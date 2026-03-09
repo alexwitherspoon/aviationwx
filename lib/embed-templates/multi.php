@@ -189,7 +189,9 @@ function renderMultiOnlyWidget($data, $options) {
     $airportId = $data['airportId'];
     $sourceAttribution = ''; // Webcam-only: no weather source attribution
     $displayCamCount = count($webcamData);
-    $gridClass = 'cams-' . max(1, $displayCamCount);
+    $allWideAngle = $displayCamCount >= 1
+        && array_reduce($webcamData, fn($carry, $w) => $carry && $w['aspectRatio'] > 1.778, true);
+    $gridClass = 'cams-' . max(1, $displayCamCount) . ($allWideAngle ? ' multi-webcam-stack' : '');
 
     $html = '<div class="style-multi style-multi-only">';
     $html .= '<div class="multi-webcam-grid ' . $gridClass . '">';

@@ -542,7 +542,22 @@ function renderFullDualWidget($data, $options) {
     }
     $html .= '</div></a>';
     $html .= '<div class="full-body">';
-    $html .= '<div class="webcam-section"><div class="webcam-grid grid-2">';
+    $html .= '<div class="webcam-section">';
+
+    // Collect aspect ratios for both cams to detect wide-angle layout
+    $aspectRatios = [];
+    for ($i = 0; $i < 2; $i++) {
+        $camIdx = $cams[$i] ?? $i;
+        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount)
+            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
+            : null;
+        require_once __DIR__ . '/../webcam-metadata.php';
+        $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
+        $aspectRatios[] = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
+    }
+    $bothWideAngle = $aspectRatios[0] > 1.778 && $aspectRatios[1] > 1.778;
+    $gridClass = 'webcam-grid grid-2' . ($bothWideAngle ? ' webcam-grid-stack' : '');
+    $html .= '<div class="' . $gridClass . '">';
 
     // Render two webcam cells - each links to history player
     for ($i = 0; $i < 2; $i++) {
@@ -556,10 +571,7 @@ function renderFullDualWidget($data, $options) {
             $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
         }
 
-        require_once __DIR__ . '/../webcam-metadata.php';
-        $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
-        $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
-
+        $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
@@ -774,10 +786,26 @@ function renderFullMultiWidget($data, $options) {
     }
     $html .= '</div></a>';
     $html .= '<div class="full-body">';
-    $html .= '<div class="webcam-section"><div class="webcam-grid grid-4">';
+    $html .= '<div class="webcam-section">';
+
+    // Collect aspect ratios for all 4 cams to detect wide-angle layout
+    $aspectRatios = [];
+    for ($i = 0; $i < 4; $i++) {
+        $camIdx = $cams[$i] ?? $i;
+        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount)
+            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
+            : null;
+        require_once __DIR__ . '/../webcam-metadata.php';
+        $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
+        $aspectRatios[] = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
+    }
+    $displayCamCount = min($webcamCount, 4);
+    $allWideAngle = $displayCamCount >= 1
+        && array_reduce(array_slice($aspectRatios, 0, $displayCamCount), fn($c, $r) => $c && $r > 1.778, true);
+    $gridClass = 'webcam-grid grid-4' . ($allWideAngle ? ' webcam-grid-stack' : '');
+    $html .= '<div class="' . $gridClass . '">';
 
     // Render four webcam cells - each links to history player
-    $displayCamCount = min($webcamCount, 4);
     for ($i = 0; $i < $displayCamCount; $i++) {
         $camIdx = $cams[$i] ?? $i;
         $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount)
@@ -789,10 +817,7 @@ function renderFullMultiWidget($data, $options) {
             $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
         }
 
-        require_once __DIR__ . '/../webcam-metadata.php';
-        $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
-        $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
-
+        $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {

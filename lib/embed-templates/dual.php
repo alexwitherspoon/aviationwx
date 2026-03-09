@@ -194,8 +194,13 @@ function renderDualOnlyWidget($data, $options) {
     $airportId = $data['airportId'];
     $sourceAttribution = ''; // Webcam-only: no weather source attribution
 
+    $bothWideAngle = count($webcamData) >= 2
+        && $webcamData[0]['aspectRatio'] > 1.778
+        && $webcamData[1]['aspectRatio'] > 1.778;
+    $gridClass = $bothWideAngle ? 'dual-webcam-grid dual-webcam-stack' : 'dual-webcam-grid';
+
     $html = '<div class="style-dual style-dual-only">';
-    $html .= '<div class="dual-webcam-grid">';
+    $html .= '<div class="' . $gridClass . '">';
     foreach ($webcamData as $webcam) {
         $camIdx = $webcam['index'];
         $webcamUrl = $webcam['url'];

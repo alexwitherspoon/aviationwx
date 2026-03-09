@@ -1212,6 +1212,9 @@
                     gap: 2px;
                     background: var(--border-color);
                 }
+                .style-dual .dual-webcam-grid.dual-webcam-stack {
+                    grid-template-columns: 1fr;
+                }
 
                 .style-dual .dual-webcam-cell {
                     position: relative;
@@ -1354,6 +1357,11 @@
                 .style-multi .webcam-grid.cams-4 {
                     grid-template-columns: repeat(2, 1fr);
                     grid-template-rows: repeat(2, 1fr);
+                }
+                .style-multi .webcam-grid.webcam-grid-stack,
+                .style-multi .multi-webcam-grid.multi-webcam-stack {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: auto;
                 }
 
                 .style-multi .webcam-cell {

@@ -864,6 +864,10 @@ a {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
     }
+    /* Wide-angle cameras (>16:9): stack vertically instead of side-by-side */
+    .style-dual .dual-webcam-grid.dual-webcam-stack {
+        grid-template-columns: 1fr;
+    }
 }
 
 .style-dual .dual-webcam-cell {
@@ -942,6 +946,12 @@ a {
 .style-multi .multi-webcam-grid.cams-3 {
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: auto auto;
+}
+
+/* Wide-angle cameras (>16:9): stack all vertically instead of 2x2 grid */
+.style-multi .multi-webcam-grid.multi-webcam-stack {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
 }
 
 .style-multi .multi-webcam-cell {
@@ -1102,10 +1112,19 @@ a {
 .style-full .webcam-section .webcam-grid.grid-2 {
     grid-template-columns: repeat(2, 1fr);
 }
+/* Wide-angle cameras (>16:9): stack vertically instead of side-by-side */
+.style-full .webcam-section .webcam-grid.grid-2.webcam-grid-stack {
+    grid-template-columns: 1fr;
+}
 
 .style-full .webcam-section .webcam-grid.grid-4 {
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
+}
+/* Wide-angle cameras (>16:9): stack all 4 vertically instead of 2x2 grid */
+.style-full .webcam-section .webcam-grid.grid-4.webcam-grid-stack {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
 }
 
 .style-full .webcam-section .webcam-cell {

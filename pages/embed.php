@@ -22,7 +22,7 @@ require_once __DIR__ . '/../lib/embed-templates/full.php';
 $embedAirportId = $_GET['embed_airport'] ?? $_GET['airport'] ?? '';
 $style = $_GET['style'] ?? 'card';
 $theme = $_GET['theme'] ?? 'light';
-$responsive = isset($_GET['responsive']) && $_GET['responsive'] === '1';
+$responsive = !isset($_GET['responsive']) || $_GET['responsive'] === '1';
 $webcamIndex = isset($_GET['webcam']) ? intval($_GET['webcam']) : 0;
 $target = $_GET['target'] ?? '_blank';
 

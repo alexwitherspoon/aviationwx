@@ -213,7 +213,7 @@ When embedding directly, you can customize the widget using URL parameters:
 | `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
 | `style` | `card`, `webcam-only`, `dual-only`, `multi-only`, `full-single`, `full-dual`, `full-multi` | Widget style |
 | `theme` | `light`, `dark`, `auto` | Color theme |
-| `responsive` | `1` | Iframe height auto-adjusts to content (postMessage to parent) |
+| `responsive` | `1` (default), `0` | Iframe height auto-adjusts to content (postMessage to parent). Default is `1`; use `0` for fixed height. |
 | `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
 | `target` | `_blank`, `_self` | Link target |
