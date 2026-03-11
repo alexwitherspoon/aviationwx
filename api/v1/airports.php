@@ -93,7 +93,7 @@ function handleListAirports(array $params, array $context): void
 
 /**
  * Format airport data for list response
- * 
+ *
  * @param string $airportId Airport ID
  * @param array $airport Airport configuration
  * @return array Formatted airport summary
@@ -104,7 +104,10 @@ function formatAirportSummary(string $airportId, array $airport): array
     $hasWeather = hasWeatherSources($airport);
     $hasWebcams = isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0;
     $webcamCount = $hasWebcams ? count($airport['webcams']) : 0;
-    
+
+    $baseDomain = getBaseDomain();
+    $url = 'https://' . $airportId . '.' . $baseDomain . '/';
+
     return [
         'id' => $airportId,
         'name' => $airport['name'] ?? '',
@@ -122,6 +125,7 @@ function formatAirportSummary(string $airportId, array $airport): array
         'has_weather' => $hasWeather,
         'has_webcams' => $hasWebcams,
         'webcam_count' => $webcamCount,
+        'url' => $url,
     ];
 }
 

@@ -71,6 +71,9 @@ function handleGetAirport(array $params, array $context): void
 function formatAirportDetails(string $airportId, array $airport): array
 {
     $tzDisplay = getTimezoneDisplayForAirport($airport);
+    $baseDomain = getBaseDomain();
+    $url = 'https://' . $airportId . '.' . $baseDomain . '/';
+
     $formatted = [
         'id' => $airportId,
         'name' => $airport['name'] ?? '',
@@ -84,6 +87,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         'timezone_abbreviation' => $tzDisplay['abbreviation'],
         'timezone_offset_hours' => $tzDisplay['offset_hours'],
         'magnetic_declination' => getMagneticDeclination($airport),
+        'url' => $url,
         'address' => $airport['address'] ?? null,
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
         'limited_availability' => isset($airport['limited_availability']) && $airport['limited_availability'] === true,
