@@ -91,12 +91,12 @@ if (isPublicApiEnabled()) {
 }
 
 // Get airport health (cached 120s; scheduler pre-warms every 30s)
+// Only listed airports (matches directory, homepage, API)
 $airportHealth = getCachedData(function() use ($config) {
     $health = [];
-    if (isset($config['airports']) && is_array($config['airports'])) {
-        foreach ($config['airports'] as $airportId => $airport) {
-            $health[] = checkAirportHealth($airportId, $airport);
-        }
+    $airports = getListedAirports($config);
+    foreach ($airports as $airportId => $airport) {
+        $health[] = checkAirportHealth($airportId, $airport);
     }
     return $health;
 }, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
