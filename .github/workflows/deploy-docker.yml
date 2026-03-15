@@ -90,7 +90,7 @@ jobs:
 
       - name: Wait for and check required workflows status
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const skipInput = '${{ github.event.inputs.skip_prerequisites }}';
@@ -339,7 +339,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ steps.determine-sha.outputs.deploy_sha }}
           fetch-depth: 0
@@ -414,7 +414,7 @@ jobs:
           echo "✓ Deployment helpers loaded"
 
       - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: |
             ${{ secrets.SSH_PRIVATE_KEY }}

@@ -21,7 +21,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -36,7 +36,7 @@ jobs:
           sudo apt-get install -y libimage-exiftool-perl ffmpeg
       
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.3
         with:
           path: |
             vendor
@@ -171,7 +171,7 @@ jobs:
       
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: critical-test-results
           path: |
