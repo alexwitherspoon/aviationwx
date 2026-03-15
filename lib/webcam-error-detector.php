@@ -444,7 +444,10 @@ function detectCorruptBottomRegion($img, int $width, int $height): array
             calculateVariance($bValues)
         );
 
-        if ($rowVariance >= 25) {
+        $varianceThreshold = defined('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD')
+            ? WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD
+            : 50;
+        if ($rowVariance >= $varianceThreshold) {
             continue;
         }
 
@@ -479,8 +482,8 @@ function detectCorruptBottomRegion($img, int $width, int $height): array
  */
 function isCorruptionColor(int $r, int $g, int $b): bool
 {
-    $low = 30;
-    $high = 250;
+    $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
+    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 180;
 
     return ($r < $low && $g > $high && $b < $low)
         || ($r < $low && $g < $low && $b > $high)
@@ -497,13 +500,16 @@ function isCorruptionColor(int $r, int $g, int $b): bool
  */
 function getCorruptionColorDescription(int $r, int $g, int $b): string
 {
-    if ($g > 250 && $r < 30 && $b < 30) {
+    $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
+    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 180;
+
+    if ($g > $high && $r < $low && $b < $low) {
         return 'solid_green';
     }
-    if ($b > 250 && $r < 30 && $g < 30) {
+    if ($b > $high && $r < $low && $g < $low) {
         return 'solid_blue';
     }
-    if ($r > 250 && $g < 30 && $b < 30) {
+    if ($r > $high && $g < $low && $b < $low) {
         return 'solid_red';
     }
 

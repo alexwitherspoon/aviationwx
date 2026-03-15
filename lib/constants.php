@@ -617,6 +617,15 @@ if (!defined('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS')) {
 if (!defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')) {
     define('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP', 20); // Samples per row for line check
 }
+if (!defined('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD', 50); // Skip row if variance >= this (allows JPEG artifacts)
+}
+if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW')) {
+    define('WEBCAM_ERROR_CORRUPT_COLOR_LOW', 50); // R/B must be < this for green/blue (allows JPEG variation)
+}
+if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH')) {
+    define('WEBCAM_ERROR_CORRUPT_COLOR_HIGH', 180); // Dominant channel must be > this (catches (0,200,0) not just (0,255,0))
+}
 
 // Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
 // Measures edge sharpness - healthy images have sharp edges, pixelated images are blurry
