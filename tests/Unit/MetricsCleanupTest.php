@@ -190,10 +190,11 @@ class MetricsCleanupTest extends TestCase
      */
     public function testCleanup_HandlesHourlyFiles(): void
     {
-        // Recent file: use today so it is always within retention (date-sensitive test fix)
-        $recentId = gmdate('Y-m-d', time()) . '-10';
-        $oldPast = gmdate('Y-m-d', time() - (METRICS_RETENTION_DAYS + 5) * 86400) . '-14';
-        $veryOldPast = gmdate('Y-m-d', time() - (METRICS_RETENTION_DAYS + 10) * 86400) . '-08';
+        // Recent file: use single time() so all IDs share same reference (avoids UTC day-boundary flakiness)
+        $now = time();
+        $recentId = gmdate('Y-m-d', $now) . '-10';
+        $oldPast = gmdate('Y-m-d', $now - (METRICS_RETENTION_DAYS + 5) * 86400) . '-14';
+        $veryOldPast = gmdate('Y-m-d', $now - (METRICS_RETENTION_DAYS + 10) * 86400) . '-08';
 
         $this->createHourlyFile($recentId);   // Recent (keep)
         $this->createHourlyFile($oldPast);    // Old (delete)
