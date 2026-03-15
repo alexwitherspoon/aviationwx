@@ -624,7 +624,7 @@ if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW')) {
     define('WEBCAM_ERROR_CORRUPT_COLOR_LOW', 50); // R/B must be < this for green/blue (allows JPEG variation)
 }
 if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH')) {
-    define('WEBCAM_ERROR_CORRUPT_COLOR_HIGH', 180); // Dominant channel must be > this (catches (0,200,0) not just (0,255,0))
+    define('WEBCAM_ERROR_CORRUPT_COLOR_HIGH', 110); // Dominant channel must be > this; full row of solid green/blue/red is rare
 }
 
 // Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
