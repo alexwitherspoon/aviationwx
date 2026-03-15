@@ -1,5 +1,5 @@
 /**
- * ESLint 9 Flat Config for AviationWX
+ * ESLint 10 Flat Config for AviationWX
  * 
  * Catches JavaScript errors including:
  * - Variable scope issues (variables used before declaration)
