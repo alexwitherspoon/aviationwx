@@ -730,7 +730,7 @@ jobs:
           echo "✓ Config file is valid JSON"
       
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-test
           path: /tmp
@@ -852,7 +852,7 @@ jobs:
           echo "✓ Config file is valid JSON"
       
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-test
           path: /tmp
@@ -997,7 +997,7 @@ jobs:
           echo "✓ Config file is valid JSON"
       
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-test
           path: /tmp
