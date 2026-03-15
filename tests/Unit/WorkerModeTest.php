@@ -91,4 +91,46 @@ class WorkerModeTest extends TestCase
         $this->assertStringNotContainsString('Processing', $outputStr, 'Worker mode should not show process pool output');
         $this->assertStringNotContainsString('workers', $outputStr, 'Worker mode should not show workers output');
     }
+
+    /**
+     * Test that maintenance airport worker exits 0 (success) or 2 (skip), never 1 (failure)
+     * Maintenance failures are expected; we use exit 2 so process pool treats as skip, not error
+     */
+    public function testFetchWeatherWorkerMode_MaintenanceAirport_DoesNotEmitErrorExitCode(): void
+    {
+        $script = __DIR__ . '/../../scripts/fetch-weather.php';
+        if (!file_exists($script)) {
+            $this->markTestSkipped('fetch-weather.php not found');
+            return;
+        }
+
+        $env = 'APP_ENV=testing CONFIG_PATH=' . escapeshellarg(__DIR__ . '/../Fixtures/airports.json.test');
+        $baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
+        $cmd = sprintf('%s WEATHER_REFRESH_URL=%s php %s --worker pdx 2>/dev/null', $env, escapeshellarg($baseUrl), escapeshellarg($script));
+        exec($cmd, $output, $exitCode);
+
+        $this->assertNotEquals(1, $exitCode, 'Maintenance airport should not exit 1 (would emit process pool: worker failed)');
+        $this->assertContains($exitCode, [0, 2], 'Maintenance airport should exit 0 (success) or 2 (skip)');
+    }
+
+    /**
+     * Test that unlisted (commissioning) airport worker exits 0 (success) or 2 (skip), never 1 (failure)
+     * Unlisted airports are often new; webcam/weather may not be functional yet
+     */
+    public function testFetchWeatherWorkerMode_UnlistedAirport_DoesNotEmitErrorExitCode(): void
+    {
+        $script = __DIR__ . '/../../scripts/fetch-weather.php';
+        if (!file_exists($script)) {
+            $this->markTestSkipped('fetch-weather.php not found');
+            return;
+        }
+
+        $env = 'APP_ENV=testing CONFIG_PATH=' . escapeshellarg(__DIR__ . '/../Fixtures/airports.json.test');
+        $baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
+        $cmd = sprintf('%s WEATHER_REFRESH_URL=%s php %s --worker test 2>/dev/null', $env, escapeshellarg($baseUrl), escapeshellarg($script));
+        exec($cmd, $output, $exitCode);
+
+        $this->assertNotEquals(1, $exitCode, 'Unlisted airport should not exit 1 (would emit process pool: worker failed)');
+        $this->assertContains($exitCode, [0, 2], 'Unlisted airport should exit 0 (success) or 2 (skip)');
+    }
 }

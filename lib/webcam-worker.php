@@ -219,18 +219,19 @@ class WebcamWorker
                 );
             }
             
-            // Determine log level based on failure reason
+            // Determine log level and exit behavior based on failure reason and airport state
             $logLevel = 'error';
             $reason = $acquisitionResult->errorReason;
-            
-            // Expected/configuration issues - log as info
+            $isCommissioning = isAirportUnlisted($this->airportConfig);
+
+            // Expected/configuration issues - log as info (camera not set up yet)
             $expectedReasons = [
                 'no_username_configured',  // Push camera not set up
                 'ffmpeg_not_available',    // RTSP not supported on this system
                 'missing_base_url'         // Federation not configured
             ];
-            
-            // Transient network/camera issues - log as warning
+
+            // Transient network/camera issues - log as warning (camera may come online)
             $transientReasons = [
                 'http_error',
                 'fetch_failed',
@@ -240,13 +241,17 @@ class WebcamWorker
                 'invalid_format',        // Temporary camera issue
                 'no_jpeg_frame'          // MJPEG stream issue
             ];
-            
+
             if (in_array($reason, $expectedReasons, true)) {
                 $logLevel = 'info';
             } elseif (in_array($reason, $transientReasons, true)) {
                 $logLevel = 'warning';
             }
-            
+            // Unlisted (commissioning): treat failures as expected - info log, skip (exit 2)
+            if ($isCommissioning) {
+                $logLevel = 'info';
+            }
+
             aviationwx_log($logLevel, 'Webcam acquisition failed', [
                 'airport' => $this->airportId,
                 'cam' => $this->camIndex,
@@ -254,7 +259,19 @@ class WebcamWorker
                 'source' => $acquisitionResult->sourceType,
                 'metadata' => $acquisitionResult->metadata
             ], 'app');
-            
+
+            // Commissioning: return skip so process pool does not log "worker failed"
+            if ($isCommissioning) {
+                return WorkerResult::skip(
+                    $acquisitionResult->errorReason ?? 'acquisition_failed',
+                    [
+                        'source' => $acquisitionResult->sourceType,
+                        'metadata' => $acquisitionResult->metadata,
+                        'commissioning' => true
+                    ]
+                );
+            }
+
             return WorkerResult::failure(
                 $acquisitionResult->errorReason ?? 'acquisition_failed',
                 [
@@ -272,18 +289,27 @@ class WebcamWorker
         );
 
         if (!$pipelineResult->success) {
-            aviationwx_log('error', 'Webcam pipeline failed', [
+            $logLevel = isAirportUnlisted($this->airportConfig) ? 'info' : 'error';
+            aviationwx_log($logLevel, 'Webcam pipeline failed', [
                 'airport' => $this->airportId,
                 'cam' => $this->camIndex,
                 'reason' => $pipelineResult->errorReason,
                 'source' => $acquisitionResult->sourceType
             ], 'app');
-            
+
             // Cleanup staging file on pipeline failure
             if ($acquisitionResult->imagePath && file_exists($acquisitionResult->imagePath)) {
                 @unlink($acquisitionResult->imagePath);
             }
-            
+
+            // Commissioning: return skip so process pool does not log "worker failed"
+            if (isAirportUnlisted($this->airportConfig)) {
+                return WorkerResult::skip(
+                    $pipelineResult->errorReason ?? 'pipeline_failed',
+                    array_merge($pipelineResult->metadata, ['commissioning' => true])
+                );
+            }
+
             return WorkerResult::failure(
                 $pipelineResult->errorReason ?? 'pipeline_failed',
                 $pipelineResult->metadata
@@ -366,7 +392,8 @@ class WebcamWorker
                     continue;
                 }
                 $failed++;
-                aviationwx_log('warning', 'Push file acquisition failed', [
+                $logLevel = isAirportUnlisted($this->airportConfig) ? 'info' : 'warning';
+                aviationwx_log($logLevel, 'Push file acquisition failed', [
                     'airport' => $this->airportId,
                     'cam' => $this->camIndex,
                     'file' => basename($filePath),
@@ -387,7 +414,8 @@ class WebcamWorker
                 if ($acquisitionResult->imagePath && file_exists($acquisitionResult->imagePath)) {
                     @unlink($acquisitionResult->imagePath);
                 }
-                aviationwx_log('warning', 'Push file pipeline failed', [
+                $logLevel = isAirportUnlisted($this->airportConfig) ? 'info' : 'warning';
+                aviationwx_log($logLevel, 'Push file pipeline failed', [
                     'airport' => $this->airportId,
                     'cam' => $this->camIndex,
                     'file' => basename($filePath),
@@ -421,6 +449,10 @@ class WebcamWorker
         }
 
         if ($processed === 0) {
+            // Commissioning: return skip so process pool does not log "worker failed"
+            if (isAirportUnlisted($this->airportConfig)) {
+                return WorkerResult::skip('all_failed', ['failed' => $failed, 'commissioning' => true]);
+            }
             return WorkerResult::failure('all_failed', ['failed' => $failed]);
         }
 

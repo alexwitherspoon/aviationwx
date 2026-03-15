@@ -33,9 +33,10 @@ if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param string $invocationId Invocation ID for log correlation
+ * @param bool $expectFailures True if failures are expected (commissioning/unlisted)
  * @return bool True on success, false on failure
  */
-function processAirportNotam(string $airportId, string $invocationId): bool {
+function processAirportNotam(string $airportId, string $invocationId, bool $expectFailures = false): bool {
     $config = loadConfig();
     if ($config === null || !isset($config['airports'][$airportId])) {
         aviationwx_log('error', 'notam fetch: airport not found', [
@@ -44,9 +45,16 @@ function processAirportNotam(string $airportId, string $invocationId): bool {
         ], 'app');
         return false;
     }
-    
+
     $airport = $config['airports'][$airportId];
-    
+    if (!is_array($airport)) {
+        aviationwx_log('error', 'notam fetch: malformed airport config', [
+            'invocation_id' => $invocationId,
+            'airport' => $airportId
+        ], 'app');
+        return false;
+    }
+
     // Skip if airport is disabled or in maintenance
     if (!isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
         return true; // Not an error, just skip
@@ -74,7 +82,8 @@ function processAirportNotam(string $airportId, string $invocationId): bool {
         $json = json_encode($cacheData, JSON_PRETTY_PRINT);
         
         if (@file_put_contents($cacheFile, $json) === false) {
-            aviationwx_log('error', 'notam fetch: failed to write cache', [
+            $logLevel = $expectFailures ? 'info' : 'error';
+            aviationwx_log($logLevel, 'notam fetch: failed to write cache', [
                 'invocation_id' => $invocationId,
                 'airport' => $airportId,
                 'cache_file' => $cacheFile
@@ -91,7 +100,8 @@ function processAirportNotam(string $airportId, string $invocationId): bool {
         return true;
         
     } catch (Exception $e) {
-        aviationwx_log('error', 'notam fetch: exception', [
+        $logLevel = $expectFailures ? 'info' : 'error';
+        aviationwx_log($logLevel, 'notam fetch: exception', [
             'invocation_id' => $invocationId,
             'airport' => $airportId,
             'error' => $e->getMessage(),
@@ -103,14 +113,30 @@ function processAirportNotam(string $airportId, string $invocationId): bool {
 
 // Worker mode: process single airport
 if ($isWorkerMode) {
+    // Validate airport ID before any work (fail fast)
+    if (empty($workerAirportId) || !validateAirportId($workerAirportId)) {
+        aviationwx_log('error', 'notam fetch: invalid airport ID', [
+            'airport' => $workerAirportId
+        ], 'app');
+        exit(1);
+    }
+
+    // Load config to check if airport is unlisted (commissioning - expect failures)
+    $config = loadConfig(false);
+    $expectFailures = false;
+    if ($config && isset($config['airports'][$workerAirportId]) && is_array($config['airports'][$workerAirportId])) {
+        $expectFailures = isAirportUnlisted($config['airports'][$workerAirportId]);
+    }
+
     // Initialize self-timeout to prevent zombie workers
     // Worker will terminate itself before ProcessPool's hard kill
     require_once __DIR__ . '/../lib/worker-timeout.php';
     initWorkerTimeout(null, "notam_{$workerAirportId}");
-    
+
     $invocationId = aviationwx_get_invocation_id();
-    $success = processAirportNotam($workerAirportId, $invocationId);
-    exit($success ? 0 : 1);
+    $success = processAirportNotam($workerAirportId, $invocationId, $expectFailures);
+    // Exit 2 = skip when commissioning (process pool does not log "worker failed")
+    exit($success ? 0 : ($expectFailures ? 2 : 1));
 }
 
 // Normal mode: use process pool (called by scheduler)

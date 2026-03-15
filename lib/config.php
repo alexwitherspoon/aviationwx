@@ -1756,6 +1756,10 @@ function loadConfig(bool $useCache = true): ?array {
         }
         
         foreach ($config['airports'] as $aid => $ap) {
+            if (!is_array($ap)) {
+                $errors[] = "Airport '{$aid}' must be an object";
+                continue;
+            }
             // Reject uppercase letters to prevent case sensitivity bugs in file paths
             if (preg_match('/[A-Z]/', $aid)) {
                 $errors[] = "Airport key '{$aid}' contains uppercase letters (must be lowercase)";

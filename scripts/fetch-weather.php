@@ -46,17 +46,21 @@ function getWeatherBaseUrl() {
 
 /**
  * Process single airport weather refresh
- * 
+ *
  * Makes HTTP request to weather API endpoint to trigger cache refresh.
  * Logs success/failure and returns status for worker process tracking.
- * 
+ * When expectFailures is true (maintenance or unlisted/commissioning), failures
+ * are logged at info level so process pool does not treat as errors.
+ *
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param string $baseUrl Base URL for weather API (e.g., 'http://localhost')
  * @param string $invocationId Invocation ID for log correlation
  * @param string $triggerType Trigger type ('cron_job', 'web_request', 'manual_cli')
+ * @param bool $expectFailures True if failures are expected (maintenance or commissioning/unlisted)
  * @return bool True on success, false on failure
  */
-function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType) {
+function processAirportWeather(string $airportId, string $baseUrl, string $invocationId, string $triggerType, bool $expectFailures = false): bool
+{
     $weatherUrl = $baseUrl . '/weather.php?airport=' . urlencode($airportId);
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -99,7 +103,8 @@ function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType
             }
             $success = true;
         } else {
-            aviationwx_log('warning', 'weather refresh returned invalid response', [
+            $logLevel = $expectFailures ? 'info' : 'warning';
+            aviationwx_log($logLevel, 'weather refresh returned invalid response', [
                 'invocation_id' => $invocationId,
                 'trigger' => $triggerType,
                 'airport' => $airportId,
@@ -120,8 +125,8 @@ function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType
                 'airport' => $airportId
             ], 'app');
         } else {
-            // Actual failure - log as error
-            aviationwx_log('error', 'weather refresh failed', [
+            $logLevel = $expectFailures ? 'info' : 'error';
+            aviationwx_log($logLevel, 'weather refresh failed', [
                 'invocation_id' => $invocationId,
                 'trigger' => $triggerType,
                 'airport' => $airportId,
@@ -156,12 +161,27 @@ if ($isWorkerMode) {
         exit(1);
     }
     
+    $airport = $config['airports'][$workerAirportId];
+    if (!is_array($airport)) {
+        aviationwx_log('error', 'worker mode: malformed airport config', [
+            'airport' => $workerAirportId
+        ], 'app');
+        exit(1);
+    }
+    // Downgrade errors for maintenance (repairs) or unlisted (commissioning - new airport setup)
+    $expectFailures = isAirportInMaintenance($airport) || isAirportUnlisted($airport);
+
     $baseUrl = getWeatherBaseUrl();
     $invocationId = aviationwx_get_invocation_id();
     $triggerInfo = aviationwx_detect_trigger_type();
     $triggerType = $triggerInfo['trigger'];
-    
-    $success = processAirportWeather($workerAirportId, $baseUrl, $invocationId, $triggerType);
+
+    $success = processAirportWeather($workerAirportId, $baseUrl, $invocationId, $triggerType, $expectFailures);
+
+    // Exit 2 = skip (process pool treats as non-failure); expected when commissioning or in maintenance
+    if (!$success && $expectFailures) {
+        exit(2);
+    }
     exit($success ? 0 : 1);
 }
 
@@ -220,8 +240,8 @@ register_shutdown_function(function() use ($pool) {
 
 $skipped = 0;
 foreach ($config['airports'] as $airportId => $airport) {
-    // Only process enabled airports
-    if (!isAirportEnabled($airport)) {
+    // Only process enabled airports; skip malformed entries
+    if (!is_array($airport) || !isAirportEnabled($airport)) {
         continue;
     }
     

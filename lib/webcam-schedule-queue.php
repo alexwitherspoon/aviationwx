@@ -130,8 +130,8 @@ class WebcamScheduleQueue
         $now = time();
         
         foreach ($airports as $airportId => $airport) {
-            // Skip disabled airports
-            if (!isAirportEnabled($airport)) {
+            // Skip malformed or disabled airports
+            if (!is_array($airport) || !isAirportEnabled($airport)) {
                 continue;
             }
 

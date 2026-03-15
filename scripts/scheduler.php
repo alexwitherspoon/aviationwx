@@ -354,7 +354,7 @@ while ($running) {
         // The global metar_refresh_seconds config is respected by the weather API internally
         if ($weatherPool !== null && isset($config['airports'])) {
             foreach ($config['airports'] as $airportId => $airport) {
-                if (!isAirportEnabled($airport)) {
+                if (!is_array($airport) || !isAirportEnabled($airport)) {
                     continue;
                 }
                 
@@ -397,7 +397,7 @@ while ($running) {
         // Process NOTAM updates (non-blocking)
         if ($notamPool !== null && isset($config['airports'])) {
             foreach ($config['airports'] as $airportId => $airport) {
-                if (!isAirportEnabled($airport)) {
+                if (!is_array($airport) || !isAirportEnabled($airport)) {
                     continue;
                 }
                 

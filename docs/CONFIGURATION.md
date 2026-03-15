@@ -85,7 +85,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `timezone` | global default | Timezone (e.g., `America/Los_Angeles`) |
 | **Status** |||
 | `maintenance` | `false` | Show maintenance banner |
-| `unlisted` | `false` | Hide from discovery (map, search, sitemap) |
+| `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning—logged at info, exit 2 (skip) so process pool does not log "worker failed". |
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
 | **Refresh Overrides** |||
