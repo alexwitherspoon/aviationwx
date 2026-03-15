@@ -610,6 +610,13 @@ if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD')) {
 if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
     define('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE', 50); // Only need ~50 samples for this check
 }
+// Corrupt bottom detection: rows to check from bottom (JPEG encodes top-to-bottom)
+if (!defined('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS')) {
+    define('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS', 5);
+}
+if (!defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')) {
+    define('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP', 20); // Samples per row for line check
+}
 
 // Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
 // Measures edge sharpness - healthy images have sharp edges, pixelated images are blurry

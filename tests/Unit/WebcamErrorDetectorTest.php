@@ -71,10 +71,40 @@ class WebcamErrorDetectorTest extends TestCase
         
         $filePath = $this->testImageDir . '/test_' . uniqid() . '.jpg';
         imagejpeg($img, $filePath, 85);
-        
+
         return $filePath;
     }
-    
+
+    /**
+     * Create test image as GD resource for direct function testing
+     *
+     * @param int $width Image width
+     * @param int $height Image height
+     * @param callable $pixelGenerator Function returning [r, g, b] for (x, y)
+     * @return \GdImage|null GD resource or null if GD unavailable
+     */
+    private function createTestImageResource(int $width, int $height, callable $pixelGenerator): ?\GdImage
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $img = imagecreatetruecolor($width, $height);
+        if ($img === false) {
+            return null;
+        }
+
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                [$r, $g, $b] = $pixelGenerator($x, $y);
+                $color = imagecolorallocate($img, $r, $g, $b);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        return $img;
+    }
+
     public function testDetectErrorFrame_FileNotExists_ReturnsError()
     {
         $result = detectErrorFrame('/nonexistent/file.jpg');
@@ -206,6 +236,143 @@ class WebcamErrorDetectorTest extends TestCase
         $result = detectErrorFrame($filePath);
         
         $this->assertTrue($result['is_error'], 'Image with no edges should be detected as error');
+    }
+    
+    public function testDetectCorruptBottomRegion_SingleLineSolidGreen_RejectsImage(): void
+    {
+        // Fail closed: even one row of solid green at bottom = reject
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
+            if ($y === $height - 1) {
+                return [0, 255, 0];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130 + (($x + $y) % 30)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertTrue($result['is_corrupt'], 'Single line of solid green at bottom must be rejected');
+        $this->assertStringContainsString('corrupt_bottom', $result['reason']);
+    }
+
+    public function testDetectCorruptBottomRegion_SingleLineSolidBlue_RejectsImage(): void
+    {
+        // Blue is common corruption artifact (e.g. decoder failure)
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
+            if ($y === $height - 1) {
+                return [0, 0, 255];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertTrue($result['is_corrupt'], 'Single line of solid blue at bottom must be rejected');
+    }
+
+    public function testDetectCorruptBottomRegion_SolidGreenAtTop_Passes(): void
+    {
+        // Only check bottom; green at top (e.g. trees) is legitimate
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            if ($y === 0) {
+                return [0, 255, 0];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertFalse($result['is_corrupt'], 'Green at top only should pass');
+    }
+
+    public function testDetectCorruptBottomRegion_VariedBottom_Passes(): void
+    {
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertFalse($result['is_corrupt'], 'Varied bottom should pass');
+    }
+
+    public function testDetectCorruptBottomRegion_CorruptionOutsideFiveRows_Passes(): void
+    {
+        // Only last 5 rows are checked; corruption at row 6 from bottom is outside window
+        $width = 300;
+        $height = 200;
+        $corruptRow = $height - 6;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($corruptRow) {
+            if ($y === $corruptRow) {
+                return [0, 255, 0];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertFalse($result['is_corrupt'], 'Corruption outside 5-row window should pass');
+    }
+
+    public function testDetectErrorFrame_CorruptBottomRegion_DetectsError(): void
+    {
+        // Simulates partial JPEG/device corruption: varied top, solid green bottom
+        $width = 300;
+        $height = 200;
+        $bottomStart = (int) floor($height * 0.67);
+        $filePath = $this->createTestImage($width, $height, function ($x, $y) use ($bottomStart) {
+            if ($y >= $bottomStart) {
+                return [0, 255, 0];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130 + (($x + $y) % 30)];
+        });
+
+        $result = detectErrorFrame($filePath);
+
+        $this->assertTrue($result['is_error'], 'Image with corrupt solid-green bottom should be detected');
+        $this->assertNotEmpty($result['reasons']);
+        $hasCorruptReason = false;
+        foreach ($result['reasons'] as $reason) {
+            if (strpos($reason, 'corrupt_bottom') !== false) {
+                $hasCorruptReason = true;
+                break;
+            }
+        }
+        $this->assertTrue($hasCorruptReason, 'Should include corrupt_bottom in reasons');
+    }
+
+    public function testDetectErrorFrame_HealthyBottomRegion_Passes(): void
+    {
+        // Varied content throughout (including bottom) - should pass corrupt-bottom check
+        $filePath = $this->createTestImage(300, 200, function($x, $y) {
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        
+        $result = detectErrorFrame($filePath);
+        
+        $this->assertFalse($result['is_error'], 'Image with varied bottom should pass');
     }
     
     public function testDetectErrorFrame_GreyBorders_DetectsError()

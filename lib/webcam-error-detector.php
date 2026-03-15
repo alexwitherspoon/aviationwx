@@ -1,12 +1,13 @@
 <?php
 /**
  * Webcam Error Frame Detector
- * 
+ *
  * Detects invalid webcam images including:
  * - Blue Iris error frames (grey borders with white text)
  * - Uniform color images (lens cap, dead camera, corruption)
+ * - Corrupt bottom region (solid green/blue/red lines from partial JPEG or device failure)
  * - Pixelated/low-quality images (Laplacian variance detection)
- * 
+ *
  * Uses phase-aware thresholds for pixelation (day/twilight/night).
  */
 
@@ -19,7 +20,8 @@ require_once __DIR__ . '/weather/utils.php';
  * Detects various image quality issues:
  * 1. Uniform color (lens cap, dead camera, corruption)
  * 2. Pixelation (low Laplacian variance) - phase-aware thresholds
- * 3. Blue Iris error frames (grey borders with white text)
+ * 3. Corrupt bottom region (partial JPEG/device corruption - solid color at bottom)
+ * 4. Blue Iris error frames (grey borders with white text)
  * 
  * @param string $imagePath Path to image file (JPEG)
  * @param array|null $airport Airport config for phase-aware pixelation threshold (optional)
@@ -69,6 +71,19 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
             'confidence' => 1.0, 
             'error_score' => 1.0, 
             'reasons' => [$uniformCheck['reason']]
+        ];
+    }
+    
+    // CORRUPT BOTTOM REGION CHECK: Run before pixelation - JPEG encodes top-to-bottom;
+    // partial upload/device corruption often produces solid color at bottom (e.g. green block).
+    // This gives a more specific reason than pixelation (which would also flag it).
+    $corruptBottomCheck = detectCorruptBottomRegion($img, $width, $height);
+    if ($corruptBottomCheck['is_corrupt']) {
+        return [
+            'is_error' => true,
+            'confidence' => 0.9,
+            'error_score' => 0.9,
+            'reasons' => [$corruptBottomCheck['reason']]
         ];
     }
     
@@ -373,6 +388,126 @@ function detectUniformColor($img, int $width, int $height): array {
         'dominant_color' => [$avgR, $avgG, $avgB],
         'reason' => ''
     ];
+}
+
+/**
+ * Detect corrupt bottom region (solid corruption-color lines in last N rows)
+ *
+ * JPEG encodes top-to-bottom; partial uploads or device corruption produce
+ * solid color lines at the bottom (green/blue/red from failed encode).
+ * Checks only the last N rows for CPU efficiency; corruption typically
+ * affects the last-painted rows first.
+ *
+ * @param resource|\GdImage $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array {
+ *   'is_corrupt' => bool,
+ *   'variance' => float,
+ *   'reason' => string
+ * }
+ */
+function detectCorruptBottomRegion($img, int $width, int $height): array
+{
+    $rowsToCheck = defined('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS')
+        ? WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS
+        : 5;
+    $rowSampleStep = defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')
+        ? WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP
+        : 20;
+
+    $yStart = max(0, $height - $rowsToCheck);
+    $stepX = max(1, (int) floor($width / $rowSampleStep));
+
+    // Scan from bottom up; corruption typically affects last-painted rows first
+    for ($y = $height - 1; $y >= $yStart; $y--) {
+        $rowPixels = [];
+        for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
+            $rgb = imagecolorat($img, $x, $y);
+            $rowPixels[] = [
+                ($rgb >> 16) & 0xFF,
+                ($rgb >> 8) & 0xFF,
+                $rgb & 0xFF,
+            ];
+        }
+
+        if (count($rowPixels) < 5) {
+            continue;
+        }
+
+        $rValues = array_column($rowPixels, 0);
+        $gValues = array_column($rowPixels, 1);
+        $bValues = array_column($rowPixels, 2);
+        $rowVariance = max(
+            calculateVariance($rValues),
+            calculateVariance($gValues),
+            calculateVariance($bValues)
+        );
+
+        if ($rowVariance >= 25) {
+            continue;
+        }
+
+        $avgR = (int) round(array_sum($rValues) / count($rValues));
+        $avgG = (int) round(array_sum($gValues) / count($gValues));
+        $avgB = (int) round(array_sum($bValues) / count($bValues));
+
+        if (!isCorruptionColor($avgR, $avgG, $avgB)) {
+            continue;
+        }
+
+        $colorDesc = getCorruptionColorDescription($avgR, $avgG, $avgB);
+
+        return [
+            'is_corrupt' => true,
+            'variance' => $rowVariance,
+            'reason' => sprintf('corrupt_bottom_%s_row_%d_variance_%.1f_rgb_%d_%d_%d',
+                $colorDesc, $y, $rowVariance, $avgR, $avgG, $avgB),
+        ];
+    }
+
+    return ['is_corrupt' => false, 'variance' => 999, 'reason' => ''];
+}
+
+/**
+ * Check if RGB is a known corruption artifact color (green/blue/red)
+ *
+ * @param int $r Red 0-255
+ * @param int $g Green 0-255
+ * @param int $b Blue 0-255
+ * @return bool
+ */
+function isCorruptionColor(int $r, int $g, int $b): bool
+{
+    $low = 30;
+    $high = 250;
+
+    return ($r < $low && $g > $high && $b < $low)
+        || ($r < $low && $g < $low && $b > $high)
+        || ($r > $high && $g < $low && $b < $low);
+}
+
+/**
+ * Get human-readable description for corruption color
+ *
+ * @param int $r Red 0-255
+ * @param int $g Green 0-255
+ * @param int $b Blue 0-255
+ * @return string Description (solid_green, solid_blue, solid_red, or solid_color)
+ */
+function getCorruptionColorDescription(int $r, int $g, int $b): string
+{
+    if ($g > 250 && $r < 30 && $b < 30) {
+        return 'solid_green';
+    }
+    if ($b > 250 && $r < 30 && $g < 30) {
+        return 'solid_blue';
+    }
+    if ($r > 250 && $g < 30 && $b < 30) {
+        return 'solid_red';
+    }
+
+    return 'solid_color';
 }
 
 /**
