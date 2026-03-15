@@ -584,6 +584,7 @@ while ($running) {
             $cloudflareScript = __DIR__ . '/fetch-cloudflare-analytics.php';
             if (file_exists($cloudflareScript)) {
                 exec('php ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
+                reapZombies(); // Reap shell spawned by exec() with &
                 $lastCloudflareAnalyticsFetch = $now;
             }
         }
@@ -594,6 +595,7 @@ while ($running) {
             $statusHealthScript = __DIR__ . '/fetch-status-health.php';
             if (file_exists($statusHealthScript)) {
                 exec('php ' . escapeshellarg($statusHealthScript) . ' > /dev/null 2>&1 &');
+                reapZombies(); // Reap shell spawned by exec() with &
                 $lastStatusHealthFetch = $now;
             }
         }
@@ -604,6 +606,7 @@ while ($running) {
             $statusMetricsScript = __DIR__ . '/fetch-status-metrics.php';
             if (file_exists($statusMetricsScript)) {
                 exec('php ' . escapeshellarg($statusMetricsScript) . ' > /dev/null 2>&1 &');
+                reapZombies(); // Reap shell spawned by exec() with &
                 $lastStatusMetricsFetch = $now;
             }
         }
@@ -614,6 +617,7 @@ while ($running) {
             $perfMetricsScript = __DIR__ . '/fetch-performance-metrics.php';
             if (file_exists($perfMetricsScript)) {
                 exec('php ' . escapeshellarg($perfMetricsScript) . ' > /dev/null 2>&1 &');
+                reapZombies(); // Reap shell spawned by exec() with &
                 $lastPerformanceMetricsFetch = $now;
             }
         }
