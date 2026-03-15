@@ -190,16 +190,19 @@ class MetricsCleanupTest extends TestCase
      */
     public function testCleanup_HandlesHourlyFiles(): void
     {
-        // Create hourly files for various dates
-        $this->createHourlyFile('2026-02-12-10'); // Recent (keep)
-        $this->createHourlyFile('2026-01-15-14'); // Old (delete)
-        $this->createHourlyFile('2026-01-10-08'); // Very old (delete)
-        
+        // Recent file: use today so it is always within retention (date-sensitive test fix)
+        $recentId = gmdate('Y-m-d', time()) . '-10';
+        $oldPast = gmdate('Y-m-d', time() - (METRICS_RETENTION_DAYS + 5) * 86400) . '-14';
+        $veryOldPast = gmdate('Y-m-d', time() - (METRICS_RETENTION_DAYS + 10) * 86400) . '-08';
+
+        $this->createHourlyFile($recentId);   // Recent (keep)
+        $this->createHourlyFile($oldPast);    // Old (delete)
+        $this->createHourlyFile($veryOldPast); // Very old (delete)
+
         $deletedCount = metrics_cleanup();
-        
+
         $this->assertGreaterThanOrEqual(2, $deletedCount, 'Should delete old hourly files');
-        
-        $this->assertFileExists(CACHE_METRICS_HOURLY_DIR . '/2026-02-12-10.json');
+        $this->assertFileExists(CACHE_METRICS_HOURLY_DIR . '/' . $recentId . '.json');
     }
     
     /**
