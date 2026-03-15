@@ -132,7 +132,7 @@ More traditional, supports more browsers but more complex setup.
 
 ## CI/CD Integration
 
-Add to `.github/workflows/test.yml`:
+The snippet below is a minimal example for reference. In this repo, browser tests run in `.github/workflows/quality-assurance-tests.yml` in the `browser-tests` job. To add browser tests to another workflow, adapt the structure below:
 
 ```yaml
 browser-tests:
