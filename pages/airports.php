@@ -1536,15 +1536,14 @@ $breadcrumbs = generateBreadcrumbSchema([
             });
         }
         
-        // Create marker cluster group
+        // Create marker cluster group - only cluster when icons overlap (32px icon size)
         var markers = L.markerClusterGroup({
-            maxClusterRadius: 60,
+            maxClusterRadius: 30,
             spiderfyOnMaxZoom: true,
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
             iconCreateFunction: function(cluster) {
                 var count = cluster.getChildCount();
-                var size = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
                 return L.divIcon({
                     html: '<div style="background: #0066cc; color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">' + count + '</div>',
                     className: 'marker-cluster',

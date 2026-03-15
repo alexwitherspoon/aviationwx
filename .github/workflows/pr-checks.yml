@@ -330,7 +330,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-          cache: 'npm'
       
       - name: Install npm dependencies
         if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true'
