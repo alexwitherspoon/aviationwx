@@ -483,7 +483,7 @@ function detectCorruptBottomRegion($img, int $width, int $height): array
 function isCorruptionColor(int $r, int $g, int $b): bool
 {
     $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
-    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 180;
+    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 110;
 
     return ($r < $low && $g > $high && $b < $low)
         || ($r < $low && $g < $low && $b > $high)
@@ -501,7 +501,7 @@ function isCorruptionColor(int $r, int $g, int $b): bool
 function getCorruptionColorDescription(int $r, int $g, int $b): string
 {
     $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
-    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 180;
+    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 110;
 
     if ($g > $high && $r < $low && $b < $low) {
         return 'solid_green';
