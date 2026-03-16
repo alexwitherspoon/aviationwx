@@ -940,6 +940,15 @@ h3 {
     grid-auto-rows: min-content;
 }
 
+/* Single webcam: center it (same size as one grid cell, not enlarged) */
+.webcam-grid-single {
+    grid-template-columns: 1fr;
+    width: 50%;
+    max-width: 50%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .webcam-item {
     background: #000;
     border-radius: 4px;
@@ -961,6 +970,10 @@ h3 {
 @media (max-width: 768px) {
     .webcam-grid {
         grid-template-columns: 1fr;
+    }
+    .webcam-grid-single {
+        width: 100%;
+        max-width: 100%;
     }
     .webcam-item {
         grid-column: span 1 !important;

@@ -1424,7 +1424,7 @@ if ($themeCookie === 'dark') {
         </script>
         <!-- Webcams -->
         <section class="webcam-section">
-            <div class="webcam-grid">
+            <div class="webcam-grid<?= count($airport['webcams']) === 1 ? ' webcam-grid-single' : '' ?>">
                 <?php 
                 require_once __DIR__ . '/../lib/webcam-metadata.php';
                 foreach ($airport['webcams'] as $index => $cam): 
