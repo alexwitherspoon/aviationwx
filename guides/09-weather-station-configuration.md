@@ -461,7 +461,7 @@ For stations that upload to PWSWeather.com. Data is accessed through the AerisWe
 
 PWSWeather station owners get **free access** to the AerisWeather API for their station data:
 
-1. **Register at Xweather** (formerly AerisWeather): [xweather.com/signup](https://www.xweather.com/signup)
+1. **Register at Xweather** (formerly AerisWeather): [signup.xweather.com/pws-contributor](https://signup.xweather.com/pws-contributor)
    - Select the free tier for PWS access
 2. **Create an application** in your dashboard
 3. **Copy credentials**:
