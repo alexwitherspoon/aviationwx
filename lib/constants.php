@@ -618,7 +618,7 @@ if (!defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')) {
     define('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP', 20); // Samples per row for line check
 }
 if (!defined('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD')) {
-    define('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD', 50); // Skip row if variance >= this (allows JPEG artifacts)
+    define('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD', 200); // Skip row if variance >= this; allows JPEG artifacts in corrupt regions, skips real varied content
 }
 if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW')) {
     define('WEBCAM_ERROR_CORRUPT_COLOR_LOW', 50); // R/B must be < this for green/blue (allows JPEG variation)

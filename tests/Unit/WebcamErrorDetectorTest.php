@@ -1,12 +1,13 @@
 <?php
 /**
  * Unit Tests for Webcam Error Frame Detector
- * 
+ *
  * Tests error frame detection functionality including:
  * - Grey pixel detection
  * - Color variance analysis
  * - Edge detection
  * - Border analysis
+ * - Corrupt bottom region (solid green/blue/red from partial JPEG/device failure)
  * - Quick check function
  */
 
@@ -313,6 +314,31 @@ class WebcamErrorDetectorTest extends TestCase
         $result = detectCorruptBottomRegion($img, $width, $height);
 
         $this->assertFalse($result['is_corrupt'], 'Varied bottom should pass');
+    }
+
+    public function testDetectCorruptBottomRegion_GreenWithJpegArtifactVariation_RejectsImage(): void
+    {
+        // JPEG compression adds block artifacts; corrupt green can have variance 50-150
+        // Old threshold 50 skipped these; threshold 200 allows detection
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
+            if ($y >= $height - 3) {
+                // Simulate JPEG block artifacts: G varies 125-145 (variance ~65)
+                $block = (int) floor($x / 15) % 5;
+                $g = [125, 127, 135, 143, 145][$block];
+                return [1, $g, 0];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomRegion($img, $width, $height);
+
+        $this->assertTrue($result['is_corrupt'], 'Green with JPEG-like variance must be rejected');
+        $this->assertStringContainsString('corrupt_bottom', $result['reason']);
     }
 
     public function testDetectCorruptBottomRegion_CorruptionOutsideFiveRows_Passes(): void
