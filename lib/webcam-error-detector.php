@@ -33,7 +33,9 @@ require_once __DIR__ . '/weather/utils.php';
 function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null): array {
     $img = null;
 
-    if ($gdImage !== null && (is_object($gdImage) || is_resource($gdImage))) {
+    $isGdImage = ($gdImage instanceof \GdImage)
+        || (is_resource($gdImage) && get_resource_type($gdImage) === 'gd');
+    if ($gdImage !== null && $isGdImage) {
         $img = $gdImage;
     } else {
         if (!file_exists($imagePath) || !is_readable($imagePath)) {
@@ -417,6 +419,7 @@ function detectCorruptBottomCornerFastFail($img, int $width, int $height): array
     $xStart = max(0, $width - $size);
     $matchCount = 0;
     $brightnessSum = 0;
+    $sampleCount = 0;
 
     for ($x = $xStart; $x < $width; $x++) {
         $rgb = imagecolorat($img, $x, $y);
@@ -424,20 +427,25 @@ function detectCorruptBottomCornerFastFail($img, int $width, int $height): array
         $g = ($rgb >> 8) & 0xFF;
         $b = $rgb & 0xFF;
         $brightnessSum += ($r + $g + $b) / 3;
+        $sampleCount++;
         if (isCorruptionColor($r, $g, $b)) {
             $matchCount++;
         }
     }
 
-    $avgBrightness = $brightnessSum / $size;
+    if ($sampleCount === 0) {
+        return ['is_corrupt' => false, 'reason' => ''];
+    }
+    $avgBrightness = $brightnessSum / $sampleCount;
     if ($avgBrightness < $minBrightness) {
         return ['is_corrupt' => false, 'reason' => ''];
     }
 
-    if ($matchCount >= $minMatch) {
+    $minMatchRequired = min($minMatch, $sampleCount);
+    if ($matchCount >= $minMatchRequired) {
         return [
             'is_corrupt' => true,
-            'reason' => sprintf('corrupt_corner_fast_fail_matched_%d_of_%d_brightness_%.0f', $matchCount, $size, $avgBrightness)
+            'reason' => sprintf('corrupt_corner_fast_fail_matched_%d_of_%d_brightness_%.0f', $matchCount, $sampleCount, $avgBrightness)
         ];
     }
 
