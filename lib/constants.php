@@ -634,7 +634,7 @@ if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH')) {
     define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH', 8); // Require 8+ of 10 to match corruption color
 }
 if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS')) {
-    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS', 35); // Skip dark corners (night); corruption green/blue/red has brightness 40+
+    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS', 35); // Skip dark corners (night); corruption green/blue/red typically 35+
 }
 
 // Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)

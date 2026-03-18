@@ -57,6 +57,11 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
     $width = imagesx($img);
     $height = imagesy($img);
 
+    // Palette images: imagecolorat returns index, not packed RGB; convert for correct pixel math
+    if (!imageistruecolor($img) && function_exists('imagepalettetotruecolor')) {
+        imagepalettetotruecolor($img);
+    }
+
     if ($width < WEBCAM_ERROR_MIN_WIDTH || $height < WEBCAM_ERROR_MIN_HEIGHT) {
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
