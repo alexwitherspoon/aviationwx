@@ -311,9 +311,7 @@ class ProcessingPipeline
      */
     private function checkErrorFrame(string $imagePath): array
     {
-        // Use the existing error detector (it loads the image again, but has sophisticated detection)
-        // Future optimization: Modify detectErrorFrame to accept GD resource
-        $result = detectErrorFrame($imagePath, $this->airportConfig);
+        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage);
 
         if ($result['is_error']) {
             return [

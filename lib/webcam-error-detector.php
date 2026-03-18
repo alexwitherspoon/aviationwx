@@ -6,6 +6,7 @@
  * - Blue Iris error frames (grey borders with white text)
  * - Uniform color images (lens cap, dead camera, corruption)
  * - Corrupt bottom region (solid green/blue/red lines from partial JPEG or device failure)
+ * - Lower-right corner fast-fail (last pixels in JPEG scan order; catches partial corruption)
  * - Pixelated/low-quality images (Laplacian variance detection)
  *
  * Uses phase-aware thresholds for pixelation (day/twilight/night).
@@ -16,67 +17,60 @@ require_once __DIR__ . '/weather/utils.php';
 
 /**
  * Check if an image appears to be an error frame
- * 
- * Detects various image quality issues:
- * 1. Uniform color (lens cap, dead camera, corruption)
- * 2. Pixelation (low Laplacian variance) - phase-aware thresholds
- * 3. Corrupt bottom region (partial JPEG/device corruption - solid color at bottom)
- * 4. Blue Iris error frames (grey borders with white text)
- * 
- * @param string $imagePath Path to image file (JPEG)
+ *
+ * Detects various image quality issues. Runs cheap checks first for efficiency.
+ *
+ * @param string $imagePath Path to image file
  * @param array|null $airport Airport config for phase-aware pixelation threshold (optional)
+ * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); when provided, skips file load
  * @return array {
- *   'is_error' => bool,        // True if image appears to be an error frame
- *   'confidence' => float,     // Confidence score (0.0 to 1.0)
- *   'error_score' => float,    // Raw error score before threshold
- *   'reasons' => array         // Array of detection reason strings
+ *   'is_error' => bool,
+ *   'confidence' => float,
+ *   'error_score' => float,
+ *   'reasons' => array
  * }
  */
-function detectErrorFrame(string $imagePath, ?array $airport = null): array {
-    if (!file_exists($imagePath) || !is_readable($imagePath)) {
-        return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['file_not_readable']];
+function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null): array {
+    $img = null;
+
+    if ($gdImage !== null && (is_object($gdImage) || is_resource($gdImage))) {
+        $img = $gdImage;
+    } else {
+        if (!file_exists($imagePath) || !is_readable($imagePath)) {
+            return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['file_not_readable']];
+        }
+        if (!function_exists('imagecreatefromstring')) {
+            return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['gd_not_available']];
+        }
+        $imageData = @file_get_contents($imagePath);
+        if ($imageData === false) {
+            return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['file_read_failed']];
+        }
+        $img = @imagecreatefromstring($imageData);
+        if ($img === false) {
+            return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['invalid_image']];
+        }
     }
-    
-    // Check if GD library is available
-    if (!function_exists('imagecreatefromstring')) {
-        return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['gd_not_available']];
-    }
-    
-    // Use @ to suppress errors for non-critical image loading
-    // We handle failures explicitly with error return below
-    $imageData = @file_get_contents($imagePath);
-    if ($imageData === false) {
-        return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['file_read_failed']];
-    }
-    
-    $img = @imagecreatefromstring($imageData);
-    if ($img === false) {
-        return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['invalid_image']];
-    }
-    
+
     $width = imagesx($img);
     $height = imagesy($img);
-    
+
     if ($width < WEBCAM_ERROR_MIN_WIDTH || $height < WEBCAM_ERROR_MIN_HEIGHT) {
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
-    
-    // UNIFORM COLOR CHECK: Earliest definitive rejection
-    // A healthy webcam image will NEVER be all one color (variance <1%)
-    // This catches: lens caps, dead cameras, corrupted files, solid error screens
-    $uniformCheck = detectUniformColor($img, $width, $height);
-    if ($uniformCheck['is_uniform']) {
+
+    // CORRUPT BOTTOM: Run cheap checks first (10 pixels, then 5 rows) before full-image uniform color
+    $cornerCheck = detectCorruptBottomCornerFastFail($img, $width, $height);
+    if ($cornerCheck['is_corrupt']) {
         return [
-            'is_error' => true, 
-            'confidence' => 1.0, 
-            'error_score' => 1.0, 
-            'reasons' => [$uniformCheck['reason']]
+            'is_error' => true,
+            'confidence' => 0.9,
+            'error_score' => 0.9,
+            'reasons' => [$cornerCheck['reason']]
         ];
     }
-    
-    // CORRUPT BOTTOM REGION CHECK: Run before pixelation - JPEG encodes top-to-bottom;
-    // partial upload/device corruption often produces solid color at bottom (e.g. green block).
-    // This gives a more specific reason than pixelation (which would also flag it).
+
+    // Full corrupt bottom region check (rows, variance, etc.)
     $corruptBottomCheck = detectCorruptBottomRegion($img, $width, $height);
     if ($corruptBottomCheck['is_corrupt']) {
         return [
@@ -86,7 +80,18 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
             'reasons' => [$corruptBottomCheck['reason']]
         ];
     }
-    
+
+    // UNIFORM COLOR: Full-image scan (expensive); run after cheap corruption checks
+    $uniformCheck = detectUniformColor($img, $width, $height);
+    if ($uniformCheck['is_uniform']) {
+        return [
+            'is_error' => true,
+            'confidence' => 1.0,
+            'error_score' => 1.0,
+            'reasons' => [$uniformCheck['reason']]
+        ];
+    }
+
     // PIXELATION CHECK: Detect overly smooth/blocky images using Laplacian variance
     // Uses phase-aware thresholds (day/twilight/night) for accuracy
     // Hard fail: pixelated images are rejected
@@ -251,7 +256,7 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     
     $isError = $errorScore >= WEBCAM_ERROR_SCORE_THRESHOLD;
     $confidence = min(1.0, $errorScore);
-    
+
     return [
         'is_error' => $isError,
         'confidence' => $confidence,
@@ -388,6 +393,55 @@ function detectUniformColor($img, int $width, int $height): array {
         'dominant_color' => [$avgR, $avgG, $avgB],
         'reason' => ''
     ];
+}
+
+/**
+ * Fast-fail: check last N pixels in lower-right corner for corruption color
+ *
+ * JPEG encodes top-to-bottom, left-to-right; truncation cuts off at lower-right.
+ * Samples rightmost pixels of bottom row. Requires min_match of N to match
+ * corruption color, and avg brightness > threshold to skip dark night corners.
+ *
+ * @param resource|\GdImage $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array{is_corrupt: bool, reason: string}
+ */
+function detectCorruptBottomCornerFastFail($img, int $width, int $height): array
+{
+    $size = defined('WEBCAM_ERROR_CORRUPT_CORNER_SIZE') ? WEBCAM_ERROR_CORRUPT_CORNER_SIZE : 10;
+    $minMatch = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH : 8;
+    $minBrightness = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS : 80;
+
+    $y = $height - 1;
+    $xStart = max(0, $width - $size);
+    $matchCount = 0;
+    $brightnessSum = 0;
+
+    for ($x = $xStart; $x < $width; $x++) {
+        $rgb = imagecolorat($img, $x, $y);
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $brightnessSum += ($r + $g + $b) / 3;
+        if (isCorruptionColor($r, $g, $b)) {
+            $matchCount++;
+        }
+    }
+
+    $avgBrightness = $brightnessSum / $size;
+    if ($avgBrightness < $minBrightness) {
+        return ['is_corrupt' => false, 'reason' => ''];
+    }
+
+    if ($matchCount >= $minMatch) {
+        return [
+            'is_corrupt' => true,
+            'reason' => sprintf('corrupt_corner_fast_fail_matched_%d_of_%d_brightness_%.0f', $matchCount, $size, $avgBrightness)
+        ];
+    }
+
+    return ['is_corrupt' => false, 'reason' => ''];
 }
 
 /**

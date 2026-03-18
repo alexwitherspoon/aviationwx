@@ -626,6 +626,16 @@ if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW')) {
 if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH')) {
     define('WEBCAM_ERROR_CORRUPT_COLOR_HIGH', 110); // Dominant channel must be > this; full row of solid green/blue/red is rare
 }
+// Fast-fail: last N pixels in lower-right (JPEG scan order); corruption cuts off there
+if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_SIZE')) {
+    define('WEBCAM_ERROR_CORRUPT_CORNER_SIZE', 10); // Pixels to sample (rightmost of bottom row)
+}
+if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH')) {
+    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH', 8); // Require 8+ of 10 to match corruption color
+}
+if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS')) {
+    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS', 35); // Skip dark corners (night); corruption green/blue/red has brightness 40+
+}
 
 // Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
 // Measures edge sharpness - healthy images have sharp edges, pixelated images are blurry

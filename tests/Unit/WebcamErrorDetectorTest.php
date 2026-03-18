@@ -8,6 +8,7 @@
  * - Edge detection
  * - Border analysis
  * - Corrupt bottom region (solid green/blue/red from partial JPEG/device failure)
+ * - Lower-right corner fast-fail (partial corruption)
  * - Quick check function
  */
 
@@ -239,6 +240,67 @@ class WebcamErrorDetectorTest extends TestCase
         $this->assertTrue($result['is_error'], 'Image with no edges should be detected as error');
     }
     
+    public function testDetectCorruptBottomCornerFastFail_GreenInCorner_RejectsImage(): void
+    {
+        // Lower-right 10 pixels are last in JPEG scan order; corruption cuts off there
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
+            if ($y === $height - 1 && $x >= $width - 10) {
+                return [0, 200, 0]; // Bright green in corner
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
+
+        $this->assertTrue($result['is_corrupt'], 'Green in lower-right corner must be rejected');
+        $this->assertStringContainsString('corrupt_corner_fast_fail', $result['reason']);
+    }
+
+    public function testDetectCorruptBottomCornerFastFail_DarkCorner_Passes(): void
+    {
+        // Dark corners (night) should not trigger; brightness gate skips
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
+            if ($y === $height - 1 && $x >= $width - 10) {
+                return [5, 8, 12]; // Dark (night) - avg brightness ~8
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
+
+        $this->assertFalse($result['is_corrupt'], 'Dark corner should pass (night safety)');
+    }
+
+    public function testDetectCorruptBottomCornerFastFail_VariedCorner_Passes(): void
+    {
+        // Varied content in corner (grass, text) should pass
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
+            if ($y === $height - 1 && $x >= $width - 10) {
+                return [80 + ($x % 40), 90 + (($x + $y) % 30), 70];
+            }
+            return [100 + ($x % 50), 120 + ($y % 40), 130];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
+
+        $this->assertFalse($result['is_corrupt'], 'Varied corner should pass');
+    }
+
     public function testDetectCorruptBottomRegion_SingleLineSolidGreen_RejectsImage(): void
     {
         // Fail closed: even one row of solid green at bottom = reject
@@ -381,12 +443,12 @@ class WebcamErrorDetectorTest extends TestCase
         $this->assertNotEmpty($result['reasons']);
         $hasCorruptReason = false;
         foreach ($result['reasons'] as $reason) {
-            if (strpos($reason, 'corrupt_bottom') !== false) {
+            if (strpos($reason, 'corrupt_bottom') !== false || strpos($reason, 'corrupt_corner_fast_fail') !== false) {
                 $hasCorruptReason = true;
                 break;
             }
         }
-        $this->assertTrue($hasCorruptReason, 'Should include corrupt_bottom in reasons');
+        $this->assertTrue($hasCorruptReason, 'Should include corrupt_bottom or corrupt_corner_fast_fail in reasons');
     }
 
     public function testDetectErrorFrame_HealthyBottomRegion_Passes(): void
