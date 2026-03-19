@@ -14,9 +14,9 @@ All configuration lives in a single `airports.json` file with two sections:
 |--------|---------|-------------|
 | `default_timezone` | `UTC` | Fallback timezone for airports |
 | `base_domain` | `aviationwx.org` | Base domain for subdomains. Used for CORS allowlist on M2M API (*.aviationwx.org). |
-| `public_ip` | — | Explicit public IPv4 (for FTP passive mode) |
-| `public_ipv6` | — | Explicit public IPv6 |
-| `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads |
+| `public_ip` | — | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
+| `public_ipv6` | — | Optional: reserved for future IPv6 support |
+| `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
@@ -166,8 +166,6 @@ Unit toggle defaults resolve in this order (first match wins):
   "config": {
     "default_timezone": "UTC",
     "base_domain": "aviationwx.org",
-    "public_ip": "178.128.130.116",
-    "public_ipv6": "2604:a880:2:d1::e88b:3001",
     "upload_hostname": "upload.aviationwx.org",
     
     "dead_man_switch_days": 7,
@@ -216,21 +214,34 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | Option | Type | Description |
 |--------|------|-------------|
 | `base_domain` | string | Base domain for URL generation (e.g., `aviationwx.org`) |
-| `public_ip` | string | Public IPv4 address for FTP passive mode |
-| `public_ipv6` | string | Public IPv6 address (optional) |
-| `upload_hostname` | string | Hostname for FTP/SFTP uploads |
+| `public_ip` | string | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
+| `public_ipv6` | string | Optional: reserved for future IPv6 support |
+| `upload_hostname` | string | Hostname for FTPs/SFTP uploads |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
 
 **FTP Passive Mode Resolution Priority:**
 
-1. **`public_ip`** (explicit) — Use directly, no DNS lookup needed
-2. **`upload_hostname`** — Resolve via DNS if `public_ip` not set
-3. **`upload.{base_domain}`** — Default fallback if neither is set
+1. **`public_ip`** — If set, use explicit IP (no DNS lookup). Use only when DNS is unavailable at startup.
+2. **`upload_hostname`** — If `public_ip` not set, resolve via DNS (recommended; survives IP changes)
+3. **`upload.{base_domain}`** — Default fallback if `upload_hostname` not set
 4. **`upload.aviationwx.org`** — Final fallback
 
-**Production Recommendation (Static IP):**
+**Recommended: Hostname (default)**
 
-For production servers with static IPs, set `public_ip` explicitly to eliminate DNS resolution as a startup dependency:
+Use `upload_hostname` for most deployments. Hostname resolution survives IP changes and works for both static and dynamic IPs:
+
+```json
+{
+  "config": {
+    "base_domain": "aviationwx.org",
+    "upload_hostname": "upload.aviationwx.org"
+  }
+}
+```
+
+**Optional: Explicit IP (edge cases)**
+
+Set `public_ip` only if DNS is unavailable or unreliable at container startup (e.g., restricted environments, early boot before DNS is ready):
 
 ```json
 {
@@ -244,7 +255,7 @@ For production servers with static IPs, set `public_ip` explicitly to eliminate 
 
 **Dynamic DNS (DDNS) Support:**
 
-For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), enable periodic DNS refresh:
+For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only—vsftpd resolves at connection time:
 
 ```json
 {
@@ -264,13 +275,12 @@ When `dynamic_dns_refresh_seconds` is enabled:
 
 **Self-Hosted/Federation:**
 
-For self-hosted instances with static IPs, configure your own domain:
+For self-hosted instances, configure your own domain. Hostname is recommended:
 
 ```json
 {
   "config": {
     "base_domain": "weather.myairport.org",
-    "public_ip": "203.0.113.50",
     "upload_hostname": "upload.weather.myairport.org"
   }
 }

@@ -253,14 +253,14 @@ chmod 755 "${SFTP_DIR}" 2>/dev/null || true
 echo "✓ SFTP directory initialized at ${SFTP_DIR}"
 
 # Configure vsftpd pasv_address
-# Priority: 1) config.public_ip (explicit IP), 2) config.upload_hostname (hostname), 3) default hostname
-# Use hostname + pasv_addr_resolve=YES to avoid 0,0,0,0 bug with dual-stack (listen_ipv6=YES)
+# Priority: 1) config.public_ip (if set, for DNS-unavailable-at-startup), 2) config.upload_hostname, 3) default
+# Hostname + pasv_addr_resolve=YES recommended; avoids 0,0,0,0 bug with dual-stack (listen_ipv6=YES)
 echo "Configuring pasv_address..."
 VSFTPD_PID=""
 PASV_ADDRESS=""
 PASV_ADDR_RESOLVE="NO"
 
-# Step 1: Try to read public_ip from airports.json config (explicit IP - use pasv_addr_resolve=NO)
+# Step 1: Optional explicit IP (use only when DNS unavailable at startup)
 if [ -f "$CONFIG_FILE" ]; then
     CONFIG_PUBLIC_IP=$(php -r "
         \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
