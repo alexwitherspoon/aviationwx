@@ -418,7 +418,7 @@ function detectCorruptBottomCornerFastFail($img, int $width, int $height): array
 {
     $size = defined('WEBCAM_ERROR_CORRUPT_CORNER_SIZE') ? WEBCAM_ERROR_CORRUPT_CORNER_SIZE : 10;
     $minMatch = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH : 8;
-    $minBrightness = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS : 80;
+    $minBrightness = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS : 35;
 
     $y = $height - 1;
     $xStart = max(0, $width - $size);
