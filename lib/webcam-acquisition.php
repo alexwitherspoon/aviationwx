@@ -252,14 +252,15 @@ abstract class BaseAcquisitionStrategy implements AcquisitionStrategy
     }
 
     /**
-     * Check for error frames (uniform color, pixelation, etc.)
-     * 
+     * Check for error frames (corrupt bottom, uniform color, pixelation, etc.)
+     *
      * @param string $imagePath Path to image file
+     * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); avoids redundant load when caller has it
      * @return array{is_error: bool, confidence: float, reasons: array}
      */
-    protected function detectErrorFrame(string $imagePath): array
+    protected function detectErrorFrame(string $imagePath, $gdImage = null): array
     {
-        return detectErrorFrame($imagePath, $this->airportConfig);
+        return detectErrorFrame($imagePath, $this->airportConfig, $gdImage);
     }
 }
 
@@ -1224,7 +1225,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return ['valid' => false, 'reason' => 'incomplete_upload', 'format' => $format];
         }
 
-        // Validate GD can parse the image
+        // Validate GD can parse the image; pass to detectErrorFrame to avoid redundant load
+        $testImg = null;
         if (function_exists('imagecreatefromstring')) {
             $imageData = @file_get_contents($file);
             if ($imageData === false) {
@@ -1237,18 +1239,18 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             unset($imageData);
         }
 
-        // Check for error frames (JPEG only)
-        if ($format === 'jpeg') {
-            $errorCheck = $this->detectErrorFrame($file);
-            if ($errorCheck['is_error']) {
-                require_once __DIR__ . '/webcam-rejection-logger.php';
-                saveRejectedWebcam($file, $this->airportId, $this->camIndex, 'error_frame', [
-                    'source' => 'push',
-                    'confidence' => $errorCheck['confidence'],
-                    'reasons' => $errorCheck['reasons']
-                ]);
-                return ['valid' => false, 'reason' => 'error_frame', 'details' => $errorCheck];
-            }
+        // Check for error frames (corrupt bottom, uniform color, etc.)
+        // Run for JPEG, PNG, WebP - corruption can occur in any format (partial uploads)
+        $errorCheck = $this->detectErrorFrame($file, $testImg);
+        unset($testImg); // Free memory before EXIF check
+        if ($errorCheck['is_error']) {
+            require_once __DIR__ . '/webcam-rejection-logger.php';
+            saveRejectedWebcam($file, $this->airportId, $this->camIndex, 'error_frame', [
+                'source' => 'push',
+                'confidence' => $errorCheck['confidence'],
+                'reasons' => $errorCheck['reasons']
+            ]);
+            return ['valid' => false, 'reason' => 'error_frame', 'details' => $errorCheck];
         }
 
         // Validate EXIF timestamp
