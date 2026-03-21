@@ -217,7 +217,7 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | `base_domain` | string | Base domain for URL generation (e.g., `aviationwx.org`) |
 | `public_ip` | string | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
 | `public_ipv6` | string | Optional: reserved for future IPv6 support |
-| `upload_hostname` | string | Hostname for FTPs/SFTP uploads |
+| `upload_hostname` | string | Hostname for FTP/SFTP uploads |
 | `network_ports` | object | Optional object defining TCP ports for self-hosted production. `deploy-configure-firewall.sh` applies host UFW/iptables/NAT from these values; the web container entrypoint sets **vsftpd** (`listen_port`, passive range), **sshd** (SFTP on `sftp`), and **fail2ban** jails to match. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ssh`** opens the host admin SSH port in UFW only; container SFTP listens on **`sftp`**. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
 

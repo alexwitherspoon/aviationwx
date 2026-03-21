@@ -1165,16 +1165,9 @@ jobs:
             chmod +x scripts/deploy-configure-firewall.sh
             ./scripts/deploy-configure-firewall.sh
           else
-            echo "⚠️  Firewall script not found, configuring ports manually..."
-            # Fallback: configure ports directly (should match deploy-configure-firewall.sh)
-            sudo ufw allow 80/tcp comment 'HTTP (Nginx)' || true
-            sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
-            sudo ufw allow 2121/tcp comment 'FTP (Push webcams)' || true
-            sudo ufw allow 2122/tcp comment 'FTPS (Push webcams)' || true
-            sudo ufw allow 2222/tcp comment 'SFTP (Push webcams)' || true
-            sudo ufw allow 50000:51000/tcp comment 'FTP passive mode (Push webcams)' || true
-            sudo ufw allow 22/tcp comment 'SSH (System access)' || true
-            sudo ufw status numbered
+            echo "❌ scripts/deploy-configure-firewall.sh not found after rsync."
+            echo "   Cannot apply config.network_ports safely; refusing hardcoded port fallback."
+            exit 1
           fi
           EOF
 

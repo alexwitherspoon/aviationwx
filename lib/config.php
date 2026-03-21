@@ -3114,7 +3114,8 @@ function validateAirportsJsonStructure(array $config): array {
                 $errors[] = 'config.host_firewall is not a valid key; TCP ports are configured in config.network_ports';
             }
             if (isset($cfg['network_ports'])) {
-                if (!is_array($cfg['network_ports'])) {
+                // JSON objects decode to associative arrays; JSON arrays decode to list arrays — reject lists.
+                if (!is_array($cfg['network_ports']) || array_is_list($cfg['network_ports'])) {
                     $errors[] = 'config.network_ports must be an object';
                 } else {
                     $hf = $cfg['network_ports'];

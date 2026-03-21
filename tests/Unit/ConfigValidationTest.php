@@ -2957,6 +2957,28 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid network_ports should pass validation');
     }
 
+    public function testGlobalConfig_NetworkPortsJsonArrayRejected()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [80, 443, 2121],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'network_ports as JSON array must be rejected');
+        $this->assertStringContainsString('config.network_ports must be an object', implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_HostFirewallKeyRejected()
     {
         $config = [
