@@ -521,6 +521,7 @@ function getSchedulerStatus(): array {
 
 /**
  * Resolved listener ports for status display (defaults merged with config.network_ports).
+ * List-shaped network_ports (invalid JSON shape) yields defaults — matches validateAirportsJsonStructure.
  *
  * @return array{ftp_control:int,ftps_explicit_tls:int,sftp:int}
  */
@@ -536,6 +537,9 @@ function getNetworkPortsForStatusDisplay(): array
         return $ports;
     }
     $np = $full['config']['network_ports'];
+    if (array_is_list($np)) {
+        return $ports;
+    }
     foreach ($ports as $key => $default) {
         if (!isset($np[$key]) || !is_numeric($np[$key])) {
             continue;

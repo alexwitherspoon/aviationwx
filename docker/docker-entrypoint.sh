@@ -126,6 +126,10 @@ load_network_ports_from_config() {
         echo "✓ Network ports: not set — using defaults"
         return 0
     fi
+    if ! jq -e '(.config.network_ports | type == "object")' "$config" >/dev/null 2>&1; then
+        echo "❌ config.network_ports must be a JSON object" >&2
+        exit 1
+    fi
     local merged='(.config.network_ports // {})'
     local http https fc ft sftp pmin pmax sshp
     http=$(jq -r "${merged} | .http // 80" "$config")

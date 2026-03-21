@@ -3118,17 +3118,17 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!is_array($cfg['network_ports']) || array_is_list($cfg['network_ports'])) {
                     $errors[] = 'config.network_ports must be an object';
                 } else {
-                    $hf = $cfg['network_ports'];
+                    $np = $cfg['network_ports'];
                     $prefix = 'config.network_ports';
-                    $hfIntKeys = [
+                    $npIntKeys = [
                         'http', 'https', 'ftp_control', 'ftps_explicit_tls', 'sftp',
                         'ftp_passive_min', 'ftp_passive_max', 'ssh', 'ftps_alt',
                     ];
-                    foreach ($hfIntKeys as $hk) {
-                        if (!array_key_exists($hk, $hf)) {
+                    foreach ($npIntKeys as $hk) {
+                        if (!array_key_exists($hk, $np)) {
                             continue;
                         }
-                        $hv = $hf[$hk];
+                        $hv = $np[$hk];
                         if ($hv === null) {
                             continue;
                         }
@@ -3138,13 +3138,13 @@ function validateAirportsJsonStructure(array $config): array {
                             $errors[] = "{$prefix}.{$hk} must be between 1 and 65535";
                         }
                     }
-                    $pmin = $hf['ftp_passive_min'] ?? null;
-                    $pmax = $hf['ftp_passive_max'] ?? null;
+                    $pmin = $np['ftp_passive_min'] ?? null;
+                    $pmax = $np['ftp_passive_max'] ?? null;
                     if ($pmin !== null && $pmax !== null && is_int($pmin) && is_int($pmax) && $pmin >= $pmax) {
                         $errors[] = "{$prefix}.ftp_passive_min must be less than ftp_passive_max";
                     }
-                    $fc = $hf['ftp_control'] ?? null;
-                    $fa = $hf['ftps_alt'] ?? null;
+                    $fc = $np['ftp_control'] ?? null;
+                    $fa = $np['ftps_alt'] ?? null;
                     if ($fc !== null && $fa !== null && is_int($fc) && is_int($fa) && $fc === $fa) {
                         $errors[] = "{$prefix}.ftps_alt must differ from ftp_control";
                     }
