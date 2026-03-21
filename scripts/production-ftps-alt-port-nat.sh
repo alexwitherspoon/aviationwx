@@ -56,7 +56,32 @@ require_root() {
 }
 
 file_has_nat_table() {
-    grep -q '^\*nat$' "$1"
+    # iptables-restore format: *nat as the table declaration (tolerate whitespace)
+    grep -qE '^[[:space:]]*\*nat([[:space:]]|$)' "$1" 2>/dev/null
+}
+
+# Some hosts ship UFW before*.rules with *filter only (no *nat). REDIRECT rules need a nat table.
+append_minimal_nat_table() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        echo "❌ Missing $file" >&2
+        return 1
+    fi
+    if file_has_nat_table "$file"; then
+        return 0
+    fi
+    cp -a "$file" "${file}.bak.appendnat.$(date +%Y%m%d%H%M%S)"
+    cat >> "$file" << 'EOF'
+
+# NAT table (appended by AviationWX production-ftps-alt-port-nat.sh — required for PREROUTING REDIRECT)
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+COMMIT
+EOF
+    echo "✓ Appended minimal *nat table to $file (UFW had no nat block)"
 }
 
 # UFW rule files must keep their original owner/mode after mktemp+mv (GNU coreutils; production host is Linux).
@@ -78,12 +103,22 @@ apply_file_metadata_from() {
 # Ensures we never IPv4-only half-install when IPv6 rules file exists but cannot be edited.
 assert_prereq_nat_tables() {
     if ! file_has_nat_table "$BEFORE_RULES"; then
-        echo "❌ No *nat table in $BEFORE_RULES — add NAT REDIRECT manually (see docs/OPERATIONS.md)." >&2
+        echo "⚠️  No *nat table in $BEFORE_RULES — appending minimal *nat block (required for REDIRECT)."
+        append_minimal_nat_table "$BEFORE_RULES" || {
+            echo "❌ Could not add *nat table to $BEFORE_RULES — see docs/OPERATIONS.md." >&2
+            exit 1
+        }
+    fi
+    if ! file_has_nat_table "$BEFORE_RULES"; then
+        echo "❌ *nat table still missing in $BEFORE_RULES after append attempt." >&2
         exit 1
     fi
     if [ -f "$BEFORE6_RULES" ] && ! file_has_nat_table "$BEFORE6_RULES"; then
-        echo "❌ $BEFORE6_RULES exists but has no *nat table; refusing to change IPv4 only." >&2
-        exit 1
+        echo "⚠️  No *nat table in $BEFORE6_RULES — appending minimal *nat block."
+        append_minimal_nat_table "$BEFORE6_RULES" || {
+            echo "❌ Could not add *nat table to $BEFORE6_RULES." >&2
+            exit 1
+        }
     fi
 }
 
