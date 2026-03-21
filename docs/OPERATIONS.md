@@ -201,6 +201,8 @@ sudo ./scripts/production-ftps-alt-port-nat.sh remove
 
 The script inserts a marked block into `/etc/ufw/before.rules` and `/etc/ufw/before6.rules`, then runs `ufw reload`, so the rules persist across reloads.
 
+If UFW’s `before.rules` has no `*nat` table (some minimal installs ship filter-only), the script appends a minimal `*nat` block so PREROUTING REDIRECT rules can load. If that still fails, ensure `/etc/ufw/before.rules` is writable and UFW is installed (`sudo ufw status`).
+
 After REDIRECT, vsftpd still listens on `ftp_control` inside the container. When `ftps_alt` is set, `deploy-configure-firewall.sh` adds `ufw allow` for that port so stale-rule cleanup does not drop it.
 
 From another machine (substitute your hostname and port):
