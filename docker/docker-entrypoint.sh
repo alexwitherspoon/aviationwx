@@ -70,7 +70,9 @@ fi
 # airports.json contains API keys, passwords, and other secrets
 # Permissions: 640 (root read/write, www-data read, others none)
 echo "Securing config file permissions..."
+# Include resolved CONFIG_FILE first (CONFIG_PATH may point outside default paths)
 SECURE_CONFIG_FILES=(
+    "${CONFIG_FILE}"
     "/var/www/html/config/airports.json"
     "/var/www/html/secrets/airports.json"
     "/home/aviationwx/airports.json"

@@ -52,6 +52,12 @@ read_network_ports_config() {
         echo "❌ config.host_firewall is not a valid key; TCP ports are configured in config.network_ports" >&2
         exit 1
     fi
+    if jq -e '.config.network_ports != null' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+        if ! jq -e '(.config.network_ports | type == "object")' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+            echo "❌ config.network_ports must be a JSON object (not an array or string)" >&2
+            exit 1
+        fi
+    fi
 
     local merged='(.config.network_ports // {})'
     HTTP_PORT=$(jq -r "${merged} | .http // 80" "$AIRPORTS_JSON")
@@ -149,7 +155,11 @@ echo "network_ports: http=${HTTP_PORT} https=${HTTPS_PORT} ftp=${FTP_CONTROL} ft
 if [ -n "$FTPS_ALT" ]; then
     echo "ftps_alt (NAT to ${FTP_CONTROL}): ${FTPS_ALT}"
 else
-    echo "ftps_alt: (unset — NAT cleared when airports.json readable)"
+    if [ "$AIRPORTS_CONFIG_READABLE" = "true" ]; then
+        echo "ftps_alt: (unset — NAT cleared when ensure runs with empty ftps_alt)"
+    else
+        echo "ftps_alt: (unset — NAT not reconciled: airports.json missing or unreadable at ${AIRPORTS_JSON})"
+    fi
 fi
 echo ""
 

@@ -29,7 +29,7 @@ BEFORE6_RULES='/etc/ufw/before6.rules'
 
 usage() {
     echo "Usage: $0 install <alt_port> | ensure [<alt_port>] | remove | status" >&2
-    echo "  install <port>  Insert NAT REDIRECT (IPv4+IPv6) alt_port -> 2121 in UFW before*.rules" >&2
+    echo "  install <port>  Insert NAT REDIRECT (IPv4+IPv6) alt_port -> ${VSFTPD_LISTEN_PORT} (VSFTPD_LISTEN_PORT) in UFW before*.rules" >&2
     echo "  ensure [port]   Idempotent: set redirect to port, or clear if port empty (deployments)" >&2
     echo "  remove          Delete the marked block from before*.rules and reload ufw" >&2
     echo "  status          Show whether the marker is present and list nat PREROUTING redirects" >&2

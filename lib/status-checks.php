@@ -563,11 +563,12 @@ function getNetworkPortsForStatusDisplay(): array
 function checkFtpSftpServices(): array
 {
     $np = getNetworkPortsForStatusDisplay();
+    $vsftpdPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
     $services = [
         'vsftpd' => [
             'name' => 'FTP/FTPS Server',
             'running' => false,
-            'ports' => [$np['ftp_control'], $np['ftps_explicit_tls']],
+            'ports' => $vsftpdPorts,
         ],
         'sshd' => [
             'name' => 'SFTP Server',
