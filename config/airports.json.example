@@ -9,6 +9,18 @@
     "public_ip": "",
     "public_ipv6": "",
     "upload_hostname": "",
+    "_comment_network_ports": "Self-hosted production TCP port map: UFW/deploy (deploy-configure-firewall.sh), vsftpd, container SFTP (sshd), and fail2ban. Omitted keys use defaults. ssh opens the host admin SSH port in the firewall; sftp is the SFTP listener inside the web container. ftps_alt is an optional extra inbound FTP control port on the host (NAT to ftp_control).",
+    "network_ports": {
+      "http": 80,
+      "https": 443,
+      "ftp_control": 2121,
+      "ftps_explicit_tls": 2122,
+      "sftp": 2222,
+      "ftp_passive_min": 50000,
+      "ftp_passive_max": 51000,
+      "ssh": 22,
+      "ftps_alt": null
+    },
     "dynamic_dns_refresh_seconds": 0,
     
     "_comment_version": "Client version management. dead_man_switch_days=0 disables. force_cleanup triggers immediate cleanup for all clients.",

@@ -17,6 +17,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `public_ip` | — | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
 | `public_ipv6` | — | Optional: reserved for future IPv6 support |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
+| `network_ports` | — | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
@@ -217,7 +218,10 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | `public_ip` | string | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
 | `public_ipv6` | string | Optional: reserved for future IPv6 support |
 | `upload_hostname` | string | Hostname for FTPs/SFTP uploads |
+| `network_ports` | object | Optional object defining TCP ports for self-hosted production. `deploy-configure-firewall.sh` applies host UFW/iptables/NAT from these values; the web container entrypoint sets **vsftpd** (`listen_port`, passive range), **sshd** (SFTP on `sftp`), and **fail2ban** jails to match. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ssh`** opens the host admin SSH port in UFW only; container SFTP listens on **`sftp`**. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
+
+**Network ports (`network_ports`):** On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and aligns **vsftpd**, **sshd** (SFTP), and **fail2ban** with that map. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
 
 **FTP Passive Mode Resolution Priority:**
 
@@ -791,9 +795,10 @@ For cameras that upload images to the server:
 ```
 
 **Connection details:**
-- SFTP: Port 2222, Host: `upload.aviationwx.org`
-- FTP/FTPS: Port 2121, Host: `upload.aviationwx.org`
-- **Both protocols enabled**: Each push camera gets both FTP and SFTP access with the same credentials
+- SFTP: port from `config.network_ports.sftp` (default 2222), host from `upload_hostname` / `upload.{base_domain}`
+- FTP/FTPS: control port from `config.network_ports.ftp_control` (default 2121), same host as SFTP
+- **Both protocols enabled**: Each push camera gets FTP and SFTP with the same credentials
+- Restricted client networks: set `config.network_ports.ftps_alt` for an extra inbound control port (NAT to `ftp_control`); `deploy-configure-firewall.sh` applies UFW and NAT on deploy. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 
 **Upload paths:**
 - **FTP**: Upload to `/` (vsftpd lands in FTP directory)

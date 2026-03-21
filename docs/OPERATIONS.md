@@ -182,6 +182,33 @@ docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationw
 docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/aviationwx/app.log | jq 'select(.level == "error")' | tail -20
 ```
 
+### FTPS alternate control port (NAT redirect)
+
+Some client networks block non-standard FTP control ports. With host networking, vsftpd binds `config.network_ports.ftp_control` on the host (default 2121). Add a second inbound TCP port that netfilter REDIRECTs to `ftp_control` before traffic reaches vsftpd so logs and fail2ban keep the real client source IP (unlike a userspace forward to `127.0.0.1`).
+
+Hostname, credentials, TLS, and passive data ports (`ftp_passive_min` / `ftp_passive_max`) stay as configured; the alternate inbound port is only for the control connection.
+
+**Declarative setup:** On the production host, `~/airports.json` (same file as `CONFIG_PATH`) may include `config.network_ports` (see [Configuration](CONFIGURATION.md#network-configuration)). Set `ftps_alt` to the extra inbound control port; NAT targets `ftp_control`. Each deploy runs `scripts/deploy-configure-firewall.sh` after rsync to apply UFW/iptables and runs `production-ftps-alt-port-nat.sh ensure` with `VSFTPD_LISTEN_PORT` equal to `ftp_control`. If `~/airports.json` is missing, deploy uses built-in port defaults and skips NAT reconciliation.
+
+**Manual (host, not inside Docker):**
+
+```bash
+sudo ./scripts/production-ftps-alt-port-nat.sh install 8021   # one-time style; prefer ensure + config for CD
+sudo ./scripts/production-ftps-alt-port-nat.sh ensure 8021      # idempotent
+sudo ./scripts/production-ftps-alt-port-nat.sh status
+sudo ./scripts/production-ftps-alt-port-nat.sh remove
+```
+
+The script inserts a marked block into `/etc/ufw/before.rules` and `/etc/ufw/before6.rules`, then runs `ufw reload`, so the rules persist across reloads.
+
+After REDIRECT, vsftpd still listens on `ftp_control` inside the container. When `ftps_alt` is set, `deploy-configure-firewall.sh` adds `ufw allow` for that port so stale-rule cleanup does not drop it.
+
+From another machine (substitute your hostname and port):
+
+```bash
+openssl s_client -connect upload.example.org:8021 -starttls ftp -servername upload.example.org </dev/null
+```
+
 ---
 
 ## Client Version Management
@@ -259,10 +286,10 @@ Protects FTP/SFTP camera uploads with forgiving policies (10 failures in 1 hour 
 # Check all container jails
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status
 
-# Check vsftpd jail (FTP/FTPS on ports 2121/2122)
+# Check vsftpd jail (ports match config.network_ports.ftp_control / ftps_explicit_tls; defaults 2121/2122)
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd
 
-# Check sshd-sftp jail (SFTP on port 2222)
+# Check sshd-sftp jail (port matches config.network_ports.sftp; default 2222)
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status sshd-sftp
 
 # View currently banned IPs for vsftpd

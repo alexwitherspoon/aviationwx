@@ -19,7 +19,11 @@ fi
 
 # For backward compatibility, check if airports.json exists in config directory
 # (fallback for environments that don't use CONFIG_PATH)
+# Prefer CONFIG_PATH when set (production docker-compose sets CONFIG_PATH=/var/www/html/config/airports.json)
 CONFIG_FILE="${CONFIG_DIR}/airports.json"
+if [ -n "${CONFIG_PATH:-}" ]; then
+    CONFIG_FILE="${CONFIG_PATH}"
+fi
 
 # Handle airports.json fallback for local development
 # Production: airports.json is mounted from /home/aviationwx/airports.json (must exist)
@@ -78,6 +82,84 @@ for config_file in "${SECURE_CONFIG_FILES[@]}"; do
     fi
 done
 echo "✓ Config files secured (640 root:www-data)"
+
+# ---------------------------------------------------------------------------
+# TCP port map: optional config.network_ports (defaults match deploy-configure-firewall.sh).
+# Applies to vsftpd, sshd (SFTP), and fail2ban inside this container.
+# ---------------------------------------------------------------------------
+HOST_HTTP_PORT=80
+HOST_HTTPS_PORT=443
+FTP_CONTROL_PORT=2121
+FTPS_EXPLICIT_TLS_PORT=2122
+SFTP_PORT=2222
+FTP_PASSIVE_MIN=50000
+FTP_PASSIVE_MAX=51000
+SSH_PORT=22
+
+validate_tcp_port() {
+    local p="$1"
+    local name="$2"
+    if ! [[ "$p" =~ ^[0-9]+$ ]] || [ "$p" -lt 1 ] || [ "$p" -gt 65535 ]; then
+        echo "⚠️  Warning: invalid $name ($p), must be 1-65535 — using default"
+        return 1
+    fi
+    return 0
+}
+
+load_network_ports_from_config() {
+    local config="$1"
+    if [ ! -f "$config" ]; then
+        echo "✓ Network ports: using defaults (config file missing: $config)"
+        return 0
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "⚠️  Warning: jq missing — network ports default to stock Docker values"
+        return 0
+    fi
+    if jq -e '(.config | has("host_firewall"))' "$config" >/dev/null 2>&1; then
+        echo "❌ config.host_firewall is not a valid key; TCP ports are configured in config.network_ports" >&2
+        exit 1
+    fi
+    if ! jq -e '(.config.network_ports != null)' "$config" >/dev/null 2>&1; then
+        echo "✓ Network ports: not set — using defaults"
+        return 0
+    fi
+    local merged='(.config.network_ports // {})'
+    local http https fc ft sftp pmin pmax sshp
+    http=$(jq -r "${merged} | .http // 80" "$config")
+    https=$(jq -r "${merged} | .https // 443" "$config")
+    fc=$(jq -r "${merged} | .ftp_control // 2121" "$config")
+    ft=$(jq -r "${merged} | .ftps_explicit_tls // 2122" "$config")
+    sftp=$(jq -r "${merged} | .sftp // 2222" "$config")
+    pmin=$(jq -r "${merged} | .ftp_passive_min // 50000" "$config")
+    pmax=$(jq -r "${merged} | .ftp_passive_max // 51000" "$config")
+    sshp=$(jq -r "${merged} | .ssh // 22" "$config")
+
+    if validate_tcp_port "$http" "network_ports.http"; then HOST_HTTP_PORT="$http"; fi
+    if validate_tcp_port "$https" "network_ports.https"; then HOST_HTTPS_PORT="$https"; fi
+    if validate_tcp_port "$fc" "network_ports.ftp_control"; then FTP_CONTROL_PORT="$fc"; fi
+    if validate_tcp_port "$ft" "network_ports.ftps_explicit_tls"; then FTPS_EXPLICIT_TLS_PORT="$ft"; fi
+    if validate_tcp_port "$sftp" "network_ports.sftp"; then SFTP_PORT="$sftp"; fi
+    if validate_tcp_port "$pmin" "network_ports.ftp_passive_min"; then FTP_PASSIVE_MIN="$pmin"; fi
+    if validate_tcp_port "$pmax" "network_ports.ftp_passive_max"; then FTP_PASSIVE_MAX="$pmax"; fi
+    if validate_tcp_port "$sshp" "network_ports.ssh"; then SSH_PORT="$sshp"; fi
+
+    if [ "$FTP_PASSIVE_MIN" -ge "$FTP_PASSIVE_MAX" ]; then
+        echo "⚠️  Warning: network_ports passive range invalid (min >= max) — using 50000-51000"
+        FTP_PASSIVE_MIN=50000
+        FTP_PASSIVE_MAX=51000
+    fi
+
+    echo "✓ Network ports from config: http=${HOST_HTTP_PORT} https=${HOST_HTTPS_PORT} ftp_control=${FTP_CONTROL_PORT} ftps_explicit_tls=${FTPS_EXPLICIT_TLS_PORT} sftp=${SFTP_PORT} passive=${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX} ssh=${SSH_PORT}"
+    if [ "$FTP_CONTROL_PORT" -eq "$FTPS_EXPLICIT_TLS_PORT" ]; then
+        echo "  (ftp_control equals ftps_explicit_tls: one vsftpd control listener; fail2ban uses that port set)"
+    else
+        echo "  ⚠️  ftps_explicit_tls differs from ftp_control: vsftpd listens on ftp_control only."
+        echo "     UFW/fail2ban still track both values from network_ports; use NAT (e.g. ftps_alt) if clients need another inbound control port."
+    fi
+}
+
+load_network_ports_from_config "$CONFIG_FILE"
 
 # Start cron daemon in background
 echo "Starting cron daemon..."
@@ -252,6 +334,29 @@ chmod 755 "${SFTP_DIR}" 2>/dev/null || true
 
 echo "✓ SFTP directory initialized at ${SFTP_DIR}"
 
+# Sync vsftpd listen_port and passive range with network_ports (ftp_control, ftp_passive_*)
+VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
+if [ -f "$VSFTPD_CONF" ]; then
+    if grep -q "^listen_port=" "$VSFTPD_CONF"; then
+        sed -i "s/^listen_port=.*/listen_port=${FTP_CONTROL_PORT}/" "$VSFTPD_CONF"
+    else
+        echo "listen_port=${FTP_CONTROL_PORT}" >> "$VSFTPD_CONF"
+    fi
+    if grep -q "^pasv_min_port=" "$VSFTPD_CONF"; then
+        sed -i "s/^pasv_min_port=.*/pasv_min_port=${FTP_PASSIVE_MIN}/" "$VSFTPD_CONF"
+    else
+        echo "pasv_min_port=${FTP_PASSIVE_MIN}" >> "$VSFTPD_CONF"
+    fi
+    if grep -q "^pasv_max_port=" "$VSFTPD_CONF"; then
+        sed -i "s/^pasv_max_port=.*/pasv_max_port=${FTP_PASSIVE_MAX}/" "$VSFTPD_CONF"
+    else
+        echo "pasv_max_port=${FTP_PASSIVE_MAX}" >> "$VSFTPD_CONF"
+    fi
+    echo "✓ vsftpd listen_port=${FTP_CONTROL_PORT} pasv ${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX}"
+else
+    echo "⚠️  Warning: vsftpd config not found at $VSFTPD_CONF"
+fi
+
 # Configure vsftpd pasv_address
 # Priority: 1) config.public_ip (if set, for DNS-unavailable-at-startup), 2) config.upload_hostname, 3) default
 # Hostname + pasv_addr_resolve=YES recommended; avoids 0,0,0,0 bug with dual-stack (listen_ipv6=YES)
@@ -305,7 +410,6 @@ if [ -z "$PASV_ADDRESS" ]; then
 fi
 
 # Update vsftpd.conf with pasv_address and pasv_addr_resolve
-VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
 if [ -f "$VSFTPD_CONF" ]; then
     if [ -n "$PASV_ADDRESS" ]; then
         # Add or update pasv_address
@@ -563,7 +667,7 @@ start_vsftpd_instance() {
 
 # Start single dual-stack vsftpd instance (handles both IPv4 and IPv6)
 if [ -f "/etc/vsftpd/vsftpd.conf" ]; then
-    start_vsftpd_instance "/etc/vsftpd/vsftpd.conf" "vsftpd (dual-stack)" "VSFTPD_PID" || true
+    start_vsftpd_instance "/etc/vsftpd/vsftpd.conf" "vsftpd (dual-stack)" "VSFTPD_PID" "${FTP_CONTROL_PORT}" || true
 else
     echo "⚠️  Warning: vsftpd config not found - FTP service will not be available"
     echo "   Web service will continue to function normally"
@@ -601,6 +705,20 @@ EOF
     fi
 fi
 
+# Set sshd Port to network_ports.sftp (container SFTP listener)
+if [ -f /etc/ssh/sshd_config ]; then
+    if grep -qE '^Port[[:space:]]' /etc/ssh/sshd_config; then
+        sed -i "s/^Port .*/Port ${SFTP_PORT}/" /etc/ssh/sshd_config
+    elif grep -qE '^#Port[[:space:]]' /etc/ssh/sshd_config; then
+        sed -i "s/^#Port .*/Port ${SFTP_PORT}/" /etc/ssh/sshd_config
+    else
+        sed -i "/^Match /i Port ${SFTP_PORT}" /etc/ssh/sshd_config
+    fi
+    echo "✓ sshd Port=${SFTP_PORT}"
+else
+    echo "⚠️  Warning: /etc/ssh/sshd_config not found — SFTP port not applied"
+fi
+
 # Start sshd (if not already running)
 echo "Starting sshd..."
 service ssh start || {
@@ -623,8 +741,8 @@ fi
 
 # Verify ports are listening (give services a moment to bind)
 sleep 2
-if ! netstat -tuln 2>/dev/null | grep -q ':2121\|:2122\|:2222'; then
-    echo "Warning: FTP/SFTP ports may not be listening yet"
+if ! netstat -tuln 2>/dev/null | grep -qE ":${FTP_CONTROL_PORT}|:${SFTP_PORT}"; then
+    echo "Warning: FTP/SFTP ports may not be listening yet (expect ${FTP_CONTROL_PORT}, ${SFTP_PORT})"
 fi
 
 echo "All services started successfully"
@@ -636,6 +754,57 @@ WATCHDOG_PID=$!
 
 # Trap signals to clean up watchdog on exit
 trap "kill $WATCHDOG_PID 2>/dev/null || true" EXIT
+
+# Write fail2ban jail and sshd-sftp filter for the configured FTP/SFTP ports
+echo "Configuring fail2ban ports..."
+FTP_FAIL2BAN_PORTS="${FTP_CONTROL_PORT}"
+if [ "$FTP_CONTROL_PORT" -ne "$FTPS_EXPLICIT_TLS_PORT" ]; then
+    FTP_FAIL2BAN_PORTS="${FTP_CONTROL_PORT},${FTPS_EXPLICIT_TLS_PORT}"
+fi
+cat > /etc/fail2ban/jail.d/aviationwx.conf << EOF
+# Fail2ban jail for AviationWX camera uploads (ports from config.network_ports at container start)
+
+[DEFAULT]
+bantime = 3600
+findtime = 3600
+maxretry = 10
+backend = auto
+destemail = root@localhost
+sendername = Fail2Ban
+action = %(action_)s
+
+[vsftpd]
+enabled = true
+port = ${FTP_FAIL2BAN_PORTS}
+filter = vsftpd
+logpath = /var/log/vsftpd.log
+maxretry = 10
+findtime = 3600
+bantime = 3600
+action = iptables-multiport[name=VSFTPD, port="${FTP_FAIL2BAN_PORTS}", protocol=tcp]
+
+[sshd-sftp]
+enabled = true
+port = ${SFTP_PORT}
+filter = sshd-sftp
+logpath = /var/log/auth.log
+maxretry = 10
+findtime = 3600
+bantime = 3600
+action = iptables-multiport[name=SSHD-SFTP, port="${SFTP_PORT}", protocol=tcp]
+EOF
+cat > /etc/fail2ban/filter.d/sshd-sftp.conf << EOF
+# Fail2ban filter for sshd SFTP on port ${SFTP_PORT} (config.network_ports.sftp)
+
+[Definition]
+failregex = ^.*Failed password for .* from <HOST> port ${SFTP_PORT}.*$
+            ^.*Invalid user .* from <HOST> port ${SFTP_PORT}.*$
+            ^.*Connection closed by authenticating user .* <HOST> port ${SFTP_PORT}.*$
+            ^.*Connection reset by authenticating user .* <HOST> port ${SFTP_PORT}.*$
+
+ignoreregex =
+EOF
+echo "✓ fail2ban: vsftpd ports=${FTP_FAIL2BAN_PORTS} sshd-sftp port=${SFTP_PORT}"
 
 # Start fail2ban
 echo "Starting fail2ban..."
