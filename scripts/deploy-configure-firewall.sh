@@ -98,6 +98,14 @@ read_network_ports_config() {
 
 read_network_ports_config
 
+# Stale-rule cleanup is safe when airports.json exists (authoritative desired state).
+# If the file is missing, baked-in defaults may not match a host with custom ports.
+if [ ! -f "$AIRPORTS_JSON" ]; then
+    CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-false}"
+else
+    CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-true}"
+fi
+
 # =============================================================================
 # DESIRED STATE: built from config.network_ports (or defaults above)
 # =============================================================================
@@ -126,8 +134,7 @@ PROTECTED_PORTS=("${SSH_PORT}/tcp" "${SSH_PORT}")
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-# Set to "true" to enable cleanup of stale rules (recommended for production)
-CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-true}"
+# Set to "true" to enable cleanup of stale rules (default when airports.json is present)
 
 # Set to "true" for dry-run mode (shows what would be done without making changes)
 DRY_RUN="${DRY_RUN:-false}"

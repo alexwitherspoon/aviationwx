@@ -59,6 +59,22 @@ file_has_nat_table() {
     grep -q '^\*nat$' "$1"
 }
 
+# UFW rule files must keep their original owner/mode after mktemp+mv (GNU coreutils; production host is Linux).
+apply_file_metadata_from() {
+    local src="$1"
+    local dst="$2"
+    if chown --reference="$src" "$dst" 2>/dev/null; then
+        :
+    else
+        chown "$(stat -c '%u:%g' "$src")" "$dst"
+    fi
+    if chmod --reference="$src" "$dst" 2>/dev/null; then
+        :
+    else
+        chmod "$(stat -c '%a' "$src")" "$dst"
+    fi
+}
+
 # Ensures we never IPv4-only half-install when IPv6 rules file exists but cannot be edited.
 assert_prereq_nat_tables() {
     if ! file_has_nat_table "$BEFORE_RULES"; then
@@ -98,6 +114,7 @@ insert_redirect_block() {
         }
         { print }
     ' "$file" > "$tmp"
+    apply_file_metadata_from "$file" "$tmp"
     mv "$tmp" "$file"
     echo "✓ Updated $file"
 }
@@ -208,6 +225,7 @@ remove_marked_block() {
         index($0, end) == 1 { skip = 0; next }
         skip == 0 { print }
     ' "$file" > "$tmp"
+    apply_file_metadata_from "$file" "$tmp"
     mv "$tmp" "$file"
     echo "✓ Removed AVIATIONWX FTPS alt block from $file"
 }

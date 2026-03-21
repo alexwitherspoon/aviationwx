@@ -794,13 +794,14 @@ bantime = 3600
 action = iptables-multiport[name=SSHD-SFTP, port="${SFTP_PORT}", protocol=tcp]
 EOF
 cat > /etc/fail2ban/filter.d/sshd-sftp.conf << EOF
-# Fail2ban filter for sshd SFTP on port ${SFTP_PORT} (config.network_ports.sftp)
+# Fail2ban filter for sshd SFTP (jail listens on config.network_ports.sftp = ${SFTP_PORT}).
+# auth.log "port N" is the client ephemeral port, not the server listen port — match any digits.
 
 [Definition]
-failregex = ^.*Failed password for .* from <HOST> port ${SFTP_PORT}.*$
-            ^.*Invalid user .* from <HOST> port ${SFTP_PORT}.*$
-            ^.*Connection closed by authenticating user .* <HOST> port ${SFTP_PORT}.*$
-            ^.*Connection reset by authenticating user .* <HOST> port ${SFTP_PORT}.*$
+failregex = ^.*Failed password for .* from <HOST> port [0-9]+.*$
+            ^.*Invalid user .* from <HOST> port [0-9]+.*$
+            ^.*Connection closed by authenticating user .* <HOST> port [0-9]+.*$
+            ^.*Connection reset by authenticating user .* <HOST> port [0-9]+.*$
 
 ignoreregex =
 EOF
