@@ -114,7 +114,7 @@ AviationWX uses a **dual fail2ban architecture** for defense in depth:
 
 ```
 Protected Services:
-- vsftpd (FTP/FTPS) on `ftp_control` and `ftps_explicit_tls` from `config.network_ports` (defaults 2121, 2122)
+- vsftpd: one control listener inside the container (`listen_port` = `ftp_control`; FTP and explicit FTPS/STARTTLS on that port). `ftps_explicit_tls` in `network_ports` is for host UFW/fail2ban when you expose a distinct inbound port for explicit-TLS clients; it is not a second vsftpd bind (same instance as `ftp_control`; use `ftps_alt` NAT for extra inbound ports).
 - sshd-sftp (SFTP) on `sftp` from `config.network_ports` (default 2222)
 
 Ban Policy (Forgiving):

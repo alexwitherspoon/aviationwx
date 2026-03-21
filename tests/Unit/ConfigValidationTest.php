@@ -2979,6 +2979,32 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('config.network_ports must be an object', implode(' ', $result['errors']));
     }
 
+    public function testGlobalConfig_NetworkPortsStringPortRejected()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [
+                    'http' => '80',
+                    'https' => 443,
+                ],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String-typed port values must be rejected');
+        $this->assertStringContainsString('network_ports.http', implode(' ', $result['errors']));
+        $this->assertStringContainsString('integer', implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_HostFirewallKeyRejected()
     {
         $config = [

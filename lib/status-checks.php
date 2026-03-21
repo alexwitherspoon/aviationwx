@@ -521,7 +521,7 @@ function getSchedulerStatus(): array {
 
 /**
  * Resolved listener ports for status display (defaults merged with config.network_ports).
- * List-shaped network_ports (invalid JSON shape) yields defaults — matches validateAirportsJsonStructure.
+ * List-shaped or invalid values are ignored (defaults) — same integer-only rule as validateAirportsJsonStructure.
  *
  * @return array{ftp_control:int,ftps_explicit_tls:int,sftp:int}
  */
@@ -541,10 +541,10 @@ function getNetworkPortsForStatusDisplay(): array
         return $ports;
     }
     foreach ($ports as $key => $default) {
-        if (!isset($np[$key]) || !is_numeric($np[$key])) {
+        if (!isset($np[$key]) || !is_int($np[$key])) {
             continue;
         }
-        $p = (int) $np[$key];
+        $p = $np[$key];
         if ($p >= 1 && $p <= 65535) {
             $ports[$key] = $p;
         }

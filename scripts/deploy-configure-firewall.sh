@@ -57,6 +57,10 @@ read_network_ports_config() {
             echo "❌ config.network_ports must be a JSON object (not an array or string)" >&2
             exit 1
         fi
+        if ! jq -e '(.config.network_ports | to_entries | map(select(.value != null and (.value | type != "number"))) | length == 0)' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+            echo "❌ config.network_ports must use JSON numbers for port fields (not strings)" >&2
+            exit 1
+        fi
     fi
 
     local merged='(.config.network_ports // {})'
