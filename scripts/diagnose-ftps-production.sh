@@ -53,8 +53,9 @@ echo "9. Check TLS version settings:"
 echo "   docker compose -f docker/docker-compose.prod.yml exec web grep -E '^ssl_tlsv|^# ssl_tlsv' /etc/vsftpd/vsftpd.conf"
 echo ""
 
-echo "10. Check if vsftpd is listening on port 2121 (IPv4 and IPv6):"
-echo "    docker compose -f docker/docker-compose.prod.yml exec web ss -tlnp | grep 2121"
+echo "10. Check vsftpd control port and listeners (defaults: 2121 / 2122; set in config.network_ports):"
+echo "    docker compose -f docker/docker-compose.prod.yml exec web grep '^listen_port=' /etc/vsftpd/vsftpd.conf"
+echo "    docker compose -f docker/docker-compose.prod.yml exec web ss -tlnp | grep -E 'vsftpd|:2121|:2122' || true"
 echo ""
 
 echo "11. Test certificate can be read by vsftpd user:"
