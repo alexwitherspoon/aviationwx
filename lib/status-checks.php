@@ -520,8 +520,42 @@ function getSchedulerStatus(): array {
 }
 
 /**
+ * Resolved listener ports for status display (defaults merged with config.network_ports).
+ * List-shaped or invalid values are ignored (defaults) — same integer-only rule as validateAirportsJsonStructure.
+ *
+ * @return array{ftp_control:int,ftps_explicit_tls:int,sftp:int}
+ */
+function getNetworkPortsForStatusDisplay(): array
+{
+    $ports = [
+        'ftp_control' => 2121,
+        'ftps_explicit_tls' => 2122,
+        'sftp' => 2222,
+    ];
+    $full = loadConfig();
+    if ($full === null || !isset($full['config']['network_ports']) || !is_array($full['config']['network_ports'])) {
+        return $ports;
+    }
+    $np = $full['config']['network_ports'];
+    if (array_is_list($np)) {
+        return $ports;
+    }
+    foreach ($ports as $key => $default) {
+        if (!isset($np[$key]) || !is_int($np[$key])) {
+            continue;
+        }
+        $p = $np[$key];
+        if ($p >= 1 && $p <= 65535) {
+            $ports[$key] = $p;
+        }
+    }
+
+    return $ports;
+}
+
+/**
  * Check FTP/SFTP service health
- * 
+ *
  * @return array {
  *   'name' => string,
  *   'status' => 'operational'|'degraded'|'down',
@@ -530,18 +564,21 @@ function getSchedulerStatus(): array {
  *   'services' => array
  * }
  */
-function checkFtpSftpServices(): array {
+function checkFtpSftpServices(): array
+{
+    $np = getNetworkPortsForStatusDisplay();
+    $vsftpdPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
     $services = [
         'vsftpd' => [
             'name' => 'FTP/FTPS Server',
             'running' => false,
-            'ports' => [2121, 2122]
+            'ports' => $vsftpdPorts,
         ],
         'sshd' => [
             'name' => 'SFTP Server',
             'running' => false,
-            'ports' => [2222]
-        ]
+            'ports' => [$np['sftp']],
+        ],
     ];
     
     // Use @ to suppress errors for non-critical process checks

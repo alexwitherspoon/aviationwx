@@ -2926,6 +2926,164 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('upload_hostname must be a non-empty string', implode(' ', $result['errors']));
     }
 
+    public function testGlobalConfig_ValidNetworkPorts()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [
+                    'http' => 80,
+                    'https' => 443,
+                    'ftp_control' => 2121,
+                    'ftps_explicit_tls' => 2122,
+                    'sftp' => 2222,
+                    'ftp_passive_min' => 50000,
+                    'ftp_passive_max' => 51000,
+                    'ssh' => 22,
+                    'ftps_alt' => 8021,
+                ],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid network_ports should pass validation');
+    }
+
+    public function testGlobalConfig_NetworkPortsJsonArrayRejected()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [80, 443, 2121],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'network_ports as JSON array must be rejected');
+        $this->assertStringContainsString('config.network_ports must be an object', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_NetworkPortsStringPortRejected()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [
+                    'http' => '80',
+                    'https' => 443,
+                ],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String-typed port values must be rejected');
+        $this->assertStringContainsString('network_ports.http', implode(' ', $result['errors']));
+        $this->assertStringContainsString('integer', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_HostFirewallKeyRejected()
+    {
+        $config = [
+            'config' => [
+                'host_firewall' => [
+                    'http' => 80,
+                    'https' => 443,
+                    'ftp_control' => 2121,
+                    'ftps_explicit_tls' => 2122,
+                    'sftp' => 2222,
+                    'ftp_passive_min' => 50000,
+                    'ftp_passive_max' => 51000,
+                    'ssh' => 22,
+                    'ftps_alt' => 8021,
+                ],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'config.host_firewall must be rejected');
+        $this->assertStringContainsString('config.host_firewall is not a valid key', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_HostFirewallNullKeyRejected()
+    {
+        $config = [
+            'config' => [
+                'host_firewall' => null,
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'config.host_firewall key must be rejected even when null');
+        $this->assertStringContainsString('config.host_firewall is not a valid key', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_NetworkPortsPassiveRangeInvalid()
+    {
+        $config = [
+            'config' => [
+                'network_ports' => [
+                    'ftp_passive_min' => 51000,
+                    'ftp_passive_max' => 50000,
+                ],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'ftp_passive_min >= max should fail');
+        $this->assertStringContainsString('ftp_passive_min', implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_CompleteNetworkConfig()
     {
         $config = [

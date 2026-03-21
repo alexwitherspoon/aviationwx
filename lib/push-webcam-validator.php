@@ -26,7 +26,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
     $pushConfig = $cam['push_config'];
     
     // Define allowed push_config fields (strict validation)
-    // Note: 'port' is informational only (fixed ports: SFTP=2222, FTP=2121)
+    // Note: 'port' is informational for camera UIs; server listeners come from config.network_ports (defaults: SFTP 2222, FTP control 2121)
     $allowedPushConfigFields = ['username', 'password', 'port', 'max_file_size_mb', 'allowed_extensions'];
     
     // Check for unknown fields in push_config
@@ -67,8 +67,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
         }
     }
     
-    // Port is informational only - not used by server
-    // Ports are fixed: SFTP=2222, FTP/FTPS=2121
+    // Port is informational only — not enforced by the server (listeners are config.network_ports / defaults).
     
     // Validate max_file_size_mb
     if (isset($pushConfig['max_file_size_mb'])) {

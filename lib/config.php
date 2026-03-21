@@ -3108,6 +3108,48 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.upload_hostname must be a valid hostname";
                 }
             }
+
+            // Optional TCP port map: config.network_ports (UFW/deploy scripts, vsftpd, sshd SFTP, fail2ban).
+            if (array_key_exists('host_firewall', $cfg)) {
+                $errors[] = 'config.host_firewall is not a valid key; TCP ports are configured in config.network_ports';
+            }
+            if (isset($cfg['network_ports'])) {
+                // JSON objects decode to associative arrays; JSON arrays decode to list arrays — reject lists.
+                if (!is_array($cfg['network_ports']) || array_is_list($cfg['network_ports'])) {
+                    $errors[] = 'config.network_ports must be an object';
+                } else {
+                    $np = $cfg['network_ports'];
+                    $prefix = 'config.network_ports';
+                    $npIntKeys = [
+                        'http', 'https', 'ftp_control', 'ftps_explicit_tls', 'sftp',
+                        'ftp_passive_min', 'ftp_passive_max', 'ssh', 'ftps_alt',
+                    ];
+                    foreach ($npIntKeys as $hk) {
+                        if (!array_key_exists($hk, $np)) {
+                            continue;
+                        }
+                        $hv = $np[$hk];
+                        if ($hv === null) {
+                            continue;
+                        }
+                        if (!is_int($hv)) {
+                            $errors[] = "{$prefix}.{$hk} must be an integer (or null)";
+                        } elseif ($hv < 1 || $hv > 65535) {
+                            $errors[] = "{$prefix}.{$hk} must be between 1 and 65535";
+                        }
+                    }
+                    $pmin = $np['ftp_passive_min'] ?? null;
+                    $pmax = $np['ftp_passive_max'] ?? null;
+                    if ($pmin !== null && $pmax !== null && is_int($pmin) && is_int($pmax) && $pmin >= $pmax) {
+                        $errors[] = "{$prefix}.ftp_passive_min must be less than ftp_passive_max";
+                    }
+                    $fc = $np['ftp_control'] ?? null;
+                    $fa = $np['ftps_alt'] ?? null;
+                    if ($fc !== null && $fa !== null && is_int($fc) && is_int($fa) && $fc === $fa) {
+                        $errors[] = "{$prefix}.ftps_alt must differ from ftp_control";
+                    }
+                }
+            }
             
             // Validate dynamic DNS refresh interval
             if (isset($cfg['dynamic_dns_refresh_seconds'])) {

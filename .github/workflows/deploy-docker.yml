@@ -1009,32 +1009,6 @@ jobs:
           echo "✓ Cloudflare credentials available for automatic renewals at ~/.secrets/cloudflare.ini"
           CERT_SCRIPT
 
-      - name: Configure firewall ports
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          cd ~/aviationwx
-          
-          echo "Configuring firewall ports for all services..."
-          
-          # Run firewall configuration script
-          if [ -f scripts/deploy-configure-firewall.sh ]; then
-            chmod +x scripts/deploy-configure-firewall.sh
-            ./scripts/deploy-configure-firewall.sh
-          else
-            echo "⚠️  Firewall script not found, configuring ports manually..."
-            # Fallback: configure ports directly (should match deploy-configure-firewall.sh)
-            sudo ufw allow 80/tcp comment 'HTTP (Nginx)' || true
-            sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
-            sudo ufw allow 2121/tcp comment 'FTP (Push webcams)' || true
-            sudo ufw allow 2122/tcp comment 'FTPS (Push webcams)' || true
-            sudo ufw allow 2222/tcp comment 'SFTP (Push webcams)' || true
-            sudo ufw allow 50000:51000/tcp comment 'FTP passive mode (Push webcams)' || true
-            sudo ufw allow 22/tcp comment 'SSH (System access)' || true
-            sudo ufw status numbered
-          fi
-          EOF
-
       - name: Ensure cache directory exists
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
@@ -1176,6 +1150,26 @@ jobs:
               "1. Check network connectivity: ping ${{ secrets.HOST }}\n2. Verify SSH connection: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'echo Connection OK'\n3. Check server disk space: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'df -h'\n4. Verify permissions on server: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'ls -la ~/aviationwx'\n5. Check rsync logs for specific errors\n6. Retry deployment after resolving issues"
           fi
           echo "✓ Repository synced successfully"
+
+      - name: Configure firewall ports
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "Configuring firewall ports for all services..."
+          echo "  (reads config.network_ports from ~/airports.json when present)"
+          
+          # Run after rsync so deploy-configure-firewall.sh matches this commit
+          if [ -f scripts/deploy-configure-firewall.sh ]; then
+            chmod +x scripts/deploy-configure-firewall.sh
+            ./scripts/deploy-configure-firewall.sh
+          else
+            echo "❌ scripts/deploy-configure-firewall.sh not found after rsync."
+            echo "   Cannot apply config.network_ports safely; refusing hardcoded port fallback."
+            exit 1
+          fi
+          EOF
 
       - name: Verify and restore SSL certificates after rsync
         run: |

@@ -2,37 +2,149 @@
 # Configure firewall ports for all production services
 # This script is DECLARATIVE - it ensures the firewall matches the desired state
 # by adding missing rules AND removing stale/orphaned rules.
+#
+# Production host firewall: reads optional config.network_ports from airports.json (defaults
+# match docker/nginx/vsftpd/sshd). Exits with error if config.host_firewall is present.
+# Override path: AIRPORTS_JSON=/path/to/airports.json
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AIRPORTS_JSON="${AIRPORTS_JSON:-$HOME/airports.json}"
+
+# Defaults when airports.json is missing or unreadable
+HTTP_PORT=80
+HTTPS_PORT=443
+FTP_CONTROL=2121
+FTPS_EXPLICIT_TLS=2122
+SFTP_PORT=2222
+FTP_PASSIVE_MIN=50000
+FTP_PASSIVE_MAX=51000
+SSH_PORT=22
+FTPS_ALT=""
+AIRPORTS_CONFIG_READABLE=false
+
+validate_tcp_port() {
+    local p="$1"
+    local name="$2"
+    if ! [[ "$p" =~ ^[0-9]+$ ]] || [ "$p" -lt 1 ] || [ "$p" -gt 65535 ]; then
+        echo "❌ ${name} must be an integer 1-65535 (got: ${p})" >&2
+        exit 1
+    fi
+}
+
+read_network_ports_config() {
+    AIRPORTS_CONFIG_READABLE=false
+    if [ ! -f "$AIRPORTS_JSON" ]; then
+        echo "⚠️  airports.json not found at ${AIRPORTS_JSON} — using baked-in default firewall ports"
+        return 0
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "❌ jq is required when airports.json exists (network_ports)" >&2
+        echo "   Install: sudo apt-get install -y jq" >&2
+        exit 1
+    fi
+    if ! jq empty "$AIRPORTS_JSON" 2>/dev/null; then
+        echo "❌ Invalid JSON: ${AIRPORTS_JSON}" >&2
+        exit 1
+    fi
+    if jq -e '(.config | has("host_firewall"))' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+        echo "❌ config.host_firewall is not a valid key; TCP ports are configured in config.network_ports" >&2
+        exit 1
+    fi
+    if jq -e '.config.network_ports != null' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+        if ! jq -e '(.config.network_ports | type == "object")' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+            echo "❌ config.network_ports must be a JSON object (not an array or string)" >&2
+            exit 1
+        fi
+        if ! jq -e '(.config.network_ports | to_entries | map(select(.value != null and (.value | type != "number"))) | length == 0)' "$AIRPORTS_JSON" >/dev/null 2>&1; then
+            echo "❌ config.network_ports must use JSON numbers for port fields (not strings)" >&2
+            exit 1
+        fi
+    fi
+
+    local merged='(.config.network_ports // {})'
+    HTTP_PORT=$(jq -r "${merged} | .http // 80" "$AIRPORTS_JSON")
+    HTTPS_PORT=$(jq -r "${merged} | .https // 443" "$AIRPORTS_JSON")
+    FTP_CONTROL=$(jq -r "${merged} | .ftp_control // 2121" "$AIRPORTS_JSON")
+    FTPS_EXPLICIT_TLS=$(jq -r "${merged} | .ftps_explicit_tls // 2122" "$AIRPORTS_JSON")
+    SFTP_PORT=$(jq -r "${merged} | .sftp // 2222" "$AIRPORTS_JSON")
+    FTP_PASSIVE_MIN=$(jq -r "${merged} | .ftp_passive_min // 50000" "$AIRPORTS_JSON")
+    FTP_PASSIVE_MAX=$(jq -r "${merged} | .ftp_passive_max // 51000" "$AIRPORTS_JSON")
+    SSH_PORT=$(jq -r "${merged} | .ssh // 22" "$AIRPORTS_JSON")
+    local raw_alt
+    raw_alt=$(jq -r "${merged} | .ftps_alt // empty" "$AIRPORTS_JSON")
+
+    validate_tcp_port "$HTTP_PORT" "network_ports.http"
+    validate_tcp_port "$HTTPS_PORT" "network_ports.https"
+    validate_tcp_port "$FTP_CONTROL" "network_ports.ftp_control"
+    validate_tcp_port "$FTPS_EXPLICIT_TLS" "network_ports.ftps_explicit_tls"
+    validate_tcp_port "$SFTP_PORT" "network_ports.sftp"
+    validate_tcp_port "$FTP_PASSIVE_MIN" "network_ports.ftp_passive_min"
+    validate_tcp_port "$FTP_PASSIVE_MAX" "network_ports.ftp_passive_max"
+    validate_tcp_port "$SSH_PORT" "network_ports.ssh"
+
+    if [ "$FTP_PASSIVE_MIN" -ge "$FTP_PASSIVE_MAX" ]; then
+        echo "❌ network_ports.ftp_passive_min must be less than ftp_passive_max" >&2
+        exit 1
+    fi
+
+    FTPS_ALT=""
+    if [ -n "$raw_alt" ] && [ "$raw_alt" != "null" ]; then
+        if ! [[ "$raw_alt" =~ ^[0-9]+$ ]]; then
+            echo "❌ network_ports.ftps_alt must be an integer (got: ${raw_alt})" >&2
+            exit 1
+        fi
+        validate_tcp_port "$raw_alt" "network_ports.ftps_alt"
+        if [ "$raw_alt" -eq "$FTP_CONTROL" ]; then
+            echo "❌ network_ports.ftps_alt must differ from ftp_control (${FTP_CONTROL})" >&2
+            exit 1
+        fi
+        FTPS_ALT="$raw_alt"
+    fi
+
+    AIRPORTS_CONFIG_READABLE=true
+}
+
+read_network_ports_config
+
+# Stale-rule cleanup is safe when airports.json exists (authoritative desired state).
+# If the file is missing, baked-in defaults may not match a host with custom ports.
+if [ ! -f "$AIRPORTS_JSON" ]; then
+    CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-false}"
+else
+    CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-true}"
+fi
+
 # =============================================================================
-# DESIRED STATE: Define all ports that SHOULD be open
+# DESIRED STATE: built from config.network_ports (or defaults above)
 # =============================================================================
-# Format: PORT:PROTOCOL:DESCRIPTION
-# Note: SSH (22) is PROTECTED and will never be removed
+# Format: PORT:PROTOCOL:DESCRIPTION or START:END:PROTOCOL:DESCRIPTION for ranges
 PORTS=(
-    "80:tcp:HTTP (Nginx)"
-    "443:tcp:HTTPS (Nginx)"
-    "2121:tcp:FTP (Push webcams)"
-    "2122:tcp:FTPS (Push webcams - explicit TLS)"
-    "2222:tcp:SFTP (Push webcams)"
-    "50000:51000:tcp:FTP passive mode (Push webcams)"
-    "22:tcp:SSH (System access)"
+    "${HTTP_PORT}:tcp:HTTP (Nginx)"
+    "${HTTPS_PORT}:tcp:HTTPS (Nginx)"
+    "${FTP_CONTROL}:tcp:FTP (Push webcams)"
+    "${FTPS_EXPLICIT_TLS}:tcp:FTPS (Push webcams - explicit TLS)"
+    "${SFTP_PORT}:tcp:SFTP (Push webcams)"
+    "${FTP_PASSIVE_MIN}:${FTP_PASSIVE_MAX}:tcp:FTP passive mode (Push webcams)"
+    "${SSH_PORT}:tcp:SSH (System access)"
 )
+if [ -n "$FTPS_ALT" ]; then
+    PORTS+=( "${FTPS_ALT}:tcp:FTPS alt control (NAT to ${FTP_CONTROL})" )
+fi
 
 # Ports to explicitly deny (internal services that should not be publicly accessible)
 DENY_PORTS=(
     "8080:tcp:Apache (internal, behind nginx - should only be accessible from localhost)"
 )
 
-# Protected ports that should NEVER be removed (safety net)
-PROTECTED_PORTS=("22/tcp" "22")
+# Protected: SSH admin port — never removed by stale-rule cleanup
+PROTECTED_PORTS=("${SSH_PORT}/tcp" "${SSH_PORT}")
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-# Set to "true" to enable cleanup of stale rules (recommended for production)
-CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-true}"
+# Set to "true" to enable cleanup of stale rules (default when airports.json is present)
 
 # Set to "true" for dry-run mode (shows what would be done without making changes)
 DRY_RUN="${DRY_RUN:-false}"
@@ -42,6 +154,17 @@ echo "Firewall Configuration (Declarative Mode)"
 echo "=============================================="
 echo "Cleanup stale rules: ${CLEANUP_STALE_RULES}"
 echo "Dry run: ${DRY_RUN}"
+echo "airports.json: ${AIRPORTS_JSON}"
+echo "network_ports: http=${HTTP_PORT} https=${HTTPS_PORT} ftp=${FTP_CONTROL} ftps_tls=${FTPS_EXPLICIT_TLS} sftp=${SFTP_PORT} passive=${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX} ssh=${SSH_PORT}"
+if [ -n "$FTPS_ALT" ]; then
+    echo "ftps_alt (NAT to ${FTP_CONTROL}): ${FTPS_ALT}"
+else
+    if [ "$AIRPORTS_CONFIG_READABLE" = "true" ]; then
+        echo "ftps_alt: (unset — NAT cleared when ensure runs with empty ftps_alt)"
+    else
+        echo "ftps_alt: (unset — NAT not reconciled: airports.json missing or unreadable at ${AIRPORTS_JSON})"
+    fi
+fi
 echo ""
 
 # Check if ufw is installed
@@ -259,7 +382,10 @@ echo ""
 # Add explicit ACCEPT rules at the beginning of INPUT chain as a safety measure.
 # This ensures ports are accessible even if ufw integration has issues.
 echo "Step 5: Ensuring explicit iptables rules for critical ports..."
-CRITICAL_PORTS=("2121" "2222" "50000:51000")
+CRITICAL_PORTS=("${FTP_CONTROL}" "${SFTP_PORT}" "${FTP_PASSIVE_MIN}:${FTP_PASSIVE_MAX}")
+if [ -n "$FTPS_ALT" ]; then
+    CRITICAL_PORTS+=("$FTPS_ALT")
+fi
 
 for port in "${CRITICAL_PORTS[@]}"; do
     # Check if rule already exists (anywhere in the chain)
@@ -291,6 +417,36 @@ fi
 
 echo "✓ iptables rules verified"
 echo ""
+
+# =============================================================================
+# STEP 6: FTPS alternate control port — NAT REDIRECT in UFW before*.rules
+# =============================================================================
+# Only reconcile when airports.json was readable (avoids clearing NAT if config path is wrong).
+NAT_SCRIPT="$SCRIPT_DIR/production-ftps-alt-port-nat.sh"
+if [ "$AIRPORTS_CONFIG_READABLE" = true ] && [ -f "$NAT_SCRIPT" ]; then
+    echo "Step 6: FTPS alternate control port (NAT redirect)..."
+    chmod +x "$NAT_SCRIPT" 2>/dev/null || true
+    if [ "$DRY_RUN" = "true" ]; then
+        if [ -n "$FTPS_ALT" ]; then
+            echo "  [DRY RUN] Would run: $SUDO env VSFTPD_LISTEN_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure $FTPS_ALT"
+        else
+            echo "  [DRY RUN] Would run: $SUDO env VSFTPD_LISTEN_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure '' (clear NAT)"
+        fi
+    else
+        if [ -n "$FTPS_ALT" ]; then
+            $SUDO env VSFTPD_LISTEN_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure "$FTPS_ALT"
+        else
+            $SUDO env VSFTPD_LISTEN_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure ""
+        fi
+    fi
+    echo ""
+elif [ "$AIRPORTS_CONFIG_READABLE" = false ]; then
+    echo "Step 6: Skipped NAT redirect reconcile (airports.json not found at ${AIRPORTS_JSON})"
+    echo ""
+else
+    echo "⚠️  Step 6: $NAT_SCRIPT not found — NAT redirect not reconciled"
+    echo ""
+fi
 
 # =============================================================================
 # FINAL: Show current status

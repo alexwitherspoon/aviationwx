@@ -114,14 +114,16 @@ AviationWX uses a **dual fail2ban architecture** for defense in depth:
 
 ```
 Protected Services:
-- vsftpd (FTP/FTPS) on ports 2121, 2122
-- sshd-sftp (SFTP) on port 2222
+- vsftpd: one control listener inside the container (`listen_port` = `ftp_control`; FTP and explicit FTPS/STARTTLS on that port). `ftps_explicit_tls` in `network_ports` is for host UFW/fail2ban when you expose a distinct inbound port for explicit-TLS clients; it is not a second vsftpd bind (same instance as `ftp_control`; use `ftps_alt` NAT for extra inbound ports).
+- sshd-sftp (SFTP) on `sftp` from `config.network_ports` (default 2222)
 
 Ban Policy (Forgiving):
 - 10 failures in 1 hour = 1 hour ban
 - Quick recovery for legitimate cameras
 - Still prevents brute force attacks
 ```
+
+`config.network_ports.ftps_alt` adds another host TCP port that REDIRECTs to `ftp_control` (same vsftpd instance; client source IP preserved for logging and bans). Defaults: `ftp_control` 2121, `ftps_alt` unset. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 
 **Rationale:** Cameras may have temporary misconfigurations, network issues, or power cycles. We don't want to permanently ban legitimate equipment during setup.
 
