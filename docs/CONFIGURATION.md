@@ -103,7 +103,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
 | `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram and `wind_direction_magnetic`. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
-| `frequencies` | `{}` | Radio frequencies |
+| `frequencies` | `{}` | Radio frequencies (see [Radio frequencies](#radio-frequencies)) |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
 | `links` | `[]` | Custom external links |
@@ -116,6 +116,19 @@ All configuration lives in a single `airports.json` file with two sections:
 | `foreflight_url` | auto | Override ForeFlight link |
 
 **Regional link behavior:** FAA Weather and AOPA are shown only for US airports. For Canadian airports, "NAV Canada Weather" (plan.navcanada.ca/wxrecall) is shown by default. For Australian airports, "Airservices Weather Cams" is shown. Region is inferred from ICAO first; for airports without ICAO (e.g. 7S5 with FAA LID only), region falls back to FAA LID (US), coordinates (lat/lon), or address (US state / Canadian province abbreviations). Use `regional_weather_url` to override with a specific camera site (e.g., a NAV Canada metcam site with known ID) or to add a regional link for other areas. Use `links` for additional custom links.
+
+### Radio frequencies
+
+The `frequencies` object maps service names to MHz strings. Align keys with chart / FAA Airport/Facility Directory style where possible:
+
+| Key | When to use |
+|-----|-------------|
+| `tower`, `ground`, `atis`, `clearance_delivery`, `approach`, `departure` | As published for controlled airports. |
+| `ctaf` | Common traffic frequency at non-towered airports. When the source lists **CTAF/UNICOM** on **one** frequency, use **`ctaf` only**—do not also add `unicom` with the same MHz (duplicate line in the UI, not two services). |
+| `unicom` | When UNICOM is **distinct** from CTAF (e.g. towered field FBO/airport advisory on 122.8 while traffic uses tower), or when only UNICOM is given without a separate CTAF. |
+| `awos`, `asos` | Automated weather as published. |
+
+Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 
 ### Webcam Options (`webcams[]` array items)
 
