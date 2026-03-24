@@ -17,9 +17,10 @@ require_once __DIR__ . '/../lib/webcam-image-metrics.php';
 require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 require_once __DIR__ . '/../lib/status-checks.php'; // Health check functions
 require_once __DIR__ . '/../lib/status-utils.php'; // Utility functions
+require_once __DIR__ . '/../lib/cached-data-loader.php';
 
 // =============================================================================
-// OPTIMIZATION: Cached data loaders
+// OPTIMIZATION: Cached data loaders (scheduler pre-warm + APCu; web avoids sync compute)
 // =============================================================================
 
 // Prevent caching (only in web context, not CLI)
@@ -53,53 +54,70 @@ $usageMetrics = $metricsBundle['rolling7'];
 $multiPeriodMetrics = $metricsBundle['multiPeriod'];
 $rolling24h = $metricsBundle['rolling1'];
 
-// Get local performance metrics (cached 60s; scheduler pre-warms every 30s)
+// Get local performance metrics (STATUS_PAGE_CACHE_TTL; scheduler pre-warms every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL)
 require_once __DIR__ . '/../lib/performance-metrics.php';
-$imageProcessingMetrics = getCachedData(
+$perfMetricsEmptySample = [
+    'avg_ms' => 0,
+    'p50_ms' => 0,
+    'p95_ms' => 0,
+    'sample_count' => 0,
+    'last_hour_count' => 0,
+];
+$nodePerformancePlaceholder = [
+    'cpu_load' => ['1min' => null, '5min' => null, '15min' => null],
+    'memory_used_bytes' => null,
+    'memory_average' => ['1min' => null, '5min' => null, '15min' => null],
+    'storage_used_bytes' => 0,
+    'storage_breakdown' => ['cache' => 0, 'uploads' => 0, 'logs' => 0],
+];
+$imageProcessingMetrics = getCachedDataBackgroundFirst(
     fn() => getImageProcessingMetrics(),
     'status_image_processing',
     CACHE_IMAGE_PROCESSING_METRICS_FILE,
-    PERFORMANCE_METRICS_CACHE_TTL
+    PERFORMANCE_METRICS_CACHE_TTL,
+    $perfMetricsEmptySample
 );
-$pageRenderMetrics = getCachedData(
+$pageRenderMetrics = getCachedDataBackgroundFirst(
     fn() => getPageRenderMetrics(),
     'status_page_render',
     CACHE_PAGE_RENDER_METRICS_FILE,
-    PERFORMANCE_METRICS_CACHE_TTL
+    PERFORMANCE_METRICS_CACHE_TTL,
+    $perfMetricsEmptySample
 );
-$nodePerformance = getCachedData(function() {
+$nodePerformance = getCachedDataBackgroundFirst(function() {
     return getNodePerformance();
-}, 'status_node_performance', CACHE_NODE_PERFORMANCE_FILE, PERFORMANCE_METRICS_CACHE_TTL);
+}, 'status_node_performance', CACHE_NODE_PERFORMANCE_FILE, PERFORMANCE_METRICS_CACHE_TTL, $nodePerformancePlaceholder);
 
-// Get system health (cached 120s; scheduler pre-warms every 30s)
-require_once __DIR__ . '/../lib/cached-data-loader.php';
-$systemHealth = getCachedData(function() {
+// Get system health (same TTL/interval as other status JSON caches)
+$systemHealth = getCachedDataBackgroundFirst(function() {
     return checkSystemHealth();
-}, 'status_system_health', CACHE_SYSTEM_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
+}, 'status_system_health', CACHE_SYSTEM_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL, ['components' => []]);
 
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
 $cloudflareConfigured = !empty($cfAnalytics); // Show all CF metrics if configured
 
-// Get public API health (if enabled, cached 120s; scheduler pre-warms every 30s)
+// Get public API health (if enabled)
 require_once __DIR__ . '/../lib/public-api/config.php';
 $publicApiHealth = null;
 if (isPublicApiEnabled()) {
-    $publicApiHealth = getCachedData(function() {
+    $publicApiHealth = getCachedDataBackgroundFirst(function() {
         return checkPublicApiHealth();
-    }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
+    }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL, [
+        'status' => 'unknown',
+        'endpoints' => [],
+    ]);
 }
 
-// Get airport health (cached 120s; scheduler pre-warms every 30s)
 // Only listed airports (matches directory, homepage, API)
-$airportHealth = getCachedData(function() use ($config) {
+$airportHealth = getCachedDataBackgroundFirst(function() use ($config) {
     $health = [];
     $airports = getListedAirports($config);
     foreach ($airports as $airportId => $airport) {
         $health[] = checkAirportHealth($airportId, $airport);
     }
     return $health;
-}, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
+}, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL, []);
 
 // Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {
@@ -959,10 +977,6 @@ if (php_sapi_name() === 'cli') {
         <h2 class="section-header">Site Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
         <?php
-        // All airports start collapsed - users click to expand
-        $isExpanded = false;
-        ?>
-        <?php 
         // Get multi-period metrics for this airport
         $airportIdLower = strtolower($airport['id']);
         $airportPeriodMetrics = $multiPeriodMetrics[$airportIdLower] ?? null;
@@ -972,7 +986,7 @@ if (php_sapi_name() === 'cli') {
         $weekViews = $airportPeriodMetrics['week']['page_views'] ?? 0;
         ?>
         <div class="status-card">
-            <div class="status-card-header airport-card-header <?php echo $isExpanded ? 'expanded' : ''; ?>" 
+            <div class="status-card-header airport-card-header" 
                  onclick="toggleAirport('<?php echo htmlspecialchars($airport['id']); ?>')">
                 <div class="airport-header-content">
                     <h2>
@@ -1002,7 +1016,7 @@ if (php_sapi_name() === 'cli') {
                     <?php endif; ?>
                 </span>
             </div>
-            <div class="status-card-body airport-card-body <?php echo $isExpanded ? 'expanded' : 'collapsed'; ?>" 
+            <div class="status-card-body airport-card-body collapsed" 
                  id="airport-<?php echo htmlspecialchars($airport['id']); ?>-body">
                 <ul class="component-list">
                     <?php foreach ($airport['components'] as $component): ?>

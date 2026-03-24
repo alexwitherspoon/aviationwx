@@ -241,28 +241,32 @@ if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {
     define('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL', 900); // 15 minutes
 }
 
-// Status page health - scheduler pre-warms cache to avoid blocking on first load
-if (!defined('STATUS_HEALTH_FETCH_INTERVAL')) {
-    define('STATUS_HEALTH_FETCH_INTERVAL', 30); // 30 seconds
+// Status page: unified TTL + background refresh (scheduler writes JSON; web reads APCu + stale-ok file)
+if (!defined('STATUS_PAGE_CACHE_TTL')) {
+    define('STATUS_PAGE_CACHE_TTL', 600); // 10 minutes
 }
-if (!defined('STATUS_HEALTH_CACHE_TTL')) {
-    define('STATUS_HEALTH_CACHE_TTL', 120); // 120 seconds - exceeds 4x fetch interval for safety
+if (!defined('STATUS_PAGE_BACKGROUND_FETCH_INTERVAL')) {
+    define('STATUS_PAGE_BACKGROUND_FETCH_INTERVAL', 120); // 2 minutes — refresh well before TTL
 }
 
-// Status page metrics bundle - single read for rolling7/rolling1/multiPeriod
+// Legacy aliases — same values (health, metrics bundle, performance JSON caches)
+if (!defined('STATUS_HEALTH_CACHE_TTL')) {
+    define('STATUS_HEALTH_CACHE_TTL', STATUS_PAGE_CACHE_TTL);
+}
 if (!defined('STATUS_METRICS_CACHE_TTL')) {
-    define('STATUS_METRICS_CACHE_TTL', 120); // 120 seconds minimum
+    define('STATUS_METRICS_CACHE_TTL', STATUS_PAGE_CACHE_TTL);
+}
+if (!defined('PERFORMANCE_METRICS_CACHE_TTL')) {
+    define('PERFORMANCE_METRICS_CACHE_TTL', STATUS_PAGE_CACHE_TTL);
+}
+if (!defined('STATUS_HEALTH_FETCH_INTERVAL')) {
+    define('STATUS_HEALTH_FETCH_INTERVAL', STATUS_PAGE_BACKGROUND_FETCH_INTERVAL);
 }
 if (!defined('STATUS_METRICS_FETCH_INTERVAL')) {
-    define('STATUS_METRICS_FETCH_INTERVAL', 60); // 60 seconds - scheduler pre-warm
-}
-
-// Status page performance metrics - node, image processing, page render
-if (!defined('PERFORMANCE_METRICS_CACHE_TTL')) {
-    define('PERFORMANCE_METRICS_CACHE_TTL', 60); // 60 seconds - exceeds 2x fetch interval
+    define('STATUS_METRICS_FETCH_INTERVAL', STATUS_PAGE_BACKGROUND_FETCH_INTERVAL);
 }
 if (!defined('PERFORMANCE_METRICS_FETCH_INTERVAL')) {
-    define('PERFORMANCE_METRICS_FETCH_INTERVAL', 30); // 30 seconds - scheduler pre-warm
+    define('PERFORMANCE_METRICS_FETCH_INTERVAL', STATUS_PAGE_BACKGROUND_FETCH_INTERVAL);
 }
 
 // Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old

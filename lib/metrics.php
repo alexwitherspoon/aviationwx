@@ -1359,6 +1359,45 @@ function metrics_get_today(): array {
 }
 
 /**
+ * Empty status bundle shape for cold cache when web requests skip synchronous aggregation.
+ *
+ * @return array{rolling7: array, rolling1: array, today: array} Empty metrics structure matching metrics_get_status_bundle()
+ */
+function metrics_get_empty_status_bundle(): array {
+    $now = time();
+    $todayId = gmdate('Y-m-d', $now);
+
+    return [
+        'rolling7' => [
+            'period_days' => 7,
+            'period_start' => $now - (7 * 86400),
+            'period_end' => $now,
+            'airports' => [],
+            'webcams' => [],
+            'global' => metrics_get_empty_global(),
+            'generated_at' => $now,
+        ],
+        'rolling1' => [
+            'period_days' => 1,
+            'period_start' => $now - 86400,
+            'period_end' => $now,
+            'airports' => [],
+            'webcams' => [],
+            'global' => metrics_get_empty_global(),
+            'generated_at' => $now,
+        ],
+        'today' => [
+            'bucket_type' => 'today',
+            'bucket_id' => $todayId,
+            'airports' => [],
+            'webcams' => [],
+            'global' => metrics_get_empty_global(),
+            'generated_at' => $now,
+        ],
+    ];
+}
+
+/**
  * Get status page metrics bundle - reads each file once
  *
  * Returns rolling7, rolling1, and today from a single pass over metrics files.

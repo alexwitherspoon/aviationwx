@@ -49,9 +49,7 @@ $lastStuckWorkerCleanup = 0;
 $lastDynamicDnsCheck = 0;
 $lastRunwaysFetch = 0;
 $lastCloudflareAnalyticsFetch = 0;
-$lastStatusHealthFetch = 0;
-$lastStatusMetricsFetch = 0;
-$lastPerformanceMetricsFetch = 0;
+$lastStatusPageCachesFetch = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -589,40 +587,25 @@ while ($running) {
             }
         }
 
-        // 10. Status page health pre-warm (every 30s, non-blocking)
-        // Pre-computes system/API/airport health so status page doesn't block on first load
-        if (($now - $lastStatusHealthFetch) >= STATUS_HEALTH_FETCH_INTERVAL) {
-            $statusHealthScript = __DIR__ . '/fetch-status-health.php';
-            if (file_exists($statusHealthScript)) {
-                exec('php ' . escapeshellarg($statusHealthScript) . ' > /dev/null 2>&1 &');
-                reapZombies(); // Reap shell spawned by exec() with &
-                $lastStatusHealthFetch = $now;
+        // 10. Status page caches pre-warm (every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL, non-blocking)
+        // Health, metrics bundle, performance JSON — aligned TTL (STATUS_PAGE_CACHE_TTL)
+        if (($now - $lastStatusPageCachesFetch) >= STATUS_PAGE_BACKGROUND_FETCH_INTERVAL) {
+            $statusScripts = [
+                'fetch-status-health.php',
+                'fetch-status-metrics.php',
+                'fetch-performance-metrics.php',
+            ];
+            foreach ($statusScripts as $script) {
+                $path = __DIR__ . '/' . $script;
+                if (file_exists($path)) {
+                    exec('php ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
+                }
             }
+            reapZombies();
+            $lastStatusPageCachesFetch = $now;
         }
 
-        // 11. Status metrics bundle pre-warm (every 60s, non-blocking)
-        // Pre-computes rolling7/rolling1/today so status page reads from cache
-        if (($now - $lastStatusMetricsFetch) >= STATUS_METRICS_FETCH_INTERVAL) {
-            $statusMetricsScript = __DIR__ . '/fetch-status-metrics.php';
-            if (file_exists($statusMetricsScript)) {
-                exec('php ' . escapeshellarg($statusMetricsScript) . ' > /dev/null 2>&1 &');
-                reapZombies(); // Reap shell spawned by exec() with &
-                $lastStatusMetricsFetch = $now;
-            }
-        }
-
-        // 12. Performance metrics pre-warm (every 30s, non-blocking)
-        // Pre-computes node perf, image processing, page render (avoids storage calc on request)
-        if (($now - $lastPerformanceMetricsFetch) >= PERFORMANCE_METRICS_FETCH_INTERVAL) {
-            $perfMetricsScript = __DIR__ . '/fetch-performance-metrics.php';
-            if (file_exists($perfMetricsScript)) {
-                exec('php ' . escapeshellarg($perfMetricsScript) . ' > /dev/null 2>&1 &');
-                reapZombies(); // Reap shell spawned by exec() with &
-                $lastPerformanceMetricsFetch = $now;
-            }
-        }
-
-        // 13. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 11. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {

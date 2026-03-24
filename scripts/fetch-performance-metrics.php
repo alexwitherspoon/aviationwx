@@ -3,7 +3,7 @@
  * Performance Metrics Pre-warm Worker
  *
  * Computes node performance, image processing metrics, and page render metrics.
- * Invoked by scheduler every PERFORMANCE_METRICS_FETCH_INTERVAL seconds.
+ * Invoked by scheduler every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL seconds.
  * Prevents status page from blocking on expensive ops (storage calc, percentiles).
  *
  * Usage: php scripts/fetch-performance-metrics.php

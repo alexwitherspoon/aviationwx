@@ -3,7 +3,7 @@
  * Status Page Health Pre-warm Worker
  *
  * Computes system, public API, and airport health and writes to cache files.
- * Invoked by scheduler every STATUS_HEALTH_FETCH_INTERVAL seconds.
+ * Invoked by scheduler every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL seconds.
  * Prevents status page from blocking on first load when cache is cold.
  *
  * Usage: php scripts/fetch-status-health.php
@@ -71,10 +71,9 @@ if (file_exists(__DIR__ . '/../lib/public-api/config.php')) {
 }
 
 $airportHealth = [];
-if (isset($config['airports']) && is_array($config['airports'])) {
-    foreach ($config['airports'] as $airportId => $airport) {
-        $airportHealth[] = checkAirportHealth($airportId, $airport);
-    }
+$listedAirports = getListedAirports($config);
+foreach ($listedAirports as $airportId => $airport) {
+    $airportHealth[] = checkAirportHealth($airportId, $airport);
 }
 if (!writeStatusHealthCache(CACHE_AIRPORT_HEALTH_FILE, 'status_airport_health', $airportHealth, $ttl)) {
     aviationwx_log('warning', 'fetch-status-health: failed to write airport health cache', [], 'app');

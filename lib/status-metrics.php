@@ -26,11 +26,12 @@ require_once __DIR__ . '/constants.php';
  */
 function getStatusMetricsBundle(): array {
     $ttl = STATUS_METRICS_CACHE_TTL;
-    $bundle = getCachedData(
+    $bundle = getCachedDataBackgroundFirst(
         fn() => metrics_get_status_bundle(),
         'status_metrics_bundle',
         CACHE_STATUS_METRICS_BUNDLE_FILE,
-        $ttl
+        $ttl,
+        metrics_get_empty_status_bundle()
     );
     $bundle['multiPeriod'] = metrics_build_multi_period_from_bundle($bundle);
     return $bundle;

@@ -3,7 +3,7 @@
  * Status Metrics Pre-warm Worker
  *
  * Computes metrics bundle (rolling7, rolling1, today) and writes to file cache.
- * Invoked by scheduler every STATUS_METRICS_FETCH_INTERVAL seconds.
+ * Invoked by scheduler every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL seconds.
  * Page loads read from APCu/file cache for fast access.
  *
  * Usage: php scripts/fetch-status-metrics.php

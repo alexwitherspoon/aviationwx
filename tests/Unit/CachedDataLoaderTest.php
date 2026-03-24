@@ -26,6 +26,8 @@ class CachedDataLoaderTest extends TestCase
         // Clear APCu cache if available
         if (function_exists('apcu_delete')) {
             @apcu_delete('cached_test_key');
+            @apcu_delete('cached_test_bg_stale');
+            @apcu_delete('cached_test_bg_fresh');
         }
     }
     
@@ -39,6 +41,8 @@ class CachedDataLoaderTest extends TestCase
         // Clear APCu cache
         if (function_exists('apcu_delete')) {
             @apcu_delete('cached_test_key');
+            @apcu_delete('cached_test_bg_stale');
+            @apcu_delete('cached_test_bg_fresh');
         }
         
         parent::tearDown();
@@ -234,5 +238,77 @@ class CachedDataLoaderTest extends TestCase
         
         $this->assertEquals($newData, $result, 'Should recompute when cache expired');
         $this->assertNotEquals(['old' => 'data'], $result, 'Should not return expired data');
+    }
+
+    /**
+     * Expired JSON still returns data without calling compute (stale-while-revalidate for status page).
+     */
+    public function testGetCachedDataBackgroundFirst_ExpiredFileReturnsStaleWithoutCompute(): void
+    {
+        require_once __DIR__ . '/../../lib/cached-data-loader.php';
+
+        $expired = [
+            'cached_at' => time() - 300,
+            'ttl' => 60,
+            'key' => 'test_bg_stale',
+            'data' => ['stale' => true],
+        ];
+        $cacheDir = dirname($this->testCacheFile);
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        file_put_contents($this->testCacheFile, json_encode($expired));
+
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('cached_test_bg_stale');
+        }
+
+        $called = false;
+        $result = getCachedDataBackgroundFirst(
+            function () use (&$called) {
+                $called = true;
+
+                return ['should_not' => 'run'];
+            },
+            'test_bg_stale',
+            $this->testCacheFile,
+            60,
+            ['default' => true]
+        );
+
+        $this->assertFalse($called, 'Compute should not run when stale file exists');
+        $this->assertEquals(['stale' => true], $result);
+    }
+
+    /**
+     * With no cache, CLI/tests take sync path and run compute.
+     */
+    public function testGetCachedDataBackgroundFirst_NoCache_CliComputes(): void
+    {
+        require_once __DIR__ . '/../../lib/cached-data-loader.php';
+
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('cached_test_bg_fresh');
+        }
+        if (file_exists($this->testCacheFile)) {
+            @unlink($this->testCacheFile);
+        }
+
+        $calls = 0;
+        $result = getCachedDataBackgroundFirst(
+            function () use (&$calls) {
+                $calls++;
+
+                return ['computed' => 42];
+            },
+            'test_bg_fresh',
+            $this->testCacheFile,
+            60,
+            ['default' => true]
+        );
+
+        $this->assertEquals(1, $calls);
+        $this->assertEquals(['computed' => 42], $result);
+        $this->assertFileExists($this->testCacheFile);
     }
 }
