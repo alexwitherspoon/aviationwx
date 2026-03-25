@@ -5973,12 +5973,13 @@ const WebcamPlayer = {
             preloadImg.src = imageUrl;
             
             preloadImg.onload = () => {
+                // Cache URL even if this load is stale (user scrubbed again); avoids re-fetch when scrubbing back
+                this.preloadedImages[cacheKey] = imageUrl;
                 if (loadId !== this._displayLoadSeq) {
                     return;
                 }
                 img.src = imageUrl;
                 img.classList.remove('loading');
-                this.preloadedImages[cacheKey] = imageUrl;
                 console.log(`[Webcam Player ${this.camIndex}] Image loaded successfully at ${timeStr} - format: ${format}, variant: ${variant}`);
             };
             preloadImg.onerror = () => {
@@ -6095,6 +6096,8 @@ const WebcamPlayer = {
         } else {
             this.resetPreloadLoadingBar();
         }
+        // False if period changed mid-preload or player closed (session bumped or inactive)
+        return this.active && sessionId === this._preloadPeriodSession;
     },
     
     // Legacy alias for backward compatibility
@@ -6115,10 +6118,11 @@ const WebcamPlayer = {
         if (frames.length < 2) return;
 
         // Preload period frames before starting playback
-        await this.preloadPeriodFrames();
-        
-        // Check if we're still active after preload
-        if (!this.active) return;
+        const preloadFinished = await this.preloadPeriodFrames();
+        // Do not start playback if player closed or period/session changed during preload
+        if (!this.active || !preloadFinished) {
+            return;
+        }
 
         this.playing = true;
         document.getElementById('webcam-player-play-btn').textContent = '⏸';
