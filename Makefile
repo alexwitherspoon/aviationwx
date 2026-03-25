@@ -154,6 +154,12 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a️⃣  Wind Rose Safety Tests (JS)..."
 	@node tests/js/wind-rose.test.js || { echo "❌ Wind rose JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a2️⃣  Webcam Player Cache Tests (JS)..."
+	@node tests/js/webcam-player-cache.test.js || { echo "❌ Webcam player cache JS tests failed"; exit 1; }
+	@echo ""
+	@echo "5a3️⃣  Webcam Player Scroll Lock Tests (JS)..."
+	@node tests/js/webcam-player-scroll-lock.test.js || { echo "❌ Webcam player scroll lock JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5b️⃣  ESLint JavaScript Linting..."
 	@if [ -f package.json ]; then \
 		npm install && npm run lint:js || { \

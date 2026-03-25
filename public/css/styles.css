@@ -1,5 +1,11 @@
 /* Aviation Weather - Responsive Styles */
 
+/* Prevent mobile Safari from inflating text after viewport/orientation changes (e.g. after modals). */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 * {
     margin: 0;
     padding: 0;

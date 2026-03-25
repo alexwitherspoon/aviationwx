@@ -2099,6 +2099,8 @@ if ($themeCookie === 'dark') {
     }
     ob_start();
     ?>
+    <script src="/public/js/webcam-player-utils.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
     <script>
 // Airport page JavaScript
 const AIRPORT_ID = '<?= $airportId ?>';
@@ -5175,7 +5177,12 @@ const WebcamPlayer = {
     playing: false,
     playInterval: null,
     preloadedImages: {},
-    loadingFrames: new Set(),  // Timestamps currently being loaded
+    // Keys: airport|cam|timestamp (see public/js/webcam-player-utils.js)
+    loadingFrames: new Set(),
+    /** @type {number} Monotonic token so stale image onload handlers never update the display */
+    _displayLoadSeq: 0,
+    /** @type {number} Invalidates preloadPeriodFrames when play/period changes */
+    _preloadPeriodSession: 0,
     timezone: 'UTC',
     // State for URL sync and UI control
     airportId: null,
@@ -5477,6 +5484,8 @@ const WebcamPlayer = {
         player.classList.remove('controls-hidden');
         this.active = true;
         this.controlsVisible = true;
+        this._displayLoadSeq = 0;
+        this._preloadPeriodSession = 0;
 
         // Handle hideui mode
         this.hideUIMode = options.hideui || false;
@@ -5485,12 +5494,8 @@ const WebcamPlayer = {
             this.hideControls();
         }
 
-        // Prevent body scroll - store scroll position first (fixes mobile viewport issue)
-        this.savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.top = `-${this.savedScrollY}px`;
+        // Prevent body scroll — delegated to webcam-player-scroll-lock.js (contract-tested)
+        this.savedScrollY = AviationWX.webcamPlayerScrollLock.apply();
 
         // Update URL (don't push state, use replaceState for clean back behavior)
         this.updateURL();
@@ -5586,17 +5591,24 @@ const WebcamPlayer = {
         player.classList.remove('active');
         player.classList.remove('controls-hidden');
 
-        // Restore body scroll and scroll position (fixes mobile viewport issue)
-        document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.top = '';
-        
-        // Restore scroll position after a brief delay to ensure styles are applied
-        // Use requestAnimationFrame to ensure DOM has updated
+        // Exit fullscreen / orientation lock if hide-UI mode was used (before restoring layout)
+        this.exitMobileLandscape();
+
+        // Blur focused controls (e.g. range slider) so iOS does not keep zoom/focus state
+        const ae = document.activeElement;
+        if (ae && player.contains(ae) && typeof ae.blur === 'function') {
+            ae.blur();
+        }
+
+        AviationWX.webcamPlayerScrollLock.release();
+
+        const y = this.savedScrollY;
+        this.savedScrollY = 0;
+        // Double rAF + microtask helps Safari apply cleared styles before scroll restoration
         requestAnimationFrame(() => {
-            window.scrollTo(0, this.savedScrollY);
-            this.savedScrollY = 0; // Reset for next time
+            requestAnimationFrame(() => {
+                window.scrollTo(0, y);
+            });
         });
 
         // Clear URL params so back returns to clean dashboard URL
@@ -5605,6 +5617,8 @@ const WebcamPlayer = {
         // Clean up
         this.preloadedImages = {};
         this.loadingFrames.clear();
+        this._displayLoadSeq = 0;
+        this._preloadPeriodSession = 0;
         this.frames = [];
         this.periodFrames = [];
         this.airportId = null;
@@ -5740,9 +5754,23 @@ const WebcamPlayer = {
         
         const wasPlaying = this.playing;
         if (wasPlaying) this.stop();
-        
+        // Abort any in-flight preloadPeriodFrames from a prior play()
+        this._preloadPeriodSession++;
+
         this.selectedPeriod = hours;
         this.updatePeriodFrames();
+
+        // Drop preload state only for this camera/period; keep other cameras cached
+        if (this.airportId !== null && this.camIndex !== null && AviationWX.webcamPlayerUtils) {
+            const validTs = new Set(this.periodFrames.map((f) => f.timestamp));
+            AviationWX.webcamPlayerUtils.pruneWebcamPreloadForCameraPeriod(
+                this.preloadedImages,
+                this.loadingFrames,
+                this.airportId,
+                this.camIndex,
+                validTs
+            );
+        }
         
         // Update button states (both mobile and desktop)
         const allButtons = document.querySelectorAll('.webcam-player-period-selector .period-btn');
@@ -5753,10 +5781,6 @@ const WebcamPlayer = {
         
         // Reset to end of new period (most recent)
         this.currentIndex = this.periodFrames.length > 0 ? this.periodFrames.length - 1 : 0;
-        
-        // Clear preloaded images (will reload on play/scrub)
-        this.preloadedImages = {};
-        this.loadingFrames.clear();
         
         // Reinitialize timeline with new period
         this.initTimeline();
@@ -5877,8 +5901,15 @@ const WebcamPlayer = {
 
         timeline.value = index;
 
+        // Invalidate slower onload/onerror handlers from previous scrubs (same camera)
+        const loadId = ++this._displayLoadSeq;
+        const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
+            this.airportId,
+            this.camIndex,
+            frame.timestamp
+        );
+
         // Use preloaded image URL if available
-        const cacheKey = frame.timestamp;
         if (this.preloadedImages[cacheKey]) {
             img.src = this.preloadedImages[cacheKey];
             img.classList.remove('loading');
@@ -5906,12 +5937,18 @@ const WebcamPlayer = {
             preloadImg.src = imageUrl;
             
             preloadImg.onload = () => {
+                if (loadId !== this._displayLoadSeq) {
+                    return;
+                }
                 img.src = imageUrl;
                 img.classList.remove('loading');
                 this.preloadedImages[cacheKey] = imageUrl;
                 console.log(`[Webcam Player ${this.camIndex}] Image loaded successfully at ${timeStr} - format: ${format}, variant: ${variant}`);
             };
             preloadImg.onerror = () => {
+                if (loadId !== this._displayLoadSeq) {
+                    return;
+                }
                 img.classList.remove('loading');
                 console.error(`[Webcam Player ${this.camIndex}] Image load failed at ${timeStr} - format: ${format}, variant: ${variant}`);
             };
@@ -5931,7 +5968,11 @@ const WebcamPlayer = {
         
         for (let i = start; i <= end; i++) {
             const frame = frames[i];
-            const cacheKey = frame.timestamp;
+            const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
+                this.airportId,
+                this.camIndex,
+                frame.timestamp
+            );
             
             // Skip if already loaded or currently loading
             if (this.preloadedImages[cacheKey] || this.loadingFrames.has(cacheKey)) {
@@ -5960,13 +6001,20 @@ const WebcamPlayer = {
         const bar = document.getElementById('webcam-player-loading-bar');
         const frames = this.periodFrames;
         let loaded = 0;
+        const sessionId = ++this._preloadPeriodSession;
 
         console.log(`[Webcam Player ${this.camIndex}] Preloading ${frames.length} frames in period`);
 
         for (const frame of frames) {
-            if (!this.active) break;
+            if (!this.active || sessionId !== this._preloadPeriodSession) {
+                break;
+            }
 
-            const cacheKey = frame.timestamp;
+            const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
+                this.airportId,
+                this.camIndex,
+                frame.timestamp
+            );
             
             // Skip if already preloaded
             if (this.preloadedImages[cacheKey]) {
@@ -5992,12 +6040,20 @@ const WebcamPlayer = {
             
             await new Promise((resolve) => {
                 img.onload = () => {
+                    if (sessionId !== this._preloadPeriodSession) {
+                        resolve();
+                        return;
+                    }
                     this.preloadedImages[cacheKey] = imageUrl;
                     loaded++;
                     bar.style.width = `${(loaded / frames.length) * 100}%`;
                     resolve();
                 };
                 img.onerror = () => {
+                    if (sessionId !== this._preloadPeriodSession) {
+                        resolve();
+                        return;
+                    }
                     loaded++;
                     bar.style.width = `${(loaded / frames.length) * 100}%`;
                     resolve();
@@ -6005,7 +6061,9 @@ const WebcamPlayer = {
             });
         }
 
-        setTimeout(() => { bar.style.width = '0%'; }, 500);
+        if (sessionId === this._preloadPeriodSession) {
+            setTimeout(() => { bar.style.width = '0%'; }, 500);
+        }
     },
     
     // Legacy alias for backward compatibility
@@ -6116,11 +6174,11 @@ const WebcamPlayer = {
                 return; // No frames available, keep existing frames
             }
 
-            // Store current frame info for position preservation
-            const currentFrame = this.frames[this.currentIndex];
+            // Snapshot timeline state (currentIndex indexes periodFrames, not full manifest)
+            const oldPeriodLength = this.periodFrames.length;
+            const currentFrame = this.periodFrames[this.currentIndex];
             const currentTimestamp = currentFrame ? currentFrame.timestamp : null;
-            const oldFramesLength = this.frames.length;
-            const wasAtEnd = currentFrame && this.currentIndex === oldFramesLength - 1;
+            const wasAtEnd = oldPeriodLength > 0 && this.currentIndex === oldPeriodLength - 1;
             const wasPlaying = this.playing;
 
             // Apply rolling window: always cap at max_frames (most recent N frames)
@@ -6174,10 +6232,10 @@ const WebcamPlayer = {
                 }
 
                 // Special handling for playback at end when new frames arrive
-                if (wasAtEnd && wasPlaying && this.periodFrames.length > oldFramesLength) {
+                if (wasAtEnd && wasPlaying && this.periodFrames.length > oldPeriodLength) {
                     // We were at the end and playing, new frames were added
                     // Stay at the old end position so playback continues naturally into new frames
-                    const oldEndIndex = Math.max(0, oldFramesLength - 1);
+                    const oldEndIndex = Math.max(0, oldPeriodLength - 1);
                     if (oldEndIndex < this.periodFrames.length - 1) {
                         // Only adjust if we're not already at the new end
                         this.currentIndex = oldEndIndex;
