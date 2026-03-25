@@ -151,6 +151,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5️⃣  Validating JavaScript..."
 	@php scripts/validate-javascript.php
 	@echo ""
+	@echo "5n️⃣  npm install (JS unit test dependencies: jsdom, eslint, …)..."
+	@npm install
+	@echo ""
 	@echo "5a️⃣  Wind Rose Safety Tests (JS)..."
 	@node tests/js/wind-rose.test.js || { echo "❌ Wind rose JS tests failed"; exit 1; }
 	@echo ""

@@ -2097,10 +2097,14 @@ if ($themeCookie === 'dark') {
             ob_end_clean();
         }
     }
-    ob_start();
+    // External scripts must NOT be inside this buffer: ob_get_clean() expects a single inline
+    // <script> block for minification (see capture below).
     ?>
     <script src="/public/js/webcam-player-utils.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
+    <?php
+    ob_start();
+    ?>
     <script>
 // Airport page JavaScript
 const AIRPORT_ID = '<?= $airportId ?>';
@@ -5307,6 +5311,23 @@ const WebcamPlayer = {
         }
     },
 
+    /** Reset play preload progress bar (avoids stale width if preload is aborted). */
+    resetPreloadLoadingBar() {
+        const bar = document.getElementById('webcam-player-loading-bar');
+        if (bar) {
+            bar.style.width = '0%';
+        }
+    },
+
+    /** Composite preload key; matches public/js/webcam-player-utils.js when available. */
+    makePreloadCacheKey(timestamp) {
+        const u = window.AviationWX && window.AviationWX.webcamPlayerUtils;
+        if (u && typeof u.makeWebcamPreloadKey === 'function') {
+            return u.makeWebcamPreloadKey(this.airportId, this.camIndex, timestamp);
+        }
+        return String(this.airportId) + '|' + String(this.camIndex) + '|' + String(timestamp);
+    },
+
     // Toggle autoplay and update button state
     toggleAutoplay() {
         if (this.playing) {
@@ -5495,7 +5516,12 @@ const WebcamPlayer = {
         }
 
         // Prevent body scroll — delegated to webcam-player-scroll-lock.js (contract-tested)
-        this.savedScrollY = AviationWX.webcamPlayerScrollLock.apply();
+        const scrollLock = window.AviationWX && window.AviationWX.webcamPlayerScrollLock;
+        if (scrollLock && typeof scrollLock.apply === 'function') {
+            this.savedScrollY = scrollLock.apply();
+        } else {
+            this.savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+        }
 
         // Update URL (don't push state, use replaceState for clean back behavior)
         this.updateURL();
@@ -5584,6 +5610,7 @@ const WebcamPlayer = {
         this.stop();
         this.stopRefreshTimer();
         this.clearHideTimer();
+        this.resetPreloadLoadingBar();
         this.active = false;
         this.hideUIMode = false;
 
@@ -5600,7 +5627,18 @@ const WebcamPlayer = {
             ae.blur();
         }
 
-        AviationWX.webcamPlayerScrollLock.release();
+        const scrollLockRel = window.AviationWX && window.AviationWX.webcamPlayerScrollLock;
+        if (scrollLockRel && typeof scrollLockRel.release === 'function') {
+            scrollLockRel.release();
+        } else {
+            document.documentElement.style.overflow = '';
+            document.body.style.overflow = '';
+            document.body.style.position = '';
+            document.body.style.left = '';
+            document.body.style.right = '';
+            document.body.style.width = '';
+            document.body.style.top = '';
+        }
 
         const y = this.savedScrollY;
         this.savedScrollY = 0;
@@ -5756,14 +5794,16 @@ const WebcamPlayer = {
         if (wasPlaying) this.stop();
         // Abort any in-flight preloadPeriodFrames from a prior play()
         this._preloadPeriodSession++;
+        this.resetPreloadLoadingBar();
 
         this.selectedPeriod = hours;
         this.updatePeriodFrames();
 
         // Drop preload state only for this camera/period; keep other cameras cached
-        if (this.airportId !== null && this.camIndex !== null && AviationWX.webcamPlayerUtils) {
+        const wpUtils = window.AviationWX && window.AviationWX.webcamPlayerUtils;
+        if (this.airportId !== null && this.camIndex !== null && wpUtils) {
             const validTs = new Set(this.periodFrames.map((f) => f.timestamp));
-            AviationWX.webcamPlayerUtils.pruneWebcamPreloadForCameraPeriod(
+            wpUtils.pruneWebcamPreloadForCameraPeriod(
                 this.preloadedImages,
                 this.loadingFrames,
                 this.airportId,
@@ -5903,11 +5943,7 @@ const WebcamPlayer = {
 
         // Invalidate slower onload/onerror handlers from previous scrubs (same camera)
         const loadId = ++this._displayLoadSeq;
-        const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
-            this.airportId,
-            this.camIndex,
-            frame.timestamp
-        );
+        const cacheKey = this.makePreloadCacheKey(frame.timestamp);
 
         // Use preloaded image URL if available
         if (this.preloadedImages[cacheKey]) {
@@ -5968,11 +6004,7 @@ const WebcamPlayer = {
         
         for (let i = start; i <= end; i++) {
             const frame = frames[i];
-            const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
-                this.airportId,
-                this.camIndex,
-                frame.timestamp
-            );
+            const cacheKey = this.makePreloadCacheKey(frame.timestamp);
             
             // Skip if already loaded or currently loading
             if (this.preloadedImages[cacheKey] || this.loadingFrames.has(cacheKey)) {
@@ -6007,14 +6039,11 @@ const WebcamPlayer = {
 
         for (const frame of frames) {
             if (!this.active || sessionId !== this._preloadPeriodSession) {
+                this.resetPreloadLoadingBar();
                 break;
             }
 
-            const cacheKey = AviationWX.webcamPlayerUtils.makeWebcamPreloadKey(
-                this.airportId,
-                this.camIndex,
-                frame.timestamp
-            );
+            const cacheKey = this.makePreloadCacheKey(frame.timestamp);
             
             // Skip if already preloaded
             if (this.preloadedImages[cacheKey]) {
@@ -6062,7 +6091,9 @@ const WebcamPlayer = {
         }
 
         if (sessionId === this._preloadPeriodSession) {
-            setTimeout(() => { bar.style.width = '0%'; }, 500);
+            setTimeout(() => { this.resetPreloadLoadingBar(); }, 500);
+        } else {
+            this.resetPreloadLoadingBar();
         }
     },
     
