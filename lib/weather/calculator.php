@@ -110,9 +110,9 @@ function calculateHumidityFromDewpoint($tempC, $dewpointC) {
  * 1 inch of mercury per 1,000 feet of altitude change.
  * 
  * Examples:
- *   - Altimeter = 29.92 inHg (standard) → PA = Field Elevation
- *   - Altimeter < 29.92 inHg (low pressure) → PA > Field Elevation (worse performance)
- *   - Altimeter > 29.92 inHg (high pressure) → PA < Field Elevation (better performance)
+ *   - Altimeter = 29.92 inHg (standard) -> PA = Field Elevation
+ *   - Altimeter < 29.92 inHg (low pressure) -> PA > Field Elevation (worse performance)
+ *   - Altimeter > 29.92 inHg (high pressure) -> PA < Field Elevation (better performance)
  * 
  * SAFETY CRITICAL: Used as input for density altitude calculation, which affects
  * aircraft performance decisions (takeoff/landing distance, climb rate).
@@ -217,14 +217,14 @@ function calculateDensityAltitude($weather, $airport) {
  * Special Cases:
  *   - Unlimited ceiling (null/no clouds): Treated as VFR for ceiling
  *   - Unlimited visibility (>10 SM or sentinel value): Treated as VFR for visibility
- *   - Missing ceiling + VFR visibility (legacy, no METAR completeness keys): Assumes unlimited ceiling → VFR
+ *   - Missing ceiling + VFR visibility (legacy, no METAR completeness keys): Assumes unlimited ceiling -> VFR
  *   - When metar_visibility_reported / metar_ceiling_reported are present and _field_source_map
  *     identifies both visibility and ceiling as coming from METAR: if visibility was reported but
- *     ceiling was not, VFR visibility + null ceiling → MVFR (fail-closed). If _field_source_map is
+ *     ceiling was not, VFR visibility + null ceiling -> MVFR (fail-closed). If _field_source_map is
  *     absent (legacy callers), the same rule applies when both completeness keys are set.
  *   - Completeness nulling only applies to fields whose aggregated source is METAR; mixed-source
  *     aggregates (e.g. visibility from a station sensor) ignore METAR flags for non-METAR fields.
- *   - Missing visibility + VFR ceiling: Conservative → MVFR (cannot confirm VFR)
+ *   - Missing visibility + VFR ceiling: Conservative -> MVFR (cannot confirm VFR)
  * 
  * SAFETY CRITICAL: Incorrect categorization could lead pilots to attempt VFR flight
  * in marginal or IFR conditions, potentially leading to controlled flight into terrain
@@ -336,7 +336,7 @@ function calculateFlightCategory($weather) {
         if ($visibilityCategory !== 'VFR') {
             return $visibilityCategory;
         }
-        // METAR: visibility stated but ceiling not reported → conservative MVFR (both fields from METAR)
+        // METAR: visibility stated but ceiling not reported -> conservative MVFR (both fields from METAR)
         $mvfrFromMetarCompleteness = $metarVisRep === true && $metarCeilRep === false
             && ($noFieldSourceMap
                 || ($visSource === 'metar' && $ceilSource === 'metar'));

@@ -1,6 +1,6 @@
 <?php
 /**
- * SAFETY CRITICAL: METAR ICAO completeness — omission of visibility/sky groups must not
+ * SAFETY CRITICAL: METAR ICAO completeness - omission of visibility/sky groups must not
  * imply unlimited visibility or VFR ceiling (Annex 3 / WMO code form).
  */
 
@@ -112,7 +112,7 @@ class MetarCompletenessSafetyTest extends TestCase
     }
 
     /**
-     * BKN with missing/non-numeric base: no ceiling height → ceiling must not be "reported" as known.
+     * BKN with missing/non-numeric base: no ceiling height -> ceiling must not be "reported" as known.
      */
     public function testParseMETARResponse_BknMissingBase_CeilingNotReportedFalse(): void
     {
@@ -218,12 +218,12 @@ class MetarCompletenessSafetyTest extends TestCase
         $airport = createTestAirport(['metar_station' => 'KSPB']);
         $result = parseMETARResponse($response, $airport);
         $this->assertIsArray($result);
-        $this->assertSame(200, $result['ceiling'], 'vertVis=2 → 200 ft AGL');
+        $this->assertSame(200, $result['ceiling'], 'vertVis=2 -> 200 ft AGL');
         $this->assertTrue($result['ceiling_reported']);
     }
 
     /**
-     * Flight category: METAR completeness flags — unknown ceiling with good visibility → MVFR (conservative).
+     * Flight category: METAR completeness flags - unknown ceiling with good visibility -> MVFR (conservative).
      */
     public function testCalculateFlightCategory_MetarUnknownCeilingWithVfrVisibility_IsMVFR(): void
     {
@@ -282,7 +282,7 @@ class MetarCompletenessSafetyTest extends TestCase
     }
 
     /**
-     * Both METAR flags false and null vis/ceil → insufficient data.
+     * Both METAR flags false and null vis/ceil -> insufficient data.
      */
     public function testCalculateFlightCategory_MetarBothUnreportedNulls_IsNull(): void
     {

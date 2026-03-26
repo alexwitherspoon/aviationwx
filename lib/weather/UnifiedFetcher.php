@@ -253,7 +253,7 @@ function fetchAllSources(array $sources, string $airportId): array {
     
     curl_multi_close($mh);
     
-    // Fallback: swob_auto 404 → try standard (hourly) URL
+    // Fallback: swob_auto 404 -> try standard (hourly) URL
     foreach ($swobAuto404Retries as $sourceKey => $source) {
         $fallbackUrl = SwobAutoAdapter::buildStandardUrl($source);
         if ($fallbackUrl === null) {

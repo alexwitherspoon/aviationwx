@@ -512,7 +512,7 @@ if ($themeCookie === 'dark') {
         // Theme Mode - Instant activation before first paint
         // Four modes: auto (browser preference), day (light), dark (classic dark), night (red night vision)
         // Priority: 
-        //   1) Mobile after evening civil twilight → Night mode (safety priority, unless manually overridden today)
+        //   1) Mobile after evening civil twilight -> Night mode (safety priority, unless manually overridden today)
         //   2) Saved cookie preference (auto/day/dark)
         //   3) Default: auto (follows browser prefers-color-scheme)
         (function() {
@@ -581,7 +581,7 @@ if ($themeCookie === 'dark') {
             
             // Note: 'night' preference is now valid (manually selected by user)
             
-            // PRIORITY 1: Mobile after evening civil twilight → Auto night mode (safety priority)
+            // PRIORITY 1: Mobile after evening civil twilight -> Auto night mode (safety priority)
             if (isMobile() && isNightTime()) {
                 // Check if user manually overrode auto-night today
                 if (nightData && manualOverride === nightData.todayDate) {
@@ -607,7 +607,7 @@ if ($themeCookie === 'dark') {
                 return;
             }
             
-            // PRIORITY 3: Auto mode (explicit 'auto' or no preference) → follow browser preference
+            // PRIORITY 3: Auto mode (explicit 'auto' or no preference) -> follow browser preference
             // This is the default when no preference is stored
             applyAutoTheme();
         })();
@@ -1332,7 +1332,7 @@ if ($themeCookie === 'dark') {
                 </div>
                 <?php endif; ?>
                 <div class="nav-theme-toggle-container">
-                    <button id="night-mode-toggle" title="Toggle theme: Auto → Day → Dark → Night" aria-label="Toggle theme mode">
+                    <button id="night-mode-toggle" title="Toggle theme: Auto -> Day -> Dark -> Night" aria-label="Toggle theme mode">
                         <span id="night-mode-icon">🔄</span>
                     </button>
                 </div>
@@ -2195,7 +2195,7 @@ const INITIAL_TIMEZONE_DISPLAY = <?php
     echo json_encode($tzDisplay, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
 
-// Default preferences for unit toggles (merged: global config → airport override)
+// Default preferences for unit toggles (merged: global config -> airport override)
 const DEFAULT_PREFERENCES = <?php
     $defaultPrefs = getDefaultPreferencesForAirport($airportId);
     echo json_encode($defaultPrefs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -2218,7 +2218,7 @@ const RUNWAY_SEGMENTS = <?php
 ?>;
 
 // Staleness thresholds (3-tier model from config)
-// Thresholds cascade: airport config → global config → built-in defaults
+// Thresholds cascade: airport config -> global config -> built-in defaults
 const STALE_WARNING_SECONDS = <?= getStaleWarningSeconds($airport) ?>;
 const STALE_ERROR_SECONDS = <?= getStaleErrorSeconds($airport) ?>;
 const STALE_FAILCLOSED_SECONDS = <?= getStaleFailclosedSeconds($airport) ?>;
@@ -2777,7 +2777,7 @@ function syncPreferencesFromCookies() {
 // Sync preferences on page load
 syncPreferencesFromCookies();
 
-// Time format preference (user cookie → airport config → global config → hardcoded default)
+// Time format preference (user cookie -> airport config -> global config -> hardcoded default)
 function getTimeFormat() {
     const format = getCookie('aviationwx_time_format')
         || safeStorageGet('aviationwx_time_format')
@@ -2821,7 +2821,7 @@ function formatTime(timeStr) {
     }
 }
 
-// Temperature unit preference (user cookie → airport config → global config → hardcoded default)
+// Temperature unit preference (user cookie -> airport config -> global config -> hardcoded default)
 function getTempUnit() {
     const unit = getCookie('aviationwx_temp_unit')
         || safeStorageGet('aviationwx_temp_unit')
@@ -2904,7 +2904,7 @@ function formatTempTimestamp(timestamp) {
     }
 }
 
-// Distance/altitude unit preference (user cookie → airport config → global config → hardcoded default)
+// Distance/altitude unit preference (user cookie -> airport config -> global config -> hardcoded default)
 function getDistanceUnit() {
     const unit = getCookie('aviationwx_distance_unit')
         || safeStorageGet('aviationwx_distance_unit')
@@ -2953,7 +2953,7 @@ function formatRainfall(inches) {
     }
 }
 
-// Barometer unit preference (user cookie → airport config → global config → hardcoded default)
+// Barometer unit preference (user cookie -> airport config -> global config -> hardcoded default)
 function getBaroUnit() {
     const unit = getCookie('aviationwx_baro_unit')
         || safeStorageGet('aviationwx_baro_unit')
@@ -3025,7 +3025,7 @@ function formatCeiling(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
-// Wind speed unit preference (user cookie → airport config → global config → hardcoded default)
+// Wind speed unit preference (user cookie -> airport config -> global config -> hardcoded default)
 function getWindSpeedUnit() {
     const unit = getCookie('aviationwx_wind_speed_unit')
         || safeStorageGet('aviationwx_wind_speed_unit')
@@ -5515,7 +5515,7 @@ const WebcamPlayer = {
             this.hideControls();
         }
 
-        // Prevent body scroll — delegated to webcam-player-scroll-lock.js (contract-tested)
+        // Prevent body scroll - delegated to webcam-player-scroll-lock.js (contract-tested)
         const scrollLock = window.AviationWX && window.AviationWX.webcamPlayerScrollLock;
         if (scrollLock && typeof scrollLock.apply === 'function') {
             this.savedScrollY = scrollLock.apply();
@@ -9013,7 +9013,7 @@ window.addEventListener('beforeunload', () => {
             </div>
             <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame" title="Previous frame (← arrow key)">⏮</button>
             <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause" title="Play/pause time-lapse (Space bar)">▶</button>
-            <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (→ arrow key)">⏭</button>
+            <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (-> arrow key)">⏭</button>
             <span class="webcam-player-btn-divider"></span>
             <button class="webcam-player-btn toggle" id="webcam-player-autoplay-btn" onclick="webcamPlayerToggleAutoplay()" aria-label="Toggle autoplay" title="Toggle continuous playback">🔄</button>
             <button class="webcam-player-btn" id="webcam-player-download-btn" onclick="webcamPlayerDownload()" aria-label="Download original image" title="Download original image with EXIF data">⬇️</button>
