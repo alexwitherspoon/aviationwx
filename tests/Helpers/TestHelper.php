@@ -88,3 +88,57 @@ function assertWeatherResponse($response) {
     }
 }
 
+/**
+ * NOTAM start/end UTC strings on the current UTC calendar day, after `now` when a later instant exists.
+ *
+ * Used by NOTAM unit tests so "upcoming_today" is stable (avoids midnight rollover and avoids
+ * fixed clock times that become "expired" later in the day). Slot paths use future times; the
+ * integer-timestamp fallback clamps to 23:59:59 UTC today. If the clock is already at the last
+ * second of the UTC day, both times may equal 23:59:59 UTC (no remaining future second that day).
+ *
+ * @return array{start_time_utc: string, end_time_utc: string}
+ */
+function notamTestTimesUpcomingLaterTodayUtc(): array
+{
+    $tz = new DateTimeZone('UTC');
+    $now = new DateTimeImmutable('now', $tz);
+    $todayEnd = $now->setTime(23, 59, 59);
+
+    $slots = [
+        [14, 0, 14, 30],
+        [18, 0, 18, 30],
+        [21, 0, 21, 30],
+        [23, 0, 23, 30],
+        [23, 40, 23, 58],
+    ];
+
+    foreach ($slots as [$sh, $sm, $eh, $em]) {
+        $start = $now->setTime($sh, $sm, 0);
+        $end = $now->setTime($eh, $em, 0);
+        if ($start > $now && $end > $start && $end <= $todayEnd) {
+            return [
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $start->getTimestamp()),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $end->getTimestamp()),
+            ];
+        }
+    }
+
+    // Fallback: clamp with integer timestamps so +N seconds never rolls into the next UTC day
+    $nowTs = $now->getTimestamp();
+    $todayEndTs = $todayEnd->getTimestamp();
+    $startTs = min($nowTs + 3, $todayEndTs);
+    $endTs = min(max($startTs + 1, $nowTs + 12), $todayEndTs);
+    if ($endTs <= $startTs) {
+        $endTs = $startTs;
+    }
+    if ($startTs <= $nowTs) {
+        $startTs = $todayEndTs;
+        $endTs = $todayEndTs;
+    }
+
+    return [
+        'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $startTs),
+        'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $endTs),
+    ];
+}
+

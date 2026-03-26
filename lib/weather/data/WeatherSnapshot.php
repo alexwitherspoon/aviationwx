@@ -68,6 +68,13 @@ class WeatherSnapshot {
     /** @var string|null Station ICAO for ICAO-keyed sources (swob, nws, awosnet). Used for "Source Name (ICAO)" attribution. */
     public readonly ?string $stationId;
 
+    /**
+     * METAR ICAO field completeness (METAR source only). Null for non-METAR snapshots.
+     *
+     * @var array{visibility_reported: bool, ceiling_reported: bool}|null
+     */
+    public readonly ?array $metarFieldCompleteness;
+
     /** @var bool Whether this snapshot was successfully parsed */
     public readonly bool $isValid;
 
@@ -76,6 +83,7 @@ class WeatherSnapshot {
      *
      * @param string|null $metarStationId For METAR source: station ICAO. Null for non-METAR or when unknown.
      * @param string|null $stationId For ICAO-keyed sources (swob, nws, awosnet): station ICAO for attribution.
+     * @param array{visibility_reported: bool, ceiling_reported: bool}|null $metarFieldCompleteness METAR-only ICAO completeness flags
      */
     public function __construct(
         string $source,
@@ -92,7 +100,8 @@ class WeatherSnapshot {
         ?string $rawMetar = null,
         bool $isValid = true,
         ?string $metarStationId = null,
-        ?string $stationId = null
+        ?string $stationId = null,
+        ?array $metarFieldCompleteness = null
     ) {
         $this->source = $source;
         $this->fetchTime = $fetchTime;
@@ -109,6 +118,7 @@ class WeatherSnapshot {
         $this->isValid = $isValid;
         $this->metarStationId = $metarStationId;
         $this->stationId = $stationId;
+        $this->metarFieldCompleteness = $metarFieldCompleteness;
     }
 
     /**
@@ -142,7 +152,8 @@ class WeatherSnapshot {
             rawMetar: null,
             isValid: false,
             metarStationId: null,
-            stationId: null
+            stationId: null,
+            metarFieldCompleteness: null
         );
     }
     

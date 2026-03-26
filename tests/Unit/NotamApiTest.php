@@ -160,12 +160,13 @@ class NotamApiTest extends TestCase {
      * Test with invalid timezone falls back gracefully
      */
     public function testRevalidateNotamStatus_InvalidTimezone() {
+        $t = notamTestTimesUpcomingLaterTodayUtc();
         $notam = [
-            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600), // 1 hour from now
-            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 7200),
-            'status' => 'upcoming_today'
+            'start_time_utc' => $t['start_time_utc'],
+            'end_time_utc' => $t['end_time_utc'],
+            'status' => 'upcoming_today',
         ];
-        
+
         // Invalid timezone should fall back to server time gracefully
         $status = revalidateNotamStatus($notam, 'Invalid/Timezone');
         $this->assertEquals('upcoming_today', $status);

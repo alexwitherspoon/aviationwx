@@ -34,6 +34,7 @@ require_once __DIR__ . '/adapter/swob-helper.php';
 require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
 require_once __DIR__ . '/wind-normalizer.php';
+require_once __DIR__ . '/metar-completeness-aggregate.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
@@ -92,7 +93,10 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     }
     $aggregator = new WeatherAggregator();
     $result = $aggregator->aggregate($snapshots, null, $localAirportIcao);
-    
+
+    // METAR ICAO completeness flags: copy from the METAR snapshot that contributed each field
+    applyMetarCompletenessFlagsFromAggregation($result, $snapshots);
+
     // Validate and fix pressure if it's clearly in wrong units
     // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.
     // Common issues:
@@ -249,7 +253,7 @@ function fetchAllSources(array $sources, string $airportId): array {
     
     curl_multi_close($mh);
     
-    // Fallback: swob_auto 404 → try standard (hourly) URL
+    // Fallback: swob_auto 404 -> try standard (hourly) URL
     foreach ($swobAuto404Retries as $sourceKey => $source) {
         $fallbackUrl = SwobAutoAdapter::buildStandardUrl($source);
         if ($fallbackUrl === null) {
