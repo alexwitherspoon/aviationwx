@@ -86,7 +86,8 @@ class WeatherAggregatorTest extends TestCase {
             rawMetar: $fields['raw_metar'] ?? null,
             isValid: true,
             metarStationId: $metarStationId,
-            stationId: $stationId
+            stationId: $stationId,
+            metarFieldCompleteness: null
         );
     }
     

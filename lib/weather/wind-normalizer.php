@@ -82,6 +82,7 @@ function normalizeWindToTrueNorth(?WeatherSnapshot $snapshot, array $airport, st
         rawMetar: $snapshot->rawMetar,
         isValid: $snapshot->isValid,
         metarStationId: $snapshot->metarStationId,
-        stationId: $snapshot->stationId
+        stationId: $snapshot->stationId,
+        metarFieldCompleteness: $snapshot->metarFieldCompleteness
     );
 }

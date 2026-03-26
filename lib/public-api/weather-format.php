@@ -149,5 +149,8 @@ function formatWeatherResponse(array $weather, array $airport): array
             : null,
         'last_hour_wind' => formatWindRoseForApi($weather['last_hour_wind'] ?? null),
         '_field_obs_time_map' => $weather['_field_obs_time_map'] ?? [],
+        // METAR ICAO completeness (fail-closed display); omitted when not from METAR pipeline
+        'metar_visibility_reported' => $weather['metar_visibility_reported'] ?? null,
+        'metar_ceiling_reported' => $weather['metar_ceiling_reported'] ?? null,
     ];
 }

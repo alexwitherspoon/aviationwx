@@ -235,9 +235,22 @@ function calculateDensityAltitude($weather, $airport) {
 function calculateFlightCategory($weather) {
     require_once __DIR__ . '/../constants.php';
     require_once __DIR__ . '/utils.php';
-    
+
+    $metarVisRep = $weather['metar_visibility_reported'] ?? null;
+    $metarCeilRep = $weather['metar_ceiling_reported'] ?? null;
+    $hasMetarCompleteness = $metarVisRep !== null && $metarCeilRep !== null;
+
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
+
+    if ($hasMetarCompleteness) {
+        if ($metarVisRep === false) {
+            $visibility = null;
+        }
+        if ($metarCeilRep === false) {
+            $ceiling = null;
+        }
+    }
     
     // Check for unlimited sentinel values before categorization
     $isUnlimitedVisibility = isUnlimitedVisibility($visibility);
@@ -300,6 +313,10 @@ function calculateFlightCategory($weather) {
     if ($visibilityCategory !== null && $ceiling === null) {
         if ($visibilityCategory !== 'VFR') {
             return $visibilityCategory;
+        }
+        // METAR: visibility stated but ceiling not reported in observation → conservative MVFR (not VFR)
+        if ($hasMetarCompleteness && $metarVisRep === true && $metarCeilRep === false) {
+            return 'MVFR';
         }
         // VFR visibility + unlimited ceiling = VFR
         return 'VFR';

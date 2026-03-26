@@ -136,11 +136,12 @@ class NotamFilterTest extends TestCase {
     }
     
     public function testDetermineNotamStatusUpcomingToday() {
+        $t = notamTestTimesUpcomingLaterTodayUtc();
         $notam = [
-            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600), // 1 hour from now
-            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 7200) // 2 hours from now
+            'start_time_utc' => $t['start_time_utc'],
+            'end_time_utc' => $t['end_time_utc'],
         ];
-        
+
         $status = determineNotamStatus($notam);
         $this->assertEquals('upcoming_today', $status);
     }

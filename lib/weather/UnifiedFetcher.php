@@ -92,7 +92,16 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     }
     $aggregator = new WeatherAggregator();
     $result = $aggregator->aggregate($snapshots, null, $localAirportIcao);
-    
+
+    // METAR ICAO completeness flags for fail-closed flight category (Annex 3: omission ≠ unlimited)
+    foreach ($snapshots as $snapshot) {
+        if ($snapshot->source === 'metar' && $snapshot->metarFieldCompleteness !== null) {
+            $result['metar_visibility_reported'] = $snapshot->metarFieldCompleteness['visibility_reported'];
+            $result['metar_ceiling_reported'] = $snapshot->metarFieldCompleteness['ceiling_reported'];
+            break;
+        }
+    }
+
     // Validate and fix pressure if it's clearly in wrong units
     // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.
     // Common issues:

@@ -88,3 +88,53 @@ function assertWeatherResponse($response) {
     }
 }
 
+/**
+ * NOTAM start/end UTC strings that are strictly in the future and still on the current UTC calendar day.
+ *
+ * Used by NOTAM unit tests so "upcoming_today" is stable (avoids midnight rollover and avoids
+ * fixed clock times that become "expired" later in the day).
+ *
+ * @return array{start_time_utc: string, end_time_utc: string}
+ */
+function notamTestTimesUpcomingLaterTodayUtc(): array
+{
+    $tz = new DateTimeZone('UTC');
+    $now = new DateTimeImmutable('now', $tz);
+    $todayEnd = $now->setTime(23, 59, 59);
+
+    $slots = [
+        [14, 0, 14, 30],
+        [18, 0, 18, 30],
+        [21, 0, 21, 30],
+        [23, 0, 23, 30],
+        [23, 40, 23, 58],
+    ];
+
+    foreach ($slots as [$sh, $sm, $eh, $em]) {
+        $start = $now->setTime($sh, $sm, 0);
+        $end = $now->setTime($eh, $em, 0);
+        if ($start > $now && $end > $start && $end <= $todayEnd) {
+            return [
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $start->getTimestamp()),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $end->getTimestamp()),
+            ];
+        }
+    }
+
+    $start = $now->modify('+3 seconds');
+    $end = $now->modify('+12 seconds');
+    if ($end > $todayEnd) {
+        $end = $todayEnd;
+        $start = $end->modify('-2 seconds');
+        if ($start <= $now) {
+            $start = $now->modify('+1 second');
+            $end = $start->modify('+1 second');
+        }
+    }
+
+    return [
+        'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $start->getTimestamp()),
+        'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $end->getTimestamp()),
+    ];
+}
+

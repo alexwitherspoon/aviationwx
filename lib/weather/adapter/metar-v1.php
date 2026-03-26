@@ -198,12 +198,22 @@ class MetarAdapter {
                     $obsTime
                 )
                 : WindGroup::empty(),
-            visibility: WeatherReading::statuteMiles($parsed['visibility'], $source, $obsTime),
+            visibility: WeatherReading::statuteMiles(
+                $parsed['visibility'],
+                $source,
+                $obsTime,
+                (bool)($parsed['visibility_greater_than'] ?? false)
+            ),
             ceiling: WeatherReading::feet($parsed['ceiling'], $source, $obsTime),
             cloudCover: WeatherReading::text($parsed['cloud_cover'], $source, $obsTime),
-            rawMetar: $airport['rawOb'] ?? null,
+            rawMetar: $parsed['raw_ob'] ?? null,
             isValid: true,
-            metarStationId: $metarStationId
+            metarStationId: $metarStationId,
+            stationId: null,
+            metarFieldCompleteness: [
+                'visibility_reported' => (bool)($parsed['visibility_reported'] ?? false),
+                'ceiling_reported' => (bool)($parsed['ceiling_reported'] ?? false),
+            ]
         );
     }
 }
@@ -336,6 +346,92 @@ function parseRawMETARToWeatherArray(string $rawMetar): ?array {
 }
 
 // =============================================================================
+// METAR ICAO completeness (Annex 3 / WMO): omitted groups are not "unlimited"
+// =============================================================================
+
+/**
+ * True when raw METAR text contains an explicit US visibility group or CAVOK.
+ *
+ * @param string $rawOb Raw METAR (e.g. rawOb from aviationweather.gov)
+ */
+function metarRawObHasExplicitUsVisibility(string $rawOb): bool
+{
+    if ($rawOb === '') {
+        return false;
+    }
+    $u = strtoupper($rawOb);
+    if (preg_match('/\bCAVOK\b/', $u)) {
+        return true;
+    }
+    if (preg_match('/\b(P\d+|\d+)\s*SM\b/u', $u)) {
+        return true;
+    }
+    if (preg_match('/\bM?\d+\/\d+\s*SM\b/u', $u)) {
+        return true;
+    }
+    if (preg_match('/\b\d+\s+\d+\/\d+\s*SM\b/u', $u)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * True when raw METAR text contains explicit sky/ceiling information (CAVOK, layers, VV, NSC/NCD/CLR/SKC).
+ *
+ * @param string $rawOb Raw METAR string
+ */
+function metarRawObHasExplicitSkyOrCavok(string $rawOb): bool
+{
+    if ($rawOb === '') {
+        return false;
+    }
+    $u = strtoupper($rawOb);
+    if (preg_match('/\bCAVOK\b/', $u)) {
+        return true;
+    }
+    if (preg_match('/\b(NSC|NCD|CLR|SKC)\b/', $u)) {
+        return true;
+    }
+    if (preg_match('/\bVV(?:\/\/\/|\d{3})\b/', $u)) {
+        return true;
+    }
+    if (preg_match('/\b(FEW|SCT|BKN|OVC|OVX)(?:\d{3})?\b/', $u)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Extract US statute-mile visibility from raw METAR text (CAVOK → unlimited sentinel).
+ *
+ * @return float|null Visibility in statute miles, or null if not extractable
+ */
+function metarExtractUsVisibilityStatuteMilesFromRawOb(string $rawOb): ?float
+{
+    if ($rawOb === '') {
+        return null;
+    }
+    $u = strtoupper($rawOb);
+    if (preg_match('/\bCAVOK\b/', $u)) {
+        return UNLIMITED_VISIBILITY_SM;
+    }
+    if (preg_match('/\bP(\d+)SM\b/', $u, $m)) {
+        return (float)$m[1];
+    }
+    if (preg_match('/\b(\d+)\s+\d+\/\d+\s*SM\b/', $u, $m)) {
+        return (float)$m[1];
+    }
+    if (preg_match('/\bM?(\d+)\/(\d+)\s*SM\b/', $u, $m)) {
+        $den = (float)$m[2];
+        return $den > 0 ? ((float)$m[1]) / $den : null;
+    }
+    if (preg_match('/\b(\d+)\s*SM\b/', $u, $m)) {
+        return (float)$m[1];
+    }
+    return null;
+}
+
+// =============================================================================
 // LEGACY FUNCTIONS (kept for backward compatibility during migration)
 // =============================================================================
 
@@ -362,51 +458,76 @@ function parseMETARResponse($response, $airport): ?array {
     }
     
     $metarData = $data[0];
-    
-    // Parse visibility - use parsed visibility from JSON
+    $rawOb = isset($metarData['rawOb']) ? (string)$metarData['rawOb'] : '';
+
+    // Visibility: ICAO — omitted or empty visib must not imply unlimited unless rawOb has explicit vis/CAVOK
     $visibility = null;
-    $visibilityFieldPresent = isset($metarData['visib']);
-    if ($visibilityFieldPresent) {
-        $visStr = str_replace('+', '', $metarData['visib']);
-        // Handle "1 1/2" format
-        if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
-            $num1 = is_numeric($matches[1]) ? floatval($matches[1]) : 0;
-            $fraction = $matches[2];
-            if (preg_match('/(\d+)\/(\d+)/', $fraction, $fracMatches)) {
-                $numerator = is_numeric($fracMatches[1]) ? floatval($fracMatches[1]) : 0;
-                $denominator = is_numeric($fracMatches[2]) && $fracMatches[2] != 0 ? floatval($fracMatches[2]) : 1;
-                $visibility = $num1 + ($numerator / $denominator);
+    $visibilityReported = false;
+    $visibilityGreaterThan = false;
+
+    if (array_key_exists('visib', $metarData)) {
+        $visKey = $metarData['visib'];
+        if ($visKey === false) {
+            $visibility = null;
+            $visibilityReported = false;
+        } elseif ($visKey === null || $visKey === '') {
+            if (metarRawObHasExplicitUsVisibility($rawOb)) {
+                $extracted = metarExtractUsVisibilityStatuteMilesFromRawOb($rawOb);
+                if ($extracted !== null) {
+                    $visibility = $extracted;
+                    $visibilityReported = true;
+                    $visibilityGreaterThan = preg_match('/\bP\d+SM\b/i', $rawOb) === 1;
+                }
             } else {
-                $visibility = $num1;
+                $visibility = null;
+                $visibilityReported = false;
             }
-        } elseif (strpos($visStr, '/') !== false) {
-            $parts = explode('/', $visStr);
-            if (count($parts) === 2 && is_numeric($parts[0]) && is_numeric($parts[1]) && $parts[1] != 0) {
-                $visibility = floatval($parts[0]) / floatval($parts[1]);
+        } else {
+            $visStr = str_replace('+', '', (string)$visKey);
+            if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
+                $num1 = is_numeric($matches[1]) ? floatval($matches[1]) : 0;
+                $fraction = $matches[2];
+                if (preg_match('/(\d+)\/(\d+)/', $fraction, $fracMatches)) {
+                    $numerator = is_numeric($fracMatches[1]) ? floatval($fracMatches[1]) : 0;
+                    $denominator = is_numeric($fracMatches[2]) && $fracMatches[2] != 0 ? floatval($fracMatches[2]) : 1;
+                    $visibility = $num1 + ($numerator / $denominator);
+                } else {
+                    $visibility = $num1;
+                }
+                $visibilityReported = true;
+            } elseif (strpos($visStr, '/') !== false) {
+                $parts = explode('/', $visStr);
+                if (count($parts) === 2 && is_numeric($parts[0]) && is_numeric($parts[1]) && $parts[1] != 0) {
+                    $visibility = floatval($parts[0]) / floatval($parts[1]);
+                    $visibilityReported = true;
+                }
+            } elseif (is_numeric($visStr)) {
+                $visibility = floatval($visStr);
+                $visibilityReported = true;
             }
-        } elseif (is_numeric($visStr) || $visStr === '') {
-            $visibility = $visStr !== '' ? floatval($visStr) : null;
+        }
+    } else {
+        if (metarRawObHasExplicitUsVisibility($rawOb)) {
+            $extracted = metarExtractUsVisibilityStatuteMilesFromRawOb($rawOb);
+            if ($extracted !== null) {
+                $visibility = $extracted;
+                $visibilityReported = true;
+                $visibilityGreaterThan = preg_match('/\bP\d+SM\b/i', $rawOb) === 1;
+            }
         }
     }
-    
-    // Convert null visibility to sentinel value (unlimited) only if field was present in response
-    // If field is missing from response, keep it as null (indicates missing data, not unlimited)
-    // METAR API: null/empty visib field = unlimited visibility, missing field = missing data
-    if ($visibility === null && $visibilityFieldPresent) {
-        $visibility = UNLIMITED_VISIBILITY_SM;  // 999.0 = unlimited
-    }
-    
+
     // Parse ceiling and cloud cover from clouds array
     $ceiling = null;
     $cloudCover = null;
     $cloudLayer = null;
-    
+    $hasCloudLayersFromJson = isset($metarData['clouds']) && is_array($metarData['clouds']) && count($metarData['clouds']) > 0;
+
     if (isset($metarData['clouds']) && is_array($metarData['clouds'])) {
         foreach ($metarData['clouds'] as $cloud) {
             if (isset($cloud['cover'])) {
                 $cover = $cloud['cover'];
-                
-                // Record the first cloud layer for reference
+
                 if ($cloudLayer === null) {
                     $base = null;
                     if (isset($cloud['base']) && is_numeric($cloud['base'])) {
@@ -417,10 +538,8 @@ function parseMETARResponse($response, $airport): ?array {
                         'base' => $base
                     ];
                 }
-                
-                // Ceiling exists when BKN or OVC (broken or overcast)
-                // Note: CLR/SKC (clear) should not set cloud_cover
-                if (in_array($cover, ['BKN', 'OVC', 'OVX'])) {
+
+                if (in_array($cover, ['BKN', 'OVC', 'OVX'], true)) {
                     if (isset($cloud['base']) && is_numeric($cloud['base'])) {
                         $ceiling = (int)round((float)$cloud['base']);
                         if ($cover !== 'CLR' && $cover !== 'SKC') {
@@ -432,19 +551,18 @@ function parseMETARResponse($response, $airport): ?array {
             }
         }
     }
-    
-    // Set cloud_cover from first non-CLR/SKC layer if no ceiling was found
-    // Note: Ceiling only exists with BKN/OVC/OVX coverage. FEW/SCT clouds do not constitute a ceiling.
-    // If only FEW/SCT clouds exist, ceiling remains null (unlimited).
+
+    if ($ceiling === null && isset($metarData['vertVis']) && is_numeric($metarData['vertVis'])) {
+        $vv = (float)$metarData['vertVis'];
+        if ($vv > 0) {
+            $ceiling = (int)round($vv * 100);
+        }
+    }
+
     if ($ceiling === null && isset($cloudLayer) && $cloudLayer['cover'] !== 'CLR' && $cloudLayer['cover'] !== 'SKC') {
         $cloudCover = $cloudLayer['cover'];
     }
-    
-    // Keep ceiling as null for unlimited (no BKN/OVC clouds)
-    // Tests expect null for unlimited ceiling, not sentinel value
-    // Sentinel value (99999) is used elsewhere in the codebase, but parseMETARResponse returns null
-    // to match test expectations and API contract
-    
+
     // Parse temperature (Celsius)
     $temperature = isset($metarData['temp']) ? $metarData['temp'] : null;
     
@@ -473,8 +591,7 @@ function parseMETARResponse($response, $airport): ?array {
     // Example: "06009G19KT" = 060° at 9 knots, gusts to 19 knots
     // Also handles variable wind: "VRBffGggKT" (e.g., VRB05G15KT)
     $gustSpeed = null;
-    if (isset($metarData['rawOb'])) {
-        $rawOb = $metarData['rawOb'];
+    if ($rawOb !== '') {
         // Match wind pattern with gust: dddffGggKT or VRBffGggKT
         // Pattern matches: direction (3 digits or VRB), wind speed (2-3 digits), G, gust speed (2-3 digits), KT
         if (preg_match('/\b(?:VRB|\d{3})(\d{2,3})G(\d{2,3})KT\b/', $rawOb, $matches)) {
@@ -500,8 +617,7 @@ function parseMETARResponse($response, $airport): ?array {
     
     // Fallback: Parse from raw METAR string if altim field is missing or invalid
     // METAR format: "A3012" means 30.12 inHg (A prefix + 4 digits in hundredths)
-    if ($pressure === null && isset($metarData['rawOb'])) {
-        $rawOb = $metarData['rawOb'];
+    if ($pressure === null && $rawOb !== '') {
         // Match altimeter pattern: A followed by 4 digits (e.g., A3012 = 30.12 inHg)
         if (preg_match('/\bA(\d{4})\b/', $rawOb, $matches)) {
             $altimHundredths = (int)$matches[1];
@@ -535,16 +651,19 @@ function parseMETARResponse($response, $airport): ?array {
     // Parse observation time (when the METAR was actually measured)
     $obsTime = null;
     if (isset($metarData['obsTime'])) {
-        // obsTime is in ISO 8601 format (e.g., '2025-01-26T16:54:00Z')
-        $timestamp = strtotime($metarData['obsTime']);
-        if ($timestamp !== false) {
-            $obsTime = $timestamp;
+        $ot = $metarData['obsTime'];
+        if (is_numeric($ot)) {
+            $obsTime = (int)$ot;
+        } else {
+            $timestamp = strtotime((string)$ot);
+            if ($timestamp !== false) {
+                $obsTime = $timestamp;
+            }
         }
     }
-    
+
     // If obsTime not available, try to parse from raw METAR string (rawOb)
-    if ($obsTime === null && isset($metarData['rawOb'])) {
-        $rawOb = $metarData['rawOb'];
+    if ($obsTime === null && $rawOb !== '') {
         // METAR observation time format is DDHHMMZ (e.g., "012353Z" = day 01, time 23:53 UTC)
         // Pattern: day (2 digits), hour (2 digits), minute (2 digits), 'Z'
         if (preg_match('/\b(\d{2})(\d{4})Z\b/', $rawOb, $matches)) {
@@ -609,7 +728,12 @@ function parseMETARResponse($response, $airport): ?array {
             }
         }
     }
-    
+
+    $ceilingReported = $ceiling !== null
+        || $hasCloudLayersFromJson
+        || (isset($metarData['cover']) && is_string($metarData['cover']) && trim($metarData['cover']) !== '')
+        || metarRawObHasExplicitSkyOrCavok($rawOb);
+
     return [
         'temperature' => $temperature,
         'dewpoint' => $dewpoint,
@@ -619,6 +743,7 @@ function parseMETARResponse($response, $airport): ?array {
         'gust_speed' => $gustSpeed, // Parsed from raw METAR string when present (e.g., "06009G19KT")
         'pressure' => $pressure,
         'visibility' => $visibility,
+        'visibility_greater_than' => $visibilityGreaterThan,
         'ceiling' => $ceiling,
         'cloud_cover' => $cloudCover,
         'precip_accum' => $precip, // Precipitation if available
@@ -626,6 +751,9 @@ function parseMETARResponse($response, $airport): ?array {
         'temp_low' => null,
         'peak_gust' => $gustSpeed, // Use current gust as peak gust (METAR provides current observation only)
         'obs_time' => $obsTime, // Observation time when METAR was measured
+        'visibility_reported' => $visibilityReported,
+        'ceiling_reported' => $ceilingReported,
+        'raw_ob' => $rawOb !== '' ? $rawOb : null,
     ];
 }
 
