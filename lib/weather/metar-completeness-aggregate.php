@@ -8,6 +8,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/data/WeatherReading.php';
+require_once __DIR__ . '/data/WeatherSnapshot.php';
+
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
 
