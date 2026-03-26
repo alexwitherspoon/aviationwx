@@ -8,11 +8,54 @@
 
 declare(strict_types=1);
 
+use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
 
 /**
+ * Resolve the visibility or ceiling reading used for METAR completeness attribution.
+ *
+ * @param WeatherSnapshot $snapshot METAR snapshot
+ * @param string $fieldName Field key: `visibility` or `ceiling`
+ * @return WeatherReading Reading for that field
+ * @throws \InvalidArgumentException If $fieldName is not visibility or ceiling
+ */
+function metarCompletenessFieldReading(WeatherSnapshot $snapshot, string $fieldName): WeatherReading
+{
+    return match ($fieldName) {
+        'visibility' => $snapshot->visibility,
+        'ceiling' => $snapshot->ceiling,
+        default => throw new \InvalidArgumentException(
+            'METAR completeness field must be visibility or ceiling, got: ' . $fieldName
+        ),
+    };
+}
+
+/**
+ * Normalize observation time from aggregated `_field_obs_time_map` values.
+ *
+ * @param mixed $value Map entry (typically int; also accepts whole float or numeric string)
+ * @return int|null Unix observation time in seconds, or null if not coercible
+ */
+function normalizeAggregateFieldObsTime(mixed $value): ?int
+{
+    if (is_int($value)) {
+        return $value;
+    }
+    if (is_float($value) && floor($value) === $value) {
+        return (int) $value;
+    }
+    if (is_string($value) && $value !== '') {
+        $v = filter_var($value, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+
+        return $v;
+    }
+
+    return null;
+}
+
+/**
  * When multiple METAR snapshots share a station, pick the one whose field reading matches
- * _field_obs_time_map, else the freshest field observation time.
+ * _field_obs_time_map, else the freshest field observation time (ties broken by fetchTime).
  *
  * @param array<WeatherSnapshot> $candidates Non-empty METAR snapshots for the station
  * @param string $fieldName Field key: visibility or ceiling
@@ -21,12 +64,18 @@ use AviationWX\Weather\Data\WeatherSnapshot;
  */
 function pickMetarSnapshotForFieldCompleteness(array $candidates, string $fieldName, ?int $wantObsTime): WeatherSnapshot
 {
+    if ($fieldName !== 'visibility' && $fieldName !== 'ceiling') {
+        throw new \InvalidArgumentException(
+            'METAR completeness field must be visibility or ceiling, got: ' . $fieldName
+        );
+    }
     if (count($candidates) === 1) {
         return $candidates[0];
     }
     if ($wantObsTime !== null) {
+        // First matching snapshot in candidate order aligns with WeatherAggregator when obs times tie (first wins).
         foreach ($candidates as $snapshot) {
-            $reading = $fieldName === 'visibility' ? $snapshot->visibility : $snapshot->ceiling;
+            $reading = metarCompletenessFieldReading($snapshot, $fieldName);
             if ($reading->observationTime === $wantObsTime) {
                 return $snapshot;
             }
@@ -35,12 +84,16 @@ function pickMetarSnapshotForFieldCompleteness(array $candidates, string $fieldN
     usort(
         $candidates,
         static function (WeatherSnapshot $a, WeatherSnapshot $b) use ($fieldName): int {
-            $ra = $fieldName === 'visibility' ? $a->visibility : $a->ceiling;
-            $rb = $fieldName === 'visibility' ? $b->visibility : $b->ceiling;
+            $ra = metarCompletenessFieldReading($a, $fieldName);
+            $rb = metarCompletenessFieldReading($b, $fieldName);
             $ta = $ra->observationTime ?? 0;
             $tb = $rb->observationTime ?? 0;
+            $cmp = $tb <=> $ta;
+            if ($cmp !== 0) {
+                return $cmp;
+            }
 
-            return $tb <=> $ta;
+            return $b->fetchTime <=> $a->fetchTime;
         }
     );
 
@@ -120,8 +173,8 @@ function applyMetarCompletenessFlagsFromAggregation(array &$result, array $snaps
         }
 
         $wantObsTime = null;
-        if (array_key_exists($fieldName, $obsTimeMap) && is_int($obsTimeMap[$fieldName])) {
-            $wantObsTime = $obsTimeMap[$fieldName];
+        if (array_key_exists($fieldName, $obsTimeMap)) {
+            $wantObsTime = normalizeAggregateFieldObsTime($obsTimeMap[$fieldName]);
         }
 
         $picked = pickMetarSnapshotForFieldCompleteness($candidates, $fieldName, $wantObsTime);

@@ -397,20 +397,22 @@ function metarRawObIndicatesUnlimitedOrClearCeiling(string $rawOb): bool
 }
 
 /**
- * True when rawOb has FEW/SCT layers with height but no BKN/OVC/OVX/VV group (ceiling not applicable by definition).
+ * True when rawOb reports only FEW/SCT layers with height and no BKN/OVC/OVX/VV group (no ceiling layer per Annex 3).
  *
  * @param string $rawOb Raw METAR observation string
+ * @return bool True when FEW/SCT-only sky groups imply a determinable non-restrictive ceiling
  */
-function metarRawObIndicatesFewSctLayersWithoutHigherCeiling(string $rawOb): bool
+function metarRawObIndicatesOnlyFewSctCloudLayers(string $rawOb): bool
 {
     if ($rawOb === '') {
         return false;
     }
     $u = strtoupper($rawOb);
-    if (preg_match('/\b(FEW|SCT)\d{3}\b/', $u) !== 1) {
+    $hasFewOrSctWithHeight = preg_match('/\b(FEW|SCT)\d{3}\b/', $u) === 1;
+    if (!$hasFewOrSctWithHeight) {
         return false;
     }
-    // BKN/OVC/VV (incl. unknown height) → ceiling may exist or obscuration; do not treat as "clear above"
+    // Any BKN/OVC/OVX/VV (incl. unknown height ///) means a ceiling or obscuration may apply; do not use FEW/SCT-only rule.
     if (preg_match('/\b(BKN|OVC|OVX|VV)(?:\d{3}|\/\/\/)/', $u) === 1) {
         return false;
     }
@@ -419,7 +421,7 @@ function metarRawObIndicatesFewSctLayersWithoutHigherCeiling(string $rawOb): boo
 }
 
 /**
- * Extract US statute-mile visibility from raw METAR text (CAVOK → unlimited sentinel).
+ * Extract US statute-mile visibility from raw METAR text (CAVOK maps to unlimited sentinel).
  *
  * @return float|null Visibility in statute miles, or null if not extractable
  */
@@ -435,7 +437,7 @@ function metarExtractUsVisibilityStatuteMilesFromRawOb(string $rawOb): ?float
     if (preg_match('/\bP(\d+)SM\b/', $u, $m)) {
         return (float)$m[1];
     }
-    // US mixed number (e.g. 1 1/2SM) — must run before simple fraction so "1/2" is not parsed alone
+    // US mixed number (e.g. 1 1/2SM) - must run before simple fraction so "1/2" is not parsed alone
     if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)\s*SM\b/', $u, $m)) {
         $whole = (float)$m[1];
         $num = (float)$m[2];
@@ -485,7 +487,7 @@ function parseMETARResponse($response, $airport): ?array {
     $metarData = $data[0];
     $rawOb = isset($metarData['rawOb']) ? (string)$metarData['rawOb'] : '';
 
-    // Visibility: ICAO — omitted or empty visib must not imply unlimited unless rawOb has explicit vis/CAVOK
+    // Visibility: ICAO - omitted or empty visib must not imply unlimited unless rawOb has explicit vis/CAVOK
     $visibility = null;
     $visibilityReported = false;
     $visibilityGreaterThan = false;
@@ -755,7 +757,7 @@ function parseMETARResponse($response, $airport): ?array {
     // Ceiling "reported": numeric height (incl. vertVis), explicit clear/CAVOK, or only FEW/SCT layers (no BKN/OVC/VV).
     $ceilingReported = $ceiling !== null
         || metarRawObIndicatesUnlimitedOrClearCeiling($rawOb)
-        || metarRawObIndicatesFewSctLayersWithoutHigherCeiling($rawOb);
+        || metarRawObIndicatesOnlyFewSctCloudLayers($rawOb);
 
     return [
         'temperature' => $temperature,
