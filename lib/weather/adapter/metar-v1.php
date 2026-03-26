@@ -380,6 +380,28 @@ function metarRawObHasExplicitUsVisibility(string $rawOb): bool
  *
  * @param string $rawOb Raw METAR string
  */
+/**
+ * True when raw METAR explicitly indicates no ceiling restriction (CAVOK or clear/no significant clouds).
+ * Stricter than metarRawObHasExplicitSkyOrCavok(): BKN/OVC/VV without a height is not "unlimited ceiling".
+ *
+ * @param string $rawOb Raw METAR observation string
+ */
+function metarRawObIndicatesUnlimitedOrClearCeiling(string $rawOb): bool
+{
+    if ($rawOb === '') {
+        return false;
+    }
+    $u = strtoupper($rawOb);
+    if (preg_match('/\bCAVOK\b/', $u)) {
+        return true;
+    }
+    if (preg_match('/\b(SKC|CLR|NSC|NCD)\b/', $u)) {
+        return true;
+    }
+
+    return false;
+}
+
 function metarRawObHasExplicitSkyOrCavok(string $rawOb): bool
 {
     if ($rawOb === '') {
@@ -529,8 +551,6 @@ function parseMETARResponse($response, $airport): ?array {
     $ceiling = null;
     $cloudCover = null;
     $cloudLayer = null;
-    $hasCloudLayersFromJson = isset($metarData['clouds']) && is_array($metarData['clouds']) && count($metarData['clouds']) > 0;
-
     if (isset($metarData['clouds']) && is_array($metarData['clouds'])) {
         foreach ($metarData['clouds'] as $cloud) {
             if (isset($cloud['cover'])) {
@@ -737,10 +757,10 @@ function parseMETARResponse($response, $airport): ?array {
         }
     }
 
+    // Ceiling "reported" only when we have a height (incl. vertVis), or METAR explicitly clears ceiling (CAVOK/SKC/…).
+    // Do not treat BKN/OVC/VV with unknown height or non-empty clouds JSON alone as a known ceiling.
     $ceilingReported = $ceiling !== null
-        || $hasCloudLayersFromJson
-        || (isset($metarData['cover']) && is_string($metarData['cover']) && trim($metarData['cover']) !== '')
-        || metarRawObHasExplicitSkyOrCavok($rawOb);
+        || metarRawObIndicatesUnlimitedOrClearCeiling($rawOb);
 
     return [
         'temperature' => $temperature,

@@ -34,6 +34,7 @@ require_once __DIR__ . '/adapter/swob-helper.php';
 require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
 require_once __DIR__ . '/wind-normalizer.php';
+require_once __DIR__ . '/metar-completeness-aggregate.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
@@ -93,14 +94,8 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     $aggregator = new WeatherAggregator();
     $result = $aggregator->aggregate($snapshots, null, $localAirportIcao);
 
-    // METAR ICAO completeness flags for fail-closed flight category (Annex 3: omission ≠ unlimited)
-    foreach ($snapshots as $snapshot) {
-        if ($snapshot->source === 'metar' && $snapshot->metarFieldCompleteness !== null) {
-            $result['metar_visibility_reported'] = $snapshot->metarFieldCompleteness['visibility_reported'];
-            $result['metar_ceiling_reported'] = $snapshot->metarFieldCompleteness['ceiling_reported'];
-            break;
-        }
-    }
+    // METAR ICAO completeness flags: copy from the METAR snapshot that contributed each field
+    applyMetarCompletenessFlagsFromAggregation($result, $snapshots);
 
     // Validate and fix pressure if it's clearly in wrong units
     // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.

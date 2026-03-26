@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../lib/weather/data/WindGroup.php';
 require_once __DIR__ . '/../../lib/weather/data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../lib/weather/AggregationPolicy.php';
 require_once __DIR__ . '/../../lib/weather/WeatherAggregator.php';
+require_once __DIR__ . '/../../lib/weather/metar-completeness-aggregate.php';
 
 // Import namespaced classes
 use AviationWX\Weather\Data\WeatherReading;
@@ -37,13 +38,15 @@ class WeatherAggregatorTest extends TestCase {
      * @param int|null $obsTime Observation timestamp
      * @param string|null $metarStationId For METAR source: station ICAO (e.g., KSPB). Null = not METAR or unknown.
      * @param string|null $stationId For ICAO-keyed sources (swob, nws, awosnet): station ICAO for attribution.
+     * @param array{visibility_reported: bool, ceiling_reported: bool}|null $metarFieldCompleteness METAR-only
      */
     private function createSnapshot(
         string $source,
         array $fields,
         ?int $obsTime = null,
         ?string $metarStationId = null,
-        ?string $stationId = null
+        ?string $stationId = null,
+        ?array $metarFieldCompleteness = null
     ): WeatherSnapshot {
         $obsTime = $obsTime ?? $this->now;
         
@@ -87,7 +90,7 @@ class WeatherAggregatorTest extends TestCase {
             isValid: true,
             metarStationId: $metarStationId,
             stationId: $stationId,
-            metarFieldCompleteness: null
+            metarFieldCompleteness: $metarFieldCompleteness
         );
     }
     
@@ -572,6 +575,54 @@ class WeatherAggregatorTest extends TestCase {
         $this->assertArrayHasKey('_field_station_map', $result);
         $this->assertIsArray($result['_field_station_map']);
         $this->assertEmpty($result['_field_station_map']);
+    }
+
+    /**
+     * METAR completeness flags must follow the snapshot that supplied each aggregated field.
+     */
+    public function testApplyMetarCompletenessFlags_visFromTempestLeavesVisibilityFlagNull(): void
+    {
+        $tempestTime = $this->now - 300;
+        $metarTime = $this->now - 600;
+        $tempest = $this->createSnapshot('tempest', [
+            'temperature' => 20.0,
+            'visibility' => 5,
+        ], $tempestTime);
+        $metar = $this->createSnapshot('metar', [
+            'visibility' => 10,
+            'ceiling' => 2000,
+            'cloud_cover' => 'BKN',
+        ], $metarTime, 'KXXX', null, [
+            'visibility_reported' => true,
+            'ceiling_reported' => false,
+        ]);
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$tempest, $metar], null, 'KXXX');
+        applyMetarCompletenessFlagsFromAggregation($result, [$tempest, $metar]);
+
+        $this->assertEquals(5, $result['visibility']);
+        $this->assertEquals('tempest', $result['_field_source_map']['visibility']);
+        $this->assertEquals('metar', $result['_field_source_map']['ceiling']);
+        $this->assertNull($result['metar_visibility_reported']);
+        $this->assertFalse($result['metar_ceiling_reported']);
+    }
+
+    public function testApplyMetarCompletenessFlags_singleMetarCopiesBothFlags(): void
+    {
+        $metar = $this->createSnapshot('metar', [
+            'visibility' => 10,
+            'ceiling' => 5000,
+        ], $this->now, 'KYYY', null, [
+            'visibility_reported' => true,
+            'ceiling_reported' => true,
+        ]);
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$metar], null, 'KYYY');
+        applyMetarCompletenessFlagsFromAggregation($result, [$metar]);
+
+        $this->assertTrue($result['metar_visibility_reported']);
+        $this->assertTrue($result['metar_ceiling_reported']);
     }
 }
 

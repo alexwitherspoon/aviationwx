@@ -114,6 +114,47 @@ class MetarCompletenessSafetyTest extends TestCase
     /**
      * Vertical visibility (obscuration): vertVis in NOAA JSON sets ceiling in hundreds of feet.
      */
+    /**
+     * BKN with missing/non-numeric base: no ceiling height → ceiling must not be "reported" as known.
+     */
+    public function testParseMETARResponse_BknMissingBase_CeilingNotReportedFalse(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z 32008KT 10SM BKN/// 11/02 A3021',
+            'temp' => 11.0,
+            'dewp' => 2.0,
+            'altim' => 1023.1,
+            'visib' => '10',
+            'clouds' => [['cover' => 'BKN', 'base' => null]],
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertNull($result['ceiling']);
+        $this->assertFalse($result['ceiling_reported']);
+    }
+
+    /**
+     * CAVOK: explicit no ceiling restriction without a numeric cloud base in JSON.
+     */
+    public function testParseMETARResponse_Cavok_CeilingReportedTrue(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z 32008KT CAVOK 11/02 A3021',
+            'temp' => 11.0,
+            'dewp' => 2.0,
+            'altim' => 1023.1,
+            'visib' => '10',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertNull($result['ceiling']);
+        $this->assertTrue($result['ceiling_reported']);
+    }
+
     public function testParseMETARResponse_VertVisSetsCeiling(): void
     {
         $response = json_encode([[
@@ -145,6 +186,42 @@ class MetarCompletenessSafetyTest extends TestCase
             'metar_ceiling_reported' => false,
         ];
         $this->assertSame('MVFR', calculateFlightCategory($weather));
+    }
+
+    /**
+     * Same MVFR rule when _field_source_map shows both fields from METAR.
+     */
+    public function testCalculateFlightCategory_MetarMvfrWithFieldSourceMap_IsMVFR(): void
+    {
+        $weather = [
+            'visibility' => 10.0,
+            'ceiling' => null,
+            'metar_visibility_reported' => true,
+            'metar_ceiling_reported' => false,
+            '_field_source_map' => [
+                'visibility' => 'metar',
+                'ceiling' => 'metar',
+            ],
+        ];
+        $this->assertSame('MVFR', calculateFlightCategory($weather));
+    }
+
+    /**
+     * Visibility from a non-METAR source: do not apply METAR-only MVFR even if ceiling METAR flags say not reported.
+     */
+    public function testCalculateFlightCategory_TempestVisibilityWithMetarCeilingFlags_IsVFR(): void
+    {
+        $weather = [
+            'visibility' => 10.0,
+            'ceiling' => null,
+            'metar_visibility_reported' => true,
+            'metar_ceiling_reported' => false,
+            '_field_source_map' => [
+                'visibility' => 'tempest',
+                'ceiling' => 'metar',
+            ],
+        ];
+        $this->assertSame('VFR', calculateFlightCategory($weather));
     }
 
     /**

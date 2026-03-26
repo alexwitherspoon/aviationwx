@@ -218,9 +218,12 @@ function calculateDensityAltitude($weather, $airport) {
  *   - Unlimited ceiling (null/no clouds): Treated as VFR for ceiling
  *   - Unlimited visibility (>10 SM or sentinel value): Treated as VFR for visibility
  *   - Missing ceiling + VFR visibility (legacy, no METAR completeness keys): Assumes unlimited ceiling → VFR
- *   - When metar_visibility_reported and metar_ceiling_reported are both set: if visibility was
- *     reported in the METAR but ceiling was not (true / false), VFR visibility + null ceiling is
- *     treated conservatively as MVFR, not VFR (fail-closed vs inferring unlimited ceiling).
+ *   - When metar_visibility_reported / metar_ceiling_reported are present and _field_source_map
+ *     identifies both visibility and ceiling as coming from METAR: if visibility was reported but
+ *     ceiling was not, VFR visibility + null ceiling → MVFR (fail-closed). If _field_source_map is
+ *     absent (legacy callers), the same rule applies when both completeness keys are set.
+ *   - Completeness nulling only applies to fields whose aggregated source is METAR; mixed-source
+ *     aggregates (e.g. visibility from a station sensor) ignore METAR flags for non-METAR fields.
  *   - Missing visibility + VFR ceiling: Conservative → MVFR (cannot confirm VFR)
  * 
  * SAFETY CRITICAL: Incorrect categorization could lead pilots to attempt VFR flight
@@ -241,16 +244,32 @@ function calculateFlightCategory($weather) {
 
     $metarVisRep = $weather['metar_visibility_reported'] ?? null;
     $metarCeilRep = $weather['metar_ceiling_reported'] ?? null;
-    $hasMetarCompleteness = $metarVisRep !== null && $metarCeilRep !== null;
 
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
 
-    if ($hasMetarCompleteness) {
-        if ($metarVisRep === false) {
+    $fieldSourceMap = isset($weather['_field_source_map']) && is_array($weather['_field_source_map'])
+        ? $weather['_field_source_map'] : [];
+    $noFieldSourceMap = $fieldSourceMap === [];
+
+    $visSource = $fieldSourceMap['visibility'] ?? null;
+    $ceilSource = $fieldSourceMap['ceiling'] ?? null;
+
+    if ($noFieldSourceMap) {
+        $hasMetarCompleteness = $metarVisRep !== null && $metarCeilRep !== null;
+        if ($hasMetarCompleteness) {
+            if ($metarVisRep === false) {
+                $visibility = null;
+            }
+            if ($metarCeilRep === false) {
+                $ceiling = null;
+            }
+        }
+    } else {
+        if ($metarVisRep !== null && $metarVisRep === false && $visSource === 'metar') {
             $visibility = null;
         }
-        if ($metarCeilRep === false) {
+        if ($metarCeilRep !== null && $metarCeilRep === false && $ceilSource === 'metar') {
             $ceiling = null;
         }
     }
@@ -317,8 +336,11 @@ function calculateFlightCategory($weather) {
         if ($visibilityCategory !== 'VFR') {
             return $visibilityCategory;
         }
-        // METAR: visibility stated but ceiling not reported in observation → conservative MVFR (not VFR)
-        if ($hasMetarCompleteness && $metarVisRep === true && $metarCeilRep === false) {
+        // METAR: visibility stated but ceiling not reported → conservative MVFR (both fields from METAR)
+        $mvfrFromMetarCompleteness = $metarVisRep === true && $metarCeilRep === false
+            && ($noFieldSourceMap
+                || ($visSource === 'metar' && $ceilSource === 'metar'));
+        if ($mvfrFromMetarCompleteness) {
             return 'MVFR';
         }
         // VFR visibility + unlimited ceiling = VFR
