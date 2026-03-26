@@ -9011,7 +9011,7 @@ window.addEventListener('beforeunload', () => {
                     <!-- Period buttons dynamically inserted by JavaScript -->
                 </div>
             </div>
-            <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame" title="Previous frame (← arrow key)">⏮</button>
+            <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame" title="Previous frame (<- arrow key)">⏮</button>
             <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause" title="Play/pause time-lapse (Space bar)">▶</button>
             <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (-> arrow key)">⏭</button>
             <span class="webcam-player-btn-divider"></span>

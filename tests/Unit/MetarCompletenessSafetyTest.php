@@ -112,6 +112,26 @@ class MetarCompletenessSafetyTest extends TestCase
     }
 
     /**
+     * US "M" prefix (less than whole SM, no fraction), empty visib: must extract and mark reported.
+     */
+    public function testParseMETARResponse_EmptyVisibWithM1SMInRaw_IsLessThanOneSm(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z M1SM FG 06/05 A3013',
+            'temp' => 6.0,
+            'dewp' => 5.0,
+            'altim' => 1020.4,
+            'visib' => '',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertEqualsWithDelta(0.99, $result['visibility'], 1e-9);
+        $this->assertTrue($result['visibility_reported']);
+    }
+
+    /**
      * BKN with missing/non-numeric base: no ceiling height -> ceiling must not be "reported" as known.
      */
     public function testParseMETARResponse_BknMissingBase_CeilingNotReportedFalse(): void
@@ -219,6 +239,28 @@ class MetarCompletenessSafetyTest extends TestCase
         $result = parseMETARResponse($response, $airport);
         $this->assertIsArray($result);
         $this->assertSame(200, $result['ceiling'], 'vertVis=2 -> 200 ft AGL');
+        $this->assertTrue($result['ceiling_reported']);
+    }
+
+    /**
+     * vertVis 0 (VV000): valid restrictive ceiling at 0 ft AGL; must not be dropped.
+     */
+    public function testParseMETARResponse_VertVisZero_SetsCeilingZero(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z AUTO 00000KT 1/4SM FG VV000 06/05 A3013',
+            'temp' => 6.0,
+            'dewp' => 5.0,
+            'altim' => 1020.4,
+            'visib' => '0.25',
+            'vertVis' => 0,
+            'wxString' => 'FG',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertSame(0, $result['ceiling']);
         $this->assertTrue($result['ceiling_reported']);
     }
 

@@ -363,7 +363,8 @@ function metarRawObHasExplicitUsVisibility(string $rawOb): bool
     if (preg_match('/\bCAVOK\b/', $u)) {
         return true;
     }
-    if (preg_match('/\b(P\d+|\d+)\s*SM\b/u', $u)) {
+    // P = greater than; M = less than (whole SM, e.g. M1SM); plain digits = stated SM
+    if (preg_match('/\b(P\d+|M\d+|\d+)\s*SM\b/u', $u)) {
         return true;
     }
     if (preg_match('/\bM?\d+\/\d+\s*SM\b/u', $u)) {
@@ -436,6 +437,11 @@ function metarExtractUsVisibilityStatuteMilesFromRawOb(string $rawOb): ?float
     }
     if (preg_match('/\bP(\d+)SM\b/', $u, $m)) {
         return (float)$m[1];
+    }
+    if (preg_match('/\bM(\d+)\s*SM\b/', $u, $m)) {
+        $n = (float)$m[1];
+        // "Less than" whole SM: use value strictly below n for categorization (e.g. M1SM < 1 SM).
+        return max(0.0, $n - 0.01);
     }
     // US mixed number (e.g. 1 1/2SM) - must run before simple fraction so "1/2" is not parsed alone
     if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)\s*SM\b/', $u, $m)) {
@@ -579,7 +585,7 @@ function parseMETARResponse($response, $airport): ?array {
 
     if ($ceiling === null && isset($metarData['vertVis']) && is_numeric($metarData['vertVis'])) {
         $vv = (float)$metarData['vertVis'];
-        if ($vv > 0) {
+        if ($vv >= 0) {
             $ceiling = (int)round($vv * 100);
         }
     }
