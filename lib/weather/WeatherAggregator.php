@@ -275,7 +275,75 @@ class WeatherAggregator {
      * @return array{reading: WeatherReading, station_id: string|null}
      */
     private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
-        return $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+        $valued = $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+        if ($valued['reading']->hasValue()) {
+            return $valued;
+        }
+        // METAR-only: attribute null ceiling/visibility (etc.) so _field_source_map stays 'metar'
+        // when the observation explicitly has no numeric value but is still timely METAR data.
+        return $this->selectBestMetarFieldForAttribution($fieldName, $snapshots, $maxAges, $localAirportIcao);
+    }
+
+    /**
+     * Pick a METAR snapshot for field attribution when the field has no numeric value but carries obs time.
+     *
+     * @param string $fieldName
+     * @param array<WeatherSnapshot> $snapshots
+     * @param array<string, int>|null $maxAges
+     * @param string|null $localAirportIcao
+     * @return array{reading: WeatherReading, station_id: string|null}
+     */
+    private function selectBestMetarFieldForAttribution(
+        string $fieldName,
+        array $snapshots,
+        ?array $maxAges = null,
+        ?string $localAirportIcao = null
+    ): array {
+        $bestReading = null;
+        $bestSnapshot = null;
+        $bestObsTime = 0;
+        $bestIsLocal = false;
+
+        foreach ($snapshots as $snapshot) {
+            if ($snapshot->source !== 'metar') {
+                continue;
+            }
+            $reading = $snapshot->getField($fieldName);
+            if ($reading === null || $reading->hasValue() || !$reading->isValid) {
+                continue;
+            }
+
+            $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
+            if ($reading->isStale($maxAge, $this->now)) {
+                continue;
+            }
+
+            $obsTime = $reading->observationTime ?? 0;
+            $isLocal = $this->isLocalSource($snapshot, $localAirportIcao);
+
+            if ($bestReading !== null && $bestIsLocal && !$isLocal) {
+                continue;
+            }
+            if ($bestReading !== null && !$bestIsLocal && $isLocal) {
+                $bestObsTime = $obsTime;
+                $bestReading = $reading->withSource($snapshot->source);
+                $bestSnapshot = $snapshot;
+                $bestIsLocal = $isLocal;
+                continue;
+            }
+
+            if ($obsTime > $bestObsTime) {
+                $bestObsTime = $obsTime;
+                $bestReading = $reading->withSource($snapshot->source);
+                $bestSnapshot = $snapshot;
+                $bestIsLocal = $isLocal;
+            }
+        }
+
+        $reading = $bestReading ?? WeatherReading::null();
+        $stationId = $bestSnapshot?->getStationIdForAttribution();
+
+        return ['reading' => $reading, 'station_id' => $stationId];
     }
     
     /**

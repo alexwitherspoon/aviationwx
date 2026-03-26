@@ -516,7 +516,17 @@ function parseMETARResponse($response, $airport): ?array {
                 $visibilityReported = false;
             }
         } else {
-            $visStr = str_replace('+', '', (string)$visKey);
+            $visRawStr = (string)$visKey;
+            // JSON may encode "greater than" with a leading + (ICAO) or P prefix (US); mirror rawOb P6SM semantics.
+            if (strpos($visRawStr, '+') !== false) {
+                $visibilityGreaterThan = true;
+            }
+            if (preg_match('/^P\d/i', ltrim($visRawStr))) {
+                $visibilityGreaterThan = true;
+            }
+            $visStr = str_replace('+', '', $visRawStr);
+            // US JSON may use P6-style prefix without "SM"; strip P so is_numeric() and fractions parse.
+            $visStr = preg_replace('/^P\s*/i', '', $visStr) ?? $visStr;
             if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
                 $num1 = is_numeric($matches[1]) ? floatval($matches[1]) : 0;
                 $fraction = $matches[2];

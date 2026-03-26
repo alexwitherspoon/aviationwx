@@ -495,6 +495,46 @@ class ApiParsingTest extends TestCase
         
         $this->assertEquals(5.5, $result['visibility']);
     }
+
+    /**
+     * JSON visib may use leading + (ICAO greater-than) without repeating rawOb P6SM semantics.
+     */
+    public function testParseMETARResponse_VisibJsonPlusPrefix_SetsVisibilityGreaterThan(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KSPB',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 30.0,
+            'wdir' => 180,
+            'wspd' => 10,
+            'visib' => '+6',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KSPB']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertEquals(6.0, $result['visibility']);
+        $this->assertTrue($result['visibility_greater_than'] ?? false);
+    }
+
+    /**
+     * JSON visib may use US-style P prefix without SM suffix.
+     */
+    public function testParseMETARResponse_VisibJsonPPrefix_SetsVisibilityGreaterThan(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KSPB',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 30.0,
+            'wdir' => 180,
+            'wspd' => 10,
+            'visib' => 'P6',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KSPB']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertEquals(6.0, $result['visibility']);
+        $this->assertTrue($result['visibility_greater_than'] ?? false);
+    }
     
     /**
      * Test parseMETARResponse - Wind direction parsing

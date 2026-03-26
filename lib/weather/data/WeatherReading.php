@@ -169,6 +169,9 @@ class WeatherReading {
      */
     public static function statuteMiles(?float $value, string $source, ?int $observationTime = null, bool $greaterThan = false): self {
         if ($value === null) {
+            if ($observationTime !== null) {
+                return new self(null, 'SM', $observationTime, $source, true, $greaterThan);
+            }
             return self::null($source);
         }
         return new self($value, 'SM', $observationTime ?? time(), $source, true, $greaterThan);
@@ -229,6 +232,9 @@ class WeatherReading {
      */
     public static function feet(?float $value, string $source, ?int $observationTime = null): self {
         if ($value === null) {
+            if ($observationTime !== null) {
+                return new self(null, 'ft', $observationTime, $source, true, false);
+            }
             return self::null($source);
         }
         return new self($value, 'ft', $observationTime ?? time(), $source, true);

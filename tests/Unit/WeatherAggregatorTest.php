@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../lib/weather/data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../lib/weather/AggregationPolicy.php';
 require_once __DIR__ . '/../../lib/weather/WeatherAggregator.php';
 require_once __DIR__ . '/../../lib/weather/metar-completeness-aggregate.php';
+require_once __DIR__ . '/../../lib/weather/calculator.php';
 
 // Import namespaced classes
 use AviationWX\Weather\Data\WeatherReading;
@@ -77,12 +78,16 @@ class WeatherAggregatorTest extends TestCase {
                     $obsTime
                 )
                 : WindGroup::empty(),
-            visibility: isset($fields['visibility'])
-                ? WeatherReading::from($fields['visibility'], $source, $obsTime)
-                : WeatherReading::null($source),
-            ceiling: isset($fields['ceiling'])
-                ? WeatherReading::from($fields['ceiling'], $source, $obsTime)
-                : WeatherReading::null($source),
+            visibility: isset($fields['visibility_reading']) && $fields['visibility_reading'] instanceof WeatherReading
+                ? $fields['visibility_reading']
+                : (isset($fields['visibility'])
+                    ? WeatherReading::from($fields['visibility'], $source, $obsTime)
+                    : WeatherReading::null($source)),
+            ceiling: isset($fields['ceiling_reading']) && $fields['ceiling_reading'] instanceof WeatherReading
+                ? $fields['ceiling_reading']
+                : (isset($fields['ceiling'])
+                    ? WeatherReading::from($fields['ceiling'], $source, $obsTime)
+                    : WeatherReading::null($source)),
             cloudCover: isset($fields['cloud_cover'])
                 ? WeatherReading::from($fields['cloud_cover'], $source, $obsTime)
                 : WeatherReading::null($source),
@@ -655,6 +660,36 @@ class WeatherAggregatorTest extends TestCase {
         $this->assertSame(3000, $result['ceiling']);
         $this->assertFalse($result['metar_visibility_reported']);
         $this->assertFalse($result['metar_ceiling_reported']);
+    }
+
+    /**
+     * Null METAR ceiling (no BKN/OVC) must still set _field_source_map['ceiling'] = metar
+     * so completeness flags and flight category MVFR path apply.
+     */
+    public function testMetarNullCeiling_SetsFieldSourceMapAndCompleteness(): void
+    {
+        $obsTime = $this->now - 120;
+        $metar = $this->createSnapshot('metar', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+            'visibility' => 10,
+            'ceiling_reading' => WeatherReading::feet(null, 'metar', $obsTime),
+            'cloud_cover' => 'FEW',
+        ], $obsTime, 'KSPB', null, [
+            'visibility_reported' => true,
+            'ceiling_reported' => false,
+        ]);
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$metar], null, 'KSPB');
+        applyMetarCompletenessFlagsFromAggregation($result, [$metar]);
+
+        $this->assertNull($result['ceiling']);
+        $this->assertSame('metar', $result['_field_source_map']['ceiling'] ?? null);
+        $this->assertSame('KSPB', $result['_field_station_map']['ceiling'] ?? null);
+        $this->assertFalse($result['metar_ceiling_reported']);
+        $this->assertTrue($result['metar_visibility_reported']);
+        $this->assertSame('MVFR', calculateFlightCategory($result));
     }
 }
 
