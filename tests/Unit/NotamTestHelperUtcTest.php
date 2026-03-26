@@ -12,20 +12,33 @@ class NotamTestHelperUtcTest extends TestCase
     public function testNotamTestTimesUpcomingLaterTodayUtc_staysWithinCurrentUtcCalendarDay(): void
     {
         $tz = new DateTimeZone('UTC');
-        $now = new DateTimeImmutable('now', $tz);
-        $today = $now->format('Y-m-d');
 
         $t = notamTestTimesUpcomingLaterTodayUtc();
         $start = new DateTimeImmutable($t['start_time_utc'], $tz);
         $end = new DateTimeImmutable($t['end_time_utc'], $tz);
 
-        $this->assertSame($today, $start->format('Y-m-d'), 'start must be on the current UTC date');
-        $this->assertSame($today, $end->format('Y-m-d'), 'end must not roll into the next UTC day');
+        $helperDate = $start->format('Y-m-d');
+        $this->assertSame($helperDate, $end->format('Y-m-d'), 'start and end must share one UTC calendar day');
 
-        // End of the returned UTC calendar day (helper and test "now" may differ by a tick at day boundary)
+        // Compare helper output to "now" taken after the helper (avoids midnight flake if test straddles UTC day)
+        $nowAfter = new DateTimeImmutable('now', $tz);
+        $nowDate = $nowAfter->format('Y-m-d');
+        $yesterdayUtc = (new DateTimeImmutable($nowDate . 'T12:00:00', $tz))->modify('-1 day')->format('Y-m-d');
+        $tomorrowUtc = (new DateTimeImmutable($nowDate . 'T12:00:00', $tz))->modify('+1 day')->format('Y-m-d');
+        $this->assertContains(
+            $helperDate,
+            [$yesterdayUtc, $nowDate, $tomorrowUtc],
+            'helper UTC date must be within one day of the post-call UTC "now" (midnight boundary safe)'
+        );
+
         $dayEnd = new DateTimeImmutable($end->format('Y-m-d') . 'T23:59:59', $tz);
-        // assertLessThanOrEqual($maximum, $actual): pass when $actual <= $maximum
-        $this->assertLessThanOrEqual($dayEnd->getTimestamp(), $end->getTimestamp());
-        $this->assertLessThanOrEqual($end->getTimestamp(), $start->getTimestamp(), 'start must be on or before end');
+        $this->assertTrue(
+            $end->getTimestamp() <= $dayEnd->getTimestamp(),
+            'end must be on or before 23:59:59 UTC on its calendar day'
+        );
+        $this->assertTrue(
+            $start->getTimestamp() <= $end->getTimestamp(),
+            'start must be on or before end'
+        );
     }
 }

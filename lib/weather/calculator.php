@@ -217,7 +217,10 @@ function calculateDensityAltitude($weather, $airport) {
  * Special Cases:
  *   - Unlimited ceiling (null/no clouds): Treated as VFR for ceiling
  *   - Unlimited visibility (>10 SM or sentinel value): Treated as VFR for visibility
- *   - Missing ceiling + VFR visibility: Assumes unlimited ceiling → VFR
+ *   - Missing ceiling + VFR visibility (legacy, no METAR completeness keys): Assumes unlimited ceiling → VFR
+ *   - When metar_visibility_reported and metar_ceiling_reported are both set: if visibility was
+ *     reported in the METAR but ceiling was not (true / false), VFR visibility + null ceiling is
+ *     treated conservatively as MVFR, not VFR (fail-closed vs inferring unlimited ceiling).
  *   - Missing visibility + VFR ceiling: Conservative → MVFR (cannot confirm VFR)
  * 
  * SAFETY CRITICAL: Incorrect categorization could lead pilots to attempt VFR flight
