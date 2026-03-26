@@ -52,6 +52,66 @@ class MetarCompletenessSafetyTest extends TestCase
     }
 
     /**
+     * US mixed-number visibility in rawOb (empty visib): "1 1/2SM" must be 1.5 SM, not 1.0 (whole only) or 0.5 (fraction alone).
+     */
+    public function testParseMETARResponse_EmptyVisibWithOneAndHalfSMInRaw_IsOnePointFiveStatuteMiles(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z AUTO 1 1/2SM CLR 10/04 A3021',
+            'temp' => 10.0,
+            'dewp' => 4.0,
+            'altim' => 1023.1,
+            'visib' => '',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertSame(1.5, $result['visibility']);
+        $this->assertTrue($result['visibility_reported']);
+    }
+
+    /**
+     * Mixed number with non-trivial fraction: 2 3/4 SM = 2.75 SM.
+     */
+    public function testParseMETARResponse_EmptyVisibWithTwoAndThreeQuarterSMInRaw_IsTwoPointSevenFive(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z 2 3/4SM FEW025 15/10 A2992',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 1013.2,
+            'visib' => '',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertSame(2.75, $result['visibility']);
+        $this->assertTrue($result['visibility_reported']);
+    }
+
+    /**
+     * Negative (ordering): plain fraction visibility "1/2SM" without a whole number must remain 0.5 SM, not mixed parsing.
+     */
+    public function testParseMETARResponse_EmptyVisibWithHalfSMOnlyInRaw_IsPointFive(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z 1/2SM FG 06/05 A3013',
+            'temp' => 6.0,
+            'dewp' => 5.0,
+            'altim' => 1020.4,
+            'visib' => '',
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertSame(0.5, $result['visibility']);
+        $this->assertTrue($result['visibility_reported']);
+    }
+
+    /**
      * Vertical visibility (obscuration): vertVis in NOAA JSON sets ceiling in hundreds of feet.
      */
     public function testParseMETARResponse_VertVisSetsCeiling(): void

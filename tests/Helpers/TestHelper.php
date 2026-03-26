@@ -121,20 +121,22 @@ function notamTestTimesUpcomingLaterTodayUtc(): array
         }
     }
 
-    $start = $now->modify('+3 seconds');
-    $end = $now->modify('+12 seconds');
-    if ($end > $todayEnd) {
-        $end = $todayEnd;
-        $start = $end->modify('-2 seconds');
-        if ($start <= $now) {
-            $start = $now->modify('+1 second');
-            $end = $start->modify('+1 second');
-        }
+    // Fallback: clamp with integer timestamps so +N seconds never rolls into the next UTC day
+    $nowTs = $now->getTimestamp();
+    $todayEndTs = $todayEnd->getTimestamp();
+    $startTs = min($nowTs + 3, $todayEndTs);
+    $endTs = min(max($startTs + 1, $nowTs + 12), $todayEndTs);
+    if ($endTs <= $startTs) {
+        $endTs = $startTs;
+    }
+    if ($startTs <= $nowTs) {
+        $startTs = $todayEndTs;
+        $endTs = $todayEndTs;
     }
 
     return [
-        'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $start->getTimestamp()),
-        'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $end->getTimestamp()),
+        'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $startTs),
+        'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $endTs),
     ];
 }
 

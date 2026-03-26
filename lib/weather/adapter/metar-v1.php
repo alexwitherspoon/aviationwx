@@ -418,8 +418,16 @@ function metarExtractUsVisibilityStatuteMilesFromRawOb(string $rawOb): ?float
     if (preg_match('/\bP(\d+)SM\b/', $u, $m)) {
         return (float)$m[1];
     }
-    if (preg_match('/\b(\d+)\s+\d+\/\d+\s*SM\b/', $u, $m)) {
-        return (float)$m[1];
+    // US mixed number (e.g. 1 1/2SM) — must run before simple fraction so "1/2" is not parsed alone
+    if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)\s*SM\b/', $u, $m)) {
+        $whole = (float)$m[1];
+        $num = (float)$m[2];
+        $den = (float)$m[3];
+        if ($den > 0.0) {
+            return $whole + ($num / $den);
+        }
+
+        return $whole;
     }
     if (preg_match('/\bM?(\d+)\/(\d+)\s*SM\b/', $u, $m)) {
         $den = (float)$m[2];
