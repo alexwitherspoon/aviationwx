@@ -112,9 +112,6 @@ class MetarCompletenessSafetyTest extends TestCase
     }
 
     /**
-     * Vertical visibility (obscuration): vertVis in NOAA JSON sets ceiling in hundreds of feet.
-     */
-    /**
      * BKN with missing/non-numeric base: no ceiling height → ceiling must not be "reported" as known.
      */
     public function testParseMETARResponse_BknMissingBase_CeilingNotReportedFalse(): void
@@ -133,6 +130,30 @@ class MetarCompletenessSafetyTest extends TestCase
         $this->assertIsArray($result);
         $this->assertNull($result['ceiling']);
         $this->assertFalse($result['ceiling_reported']);
+    }
+
+    /**
+     * FEW/SCT only (no BKN/OVC/VV): ceiling is determinable as "no restrictive ceiling" per layer rules.
+     */
+    public function testParseMETARResponse_FewSctOnly_CeilingReportedTrue(): void
+    {
+        $response = json_encode([[
+            'icaoId' => 'KXXX',
+            'rawOb' => 'METAR KXXX 252153Z 32008KT 10SM FEW250 SCT300 11/02 A3021',
+            'temp' => 11.0,
+            'dewp' => 2.0,
+            'altim' => 1023.1,
+            'visib' => '10',
+            'clouds' => [
+                ['cover' => 'FEW', 'base' => 25000],
+                ['cover' => 'SCT', 'base' => 30000],
+            ],
+        ]]);
+        $airport = createTestAirport(['metar_station' => 'KXXX']);
+        $result = parseMETARResponse($response, $airport);
+        $this->assertIsArray($result);
+        $this->assertNull($result['ceiling']);
+        $this->assertTrue($result['ceiling_reported']);
     }
 
     /**
@@ -155,6 +176,9 @@ class MetarCompletenessSafetyTest extends TestCase
         $this->assertTrue($result['ceiling_reported']);
     }
 
+    /**
+     * Vertical visibility (obscuration): vertVis in NOAA JSON sets ceiling in hundreds of feet.
+     */
     public function testParseMETARResponse_VertVisSetsCeiling(): void
     {
         $response = json_encode([[

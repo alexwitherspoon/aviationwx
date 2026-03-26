@@ -624,5 +624,37 @@ class WeatherAggregatorTest extends TestCase {
         $this->assertTrue($result['metar_visibility_reported']);
         $this->assertTrue($result['metar_ceiling_reported']);
     }
+
+    /**
+     * Two METAR snapshots for the same station: completeness flags must follow _field_obs_time_map.
+     */
+    public function testApplyMetarCompletenessFlags_matchesFieldObsTimeWhenMultipleMetarSameStation(): void
+    {
+        $olderObs = $this->now - 600;
+        $fresherObs = $this->now - 120;
+        $older = $this->createSnapshot('metar', [
+            'visibility' => 5,
+            'ceiling' => 2000,
+        ], $olderObs, 'KXXX', null, [
+            'visibility_reported' => true,
+            'ceiling_reported' => true,
+        ]);
+        $fresher = $this->createSnapshot('metar', [
+            'visibility' => 10,
+            'ceiling' => 3000,
+        ], $fresherObs, 'KXXX', null, [
+            'visibility_reported' => false,
+            'ceiling_reported' => false,
+        ]);
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$older, $fresher], null, 'KXXX');
+        applyMetarCompletenessFlagsFromAggregation($result, [$older, $fresher]);
+
+        $this->assertSame(10, $result['visibility']);
+        $this->assertSame(3000, $result['ceiling']);
+        $this->assertFalse($result['metar_visibility_reported']);
+        $this->assertFalse($result['metar_ceiling_reported']);
+    }
 }
 

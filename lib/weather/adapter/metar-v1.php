@@ -376,13 +376,7 @@ function metarRawObHasExplicitUsVisibility(string $rawOb): bool
 }
 
 /**
- * True when raw METAR text contains explicit sky/ceiling information (CAVOK, layers, VV, NSC/NCD/CLR/SKC).
- *
- * @param string $rawOb Raw METAR string
- */
-/**
  * True when raw METAR explicitly indicates no ceiling restriction (CAVOK or clear/no significant clouds).
- * Stricter than metarRawObHasExplicitSkyOrCavok(): BKN/OVC/VV without a height is not "unlimited ceiling".
  *
  * @param string $rawOb Raw METAR observation string
  */
@@ -402,25 +396,26 @@ function metarRawObIndicatesUnlimitedOrClearCeiling(string $rawOb): bool
     return false;
 }
 
-function metarRawObHasExplicitSkyOrCavok(string $rawOb): bool
+/**
+ * True when rawOb has FEW/SCT layers with height but no BKN/OVC/OVX/VV group (ceiling not applicable by definition).
+ *
+ * @param string $rawOb Raw METAR observation string
+ */
+function metarRawObIndicatesFewSctLayersWithoutHigherCeiling(string $rawOb): bool
 {
     if ($rawOb === '') {
         return false;
     }
     $u = strtoupper($rawOb);
-    if (preg_match('/\bCAVOK\b/', $u)) {
-        return true;
+    if (preg_match('/\b(FEW|SCT)\d{3}\b/', $u) !== 1) {
+        return false;
     }
-    if (preg_match('/\b(NSC|NCD|CLR|SKC)\b/', $u)) {
-        return true;
+    // BKN/OVC/VV (incl. unknown height) → ceiling may exist or obscuration; do not treat as "clear above"
+    if (preg_match('/\b(BKN|OVC|OVX|VV)(?:\d{3}|\/\/\/)/', $u) === 1) {
+        return false;
     }
-    if (preg_match('/\bVV(?:\/\/\/|\d{3})\b/', $u)) {
-        return true;
-    }
-    if (preg_match('/\b(FEW|SCT|BKN|OVC|OVX)(?:\d{3})?\b/', $u)) {
-        return true;
-    }
-    return false;
+
+    return true;
 }
 
 /**
@@ -757,10 +752,10 @@ function parseMETARResponse($response, $airport): ?array {
         }
     }
 
-    // Ceiling "reported" only when we have a height (incl. vertVis), or METAR explicitly clears ceiling (CAVOK/SKC/…).
-    // Do not treat BKN/OVC/VV with unknown height or non-empty clouds JSON alone as a known ceiling.
+    // Ceiling "reported": numeric height (incl. vertVis), explicit clear/CAVOK, or only FEW/SCT layers (no BKN/OVC/VV).
     $ceilingReported = $ceiling !== null
-        || metarRawObIndicatesUnlimitedOrClearCeiling($rawOb);
+        || metarRawObIndicatesUnlimitedOrClearCeiling($rawOb)
+        || metarRawObIndicatesFewSctLayersWithoutHigherCeiling($rawOb);
 
     return [
         'temperature' => $temperature,
