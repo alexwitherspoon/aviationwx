@@ -12,6 +12,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/webcam-metadata.php';
 
 /**
  * Store variant manifest for an image
@@ -148,7 +149,6 @@ function getLatestVariantManifest(string $airportId, int $camIndex): ?array {
     }
     
     // Fall back to finding latest timestamp from disk
-    require_once __DIR__ . '/webcam-metadata.php';
     $latestTimestamp = getLatestImageTimestamp($airportId, $camIndex);
     if ($latestTimestamp <= 0) {
         return null;
@@ -186,7 +186,6 @@ function getVariantAvailabilityCounts(string $airportId, int $camIndex, ?int $ti
 
     if ($manifest['original']['exists'] ?? false) {
         $originalFormat = $manifest['original']['format'] ?? 'jpg';
-        require_once __DIR__ . '/webcam-metadata.php';
         $originalPath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $actualTimestamp, $originalFormat);
         if (file_exists($originalPath)) {
             $available++;

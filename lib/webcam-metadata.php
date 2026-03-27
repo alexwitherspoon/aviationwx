@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/webcam-format-generation.php';
 require_once __DIR__ . '/exif-utils.php';
 require_once __DIR__ . '/config.php';
@@ -421,38 +422,58 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
 }
 
 /**
+ * Collect unique Unix timestamps from timestamped frame files in the camera cache directory.
+ *
+ * Skips symlinks. Matches `{timestamp}_original.{ext}` and `{timestamp}_{height}.{ext}`.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return int[] Unique timestamps, newest first (descending)
+ */
+function collectWebcamFrameTimestampsFromFiles(string $airportId, int $camIndex): array {
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
+    if (empty($files)) {
+        return [];
+    }
+
+    $seen = [];
+    foreach ($files as $file) {
+        if (is_link($file)) {
+            continue;
+        }
+
+        $basename = basename($file);
+        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
+            $seen[(int)$matches[1]] = true;
+        }
+    }
+
+    if (empty($seen)) {
+        return [];
+    }
+
+    $unique = array_keys($seen);
+    rsort($unique, SORT_NUMERIC);
+
+    return $unique;
+}
+
+/**
  * Get latest image timestamp for a camera
- * 
+ *
  * Scans the camera directory for timestamped files and returns the most recent timestamp.
- * 
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @return int Unix timestamp, or 0 if no images found
  */
 function getLatestImageTimestamp(string $airportId, int $camIndex): int {
-    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
-    if (empty($files)) {
+    $unique = collectWebcamFrameTimestampsFromFiles($airportId, $camIndex);
+    if (empty($unique)) {
         return 0;
     }
-    
-    $latestTimestamp = 0;
-    foreach ($files as $file) {
-        // Skip symlinks
-        if (is_link($file)) {
-            continue;
-        }
-        
-        $basename = basename($file);
-        // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
-            $timestamp = (int)$matches[1];
-            if ($timestamp > $latestTimestamp) {
-                $latestTimestamp = $timestamp;
-            }
-        }
-    }
-    
-    return $latestTimestamp;
+
+    return $unique[0];
 }
 
 /**
@@ -468,33 +489,10 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
  * @return int Unix timestamp, or 0 if no completed images found
  */
 function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
-    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
-    if (empty($files)) {
+    $uniqueTimestamps = collectWebcamFrameTimestampsFromFiles($airportId, $camIndex);
+    if (empty($uniqueTimestamps)) {
         return 0;
     }
-
-    // Collect unique timestamps
-    $timestamps = [];
-    foreach ($files as $file) {
-        // Skip symlinks
-        if (is_link($file)) {
-            continue;
-        }
-
-        $basename = basename($file);
-        // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
-            $timestamp = (int)$matches[1];
-            $timestamps[$timestamp] = true;
-        }
-    }
-
-    if (empty($timestamps)) {
-        return 0;
-    }
-
-    $uniqueTimestamps = array_keys($timestamps);
-    rsort($uniqueTimestamps);
 
     if (count($uniqueTimestamps) === 1) {
         return $uniqueTimestamps[0];
