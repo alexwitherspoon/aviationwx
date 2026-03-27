@@ -1492,21 +1492,21 @@ function metrics_get_status_bundle(): array {
 }
 
 /**
- * Build multi-period metrics from bundle + current hour (APCu)
+ * Build multi-period per-airport metrics from hour / today / weekly aggregates.
  *
- * @param array $bundle From metrics_get_status_bundle
- * @return array Multi-period metrics indexed by airport
+ * Single implementation shared by the status bundle path and legacy live aggregation.
+ *
+ * @param array $hourly Current hour metrics (from metrics_get_current_hour())
+ * @param array $daily Today bucket (metrics_get_today() or bundle today)
+ * @param array $weekly Rolling window (metrics_get_rolling(METRICS_STATUS_PAGE_DAYS) or bundle rolling7)
+ * @return array Multi-period metrics indexed by airport ID
  */
-function metrics_build_multi_period_from_bundle(array $bundle): array {
-    $hourly = metrics_get_current_hour();
-    $daily = $bundle['today'];
-    $weekly = $bundle['rolling7'];
-
+function metrics_build_multi_period_from_periods(array $hourly, array $daily, array $weekly): array {
     $result = [];
     $allAirports = array_unique(array_merge(
-        array_keys($hourly['airports']),
+        array_keys($hourly['airports'] ?? []),
         array_keys($daily['airports'] ?? []),
-        array_keys($weekly['airports'])
+        array_keys($weekly['airports'] ?? [])
     ));
 
     foreach ($allAirports as $airportId) {
@@ -1526,9 +1526,9 @@ function metrics_build_multi_period_from_bundle(array $bundle): array {
                 'weather_requests' => $weekly['airports'][$airportId]['weather_requests'] ?? 0,
                 'webcam_requests' => $weekly['airports'][$airportId]['webcam_requests'] ?? 0,
             ],
-            'webcams' => []
+            'webcams' => [],
         ];
-        foreach ($weekly['webcams'] as $webcamKey => $webcamData) {
+        foreach ($weekly['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (strpos($webcamKey, $airportId . '_') === 0) {
                 $camIndex = (int)substr($webcamKey, strlen($airportId) + 1);
                 $result[$airportId]['webcams'][$camIndex] = $webcamData;
@@ -1540,6 +1540,20 @@ function metrics_build_multi_period_from_bundle(array $bundle): array {
 }
 
 /**
+ * Build multi-period metrics from bundle + current hour (APCu)
+ *
+ * @param array $bundle From metrics_get_status_bundle
+ * @return array Multi-period metrics indexed by airport
+ */
+function metrics_build_multi_period_from_bundle(array $bundle): array {
+    return metrics_build_multi_period_from_periods(
+        metrics_get_current_hour(),
+        $bundle['today'],
+        $bundle['rolling7']
+    );
+}
+
+/**
  * Get multi-period metrics for all airports (hour, day, 7-day)
  *
  * Returns metrics organized by airport with all three time periods.
@@ -1548,49 +1562,11 @@ function metrics_build_multi_period_from_bundle(array $bundle): array {
  * @return array Multi-period metrics indexed by airport
  */
 function metrics_get_multi_period(): array {
-    $hourly = metrics_get_current_hour();
-    $daily = metrics_get_today();
-    $weekly = metrics_get_rolling(METRICS_STATUS_PAGE_DAYS);
-    
-    $result = [];
-    
-    // Collect all airport IDs from all periods
-    $allAirports = array_unique(array_merge(
-        array_keys($hourly['airports']),
-        array_keys($daily['airports'] ?? []),
-        array_keys($weekly['airports'])
-    ));
-    
-    foreach ($allAirports as $airportId) {
-        $result[$airportId] = [
-            'hour' => [
-                'page_views' => $hourly['airports'][$airportId]['page_views'] ?? 0,
-                'weather_requests' => $hourly['airports'][$airportId]['weather_requests'] ?? 0,
-                'webcam_requests' => $hourly['airports'][$airportId]['webcam_requests'] ?? 0,
-            ],
-            'day' => [
-                'page_views' => $daily['airports'][$airportId]['page_views'] ?? 0,
-                'weather_requests' => $daily['airports'][$airportId]['weather_requests'] ?? 0,
-                'webcam_requests' => $daily['airports'][$airportId]['webcam_requests'] ?? 0,
-            ],
-            'week' => [
-                'page_views' => $weekly['airports'][$airportId]['page_views'] ?? 0,
-                'weather_requests' => $weekly['airports'][$airportId]['weather_requests'] ?? 0,
-                'webcam_requests' => $weekly['airports'][$airportId]['webcam_requests'] ?? 0,
-            ],
-            'webcams' => []
-        ];
-        
-        // Get webcam metrics from weekly data
-        foreach ($weekly['webcams'] as $webcamKey => $webcamData) {
-            if (strpos($webcamKey, $airportId . '_') === 0) {
-                $camIndex = (int)substr($webcamKey, strlen($airportId) + 1);
-                $result[$airportId]['webcams'][$camIndex] = $webcamData;
-            }
-        }
-    }
-    
-    return $result;
+    return metrics_build_multi_period_from_periods(
+        metrics_get_current_hour(),
+        metrics_get_today(),
+        metrics_get_rolling(METRICS_STATUS_PAGE_DAYS)
+    );
 }
 
 // =============================================================================
