@@ -1143,26 +1143,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #666;
         }
         
-        .airports-pwa-note {
-            margin: 0;
-            font-size: 0.95rem;
-            color: #555;
-            line-height: 1.55;
-            max-width: 52rem;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .airports-pwa-note a {
-            color: #0066cc;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        
-        .airports-pwa-note a:hover {
-            text-decoration: underline;
-        }
-        
         body.dark-mode .airports-pwa-section {
             background: linear-gradient(135deg, #1a2332 0%, #1a1a1a 100%);
             border-top-color: #4a9eff;
@@ -1172,8 +1152,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #e0e0e0;
         }
         
-        body.dark-mode .airports-pwa-section .airports-pwa-lead,
-        body.dark-mode .airports-pwa-note {
+        body.dark-mode .airports-pwa-section .airports-pwa-lead {
             color: #a0a0a0;
         }
         
@@ -1192,8 +1171,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #a0a0a0;
         }
         
-        body.dark-mode .airports-pwa-card a,
-        body.dark-mode .airports-pwa-note a {
+        body.dark-mode .airports-pwa-card a {
             color: #4a9eff;
         }
         
@@ -1491,9 +1469,6 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <?php endif; ?>
                     </div>
                 </div>
-                <p class="airports-pwa-note">
-                    Many people pin the <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/">airport map</a> for quick access; you can also add a specific airport the same way.
-                </p>
             </div>
         </section>
         
