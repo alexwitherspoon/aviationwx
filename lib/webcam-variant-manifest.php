@@ -163,7 +163,7 @@ function getLatestVariantManifest(string $airportId, int $camIndex): ?array {
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param int|null $timestamp Frame timestamp, or null to use latest manifest
- * @return array{available: int, total: int}|null Null when no manifest or invalid totals
+ * @return array{available: int, total: int}|null Null when no manifest, invalid totals, bad shape, or unusable timestamp
  */
 function getVariantAvailabilityCounts(string $airportId, int $camIndex, ?int $timestamp = null): ?array {
     if ($timestamp === null) {
@@ -182,17 +182,27 @@ function getVariantAvailabilityCounts(string $airportId, int $camIndex, ?int $ti
     }
 
     $actualTimestamp = $timestamp ?? (int) ($manifest['timestamp'] ?? 0);
+    if ($actualTimestamp <= 0) {
+        return null;
+    }
+
+    if (array_key_exists('variants', $manifest) && !is_array($manifest['variants'])) {
+        return null;
+    }
+
     $available = 0;
 
-    if ($manifest['original']['exists'] ?? false) {
-        $originalFormat = $manifest['original']['format'] ?? 'jpg';
+    $originalBlock = $manifest['original'] ?? null;
+    if (is_array($originalBlock) && ($originalBlock['exists'] ?? false)) {
+        $originalFormat = $originalBlock['format'] ?? 'jpg';
         $originalPath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $actualTimestamp, $originalFormat);
         if (file_exists($originalPath)) {
             $available++;
         }
     }
 
-    foreach ($manifest['variants'] as $height => $formats) {
+    $variants = $manifest['variants'] ?? [];
+    foreach ($variants as $height => $formats) {
         if (!is_array($formats)) {
             continue;
         }
