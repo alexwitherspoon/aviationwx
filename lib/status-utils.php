@@ -8,33 +8,47 @@
 
 /**
  * Determine status color
- * 
- * @param string $status Status level: 'operational', 'degraded', 'down', 'maintenance', or other
+ *
+ * @param string $status Status level: operational, degraded, down, maintenance, failed, standby, or other
  * @return string Color name: 'green', 'yellow', 'red', 'orange', or 'gray'
  */
 function getStatusColor(string $status): string {
     switch ($status) {
-        case 'operational': return 'green';
-        case 'degraded': return 'yellow';
-        case 'down': return 'red';
-        case 'maintenance': return 'orange';
-        default: return 'gray';
+        case 'operational':
+            return 'green';
+        case 'degraded':
+            return 'yellow';
+        case 'down':
+        case 'failed':
+            return 'red';
+        case 'maintenance':
+            return 'orange';
+        case 'standby':
+            return 'gray';
+        default:
+            return 'gray';
     }
 }
 
 /**
  * Get status icon
- * 
- * @param string $status Status level: 'operational', 'degraded', 'down', 'maintenance', or other
- * @return string Icon character: '●' for status states, '🚧' for maintenance, '○' for unknown
+ *
+ * @param string $status Status level: operational, degraded, down, maintenance, failed, standby, or other
+ * @return string Icon character for the status row
  */
 function getStatusIcon(string $status): string {
     switch ($status) {
-        case 'operational': return '●';
-        case 'degraded': return '●';
-        case 'down': return '●';
-        case 'maintenance': return '🚧';
-        default: return '○';
+        case 'operational':
+        case 'degraded':
+        case 'down':
+        case 'failed':
+            return '●';
+        case 'maintenance':
+            return '🚧';
+        case 'standby':
+            return '○';
+        default:
+            return '○';
     }
 }
 

@@ -54,6 +54,16 @@ class StatusPageTest extends TestCase
         $result = getStatusColor('down');
         $this->assertEquals('red', $result);
     }
+
+    public function testGetStatusColor_Failed_ReturnsRed(): void
+    {
+        $this->assertSame('red', getStatusColor('failed'));
+    }
+
+    public function testGetStatusColor_Standby_ReturnsGray(): void
+    {
+        $this->assertSame('gray', getStatusColor('standby'));
+    }
     
     public function testGetStatusColor_Unknown_ReturnsGray(): void
     {
@@ -71,6 +81,16 @@ class StatusPageTest extends TestCase
     {
         $result = getStatusIcon('unknown');
         $this->assertEquals('○', $result);
+    }
+
+    public function testGetStatusIcon_Failed_ReturnsDot(): void
+    {
+        $this->assertSame('●', getStatusIcon('failed'));
+    }
+
+    public function testGetStatusIcon_Standby_ReturnsHollowCircle(): void
+    {
+        $this->assertSame('○', getStatusIcon('standby'));
     }
     
     public function testFormatRelativeTime_JustNow_ReturnsJustNow(): void

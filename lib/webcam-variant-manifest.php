@@ -158,35 +158,32 @@ function getLatestVariantManifest(string $airportId, int $camIndex): ?array {
 }
 
 /**
- * Calculate variant coverage percentage
- * 
- * Returns the actual variant coverage based on what was generated,
- * not based on global config assumptions.
- * 
+ * Count variant files present on disk vs expected for a frame (from manifest).
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @param int|null $timestamp Specific timestamp, or null for latest
- * @return float Coverage percentage (0.0 to 1.0), or 0.0 if no manifest found
+ * @param int|null $timestamp Frame timestamp, or null to use latest manifest
+ * @return array{available: int, total: int}|null Null when no manifest or invalid totals
  */
-function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = null): float {
+function getVariantAvailabilityCounts(string $airportId, int $camIndex, ?int $timestamp = null): ?array {
     if ($timestamp === null) {
         $manifest = getLatestVariantManifest($airportId, $camIndex);
     } else {
         $manifest = getVariantManifest($airportId, $camIndex, $timestamp);
     }
-    
+
     if ($manifest === null) {
-        return 0.0;
+        return null;
     }
-    
-    $expected = $manifest['total_files'] ?? 0;
+
+    $expected = (int) ($manifest['total_files'] ?? 0);
     if ($expected <= 0) {
-        return 0.0;
+        return null;
     }
-    
-    $actualTimestamp = $timestamp ?? $manifest['timestamp'];
+
+    $actualTimestamp = $timestamp ?? (int) ($manifest['timestamp'] ?? 0);
     $available = 0;
-    
+
     if ($manifest['original']['exists'] ?? false) {
         $originalFormat = $manifest['original']['format'] ?? 'jpg';
         require_once __DIR__ . '/webcam-metadata.php';
@@ -195,15 +192,38 @@ function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = 
             $available++;
         }
     }
-    
+
     foreach ($manifest['variants'] as $height => $formats) {
+        if (!is_array($formats)) {
+            continue;
+        }
         foreach ($formats as $format) {
-            $variantPath = getWebcamVariantPath($airportId, $camIndex, $actualTimestamp, (int)$height, $format);
+            $variantPath = getWebcamVariantPath($airportId, $camIndex, $actualTimestamp, (int) $height, $format);
             if (file_exists($variantPath)) {
                 $available++;
             }
         }
     }
-    
-    return $expected > 0 ? ($available / $expected) : 0.0;
+
+    return ['available' => $available, 'total' => $expected];
+}
+
+/**
+ * Calculate variant coverage percentage
+ *
+ * Returns the actual variant coverage based on what was generated,
+ * not based on global config assumptions.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int|null $timestamp Specific timestamp, or null for latest
+ * @return float Coverage percentage (0.0 to 1.0), or 0.0 if no manifest found
+ */
+function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = null): float {
+    $counts = getVariantAvailabilityCounts($airportId, $camIndex, $timestamp);
+    if ($counts === null || $counts['total'] <= 0) {
+        return 0.0;
+    }
+
+    return $counts['available'] / $counts['total'];
 }
