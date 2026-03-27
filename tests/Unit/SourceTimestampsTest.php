@@ -53,6 +53,21 @@ class SourceTimestampsTest extends TestCase
         if (is_dir($webcamBase)) {
             $this->deleteTree($webcamBase);
         }
+        $this->clearWebcamFreshnessApcuKeys();
+    }
+
+    /**
+     * webcam_get_last_completed_timestamp_for_freshness caches in APCu; clear so tests stay isolated when APCu is on.
+     */
+    private function clearWebcamFreshnessApcuKeys(): void
+    {
+        if (!function_exists('apcu_delete')) {
+            return;
+        }
+        $prefix = 'webcam_fresh_ts_v1_' . strtolower($this->testAirportId) . '_';
+        foreach ([0, 1, 2, 3] as $camIndex) {
+            @apcu_delete($prefix . $camIndex);
+        }
     }
 
     private function deleteTree(string $dir): void
