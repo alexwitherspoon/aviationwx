@@ -8,6 +8,7 @@
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
+require_once __DIR__ . '/../lib/pwa-help-screenshots.php';
 
 // Load configuration and get listed airports (excludes unlisted airports from discovery)
 $config = loadConfig();
@@ -109,6 +110,11 @@ foreach ($airports as $airportId => $airport) {
     }
 }
 $airportsJson = json_encode($airportsForMap);
+
+// Optional screenshots for Add to Home Screen help: public/images/pwa-add-to-home-screen-{android,ios}.{avif,webp,jpg}
+$pwaHelpImageDir = __DIR__ . '/../public/images';
+$pwaHelpScreenshotAndroid = getPwaHelpScreenshotSet($pwaHelpImageDir, 'pwa-add-to-home-screen-android');
+$pwaHelpScreenshotIos = getPwaHelpScreenshotSet($pwaHelpImageDir, 'pwa-add-to-home-screen-ios');
 
 // SEO variables
 $pageTitle = 'Airport Network Map - AviationWX.org';
@@ -1020,6 +1026,176 @@ $breadcrumbs = generateBreadcrumbSchema([
         body.dark-mode .radar-controls label {
             color: #e0e0e0;
         }
+        
+        /* Add to Home Screen (optional) -- anchor target for dashboard hamburger link */
+        #add-to-home-screen {
+            scroll-margin-top: 5rem;
+        }
+        
+        .airports-pwa-section {
+            background: linear-gradient(135deg, #f0f6fc 0%, #e8eef5 100%);
+            padding: 3rem 2rem;
+            margin-top: 0;
+            border-top: 3px solid #0066cc;
+        }
+        
+        .airports-pwa-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .airports-pwa-section h2 {
+            margin: 0 0 1rem;
+            font-size: 1.75rem;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .airports-pwa-section .airports-pwa-lead {
+            margin: 0 0 2rem;
+            color: #555;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            max-width: 52rem;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .airports-pwa-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        
+        @media (max-width: 640px) {
+            .airports-pwa-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .airports-pwa-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0, 102, 204, 0.12);
+        }
+        
+        .airports-pwa-card h3 {
+            margin: 0 0 0.75rem;
+            font-size: 1.2rem;
+            color: #333;
+        }
+        
+        .airports-pwa-card ol {
+            margin: 0;
+            padding-left: 1.25rem;
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.55;
+        }
+        
+        .airports-pwa-card li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .airports-pwa-card li:last-child {
+            margin-bottom: 0;
+        }
+        
+        .airports-pwa-card a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .airports-pwa-card a:hover {
+            text-decoration: underline;
+        }
+        
+        .airports-pwa-figure {
+            margin: 1rem 0 0;
+            text-align: center;
+        }
+        
+        .airports-pwa-figure img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .airports-pwa-figure figcaption {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .airports-pwa-note {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #555;
+            line-height: 1.55;
+            max-width: 52rem;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .airports-pwa-note a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .airports-pwa-note a:hover {
+            text-decoration: underline;
+        }
+        
+        body.dark-mode .airports-pwa-section {
+            background: linear-gradient(135deg, #1a2332 0%, #1a1a1a 100%);
+            border-top-color: #4a9eff;
+        }
+        
+        body.dark-mode .airports-pwa-section h2 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .airports-pwa-section .airports-pwa-lead,
+        body.dark-mode .airports-pwa-note {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .airports-pwa-card {
+            background: #1e1e1e;
+            border-color: rgba(74, 158, 255, 0.25);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .airports-pwa-card h3 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .airports-pwa-card ol,
+        body.dark-mode .airports-pwa-card li {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .airports-pwa-card a,
+        body.dark-mode .airports-pwa-note a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .airports-pwa-figure img {
+            border-color: #333;
+        }
+        
+        body.dark-mode .airports-pwa-figure figcaption {
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -1249,6 +1425,64 @@ $breadcrumbs = generateBreadcrumbSchema([
                 
                 <p class="add-airport-footer">
                     <a href="https://guides.aviationwx.org">📚 Read the full setup guides</a>
+                </p>
+            </div>
+        </section>
+        
+        <section id="add-to-home-screen" class="airports-pwa-section" aria-labelledby="add-to-home-screen-heading">
+            <div class="airports-pwa-inner">
+                <h2 id="add-to-home-screen-heading">Add to Home Screen (optional)</h2>
+                <p class="airports-pwa-lead">
+                    AviationWX is not in the Google Play or Apple App Store. If you like, you can add a shortcut that opens from your home screen like an app. This is optional; the site works fully in the browser.
+                </p>
+                <div class="airports-pwa-grid">
+                    <div class="airports-pwa-card">
+                        <h3>Android (Chrome)</h3>
+                        <ol>
+                            <li>Open <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/">airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?></a> or any airport dashboard in Chrome.</li>
+                            <li>Tap the three-dot menu (top right).</li>
+                            <li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong> (wording varies by version).</li>
+                        </ol>
+                        <?php if ($pwaHelpScreenshotAndroid !== null): ?>
+                        <figure class="airports-pwa-figure">
+                            <picture>
+                                <?php if ($pwaHelpScreenshotAndroid['avif'] !== null): ?>
+                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotAndroid['avif'], ENT_QUOTES, 'UTF-8') ?>" type="image/avif">
+                                <?php endif; ?>
+                                <?php if ($pwaHelpScreenshotAndroid['webp'] !== null): ?>
+                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotAndroid['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotAndroid), ENT_QUOTES, 'UTF-8') ?>" alt="Chrome menu on Android showing Install app or Add to Home screen" loading="lazy" decoding="async">
+                            </picture>
+                            <figcaption>Example: Chrome on Android</figcaption>
+                        </figure>
+                        <?php endif; ?>
+                    </div>
+                    <div class="airports-pwa-card">
+                        <h3>iPhone or iPad (Safari)</h3>
+                        <ol>
+                            <li>Open <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/">airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?></a> or any airport dashboard in <strong>Safari</strong> (required for Add to Home Screen).</li>
+                            <li>Tap the Share button.</li>
+                            <li>Scroll down until you see <strong>Add to Home Screen</strong>, then tap it.</li>
+                        </ol>
+                        <?php if ($pwaHelpScreenshotIos !== null): ?>
+                        <figure class="airports-pwa-figure">
+                            <picture>
+                                <?php if ($pwaHelpScreenshotIos['avif'] !== null): ?>
+                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotIos['avif'], ENT_QUOTES, 'UTF-8') ?>" type="image/avif">
+                                <?php endif; ?>
+                                <?php if ($pwaHelpScreenshotIos['webp'] !== null): ?>
+                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotIos['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotIos), ENT_QUOTES, 'UTF-8') ?>" alt="Safari share sheet on iPhone showing Add to Home Screen" loading="lazy" decoding="async">
+                            </picture>
+                            <figcaption>Example: Safari on iPhone</figcaption>
+                        </figure>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <p class="airports-pwa-note">
+                    Many people pin the <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/">airport map</a> for quick access; you can also add a specific airport the same way.
                 </p>
             </div>
         </section>

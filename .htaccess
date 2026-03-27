@@ -168,6 +168,17 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
+# PWA help screenshots (Add to Home Screen) -- same long cache as about-photo
+<FilesMatch "^public/images/pwa-add-to-home-screen-(android|ios)\.(jpg|jpeg|webp|avif)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </IfModule>
+</FilesMatch>
+
 # Cache widget.js: short TTL so embed updates propagate on deploy
 <FilesMatch "^(public/js/widget\.js|widget\.js)$">
     <IfModule mod_expires.c>
