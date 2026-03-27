@@ -1364,6 +1364,10 @@ if ($themeCookie === 'dark') {
                         <span>Dashboard</span>
                     </a>
                     <?php endif; ?>
+                    <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/#add-to-home-screen" class="nav-hamburger-item">
+                        <span class="nav-item-icon">📱</span>
+                        <span>Add to Home Screen</span>
+                    </a>
                     <a href="https://embed.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">🔗</span>
                         <span>Embed Generator</span>

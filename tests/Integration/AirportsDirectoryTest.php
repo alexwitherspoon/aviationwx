@@ -245,5 +245,19 @@ class AirportsDirectoryTest extends TestCase
         $this->assertStringContainsString('safeStorageSet', $output, 'Should define safeStorageSet');
         $this->assertStringContainsString('try { return localStorage.getItem', $output, 'Should wrap getItem in try/catch');
     }
+
+    /**
+     * PWA help section anchor must remain stable: airport dashboard hamburger links to #add-to-home-screen.
+     */
+    public function testAddToHomeScreenSection_HasStableAnchorId(): void
+    {
+        $output = $this->getAirportsPageContent();
+
+        $this->assertStringContainsString(
+            'id="add-to-home-screen"',
+            $output,
+            'Add to Home Screen section must keep id="add-to-home-screen" for dashboard hamburger hash links'
+        );
+    }
 }
 
