@@ -79,6 +79,12 @@ Shows:
 - Per-airport status (Weather API, Webcams)
 - Usage metrics (Views, API requests, Map tiles served)
 
+**Interpreting signals**
+
+- **Weather Data Fetching** (system row): aggregate **HTTP fetch success** for weather sources over the last hour. It is **not** a guarantee that every airport has fresh observations.
+- **Per-airport weather**: based on observation timestamps in the weather cache (same family of values as the public API).
+- **Per-airport webcams**: freshness uses **last completed frame** time on disk (aligned with the image pipeline and API), not the `current.jpg` symlink mtime alone.
+
 ### Health Endpoints
 
 | Endpoint | Purpose |

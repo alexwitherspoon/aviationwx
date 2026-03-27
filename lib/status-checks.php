@@ -971,88 +971,61 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $totalCams = count($webcams);
         
         foreach ($webcams as $idx => $cam) {
-            // Determine camera type (Push or Pull)
-            $isPush = (isset($cam['type']) && $cam['type'] === 'push') 
+            $isPush = (isset($cam['type']) && $cam['type'] === 'push')
                    || isset($cam['push_config']);
             $cameraType = $isPush ? 'Push' : 'Pull';
             $camName = $cam['name'] ?? "Webcam {$idx}";
             
-            // Check cache files using new structure (per-airport/per-camera directories)
-            // Use current.jpg/current.webp symlinks which are the standard serving endpoints
-            // These symlinks are created by the scheduler and point to the latest 720p variant
             $cacheDir = getWebcamCameraDir($airportId, $idx);
             $cacheJpg = $cacheDir . '/current.jpg';
-            $cacheWebp = $cacheDir . '/current.webp';
             
-            // Check if cache files exist and are readable
-            $cacheExists = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
-                        || (@file_exists($cacheWebp) && @is_readable($cacheWebp));
-            
-            // Check variant availability (height-based variants)
-            
-            // Get last completed timestamp to avoid race conditions
-            // (latest may still be generating variants)
-            $lastCompletedTimestamp = getLastCompletedImageTimestamp($airportId, $idx);
+            // Staleness from last-completed frame (promoted), not current.jpg mtime; aligns with API
+            $lastCompletedTimestamp = webcam_get_last_completed_timestamp_for_freshness($airportId, $idx);
             $variantCoverage = null;
             
             if ($lastCompletedTimestamp > 0) {
-                // Use manifest-based coverage (dynamic based on actual generation)
                 $variantCoverage = getVariantCoverage($airportId, $idx, $lastCompletedTimestamp);
             }
-            
-            // Get refresh seconds (min 60)
-            $webcamRefresh = isset($cam['refresh_seconds']) 
-                ? max(60, intval($cam['refresh_seconds'])) 
-                : (isset($airport['webcam_refresh_seconds']) 
-                    ? max(60, intval($airport['webcam_refresh_seconds'])) 
-                    : max(60, getDefaultWebcamRefresh()));
             
             $camStatus = 'operational';
             $camMessage = '';
             $camLastChanged = 0;
             
-            if ($cacheExists) {
-                // Determine which file to use (prefer JPG, fallback to WEBP)
-                $cacheFile = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
-                           ? $cacheJpg 
-                           : $cacheWebp;
-                $cacheAge = time() - @filemtime($cacheFile);
-                $camLastChanged = @filemtime($cacheFile) ?: 0;
-                
-                // Apply 3-tier staleness model (same as weather) for safety-critical data freshness
-                $warningThreshold = getStaleWarningSeconds($airport);
-                $errorThreshold = getStaleErrorSeconds($airport);
-                $failclosedThreshold = getStaleFailclosedSeconds($airport);
-                
-                $errorFile = $cacheJpg . '.error.json';
-                $hasError = !$isPush && file_exists($errorFile);
-                
-                // Check backoff state (pull cameras only)
-                $inBackoff = false;
-                $failureReason = null;
-                if (!$isPush) {
-                    $backoffData = getCachedBackoffData();
-                    $key = $airportId . '_' . $idx;
-                    if (isset($backoffData[$key])) {
-                        $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
-                        $inBackoff = $backoffUntil > time();
-                        if ($inBackoff) {
-                            $failureReason = $backoffData[$key]['last_failure_reason'] ?? null;
-                        }
+            $warningThreshold = getStaleWarningSeconds($airport);
+            $errorThreshold = getStaleErrorSeconds($airport);
+            $failclosedThreshold = getStaleFailclosedSeconds($airport);
+            
+            $errorFile = $cacheJpg . '.error.json';
+            $hasError = !$isPush && file_exists($errorFile);
+            
+            $inBackoff = false;
+            $failureReason = null;
+            if (!$isPush) {
+                $backoffData = getCachedBackoffData();
+                $key = $airportId . '_' . $idx;
+                if (isset($backoffData[$key])) {
+                    $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
+                    $inBackoff = $backoffUntil > time();
+                    if ($inBackoff) {
+                        $failureReason = $backoffData[$key]['last_failure_reason'] ?? null;
                     }
                 }
+            }
+            
+            if ($hasError || $inBackoff) {
+                $camStatus = 'degraded';
+                if ($inBackoff && $failureReason) {
+                    $camMessage = 'In backoff: ' . $failureReason;
+                } else {
+                    $camMessage = $hasError ? 'Has errors' : 'In backoff';
+                }
+            } elseif ($lastCompletedTimestamp > 0) {
+                $cacheAge = time() - $lastCompletedTimestamp;
+                $camLastChanged = $lastCompletedTimestamp;
                 
-                // Prioritize error/backoff status over staleness (circuit breaker takes precedence)
-                if ($hasError || $inBackoff) {
-                    $camStatus = 'degraded';
-                    if ($inBackoff && $failureReason) {
-                        $camMessage = 'In backoff: ' . $failureReason;
-                    } else {
-                        $camMessage = $hasError ? 'Has errors' : 'In backoff';
-                    }
-                } elseif ($cacheAge < $warningThreshold) {
+                if ($cacheAge < $warningThreshold) {
                     $camStatus = 'operational';
-                    $camMessage = '';  // No status message needed when healthy - green indicator + timestamp suffice
+                    $camMessage = '';
                     $healthyCams++;
                 } elseif ($cacheAge < $errorThreshold) {
                     $camStatus = 'operational';
@@ -1072,7 +1045,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 } elseif (!$webcamCacheDirReadable) {
                     $camMessage = 'Cache directory not readable';
                 } else {
-                    $camMessage = 'No cache available';
+                    $camMessage = 'No completed frame available';
                 }
             }
             
@@ -1093,7 +1066,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $messageParts[] = "Verified {$verified} / Rejected {$rejected} (24h)";
             
             // Add variant coverage
-            if ($cacheExists && isset($variantCoverage)) {
+            if ($lastCompletedTimestamp > 0 && isset($variantCoverage)) {
                 $coveragePercent = round($variantCoverage * 100);
                 if ($variantCoverage >= 0.9) {
                     $messageParts[] = "{$coveragePercent}% variants available";

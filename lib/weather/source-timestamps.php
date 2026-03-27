@@ -7,20 +7,21 @@
  */
 
 require_once __DIR__ . '/../cache-paths.php';
+require_once __DIR__ . '/../webcam-metadata.php';
 
 /**
  * Get timestamps for all configured data sources for an airport
- * 
- * Extracts timestamps from primary weather, METAR, and webcam sources.
- * Handles missing files, corrupted data, and missing timestamps gracefully.
- * 
+ *
+ * Webcam timestamps: per-camera last-completed frame (see webcam_get_last_completed_timestamp_for_freshness);
+ * newest_timestamp is the maximum across cameras.
+ *
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
  * @return array {
  *   'primary' => array{
- *     'timestamp' => int,      // Unix timestamp or 0 if unavailable
- *     'age' => int,            // Seconds since timestamp (PHP_INT_MAX if unavailable)
- *     'available' => bool       // Whether source is configured
+ *     'timestamp' => int,
+ *     'age' => int,
+ *     'available' => bool
  *   },
  *   'backup' => array{
  *     'timestamp' => int,
@@ -155,61 +156,13 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         $webcamNewestTimestamp = 0;
         
         foreach ($airport['webcams'] as $index => $cam) {
-            $webcamTimestamp = 0;
-            
-            // Try to get timestamp from JPG or WebP file using new path structure
-            foreach (['jpg', 'webp'] as $format) {
-                $filePath = getCacheSymlinkPath($airportId, $index, $format);
-                if (file_exists($filePath)) {
-                    // Try EXIF first if available, then fallback to filemtime
-                    if (function_exists('exif_read_data')) {
-                        // Use @ to suppress errors for non-critical EXIF operations
-                        // We handle failures explicitly with fallback to filemtime below
-                        $exif = @exif_read_data($filePath, 'EXIF', true);
-                        if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
-                            $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                            // Parse EXIF date format: "YYYY:MM:DD HH:MM:SS"
-                            // Our pipeline writes EXIF in UTC, so parse as UTC
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                            if ($timestamp !== false && $timestamp > 0) {
-                                $webcamTimestamp = (int)$timestamp;
-                            }
-                        }
-                        // Also check main EXIF array (some cameras store it there)
-                        if ($webcamTimestamp === 0 && isset($exif['DateTimeOriginal'])) {
-                            $dateTime = $exif['DateTimeOriginal'];
-                            // Our pipeline writes EXIF in UTC, so parse as UTC
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                            if ($timestamp !== false && $timestamp > 0) {
-                                $webcamTimestamp = (int)$timestamp;
-                            }
-                        }
-                    }
-                    
-                    // Fallback to file modification time if EXIF not available or failed
-                    if ($webcamTimestamp === 0) {
-                        // Use @ to suppress errors for non-critical file operations
-                        // We handle failures explicitly by leaving timestamp as 0
-                        $mtime = @filemtime($filePath);
-                        if ($mtime !== false && $mtime > 0) {
-                            $webcamTimestamp = (int)$mtime;
-                        }
-                    }
-                    
-                    if ($webcamTimestamp > 0) {
-                        break;
-                    }
-                }
-            }
-            
+            $webcamTimestamp = webcam_get_last_completed_timestamp_for_freshness($airportId, $index);
+
             if ($webcamTimestamp > 0) {
                 if ($webcamTimestamp > $webcamNewestTimestamp) {
                     $webcamNewestTimestamp = $webcamTimestamp;
                 }
-                // Note: We don't check staleness here - that's done by the caller
-                // We just track if timestamp is available
             } else {
-                // No webcam file or timestamp - count as stale
                 $webcamStaleCount++;
             }
         }
