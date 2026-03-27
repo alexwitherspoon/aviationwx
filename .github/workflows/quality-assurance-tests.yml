@@ -602,7 +602,8 @@ jobs:
           }
           echo "✓ Test fixture is valid JSON"
       
-      # Use host docker driver so CI does not pull moby/buildkit from Docker Hub (avoids 401/rate limits on buildx bootstrap).
+      # docker-container driver pulls moby/buildkit from Docker Hub (can 401 on rate limits). docker driver uses
+      # embedded BuildKit but cannot export to GHA cache (cache-to); keep cache-from to reuse prior layers.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
@@ -617,7 +618,6 @@ jobs:
           push: false
           tags: aviationwx:test
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/aviationwx-test.tar
       
       - name: Upload Docker image artifact
