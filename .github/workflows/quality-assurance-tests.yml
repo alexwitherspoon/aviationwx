@@ -602,8 +602,11 @@ jobs:
           }
           echo "✓ Test fixture is valid JSON"
       
+      # Use host docker driver so CI does not pull moby/buildkit from Docker Hub (avoids 401/rate limits on buildx bootstrap).
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
       
       - name: Build Docker image with cache
         uses: docker/build-push-action@v7
