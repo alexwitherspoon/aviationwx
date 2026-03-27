@@ -17,6 +17,14 @@ if (!defined('MIN_WEBCAM_REFRESH')) {
 if (!defined('MAX_WEBCAM_REFRESH')) {
     define('MAX_WEBCAM_REFRESH', 3600); // 1 hour maximum (slowest allowed)
 }
+
+// When two or more unique frame timestamps exist, use second-newest only if the top two are within
+// this gap (same upload burst / variant generation). If the gap is larger, they are independent
+// captures and the newest timestamp is treated as last completed (avoids sparse two-frame false staleness).
+if (!defined('WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS')) {
+    define('WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS', 600); // 10 minutes
+}
+
 if (!defined('DEFAULT_WEATHER_REFRESH')) {
     define('DEFAULT_WEATHER_REFRESH', 60);
 }

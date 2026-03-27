@@ -457,11 +457,12 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
 
 /**
  * Get last completed image timestamp for a camera
- * 
- * Returns the second-most-recent timestamp to avoid race conditions during
- * variant generation. The latest image may still be in-progress, but the
- * second-latest is guaranteed to be fully promoted.
- * 
+ *
+ * When two or more unique timestamps exist, normally returns the second-newest so that the latest
+ * directory may still be mid-variant-generation. If the gap between newest and second-newest exceeds
+ * WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS, those captures are independent (e.g. sparse camera);
+ * the newest timestamp is used so health and API do not report stale age while current.jpg is fresh.
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @return int Unix timestamp, or 0 if no completed images found
@@ -471,7 +472,7 @@ function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
     if (empty($files)) {
         return 0;
     }
-    
+
     // Collect unique timestamps
     $timestamps = [];
     foreach ($files as $file) {
@@ -479,7 +480,7 @@ function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
         if (is_link($file)) {
             continue;
         }
-        
+
         $basename = basename($file);
         // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
         if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
@@ -487,22 +488,27 @@ function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
             $timestamps[$timestamp] = true;
         }
     }
-    
+
     if (empty($timestamps)) {
         return 0;
     }
-    
-    // Get unique timestamps and sort descending
+
     $uniqueTimestamps = array_keys($timestamps);
     rsort($uniqueTimestamps);
-    
-    // Return second-most-recent (last completed)
-    // If only one image exists, return it (no race condition possible)
+
     if (count($uniqueTimestamps) === 1) {
         return $uniqueTimestamps[0];
     }
-    
-    return $uniqueTimestamps[1];
+
+    $newest = $uniqueTimestamps[0];
+    $second = $uniqueTimestamps[1];
+    $pairGap = $newest - $second;
+
+    if ($pairGap <= WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS) {
+        return $second;
+    }
+
+    return $newest;
 }
 
 /** APCu TTL for cached last-completed webcam timestamps (limits glob scans on outage polling). */
@@ -518,7 +524,7 @@ if (!defined('WEBCAM_FRESHNESS_APCU_TTL_SECONDS')) {
  * @return int Unix timestamp, or 0 if no completed frame files
  */
 function webcam_get_last_completed_timestamp_for_freshness(string $airportId, int $camIndex): int {
-    $cacheKey = 'webcam_fresh_ts_v1_' . strtolower($airportId) . '_' . $camIndex;
+    $cacheKey = 'webcam_fresh_ts_v2_' . strtolower($airportId) . '_' . $camIndex;
 
     if (function_exists('apcu_fetch')) {
         $cached = @apcu_fetch($cacheKey, $success);

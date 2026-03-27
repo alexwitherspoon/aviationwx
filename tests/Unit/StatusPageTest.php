@@ -478,7 +478,7 @@ class StatusPageTest extends TestCase
     {
         $airportId = 'test_webcam_stale_current_mtime';
         if (function_exists('apcu_delete')) {
-            @apcu_delete('webcam_fresh_ts_v1_' . strtolower($airportId) . '_0');
+            @apcu_delete('webcam_fresh_ts_v2_' . strtolower($airportId) . '_0');
         }
 
         $airport = [
