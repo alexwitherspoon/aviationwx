@@ -472,11 +472,11 @@ class StatusPageTest extends TestCase
     }
 
     /**
-     * Two frames: last-completed is second-newest; stale current.jpg must not produce failclosed.
+     * Two frames: last-completed is second-newest; stale current.jpg mtime must not produce failclosed.
      */
-    public function testCheckAirportHealth_Webcam_LastCompletedUsesSecondNewestFrameNotStaleSymlink(): void
+    public function testCheckAirportHealth_Webcam_LastCompletedUsesSecondNewestFrameWhenCurrentMtimeIsStale(): void
     {
-        $airportId = 'test_webcam_symlink_stale';
+        $airportId = 'test_webcam_stale_current_mtime';
         if (function_exists('apcu_delete')) {
             @apcu_delete('webcam_fresh_ts_v1_' . strtolower($airportId) . '_0');
         }
