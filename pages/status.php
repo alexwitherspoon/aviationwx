@@ -52,7 +52,8 @@ require_once __DIR__ . '/../lib/status-metrics.php';
 $metricsBundle = getStatusMetricsBundle();
 $usageMetrics = $metricsBundle['rolling7'];
 $multiPeriodMetrics = $metricsBundle['multiPeriod'];
-$rolling24h = $metricsBundle['rolling1'];
+// Calendar rollup: full prior UTC day (daily file) + today hourly -- not metrics_get_rolling_hours(24)
+$rolling1Calendar = $metricsBundle['rolling1'];
 
 // Get local performance metrics (STATUS_PAGE_CACHE_TTL; scheduler pre-warms every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL)
 require_once __DIR__ . '/../lib/performance-metrics.php';
@@ -807,14 +808,14 @@ if (php_sapi_name() === 'cli') {
                 </div>
                 <?php endif; ?>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_by_source']['openweathermap'] ?? 0) ?></span>
+                    <span class="cf-metric-value"><?= number_format($rolling1Calendar['global']['tiles_by_source']['openweathermap'] ?? 0) ?></span>
                     <span class="cf-metric-label">Cloud Tiles Served</span>
-                    <div class="cf-metric-subtext">Last 24 hours</div>
+                    <div class="cf-metric-subtext">Prior UTC day + today (hourly)</div>
                 </div>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_by_source']['rainviewer'] ?? 0) ?></span>
+                    <span class="cf-metric-value"><?= number_format($rolling1Calendar['global']['tiles_by_source']['rainviewer'] ?? 0) ?></span>
                     <span class="cf-metric-label">Rain Tiles Served</span>
-                    <div class="cf-metric-subtext">Last 24 hours</div>
+                    <div class="cf-metric-subtext">Prior UTC day + today (hourly)</div>
                 </div>
             </div>
             <?php endif; ?>
@@ -984,6 +985,9 @@ if (php_sapi_name() === 'cli') {
         $hourViews = $airportPeriodMetrics['hour']['page_views'] ?? 0;
         $dayViews = $airportPeriodMetrics['day']['page_views'] ?? 0;
         $weekViews = $airportPeriodMetrics['week']['page_views'] ?? 0;
+        $titleHourViews = 'Live: current UTC hour (persisted file plus counters not yet flushed to disk).';
+        $titleDayViews = 'Today UTC from persisted hourly files; may trail the hour figure briefly until counters flush. Bundle cache can lag a few minutes.';
+        $titleWeekViews = 'Rolling calendar window: seven prior UTC days (daily files) plus today hourly; bundle cache can lag a few minutes.';
         ?>
         <div class="status-card">
             <div class="status-card-header airport-card-header" 
@@ -995,11 +999,11 @@ if (php_sapi_name() === 'cli') {
                     </h2>
                     <div class="airport-views-summary">
                         <span class="views-label">Views:</span>
-                        <span class="views-period" title="Last hour"><?php echo number_format($hourViews); ?>/hour</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleHourViews); ?>"><?php echo number_format($hourViews); ?>/hour</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="Today"><?php echo number_format($dayViews); ?>/day</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleDayViews); ?>"><?php echo number_format($dayViews); ?>/day</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="Last 7 days"><?php echo number_format($weekViews); ?>/week</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleWeekViews); ?>"><?php echo number_format($weekViews); ?>/week</span>
                     </div>
                 </div>
                 <span class="status-badge">
