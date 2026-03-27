@@ -64,7 +64,7 @@ class SourceTimestampsTest extends TestCase
         if (!function_exists('apcu_delete')) {
             return;
         }
-        $prefix = 'webcam_fresh_ts_v1_' . strtolower($this->testAirportId) . '_';
+        $prefix = 'webcam_fresh_ts_v2_' . strtolower($this->testAirportId) . '_';
         foreach ([0, 1, 2, 3] as $camIndex) {
             @apcu_delete($prefix . $camIndex);
         }

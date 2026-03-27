@@ -78,6 +78,24 @@ class StatusPageIntegrationTest extends TestCase
             "Response should contain closing HTML tag"
         );
     }
+
+    /**
+     * Pretty URL /status must load the status page (not 404)
+     */
+    public function testStatusPage_PrettyPath_ReturnsHtml(): void
+    {
+        $response = $this->makeRequest('status');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped('Endpoint not available');
+            return;
+        }
+
+        $this->assertEquals(200, $response['http_code'], 'GET /status should return 200, not 404');
+        $body = strtolower($response['body']);
+        $this->assertStringContainsString('aviationwx status', $body);
+        $this->assertStringContainsString('<html', $body);
+    }
     
     /**
      * Test status page contains expected elements

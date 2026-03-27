@@ -16,6 +16,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/process-utils.php';
 require_once __DIR__ . '/webcam-metadata.php';
 require_once __DIR__ . '/webcam-variant-manifest.php';
 require_once __DIR__ . '/webcam-image-metrics.php';
@@ -983,8 +984,15 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $lastCompletedTimestamp = webcam_get_last_completed_timestamp_for_freshness($airportId, $idx);
             $variantCoverage = null;
             
+            $availableVariants = null;
+            $totalVariants = null;
             if ($lastCompletedTimestamp > 0) {
-                $variantCoverage = getVariantCoverage($airportId, $idx, $lastCompletedTimestamp);
+                $variantCounts = getVariantAvailabilityCounts($airportId, $idx, $lastCompletedTimestamp);
+                if ($variantCounts !== null) {
+                    $availableVariants = $variantCounts['available'];
+                    $totalVariants = $variantCounts['total'];
+                    $variantCoverage = $availableVariants / $totalVariants;
+                }
             }
             
             $camStatus = 'operational';
@@ -1092,8 +1100,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 'message' => $detailedMessage,
                 'lastChanged' => $camLastChanged,
                 'variant_coverage' => isset($variantCoverage) ? round($variantCoverage * 100, 1) : null,
-                'available_variants' => isset($availableVariants) ? $availableVariants : null,
-                'total_variants' => isset($totalVariants) ? $totalVariants : null,
+                'available_variants' => $availableVariants,
+                'total_variants' => $totalVariants,
                 'image_metrics' => $imageMetrics
             ];
             
@@ -1235,10 +1243,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
     foreach ($health['components'] as $comp) {
         if (isset($comp['sources']) && is_array($comp['sources'])) {
             foreach ($comp['sources'] as $source) {
-                if ($source['status'] === 'down') {
+                $srcStatus = $source['status'] ?? '';
+                if ($srcStatus === 'down') {
                     $hasDown = true;
                     break 2; // Break out of both loops
-                } elseif ($source['status'] === 'degraded') {
+                }
+                if ($srcStatus === 'degraded' || $srcStatus === 'failed') {
                     $hasDegraded = true;
                 }
             }

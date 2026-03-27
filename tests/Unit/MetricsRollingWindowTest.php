@@ -237,6 +237,47 @@ class MetricsRollingWindowTest extends TestCase
     }
     
     /**
+     * Status page rollup uses metrics_get_rolling(1) (calendar: prior UTC day + today hourly),
+     * not metrics_get_rolling_hours(24) (sliding 24h from hourly files only).
+     *
+     * With yesterday only in a daily file and today only in hourly files, rolling(1) includes
+     * the full daily total plus today; rolling_hours(24) only sums hourly files in the window.
+     */
+    public function testRollingOneDay_CalendarRollupIncludesDailyFileBeyondRollingHours24(): void
+    {
+        $now = time();
+        $yesterday = gmdate('Y-m-d', $now - 86400);
+        $this->createDailyFile($yesterday, 1000);
+
+        $today = gmdate('Y-m-d', $now);
+        $currentHour = (int)gmdate('H', $now);
+        for ($h = 0; $h <= $currentHour; $h++) {
+            $hourId = $today . '-' . sprintf('%02d', $h);
+            $this->createHourlyFile($hourId, 10);
+        }
+
+        $calendarOneDay = metrics_get_rolling(1);
+        $sliding24h = metrics_get_rolling_hours(24);
+
+        $todayHourlyOnly = ($currentHour + 1) * 10;
+        $this->assertSame(
+            1000 + $todayHourlyOnly,
+            $calendarOneDay['airports']['kspb']['page_views'] ?? 0,
+            'Rolling 1 day must include full prior UTC day from daily file plus today hourly'
+        );
+        $this->assertSame(
+            $todayHourlyOnly,
+            $sliding24h['airports']['kspb']['page_views'] ?? 0,
+            'Rolling 24h with no yesterday hourly files counts only today hourly in window'
+        );
+        $this->assertGreaterThan(
+            $sliding24h['airports']['kspb']['page_views'] ?? 0,
+            $calendarOneDay['airports']['kspb']['page_views'] ?? 0,
+            'Calendar rolling1 must exceed sliding 24h when prior day exists only as daily aggregate'
+        );
+    }
+
+    /**
      * Test that multiple airports are tracked separately in rolling window
      */
     public function testRollingWindow_SeparatesMultipleAirports(): void

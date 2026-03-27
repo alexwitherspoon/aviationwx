@@ -1027,7 +1027,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #e0e0e0;
         }
         
-        /* Add to Home Screen (optional) -- anchor target for dashboard hamburger link */
+        /* Add [favicon] to your Home Screen -- anchor target for dashboard hamburger link */
         #add-to-home-screen {
             scroll-margin-top: 5rem;
         }
@@ -1050,6 +1050,14 @@ $breadcrumbs = generateBreadcrumbSchema([
             font-size: 1.75rem;
             color: #333;
             font-weight: 600;
+        }
+        
+        .airports-pwa-heading-icon {
+            display: inline-block;
+            vertical-align: -0.15em;
+            width: 1.35em;
+            height: 1.35em;
+            margin: 0 0.12em;
         }
         
         .airports-pwa-section .airports-pwa-lead {
@@ -1135,26 +1143,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #666;
         }
         
-        .airports-pwa-note {
-            margin: 0;
-            font-size: 0.95rem;
-            color: #555;
-            line-height: 1.55;
-            max-width: 52rem;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .airports-pwa-note a {
-            color: #0066cc;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        
-        .airports-pwa-note a:hover {
-            text-decoration: underline;
-        }
-        
         body.dark-mode .airports-pwa-section {
             background: linear-gradient(135deg, #1a2332 0%, #1a1a1a 100%);
             border-top-color: #4a9eff;
@@ -1164,8 +1152,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #e0e0e0;
         }
         
-        body.dark-mode .airports-pwa-section .airports-pwa-lead,
-        body.dark-mode .airports-pwa-note {
+        body.dark-mode .airports-pwa-section .airports-pwa-lead {
             color: #a0a0a0;
         }
         
@@ -1184,8 +1171,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #a0a0a0;
         }
         
-        body.dark-mode .airports-pwa-card a,
-        body.dark-mode .airports-pwa-note a {
+        body.dark-mode .airports-pwa-card a {
             color: #4a9eff;
         }
         
@@ -1431,9 +1417,9 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         <section id="add-to-home-screen" class="airports-pwa-section" aria-labelledby="add-to-home-screen-heading">
             <div class="airports-pwa-inner">
-                <h2 id="add-to-home-screen-heading">Add to Home Screen (optional)</h2>
+                <h2 id="add-to-home-screen-heading">Add <img src="/public/favicons/android-chrome-192x192.png" alt="" aria-hidden="true" class="airports-pwa-heading-icon" width="32" height="32" decoding="async"> to your Home Screen</h2>
                 <p class="airports-pwa-lead">
-                    AviationWX is not in the Google Play or Apple App Store. If you like, you can add a shortcut that opens from your home screen like an app. This is optional; the site works fully in the browser.
+                    To quickly access AviationWX, here's how to add an icon shortcut to your device Home Screen, like an app. This is optional, as the site works fully in the browser. AviationWX is <em>not</em> in the Google Play or Apple App stores and is free to use.
                 </p>
                 <div class="airports-pwa-grid">
                     <div class="airports-pwa-card">
@@ -1483,9 +1469,6 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <?php endif; ?>
                     </div>
                 </div>
-                <p class="airports-pwa-note">
-                    Many people pin the <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/">airport map</a> for quick access; you can also add a specific airport the same way.
-                </p>
             </div>
         </section>
         

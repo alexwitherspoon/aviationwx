@@ -172,4 +172,25 @@ class SyncPushConfigTest extends TestCase
         $this->assertSame('testid', $usernameMapping[$username]['airport']);
         $this->assertSame('testid_0', $usernameMapping[$username]['camera']);
     }
+
+    /**
+     * Regression: FTP user success log must reference $ftpDir (FTP root), not $filesDir (SFTP path).
+     */
+    public function testFtpUserCreatedLog_UsesFtpDirInSource(): void
+    {
+        $path = __DIR__ . '/../../scripts/sync-push-config.php';
+        $this->assertFileExists($path);
+        $src = file_get_contents($path);
+        $this->assertIsString($src);
+        $this->assertStringContainsString(
+            "'local_root' => \$ftpDir",
+            $src,
+            'FTP user created/updated log context must use $ftpDir'
+        );
+        $this->assertStringNotContainsString(
+            "'local_root' => \$filesDir",
+            $src,
+            'local_root in logs must not use $filesDir (SFTP path; undefined in FTP flow)'
+        );
+    }
 }

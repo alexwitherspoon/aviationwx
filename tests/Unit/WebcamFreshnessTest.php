@@ -23,7 +23,7 @@ class WebcamFreshnessTest extends TestCase
     {
         $this->removeTestCameraTree();
         if (function_exists('apcu_delete')) {
-            @apcu_delete('webcam_fresh_ts_v1_' . strtolower($this->airportId) . '_0');
+            @apcu_delete('webcam_fresh_ts_v2_' . strtolower($this->airportId) . '_0');
         }
         parent::tearDown();
     }
@@ -81,12 +81,29 @@ class WebcamFreshnessTest extends TestCase
         $this->assertSame($ts, webcam_get_last_completed_timestamp_for_freshness($this->airportId, 0));
     }
 
-    public function testWebcamGetLastCompletedTimestampForFreshness_UsesSecondNewestWhenTwoFrames(): void
+    public function testWebcamGetLastCompletedTimestampForFreshness_UsesSecondNewestWhenTopPairIsCloseInTime(): void
     {
-        $older = time() - 3600;
-        $newer = time() - 60;
-        $this->writeFrame(0, $older);
-        $this->writeFrame(0, $newer);
-        $this->assertSame($older, webcam_get_last_completed_timestamp_for_freshness($this->airportId, 0));
+        $secondNewest = time() - 300;
+        $newest = time() - 120;
+        $this->writeFrame(0, $secondNewest);
+        $this->writeFrame(0, $newest);
+        $this->assertSame(
+            $secondNewest,
+            webcam_get_last_completed_timestamp_for_freshness($this->airportId, 0),
+            'Within burst gap, second-newest avoids in-flight latest directory'
+        );
+    }
+
+    public function testWebcamGetLastCompletedTimestampForFreshness_UsesNewestWhenTopPairIsFarApart(): void
+    {
+        $sparseOld = time() - (86400 * 4);
+        $sparseNew = time() - 120;
+        $this->writeFrame(0, $sparseOld);
+        $this->writeFrame(0, $sparseNew);
+        $this->assertSame(
+            $sparseNew,
+            webcam_get_last_completed_timestamp_for_freshness($this->airportId, 0),
+            'Sparse captures: newest is completed; second-newest would falsely mark health stale'
+        );
     }
 }

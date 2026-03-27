@@ -516,7 +516,7 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 ### For Quick Checks
 - Bookmark your home airport's dashboard
 - Use the search to quickly jump between airports
-- **Add to Home Screen (optional):** AviationWX is a website, not an app in the App Store or Google Play. If you want a home screen icon that opens the site like an app, use your browser's add-to-home-screen or install option. Step-by-step help for Android and iPhone is on the [airport map](https://airports.aviationwx.org/#add-to-home-screen) page under **Add to Home Screen (optional)** at the bottom. From any airport dashboard, open the menu (☰) and choose **Add to Home Screen** to jump to that section.
+- **Add … to your Home Screen (optional):** To quickly access AviationWX, here's how to add an icon shortcut to your device Home Screen, like an app. This is optional, as the site works fully in the browser. AviationWX is *not* in the Google Play or Apple App stores and is free to use. Step-by-step help for Android and iPhone is on the [airport map](https://airports.aviationwx.org/#add-to-home-screen) at the bottom (heading: **Add**, site icon, **to your Home Screen**). From any airport dashboard, open the menu (☰) and choose **Add**, site icon, **to your Home Screen** to jump to that section.
 
 ### Sharing
 - Every dashboard has a shareable URL: `https://[airport-id].aviationwx.org`

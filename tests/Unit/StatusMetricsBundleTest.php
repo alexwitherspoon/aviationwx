@@ -178,4 +178,33 @@ class StatusMetricsBundleTest extends TestCase
         $this->assertArrayHasKey('rolling7', $bundle);
         $this->assertArrayHasKey('rolling1', $bundle);
     }
+
+    /**
+     * metrics_get_multi_period() must match building from the same three period aggregates.
+     */
+    public function testMetricsBuildMultiPeriodFromPeriods_MatchesGetMultiPeriod(): void
+    {
+        $expected = metrics_get_multi_period();
+        $actual = metrics_build_multi_period_from_periods(
+            metrics_get_current_hour(),
+            metrics_get_today(),
+            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS)
+        );
+        $this->assertEquals($expected, $actual);
+    }
+
+    /**
+     * Bundle path must match building from current hour plus bundle today and rolling7.
+     */
+    public function testMetricsBuildMultiPeriodFromBundle_MatchesFromPeriods(): void
+    {
+        $bundle = metrics_get_status_bundle();
+        $fromBundle = metrics_build_multi_period_from_bundle($bundle);
+        $fromPeriods = metrics_build_multi_period_from_periods(
+            metrics_get_current_hour(),
+            $bundle['today'],
+            $bundle['rolling7']
+        );
+        $this->assertEquals($fromPeriods, $fromBundle);
+    }
 }

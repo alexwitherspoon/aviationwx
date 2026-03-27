@@ -54,6 +54,16 @@ class StatusPageTest extends TestCase
         $result = getStatusColor('down');
         $this->assertEquals('red', $result);
     }
+
+    public function testGetStatusColor_Failed_ReturnsRed(): void
+    {
+        $this->assertSame('red', getStatusColor('failed'));
+    }
+
+    public function testGetStatusColor_Standby_ReturnsGray(): void
+    {
+        $this->assertSame('gray', getStatusColor('standby'));
+    }
     
     public function testGetStatusColor_Unknown_ReturnsGray(): void
     {
@@ -71,6 +81,16 @@ class StatusPageTest extends TestCase
     {
         $result = getStatusIcon('unknown');
         $this->assertEquals('○', $result);
+    }
+
+    public function testGetStatusIcon_Failed_ReturnsDot(): void
+    {
+        $this->assertSame('●', getStatusIcon('failed'));
+    }
+
+    public function testGetStatusIcon_Standby_ReturnsHollowCircle(): void
+    {
+        $this->assertSame('○', getStatusIcon('standby'));
     }
     
     public function testFormatRelativeTime_JustNow_ReturnsJustNow(): void
@@ -478,7 +498,7 @@ class StatusPageTest extends TestCase
     {
         $airportId = 'test_webcam_stale_current_mtime';
         if (function_exists('apcu_delete')) {
-            @apcu_delete('webcam_fresh_ts_v1_' . strtolower($airportId) . '_0');
+            @apcu_delete('webcam_fresh_ts_v2_' . strtolower($airportId) . '_0');
         }
 
         $airport = [
@@ -520,6 +540,54 @@ class StatusPageTest extends TestCase
         $this->assertNotSame('down', $cameras[0]['status']);
         $this->assertStringNotContainsString('Stale (failclosed)', $cameras[0]['message']);
         $this->assertSame($olderTs, $cameras[0]['lastChanged']);
+
+        if (file_exists($weatherFile)) {
+            unlink($weatherFile);
+        }
+        $this->deleteWebcamTestTree($airportId);
+    }
+
+    /**
+     * Missing variant manifest must not be treated as 0% coverage or degrade an otherwise healthy camera.
+     */
+    public function testCheckAirportHealth_Webcam_OperationalWhenVariantManifestMissing(): void
+    {
+        $airportId = 'test_webcam_no_variant_manifest';
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('webcam_fresh_ts_v2_' . strtolower($airportId) . '_0');
+        }
+
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+            ],
+            'webcams' => [
+                ['name' => 'Runway', 'type' => 'push'],
+            ],
+        ];
+
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $weatherFile = getWeatherCachePath($airportId);
+        file_put_contents($weatherFile, json_encode([
+            'obs_time_primary' => time() - 120,
+            'temperature' => 10.0,
+        ]));
+
+        $ts = time() - 120;
+        $framesDir = getWebcamFramesDir($airportId, 0, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents($framesDir . '/' . $ts . '_original.jpg', 'x');
+        $this->assertNull(
+            getVariantAvailabilityCounts($airportId, 0, $ts),
+            'Fixture must have no manifest so availability counts are unknown'
+        );
+
+        $health = checkAirportHealth($airportId, $airport);
+        $cameras = $health['components']['webcams']['cameras'] ?? [];
+        $this->assertNotEmpty($cameras);
+        $this->assertSame('operational', $cameras[0]['status']);
+        $this->assertNull($cameras[0]['variant_coverage']);
+        $this->assertStringNotContainsString('variants (low coverage)', $cameras[0]['message']);
 
         if (file_exists($weatherFile)) {
             unlink($weatherFile);

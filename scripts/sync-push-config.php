@@ -1084,7 +1084,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         'username' => $username,
         'airport' => $airportId,
         'cam' => $camIndex,
-        'local_root' => $filesDir
+        'local_root' => $ftpDir
     ], 'app');
     
     return true;

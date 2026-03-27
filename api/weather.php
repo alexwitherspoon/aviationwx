@@ -502,7 +502,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
             
             // Use file-based locking to prevent concurrent refreshes from multiple clients
-            $lockFile = $weatherCacheDir . '/refresh_' . $airportId . '.lock';
+            $lockFile = dirname($weatherCacheFile) . '/refresh_' . $airportId . '.lock';
             
             // Clean up stale locks (older than 5 minutes) - use atomic check-and-delete
             if (file_exists($lockFile)) {

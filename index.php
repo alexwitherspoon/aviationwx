@@ -16,8 +16,8 @@ $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
 $parsedUri = parse_url($requestUri);
 $requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
 
-// Route status.php requests
-if ($requestPath === 'status.php') {
+// Status page: legacy .php path and pretty /status (same handler as ?status=1 / status subdomain)
+if ($requestPath === 'status.php' || $requestPath === 'status') {
     include 'pages/status.php';
     exit;
 }
