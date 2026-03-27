@@ -16,6 +16,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/process-utils.php';
 require_once __DIR__ . '/webcam-metadata.php';
 require_once __DIR__ . '/webcam-variant-manifest.php';
 require_once __DIR__ . '/webcam-image-metrics.php';
