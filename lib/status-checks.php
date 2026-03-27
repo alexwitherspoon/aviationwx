@@ -992,8 +992,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $availableVariants = $variantCounts['available'];
                     $totalVariants = $variantCounts['total'];
                     $variantCoverage = $availableVariants / $totalVariants;
-                } else {
-                    $variantCoverage = 0.0;
                 }
             }
             

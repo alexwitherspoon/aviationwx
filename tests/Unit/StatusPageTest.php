@@ -547,6 +547,54 @@ class StatusPageTest extends TestCase
         $this->deleteWebcamTestTree($airportId);
     }
 
+    /**
+     * Missing variant manifest must not be treated as 0% coverage or degrade an otherwise healthy camera.
+     */
+    public function testCheckAirportHealth_Webcam_OperationalWhenVariantManifestMissing(): void
+    {
+        $airportId = 'test_webcam_no_variant_manifest';
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('webcam_fresh_ts_v2_' . strtolower($airportId) . '_0');
+        }
+
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+            ],
+            'webcams' => [
+                ['name' => 'Runway', 'type' => 'push'],
+            ],
+        ];
+
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $weatherFile = getWeatherCachePath($airportId);
+        file_put_contents($weatherFile, json_encode([
+            'obs_time_primary' => time() - 120,
+            'temperature' => 10.0,
+        ]));
+
+        $ts = time() - 120;
+        $framesDir = getWebcamFramesDir($airportId, 0, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents($framesDir . '/' . $ts . '_original.jpg', 'x');
+        $this->assertNull(
+            getVariantAvailabilityCounts($airportId, 0, $ts),
+            'Fixture must have no manifest so availability counts are unknown'
+        );
+
+        $health = checkAirportHealth($airportId, $airport);
+        $cameras = $health['components']['webcams']['cameras'] ?? [];
+        $this->assertNotEmpty($cameras);
+        $this->assertSame('operational', $cameras[0]['status']);
+        $this->assertNull($cameras[0]['variant_coverage']);
+        $this->assertStringNotContainsString('variants (low coverage)', $cameras[0]['message']);
+
+        if (file_exists($weatherFile)) {
+            unlink($weatherFile);
+        }
+        $this->deleteWebcamTestTree($airportId);
+    }
+
     private function deleteWebcamTestTree(string $airportId): void
     {
         $base = CACHE_WEBCAMS_DIR . '/' . strtolower($airportId);
