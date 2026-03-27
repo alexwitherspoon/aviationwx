@@ -535,10 +535,12 @@ body {
     text-align: center;
 }
 
-.nav-hamburger-pwa-icon {
-    display: inline-block;
-    vertical-align: -0.2em;
-    margin: 0 0.1em;
+.nav-item-icon .nav-hamburger-pwa-icon {
+    display: block;
+    width: 18px;
+    height: 18px;
+    margin: 0 auto;
+    object-fit: contain;
 }
 
 /* Unified dropdown for both search and nearby airports */

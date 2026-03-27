@@ -1365,8 +1365,10 @@ if ($themeCookie === 'dark') {
                     </a>
                     <?php endif; ?>
                     <a href="https://airports.<?= htmlspecialchars(getBaseDomain(), ENT_QUOTES, 'UTF-8') ?>/#add-to-home-screen" class="nav-hamburger-item">
-                        <span class="nav-item-icon" aria-hidden="true"></span>
-                        <span>Add <img src="/public/favicons/android-chrome-192x192.png" alt="" width="18" height="18" decoding="async" class="nav-hamburger-pwa-icon"> to your Home Screen</span>
+                        <span class="nav-item-icon" aria-hidden="true">
+                            <img src="/public/favicons/android-chrome-192x192.png" alt="" width="18" height="18" decoding="async" class="nav-hamburger-pwa-icon">
+                        </span>
+                        <span>Add to your Home Screen</span>
                     </a>
                     <a href="https://embed.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">🔗</span>
