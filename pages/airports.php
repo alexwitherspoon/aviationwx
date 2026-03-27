@@ -1452,7 +1452,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                                 <?php if ($pwaHelpScreenshotAndroid['webp'] !== null): ?>
                                 <source srcset="<?= htmlspecialchars($pwaHelpScreenshotAndroid['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
                                 <?php endif; ?>
-                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotAndroid), ENT_QUOTES, 'UTF-8') ?>" alt="Chrome menu on Android showing Install app or Add to Home screen" loading="lazy" decoding="async">
+                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotAndroid), ENT_QUOTES, 'UTF-8') ?>" alt="Chrome menu on Android showing Install app or Add to Home screen" width="456" height="1024" loading="lazy" decoding="async">
                             </picture>
                             <figcaption>Example: Chrome on Android</figcaption>
                         </figure>
@@ -1474,7 +1474,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                                 <?php if ($pwaHelpScreenshotIos['webp'] !== null): ?>
                                 <source srcset="<?= htmlspecialchars($pwaHelpScreenshotIos['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
                                 <?php endif; ?>
-                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotIos), ENT_QUOTES, 'UTF-8') ?>" alt="Safari share sheet on iPhone showing Add to Home Screen" loading="lazy" decoding="async">
+                                <img src="<?= htmlspecialchars(getPwaHelpScreenshotImgFallback($pwaHelpScreenshotIos), ENT_QUOTES, 'UTF-8') ?>" alt="Safari share sheet on iPhone showing Add to Home Screen" width="589" height="1280" loading="lazy" decoding="async">
                             </picture>
                             <figcaption>Example: Safari on iPhone</figcaption>
                         </figure>
