@@ -505,4 +505,35 @@ function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
     return $uniqueTimestamps[1];
 }
 
+/** APCu TTL for cached last-completed webcam timestamps (limits glob scans on outage polling). */
+if (!defined('WEBCAM_FRESHNESS_APCU_TTL_SECONDS')) {
+    define('WEBCAM_FRESHNESS_APCU_TTL_SECONDS', 45);
+}
+
+/**
+ * Last-completed frame time for staleness (same source as API after promotion; see getLastCompletedImageTimestamp).
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return int Unix timestamp, or 0 if no completed frame files
+ */
+function webcam_get_last_completed_timestamp_for_freshness(string $airportId, int $camIndex): int {
+    $cacheKey = 'webcam_fresh_ts_v1_' . strtolower($airportId) . '_' . $camIndex;
+
+    if (function_exists('apcu_fetch')) {
+        $cached = @apcu_fetch($cacheKey, $success);
+        if ($success && is_int($cached)) {
+            return max(0, $cached);
+        }
+    }
+
+    $ts = getLastCompletedImageTimestamp($airportId, $camIndex);
+
+    if (function_exists('apcu_store')) {
+        @apcu_store($cacheKey, $ts, WEBCAM_FRESHNESS_APCU_TTL_SECONDS);
+    }
+
+    return $ts;
+}
+
 

@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/webcam-metadata.php';
 
 class SourceTimestampsTest extends TestCase
 {
@@ -48,6 +49,58 @@ class SourceTimestampsTest extends TestCase
                 @unlink($file);
             }
         }
+        $webcamBase = CACHE_WEBCAMS_DIR . '/' . strtolower($this->testAirportId);
+        if (is_dir($webcamBase)) {
+            $this->deleteTree($webcamBase);
+        }
+        $this->clearWebcamFreshnessApcuKeys();
+    }
+
+    /**
+     * webcam_get_last_completed_timestamp_for_freshness caches in APCu; clear so tests stay isolated when APCu is on.
+     */
+    private function clearWebcamFreshnessApcuKeys(): void
+    {
+        if (!function_exists('apcu_delete')) {
+            return;
+        }
+        $prefix = 'webcam_fresh_ts_v1_' . strtolower($this->testAirportId) . '_';
+        foreach ([0, 1, 2, 3] as $camIndex) {
+            @apcu_delete($prefix . $camIndex);
+        }
+    }
+
+    private function deleteTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->deleteTree($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
+    }
+
+    private function writeWebcamFrameFile(string $airportId, int $camIndex, int $timestamp): void
+    {
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $path = $framesDir . '/' . $timestamp . '_original.jpg';
+        file_put_contents($path, 'x');
     }
     
     /**
@@ -178,22 +231,14 @@ class SourceTimestampsTest extends TestCase
             ]
         ];
         
-        // Create webcam cache file
-        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
-        $webcamDir = dirname($webcamFile);
-        if (!is_dir($webcamDir)) {
-            mkdir($webcamDir, 0755, true);
-        }
         $webcamTimestamp = time() - 1800; // 30 minutes ago
-        touch($webcamFile, $webcamTimestamp);
+        $this->writeWebcamFrameFile($this->testAirportId, 0, $webcamTimestamp);
         
         $result = getSourceTimestamps($this->testAirportId, $airport);
         
         $this->assertTrue($result['webcams']['available']);
         $this->assertEquals(1, $result['webcams']['total']);
-        // Allow small tolerance for file system timestamp precision
-        $this->assertLessThan(5, abs($result['webcams']['newest_timestamp'] - $webcamTimestamp));
+        $this->assertEquals($webcamTimestamp, $result['webcams']['newest_timestamp']);
     }
     
     /**
@@ -260,24 +305,19 @@ class SourceTimestampsTest extends TestCase
             ]
         ];
         
-        $webcamDir = CACHE_WEBCAMS_DIR;
-        ensureCacheDir($webcamDir);
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
         
         $olderTimestamp = time() - 3600; // 1 hour ago
         $newerTimestamp = time() - 1800; // 30 minutes ago
         
-        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
-        touch($webcamFile, $olderTimestamp);
-        $cam1Dir = getWebcamCameraDir($this->testAirportId, 1);
-        ensureCacheDir($cam1Dir);
-        touch($cam1Dir . '/current.jpg', $newerTimestamp);
+        $this->writeWebcamFrameFile($this->testAirportId, 0, $olderTimestamp);
+        $this->writeWebcamFrameFile($this->testAirportId, 1, $newerTimestamp);
         
         $result = getSourceTimestamps($this->testAirportId, $airport);
         
         $this->assertTrue($result['webcams']['available']);
         $this->assertEquals(2, $result['webcams']['total']);
-        // Should return newest timestamp
-        $this->assertLessThan(5, abs($result['webcams']['newest_timestamp'] - $newerTimestamp));
+        $this->assertEquals($newerTimestamp, $result['webcams']['newest_timestamp']);
     }
 
     /**

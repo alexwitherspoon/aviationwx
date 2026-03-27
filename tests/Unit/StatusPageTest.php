@@ -470,4 +470,92 @@ class StatusPageTest extends TestCase
             unlink($cacheFile);
         }
     }
+
+    /**
+     * Two frames: last-completed is second-newest; stale current.jpg mtime must not produce failclosed.
+     */
+    public function testCheckAirportHealth_Webcam_LastCompletedUsesSecondNewestFrameWhenCurrentMtimeIsStale(): void
+    {
+        $airportId = 'test_webcam_stale_current_mtime';
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('webcam_fresh_ts_v1_' . strtolower($airportId) . '_0');
+        }
+
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345']
+            ],
+            'webcams' => [
+                ['name' => 'Runway', 'type' => 'push']
+            ]
+        ];
+
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $weatherFile = getWeatherCachePath($airportId);
+        file_put_contents($weatherFile, json_encode([
+            'obs_time_primary' => time() - 120,
+            'temperature' => 10.0
+        ]));
+
+        $olderTs = time() - 600;
+        $newerTs = time() - 120;
+        $olderDir = getWebcamFramesDir($airportId, 0, $olderTs);
+        ensureCacheDir($olderDir);
+        file_put_contents($olderDir . '/' . $olderTs . '_original.jpg', 'older');
+        $newerDir = getWebcamFramesDir($airportId, 0, $newerTs);
+        ensureCacheDir($newerDir);
+        file_put_contents($newerDir . '/' . $newerTs . '_original.jpg', 'newer');
+
+        $lastCompletedTs = getLastCompletedImageTimestamp($airportId, 0);
+        $this->assertSame($olderTs, $lastCompletedTs, 'With two frames, last completed must be second-newest');
+
+        $camDir = getWebcamCameraDir($airportId, 0);
+        ensureCacheDir($camDir);
+        touch($camDir . '/current.jpg', time() - 86400 * 10);
+
+        $health = checkAirportHealth($airportId, $airport);
+
+        $cameras = $health['components']['webcams']['cameras'] ?? [];
+        $this->assertNotEmpty($cameras);
+        $this->assertNotSame('down', $cameras[0]['status']);
+        $this->assertStringNotContainsString('Stale (failclosed)', $cameras[0]['message']);
+        $this->assertSame($olderTs, $cameras[0]['lastChanged']);
+
+        if (file_exists($weatherFile)) {
+            unlink($weatherFile);
+        }
+        $this->deleteWebcamTestTree($airportId);
+    }
+
+    private function deleteWebcamTestTree(string $airportId): void
+    {
+        $base = CACHE_WEBCAMS_DIR . '/' . strtolower($airportId);
+        if (!is_dir($base)) {
+            return;
+        }
+        $this->deleteTreeRecursive($base);
+    }
+
+    private function deleteTreeRecursive(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->deleteTreeRecursive($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
+    }
 }
