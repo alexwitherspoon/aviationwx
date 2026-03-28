@@ -2716,6 +2716,43 @@ function resolveWeatherLastUpdatedDate(weather) {
     return null;
 }
 
+// Format relative time (weather "Last updated" and webcams). Must always be defined: airports without
+// webcams omit the webcam-only script block where this used to live, which caused ReferenceError.
+function formatRelativeTime(seconds) {
+    if (isNaN(seconds) || seconds < 0) {
+        return '--';
+    }
+
+    if (seconds < 60) {
+        return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
+    }
+
+    if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
+    }
+
+    if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600);
+        const remainingMinutes = Math.floor((seconds % 3600) / 60);
+
+        if (remainingMinutes === 0) {
+            return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
+        }
+        return hours + (hours === 1 ? ' hour' : ' hours') + ' ' +
+               remainingMinutes + (remainingMinutes === 1 ? ' minute' : ' minutes') + ' ago';
+    }
+
+    const days = Math.floor(seconds / 86400);
+    const remainingHours = Math.floor((seconds % 86400) / 3600);
+
+    if (remainingHours === 0) {
+        return days + (days === 1 ? ' day' : ' days') + ' ago';
+    }
+    return days + (days === 1 ? ' day' : ' days') + ' ' +
+           remainingHours + (remainingHours === 1 ? ' hour' : ' hours') + ' ago';
+}
+
 // Store current weather data globally for toggle re-rendering
 let currentWeatherData = null;
 
@@ -6642,48 +6679,6 @@ function reloadWebcamImages() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
     safeSwapCameraImage(<?= $index ?>);
     <?php endforeach; ?>
-}
-
-// Format relative time with conditional precision
-// Under 1 hour: single unit (e.g., "30 seconds ago", "45 minutes ago")
-// 1 hour or more: two units (e.g., "1 hour 23 minutes ago", "2 days 5 hours ago")
-function formatRelativeTime(seconds) {
-    if (isNaN(seconds) || seconds < 0) {
-        return '--';
-    }
-    
-    // Less than 1 minute: show seconds only
-    if (seconds < 60) {
-        return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
-    }
-    
-    // Less than 1 hour: show minutes only (single unit)
-    if (seconds < 3600) {
-        const minutes = Math.floor(seconds / 60);
-        return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
-    }
-    
-    // 1 hour or more: show two units (hours and minutes)
-    if (seconds < 86400) {
-        const hours = Math.floor(seconds / 3600);
-        const remainingMinutes = Math.floor((seconds % 3600) / 60);
-        
-        if (remainingMinutes === 0) {
-            return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
-        }
-        return hours + (hours === 1 ? ' hour' : ' hours') + ' ' +
-               remainingMinutes + (remainingMinutes === 1 ? ' minute' : ' minutes') + ' ago';
-    }
-    
-    // 1 day or more: show two units (days and hours)
-    const days = Math.floor(seconds / 86400);
-    const remainingHours = Math.floor((seconds % 86400) / 3600);
-    
-    if (remainingHours === 0) {
-        return days + (days === 1 ? ' day' : ' days') + ' ago';
-    }
-    return days + (days === 1 ? ' day' : ' days') + ' ' +
-           remainingHours + (remainingHours === 1 ? ' hour' : ' hours') + ' ago';
 }
 
 function lastCamIndexForElem(elem) {
