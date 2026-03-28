@@ -512,7 +512,9 @@ if (isset($webcam['type']) && $webcam['type'] === 'aviationwx_api') {
 ## Documentation Needs
 
 ### For Airport Operators
-- `docs/FEDERATION_SETUP.md` - How to enable federation
+- `guides/14-self-hosting-and-federation.md` - Self-hosting, optional federation with the main network, and operational expectations
+- `docs/CONFIGURATION.md` - Global config and per-airport `airports.json` (domains, weather sources, keys)
+- `docs/DEPLOYMENT.md` - Production deployment, networking, and host setup
 - API key generation process
 - Security best practices
 - Troubleshooting guide
