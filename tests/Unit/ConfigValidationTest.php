@@ -1292,7 +1292,6 @@ class ConfigValidationTest extends TestCase
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -1505,7 +1504,6 @@ class ConfigValidationTest extends TestCase
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ],
                             'unknown_field' => 'value'
@@ -2074,7 +2072,6 @@ class ConfigValidationTest extends TestCase
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2105,7 +2102,6 @@ class ConfigValidationTest extends TestCase
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'port' => 2121,
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2140,7 +2136,6 @@ class ConfigValidationTest extends TestCase
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2169,7 +2164,6 @@ class ConfigValidationTest extends TestCase
                             'type' => 'push',
                             'push_config' => [
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2199,7 +2193,6 @@ class ConfigValidationTest extends TestCase
                             'type' => 'push',
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2231,7 +2224,6 @@ class ConfigValidationTest extends TestCase
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'port' => 70000,
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
                             ]
                         ]
@@ -2293,7 +2285,6 @@ class ConfigValidationTest extends TestCase
                             'push_config' => [
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
-                                'max_file_size_mb' => 25,
                                 'allowed_extensions' => 'not-an-array'
                             ]
                         ]
