@@ -632,7 +632,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
-            CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
+            CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
             CURLOPT_HEADERFUNCTION => $headerCallback,
         ];
         if (!empty($headers)) {
@@ -794,7 +794,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         $jpegData = substr($data, $jpegStart, $jpegEnd - $jpegStart + 2);
         $jpegSize = strlen($jpegData);
 
-        if ($jpegSize < 1024 || $jpegSize > CACHE_FILE_MAX_SIZE) {
+        if ($jpegSize < 1024 || $jpegSize > getCacheFileMaxSizeBytes()) {
             $this->recordFailure('invalid_size', 'transient');
             return AcquisitionResult::failure('invalid_size', 'mjpeg', ['size' => $jpegSize]);
         }
@@ -1182,8 +1182,14 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return ['valid' => false, 'reason' => 'size_too_small', 'size' => $size];
         }
 
-        // Check maximum size
-        $maxSizeBytes = ($pushConfig['max_file_size_mb'] ?? 100) * 1024 * 1024;
+        // Check maximum size: inherit global cap when omitted; per-camera cap cannot exceed global
+        $globalBytes = getCacheFileMaxSizeBytes();
+        if (!isset($pushConfig['max_file_size_mb'])) {
+            $maxSizeBytes = $globalBytes;
+        } else {
+            $perCamBytes = (int) $pushConfig['max_file_size_mb'] * 1024 * 1024;
+            $maxSizeBytes = min($perCamBytes, $globalBytes);
+        }
         if ($size > $maxSizeBytes) {
             return ['valid' => false, 'reason' => 'size_limit_exceeded', 'size' => $size, 'max' => $maxSizeBytes];
         }

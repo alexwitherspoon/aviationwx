@@ -20,6 +20,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `network_ports` | — | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
+| `cache_file_max_size_mb` | `25` | Max size in MiB for webcam pipeline loads, HTTP/MJPEG pull downloads, partner logo fetches, and **default** push upload acceptance (integer **1--100**). |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
 | `notam_refresh_seconds` | `600` | NOTAM refresh interval |
@@ -148,7 +149,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | **Push Options** |||
 | `push_config.username` | — | 14 alphanumeric chars |
 | `push_config.password` | — | 14 alphanumeric chars |
-| `push_config.max_file_size_mb` | `100` | Max upload size (1-100 MB) |
+| `push_config.max_file_size_mb` | *(inherit global)* | Optional per-camera cap (integer **1** through **`config.cache_file_max_size_mb`**). Omit to use the global `cache_file_max_size_mb` for FTP/SFTP acceptance. Set lower to limit a single camera (bandwidth or policy). |
 | `push_config.allowed_extensions` | `["jpg","jpeg","png"]` | Allowed file types |
 | `push_config.upload_file_max_age_seconds` | `1800` | Max file age before abandonment (600-7200) |
 | `push_config.stability_check_timeout_seconds` | `15` | Stability check timeout (10-30) |

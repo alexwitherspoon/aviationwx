@@ -2273,7 +2273,7 @@ class ConfigValidationTest extends TestCase
         
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Push config with invalid max_file_size_mb should fail validation');
-        $this->assertStringContainsString('max_file_size_mb must be positive integer', implode(' ', $result['errors']));
+        $this->assertStringContainsString('max_file_size_mb must be between 1 and 25', implode(' ', $result['errors']));
     }
 
     public function testPushConfig_InvalidAllowedExtensions()
@@ -3236,6 +3236,49 @@ class ConfigValidationTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Global config with invalid webcam_refresh_default should fail validation');
         $this->assertStringContainsString('webcam_refresh_default must be a positive integer', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_InvalidCacheFileMaxSizeMb()
+    {
+        $config = [
+            'config' => [
+                'cache_file_max_size_mb' => 0
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with invalid cache_file_max_size_mb should fail validation');
+        $this->assertStringContainsString('cache_file_max_size_mb must be an integer between 1 and 100', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_ValidCacheFileMaxSizeMb()
+    {
+        $config = [
+            'config' => [
+                'cache_file_max_size_mb' => 50
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid cache_file_max_size_mb should pass validation');
     }
 
     public function testGlobalConfig_InvalidWeatherRefreshDefault()

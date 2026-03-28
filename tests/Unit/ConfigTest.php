@@ -629,4 +629,11 @@ class ConfigTest extends TestCase {
         $this->assertGreaterThanOrEqual(-180.0, $result);
         $this->assertLessThanOrEqual(180.0, $result);
     }
+
+    /**
+     * Default webcam cache file cap matches CACHE_FILE_MAX_SIZE when fixture omits config key
+     */
+    public function testGetCacheFileMaxSizeBytes_MatchesConstantDefault(): void {
+        $this->assertSame(CACHE_FILE_MAX_SIZE, getCacheFileMaxSizeBytes());
+    }
 }
