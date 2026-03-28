@@ -100,10 +100,20 @@
 
         const runwayScale = 0.86;
         const LABEL_POSITION = 0.93;
-        const MIN_LABEL_DIST = 18;
 
         const segments = full.runwaySegments || [];
-        const labelPositions = [];
+
+        const fieldObsTimeMap = full.fieldObsTimeMap || {};
+        const isMetarOnly = full.isMetarOnly || false;
+        const staleFailclosed = full.staleFailclosedSeconds || 10800;
+        const metarStaleFailclosed = full.metarStaleFailclosedSeconds || 10800;
+
+        const windStale = isFieldStale('wind_speed', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed) ||
+            isFieldStale('wind_direction', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed);
+
+        const windSpeed = options.windSpeed ?? null;
+        const isVRB = options.isVRB ?? false;
+        const willShowCenterText = !windStale && (windSpeed === null || windSpeed === undefined || windSpeed < CALM_WIND_THRESHOLD || isVRB);
 
         segments.forEach(function(seg) {
             const sx = (seg.start && seg.start[0]) || 0;
@@ -123,72 +133,21 @@
             ctx.moveTo(startX, startY);
             ctx.lineTo(endX, endY);
             ctx.stroke();
-
-            const leIdent = seg.le_ident || '';
-            const heIdent = seg.he_ident || '';
-            const labelAtStart = LABEL_POSITION * sx + (1 - LABEL_POSITION) * ex;
-            const labelAtStartY = LABEL_POSITION * sy + (1 - LABEL_POSITION) * ey;
-            const labelAtEnd = LABEL_POSITION * ex + (1 - LABEL_POSITION) * sx;
-            const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
-            const identAtStart = seg.ident_at_start !== undefined ? seg.ident_at_start : leIdent;
-            const identAtEnd = seg.ident_at_end !== undefined ? seg.ident_at_end : heIdent;
-
-            const xStart = cx + rw * labelAtStart;
-            const yStart = cy - rw * labelAtStartY;
-            const xEnd = cx + rw * labelAtEnd;
-            const yEnd = cy - rw * labelAtEndY;
-            const dirStartX = sx - ex;
-            const dirStartY = -(sy - ey);
-            const dirEndX = ex - sx;
-            const dirEndY = -(ey - sy);
-            const dStart = Math.sqrt(dirStartX * dirStartX + dirStartY * dirStartY) || 1;
-            const dEnd = Math.sqrt(dirEndX * dirEndX + dirEndY * dirEndY) || 1;
-            const distStartToStart = Math.hypot(startX - xStart, startY - yStart);
-            const distStartToEnd = Math.hypot(endX - xStart, endY - yStart);
-            const distEndToStart = Math.hypot(startX - xEnd, startY - yEnd);
-            const distEndToEnd = Math.hypot(endX - xEnd, endY - yEnd);
-            const pushStart = distStartToEnd > distStartToStart ? 1 : -1;
-            const pushEnd = distEndToStart > distEndToEnd ? 1 : -1;
-            labelPositions.push({
-                x: xStart, y: yStart, ident: identAtStart, origX: xStart, origY: yStart,
-                dirX: dirStartX / dStart, dirY: dirStartY / dStart, pushSign: pushStart
-            });
-            labelPositions.push({
-                x: xEnd, y: yEnd, ident: identAtEnd, origX: xEnd, origY: yEnd,
-                dirX: dirEndX / dEnd, dirY: dirEndY / dEnd, pushSign: pushEnd
-            });
         });
 
-        for (let i = 0; i < labelPositions.length; i++) {
-            for (let j = i + 1; j < labelPositions.length; j++) {
-                const a = labelPositions[i];
-                const b = labelPositions[j];
-                const dx = b.x - a.x;
-                const dy = b.y - a.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < MIN_LABEL_DIST && dist > 0) {
-                    const push = (MIN_LABEL_DIST - dist) / 2;
-                    if (a.dirX !== undefined && a.dirY !== undefined) {
-                        const sign = a.pushSign !== undefined ? a.pushSign : -1;
-                        a.x -= sign * a.dirX * push;
-                        a.y -= sign * a.dirY * push;
-                    }
-                    if (b.dirX !== undefined && b.dirY !== undefined) {
-                        const sign = b.pushSign !== undefined ? b.pushSign : -1;
-                        b.x -= sign * b.dirX * push;
-                        b.y -= sign * b.dirY * push;
-                    }
-                }
-            }
-        }
-
-        const fieldObsTimeMap = full.fieldObsTimeMap || {};
-        const isMetarOnly = full.isMetarOnly || false;
-        const staleFailclosed = full.staleFailclosedSeconds || 10800;
-        const metarStaleFailclosed = full.metarStaleFailclosedSeconds || 10800;
-
-        const windStale = isFieldStale('wind_speed', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed) ||
-            isFieldStale('wind_direction', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed);
+        // On-segment label layout (overlap + hub when CALM/VRB); public/js/runway-label-layout.js
+        const layoutApi = window.AviationWX && window.AviationWX.runwayLabelLayout;
+        const labelPositions = (layoutApi && typeof layoutApi.computeRunwayLabelPositions === 'function')
+            ? layoutApi.computeRunwayLabelPositions({
+                cx: cx,
+                cy: cy,
+                r: r,
+                segments: segments,
+                willShowCenterText: willShowCenterText,
+                runwayScale: runwayScale,
+                labelPosition: LABEL_POSITION
+            })
+            : [];
 
         const lastHourWind = full.lastHourWind;
         const periodLabel = full.periodLabel || 'last hour';
@@ -200,9 +159,7 @@
             drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
         }
 
-        const windSpeed = options.windSpeed ?? null;
         const windDirRaw = options.windDirection ?? null;
-        const isVRB = options.isVRB ?? false;
         const windDirMag = full.windDirectionMagnetic;
 
         let windDirNumeric = null;
@@ -258,20 +215,6 @@
                     ctx.fillText('CALM', cx, cy);
                 }
             }
-        }
-
-        const willShowCenterText = !windStale && (windSpeed === null || windSpeed === undefined || windSpeed < CALM_WIND_THRESHOLD || isVRB);
-        if (willShowCenterText) {
-            const CENTER_EXCLUSION = 48;
-            labelPositions.forEach(function(lp) {
-                const dist = Math.sqrt((lp.x - cx) ** 2 + (lp.y - cy) ** 2);
-                if (dist < CENTER_EXCLUSION && lp.dirX !== undefined && lp.dirY !== undefined) {
-                    const push = CENTER_EXCLUSION - dist;
-                    const sign = lp.pushSign !== undefined ? lp.pushSign : -1;
-                    lp.x -= sign * lp.dirX * push;
-                    lp.y -= sign * lp.dirY * push;
-                }
-            });
         }
 
         ctx.font = 'bold 14px sans-serif';

@@ -25,7 +25,8 @@ const DEFAULT_FILES = [
   'public/js/service-worker.js',
   'public/js/webcam-player-utils.js',
   'public/js/webcam-player-scroll-lock.js',
-  'public/js/weather-timestamp-utils.js'
+  'public/js/weather-timestamp-utils.js',
+  'public/js/runway-label-layout.js'
 ];
 
 // Parse command line arguments

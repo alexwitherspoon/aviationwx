@@ -180,6 +180,7 @@ switch ($style) {
     <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars(strtoupper($airportId)) ?> Weather Widget</title>
     <link rel="stylesheet" href="/public/css/embed-widgets.css">
+    <script src="/public/js/runway-label-layout.js"></script>
     <script src="/public/js/embed-wind-compass.js"></script>
     <style>
         /* Ensure full viewport usage for iframe */

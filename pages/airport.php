@@ -2109,6 +2109,7 @@ if ($themeCookie === 'dark') {
     <script src="/public/js/webcam-player-utils.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/weather-timestamp-utils.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/runway-label-layout.js?v=<?= $buildHashShort ?>"></script>
     <?php
     ob_start();
     ?>
@@ -3732,23 +3733,27 @@ function updateWeatherTimestamp() {
     try {
         const weatherEl = document.getElementById('weather-last-updated');
         const windEl = document.getElementById('wind-last-updated');
-        
-        if (!weatherEl || !windEl) {
+        if (!weatherEl && !windEl) {
             console.warn('[Weather] Timestamp elements not found');
             return;
         }
-        
+        const setBoth = function (text) {
+            if (weatherEl) {
+                weatherEl.textContent = text;
+            }
+            if (windEl) {
+                windEl.textContent = text;
+            }
+        };
         if (weatherLastUpdated === null) {
-            weatherEl.textContent = '--';
-            windEl.textContent = '--';
+            setBoth('--');
             return;
         }
     
     // When clock skew detected: show absolute observation time only (no relative - client time unreliable)
     if (clientClockSkewDetected) {
         const timeStr = formatObservationTimeForClockSkew(Math.floor(weatherLastUpdated.getTime() / 1000));
-        weatherEl.textContent = timeStr;
-        windEl.textContent = timeStr;
+        setBoth(timeStr);
         // Hide staleness warnings - we cannot compute them reliably when client clock is wrong
         const weatherWarningEl = document.getElementById('weather-timestamp-warning');
         const windWarningEl = document.getElementById('wind-timestamp-warning');
@@ -3830,11 +3835,10 @@ function updateWeatherTimestamp() {
         timeStr = formatRelativeTime(diffSeconds);
     }
     
-        weatherEl.textContent = timeStr;
-        windEl.textContent = timeStr;
+        setBoth(timeStr);
         
         // Apply visual styling based on staleness
-        [weatherEl, windEl].forEach(el => {
+        [weatherEl, windEl].filter(Boolean).forEach(el => {
             if (isVeryStale) {
                 el.style.color = '#c00'; // Red for very stale
                 el.style.fontWeight = 'bold';
@@ -4193,7 +4197,11 @@ async function fetchWeather(forceRefresh = false) {
             }
             
             const isStale = data.stale === true || false;
-            const serverTsSec = window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp(data.weather);
+            const pickTs = window.AviationWX && window.AviationWX.weatherTimestamp &&
+                typeof window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp === 'function'
+                ? window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp
+                : null;
+            const serverTsSec = pickTs ? pickTs(data.weather) : null;
             const serverTimestamp = serverTsSec !== null ? new Date(serverTsSec * 1000) : null;
             
             // Solution C: Detect if server data is older than client data (indicates stale cache was served)
@@ -4710,12 +4718,30 @@ function updateWindVisual(weather) {
     // Draw outer circle
     ctx.strokeStyle = colors.circle; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
 
-    // Runway segments are pre-rotated to magnetic north in PHP (lib/heading-conversion.php)
-    const runwayScale = 0.86; // Runways extend to 86% of circle (14% buffer; was 72%/28%)
-    const LABEL_POSITION = 0.93; // Place labels at 93% along runway (7% inward from end)
-    const MIN_LABEL_DIST = 18;
+    // Wind fields (needed before runway labels: hub clearance when CALM/VRB is centered)
+    const CALM_WIND_THRESHOLD = 3;
+    const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+        ? AIRPORT_DATA.weather_refresh_seconds 
+        : 60;
+    const sourcesConfigured = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const isMetarOnly = sourcesConfigured && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
+                      isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
+    const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly);
+    const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
+    const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, isMetarOnly);
+    const wdObj = weather.wind_direction;
+    const wdMag = (wdObj && typeof wdObj === 'object') ? wdObj.magnetic_north : weather.wind_direction_magnetic;
+    const wd = windDirectionStale ? null : (wdMag ?? null);
+    const isVariableWind = (wdObj && typeof wdObj === 'object') ? !!wdObj.variable : (wd === 'VRB' || wd === 'vrb' || (weather.wind_direction_text || '') === 'VRB');
+    const windDirNumeric = typeof wd === 'number' && wd >= 0 && wd <= 360 ? wd : null;
+    const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
+    const willShowCenterText = !windStale && (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD || isVariableWind);
 
-    const labelPositions = [];
+    // Runway segments are pre-rotated to magnetic north in PHP (lib/heading-conversion.php)
+    const runwayScale = 0.86;
+    const LABEL_POSITION = 0.93;
+
     RUNWAY_SEGMENTS.forEach((seg) => {
         const [sx, sy] = seg.start;
         const [ex, ey] = seg.end;
@@ -4724,7 +4750,6 @@ function updateWindVisual(weather) {
         const startY = cy - rw * sy;
         const endX = cx + rw * ex;
         const endY = cy - rw * ey;
-        
         ctx.strokeStyle = colors.runway;
         ctx.lineWidth = 8;
         ctx.lineCap = 'round';
@@ -4732,87 +4757,22 @@ function updateWindVisual(weather) {
         ctx.moveTo(startX, startY);
         ctx.lineTo(endX, endY);
         ctx.stroke();
-        
-        const leIdent = seg.le_ident || '';
-        const heIdent = seg.he_ident || '';
-        // Place labels at 93% along runway line (7% inward from each end) to reduce overlap at intersections
-        const labelAtStart = LABEL_POSITION * sx + (1 - LABEL_POSITION) * ex;
-        const labelAtStartY = LABEL_POSITION * sy + (1 - LABEL_POSITION) * ey;
-        const labelAtEnd = LABEL_POSITION * ex + (1 - LABEL_POSITION) * sx;
-        const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
-        const identAtStart = seg.ident_at_start ?? leIdent;
-        const identAtEnd = seg.ident_at_end ?? heIdent;
-        const xStart = cx + rw * labelAtStart;
-        const yStart = cy - rw * labelAtStartY;
-        const xEnd = cx + rw * labelAtEnd;
-        const yEnd = cy - rw * labelAtEndY;
-        const dirStartX = sx - ex;
-        const dirStartY = -(sy - ey);
-        const dirEndX = ex - sx;
-        const dirEndY = -(ey - sy);
-        const dStart = Math.sqrt(dirStartX * dirStartX + dirStartY * dirStartY) || 1;
-        const dEnd = Math.sqrt(dirEndX * dirEndX + dirEndY * dirEndY) || 1;
-        const distStartToStart = Math.hypot(startX - xStart, startY - yStart);
-        const distStartToEnd = Math.hypot(endX - xStart, endY - yStart);
-        const distEndToStart = Math.hypot(startX - xEnd, startY - yEnd);
-        const distEndToEnd = Math.hypot(endX - xEnd, endY - yEnd);
-        const pushStart = distStartToEnd > distStartToStart ? 1 : -1;
-        const pushEnd = distEndToStart > distEndToEnd ? 1 : -1;
-        labelPositions.push({
-            x: xStart,
-            y: yStart,
-            ident: identAtStart,
-            origX: xStart,
-            origY: yStart,
-            dirX: dirStartX / dStart,
-            dirY: dirStartY / dStart,
-            pushSign: pushStart
-        });
-        labelPositions.push({
-            x: xEnd,
-            y: yEnd,
-            ident: identAtEnd,
-            origX: xEnd,
-            origY: yEnd,
-            dirX: dirEndX / dEnd,
-            dirY: dirEndY / dEnd,
-            pushSign: pushEnd
-        });
     });
-    
-    // Resolve label overlaps by pushing each inward along its runway (keeps labels on runways)
-    for (let i = 0; i < labelPositions.length; i++) {
-        for (let j = i + 1; j < labelPositions.length; j++) {
-            const a = labelPositions[i];
-            const b = labelPositions[j];
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < MIN_LABEL_DIST && dist > 0) {
-                const push = (MIN_LABEL_DIST - dist) / 2;
-                if (a.dirX !== undefined && a.dirY !== undefined) {
-                    const sign = a.pushSign !== undefined ? a.pushSign : -1;
-                    a.x -= sign * a.dirX * push;
-                    a.y -= sign * a.dirY * push;
-                }
-                if (b.dirX !== undefined && b.dirY !== undefined) {
-                    const sign = b.pushSign !== undefined ? b.pushSign : -1;
-                    b.x -= sign * b.dirX * push;
-                    b.y -= sign * b.dirY * push;
-                }
-            }
-        }
-    }
-    
-    // Check if wind data is stale before displaying wind indicators
-    const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
-        ? AIRPORT_DATA.weather_refresh_seconds 
-        : 60;
-    const sourcesConfigured = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    const isMetarOnly = sourcesConfigured && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
-    const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
-                      isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
-    
+
+    // On-segment label layout (overlap + hub when CALM/VRB); public/js/runway-label-layout.js
+    const layoutApi = window.AviationWX && window.AviationWX.runwayLabelLayout;
+    const labelPositions = (layoutApi && typeof layoutApi.computeRunwayLabelPositions === 'function')
+        ? layoutApi.computeRunwayLabelPositions({
+            cx: cx,
+            cy: cy,
+            r: r,
+            segments: RUNWAY_SEGMENTS,
+            willShowCenterText: willShowCenterText,
+            runwayScale: runwayScale,
+            labelPosition: LABEL_POSITION
+        })
+        : [];
+
     // Draw wind rose petals (last hour) when available - before wind indicators
     const lhwRaw = weather.last_hour_wind;
     const lastHourWind = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.sectors) ? lhwRaw.sectors : lhwRaw;
@@ -4824,20 +4784,6 @@ function updateWindVisual(weather) {
         drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
     }
 
-    // Check staleness for individual wind fields for details panel
-    const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly);
-    const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
-    const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, isMetarOnly);
-    
-    // Use sanitized values for details panel (null out stale fields)
-    // Display: wind_direction.magnetic_north (fail closed); staleness uses wind_direction
-    const wdObj = weather.wind_direction;
-    const wdMag = (wdObj && typeof wdObj === 'object') ? wdObj.magnetic_north : weather.wind_direction_magnetic;
-    const wd = windDirectionStale ? null : (wdMag ?? null);
-    const isVariableWind = (wdObj && typeof wdObj === 'object') ? !!wdObj.variable : (wd === 'VRB' || wd === 'vrb' || (weather.wind_direction_text || '') === 'VRB');
-    // Allow 0° (north wind) - check for number type and valid range (0-360)
-    const windDirNumeric = typeof wd === 'number' && wd >= 0 && wd <= 360 ? wd : null;
-    
     // Get today's peak gust from server (daily tracking, never stale)
     const todaysPeakGust = weather.peak_gust_today || 0;
     
@@ -4850,10 +4796,8 @@ function updateWindVisual(weather) {
     
     // Get gust speed/peak gust value (null if stale)
     const gustSpeed = gustSpeedStale ? null : (weather.gust_speed || weather.peak_gust || null);
-    const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
 
     const windUnitLabel = getWindSpeedUnitLabel();
-    const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
     windDetails.innerHTML = `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Speed:</span>
@@ -4970,20 +4914,6 @@ function updateWindVisual(weather) {
         }
     }
     // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
-
-    const willShowCenterText = !windStale && (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD || isVariableWind);
-    if (willShowCenterText) {
-        const CENTER_EXCLUSION = 48;
-        labelPositions.forEach((lp) => {
-            const dist = Math.sqrt((lp.x - cx) ** 2 + (lp.y - cy) ** 2);
-            if (dist < CENTER_EXCLUSION && lp.dirX !== undefined && lp.dirY !== undefined) {
-                const push = CENTER_EXCLUSION - dist;
-                const sign = lp.pushSign !== undefined ? lp.pushSign : -1;
-                lp.x -= sign * lp.dirX * push;
-                lp.y -= sign * lp.dirY * push;
-            }
-        });
-    }
 
     // Draw runway labels (after petals/arrow so labels sit on top)
     // Baseline level with screen for readability (counter-rotate when canvas is rotated)
@@ -7323,19 +7253,25 @@ if (hasWeatherSources) {
     // Display initial weather data immediately if available (from cache)
     if (typeof INITIAL_WEATHER_DATA !== 'undefined' && INITIAL_WEATHER_DATA !== null) {
         currentWeatherData = INITIAL_WEATHER_DATA;
-        const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
-            ? AIRPORT_DATA.weather_refresh_seconds 
-            : 60;
-        displayWeather(INITIAL_WEATHER_DATA);
-        updateWindVisual(INITIAL_WEATHER_DATA);
-        
-        // Set initial timestamp from embedded cache (see public/js/weather-timestamp-utils.js)
-        const initialTsSec = window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp(INITIAL_WEATHER_DATA);
-        if (initialTsSec !== null) {
+
+        // Timestamp before wind canvas: if updateWindVisual throws, we still show recency and fetchWeather still runs
+        const tsPicker = window.AviationWX && window.AviationWX.weatherTimestamp &&
+            typeof window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp === 'function'
+            ? window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp
+            : null;
+        const initialTsSec = tsPicker ? tsPicker(INITIAL_WEATHER_DATA) : null;
+        if (initialTsSec !== null && Number.isFinite(initialTsSec) && initialTsSec > 0) {
             weatherLastUpdated = new Date(initialTsSec * 1000);
             updateWeatherTimestamp();
         }
-        
+
+        displayWeather(INITIAL_WEATHER_DATA);
+        try {
+            updateWindVisual(INITIAL_WEATHER_DATA);
+        } catch (e) {
+            console.error('[Weather] updateWindVisual failed (initial cache):', e);
+        }
+
         console.log('[Weather] Initial data displayed from cache');
     } else {
         // No initial weather data available - show empty fields
