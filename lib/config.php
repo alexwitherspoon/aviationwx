@@ -4055,7 +4055,14 @@ function validateAirportsJsonStructure(array $config): array {
                                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.port must be 1-65535, got: {$port}";
                                         }
                                     }
-                                    // max_file_size_mb: validated in validatePushWebcamConfig() (first airports loop)
+                                    if (isset($pushConfig['max_file_size_mb'])) {
+                                        $globalMb = getCacheFileMaxSizeMbFromRootConfig($config);
+                                        $upper = min(100, $globalMb);
+                                        $maxSize = intval($pushConfig['max_file_size_mb']);
+                                        if ($maxSize < 1 || $maxSize > $upper) {
+                                            $errors[] = "Airport '{$airportCode}' webcam index {$idx}: max_file_size_mb must be between 1 and {$upper} (global cache_file_max_size_mb is {$globalMb}; omit key to inherit)";
+                                        }
+                                    }
                                     if (isset($pushConfig['allowed_extensions']) && !is_array($pushConfig['allowed_extensions'])) {
                                         $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions must be an array";
                                     }
