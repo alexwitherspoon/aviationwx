@@ -1,18 +1,15 @@
 /**
  * Weather timestamp utilities -- safety-critical unit tests (JavaScript)
  *
- * Pilots rely on "Last updated" to judge observation recency. pickWeatherUnixTimestamp
- * must return a consistent Unix second from cache/API payloads that may omit
- * aggregate last_updated but include source-specific times. lastUpdatedDateFromWeather
- * must never yield an invalid Date for UI formatting.
- *
- * Regression: embedded PHP cache and API JSON may use numeric strings; init order must
- * not depend on wind canvas (covered by lastUpdatedDateFromWeather contract tests).
+ * Pilots rely on "Last updated" to judge observation recency. The airport UI uses
+ * observation times (METAR/sensor obs, field map) rather than fetch/cache times when available.
  *
  * Run with: node tests/js/weather-timestamp-utils.test.js
  */
 
 const {
+    pickFetchUnixTimestamp,
+    pickObservationUnixTimestamp,
     pickWeatherUnixTimestamp,
     lastUpdatedDateFromWeather
 } = require('../../public/js/weather-timestamp-utils.js');
@@ -49,49 +46,29 @@ function assertNull(actual, message) {
 function runTests() {
     console.log('\nWeather timestamp utilities (safety-critical)\n' + '='.repeat(50));
 
-    test('null input returns null', () => {
+    test('pickWeatherUnixTimestamp: null input returns null', () => {
         assertNull(pickWeatherUnixTimestamp(null), 'null');
     });
 
-    test('undefined input returns null', () => {
+    test('pickWeatherUnixTimestamp: undefined input returns null', () => {
         assertNull(pickWeatherUnixTimestamp(undefined), 'undefined');
     });
 
-    test('non-object input returns null', () => {
+    test('pickWeatherUnixTimestamp: non-object input returns null', () => {
         assertNull(pickWeatherUnixTimestamp('x'), 'string');
         assertNull(pickWeatherUnixTimestamp(42), 'number');
     });
 
-    test('empty object returns null', () => {
+    test('pickWeatherUnixTimestamp: empty object returns null', () => {
         assertNull(pickWeatherUnixTimestamp({}), 'empty');
     });
 
-    test('only last_updated (positive) is returned', () => {
+    test('pickWeatherUnixTimestamp: only last_updated (positive) is returned', () => {
         const t = 1_700_000_000;
         assertStrictEqual(pickWeatherUnixTimestamp({ last_updated: t }), t, 'last_updated');
     });
 
-    test('only last_updated_primary is returned', () => {
-        const t = 1_700_000_100;
-        assertStrictEqual(pickWeatherUnixTimestamp({ last_updated_primary: t }), t, 'primary');
-    });
-
-    test('only last_updated_metar is returned', () => {
-        const t = 1_700_000_200;
-        assertStrictEqual(pickWeatherUnixTimestamp({ last_updated_metar: t }), t, 'metar');
-    });
-
-    test('only obs_time_metar is returned', () => {
-        const t = 1_700_000_300;
-        assertStrictEqual(pickWeatherUnixTimestamp({ obs_time_metar: t }), t, 'obs metar');
-    });
-
-    test('only obs_time_primary is returned', () => {
-        const t = 1_700_000_400;
-        assertStrictEqual(pickWeatherUnixTimestamp({ obs_time_primary: t }), t, 'obs primary');
-    });
-
-    test('missing aggregate last_updated uses max of other fields (s33-style cache)', () => {
+    test('pickWeatherUnixTimestamp: missing aggregate last_updated uses max of other fields', () => {
         const a = 1_700_000_500;
         const b = 1_700_000_800;
         assertStrictEqual(
@@ -104,7 +81,54 @@ function runTests() {
         );
     });
 
-    test('s33-like embedded cache: numbers only still resolves', () => {
+    test('pickObservationUnixTimestamp ignores newer fetch when observation is older', () => {
+        const obs = 1_700_000_000;
+        const fetchTs = 1_700_000_900;
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                obs_time_metar: obs,
+                last_updated_metar: fetchTs,
+                last_updated: fetchTs
+            }),
+            obs,
+            'prefer obs over fetch'
+        );
+    });
+
+    test('pickObservationUnixTimestamp: max across obs_time and field map', () => {
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                obs_time_metar: 100,
+                _field_obs_time_map: { temperature: 150, wind_speed: 120 }
+            }),
+            150,
+            'max observation'
+        );
+    });
+
+    test('pickObservationUnixTimestamp falls back to fetch when no observation metadata', () => {
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                last_updated_metar: 1_800_000_000,
+                last_updated: 1_800_000_000
+            }),
+            1_800_000_000,
+            'fetch fallback'
+        );
+    });
+
+    test('pickFetchUnixTimestamp only uses last_updated*', () => {
+        assertStrictEqual(
+            pickFetchUnixTimestamp({
+                last_updated_metar: 50,
+                obs_time_metar: 999
+            }),
+            50,
+            'ignores obs'
+        );
+    });
+
+    test('s33-like: legacy pick max includes fetch; UI uses observation', () => {
         const w = {
             wind_speed: 0,
             last_updated_primary: null,
@@ -112,14 +136,16 @@ function runTests() {
             last_updated: 1_774_722_052,
             obs_time_metar: 1_774_721_700
         };
-        assertStrictEqual(pickWeatherUnixTimestamp(w), 1_774_722_052, 'max timestamp');
+        assertStrictEqual(pickWeatherUnixTimestamp(w), 1_774_722_052, 'max includes fetch');
+        assertStrictEqual(pickObservationUnixTimestamp(w), 1_774_721_700, 'observation only');
         const d = lastUpdatedDateFromWeather(w);
         if (d === null || !Number.isFinite(d.getTime())) {
-            throw new Error('expected valid Date from s33-like payload');
+            throw new Error('expected valid Date');
         }
+        assertStrictEqual(d.getTime(), 1_774_721_700 * 1000, 'UI matches observation');
     });
 
-    test('numeric string last_updated is coerced (JSON/PHP edge shapes)', () => {
+    test('numeric string last_updated is coerced (pickWeatherUnixTimestamp)', () => {
         assertStrictEqual(
             pickWeatherUnixTimestamp({ last_updated: '1700000000' }),
             1_700_000_000,
@@ -153,7 +179,7 @@ function runTests() {
         );
     });
 
-    test('all candidates present: returns maximum (freshest)', () => {
+    test('pickWeatherUnixTimestamp: all scalar candidates returns maximum', () => {
         assertStrictEqual(
             pickWeatherUnixTimestamp({
                 last_updated: 100,
@@ -164,6 +190,18 @@ function runTests() {
             }),
             300,
             'max'
+        );
+    });
+
+    test('pickWeatherUnixTimestamp: includes _field_obs_time_map in max', () => {
+        assertStrictEqual(
+            pickWeatherUnixTimestamp({
+                last_updated: 100,
+                obs_time_metar: 200,
+                _field_obs_time_map: { temperature: 400 }
+            }),
+            400,
+            'field map max'
         );
     });
 
@@ -191,7 +229,7 @@ function runTests() {
         );
     });
 
-    test('lastUpdatedDateFromWeather returns null when pick returns null', () => {
+    test('lastUpdatedDateFromWeather returns null when no timestamps', () => {
         assertNull(lastUpdatedDateFromWeather({}), 'empty');
     });
 

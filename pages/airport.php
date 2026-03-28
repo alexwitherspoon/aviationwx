@@ -1639,7 +1639,7 @@ if ($themeCookie === 'dark') {
                         <span id="wind-speed-unit-display">kts</span>
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="wind-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="wind-last-updated">--</span></p>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="wind-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="wind-last-updated" title="Latest observation time for displayed data (not server fetch time when observation times are present)">--</span></p>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: center;">
                 <div id="wind-visual" class="wind-visual-container">
@@ -1693,7 +1693,7 @@ if ($themeCookie === 'dark') {
                         </button>
                     </div>
                 </div>
-                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
+                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated" title="Latest observation time for displayed data (not server fetch time when observation times are present)">--</span></p>
             </div>
             <div id="weather-data" class="weather-grid">
                 <div class="weather-item loading">
@@ -2692,7 +2692,7 @@ let weatherLastUpdated = null;
 
 /**
  * Best-effort Date for "last updated" from a weather payload (see public/js/weather-timestamp-utils.js).
- * Uses lastUpdatedDateFromWeather when available so Invalid Date never reaches relative-time formatting.
+ * Uses lastUpdatedDateFromWeather when available (observation time, not fetch time when obs metadata exists).
  *
  * @param {object} weather Weather from embedded cache or API
  * @returns {Date|null}
@@ -2704,6 +2704,14 @@ function resolveWeatherLastUpdatedDate(weather) {
     }
     if (typeof wt.lastUpdatedDateFromWeather === 'function') {
         return wt.lastUpdatedDateFromWeather(weather);
+    }
+    if (typeof wt.pickObservationUnixTimestamp === 'function') {
+        const sec = wt.pickObservationUnixTimestamp(weather);
+        if (sec === null || !Number.isFinite(sec) || sec <= 0) {
+            return null;
+        }
+        const d = new Date(sec * 1000);
+        return Number.isFinite(d.getTime()) ? d : null;
     }
     if (typeof wt.pickWeatherUnixTimestamp === 'function') {
         const sec = wt.pickWeatherUnixTimestamp(weather);

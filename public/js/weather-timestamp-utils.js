@@ -1,13 +1,16 @@
 /**
  * Weather "last updated" timestamp helpers (safety-critical display)
  *
- * Airport dashboards show when observations were last refreshed. The API/cache may
- * expose aggregate `last_updated` or only source-specific times (`last_updated_primary`,
- * `obs_time_*`). This module picks a single Unix second for UI consistency.
+ * Airport UI should show **when the observation was made**, not when our server last
+ * fetched the METAR/sensor (`last_updated_*`). Pipeline fields:
+ * - Observation: `obs_time_metar`, `obs_time_primary`, per-field `_field_obs_time_map`
+ * - Fetch/cache: `last_updated`, `last_updated_primary`, `last_updated_metar`
  *
- * Policy: use the maximum of all positive candidate fields so the label reflects the
- * freshest data the UI is showing (never silently hide recency). Numeric strings are
- * accepted so JSON/PHP edge shapes still resolve (integers only, reasonable range).
+ * `pickObservationUnixTimestamp` / `lastUpdatedDateFromWeather` prefer observation times
+ * (max of available observation candidates), then fall back to fetch times if no obs metadata.
+ *
+ * `pickWeatherUnixTimestamp` keeps legacy behavior: max of all candidate fields (API parity,
+ * diagnostics). Numeric strings are accepted where noted below.
  *
  * @module weather-timestamp-utils
  */
@@ -47,7 +50,66 @@
     }
 
     /**
-     * Best-effort Unix timestamp (seconds) for "last updated" display.
+     * Max of fetch/cache fields only (`last_updated*`).
+     *
+     * @param {object|null|undefined} w Weather object from cache or API
+     * @returns {number|null} Unix seconds, or null if no valid time
+     */
+    function pickFetchUnixTimestamp(w) {
+        if (w === null || w === undefined || typeof w !== 'object') {
+            return null;
+        }
+        const candidates = [w.last_updated, w.last_updated_primary, w.last_updated_metar];
+        const nums = [];
+        for (let i = 0; i < candidates.length; i++) {
+            const t = toPositiveUnixSeconds(candidates[i]);
+            if (t !== null) {
+                nums.push(t);
+            }
+        }
+        if (nums.length === 0) {
+            return null;
+        }
+        return Math.max.apply(null, nums);
+    }
+
+    /**
+     * Unix second for UI "last updated": latest **observation** time, not server fetch.
+     * Uses `obs_time_metar`, `obs_time_primary`, and `_field_obs_time_map` values; if none,
+     * falls back to {@link pickFetchUnixTimestamp}.
+     *
+     * @param {object|null|undefined} w Weather object from cache or API
+     * @returns {number|null} Unix seconds, or null if no valid time
+     */
+    function pickObservationUnixTimestamp(w) {
+        if (w === null || w === undefined || typeof w !== 'object') {
+            return null;
+        }
+        const nums = [];
+        [w.obs_time_metar, w.obs_time_primary].forEach(function (v) {
+            const t = toPositiveUnixSeconds(v);
+            if (t !== null) {
+                nums.push(t);
+            }
+        });
+        const map = w._field_obs_time_map;
+        if (map && typeof map === 'object' && !Array.isArray(map)) {
+            const keys = Object.keys(map);
+            for (let i = 0; i < keys.length; i++) {
+                const t = toPositiveUnixSeconds(map[keys[i]]);
+                if (t !== null) {
+                    nums.push(t);
+                }
+            }
+        }
+        if (nums.length > 0) {
+            return Math.max.apply(null, nums);
+        }
+        return pickFetchUnixTimestamp(w);
+    }
+
+    /**
+     * Legacy: max of observation and fetch fields (freshest metadata of any kind).
      *
      * @param {object|null|undefined} w Weather object from cache or API
      * @returns {number|null} Unix seconds, or null if no valid time
@@ -70,6 +132,16 @@
                 nums.push(t);
             }
         }
+        const map = w._field_obs_time_map;
+        if (map && typeof map === 'object' && !Array.isArray(map)) {
+            const keys = Object.keys(map);
+            for (let j = 0; j < keys.length; j++) {
+                const t = toPositiveUnixSeconds(map[keys[j]]);
+                if (t !== null) {
+                    nums.push(t);
+                }
+            }
+        }
         if (nums.length === 0) {
             return null;
         }
@@ -77,14 +149,13 @@
     }
 
     /**
-     * Safe Date for "last updated" UI, or null if observation time cannot be determined.
-     * Rejects invalid Date objects (e.g. overflow) so the airport page never formats NaN.
+     * Safe Date for airport "last updated" line: **observation** time when available.
      *
      * @param {object|null|undefined} w Weather object from cache or API
      * @returns {Date|null}
      */
     function lastUpdatedDateFromWeather(w) {
-        const sec = pickWeatherUnixTimestamp(w);
+        const sec = pickObservationUnixTimestamp(w);
         if (sec === null) {
             return null;
         }
@@ -93,6 +164,8 @@
     }
 
     const api = {
+        pickFetchUnixTimestamp: pickFetchUnixTimestamp,
+        pickObservationUnixTimestamp: pickObservationUnixTimestamp,
         pickWeatherUnixTimestamp: pickWeatherUnixTimestamp,
         lastUpdatedDateFromWeather: lastUpdatedDateFromWeather
     };

@@ -2,10 +2,11 @@
 /**
  * Normalize aggregate `last_updated` / `last_updated_iso` for weather pipeline output.
  *
- * Policy matches `public/js/weather-timestamp-utils.js` (pickWeatherUnixTimestamp): use the
- * maximum of all positive, finite candidate timestamps so the overall label reflects the
- * freshest observation metadata present (field obs times, primary/metar fetch times, obs times).
- * The browser helper also accepts plain digit strings for those fields when JSON stores them as strings.
+ * Policy: max of positive candidates so aggregate `last_updated` reflects the freshest metadata
+ * in the payload (field obs times, primary/metar fetch times, obs times). The airport page UI
+ * uses `pickObservationUnixTimestamp` in `weather-timestamp-utils.js` to prefer **observation**
+ * times over fetch times for the human-readable "Last updated" line. Digit strings are accepted
+ * in the browser helper when JSON stores them as strings.
  *
  * @package AviationWX\Weather
  */

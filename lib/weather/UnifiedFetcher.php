@@ -421,7 +421,7 @@ function addCalculatedFields(array $data, array $airport): array {
     $data['sunrise'] = getSunriseTime($airport);
     $data['sunset'] = getSunsetTime($airport);
     
-    // Same timestamp policy as WeatherAggregator and pickWeatherUnixTimestamp (JS) after validation.
+    // Same aggregate last_updated policy as WeatherAggregator; airport UI uses pickObservationUnixTimestamp (JS) for display.
     normalizeAggregateLastUpdatedTimes($data, time());
     
     return $data;
