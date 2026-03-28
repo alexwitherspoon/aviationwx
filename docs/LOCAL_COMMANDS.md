@@ -125,7 +125,7 @@ make logs
 make restart
 ```
 
-## 🎯 For Production (Docker Droplet)
+## 🎯 For Production (Docker on the server)
 
 **The scheduler daemon runs automatically inside the Docker container** - no setup required!
 

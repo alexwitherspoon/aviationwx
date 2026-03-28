@@ -45,7 +45,7 @@ The `airports.json` file contains:
    # This file is in .gitignore and won't be committed
    ```
 
-2. **Production (Docker on Droplet)**
+2. **Production (Docker on host / VPS)**
    - Store `airports.json` on the host and mount read-only into the container
    - Or set `CONFIG_PATH` env to point at a secure host path
    - Set proper file permissions (600 or 640) on the host

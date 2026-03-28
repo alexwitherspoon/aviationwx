@@ -359,6 +359,59 @@ function getGlobalConfig(string $key, mixed $default = null): mixed {
 }
 
 /**
+ * Normalize global cache file max size to a whole MiB value (1--100).
+ *
+ * @param mixed $raw Value from config (typically int)
+ * @return int Megabytes clamped to 1--100
+ */
+function normalizeCacheFileMaxSizeMb(mixed $raw): int
+{
+    if (!is_numeric($raw)) {
+        return 25;
+    }
+    $mb = (int) $raw;
+    if ($mb < 1) {
+        return 1;
+    }
+    if ($mb > 100) {
+        return 100;
+    }
+
+    return $mb;
+}
+
+/**
+ * Effective global cache file max in MiB from a loaded airports.json root array (for validation).
+ *
+ * @param array<string, mixed> $rootConfig Full config with optional `config` section
+ * @return int Megabytes 1--100
+ */
+function getCacheFileMaxSizeMbFromRootConfig(array $rootConfig): int
+{
+    $raw = $rootConfig['config']['cache_file_max_size_mb'] ?? 25;
+
+    return normalizeCacheFileMaxSizeMb($raw);
+}
+
+/**
+ * Max file size in bytes for webcam pipeline loading, HTTP/MJPEG pull downloads, and partner logo fetches.
+ *
+ * Reads `config.cache_file_max_size_mb` (1--100 MB). When the key is missing or unusable, uses
+ * {@see CACHE_FILE_MAX_SIZE} so behavior matches the compiled default without requiring config.
+ *
+ * @return int Positive byte limit
+ */
+function getCacheFileMaxSizeBytes(): int
+{
+    $raw = getGlobalConfig('cache_file_max_size_mb', 25);
+    if (!is_numeric($raw)) {
+        return CACHE_FILE_MAX_SIZE;
+    }
+
+    return normalizeCacheFileMaxSizeMb($raw) * 1024 * 1024;
+}
+
+/**
  * Get default timezone from global config
  * @return string Timezone identifier (default: UTC)
  */
@@ -1779,7 +1832,12 @@ function loadConfig(bool $useCache = true): ?array {
                 if ($isPush) {
                     // Validate push camera configuration
                     require_once __DIR__ . '/push-webcam-validator.php';
-                    $pushValidation = validatePushWebcamConfig($cam, $aid, $idx);
+                    $pushValidation = validatePushWebcamConfig(
+                        $cam,
+                        $aid,
+                        $idx,
+                        getCacheFileMaxSizeMbFromRootConfig($config)
+                    );
                     if (!$pushValidation['valid']) {
                         $errors = array_merge($errors, $pushValidation['errors']);
                     }
@@ -3209,6 +3267,14 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.webcam_refresh_default must be a positive integer";
                 }
             }
+
+            if (isset($cfg['cache_file_max_size_mb'])) {
+                if (!is_int($cfg['cache_file_max_size_mb'])
+                    || $cfg['cache_file_max_size_mb'] < 1
+                    || $cfg['cache_file_max_size_mb'] > 100) {
+                    $errors[] = 'config.cache_file_max_size_mb must be an integer between 1 and 100';
+                }
+            }
             
             if (isset($cfg['weather_refresh_default'])) {
                 if (!is_int($cfg['weather_refresh_default']) || $cfg['weather_refresh_default'] < 1) {
@@ -3977,7 +4043,7 @@ function validateAirportsJsonStructure(array $config): array {
                                     $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config must be an object";
                                 } else {
                                     // Note: 'protocol' is deprecated (both FTP and SFTP always enabled)
-                                    $requiredPushFields = ['username', 'password', 'max_file_size_mb', 'allowed_extensions'];
+                                    $requiredPushFields = ['username', 'password', 'allowed_extensions'];
                                     foreach ($requiredPushFields as $field) {
                                         if (!isset($pushConfig[$field])) {
                                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config missing '{$field}'";
@@ -3990,9 +4056,11 @@ function validateAirportsJsonStructure(array $config): array {
                                         }
                                     }
                                     if (isset($pushConfig['max_file_size_mb'])) {
-                                        $size = $pushConfig['max_file_size_mb'];
-                                        if (!is_int($size) || $size < 1) {
-                                            $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.max_file_size_mb must be positive integer";
+                                        $globalMb = getCacheFileMaxSizeMbFromRootConfig($config);
+                                        $upper = min(100, $globalMb);
+                                        $maxSize = intval($pushConfig['max_file_size_mb']);
+                                        if ($maxSize < 1 || $maxSize > $upper) {
+                                            $errors[] = "Airport '{$airportCode}' webcam index {$idx}: max_file_size_mb must be between 1 and {$upper} (global cache_file_max_size_mb is {$globalMb}; omit key to inherit)";
                                         }
                                     }
                                     if (isset($pushConfig['allowed_extensions']) && !is_array($pushConfig['allowed_extensions'])) {

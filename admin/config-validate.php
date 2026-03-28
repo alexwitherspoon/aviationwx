@@ -102,7 +102,12 @@ if (!$configFilePath || !file_exists($configFilePath)) {
                                 
                                 if ($isPush) {
                                     // Validate push camera
-                                    $pushValidation = validatePushWebcamConfig($cam, $aid, $idx);
+                                    $pushValidation = validatePushWebcamConfig(
+                                        $cam,
+                                        $aid,
+                                        $idx,
+                                        getCacheFileMaxSizeMbFromRootConfig($config)
+                                    );
                                     if (!$pushValidation['valid']) {
                                         foreach ($pushValidation['errors'] as $err) {
                                             $errors[] = "Airport '{$aid}' webcam {$idx}: {$err}";

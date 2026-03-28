@@ -265,7 +265,7 @@ class ProcessingPipeline
             return ['success' => false, 'reason' => 'file_too_small'];
         }
 
-        if ($size > CACHE_FILE_MAX_SIZE) {
+        if ($size > getCacheFileMaxSizeBytes()) {
             return ['success' => false, 'reason' => 'file_too_large'];
         }
 

@@ -533,14 +533,18 @@ function generateConfigSnippet($formData) {
             if ($camType === 'push') {
                 // Push camera
                 $webcam['type'] = 'push';
-                $webcam['push_config'] = [
+                $pushCfg = [
                     'username' => $cam['push_username'] ?? generateRandomCredential(),
                     'password' => $cam['push_password'] ?? generateRandomCredential(),
                     'protocol' => strtolower($cam['protocol'] ?? 'sftp'),
                     'port' => intval($cam['port'] ?? ($cam['protocol'] === 'sftp' ? 2222 : ($cam['protocol'] === 'ftps' ? 2122 : 2121))),
-                    'max_file_size_mb' => intval($cam['max_file_size_mb'] ?? 100),
                     'allowed_extensions' => ['jpg', 'jpeg', 'png']
                 ];
+                $mfs = $cam['max_file_size_mb'] ?? '';
+                if ($mfs !== '' && $mfs !== null && is_numeric($mfs) && (int) $mfs > 0) {
+                    $pushCfg['max_file_size_mb'] = (int) $mfs;
+                }
+                $webcam['push_config'] = $pushCfg;
             } else {
                 // Pull camera
                 $webcam['url'] = trim($cam['url'] ?? '');
@@ -1844,7 +1848,9 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     <div class="form-group">
                         <label>Max File Size (MB)</label>
                         <input type="number" name="webcams[${idx}][max_file_size_mb]" 
-                               value="${cam.max_file_size_mb || 100}" min="1" max="100">
+                               value="${(cam.max_file_size_mb !== undefined && cam.max_file_size_mb !== null && cam.max_file_size_mb !== '') ? cam.max_file_size_mb : ''}" 
+                               min="1" max="100" placeholder="Global default (config.cache_file_max_size_mb)">
+                        <small class="help-text">Optional. Leave blank to use global <code>config.cache_file_max_size_mb</code>. Set lower to cap this camera only.</small>
                     </div>
                     
                     <div class="form-group">
@@ -2065,7 +2071,9 @@ function renderWebcamForm($idx, $cam) {
             <div class="form-group">
                 <label>Max File Size (MB)</label>
                 <input type="number" name="webcams[<?= $idx ?>][max_file_size_mb]" 
-                       value="<?= htmlspecialchars($cam['max_file_size_mb'] ?? 100) ?>" min="1" max="100">
+                       value="<?= isset($cam['max_file_size_mb']) ? htmlspecialchars((string) $cam['max_file_size_mb']) : '' ?>" 
+                       min="1" max="100" placeholder="Global default (config.cache_file_max_size_mb)">
+                <small class="help-text">Optional. Leave blank to use global <code>config.cache_file_max_size_mb</code>.</small>
             </div>
             
             <div class="form-group">

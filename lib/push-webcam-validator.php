@@ -8,13 +8,14 @@ require_once __DIR__ . '/logger.php';
 
 /**
  * Validate push webcam configuration
- * 
+ *
  * @param array $cam Camera configuration
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index
+ * @param int|null $globalCacheMaxMb Effective global `config.cache_file_max_size_mb` (1--100); omit in standalone tests
  * @return array ['valid' => bool, 'errors' => array]
  */
-function validatePushWebcamConfig($cam, $airportId, $camIndex) {
+function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCacheMaxMb = null) {
     $errors = [];
     
     // Check if push_config exists
@@ -69,11 +70,16 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
     
     // Port is informational only — not enforced by the server (listeners are config.network_ports / defaults).
     
-    // Validate max_file_size_mb
+    // max_file_size_mb: optional (omit = inherit global cache_file_max_size_mb at runtime)
     if (isset($pushConfig['max_file_size_mb'])) {
         $maxSize = intval($pushConfig['max_file_size_mb']);
-        if ($maxSize < 1 || $maxSize > 100) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: max_file_size_mb must be between 1 and 100";
+        $upper = $globalCacheMaxMb !== null ? min(100, $globalCacheMaxMb) : 100;
+        if ($maxSize < 1 || $maxSize > $upper) {
+            if ($globalCacheMaxMb !== null) {
+                $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: max_file_size_mb must be between 1 and {$upper} (global cache_file_max_size_mb is {$globalCacheMaxMb}; omit key to inherit)";
+            } else {
+                $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: max_file_size_mb must be between 1 and 100";
+            }
         }
     }
     

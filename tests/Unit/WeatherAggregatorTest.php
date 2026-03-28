@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../lib/weather/data/WeatherReading.php';
 require_once __DIR__ . '/../../lib/weather/data/WindGroup.php';
 require_once __DIR__ . '/../../lib/weather/data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../lib/weather/AggregationPolicy.php';
+require_once __DIR__ . '/../../lib/weather/aggregate-timestamps.php';
 require_once __DIR__ . '/../../lib/weather/WeatherAggregator.php';
 require_once __DIR__ . '/../../lib/weather/metar-completeness-aggregate.php';
 require_once __DIR__ . '/../../lib/weather/calculator.php';
@@ -28,6 +29,7 @@ class WeatherAggregatorTest extends TestCase {
     private int $now;
     
     protected function setUp(): void {
+        parent::setUp();
         $this->now = time();
     }
     
@@ -108,6 +110,29 @@ class WeatherAggregatorTest extends TestCase {
         $this->assertNull($result['visibility']);
         $this->assertIsArray($result['_field_obs_time_map']);
         $this->assertEmpty($result['_field_obs_time_map']);
+    }
+
+    /**
+     * last_updated must be the max of field obs times and primary/metar metadata (not field map alone).
+     */
+    public function testAggregate_LastUpdated_FieldObsAheadOfFetch_UsesMaxObservation(): void {
+        $obsAhead = $this->now + 3600;
+        $snapshot = $this->createSnapshot('tempest', [
+            'temperature' => 20.0,
+            'dewpoint' => 15.0,
+            'humidity' => 75,
+            'pressure' => 29.92,
+            'wind_speed' => 10,
+            'wind_direction' => 270,
+            'visibility' => 10,
+        ], $obsAhead);
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$snapshot], null, null);
+
+        $this->assertSame($obsAhead, $result['last_updated']);
+        $this->assertSame($this->now, $result['last_updated_primary']);
+        $this->assertSame(date('c', $obsAhead), $result['last_updated_iso']);
     }
     
     public function testSingleSourceAllFields(): void {

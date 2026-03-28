@@ -138,7 +138,7 @@ Your Self-Hosted Install          AviationWX.org Network
 **Option A: Cloud VPS (Recommended for beginners)**
 - **Pros:** Public IP included, high bandwidth, managed infrastructure
 - **Cons:** Monthly cost, external dependency
-- **Providers:** DigitalOcean, Linode, AWS, Hetzner
+- **Providers:** Any VPS host (for example Linode, AWS, Hetzner, Vultr)
 - **Static IP:** Automatically included
 - **DNS:** Easy to configure (just point A record to IP)
 
@@ -852,7 +852,7 @@ Your local install continues working normally.
 
 **Monthly recurring:**
 - **VPS/Cloud Server:** $5-50/month
-  - DigitalOcean Droplet: $12/month (2GB RAM, 50GB transfer)
+  - Typical 2GB VPS: ~$12/month at many providers (pricing varies)
   - Linode Nanode: $5/month (1GB RAM, 1TB transfer, tight but works)
   - AWS t3.small: ~$15/month (2GB RAM, pay for bandwidth)
   - Hetzner CX21: €5.8/month (~$6.50, 3GB RAM, 20TB transfer)

@@ -223,8 +223,9 @@ if (!defined('RATE_LIMIT_APCU_TTL_BUFFER')) {
 if (!defined('FILE_LOCK_STALE_SECONDS')) {
     define('FILE_LOCK_STALE_SECONDS', 300); // 5 minutes
 }
+// Default max bytes when config.cache_file_max_size_mb is unset (see getCacheFileMaxSizeBytes() in config.php)
 if (!defined('CACHE_FILE_MAX_SIZE')) {
-    define('CACHE_FILE_MAX_SIZE', 5242880); // 5MB
+    define('CACHE_FILE_MAX_SIZE', 25 * 1024 * 1024); // 25 MiB
 }
 if (!defined('MJPEG_MAX_SIZE')) {
     define('MJPEG_MAX_SIZE', 2097152); // 2MB

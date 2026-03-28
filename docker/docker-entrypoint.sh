@@ -201,22 +201,27 @@ WEBCAM_CACHE_DIR="${CACHE_DIR}/webcams"
 WEATHER_CACHE_DIR="${CACHE_DIR}/weather"
 UPLOADS_CACHE_DIR="${CACHE_DIR}/uploads"
 
-# Create cache directories if they don't exist
-if [ ! -d "${CACHE_DIR}" ]; then
-    echo "Creating cache directory: ${CACHE_DIR}"
-    mkdir -p "${CACHE_DIR}"
-fi
+# Create cache dirs as www-data first. Production bind-mounts cache from the host
+# (often owned by www-data). Under rootless Docker, container "root" maps to an
+# unprivileged host UID and cannot mkdir inside that tree; www-data can.
+ensure_cache_subdirs() {
+    local dirs=(
+        "${CACHE_DIR}"
+        "${WEBCAM_CACHE_DIR}"
+        "${WEATHER_CACHE_DIR}"
+        "${WEATHER_CACHE_DIR}/history"
+        "${UPLOADS_CACHE_DIR}"
+    )
+    if command -v runuser >/dev/null 2>&1; then
+        if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
+            return 0
+        fi
+    fi
+    mkdir -p "${dirs[@]}"
+}
 
-if [ ! -d "${WEBCAM_CACHE_DIR}" ]; then
-    echo "Creating webcam cache directory: ${WEBCAM_CACHE_DIR}"
-    mkdir -p "${WEBCAM_CACHE_DIR}"
-fi
-
-if [ ! -d "${WEATHER_CACHE_DIR}" ]; then
-    echo "Creating weather cache directory: ${WEATHER_CACHE_DIR}"
-    mkdir -p "${WEATHER_CACHE_DIR}"
-    mkdir -p "${WEATHER_CACHE_DIR}/history"
-fi
+echo "Ensuring cache subdirectories exist..."
+ensure_cache_subdirs
 
 # Set ownership to www-data:www-data (UID 33, GID 33)
 # This ensures the web server can write to the cache directory

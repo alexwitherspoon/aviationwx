@@ -8,6 +8,7 @@
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 
 /**
@@ -88,7 +89,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 3,
         CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
-        CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
+        CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
     ]);
     
     $data = curl_exec($ch);

@@ -128,6 +128,8 @@ aviationwx.org/
 8. Daily tracking (temp extremes, peak gust)
 9. Cache and serve response
 
+**Observation vs fetch for "Last updated"**: Aggregate weather JSON includes both observation timestamps (`obs_time_*`, `_field_obs_time_map`) and fetch timestamps (`last_updated_*`). The airport UI must label **observation** time for the human "Last updated" line; see [Airport "Last updated": observation time vs fetch time](DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time).
+
 ### Webcam System
 
 **`api/webcam.php`** (Internal API): Serves cached webcam images
@@ -501,6 +503,13 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 - **Conservative**: Excludes TFRs when coordinates cannot be parsed (prevents false positives)
 - **Benefit**: Only shows TFRs that actually affect the airport's airspace
 
+### 9. Airport "Last updated" Uses Observation Time Before Fetch Time
+
+- **Why**: Pilots need recency of **conditions**, not recency of **our HTTP fetch**. Using max(fetch, obs) for the label can overstate how fresh the observation is.
+- **Implementation**: `pickObservationUnixTimestamp` / `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`; PHP aggregate `last_updated` remains max-of-candidates for metadata staleness (different purpose).
+- **Regression tests**: `tests/js/weather-timestamp-utils.test.js`
+- **Detail**: [DATA_FLOW.md (Airport "Last updated")](DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time)
+
 ## Security Considerations
 
 - **Input Validation**: All user input validated and sanitized
@@ -544,7 +553,7 @@ See [SECURITY.md](docs/SECURITY.md) for detailed security information.
 
 - **Docker-based**: Containerized for consistent deployment
 - **GitHub Actions**: Automated CI/CD pipeline
-- **Production**: Docker Compose on DigitalOcean Droplet
+- **Production**: Docker Compose on the production host (VPS or dedicated server)
 - **DNS**: Wildcard subdomain support
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.

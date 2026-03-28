@@ -134,6 +134,44 @@ class PushWebcamValidatorTest extends TestCase
         $errorMessages = implode(' ', $result['errors']);
         $this->assertStringContainsString('max_file_size_mb must be between 1 and 100', $errorMessages);
     }
+
+    public function testInvalidFileSizeExceedsGlobalCap()
+    {
+        $cam = [
+            'name' => 'Test Camera',
+            'type' => 'push',
+            'push_config' => [
+                'username' => 'aB3xK9mP2qR7vN',
+                'password' => 'mK8pL3nQ6rT9vW',
+                'max_file_size_mb' => 50,
+                'allowed_extensions' => ['jpg']
+            ]
+        ];
+
+        $result = validatePushWebcamConfig($cam, 'kspb', 0, 25);
+
+        $this->assertFalse($result['valid']);
+        $errorMessages = implode(' ', $result['errors']);
+        $this->assertStringContainsString('between 1 and 25', $errorMessages);
+        $this->assertStringContainsString('global cache_file_max_size_mb is 25', $errorMessages);
+    }
+
+    public function testValidPushWebcamConfigWithoutMaxFileSizeMb()
+    {
+        $cam = [
+            'name' => 'Test Camera',
+            'type' => 'push',
+            'push_config' => [
+                'username' => 'aB3xK9mP2qR7vN',
+                'password' => 'mK8pL3nQ6rT9vW',
+                'allowed_extensions' => ['jpg', 'jpeg', 'png']
+            ]
+        ];
+
+        $result = validatePushWebcamConfig($cam, 'kspb', 0, 25);
+
+        $this->assertTrue($result['valid'], implode(', ', $result['errors']));
+    }
     
     public function testInvalidExtension()
     {
