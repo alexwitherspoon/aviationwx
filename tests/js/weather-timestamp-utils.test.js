@@ -3,12 +3,19 @@
  *
  * Pilots rely on "Last updated" to judge observation recency. pickWeatherUnixTimestamp
  * must return a consistent Unix second from cache/API payloads that may omit
- * aggregate last_updated but include source-specific times.
+ * aggregate last_updated but include source-specific times. lastUpdatedDateFromWeather
+ * must never yield an invalid Date for UI formatting.
+ *
+ * Regression: embedded PHP cache and API JSON may use numeric strings; init order must
+ * not depend on wind canvas (covered by lastUpdatedDateFromWeather contract tests).
  *
  * Run with: node tests/js/weather-timestamp-utils.test.js
  */
 
-const { pickWeatherUnixTimestamp } = require('../../public/js/weather-timestamp-utils.js');
+const {
+    pickWeatherUnixTimestamp,
+    lastUpdatedDateFromWeather
+} = require('../../public/js/weather-timestamp-utils.js');
 
 let passed = 0;
 let failed = 0;
@@ -97,6 +104,55 @@ function runTests() {
         );
     });
 
+    test('s33-like embedded cache: numbers only still resolves', () => {
+        const w = {
+            wind_speed: 0,
+            last_updated_primary: null,
+            last_updated_metar: 1_774_722_052,
+            last_updated: 1_774_722_052,
+            obs_time_metar: 1_774_721_700
+        };
+        assertStrictEqual(pickWeatherUnixTimestamp(w), 1_774_722_052, 'max timestamp');
+        const d = lastUpdatedDateFromWeather(w);
+        if (d === null || !Number.isFinite(d.getTime())) {
+            throw new Error('expected valid Date from s33-like payload');
+        }
+    });
+
+    test('numeric string last_updated is coerced (JSON/PHP edge shapes)', () => {
+        assertStrictEqual(
+            pickWeatherUnixTimestamp({ last_updated: '1700000000' }),
+            1_700_000_000,
+            'string coerced'
+        );
+    });
+
+    test('whitespace around numeric string is trimmed', () => {
+        assertStrictEqual(
+            pickWeatherUnixTimestamp({ last_updated_metar: '  1700000000  ' }),
+            1_700_000_000,
+            'trim'
+        );
+    });
+
+    test('non-numeric string timestamps are ignored', () => {
+        assertNull(
+            pickWeatherUnixTimestamp({ last_updated: 'not-a-number' }),
+            'text'
+        );
+        assertNull(
+            pickWeatherUnixTimestamp({ last_updated: '1700000000.5' }),
+            'decimal string'
+        );
+    });
+
+    test('absurd string magnitude is ignored', () => {
+        assertNull(
+            pickWeatherUnixTimestamp({ last_updated: '50000000000000000000' }),
+            'overflow string'
+        );
+    });
+
     test('all candidates present: returns maximum (freshest)', () => {
         assertStrictEqual(
             pickWeatherUnixTimestamp({
@@ -135,11 +191,15 @@ function runTests() {
         );
     });
 
-    test('string timestamps are ignored (type-safe)', () => {
-        assertNull(
-            pickWeatherUnixTimestamp({ last_updated: '1700000000' }),
-            'string not coerced'
-        );
+    test('lastUpdatedDateFromWeather returns null when pick returns null', () => {
+        assertNull(lastUpdatedDateFromWeather({}), 'empty');
+    });
+
+    test('lastUpdatedDateFromWeather returns Date with finite getTime()', () => {
+        const d = lastUpdatedDateFromWeather({ last_updated: 1_700_000_000 });
+        if (d === null || typeof d.getTime !== 'function' || !Number.isFinite(d.getTime())) {
+            throw new Error('expected finite Date');
+        }
     });
 
     console.log('\n' + '='.repeat(50));

@@ -2690,7 +2690,31 @@ setInterval(updateClocks, 1000);
 // Store weather update time
 let weatherLastUpdated = null;
 
-// pickWeatherUnixTimestamp: public/js/weather-timestamp-utils.js (AviationWX.weatherTimestamp)
+/**
+ * Best-effort Date for "last updated" from a weather payload (see public/js/weather-timestamp-utils.js).
+ * Uses lastUpdatedDateFromWeather when available so Invalid Date never reaches relative-time formatting.
+ *
+ * @param {object} weather Weather from embedded cache or API
+ * @returns {Date|null}
+ */
+function resolveWeatherLastUpdatedDate(weather) {
+    const wt = window.AviationWX && window.AviationWX.weatherTimestamp;
+    if (!wt) {
+        return null;
+    }
+    if (typeof wt.lastUpdatedDateFromWeather === 'function') {
+        return wt.lastUpdatedDateFromWeather(weather);
+    }
+    if (typeof wt.pickWeatherUnixTimestamp === 'function') {
+        const sec = wt.pickWeatherUnixTimestamp(weather);
+        if (sec === null || !Number.isFinite(sec) || sec <= 0) {
+            return null;
+        }
+        const d = new Date(sec * 1000);
+        return Number.isFinite(d.getTime()) ? d : null;
+    }
+    return null;
+}
 
 // Store current weather data globally for toggle re-rendering
 let currentWeatherData = null;
@@ -3749,7 +3773,11 @@ function updateWeatherTimestamp() {
             setBoth('--');
             return;
         }
-    
+        if (!Number.isFinite(weatherLastUpdated.getTime())) {
+            setBoth('--');
+            return;
+        }
+
     // When clock skew detected: show absolute observation time only (no relative - client time unreliable)
     if (clientClockSkewDetected) {
         const timeStr = formatObservationTimeForClockSkew(Math.floor(weatherLastUpdated.getTime() / 1000));
@@ -4197,12 +4225,7 @@ async function fetchWeather(forceRefresh = false) {
             }
             
             const isStale = data.stale === true || false;
-            const pickTs = window.AviationWX && window.AviationWX.weatherTimestamp &&
-                typeof window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp === 'function'
-                ? window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp
-                : null;
-            const serverTsSec = pickTs ? pickTs(data.weather) : null;
-            const serverTimestamp = serverTsSec !== null ? new Date(serverTsSec * 1000) : null;
+            const serverTimestamp = resolveWeatherLastUpdatedDate(data.weather);
             
             // Solution C: Detect if server data is older than client data (indicates stale cache was served)
             // But don't force immediate refresh if we already have a stale refresh scheduled
@@ -4231,7 +4254,11 @@ async function fetchWeather(forceRefresh = false) {
             
             currentWeatherData = data.weather; // Store globally for toggle re-rendering
             displayWeather(data.weather);
-            updateWindVisual(data.weather);
+            try {
+                updateWindVisual(data.weather);
+            } catch (e) {
+                console.error('[Weather] updateWindVisual failed (fetch):', e);
+            }
             weatherLastUpdated = serverTimestamp || new Date();
             updateWeatherTimestamp(); // Update the timestamp
             checkAndUpdateOutageBanner(); // Check if outage banner should be shown/hidden
@@ -7255,13 +7282,9 @@ if (hasWeatherSources) {
         currentWeatherData = INITIAL_WEATHER_DATA;
 
         // Timestamp before wind canvas: if updateWindVisual throws, we still show recency and fetchWeather still runs
-        const tsPicker = window.AviationWX && window.AviationWX.weatherTimestamp &&
-            typeof window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp === 'function'
-            ? window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp
-            : null;
-        const initialTsSec = tsPicker ? tsPicker(INITIAL_WEATHER_DATA) : null;
-        if (initialTsSec !== null && Number.isFinite(initialTsSec) && initialTsSec > 0) {
-            weatherLastUpdated = new Date(initialTsSec * 1000);
+        const initialDate = resolveWeatherLastUpdatedDate(INITIAL_WEATHER_DATA);
+        if (initialDate !== null) {
+            weatherLastUpdated = initialDate;
             updateWeatherTimestamp();
         }
 

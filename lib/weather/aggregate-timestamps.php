@@ -5,6 +5,7 @@
  * Policy matches `public/js/weather-timestamp-utils.js` (pickWeatherUnixTimestamp): use the
  * maximum of all positive, finite candidate timestamps so the overall label reflects the
  * freshest observation metadata present (field obs times, primary/metar fetch times, obs times).
+ * The browser helper also accepts plain digit strings for those fields when JSON stores them as strings.
  *
  * @package AviationWX\Weather
  */
