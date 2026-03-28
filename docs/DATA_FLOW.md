@@ -14,6 +14,7 @@ This document describes how weather, webcam, and NOTAM data is fetched, processe
 8. [NOTAM Data Fetching](#notam-data-fetching)
 9. [NOTAM Data Processing](#notam-data-processing)
 10. [Data Display on Dashboard](#data-display-on-dashboard)
+11. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
 
 ---
 
@@ -1536,6 +1537,24 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 ---
 
 ## Data Display on Dashboard
+
+### Airport "Last updated": observation time vs fetch time
+
+**Safety-critical distinction**: The airport page line that tells the pilot **when the weather snapshot reflects conditions** must use **observation time** (when the METAR was issued or the sensor reading was taken), not **server fetch time** (when our cache last retrieved data). Showing fetch time can make conditions look newer than they are and mislead go/no-go decisions.
+
+**Pipeline fields** (from `WeatherAggregator` and `normalizeAggregateLastUpdatedTimes` in `lib/weather/aggregate-timestamps.php`):
+
+| Role | Fields |
+|------|--------|
+| Observation | `obs_time_primary`, `obs_time_metar`, per-field `_field_obs_time_map` |
+| Fetch / cache | `last_updated`, `last_updated_primary`, `last_updated_metar` |
+
+**Two policies on purpose**:
+
+1. **Aggregate JSON `last_updated` / `last_updated_iso`**: PHP computes a **maximum** across observation and fetch candidates so the payload carries a single "freshest metadata" stamp for staleness and APIs. That max can be driven by fetch time when it is newer than observation metadata.
+2. **Human "Last updated" on the airport dashboard**: The browser uses `pickObservationUnixTimestamp` and `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`, which take the **maximum of observation candidates only**, then fall back to fetch times **only if** no observation metadata exists. Legacy `pickWeatherUnixTimestamp` remains max-of-all for backward compatibility and diagnostics.
+
+**Regression protection**: Node tests in `tests/js/weather-timestamp-utils.test.js` assert this split (including real-world-style payloads). Changing the UI to prefer fetch over observation without an explicit product decision would fail those tests.
 
 ### Weather Data Display
 

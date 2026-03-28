@@ -55,7 +55,11 @@ class WeatherAggregator {
      * @param array<WeatherSnapshot> $snapshots Snapshots in preference order
      * @param array<string, int>|null $maxAges Optional per-source max age overrides (source => seconds)
      * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB) for local vs neighboring METAR detection
-     * @return array Aggregated weather data with attribution (last_updated / last_updated_iso normalized via normalizeAggregateLastUpdatedTimes)
+     * @return array<string, mixed> Aggregated weather data with field attribution. Includes
+     *         `last_updated` / `last_updated_iso` from normalizeAggregateLastUpdatedTimes() (max of
+     *         observation and fetch candidates for API/staleness). The airport dashboard uses
+     *         observation-first display for the human "Last updated" line; see
+     *         docs/DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time.
      */
     public function aggregate(array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         if (empty($snapshots)) {
@@ -121,9 +125,11 @@ class WeatherAggregator {
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 4: Add metadata
+        // STEP 4: Add metadata (observation vs fetch times; safety-critical display policy)
         // ═══════════════════════════════════════════════════════════════════
-        
+        // Rationale: pilots need observation recency, not only HTTP fetch recency. Policy split
+        // is documented on aggregate() and in docs/DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time.
+
         $result['_field_obs_time_map'] = $fieldObsTimeMap;
         $result['_field_source_map'] = $fieldSourceMap;
         $result['_field_station_map'] = $fieldStationMap;
@@ -134,7 +140,6 @@ class WeatherAggregator {
         $result['last_updated_primary'] = $this->findPrimaryFetchTime($snapshots);
         $result['last_updated_metar'] = $this->findMetarFetchTime($snapshots);
         
-        // Display recency: pilots need one coherent "last updated" from all valid timestamps.
         \normalizeAggregateLastUpdatedTimes($result, $this->now);
         
         // Add raw METAR if available

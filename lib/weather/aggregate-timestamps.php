@@ -3,10 +3,14 @@
  * Normalize aggregate `last_updated` / `last_updated_iso` for weather pipeline output.
  *
  * Policy: max of positive candidates so aggregate `last_updated` reflects the freshest metadata
- * in the payload (field obs times, primary/metar fetch times, obs times). The airport page UI
- * uses `pickObservationUnixTimestamp` in `weather-timestamp-utils.js` to prefer **observation**
- * times over fetch times for the human-readable "Last updated" line. Digit strings are accepted
- * in the browser helper when JSON stores them as strings.
+ * in the payload (field obs times, primary/metar fetch times, obs times). This is intentional:
+ * APIs and staleness checks need a single "newest timestamp" in the blob, and that may be a
+ * fetch time when observation metadata is older or missing.
+ *
+ * Do not assume aggregate `last_updated` is safe to show as "when conditions were observed".
+ * The airport dashboard uses `pickObservationUnixTimestamp` in `weather-timestamp-utils.js`
+ * for that (observation max, else fetch). See docs/DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time.
+ * Digit strings are accepted in the browser helper when JSON stores them as strings.
  *
  * @package AviationWX\Weather
  */
@@ -37,7 +41,8 @@ function weather_positive_aggregate_timestamp(mixed $value): ?int
  * Set last_updated and last_updated_iso from all valid timestamp fields in aggregate data.
  *
  * Modifies $data in place. When no positive candidate exists, uses $fallbackNow (typically
- * aggregator "now" or time() in addCalculatedFields).
+ * aggregator "now" or time() in addCalculatedFields). The file-level docblock explains why this
+ * max-of-all stamp must not be confused with the airport UI "Last updated" label.
  *
  * @param array<string, mixed> $data Weather aggregate (modified in place)
  * @param int $fallbackNow Unix seconds when no valid candidate is found

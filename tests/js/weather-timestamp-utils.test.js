@@ -4,6 +4,8 @@
  * Pilots rely on "Last updated" to judge observation recency. The airport UI uses
  * observation times (METAR/sensor obs, field map) rather than fetch/cache times when available.
  *
+ * Product policy and field meanings: docs/DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time
+ *
  * Run with: node tests/js/weather-timestamp-utils.test.js
  */
 
@@ -104,6 +106,49 @@ function runTests() {
             150,
             'max observation'
         );
+    });
+
+    test('REGRESSION: pickObservationUnixTimestamp uses _field_obs_time_map without scalar obs_time_*', () => {
+        const obsFromMap = 1_700_000_100;
+        const fetchNewer = 1_700_000_900;
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                obs_time_primary: null,
+                obs_time_metar: null,
+                _field_obs_time_map: { temperature: obsFromMap },
+                last_updated: fetchNewer,
+                last_updated_primary: fetchNewer
+            }),
+            obsFromMap,
+            'field map only still observation-first'
+        );
+    });
+
+    test('REGRESSION: pickObservationUnixTimestamp ignores non-scalar map entries', () => {
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                _field_obs_time_map: {
+                    nested: { not: 'a unix second' },
+                    arr: [1_700_000_000],
+                    good: 1_700_000_050
+                },
+                last_updated: 1_800_000_000
+            }),
+            1_700_000_050,
+            'only coercible scalars count'
+        );
+    });
+
+    test('REGRESSION: lastUpdatedDateFromWeather matches map-only observation', () => {
+        const t = 1_700_000_200;
+        const d = lastUpdatedDateFromWeather({
+            _field_obs_time_map: { wind_speed: t },
+            last_updated: 1_900_000_000
+        });
+        if (d === null || !Number.isFinite(d.getTime())) {
+            throw new Error('expected valid Date');
+        }
+        assertStrictEqual(d.getTime(), t * 1000, 'Date from field map obs');
     });
 
     test('pickObservationUnixTimestamp falls back to fetch when no observation metadata', () => {

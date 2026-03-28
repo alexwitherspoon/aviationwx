@@ -160,6 +160,12 @@ vendor/bin/phpunit --testsuite Integration
 - HTML output validation
 - Webcam refresh initialization
 
+### Node.js unit tests (`tests/js/`)
+
+Small **Node** test runners (no Jest) for shared frontend utilities. Run via `make test-ci` (or `node tests/js/<file>.test.js`).
+
+**Safety-critical**: `tests/js/weather-timestamp-utils.test.js` locks in **observation time vs server fetch time** for the airport "Last updated" line (`pickObservationUnixTimestamp`, `lastUpdatedDateFromWeather`). See [DATA_FLOW.md](DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time).
+
 ### Browser Tests (`tests/Browser/`)
 
 Playwright-based tests for frontend functionality. These run against the isolated test environment (port 9080).
