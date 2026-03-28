@@ -25,7 +25,8 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 
 This deployment requires **minimal host customization**:
 - ✅ **No log directory setup** - CD creates `/var/aviationwx/logs` on host; logs persist across reboots
-- ✅ **No cache directory setup** - Cache automatically created in `/tmp/aviationwx-cache`
+- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` with `webcams` and `sftp` subdirectories (bind-mounted into the container)
+- ✅ **Partner logos directory** - CD creates `/home/aviationwx/partner-logos`; logo files come from the secrets repo deploy
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
 - ✅ **No sudo required for application** - Only needed for initial Docker/SSL setup
@@ -80,6 +81,15 @@ ufw --force enable
 ufw status
 ```
 
+**FTP/SFTP:** The initial rules above only open SSH, HTTP, and HTTPS. Automated deployment runs `scripts/deploy-configure-firewall.sh`, which opens FTP control, SFTP, and the passive port range from `config.network_ports` in `~/airports.json` (defaults: 2121, 2222, 50000--51000). If you need FTP/SFTP open before the first successful deploy (for example manual testing), add:
+
+```bash
+ufw allow 2121/tcp
+ufw allow 2222/tcp
+ufw allow 50000:51000/tcp
+ufw reload
+```
+
 ### 5. Install Docker & Docker Compose
 
 ```bash
@@ -106,6 +116,14 @@ docker ps  # Should work without sudo
 # Switch back to root
 exit
 ```
+
+**Rootful Docker (recommended for production):** After install, confirm you are using Docker Engine as root, not rootless mode:
+
+```bash
+docker info | grep -E 'Docker Root Dir|rootless'
+```
+
+`Docker Root Dir` should be `/var/lib/docker`. If you see `rootless: true`, bind mounts and permissions will not match this guide; install Docker Engine from Docker’s Ubuntu package instructions (same as `get.docker.com`) so the daemon runs rootful.
 
 ## DNS Configuration
 

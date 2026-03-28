@@ -603,6 +603,20 @@ jobs:
           # This avoids creating unnecessary commits and deployment loops
           echo "✓ Cache version updated (will be synced to server)"
 
+      - name: Ensure server deployment paths exist
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          mkdir -p "${HOME}/aviationwx"
+          mkdir -p "${HOME}/partner-logos"
+          chmod 755 "${HOME}/partner-logos"
+          sudo mkdir -p /etc/letsencrypt
+          sudo chmod 755 /etc/letsencrypt
+          echo "✓ ${HOME}/aviationwx, ${HOME}/partner-logos, /etc/letsencrypt"
+          ls -ld "${HOME}/aviationwx" "${HOME}/partner-logos"
+          ls -ld /etc/letsencrypt
+          EOF
+
       - name: Clean up old directory structure on server
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
@@ -1036,12 +1050,13 @@ jobs:
           fi
           
           # Try to create directory structure without sudo first
-          if mkdir -p /tmp/aviationwx-cache/webcams 2>/dev/null; then
-            echo "✓ Created cache directory without sudo"
+          # webcams: image cache; sftp: host path for SFTP chroot (see docker-compose.prod.yml)
+          if mkdir -p /tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp 2>/dev/null; then
+            echo "✓ Created cache directories without sudo"
           else
             echo "⚠️  Failed to create directory without sudo, trying with sudo..."
             # Use sudo to create directory structure
-            sudo mkdir -p /tmp/aviationwx-cache/webcams || {
+            sudo mkdir -p /tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp || {
               echo "❌ Failed to create cache directory even with sudo"
               exit 1
             }
@@ -1065,11 +1080,12 @@ jobs:
           # Use 775 for webcams (group writable) and 755 for parent
           sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
             sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
+            sudo chmod 775 /tmp/aviationwx-cache/sftp 2>/dev/null || chmod 775 /tmp/aviationwx-cache/sftp || true
           
           # Verify directory was created and is writable
-          if [ ! -d /tmp/aviationwx-cache/webcams ]; then
+          if [ ! -d /tmp/aviationwx-cache/webcams ] || [ ! -d /tmp/aviationwx-cache/sftp ]; then
             echo "❌ Failed to create cache directory"
-            echo "This is critical - webcam caching will not work without this directory"
+            echo "This is critical - webcam caching and SFTP will not work without these directories"
             echo "Check permissions and disk space, then retry deployment"
             exit 1
           fi
@@ -1078,6 +1094,7 @@ jobs:
           echo "Final directory permissions:"
           ls -ld /tmp/aviationwx-cache
           ls -ld /tmp/aviationwx-cache/webcams
+          ls -ld /tmp/aviationwx-cache/sftp
           
           # Test write access (as current user, which should work if permissions are correct)
           if touch /tmp/aviationwx-cache/webcams/.test_write 2>/dev/null; then
@@ -1089,7 +1106,7 @@ jobs:
           fi
           
           # Final verification
-          echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
+          echo "✓ Cache directories created at /tmp/aviationwx-cache/webcams and /tmp/aviationwx-cache/sftp"
           echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
           EOF
 
