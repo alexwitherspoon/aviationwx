@@ -631,9 +631,20 @@ class ConfigTest extends TestCase {
     }
 
     /**
-     * Default webcam cache file cap matches CACHE_FILE_MAX_SIZE when fixture omits config key
+     * Fixture sets config.cache_file_max_size_mb so getCacheFileMaxSizeBytes() reads the configured MiB cap.
      */
-    public function testGetCacheFileMaxSizeBytes_MatchesConstantDefault(): void {
-        $this->assertSame(CACHE_FILE_MAX_SIZE, getCacheFileMaxSizeBytes());
+    public function testGetCacheFileMaxSizeBytes_UsesFixtureCacheFileMaxSizeMb(): void {
+        $this->assertSame(32 * 1024 * 1024, getCacheFileMaxSizeBytes());
+    }
+
+    /**
+     * normalizeCacheFileMaxSizeMb() clamps to 1--100 MiB and treats non-numeric input as 25 MiB.
+     */
+    public function testNormalizeCacheFileMaxSizeMb_ClampsAndDefaults(): void {
+        $this->assertSame(25, normalizeCacheFileMaxSizeMb('not_numeric'));
+        $this->assertSame(1, normalizeCacheFileMaxSizeMb(0));
+        $this->assertSame(100, normalizeCacheFileMaxSizeMb(200));
+        $this->assertSame(32, normalizeCacheFileMaxSizeMb(32));
+        $this->assertSame(1, normalizeCacheFileMaxSizeMb(-5));
     }
 }

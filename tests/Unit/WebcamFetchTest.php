@@ -90,10 +90,10 @@ class WebcamFetchTest extends TestCase
     {
         // Test that JPEG size validation logic works
         // Minimum: ~1KB (1024 bytes)
-        // Maximum: CACHE_FILE_MAX_SIZE / getCacheFileMaxSizeBytes() default (see constants.php / config.php)
+        // Maximum: effective cap from config (tests/Fixtures/airports.json.test cache_file_max_size_mb)
 
         $minSize = 1024;
-        $maxSize = CACHE_FILE_MAX_SIZE;
+        $maxSize = getCacheFileMaxSizeBytes();
         
         // Too small - should be rejected
         $smallJpeg = "\xFF\xD8" . str_repeat("\x00", 100) . "\xFF\xD9";
