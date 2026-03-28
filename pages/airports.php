@@ -1419,7 +1419,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             <div class="airports-pwa-inner">
                 <h2 id="add-to-home-screen-heading">Add <img src="/public/favicons/android-chrome-192x192.png" alt="" aria-hidden="true" class="airports-pwa-heading-icon" width="32" height="32" decoding="async"> to your Home Screen</h2>
                 <p class="airports-pwa-lead">
-                    To quickly access AviationWX, here's how to add an icon shortcut to your device Home Screen, like an app. This is optional, as the site works fully in the browser. AviationWX is <em>not</em> in the Google Play or Apple App stores and is free to use.
+                    To quickly access AviationWX, here's how to add an icon shortcut to your Home Screen similar to an app. This is optional, as the site works fully in the browser. AviationWX is <strong>not</strong> in the Google Play or Apple App stores and is free to use.
                 </p>
                 <div class="airports-pwa-grid">
                     <div class="airports-pwa-card">
