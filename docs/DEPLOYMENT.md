@@ -38,7 +38,7 @@ This deployment requires **minimal host customization**:
 
 ### 1. Create and Access VPS
 
-Create a new Ubuntu LTS droplet/VPS (minimum 1GB RAM, 1 vCPU). SSH into the server:
+Create a new Ubuntu LTS VPS (minimum 1GB RAM, 1 vCPU). SSH into the server:
 
 ```bash
 ssh root@YOUR_SERVER_IP
@@ -150,8 +150,8 @@ If using Cloudflare:
 2. Select your domain
 3. Go to DNS → Records
 4. Add two A records:
-   - **Record 1**: `@` → YOUR_DROPLET_IP
-   - **Record 2**: `*` → YOUR_DROPLET_IP
+   - **Record 1**: `@` → YOUR_SERVER_IP
+   - **Record 2**: `*` → YOUR_SERVER_IP
 5. Choose proxy status:
    - **DNS only (gray cloud)**: Direct connection - better for dynamic content
    - **Proxied (orange cloud)**: Cloudflare CDN - adds caching and DDoS protection

@@ -544,7 +544,7 @@ See [SECURITY.md](docs/SECURITY.md) for detailed security information.
 
 - **Docker-based**: Containerized for consistent deployment
 - **GitHub Actions**: Automated CI/CD pipeline
-- **Production**: Docker Compose on DigitalOcean Droplet
+- **Production**: Docker Compose on the production host (VPS or dedicated server)
 - **DNS**: Wildcard subdomain support
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
