@@ -55,7 +55,7 @@ class WeatherAggregator {
      * @param array<WeatherSnapshot> $snapshots Snapshots in preference order
      * @param array<string, int>|null $maxAges Optional per-source max age overrides (source => seconds)
      * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB) for local vs neighboring METAR detection
-     * @return array Aggregated weather data with attribution
+     * @return array Aggregated weather data with attribution (last_updated / last_updated_iso normalized via normalizeAggregateLastUpdatedTimes)
      */
     public function aggregate(array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         if (empty($snapshots)) {
@@ -134,9 +134,8 @@ class WeatherAggregator {
         $result['last_updated_primary'] = $this->findPrimaryFetchTime($snapshots);
         $result['last_updated_metar'] = $this->findMetarFetchTime($snapshots);
         
-        // Overall last_updated is the freshest observation we're using
-        $result['last_updated'] = !empty($fieldObsTimeMap) ? max($fieldObsTimeMap) : $this->now;
-        $result['last_updated_iso'] = date('c', $result['last_updated']);
+        // Display recency: pilots need one coherent "last updated" from all valid timestamps.
+        \normalizeAggregateLastUpdatedTimes($result, $this->now);
         
         // Add raw METAR if available
         foreach ($snapshots as $snapshot) {
@@ -505,8 +504,7 @@ class WeatherAggregator {
         $result['_field_obs_time_map'] = [];
         $result['_field_source_map'] = [];
         $result['_field_station_map'] = [];
-        $result['last_updated'] = $this->now;
-        $result['last_updated_iso'] = date('c', $this->now);
+        \normalizeAggregateLastUpdatedTimes($result, $this->now);
         
         return $result;
     }

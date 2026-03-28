@@ -157,6 +157,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a️⃣  Wind Rose Safety Tests (JS)..."
 	@node tests/js/wind-rose.test.js || { echo "❌ Wind rose JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a1️⃣  Weather Timestamp Utilities Tests (JS)..."
+	@node tests/js/weather-timestamp-utils.test.js || { echo "❌ Weather timestamp JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a2️⃣  Webcam Player Cache Tests (JS)..."
 	@node tests/js/webcam-player-cache.test.js || { echo "❌ Webcam player cache JS tests failed"; exit 1; }
 	@echo ""
@@ -168,7 +171,7 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 		npm install && npm run lint:js || { \
 			echo ""; \
 			echo "❌ ESLint found JavaScript errors. Please fix them."; \
-			echo "See docs/ESLINT_KNOWN_LIMITATIONS.md for details."; \
+			echo "Parsing errors in PHP-embedded script blocks are often ESLint false positives; fix real rule violations."; \
 			exit 1; \
 		}; \
 	else \

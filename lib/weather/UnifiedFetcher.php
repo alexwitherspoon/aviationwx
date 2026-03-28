@@ -19,6 +19,7 @@ require_once __DIR__ . '/data/WeatherReading.php';
 require_once __DIR__ . '/data/WindGroup.php';
 require_once __DIR__ . '/data/WeatherSnapshot.php';
 require_once __DIR__ . '/AggregationPolicy.php';
+require_once __DIR__ . '/aggregate-timestamps.php';
 require_once __DIR__ . '/WeatherAggregator.php';
 require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
@@ -365,10 +366,13 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
  * 
  * Uses existing calculator functions that expect $weather and $airport arrays.
  * Handles all derived calculations from raw weather data.
- * 
+ *
+ * After calculations, normalizes `last_updated` and `last_updated_iso` so stale or zero
+ * aggregate timestamps cannot hide fresher primary or METAR metadata (see normalizeAggregateLastUpdatedTimes).
+ *
  * @param array $data Weather data
  * @param array $airport Airport configuration
- * @return array Weather data with calculated fields
+ * @return array Weather data with calculated fields and normalized display timestamps
  */
 function addCalculatedFields(array $data, array $airport): array {
     // Calculate dewpoint from humidity if missing
@@ -417,9 +421,8 @@ function addCalculatedFields(array $data, array $airport): array {
     $data['sunrise'] = getSunriseTime($airport);
     $data['sunset'] = getSunsetTime($airport);
     
-    // ISO timestamp
-    $lastUpdated = $data['last_updated'] ?? time();
-    $data['last_updated_iso'] = date('c', $lastUpdated);
+    // Same timestamp policy as WeatherAggregator and pickWeatherUnixTimestamp (JS) after validation.
+    normalizeAggregateLastUpdatedTimes($data, time());
     
     return $data;
 }

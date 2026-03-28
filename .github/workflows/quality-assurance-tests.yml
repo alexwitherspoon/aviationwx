@@ -289,7 +289,6 @@ jobs:
               echo "❌ ESLint found JavaScript errors. Please fix them."
               echo ""
               echo "Note: Some parsing errors may be false positives due to PHP-embedded JavaScript."
-              echo "See docs/ESLINT_KNOWN_LIMITATIONS.md for details on known limitations."
               echo ""
               echo "Review the errors above and fix any real issues (scope, undefined variables, etc.)."
               echo "Parsing errors in PHP-embedded JavaScript are documented false positives."

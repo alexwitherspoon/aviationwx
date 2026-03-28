@@ -24,7 +24,8 @@ const DEFAULT_FILES = [
   'pages/status.php',
   'public/js/service-worker.js',
   'public/js/webcam-player-utils.js',
-  'public/js/webcam-player-scroll-lock.js'
+  'public/js/webcam-player-scroll-lock.js',
+  'public/js/weather-timestamp-utils.js'
 ];
 
 // Parse command line arguments
@@ -295,8 +296,7 @@ async function lintJavaScript() {
           // This is a parsing error - log it but don't fail
           console.log(`\n📄 ${fileInfo.file}${fileInfo.scriptIndex > 0 ? ` [script-${fileInfo.scriptIndex}]` : ''}`);
           console.log(`  ⚠️  Line ${msg.line}:${msg.column} - ${msg.message} (parsing error - known false positive)`);
-          console.log(`     This is a documented limitation of linting PHP-embedded JavaScript.`);
-          console.log(`     See docs/ESLINT_KNOWN_LIMITATIONS.md for details.`);
+          console.log(`     ESLint often cannot parse PHP-embedded JavaScript; treat as a false positive unless a rule reports a real issue.`);
           return false; // Don't count as a real error
         }
         return true; // Real error

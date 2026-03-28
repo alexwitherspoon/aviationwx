@@ -2108,6 +2108,7 @@ if ($themeCookie === 'dark') {
     ?>
     <script src="/public/js/webcam-player-utils.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/weather-timestamp-utils.js?v=<?= $buildHashShort ?>"></script>
     <?php
     ob_start();
     ?>
@@ -2687,6 +2688,8 @@ setInterval(updateClocks, 1000);
 
 // Store weather update time
 let weatherLastUpdated = null;
+
+// pickWeatherUnixTimestamp: public/js/weather-timestamp-utils.js (AviationWX.weatherTimestamp)
 
 // Store current weather data globally for toggle re-rendering
 let currentWeatherData = null;
@@ -4190,7 +4193,8 @@ async function fetchWeather(forceRefresh = false) {
             }
             
             const isStale = data.stale === true || false;
-            const serverTimestamp = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : null;
+            const serverTsSec = window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp(data.weather);
+            const serverTimestamp = serverTsSec !== null ? new Date(serverTsSec * 1000) : null;
             
             // Solution C: Detect if server data is older than client data (indicates stale cache was served)
             // But don't force immediate refresh if we already have a stale refresh scheduled
@@ -7325,9 +7329,10 @@ if (hasWeatherSources) {
         displayWeather(INITIAL_WEATHER_DATA);
         updateWindVisual(INITIAL_WEATHER_DATA);
         
-        // Set initial timestamp from embedded data
-        if (INITIAL_WEATHER_DATA.last_updated) {
-            weatherLastUpdated = new Date(INITIAL_WEATHER_DATA.last_updated * 1000);
+        // Set initial timestamp from embedded cache (see public/js/weather-timestamp-utils.js)
+        const initialTsSec = window.AviationWX.weatherTimestamp.pickWeatherUnixTimestamp(INITIAL_WEATHER_DATA);
+        if (initialTsSec !== null) {
+            weatherLastUpdated = new Date(initialTsSec * 1000);
             updateWeatherTimestamp();
         }
         
