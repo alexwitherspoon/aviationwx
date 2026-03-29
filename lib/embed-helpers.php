@@ -17,8 +17,9 @@
  * 
  * RATE LIMITING:
  * Embed requests forward the original client IP via X-Forwarded-Client-IP header.
- * The public API uses this for rate limiting, so each end user gets their own
- * rate limit bucket (anonymous tier: 20/min, 200/hr, 2000/day).
+ * The public API applies the anonymous tier per that IP. Effective numbers come from
+ * getPublicApiRateLimits() in lib/public-api/config.php and config.public_api.rate_limits
+ * (see config/airports.json.example); not duplicated in this comment.
  */
 
 require_once __DIR__ . '/config.php';

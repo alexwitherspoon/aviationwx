@@ -89,10 +89,10 @@ curl https://api.aviationwx.org/v1/airports
 
 ### Rate Limits
 
-| Tier | Requests/min | Requests/day |
-|------|--------------|--------------|
-| Anonymous | 100 | 10,000 |
-| Partner (API key) | 500 | 50,000 |
+Current limits depend on tier (anonymous vs partner API key) and are **not duplicated here** so they stay accurate when config changes.
+
+- **Live reference:** [api.aviationwx.org](https://api.aviationwx.org) lists the effective limits for the production service.
+- **Self-hosted / inspection:** See `config.public_api.rate_limits` in your `airports.json` (shape in [`config/airports.json.example`](config/airports.json.example)). Defaults applied when keys are omitted are defined in [`lib/public-api/config.php`](lib/public-api/config.php) (`getPublicApiRateLimits()`).
 
 See [API documentation](https://api.aviationwx.org) for full endpoint details, authentication, and usage guidelines.
 

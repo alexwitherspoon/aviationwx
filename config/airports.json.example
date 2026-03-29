@@ -90,9 +90,9 @@
       "version": "1",
       "rate_limits": {
         "anonymous": {
-          "requests_per_minute": 100,
-          "requests_per_hour": 1000,
-          "requests_per_day": 10000
+          "requests_per_minute": 50,
+          "requests_per_hour": 500,
+          "requests_per_day": 2000
         },
         "partner": {
           "requests_per_minute": 500,

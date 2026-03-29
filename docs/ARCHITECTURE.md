@@ -513,7 +513,7 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 ## Security Considerations
 
 - **Input Validation**: All user input validated and sanitized
-- **Rate Limiting**: Prevents abuse (120/min weather, 100/min webcams)
+- **Rate limiting**: Prevents abuse; internal weather/webcam caps are `RATE_LIMIT_WEATHER_*` / `RATE_LIMIT_WEBCAM_*` in [`lib/constants.php`](lib/constants.php). Public API tiers use [`lib/public-api/config.php`](lib/public-api/config.php) and `config.public_api.rate_limits`.
 - **Credential Protection**: API keys never exposed to frontend
 - **File Permissions**: Sensitive files properly protected
 - **Error Messages**: Sanitized to prevent information leakage

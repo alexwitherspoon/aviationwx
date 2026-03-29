@@ -106,7 +106,7 @@ Returns weather data for the specified airport.
 - `429`: Rate limit exceeded
 - `500`: Server error
 
-**Rate Limiting:** 120 requests per minute per IP
+**Rate limiting:** Per-IP limits are enforced in `api/weather.php` using `RATE_LIMIT_WEATHER_MAX` and `RATE_LIMIT_WEATHER_WINDOW` in [`lib/constants.php`](../lib/constants.php). Check that file (and response headers on `429`) for current values.
 
 **Caching:** 
 - Responses are cached with multi-layer cache control
@@ -278,7 +278,7 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - `Accept` header (no `fmt=`): Server respects browser preference, always returns 200
 - Fallback: JPEG (always available, always enabled)
 
-**Rate Limiting:** 100 requests per minute per IP
+**Rate limiting:** Per-IP limits are enforced in `api/webcam.php` using `RATE_LIMIT_WEBCAM_MAX` and `RATE_LIMIT_WEBCAM_WINDOW` in [`lib/constants.php`](../lib/constants.php). Check that file (and response headers on `429`) for current values.
 
 **Caching:** Images are cached on disk and served with appropriate cache headers. 202 responses are not cached.
 
@@ -566,10 +566,14 @@ Error messages are sanitized to prevent information leakage.
 
 ---
 
-## Rate Limiting
+## Rate limiting (internal endpoints)
 
-- **Weather API**: 120 requests per minute per IP
-- **Webcam API**: 100 requests per minute per IP
+These limits apply to **`/weather.php`** and **`/webcam.php`**, not the versioned Public API at `api.aviationwx.org`.
+
+- **Weather:** `RATE_LIMIT_WEATHER_MAX` / `RATE_LIMIT_WEATHER_WINDOW` in [`lib/constants.php`](../lib/constants.php), enforced in `api/weather.php`.
+- **Webcam:** `RATE_LIMIT_WEBCAM_MAX` / `RATE_LIMIT_WEBCAM_WINDOW` in the same file, enforced in `api/webcam.php`.
+
+For **Public API** (`/v1/...`) limits, use [api.aviationwx.org](https://api.aviationwx.org) and [`lib/public-api/config.php`](../lib/public-api/config.php) (`getPublicApiRateLimits()`), plus optional overrides under `config.public_api.rate_limits` in `airports.json`.
 
 Rate limit exceeded returns:
 - **Status**: `429 Too Many Requests`

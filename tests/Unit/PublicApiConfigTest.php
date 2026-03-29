@@ -124,9 +124,9 @@ class PublicApiConfigTest extends TestCase
         
         $limits = getPublicApiRateLimits('anonymous');
         
-        $this->assertEquals(100, $limits['requests_per_minute']);
-        $this->assertEquals(1000, $limits['requests_per_hour']);
-        $this->assertEquals(10000, $limits['requests_per_day']);
+        $this->assertEquals(50, $limits['requests_per_minute']);
+        $this->assertEquals(500, $limits['requests_per_hour']);
+        $this->assertEquals(2000, $limits['requests_per_day']);
     }
     
     /**

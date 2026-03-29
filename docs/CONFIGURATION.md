@@ -1522,6 +1522,14 @@ php -r "require 'lib/config.php'; \$c = loadConfig(); var_dump(isset(\$c['config
 
 When `config.public_api.enabled` is true, the Public API and weather history features are available. Wind rose data uses a configurable rolling window.
 
+### Rate limits
+
+Anonymous and partner tiers use `config.public_api.rate_limits` with `requests_per_minute`, `requests_per_hour`, and `requests_per_day` per tier. **Numeric defaults are not listed here** so documentation does not drift from code.
+
+- **Defaults:** [`lib/public-api/config.php`](../lib/public-api/config.php) (`getPublicApiRateLimits()`).
+- **Example shape:** [`config/airports.json.example`](../config/airports.json.example) under `config.public_api.rate_limits`.
+- **Live service:** [api.aviationwx.org](https://api.aviationwx.org) shows the effective limits for the public deployment.
+
 ### Wind Rose Options
 
 | Option | Default | Description |
