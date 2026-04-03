@@ -13,7 +13,7 @@
  * Base URL for HTTP requests to the app Apache vhost from inside the same container or host.
  *
  * Uses getenv('WEATHER_REFRESH_URL') when set (same as scripts/fetch-weather.php). Otherwise
- * falls back to Docker detection and APP_PORT / PORT / 8080.
+ * uses http://localhost:{APP_PORT or PORT or 8080}.
  *
  * @return string Base URL without trailing slash (e.g. http://localhost:8080)
  */
@@ -23,12 +23,7 @@ function getInternalApacheBaseUrl(): string {
         return rtrim($baseUrl, '/');
     }
 
-    $isDocker = file_exists('/.dockerenv')
-        || (getenv('container') !== false)
-        || (file_exists('/proc/self/cgroup') && strpos((string)@file_get_contents('/proc/self/cgroup'), 'docker') !== false);
-
     $port = getenv('APP_PORT') ?: getenv('PORT') ?: '8080';
-    $baseUrl = $isDocker ? 'http://localhost:8080' : 'http://localhost:' . $port;
 
-    return rtrim($baseUrl, '/');
+    return rtrim('http://localhost:' . $port, '/');
 }

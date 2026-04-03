@@ -43,6 +43,7 @@ try {
 } catch (Throwable $e) {
     $success = false;
     $results['error'] = $e->getMessage();
+    $results['metrics_flush_error'] = $e->getMessage();
 }
 
 echo json_encode([

@@ -126,7 +126,7 @@ Manual flush (from the host or inside the web container; must be localhost for t
 curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/metrics-flush.php'
 ```
 
-Expect JSON with `"success":true` and `"metrics_flush":true`. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production).
+Expect JSON with `"success":true` (boolean) and `"metrics_flush":true`. The HTTP client treats only boolean `true` as success, not a string or other truthy value. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production). When `WEATHER_REFRESH_URL` is unset, the fallback is `http://localhost:` plus `APP_PORT`, then `PORT`, then `8080`.
 
 ### Metrics flush failing (status page day/week zeros, logs show HTTP flush failed)
 
