@@ -1275,12 +1275,14 @@ function metrics_get_rolling(int $days = 7, ?array $liveHourOverride = null, ?in
  * Reads hourly files directly for the exact number of hours specified,
  * crossing calendar-day boundaries as needed. This provides a true
  * rolling window (e.g., exactly 24 hours ago to now).
- * 
+ *
  * @param int $hours Number of hours to aggregate (default: 24)
+ * @param int|null $atTimestamp Unix time for period bounds and for the live hour bucket; default now.
+ *        Use one value for the whole aggregation so the current hour matches historical hour file ids.
  * @return array Aggregated metrics with period_hours instead of period_days
  */
-function metrics_get_rolling_hours(int $hours = 24): array {
-    $now = time();
+function metrics_get_rolling_hours(int $hours = 24, ?int $atTimestamp = null): array {
+    $now = $atTimestamp ?? time();
     $result = [
         'period_hours' => $hours,
         'period_start' => $now - ($hours * 3600),
@@ -1300,7 +1302,7 @@ function metrics_get_rolling_hours(int $hours = 24): array {
         $hourId = gmdate('Y-m-d-H', $hourTimestamp);
 
         if ($hourId === $currentHourId) {
-            $live = metrics_get_current_hour();
+            $live = metrics_get_current_hour($now);
             metrics_merge_airports($result['airports'], $live['airports'] ?? []);
             metrics_merge_webcams($result['webcams'], $live['webcams'] ?? []);
             metrics_merge_global($result['global'], $live['global'] ?? []);

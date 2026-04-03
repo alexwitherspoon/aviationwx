@@ -128,6 +128,29 @@ curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/metrics-flush
 
 Expect JSON with `"success":true` (boolean) and `"metrics_flush":true`. The HTTP client treats only boolean `true` as success, not a string or other truthy value. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production). When `WEATHER_REFRESH_URL` is unset, the fallback is `http://localhost:` plus `APP_PORT`, then `PORT`, then `8080`.
 
+#### Internal flush endpoint (`health/metrics-flush.php`)
+
+Security: only `127.0.0.1` and `::1` (`REMOTE_ADDR`; not `X-Forwarded-For`).
+
+**Success (HTTP 200):**
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `success` | bool | `true` only if both flushes succeed. |
+| `timestamp` | int | Unix time. |
+| `results.metrics_flush` | bool | |
+| `results.metrics_flush_error` | string or null | Set when `metrics_flush` is false: code from `metrics_get_last_metrics_flush_error()` or `unknown`. |
+| `results.variant_health_flush` | bool | |
+
+**Uncaught exception (response body is still returned; HTTP status is typically 200 unless the server overrides):**
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `success` | bool | `false` |
+| `timestamp` | int | |
+| `results.error` | string | Exception message (duplicate of `flush_endpoint_error`). |
+| `results.flush_endpoint_error` | string | Failure from either metrics or variant health; do not treat as metrics-only. `metrics_flush_error` is not set on this path. |
+
 ### Metrics flush failing (status page day/week zeros, logs show HTTP flush failed)
 
 1. **Permissions on the cache bind mount** (host): `cache/metrics` and subdirs must be writable by `www-data`. CD should create them and `chown` the tree; see `docs/DEPLOYMENT.md`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.

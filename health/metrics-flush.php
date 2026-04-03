@@ -1,30 +1,9 @@
 <?php
 /**
- * Internal metrics and variant-health flush endpoint
+ * Internal metrics and variant-health flush endpoint (localhost only).
  *
- * Called by the scheduler via localhost so APCu counters are read and persisted in PHP-FPM.
- * CLI cannot see FPM APCu; this script runs in the web worker context.
- *
- * Security: only 127.0.0.1 and ::1 (REMOTE_ADDR is authoritative; not X-Forwarded-For).
- *
- * JSON response shape:
- *
- * **Success (HTTP 200):**
- * - `success` (bool): true only if both flushes succeed.
- * - `timestamp` (int): Unix time.
- * - `results` (object):
- *   - `metrics_flush` (bool)
- *   - `metrics_flush_error` (string|null): set when `metrics_flush` is false; diagnostic code or message
- *     from metrics_get_last_metrics_flush_error(), or `unknown`.
- *   - `variant_health_flush` (bool)
- *
- * **Uncaught exception (HTTP 200 body still returned):**
- * - `success` (bool): false
- * - `timestamp` (int)
- * - `results` (object):
- *   - `error` (string): exception message (same as `flush_endpoint_error`)
- *   - `flush_endpoint_error` (string): use for either metrics or variant_health failure; do not assume
- *     `metrics_flush_error` (that field is only set on the normal path when metrics_flush returns false).
+ * The scheduler calls this over HTTP so APCu counters are read in PHP-FPM. CLI cannot see FPM APCu.
+ * Response JSON is documented in `docs/OPERATIONS.md` (Metrics System, internal flush endpoint).
  *
  * @see metrics_flush()
  * @see variant_health_flush()
