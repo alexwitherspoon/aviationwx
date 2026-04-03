@@ -964,9 +964,11 @@ function metrics_flush_via_http(): bool {
     // Log failure with rate limiting; prefer error when the server reported a flush reason (e.g. disk)
     static $lastLogTime = 0;
     $now = time();
-    $results = is_array($data) && isset($data['results']) && is_array($data['results']) ? $data['results'] : [];
-    $flushErr = $results['metrics_flush_error'] ?? null;
-    $endpointErr = $results['flush_endpoint_error'] ?? null;
+    $responseResults = is_array($data) && isset($data['results']) && is_array($data['results'])
+        ? $data['results']
+        : [];
+    $flushErr = $responseResults['metrics_flush_error'] ?? null;
+    $endpointErr = $responseResults['flush_endpoint_error'] ?? null;
 
     if (($now - $lastLogTime) >= 300) {
         $hasDiag = ($flushErr !== null && $flushErr !== '')
@@ -1645,7 +1647,8 @@ function metrics_get_status_bundle(): array {
  * Build multi-period per-airport metrics from hour / today / weekly aggregates.
  *
  * Single implementation shared by the status page and tests. Callers should pass aggregates
- * built with the same metrics_get_current_hour() snapshot when combining today and rolling windows.
+ * produced with the same Unix snapshot across metrics_get_current_hour(), metrics_get_today(),
+ * and metrics_get_rolling() when combining hour, today, and rolling windows.
  *
  * @param array $hourly Current hour snapshot (metrics_get_current_hour() output shape)
  * @param array $daily Today bucket (files for prior UTC hours plus live hour merge)
