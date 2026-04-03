@@ -187,11 +187,12 @@ class StatusMetricsBundleTest extends TestCase
      */
     public function testMetricsBuildMultiPeriodFromPeriods_MatchesGetMultiPeriod(): void
     {
-        $live = metrics_get_current_hour();
+        $snapshot = time();
+        $live = metrics_get_current_hour($snapshot);
         $expected = metrics_build_multi_period_from_periods(
             $live,
-            metrics_get_today($live),
-            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live)
+            metrics_get_today($live, $snapshot),
+            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live, $snapshot)
         );
         $this->assertEquals($expected, metrics_get_multi_period());
     }

@@ -132,7 +132,7 @@ Expect JSON with `"success":true` (boolean) and `"metrics_flush":true`. The HTTP
 
 1. **Permissions on the cache bind mount** (host): `cache/metrics` and subdirs must be writable by `www-data`. CD should create them and `chown` the tree; see `docs/DEPLOYMENT.md`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
 2. **Internal URL**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `metrics_flush_via_http()` never reaches PHP-FPM.
-3. **Response body**: `curl` the internal URL above; if `"metrics_flush":false`, read `"metrics_flush_error"` (e.g. `hourly_rename_failed`, `json_encode_failed:...`).
+3. **Response body**: `curl` the internal URL above; if `"metrics_flush":false`, read `"metrics_flush_error"` (e.g. `hourly_rename_failed`, `json_encode_failed:...`). If PHP throws before finishing, look at `"flush_endpoint_error"` (and `"error"`) in `results` -- that can be either metrics or variant health, not only metrics flush.
 4. **Application log**: `grep metrics /var/log/aviationwx/app.log` (paths may vary; see logging section above).
 
 ---

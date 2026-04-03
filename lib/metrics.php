@@ -964,14 +964,19 @@ function metrics_flush_via_http(): bool {
     // Log failure with rate limiting; prefer error when the server reported a flush reason (e.g. disk)
     static $lastLogTime = 0;
     $now = time();
-    $flushErr = is_array($data) ? ($data['results']['metrics_flush_error'] ?? null) : null;
+    $results = is_array($data) && isset($data['results']) && is_array($data['results']) ? $data['results'] : [];
+    $flushErr = $results['metrics_flush_error'] ?? null;
+    $endpointErr = $results['flush_endpoint_error'] ?? null;
 
     if (($now - $lastLogTime) >= 300) {
-        $level = ($flushErr !== null && $flushErr !== '') ? 'error' : 'warning';
+        $hasDiag = ($flushErr !== null && $flushErr !== '')
+            || ($endpointErr !== null && $endpointErr !== '');
+        $level = $hasDiag ? 'error' : 'warning';
         aviationwx_log($level, 'metrics: HTTP flush failed', [
             'http_code' => $httpCode,
             'curl_error' => $curlError ?: 'unknown',
             'metrics_flush_error' => $flushErr,
+            'flush_endpoint_error' => $endpointErr,
             'response' => substr($response ?: '', 0, 200),
             'url' => $url,
         ], 'app');
@@ -1174,10 +1179,12 @@ function metrics_aggregate_weekly(string $weekId): bool {
  * @param int $days Number of days to aggregate (default: 7)
  * @param array|null $liveHourOverride If set, use this instead of calling metrics_get_current_hour()
  *        for today's live portion (keeps rolling aligned with a shared snapshot).
+ * @param int|null $atTimestamp Unix time for period bounds and file reads; default now.
+ *        Use one shared value with metrics_get_today() and metrics_get_current_hour() when aggregating together.
  * @return array Aggregated metrics
  */
-function metrics_get_rolling(int $days = 7, ?array $liveHourOverride = null): array {
-    $now = time();
+function metrics_get_rolling(int $days = 7, ?array $liveHourOverride = null, ?int $atTimestamp = null): array {
+    $now = $atTimestamp ?? time();
     $result = [
         'period_days' => $days,
         'period_start' => $now - ($days * 86400),
@@ -1252,7 +1259,7 @@ function metrics_get_rolling(int $days = 7, ?array $liveHourOverride = null): ar
         metrics_merge_global($result['global'], $hourData['global'] ?? []);
     }
 
-    $liveHour = $liveHourOverride ?? metrics_get_current_hour();
+    $liveHour = $liveHourOverride ?? metrics_get_current_hour($now);
     metrics_merge_airports($result['airports'], $liveHour['airports'] ?? []);
     metrics_merge_webcams($result['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($result['global'], $liveHour['global'] ?? []);
@@ -1362,11 +1369,13 @@ function metrics_get_airport(string $airportId): array {
  * 
  * Combines unflushed APCu counters with already-flushed hourly file data
  * to provide real-time current hour metrics.
- * 
+ *
+ * @param int|null $atTimestamp Unix time for bucket id and hourly file selection; default now.
+ *        Pass the same value as metrics_get_today() / metrics_get_rolling() for aligned boundaries.
  * @return array Hourly metrics
  */
-function metrics_get_current_hour(): array {
-    $now = time();
+function metrics_get_current_hour(?int $atTimestamp = null): array {
+    $now = $atTimestamp ?? time();
     $result = [
         'bucket_type' => 'current_hour',
         'bucket_id' => metrics_get_hour_id($now),
@@ -1433,10 +1442,12 @@ function metrics_get_current_hour(): array {
  * (hourly file + unflushed APCu) so totals match /hour on status.
  *
  * @param array|null $liveHourOverride If set, use this instead of metrics_get_current_hour() for the live merge.
+ * @param int|null $atTimestamp Unix time for today bucket and prior-hour file reads; default now.
+ *        Use one shared value with metrics_get_rolling() and metrics_get_current_hour() when aggregating together.
  * @return array Today's metrics
  */
-function metrics_get_today(?array $liveHourOverride = null): array {
-    $now = time();
+function metrics_get_today(?array $liveHourOverride = null, ?int $atTimestamp = null): array {
+    $now = $atTimestamp ?? time();
     $todayId = gmdate('Y-m-d', $now);
 
     $result = [
@@ -1472,7 +1483,7 @@ function metrics_get_today(?array $liveHourOverride = null): array {
         metrics_merge_global($result['global'], $hourData['global'] ?? []);
     }
 
-    $liveHour = $liveHourOverride ?? metrics_get_current_hour();
+    $liveHour = $liveHourOverride ?? metrics_get_current_hour($now);
     metrics_merge_airports($result['airports'], $liveHour['airports'] ?? []);
     metrics_merge_webcams($result['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($result['global'], $liveHour['global'] ?? []);
@@ -1523,8 +1534,10 @@ function metrics_get_empty_status_bundle(): array {
  * Get status page metrics bundle - reads each file once
  *
  * Returns rolling7, rolling1, and today from a single pass over metrics files.
- * Multi-period is built from these + metrics_get_current_hour (APCu) at request time.
- * After a successful flush, an APCu mirror may serve this payload for a short TTL.
+ * The live merge uses metrics_get_current_hour() at the same Unix time as the start of the pass
+ * so bucket boundaries match the file aggregation.
+ * Multi-period is built separately via metrics_get_multi_period(). After a successful flush, an APCu
+ * mirror may serve this payload for a short TTL.
  *
  * @return array {rolling7: array, rolling1: array, today: array}
  */
@@ -1614,7 +1627,7 @@ function metrics_get_status_bundle(): array {
         metrics_merge_global($today['global'], $hourData['global'] ?? []);
     }
 
-    $liveHour = metrics_get_current_hour();
+    $liveHour = metrics_get_current_hour($now);
     metrics_merge_airports($rolling7['airports'], $liveHour['airports'] ?? []);
     metrics_merge_webcams($rolling7['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($rolling7['global'], $liveHour['global'] ?? []);
@@ -1694,17 +1707,19 @@ function metrics_build_multi_period_from_bundle(array $_bundle): array {
  * Get multi-period metrics for all airports (hour, day, 7-day)
  *
  * Returns metrics organized by airport with all three time periods.
- * Uses one metrics_get_current_hour() snapshot for hour, today, and rolling aggregates.
+ * Uses one Unix snapshot for metrics_get_current_hour(), metrics_get_today(), and metrics_get_rolling()
+ * so UTC day/hour boundaries and live merges stay aligned within the request.
  *
  * @return array Multi-period metrics indexed by airport
  */
 function metrics_get_multi_period(): array {
-    $live = metrics_get_current_hour();
+    $snapshot = time();
+    $live = metrics_get_current_hour($snapshot);
 
     return metrics_build_multi_period_from_periods(
         $live,
-        metrics_get_today($live),
-        metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live)
+        metrics_get_today($live, $snapshot),
+        metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live, $snapshot)
     );
 }
 
