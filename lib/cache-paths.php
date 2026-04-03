@@ -776,7 +776,11 @@ function ensureCacheDir(string $path): bool {
 /**
  * Ensure all required cache directories exist
  * Call this during application bootstrap or deployment
- * 
+ *
+ * Production: keep this list aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs)
+ * and `.github/workflows/deploy-docker.yml` (Ensure cache directory exists). Omit CACHE_SFTP_DIR
+ * (`/var/sftp`); that path is created in the entrypoint SFTP block, not under CACHE_BASE_DIR.
+ *
  * @return array List of directories and their creation status
  */
 function ensureAllCacheDirs(): array {
