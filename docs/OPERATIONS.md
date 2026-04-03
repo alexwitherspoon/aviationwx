@@ -120,7 +120,20 @@ Metrics tracked in APCu, flushed to JSON files every 5 minutes:
 - Browser format support
 - Cache hit/miss rates
 
-Manual flush: `curl https://aviationwx.org/health/metrics-flush.php`
+Manual flush (from the host or inside the web container; must be localhost for the internal endpoint):
+
+```bash
+curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/metrics-flush.php'
+```
+
+Expect JSON with `"success":true` and `"metrics_flush":true`. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production).
+
+### Metrics flush failing (status page day/week zeros, logs show HTTP flush failed)
+
+1. **Permissions on the cache bind mount** (host): `cache/metrics` and subdirs must be writable by `www-data`. CD should create them and `chown` the tree; see `docs/DEPLOYMENT.md`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
+2. **Internal URL**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `metrics_flush_via_http()` never reaches PHP-FPM.
+3. **Response body**: `curl` the internal URL above; if `"metrics_flush":false`, read `"metrics_flush_error"` (e.g. `hourly_rename_failed`, `json_encode_failed:...`).
+4. **Application log**: `grep metrics /var/log/aviationwx/app.log` (paths may vary; see logging section above).
 
 ---
 

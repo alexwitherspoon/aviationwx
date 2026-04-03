@@ -23,6 +23,7 @@
 
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/internal-http-url.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/circuit-breaker.php';
 
@@ -501,6 +502,81 @@ function metrics_track_tile_serve(string $source): void {
 }
 
 // =============================================================================
+// STATUS BUNDLE MIRROR (APCu, best-effort after flush; telemetry only)
+// =============================================================================
+
+/**
+ * Last metrics_flush() failure reason for diagnostics (not safety-critical).
+ *
+ * @return string|null Short code if last flush failed, null on success or unknown
+ */
+function metrics_get_last_metrics_flush_error(): ?string {
+    if (!isset($GLOBALS['aviationwx_metrics_flush_last_error'])) {
+        return null;
+    }
+    $e = $GLOBALS['aviationwx_metrics_flush_last_error'];
+    return is_string($e) && $e !== '' ? $e : null;
+}
+
+/**
+ * Remove the status bundle APCu mirror before rebuilding after flush.
+ *
+ * @return void
+ */
+function metrics_invalidate_status_bundle_mirror(): void {
+    if (!function_exists('apcu_delete')) {
+        return;
+    }
+    @apcu_delete(METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY);
+}
+
+/**
+ * Try to read a fresh status bundle mirror from APCu.
+ *
+ * @return array|null Same shape as metrics_get_status_bundle(), or null if miss or stale
+ */
+function metrics_try_get_status_bundle_mirror(): ?array {
+    if (!function_exists('apcu_fetch')) {
+        return null;
+    }
+    $raw = @apcu_fetch(METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY);
+    if (!is_array($raw) || !isset($raw['bundle'], $raw['generated_at'], $raw['today_bucket_id'])) {
+        return null;
+    }
+    $now = time();
+    if (($now - (int)$raw['generated_at']) > METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS) {
+        return null;
+    }
+    if ($raw['today_bucket_id'] !== gmdate('Y-m-d', $now)) {
+        return null;
+    }
+    return is_array($raw['bundle']) ? $raw['bundle'] : null;
+}
+
+/**
+ * Store status bundle snapshot in APCu after a successful flush.
+ *
+ * @param array $bundle From metrics_get_status_bundle()
+ * @return void
+ */
+function metrics_store_status_bundle_mirror(array $bundle): void {
+    if (!function_exists('apcu_store')) {
+        return;
+    }
+    $now = time();
+    $payload = [
+        'generated_at' => $now,
+        'today_bucket_id' => gmdate('Y-m-d', $now),
+        'bundle' => $bundle,
+    ];
+    @apcu_store(
+        METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY,
+        $payload,
+        METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS
+    );
+}
+
+// =============================================================================
 // FLUSH FUNCTIONS
 // =============================================================================
 
@@ -539,13 +615,15 @@ function metrics_get_week_id(?int $timestamp = null): string {
 
 /**
  * Flush APCu counters to hourly JSON file
- * 
+ *
  * Called periodically by scheduler. Reads current counters, adds to hourly bucket,
- * and resets counters.
- * 
+ * and resets counters. On failure, see metrics_get_last_metrics_flush_error().
+ *
  * @return bool True on success
  */
 function metrics_flush(): bool {
+    $GLOBALS['aviationwx_metrics_flush_last_error'] = null;
+
     // Ensure directories exist
     ensureCacheDir(CACHE_METRICS_DIR);
     ensureCacheDir(CACHE_METRICS_HOURLY_DIR);
@@ -806,44 +884,57 @@ function metrics_flush(): bool {
     }
     
     $hourData['last_flush'] = $now;
-    
+
+    $jsonPayload = json_encode($hourData, JSON_PRETTY_PRINT);
+    if ($jsonPayload === false) {
+        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'json_encode_failed:' . json_last_error_msg();
+        return false;
+    }
+
     // Write hourly data atomically
     $tmpFile = $hourFile . '.tmp.' . getmypid();
-    $written = @file_put_contents($tmpFile, json_encode($hourData, JSON_PRETTY_PRINT), LOCK_EX);
+    $written = @file_put_contents($tmpFile, $jsonPayload, LOCK_EX);
     if ($written === false) {
         @unlink($tmpFile);
+        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'hourly_tmp_write_failed';
         return false;
     }
-    
+
     if (!@rename($tmpFile, $hourFile)) {
         @unlink($tmpFile);
+        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'hourly_rename_failed';
         return false;
     }
-    
+
     // Reset APCu counters
     metrics_reset_all();
-    
+
+    // Refresh APCu mirror so status bundle reads avoid full disk merge until TTL (best-effort)
+    metrics_invalidate_status_bundle_mirror();
+    $bundle = metrics_get_status_bundle();
+    metrics_store_status_bundle_mirror($bundle);
+
     return true;
 }
 
 /**
  * Flush metrics via HTTP to PHP-FPM context
- * 
+ *
  * APCu is process-isolated: CLI processes (like the scheduler) cannot access
  * counters incremented by PHP-FPM workers. This function calls an internal
  * endpoint via localhost to trigger the flush within PHP-FPM context.
- * 
+ *
+ * URL base comes from getInternalApacheBaseUrl() (WEATHER_REFRESH_URL in production).
+ *
  * Use this from CLI scripts instead of metrics_flush() directly.
- * 
+ *
  * @return bool True on success
  */
 function metrics_flush_via_http(): bool {
     $ch = curl_init();
-    
-    // Call Apache directly on port 8080 (skips nginx, works in both prod and local)
-    // Endpoint in health/ directory to avoid .htaccess blocking of admin/
-    $url = 'http://127.0.0.1:8080/health/metrics-flush.php';
-    
+
+    $url = getInternalApacheBaseUrl() . '/health/metrics-flush.php';
+
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
@@ -852,30 +943,36 @@ function metrics_flush_via_http(): bool {
         CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_HTTPHEADER => ['X-Scheduler-Request: 1'],
     ]);
-    
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    
+    $curlError = curl_error($ch);
+
     if ($httpCode === 200 && $response !== false) {
         $data = json_decode($response, true);
-        if (isset($data['success']) && $data['success']) {
+        if (is_array($data) && !empty($data['success'])) {
             return true;
         }
     }
-    
-    // Log failure with rate limiting to avoid log spam
+
+    // Log failure with rate limiting; prefer error when the server reported a flush reason (e.g. disk)
     static $lastLogTime = 0;
     $now = time();
+    $decoded = is_string($response) ? json_decode($response, true) : null;
+    $flushErr = is_array($decoded) ? ($decoded['results']['metrics_flush_error'] ?? null) : null;
+
     if (($now - $lastLogTime) >= 300) {
-        aviationwx_log('warning', 'metrics: HTTP flush failed', [
+        $level = ($flushErr !== null && $flushErr !== '') ? 'error' : 'warning';
+        aviationwx_log($level, 'metrics: HTTP flush failed', [
             'http_code' => $httpCode,
-            'error' => $error ?: 'unknown',
-            'response' => substr($response ?: '', 0, 200)
+            'curl_error' => $curlError ?: 'unknown',
+            'metrics_flush_error' => $flushErr,
+            'response' => substr($response ?: '', 0, 200),
+            'url' => $url,
         ], 'app');
         $lastLogTime = $now;
     }
-    
+
     return false;
 }
 
@@ -1122,31 +1219,37 @@ function metrics_get_rolling(int $days = 7): array {
         }
     }
     
-    // Add current day's hourly data
-    $todayHours = (int)gmdate('H') + 1;
-    for ($h = 0; $h < $todayHours; $h++) {
-        $hourId = gmdate('Y-m-d', $now) . '-' . sprintf('%02d', $h);
+    // Current UTC day: committed hours from files, then live current hour (file + APCu)
+    $todayId = gmdate('Y-m-d', $now);
+    $currentHour = (int)gmdate('H', $now);
+    for ($h = 0; $h < $currentHour; $h++) {
+        $hourId = $todayId . '-' . sprintf('%02d', $h);
         $hourFile = getMetricsHourlyPath($hourId);
-        
+
         if (!file_exists($hourFile)) {
             continue;
         }
-        
+
         $content = @file_get_contents($hourFile);
         if ($content === false) {
             continue;
         }
-        
+
         $hourData = @json_decode($content, true);
         if (!is_array($hourData)) {
             continue;
         }
-        
+
         metrics_merge_airports($result['airports'], $hourData['airports'] ?? []);
         metrics_merge_webcams($result['webcams'], $hourData['webcams'] ?? []);
         metrics_merge_global($result['global'], $hourData['global'] ?? []);
     }
-    
+
+    $liveHour = metrics_get_current_hour();
+    metrics_merge_airports($result['airports'], $liveHour['airports'] ?? []);
+    metrics_merge_webcams($result['webcams'], $liveHour['webcams'] ?? []);
+    metrics_merge_global($result['global'], $liveHour['global'] ?? []);
+
     return $result;
 }
 
@@ -1174,34 +1277,41 @@ function metrics_get_rolling_hours(int $hours = 24): array {
     
     // Calculate the starting hour timestamp and iterate through each hour
     // We go backwards from the current hour to include partial current hour data
-    $currentHour = (int)gmdate('H', $now);
-    $currentDate = gmdate('Y-m-d', $now);
-    
+    $currentHourId = metrics_get_hour_id($now);
+
     for ($h = 0; $h < $hours; $h++) {
-        // Calculate timestamp for this hour bucket (going backwards)
         $hourTimestamp = $now - ($h * 3600);
         $hourId = gmdate('Y-m-d-H', $hourTimestamp);
+
+        if ($hourId === $currentHourId) {
+            $live = metrics_get_current_hour();
+            metrics_merge_airports($result['airports'], $live['airports'] ?? []);
+            metrics_merge_webcams($result['webcams'], $live['webcams'] ?? []);
+            metrics_merge_global($result['global'], $live['global'] ?? []);
+            continue;
+        }
+
         $hourFile = getMetricsHourlyPath($hourId);
-        
+
         if (!file_exists($hourFile)) {
             continue;
         }
-        
+
         $content = @file_get_contents($hourFile);
         if ($content === false) {
             continue;
         }
-        
+
         $hourData = @json_decode($content, true);
         if (!is_array($hourData)) {
             continue;
         }
-        
+
         metrics_merge_airports($result['airports'], $hourData['airports'] ?? []);
         metrics_merge_webcams($result['webcams'], $hourData['webcams'] ?? []);
         metrics_merge_global($result['global'], $hourData['global'] ?? []);
     }
-    
+
     return $result;
 }
 
@@ -1311,16 +1421,16 @@ function metrics_get_current_hour(): array {
 
 /**
  * Get metrics for today (all hours so far)
- * 
- * Aggregates all hourly files for the current UTC day. Always reads
- * hourly files directly to ensure fresh data (daily files may be stale).
- * 
+ *
+ * Merges committed hourly files for UTC hours [0, currentHour) plus the live current hour
+ * from metrics_get_current_hour() (hourly file + unflushed APCu) so totals match /hour on status.
+ *
  * @return array Today's metrics
  */
 function metrics_get_today(): array {
     $now = time();
     $todayId = gmdate('Y-m-d', $now);
-    
+
     $result = [
         'bucket_type' => 'today',
         'bucket_id' => $todayId,
@@ -1329,32 +1439,36 @@ function metrics_get_today(): array {
         'global' => metrics_get_empty_global(),
         'generated_at' => $now
     ];
-    
-    // Aggregate hourly files for today (hours 0 through current hour)
+
     $currentHour = (int)gmdate('H', $now);
-    for ($h = 0; $h <= $currentHour; $h++) {
+    for ($h = 0; $h < $currentHour; $h++) {
         $hourId = $todayId . '-' . sprintf('%02d', $h);
         $hourFile = getMetricsHourlyPath($hourId);
-        
+
         if (!file_exists($hourFile)) {
             continue;
         }
-        
+
         $content = @file_get_contents($hourFile);
         if ($content === false) {
             continue;
         }
-        
+
         $hourData = @json_decode($content, true);
         if (!is_array($hourData)) {
             continue;
         }
-        
+
         metrics_merge_airports($result['airports'], $hourData['airports'] ?? []);
         metrics_merge_webcams($result['webcams'], $hourData['webcams'] ?? []);
         metrics_merge_global($result['global'], $hourData['global'] ?? []);
     }
-    
+
+    $liveHour = metrics_get_current_hour();
+    metrics_merge_airports($result['airports'], $liveHour['airports'] ?? []);
+    metrics_merge_webcams($result['webcams'], $liveHour['webcams'] ?? []);
+    metrics_merge_global($result['global'], $liveHour['global'] ?? []);
+
     return $result;
 }
 
@@ -1402,10 +1516,16 @@ function metrics_get_empty_status_bundle(): array {
  *
  * Returns rolling7, rolling1, and today from a single pass over metrics files.
  * Multi-period is built from these + metrics_get_current_hour (APCu) at request time.
+ * After a successful flush, an APCu mirror may serve this payload for a short TTL.
  *
  * @return array {rolling7: array, rolling1: array, today: array}
  */
 function metrics_get_status_bundle(): array {
+    $mirrored = metrics_try_get_status_bundle_mirror();
+    if ($mirrored !== null) {
+        return $mirrored;
+    }
+
     $now = time();
     $todayId = gmdate('Y-m-d', $now);
     $currentHour = (int)gmdate('H', $now);
@@ -1463,7 +1583,7 @@ function metrics_get_status_bundle(): array {
         }
     }
 
-    for ($h = 0; $h <= $currentHour; $h++) {
+    for ($h = 0; $h < $currentHour; $h++) {
         $hourId = $todayId . '-' . sprintf('%02d', $h);
         $hourFile = getMetricsHourlyPath($hourId);
         if (!file_exists($hourFile)) {
@@ -1487,6 +1607,17 @@ function metrics_get_status_bundle(): array {
         metrics_merge_webcams($today['webcams'], $hourData['webcams'] ?? []);
         metrics_merge_global($today['global'], $hourData['global'] ?? []);
     }
+
+    $liveHour = metrics_get_current_hour();
+    metrics_merge_airports($rolling7['airports'], $liveHour['airports'] ?? []);
+    metrics_merge_webcams($rolling7['webcams'], $liveHour['webcams'] ?? []);
+    metrics_merge_global($rolling7['global'], $liveHour['global'] ?? []);
+    metrics_merge_airports($rolling1['airports'], $liveHour['airports'] ?? []);
+    metrics_merge_webcams($rolling1['webcams'], $liveHour['webcams'] ?? []);
+    metrics_merge_global($rolling1['global'], $liveHour['global'] ?? []);
+    metrics_merge_airports($today['airports'], $liveHour['airports'] ?? []);
+    metrics_merge_webcams($today['webcams'], $liveHour['webcams'] ?? []);
+    metrics_merge_global($today['global'], $liveHour['global'] ?? []);
 
     return ['rolling7' => $rolling7, 'rolling1' => $rolling1, 'today' => $today];
 }
@@ -1540,17 +1671,17 @@ function metrics_build_multi_period_from_periods(array $hourly, array $daily, ar
 }
 
 /**
- * Build multi-period metrics from bundle + current hour (APCu)
+ * Build multi-period metrics for the status page (live today and week, same as metrics_get_multi_period()).
  *
- * @param array $bundle From metrics_get_status_bundle
+ * The bundle argument is kept for a stable call signature; per-airport day/week values always use
+ * metrics_get_today() and metrics_get_rolling() so totals stay aligned with APCu even when the
+ * status bundle came from a short-lived APCu mirror after flush.
+ *
+ * @param array $_bundle Pass metrics_get_status_bundle() output for API compatibility (unused)
  * @return array Multi-period metrics indexed by airport
  */
-function metrics_build_multi_period_from_bundle(array $bundle): array {
-    return metrics_build_multi_period_from_periods(
-        metrics_get_current_hour(),
-        $bundle['today'],
-        $bundle['rolling7']
-    );
+function metrics_build_multi_period_from_bundle(array $_bundle): array {
+    return metrics_get_multi_period();
 }
 
 /**

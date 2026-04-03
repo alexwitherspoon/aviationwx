@@ -30,13 +30,16 @@ $success = true;
 try {
     // Flush metrics APCu counters to JSON files
     $results['metrics_flush'] = metrics_flush();
-    
+    $results['metrics_flush_error'] = $results['metrics_flush']
+        ? null
+        : (metrics_get_last_metrics_flush_error() ?? 'unknown');
+
     // Flush variant health APCu counters to cache file
     $results['variant_health_flush'] = variant_health_flush();
-    
+
     // Overall success requires both to succeed
     $success = $results['metrics_flush'] && $results['variant_health_flush'];
-    
+
 } catch (Throwable $e) {
     $success = false;
     $results['error'] = $e->getMessage();

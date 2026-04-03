@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/internal-http-url.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 
@@ -26,22 +27,14 @@ if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
 
 /**
  * Get weather refresh base URL
- * 
- * Determines the base URL for weather refresh requests. Checks WEATHER_REFRESH_URL
- * environment variable first, then detects Docker environment and falls back to
- * localhost with appropriate port.
- * 
+ *
+ * Delegates to getInternalApacheBaseUrl() so scheduler traffic uses the same
+ * internal Apache base as metrics flush (WEATHER_REFRESH_URL in production).
+ *
  * @return string Base URL (without trailing slash)
  */
-function getWeatherBaseUrl() {
-    $baseUrl = getenv('WEATHER_REFRESH_URL');
-    if (!$baseUrl) {
-        $isDocker = file_exists('/.dockerenv') || 
-                    (getenv('container') !== false) ||
-                    (file_exists('/proc/self/cgroup') && strpos(@file_get_contents('/proc/self/cgroup'), 'docker') !== false);
-        $baseUrl = $isDocker ? "http://localhost:8080" : "http://localhost:" . (getenv('APP_PORT') ?: getenv('PORT') ?: '8080');
-    }
-    return rtrim($baseUrl, '/');
+function getWeatherBaseUrl(): string {
+    return getInternalApacheBaseUrl();
 }
 
 /**
