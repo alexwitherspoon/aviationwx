@@ -120,7 +120,43 @@ Metrics tracked in APCu, flushed to JSON files every 5 minutes:
 - Browser format support
 - Cache hit/miss rates
 
-Manual flush: `curl https://aviationwx.org/health/metrics-flush.php`
+Manual flush (from the host or inside the web container; must be localhost for the internal endpoint):
+
+```bash
+curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/metrics-flush.php'
+```
+
+Expect JSON with `"success":true` (boolean) and `"metrics_flush":true`. The HTTP client treats only boolean `true` as success, not a string or other truthy value. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production). When `WEATHER_REFRESH_URL` is unset, the fallback is `http://localhost:` plus `APP_PORT`, then `PORT`, then `8080`.
+
+#### Internal flush endpoint (`health/metrics-flush.php`)
+
+Security: only `127.0.0.1` and `::1` (`REMOTE_ADDR`; not `X-Forwarded-For`).
+
+**Success (HTTP 200):**
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `success` | bool | `true` only if both flushes succeed. |
+| `timestamp` | int | Unix time. |
+| `results.metrics_flush` | bool | |
+| `results.metrics_flush_error` | string or null | Set when `metrics_flush` is false: code from `metrics_get_last_metrics_flush_error()` or `unknown`. |
+| `results.variant_health_flush` | bool | |
+
+**Uncaught exception (response body is still returned; HTTP status is typically 200 unless the server overrides):**
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `success` | bool | `false` |
+| `timestamp` | int | |
+| `results.error` | string | Exception message (duplicate of `flush_endpoint_error`). |
+| `results.flush_endpoint_error` | string | Failure from either metrics or variant health; do not treat as metrics-only. `metrics_flush_error` is not set on this path. |
+
+### Metrics flush failing (status page day/week zeros, logs show HTTP flush failed)
+
+1. **Permissions on the cache bind mount** (host): `cache/metrics` and subdirs must be writable by `www-data`. CD should create them and `chown` the tree; see `docs/DEPLOYMENT.md`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
+2. **Internal URL**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `metrics_flush_via_http()` never reaches PHP-FPM.
+3. **Response body**: `curl` the internal URL above; if `"metrics_flush":false`, read `"metrics_flush_error"` (e.g. `hourly_rename_failed`, `json_encode_failed:...`). If PHP throws before finishing, look at `"flush_endpoint_error"` (and `"error"`) in `results` -- that can be either metrics or variant health, not only metrics flush.
+4. **Application log**: `grep metrics /var/log/aviationwx/app.log` (paths may vary; see logging section above).
 
 ---
 

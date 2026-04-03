@@ -25,7 +25,7 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 
 This deployment requires **minimal host customization**:
 - ✅ **No log directory setup** - CD creates `/var/aviationwx/logs` on host; logs persist across reboots
-- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` with `webcams` and `sftp` subdirectories (bind-mounted into the container)
+- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` subdirectories matching `ensureAllCacheDirs()` in `lib/cache-paths.php` (e.g. `weather/history`, `webcams`, `ftp`, `notam`, `partners`, `rate_limits`, `metrics/*`, `peak_gusts`, `temp_extremes`, `runways`, `geomag`, `map_tiles`) plus `sftp` for the `/var/sftp` bind mount; all are `www-data`-writable after `chown` except container startup may set `cache/ftp` root-owned for vsftpd
 - ✅ **Partner logos directory** - CD creates `/home/aviationwx/partner-logos`; logo files come from the secrets repo deploy
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions

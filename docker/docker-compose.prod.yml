@@ -33,7 +33,7 @@ services:
       - /tmp/aviationwx-cache/sftp:/var/sftp
       # Logs persist on host across container restarts and reboots
       - /var/aviationwx/logs:/var/log/aviationwx
-      # Note: FTP uploads go to /var/www/html/cache/uploads/ (inside cache mount)
+      # Note: FTP uploads use /var/www/html/cache/ftp/ (CACHE_UPLOADS_DIR; inside cache mount)
       - /etc/letsencrypt:/etc/letsencrypt:rw  # Let's Encrypt certificates (rw needed for certbot to write)
     cap_add:
       - NET_ADMIN

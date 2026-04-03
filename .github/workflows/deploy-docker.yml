@@ -1049,18 +1049,26 @@ jobs:
             echo "Existing cache directory owner: ${CURRENT_OWNER}"
           fi
           
-          # Try to create directory structure without sudo first
-          # webcams: image cache; sftp: host path for SFTP chroot (see docker-compose.prod.yml)
-          if mkdir -p /tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp 2>/dev/null; then
+          # Bind mount is /tmp/aviationwx-cache -> /var/www/html/cache. Subdirs must match
+          # lib/cache-paths.php ensureAllCacheDirs() (except /var/sftp, mounted from .../sftp).
+          # shellcheck disable=SC2086
+          CACHE_MKDIRS="/tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp \
+            /tmp/aviationwx-cache/weather /tmp/aviationwx-cache/weather/history \
+            /tmp/aviationwx-cache/ftp /tmp/aviationwx-cache/notam /tmp/aviationwx-cache/partners \
+            /tmp/aviationwx-cache/rate_limits \
+            /tmp/aviationwx-cache/metrics/hourly /tmp/aviationwx-cache/metrics/daily /tmp/aviationwx-cache/metrics/weekly \
+            /tmp/aviationwx-cache/peak_gusts /tmp/aviationwx-cache/temp_extremes /tmp/aviationwx-cache/runways \
+            /tmp/aviationwx-cache/geomag /tmp/aviationwx-cache/map_tiles"
+          if mkdir -p ${CACHE_MKDIRS} 2>/dev/null; then
             echo "✓ Created cache directories without sudo"
           else
             echo "⚠️  Failed to create directory without sudo, trying with sudo..."
-            # Use sudo to create directory structure
-            sudo mkdir -p /tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp || {
+            if sudo mkdir -p ${CACHE_MKDIRS}; then
+              echo "✓ Created cache directory with sudo"
+            else
               echo "❌ Failed to create cache directory even with sudo"
               exit 1
-            }
-            echo "✓ Created cache directory with sudo"
+            fi
           fi
           
           # Set ownership to match container's www-data user
@@ -1079,13 +1087,18 @@ jobs:
           # Ensure directory permissions allow www-data to write
           # Use 775 for webcams (group writable) and 755 for parent
           sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
-            sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
-            sudo chmod 775 /tmp/aviationwx-cache/sftp 2>/dev/null || chmod 775 /tmp/aviationwx-cache/sftp || true
+            for d in webcams sftp weather weather/history ftp notam partners rate_limits \
+              metrics metrics/hourly metrics/daily metrics/weekly \
+              peak_gusts temp_extremes runways geomag map_tiles; do
+              sudo chmod 775 "/tmp/aviationwx-cache/${d}" 2>/dev/null || chmod 775 "/tmp/aviationwx-cache/${d}" || true
+            done
           
           # Verify directory was created and is writable
-          if [ ! -d /tmp/aviationwx-cache/webcams ] || [ ! -d /tmp/aviationwx-cache/sftp ]; then
+          if [ ! -d /tmp/aviationwx-cache/webcams ] || [ ! -d /tmp/aviationwx-cache/sftp ] \
+            || [ ! -d /tmp/aviationwx-cache/weather/history ] || [ ! -d /tmp/aviationwx-cache/metrics/hourly ] \
+            || [ ! -d /tmp/aviationwx-cache/map_tiles ]; then
             echo "❌ Failed to create cache directory"
-            echo "This is critical - webcam caching and SFTP will not work without these directories"
+            echo "This is critical - cache subdirs must exist (see lib/cache-paths.php ensureAllCacheDirs)"
             echo "Check permissions and disk space, then retry deployment"
             exit 1
           fi
@@ -1095,6 +1108,8 @@ jobs:
           ls -ld /tmp/aviationwx-cache
           ls -ld /tmp/aviationwx-cache/webcams
           ls -ld /tmp/aviationwx-cache/sftp
+          ls -ld /tmp/aviationwx-cache/weather /tmp/aviationwx-cache/metrics /tmp/aviationwx-cache/metrics/hourly 2>/dev/null || true
+          ls -ld /tmp/aviationwx-cache/map_tiles /tmp/aviationwx-cache/ftp 2>/dev/null || true
           
           # Test write access (as current user, which should work if permissions are correct)
           if touch /tmp/aviationwx-cache/webcams/.test_write 2>/dev/null; then
@@ -1106,7 +1121,7 @@ jobs:
           fi
           
           # Final verification
-          echo "✓ Cache directories created at /tmp/aviationwx-cache/webcams and /tmp/aviationwx-cache/sftp"
+          echo "✓ Cache subdirs created (matches ensureAllCacheDirs in lib/cache-paths.php; SFTP host path sftp/)"
           echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
           EOF
 

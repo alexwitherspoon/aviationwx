@@ -4,7 +4,7 @@
  *
  * Provides optimized access to metrics data for the status page with APCu caching.
  * Uses single bundle read (rolling7, rolling1, today) to eliminate duplicate file reads.
- * Multi-period merges bundle with current-hour APCu at request time.
+ * Multi-period uses metrics_get_multi_period() (one live snapshot per request for hour/day/week).
  */
 
 require_once __DIR__ . '/cached-data-loader.php';
@@ -15,8 +15,8 @@ require_once __DIR__ . '/constants.php';
 /**
  * Get status metrics bundle (rolling7, rolling1, multiPeriod)
  *
- * Reads each metrics file once. APCu + file persistence. Multi-period includes
- * real-time current hour from APCu.
+ * Reads each metrics file once for rolling7/rolling1/today. multiPeriod is computed via
+ * metrics_get_multi_period() so hour/day/week share one APCu snapshot.
  *
  * @return array {
  *   rolling7: array 7-day rolling metrics,

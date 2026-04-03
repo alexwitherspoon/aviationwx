@@ -351,6 +351,13 @@ if (!defined('METRICS_FLUSH_INTERVAL_SECONDS')) {
 if (!defined('METRICS_STATUS_PAGE_DAYS')) {
     define('METRICS_STATUS_PAGE_DAYS', 7); // Show 7-day rolling window on status page
 }
+if (!defined('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS')) {
+    // APCu snapshot of metrics_get_status_bundle() after flush; best-effort telemetry only
+    define('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS', 120);
+}
+if (!defined('METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY')) {
+    define('METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY', 'metrics_status_bundle_mirror_v1');
+}
 
 // Time constants (seconds)
 if (!defined('SECONDS_PER_MINUTE')) {

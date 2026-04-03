@@ -1,12 +1,12 @@
 <?php
 /**
- * Internal Metrics Flush Endpoint
- * 
- * Called by scheduler via localhost to flush APCu counters within PHP-FPM context.
- * APCu is process-isolated: CLI scheduler cannot read PHP-FPM's APCu cache.
- * This endpoint runs in PHP-FPM, giving access to the actual metrics counters.
- * 
- * Security: Only accepts requests from localhost (127.0.0.1 or ::1).
+ * Internal metrics and variant-health flush endpoint (localhost only).
+ *
+ * The scheduler calls this over HTTP so APCu counters are read in PHP-FPM. CLI cannot see FPM APCu.
+ * Response JSON is documented in `docs/OPERATIONS.md` (Metrics System, internal flush endpoint).
+ *
+ * @see metrics_flush()
+ * @see variant_health_flush()
  */
 
 // Security: Only allow localhost requests
@@ -30,16 +30,21 @@ $success = true;
 try {
     // Flush metrics APCu counters to JSON files
     $results['metrics_flush'] = metrics_flush();
-    
+    $results['metrics_flush_error'] = $results['metrics_flush']
+        ? null
+        : (metrics_get_last_metrics_flush_error() ?? 'unknown');
+
     // Flush variant health APCu counters to cache file
     $results['variant_health_flush'] = variant_health_flush();
-    
+
     // Overall success requires both to succeed
     $success = $results['metrics_flush'] && $results['variant_health_flush'];
-    
+
 } catch (Throwable $e) {
     $success = false;
-    $results['error'] = $e->getMessage();
+    $msg = $e->getMessage();
+    $results['error'] = $msg;
+    $results['flush_endpoint_error'] = $msg;
 }
 
 echo json_encode([

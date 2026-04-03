@@ -196,10 +196,23 @@ echo "✓ Scheduler started (PID: $SCHEDULER_PID)"
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions
 echo "Initializing cache directory..."
+# Subdirectories must match lib/cache-paths.php ensureAllCacheDirs() (except CACHE_SFTP_DIR = /var/sftp, handled below).
 CACHE_DIR="/var/www/html/cache"
 WEBCAM_CACHE_DIR="${CACHE_DIR}/webcams"
 WEATHER_CACHE_DIR="${CACHE_DIR}/weather"
-UPLOADS_CACHE_DIR="${CACHE_DIR}/uploads"
+FTP_CACHE_DIR="${CACHE_DIR}/ftp"
+METRICS_DIR="${CACHE_DIR}/metrics"
+METRICS_HOURLY_DIR="${METRICS_DIR}/hourly"
+METRICS_DAILY_DIR="${METRICS_DIR}/daily"
+METRICS_WEEKLY_DIR="${METRICS_DIR}/weekly"
+PEAK_GUSTS_DIR="${CACHE_DIR}/peak_gusts"
+TEMP_EXTREMES_DIR="${CACHE_DIR}/temp_extremes"
+RUNWAYS_DIR="${CACHE_DIR}/runways"
+GEOMAG_DIR="${CACHE_DIR}/geomag"
+NOTAM_DIR="${CACHE_DIR}/notam"
+PARTNERS_DIR="${CACHE_DIR}/partners"
+RATE_LIMITS_DIR="${CACHE_DIR}/rate_limits"
+MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
 
 # Create cache dirs as www-data first. Production bind-mounts cache from the host
 # (often owned by www-data). Under rootless Docker, container "root" maps to an
@@ -207,10 +220,22 @@ UPLOADS_CACHE_DIR="${CACHE_DIR}/uploads"
 ensure_cache_subdirs() {
     local dirs=(
         "${CACHE_DIR}"
-        "${WEBCAM_CACHE_DIR}"
+        "${PEAK_GUSTS_DIR}"
+        "${TEMP_EXTREMES_DIR}"
+        "${RUNWAYS_DIR}"
+        "${GEOMAG_DIR}"
         "${WEATHER_CACHE_DIR}"
         "${WEATHER_CACHE_DIR}/history"
-        "${UPLOADS_CACHE_DIR}"
+        "${WEBCAM_CACHE_DIR}"
+        "${FTP_CACHE_DIR}"
+        "${NOTAM_DIR}"
+        "${PARTNERS_DIR}"
+        "${RATE_LIMITS_DIR}"
+        "${METRICS_DIR}"
+        "${METRICS_HOURLY_DIR}"
+        "${METRICS_DAILY_DIR}"
+        "${METRICS_WEEKLY_DIR}"
+        "${MAP_TILES_DIR}"
     )
     if command -v runuser >/dev/null 2>&1; then
         if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
@@ -239,6 +264,18 @@ if [ -d "${CACHE_DIR}" ]; then
     fi
     if [ -d "${WEATHER_CACHE_DIR}" ]; then
         chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
+    fi
+    # Writable app data under cache (www-data); ftp/ is re-owned root below for vsftpd
+    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${GEOMAG_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
+        if [ -d "${_d}" ]; then
+            chmod 775 "${_d}" 2>/dev/null || true
+        fi
+    done
+    if [ -d "${METRICS_DIR}" ]; then
+        chmod 775 "${METRICS_DIR}" 2>/dev/null || true
+        chmod 775 "${METRICS_HOURLY_DIR}" 2>/dev/null || true
+        chmod 775 "${METRICS_DAILY_DIR}" 2>/dev/null || true
+        chmod 775 "${METRICS_WEEKLY_DIR}" 2>/dev/null || true
     fi
     
     echo "✓ Cache directory initialized"

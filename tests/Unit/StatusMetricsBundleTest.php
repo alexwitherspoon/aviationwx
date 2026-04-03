@@ -28,6 +28,9 @@ class StatusMetricsBundleTest extends TestCase
         if (function_exists('apcu_clear_cache')) {
             @apcu_clear_cache();
         }
+        if (function_exists('apcu_delete')) {
+            @apcu_delete(METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY);
+        }
         $bundleFile = CACHE_BASE_DIR . '/status_metrics_bundle.json';
         if (file_exists($bundleFile)) {
             @unlink($bundleFile);
@@ -184,27 +187,23 @@ class StatusMetricsBundleTest extends TestCase
      */
     public function testMetricsBuildMultiPeriodFromPeriods_MatchesGetMultiPeriod(): void
     {
-        $expected = metrics_get_multi_period();
-        $actual = metrics_build_multi_period_from_periods(
-            metrics_get_current_hour(),
-            metrics_get_today(),
-            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS)
+        $snapshot = time();
+        $live = metrics_get_current_hour($snapshot);
+        $expected = metrics_build_multi_period_from_periods(
+            $live,
+            metrics_get_today($live, $snapshot),
+            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live, $snapshot)
         );
-        $this->assertEquals($expected, $actual);
+        $this->assertEquals($expected, metrics_get_multi_period());
     }
 
     /**
-     * Bundle path must match building from current hour plus bundle today and rolling7.
+     * Status multi-period path must match full live aggregation (today + rolling include APCu).
      */
     public function testMetricsBuildMultiPeriodFromBundle_MatchesFromPeriods(): void
     {
         $bundle = metrics_get_status_bundle();
         $fromBundle = metrics_build_multi_period_from_bundle($bundle);
-        $fromPeriods = metrics_build_multi_period_from_periods(
-            metrics_get_current_hour(),
-            $bundle['today'],
-            $bundle['rolling7']
-        );
-        $this->assertEquals($fromPeriods, $fromBundle);
+        $this->assertEquals(metrics_get_multi_period(), $fromBundle);
     }
 }
