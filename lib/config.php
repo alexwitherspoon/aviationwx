@@ -191,6 +191,58 @@ function isProduction(): bool {
 }
 
 /**
+ * Returns whether the HTTP host is the main site (apex or www), not a feature or airport subdomain.
+ *
+ * Compares case-insensitively against getBaseDomain() so config casing does not affect routing.
+ *
+ * @param string $hostWithoutPort Host from HTTP_HOST with port removed
+ * @param string $baseDomain Value from getBaseDomain()
+ * @return bool True for apex or www only
+ */
+function isPrimarySiteHost(string $hostWithoutPort, string $baseDomain): bool {
+    $host = strtolower($hostWithoutPort);
+    $base = strtolower($baseDomain);
+    return $host === $base || $host === 'www.' . $base;
+}
+
+/**
+ * In production only, redirect apex/www requests to the canonical feature subdomain (301).
+ *
+ * Production is determined by isProduction() (APP_ENV, ENVIRONMENT, host heuristics). Deployments
+ * typically set APP_ENV=production via production .env or container environment.
+ *
+ * @param string $subdomainLabel Single DNS label (e.g. airports, guides, terms, embed)
+ * @param string $pathAndQuery Path on the target host including query string; must start with / or be empty
+ * @param string $hostWithoutPort Host from HTTP_HOST with port removed, lowercased
+ * @param string $baseDomain Value from getBaseDomain()
+ * @return void Returns when no redirect; otherwise does not return (301 Location and exit)
+ */
+function redirectProductionApexToCanonicalSubdomain(
+    string $subdomainLabel,
+    string $pathAndQuery,
+    string $hostWithoutPort,
+    string $baseDomain
+): void {
+    if (!isProduction() || !isPrimarySiteHost($hostWithoutPort, $baseDomain)) {
+        return;
+    }
+    if (!preg_match('/^[a-z][a-z0-9-]{0,62}$/', $subdomainLabel)) {
+        error_log('redirectProductionApexToCanonicalSubdomain: invalid subdomain label');
+        return;
+    }
+    if ($pathAndQuery === '') {
+        $pathAndQuery = '/';
+    }
+    if ($pathAndQuery[0] !== '/') {
+        $pathAndQuery = '/' . $pathAndQuery;
+    }
+    $url = 'https://' . $subdomainLabel . '.' . strtolower($baseDomain) . $pathAndQuery;
+    http_response_code(301);
+    header('Location: ' . $url);
+    exit;
+}
+
+/**
  * Check if application is running in test mode
  * 
  * Test mode is active when:

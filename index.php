@@ -72,6 +72,7 @@ if ($config === null) {
 
 // Check for guides subdomain (after config is loaded so getBaseDomain() works)
 $baseDomain = getBaseDomain();
+$hostWithoutPort = preg_replace('/:\d+$/', '', $host);
 // Match guides subdomain exactly (e.g., guides.aviationwx.org)
 if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     // In single-airport mode, redirect to the single airport dashboard
@@ -110,8 +111,8 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
-// Check for guides query parameter or path (for local dev/testing)
-// This must be after config is loaded because guides.php needs config
+// Guides via path or query; production apex/www 301 to guides subdomain
+// Config must be loaded before guides.php
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
     // In single-airport mode, redirect to the single airport dashboard
     if (isSingleAirportMode()) {
@@ -124,7 +125,17 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
             exit;
         }
     }
-    
+
+    $guidesQuery = $_GET;
+    unset($guidesQuery['guides']);
+    $guidesQs = !empty($guidesQuery) ? '?' . http_build_query($guidesQuery) : '';
+    if (strpos($requestPath, 'guides/') === 0) {
+        $guidesTail = '/' . substr($requestPath, 7);
+    } else {
+        $guidesTail = '/';
+    }
+    redirectProductionApexToCanonicalSubdomain('guides', $guidesTail . $guidesQs, $hostWithoutPort, $baseDomain);
+
     // If path-based route, strip 'guides/' prefix so guides.php can handle it correctly
     if (strpos($requestPath, 'guides/') === 0) {
         // Extract the guide name after 'guides/'
@@ -156,7 +167,7 @@ if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
-// Check for airports directory page (for local dev/testing)
+// Airports directory via path or query; production apex/www redirect to airports subdomain
 if (isset($_GET['airports']) || $requestPath === 'airports') {
     // In single-airport mode, redirect to the single airport dashboard
     if (isSingleAirportMode()) {
@@ -169,14 +180,24 @@ if (isset($_GET['airports']) || $requestPath === 'airports') {
             exit;
         }
     }
-    
+
+    $airportsQuery = $_GET;
+    unset($airportsQuery['airports']);
+    $airportsQs = !empty($airportsQuery) ? '?' . http_build_query($airportsQuery) : '';
+    redirectProductionApexToCanonicalSubdomain('airports', '/' . $airportsQs, $hostWithoutPort, $baseDomain);
+
     // Route to airports directory page
     include 'pages/airports.php';
     exit;
 }
 
-// Check for terms query parameter or path (for local dev/testing)
+// Terms via path or query; production apex/www redirect to terms subdomain
 if (isset($_GET['terms']) || $requestPath === 'terms') {
+    $termsQuery = $_GET;
+    unset($termsQuery['terms']);
+    $termsQs = !empty($termsQuery) ? '?' . http_build_query($termsQuery) : '';
+    redirectProductionApexToCanonicalSubdomain('terms', '/' . $termsQs, $hostWithoutPort, $baseDomain);
+
     // Route to terms of service page
     include 'pages/terms.php';
     exit;
@@ -188,8 +209,13 @@ if ($requestPath === 'sitemap') {
     exit;
 }
 
-// Check for embed query parameter (for local dev/testing)
+// Embed via query; production apex/www redirect to embed subdomain
 if (isset($_GET['embed'])) {
+    $embedQuery = $_GET;
+    unset($embedQuery['embed']);
+    $embedQs = !empty($embedQuery) ? '?' . http_build_query($embedQuery) : '';
+    redirectProductionApexToCanonicalSubdomain('embed', '/' . $embedQs, $hostWithoutPort, $baseDomain);
+
     // Check if render=1 parameter is set - if so, show embed widget
     // Otherwise show configurator (with optional pre-selected airport from URL)
     if (isset($_GET['render']) && $_GET['render'] === '1' && isset($_GET['airport']) && !empty($_GET['airport'])) {

@@ -647,4 +647,25 @@ class ConfigTest extends TestCase {
         $this->assertSame(32, normalizeCacheFileMaxSizeMb(32));
         $this->assertSame(1, normalizeCacheFileMaxSizeMb(-5));
     }
+
+    /**
+     * isPrimarySiteHost() is true only for apex and www (not feature subdomains).
+     */
+    public function testIsPrimarySiteHost_ApexAndWwwOnly(): void {
+        $base = 'aviationwx.org';
+        $this->assertTrue(isPrimarySiteHost('aviationwx.org', $base));
+        $this->assertTrue(isPrimarySiteHost('www.aviationwx.org', $base));
+        $this->assertFalse(isPrimarySiteHost('airports.aviationwx.org', $base));
+        $this->assertFalse(isPrimarySiteHost('guides.aviationwx.org', $base));
+        $this->assertFalse(isPrimarySiteHost('kspb.aviationwx.org', $base));
+        $this->assertFalse(isPrimarySiteHost('localhost', $base));
+    }
+
+    /**
+     * Base domain from config is compared case-insensitively for primary-site detection.
+     */
+    public function testIsPrimarySiteHost_NormalizesBaseDomainCase(): void {
+        $this->assertTrue(isPrimarySiteHost('Aviationwx.org', 'AVIATIONWX.ORG'));
+        $this->assertTrue(isPrimarySiteHost('www.aviationwx.org', 'Aviationwx.org'));
+    }
 }
