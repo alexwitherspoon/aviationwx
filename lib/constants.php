@@ -623,9 +623,16 @@ if (!defined('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD')) {
 }
 
 // Uniform color detection (solid color = failed camera, lens cap, corruption)
-// A healthy webcam image will NEVER be all one color - even fog/night/snow has variance
+// Daytime: high threshold catches flat error screens while allowing natural texture.
+// Night: use a lower threshold so very dark sky (low but non-zero variance from noise/stars) is not misclassified as uniform.
 if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD')) {
     define('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD', 25); // Max channel variance <25 = essentially one color
+}
+if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NAUTICAL')) {
+    define('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NAUTICAL', 15); // Nautical twilight: between day and night
+}
+if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT')) {
+    define('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT', 8); // Only reject if nearly flat (dead sensor / lens cap)
 }
 if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
     define('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE', 50); // Only need ~50 samples for this check
@@ -668,9 +675,10 @@ if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS')) {
 // - Night with lights: 50-200
 // - Dark night: 20-100
 // - Foggy night/twilight: 2-8 (legitimate but very soft)
-// - Severely pixelated/corrupted: <2 (essentially flat/broken)
+// - Ultra-dark clear night (little edge content): can fall just under 2; still valid
+// - Severely pixelated/corrupted: near 0 (essentially flat/broken)
 //
-// Thresholds are set conservatively low to avoid false positives
+// Night threshold below 2 accepts that band without letting obvious broken frames through when combined with other checks.
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_DAY')) {
     define('WEBCAM_PIXELATION_THRESHOLD_DAY', 15); // Day: reject if variance < 15
 }
@@ -681,7 +689,7 @@ if (!defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL')) {
     define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 5); // Nautical twilight: more lenient for foggy conditions
 }
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 2); // Night: very conservative (fog/dark conditions have low variance ~2-8)
+    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 1); // Night: allow Laplacian variance down to 1 (very dark sky)
 }
 // Sample size for Laplacian calculation (grid of NxN samples across image)
 if (!defined('WEBCAM_PIXELATION_SAMPLE_GRID')) {

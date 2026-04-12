@@ -9,7 +9,7 @@
  * - Lower-right corner fast-fail (last pixels in JPEG scan order; catches partial corruption)
  * - Pixelated/low-quality images (Laplacian variance detection)
  *
- * Uses phase-aware thresholds for pixelation (day/twilight/night).
+ * Uses phase-aware thresholds for pixelation and uniform-color checks (day/twilight/night).
  */
 
 require_once __DIR__ . '/constants.php';
@@ -89,7 +89,7 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
     }
 
     // UNIFORM COLOR: Full-image scan (expensive); run after cheap corruption checks
-    $uniformCheck = detectUniformColor($img, $width, $height);
+    $uniformCheck = detectUniformColor($img, $width, $height, $airport);
     if ($uniformCheck['is_uniform']) {
         return [
             'is_error' => true,
@@ -295,22 +295,56 @@ function calculateVariance(array $values): float {
 }
 
 /**
+ * Max channel variance below which the image is treated as a single solid color.
+ *
+ * Day and civil twilight use the default constant. Nautical twilight uses a middle value.
+ * Night uses a lower ceiling so legitimate very dark sky is not misclassified as uniform.
+ *
+ * @param array|null $airport Airport config with lat/lon; null uses daytime threshold
+ * @param int|null $timestamp Unix time for phase (null = now)
+ * @return float Threshold on max channel variance; below this the frame is treated as uniform
+ */
+function getUniformColorVarianceThreshold(?array $airport = null, ?int $timestamp = null): float {
+    $default = defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD')
+        ? (float) WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD
+        : 25.0;
+    if ($airport === null || !isset($airport['lat']) || !isset($airport['lon'])) {
+        return $default;
+    }
+    $phase = getDaylightPhase($airport, $timestamp);
+    switch ($phase) {
+        case DAYLIGHT_PHASE_NIGHT:
+            return defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT')
+                ? (float) WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT
+                : 8.0;
+        case DAYLIGHT_PHASE_NAUTICAL_TWILIGHT:
+            return defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NAUTICAL')
+                ? (float) WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NAUTICAL
+                : 15.0;
+        default:
+            return $default;
+    }
+}
+
+/**
  * Detect if image is essentially one uniform color
- * 
+ *
  * Checks if an image has extremely low color variance, indicating a failed camera,
  * corrupted file, lens cap, or solid color error screen. A healthy webcam image
  * will always have some variance - even fog/night/snow has significant variance
- * due to sensor noise and natural gradients.
- * 
+ * due to sensor noise and natural gradients. At night, thresholds are lower so
+ * very dark sky (low variance but not a dead sensor) is not rejected as uniform.
+ *
  * Samples ~50 pixels distributed across the image for efficiency.
  * Checks both brightness variance AND color channel variance to catch:
  * - Solid black (lens cap, dead camera)
  * - Solid grey (some error states)
  * - Solid color (some cameras output solid blue/green on failure)
- * 
- * @param resource $img GD image resource
+ *
+ * @param resource|\GdImage $img GD image resource
  * @param int $width Image width
  * @param int $height Image height
+ * @param array|null $airport Airport config with lat/lon for phase-aware threshold (optional)
  * @return array {
  *   'is_uniform' => bool,      // True if image is essentially one color
  *   'variance' => float,       // Calculated max variance across channels
@@ -318,13 +352,11 @@ function calculateVariance(array $values): float {
  *   'reason' => string         // Descriptive reason string for logging
  * }
  */
-function detectUniformColor($img, int $width, int $height): array {
+function detectUniformColor($img, int $width, int $height, ?array $airport = null): array {
     $sampleSize = defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE') 
         ? WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE 
         : 50;
-    $threshold = defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD') 
-        ? WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD 
-        : 25;
+    $threshold = getUniformColorVarianceThreshold($airport);
     
     // Sample pixels in a grid pattern across the image
     $gridSize = (int)ceil(sqrt($sampleSize));

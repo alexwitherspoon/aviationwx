@@ -646,5 +646,34 @@ class WebcamErrorDetectorTest extends TestCase
         // The code protects against division by zero at line 99-102 in webcam-error-detector.php
         // This test documents that the edge case is handled
     }
+
+    /**
+     * Uniform threshold without airport matches the default (day) constant.
+     */
+    public function testGetUniformColorVarianceThreshold_NoAirport_ReturnsDefault(): void
+    {
+        $this->assertSame(
+            (float) WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD,
+            getUniformColorVarianceThreshold(null)
+        );
+    }
+
+    /**
+     * At night, uniform detection uses a lower variance ceiling so very dark sky is accepted.
+     */
+    public function testGetUniformColorVarianceThreshold_EquatorMidnight_ReturnsNightConstant(): void
+    {
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $midnightUtc = strtotime('2026-06-15 00:00:00 UTC');
+        $this->assertSame(
+            DAYLIGHT_PHASE_NIGHT,
+            getDaylightPhase($airport, $midnightUtc),
+            'Precondition: equator midnight should be night'
+        );
+        $this->assertSame(
+            (float) WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT,
+            getUniformColorVarianceThreshold($airport, $midnightUtc)
+        );
+    }
 }
 
