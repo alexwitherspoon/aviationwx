@@ -7,6 +7,40 @@
  */
 
 /**
+ * Detect if the address string is primarily GPS coordinates, not a postal address.
+ *
+ * Coordinate strings often contain commas (e.g. DMS: "44° N, 114° W"). The
+ * envelope parser splits on commas and treats digit runs like US ZIP codes,
+ * which corrupts display (e.g. "114.93453° W" → ZIP "93453").
+ *
+ * @param string $address Raw address field from airport config
+ * @return bool True when the value should be shown verbatim and linked by lat/lon only
+ */
+function addressLooksLikeGpsCoordinates(string $address): bool
+{
+    $t = trim($address);
+    if ($t === '') {
+        return false;
+    }
+
+    // Degree-minute or DMS-style: "44.20856° N, 114.93453° W"
+    if (preg_match('/°/u', $t) && preg_match('/[NS]/i', $t) && preg_match('/[EW]/i', $t)) {
+        return true;
+    }
+
+    // Signed decimal degrees only: "44.20856, -114.93453" (reject arbitrary number pairs)
+    if (preg_match('/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/', $t, $m)) {
+        $a = (float) $m[1];
+        $b = (float) $m[2];
+        if ((abs($a) <= 90 && abs($b) <= 180) || (abs($b) <= 90 && abs($a) <= 180)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Format address string in envelope-style format
  * 
  * Parses address strings (typically from Google Maps) and formats them
@@ -28,6 +62,10 @@ function formatAddressEnvelope(string $address): string
     }
     
     $address = trim($address);
+
+    if (addressLooksLikeGpsCoordinates($address)) {
+        return htmlspecialchars($address, ENT_QUOTES, 'UTF-8');
+    }
     
     // Parse address components
     $components = parseAddressComponents($address);

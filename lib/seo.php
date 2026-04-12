@@ -4,6 +4,8 @@
  * Provides functions for generating structured data, Open Graph tags, and meta tags
  */
 
+require_once __DIR__ . '/address-formatter.php';
+
 /**
  * Get the current page URL (canonical)
  * 
@@ -123,12 +125,15 @@ function generateWebSiteSchema() {
 
 /**
  * Generate Airport structured data (JSON-LD) for airport pages
- * 
+ *
  * Creates Schema.org Airport structured data for airport pages.
  * Uses the specific Airport type (better than generic LocalBusiness) with
  * aviation-specific properties like icaoCode, iataCode, and sameAs links
  * to authoritative aviation databases.
- * 
+ *
+ * PostalAddress is omitted when the configured address is GPS-style text
+ * (addressLooksLikeGpsCoordinates); location is expressed with GeoCoordinates only.
+ *
  * @param array $airport Airport configuration array
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @return array Schema.org Airport JSON-LD structure
@@ -182,11 +187,13 @@ function generateAirportSchema($airport, $airportId) {
     }
     $schema['sameAs'] = $sameAs;
     
-    // Add address
-    $schema['address'] = [
-        '@type' => 'PostalAddress',
-        'addressLocality' => $airport['address']
-    ];
+    $addr = isset($airport['address']) ? trim((string) $airport['address']) : '';
+    if ($addr !== '' && !addressLooksLikeGpsCoordinates($addr)) {
+        $schema['address'] = [
+            '@type' => 'PostalAddress',
+            'addressLocality' => $addr
+        ];
+    }
     
     // Add geo coordinates if available
     if (isset($airport['lat']) && isset($airport['lon'])) {

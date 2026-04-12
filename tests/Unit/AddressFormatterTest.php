@@ -369,4 +369,33 @@ class AddressFormatterTest extends TestCase
         $this->assertEquals('97201-1234', $result['zip']);
         $this->assertEquals('OR', $result['state']);
     }
+
+    /**
+     * GPS coordinate strings must not be split as postal addresses (comma / ZIP heuristics).
+     */
+    public function testFormatAddressEnvelope_DmsCoordinates_ReturnsVerbatim()
+    {
+        $address = '44.20856° N, 114.93453° W';
+        $result = formatAddressEnvelope($address);
+        $this->assertStringContainsString('44.20856° N', $result);
+        $this->assertStringContainsString('114.93453° W', $result);
+        $this->assertStringNotContainsString('114.° W', $result, 'Longitude must not be corrupted by ZIP parsing');
+    }
+
+    public function testAddressLooksLikeGpsCoordinates_DecimalDegrees()
+    {
+        $this->assertTrue(addressLooksLikeGpsCoordinates('44.20856, -114.93453'));
+        $this->assertFalse(addressLooksLikeGpsCoordinates('12345, 67890'));
+    }
+
+    /**
+     * Decimal-degree pairs must pass through verbatim like DMS (no envelope parsing).
+     */
+    public function testFormatAddressEnvelope_DecimalCoordinates_ReturnsVerbatim()
+    {
+        $address = '44.20856, -114.93453';
+        $result = formatAddressEnvelope($address);
+        $this->assertStringContainsString('44.20856', $result);
+        $this->assertStringContainsString('-114.93453', $result);
+    }
 }

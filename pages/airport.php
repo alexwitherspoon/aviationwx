@@ -1725,8 +1725,14 @@ if ($themeCookie === 'dark') {
                     if (!empty($airport['address'])) {
                         $addressText = $airport['address'];
                         $formattedAddress = formatAddressEnvelope($airport['address']);
-                        $geoUrl .= '?q=' . urlencode($airport['address']);
-                        $appleMapsUrl = 'https://maps.apple.com/?q=' . urlencode($airport['address']) . '&ll=' . $lat . ',' . $lon;
+                        // GPS-style strings: link by coordinates only. A ?q= search confuses geocoders
+                        // (e.g. degree text → wrong region/place name) and geo: ?q= is unnecessary.
+                        if (addressLooksLikeGpsCoordinates($airport['address'])) {
+                            $appleMapsUrl = 'https://maps.apple.com/?ll=' . $lat . ',' . $lon;
+                        } else {
+                            $geoUrl .= '?q=' . urlencode($airport['address']);
+                            $appleMapsUrl = 'https://maps.apple.com/?q=' . urlencode($airport['address']) . '&ll=' . $lat . ',' . $lon;
+                        }
                     } else {
                         $addressText = $lat . ', ' . $lon;
                         $formattedAddress = htmlspecialchars($addressText);

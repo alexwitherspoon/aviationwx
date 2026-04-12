@@ -125,6 +125,46 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
+     * GPS-style address strings must not appear as PostalAddress; geo is authoritative.
+     */
+    public function testGenerateAirportSchema_GpsAddress_OmitsPostalAddress_UsesGeo()
+    {
+        $airport = [
+            'name' => 'Backcountry Strip',
+            'icao' => 'TEST',
+            'address' => '44.20856° N, 114.93453° W',
+            'lat' => 44.208556,
+            'lon' => -114.934528,
+        ];
+
+        $schema = generateAirportSchema($airport, 'test');
+
+        $this->assertArrayNotHasKey('address', $schema);
+        $this->assertArrayHasKey('geo', $schema);
+        $this->assertEquals(44.208556, $schema['geo']['latitude']);
+        $this->assertEquals(-114.934528, $schema['geo']['longitude']);
+    }
+
+    /**
+     * Decimal-degree-only address line should also omit PostalAddress when recognized as GPS.
+     */
+    public function testGenerateAirportSchema_DecimalGpsAddress_OmitsPostalAddress()
+    {
+        $airport = [
+            'name' => 'Test Airport',
+            'icao' => 'TEST',
+            'address' => '44.20856, -114.93453',
+            'lat' => 44.20856,
+            'lon' => -114.93453,
+        ];
+
+        $schema = generateAirportSchema($airport, 'test');
+
+        $this->assertArrayNotHasKey('address', $schema);
+        $this->assertArrayHasKey('geo', $schema);
+    }
+
+    /**
      * Test generateAirportSchema() - Basic Structure
      */
     public function testGenerateAirportSchema_BasicStructure()
