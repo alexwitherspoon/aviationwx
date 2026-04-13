@@ -30,6 +30,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
+| `station_power_refresh_seconds` | `900` (15 min) | Default dashboard poll interval for `/api/station-power.php` (minimum 60; overridable per airport) |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
 | `faa_crop_margins` | see below | Default crop margins for FAA profile (percentages) |
@@ -92,6 +93,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
 | `station_power` | — | Optional facility power telemetry for `limited_availability` sites. Object shape: `provider` (string, e.g. `vrm`) and `config` (provider-specific). **Requires** `limited_availability: true`. Staleness for this block is **not** tied to METAR/weather fail-closed rules. The dashboard uses neutral **Station Power** labels only (no vendor branding in the UI). **Manual refresh:** same command as the scheduler: `php scripts/fetch-station-power.php --worker <airport_id>`; with local Docker: `make station-power-fetch AIRPORT=<airport_id>` (containers must be running). |
+| `station_power_refresh_seconds` | `config.station_power_refresh_seconds` or 900 | Per-airport override for how often the browser polls `/api/station-power.php` (minimum 60). Scheduler fetch interval for upstream data is separate (`STATION_POWER_FETCH_INTERVAL_SECONDS`, default 10 minutes). |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |

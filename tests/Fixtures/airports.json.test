@@ -264,6 +264,35 @@
           "station_id": "CYAV"
         }
       ]
+    },
+    "spfx": {
+      "name": "Station Power API Test Fixture",
+      "enabled": true,
+      "maintenance": false,
+      "icao": "SPFX",
+      "iata": null,
+      "faa": "SPFX",
+      "address": "Test, Oregon",
+      "lat": 45.0,
+      "lon": -122.0,
+      "elevation_ft": 100,
+      "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "limited_availability": true,
+      "station_power": {
+        "provider": "vrm",
+        "config": {
+          "installation_id": 99901,
+          "access_token": "test_station_power_access_token_spfx"
+        }
+      },
+      "weather_sources": [
+        {
+          "type": "metar",
+          "station_id": "KSPFX"
+        }
+      ]
     }
   }
 }

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../lib/weather/outage-detection.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/station-power/station-power-cache.php';
+require_once __DIR__ . '/../lib/station-power/station-power-dashboard-format.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/runways.php';
 
@@ -1981,7 +1982,9 @@ if ($themeCookie === 'dark') {
         $stationPowerData = null;
         $stationPowerDisplayable = false;
         $stationPowerSampleTsSec = 0;
+        $stationPowerPollSeconds = 60;
         if ($showStationPowerBlock) {
+            $stationPowerPollSeconds = getStationPowerRefreshSeconds($airport);
             $stationPowerData = loadStationPowerCache($airportId);
             $stationPowerDisplayable = is_array($stationPowerData) && stationPowerCacheIsDisplayable($stationPowerData);
             if ($stationPowerDisplayable && is_array($stationPowerData)) {
@@ -1998,114 +2001,24 @@ if ($themeCookie === 'dark') {
                 <div class="station-power-header-titles">
                     <h2 id="station-power-heading" class="station-power-title">Station Power</h2>
                 </div>
-                <?php if ($stationPowerDisplayable): ?>
-                <p class="station-power-last-updated weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="station-power-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="station-power-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="station-power-last-updated"<?= $stationPowerSampleTsSec > 0 ? ' data-timestamp="' . htmlspecialchars((string) $stationPowerSampleTsSec, ENT_QUOTES, 'UTF-8') . '"' : '' ?> title="Latest observation time for displayed averages (not server fetch time)">--</span></p>
-                <?php endif; ?>
+                <p id="station-power-last-updated-row" class="station-power-last-updated weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0; display: <?= $stationPowerDisplayable ? 'block' : 'none' ?>;">Last updated: <span id="station-power-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="station-power-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="station-power-last-updated"<?= $stationPowerSampleTsSec > 0 ? ' data-timestamp="' . htmlspecialchars((string) $stationPowerSampleTsSec, ENT_QUOTES, 'UTF-8') . '"' : '' ?> title="Latest observation time for displayed averages (not server fetch time)">--</span></p>
             </div>
-            <?php if (!$stationPowerDisplayable): ?>
-                <p class="station-power-empty">No station power data yet.</p>
-            <?php else: ?>
+            <p id="station-power-empty-state" class="station-power-empty" style="display: <?= $stationPowerDisplayable ? 'none' : 'block' ?>;">No station power data yet.</p>
                 <?php
-                /** @var array<string,mixed> $stationPowerData */
-                $sp = $stationPowerData;
-                $fmtW = static function ($v): string {
-                    if ($v === null || !is_numeric($v)) {
-                        return '---';
-                    }
-                    return htmlspecialchars((string) round((float) $v, 0)) . ' W';
-                };
-                // Local-day totals are stored as Wh; VRM UTC-day totals are kWh in *_kwh_utc keys.
-                $fmtWh = static function ($v): string {
-                    if ($v === null || !is_numeric($v)) {
-                        return '---';
-                    }
-                    return htmlspecialchars((string) round((float) $v, 0)) . ' Wh';
-                };
-                $fmtBatteryVolts = static function ($v): string {
-                    if ($v === null || !is_numeric($v)) {
-                        return '---';
-                    }
-                    return htmlspecialchars((string) round((float) $v, 1)) . 'v';
-                };
-                $fmtSoc = static function ($v): string {
-                    if ($v === null || !is_numeric($v)) {
-                        return '---';
-                    }
-                    return htmlspecialchars((string) round((float) $v, 1)) . '%';
-                };
-                $fmtTtg = static function (?string $s): string {
-                    if ($s === null) {
-                        return '---';
-                    }
-                    $t = trim($s);
-                    if ($t === '') {
-                        return '---';
-                    }
-                    if (ctype_digit($t)) {
-                        $n = (int) $t;
-                        $unit = $n === 1 ? 'hr' : 'hrs';
-
-                        return htmlspecialchars((string) $n) . ' ' . $unit;
-                    }
-                    if (preg_match('/^(\d+)\s*h$/i', $t, $m)) {
-                        $n = (int) $m[1];
-                        $unit = $n === 1 ? 'hr' : 'hrs';
-
-                        return htmlspecialchars((string) $n) . ' ' . $unit;
-                    }
-
-                    return htmlspecialchars($t);
-                };
-                $socVal = isset($sp['battery_soc_percent']) && is_numeric($sp['battery_soc_percent'])
-                    ? max(0.0, min(100.0, (float) $sp['battery_soc_percent']))
-                    : null;
-                $socMeterClass = 'station-power-meter';
-                if ($socVal !== null) {
-                    if ($socVal < 40.0) {
-                        $socMeterClass .= ' station-power-meter--low';
-                    } elseif ($socVal < 60.0) {
-                        $socMeterClass .= ' station-power-meter--medium';
-                    }
-                }
-                $solarTotalWatts = null;
-                if (isset($sp['solar_total_watts']) && is_numeric($sp['solar_total_watts'])) {
-                    $solarTotalWatts = (float) $sp['solar_total_watts'];
-                } else {
-                    $pcW = isset($sp['solar_pc_watts']) && is_numeric($sp['solar_pc_watts']) ? (float) $sp['solar_pc_watts'] : null;
-                    $pbW = isset($sp['solar_pb_watts']) && is_numeric($sp['solar_pb_watts']) ? (float) $sp['solar_pb_watts'] : null;
-                    if ($pcW !== null || $pbW !== null) {
-                        $solarTotalWatts = (float) ($pcW ?? 0.0) + (float) ($pbW ?? 0.0);
-                    }
-                }
-                $solarTodayWh = isset($sp['solar_daily_wh_local']) && is_numeric($sp['solar_daily_wh_local'])
-                    ? (float) $sp['solar_daily_wh_local']
-                    : null;
-                $solarTodayTitle = 'Cumulative solar energy from local midnight to now (hourly buckets, airport timezone).';
-                if ($solarTodayWh === null && isset($sp['solar_daily_kwh_utc']) && is_numeric($sp['solar_daily_kwh_utc'])) {
-                    $solarTodayWh = (float) $sp['solar_daily_kwh_utc'] * 1000.0;
-                    $solarTodayTitle = 'Cumulative solar energy for the VRM UTC calendar day (local-day hourly data unavailable).';
-                }
-                $loadTodayWh = isset($sp['load_daily_wh_local']) && is_numeric($sp['load_daily_wh_local'])
-                    ? (float) $sp['load_daily_wh_local']
-                    : null;
-                $loadTodayTitle = 'Cumulative DC energy from local midnight to now (hourly buckets, airport timezone).';
-                if ($loadTodayWh === null && isset($sp['load_daily_kwh_utc']) && is_numeric($sp['load_daily_kwh_utc'])) {
-                    $loadTodayWh = (float) $sp['load_daily_kwh_utc'] * 1000.0;
-                    $loadTodayTitle = 'Cumulative DC energy for the VRM UTC calendar day (local-day hourly data unavailable).';
-                }
-                $ttgDisplay = isset($sp['time_to_go_display']) && is_string($sp['time_to_go_display']) && $sp['time_to_go_display'] !== ''
-                    ? $sp['time_to_go_display']
-                    : null;
+                /** @var array<string,mixed> $sp */
+                $sp = ($stationPowerDisplayable && is_array($stationPowerData)) ? $stationPowerData : [];
+                $cells = stationPowerDashboardFormatCells($sp);
                 ?>
+            <div id="station-power-data" class="station-power-data" style="display: <?= $stationPowerDisplayable ? 'block' : 'none' ?>;">
             <div class="station-power-layout">
                 <div class="station-power-inputs">
                     <div class="station-power-metric">
                         <span class="label">Solar production now</span>
-                        <span class="value"><?= $fmtW($solarTotalWatts) ?></span>
+                        <span id="station-power-value-solar-now" class="value"><?= $cells['solar_now'] ?></span>
                     </div>
                     <div class="station-power-metric">
-                        <span class="label" title="<?= htmlspecialchars($solarTodayTitle) ?>">Solar production today</span>
-                        <span class="value"><?= $fmtWh($solarTodayWh) ?></span>
+                        <span id="station-power-label-solar-today" class="label" title="<?= htmlspecialchars($cells['solar_today_title'], ENT_QUOTES, 'UTF-8') ?>">Solar production today</span>
+                        <span id="station-power-value-solar-today" class="value"><?= $cells['solar_today'] ?></span>
                     </div>
                 </div>
                 <div class="station-power-hero" role="group" aria-labelledby="station-power-battery-heading">
@@ -2115,35 +2028,31 @@ if ($themeCookie === 'dark') {
                     <div class="station-power-battery-trio">
                         <div class="station-power-metric station-power-battery-side station-power-battery-volts">
                             <span class="label" title="Last sampled battery voltage">Volts</span>
-                            <span class="value station-power-battery-secondary"><?= $fmtBatteryVolts($sp['battery_volts'] ?? null) ?></span>
+                            <span id="station-power-value-battery-volts" class="value station-power-battery-secondary"><?= $cells['battery_volts'] ?></span>
                         </div>
                         <div class="station-power-battery-center">
-                            <?php if ($socVal !== null): ?>
-                            <div class="station-power-soc"><?= $fmtSoc($socVal) ?></div>
-                            <meter class="<?= htmlspecialchars($socMeterClass, ENT_QUOTES, 'UTF-8') ?>" min="0" max="100" value="<?= htmlspecialchars((string) $socVal) ?>" aria-label="Battery state of charge"><?= htmlspecialchars((string) round($socVal, 1)) ?> percent</meter>
-                            <?php else: ?>
-                            <div class="station-power-soc">---</div>
-                            <p class="station-power-meter-fallback" role="status">---</p>
-                            <?php endif; ?>
+                            <div id="station-power-soc-text" class="station-power-soc"><?= $cells['soc_text'] ?></div>
+                            <meter id="station-power-soc-meter" class="<?= htmlspecialchars($cells['soc_meter_class'], ENT_QUOTES, 'UTF-8') ?>" min="0" max="100" value="<?= $cells['soc_meter_value'] ?>" aria-label="Battery state of charge" style="display: <?= $cells['soc_show_meter'] ? 'inline-block' : 'none' ?>;"><?= $cells['soc_meter_inner_text'] ?></meter>
+                            <p id="station-power-soc-fallback" class="station-power-meter-fallback" role="status" style="display: <?= $cells['soc_show_meter'] ? 'none' : 'block' ?>;">---</p>
                         </div>
                         <div class="station-power-metric station-power-battery-side station-power-battery-ttg">
                             <span class="label" title="Estimated time left on battery at current loads">Time left</span>
-                            <span class="value station-power-battery-secondary"><?= $fmtTtg($ttgDisplay) ?></span>
+                            <span id="station-power-value-ttg" class="value station-power-battery-secondary"><?= $cells['ttg'] ?></span>
                         </div>
                     </div>
                 </div>
                 <div class="station-power-outputs">
                     <div class="station-power-metric">
                         <span class="label">DC load now</span>
-                        <span class="value"><?= $fmtW($sp['load_watts'] ?? null) ?></span>
+                        <span id="station-power-value-dc-load-now" class="value"><?= $cells['dc_load_now'] ?></span>
                     </div>
                     <div class="station-power-metric">
-                        <span class="label" title="<?= htmlspecialchars($loadTodayTitle) ?>">DC load today</span>
-                        <span class="value"><?= $fmtWh($loadTodayWh) ?></span>
+                        <span id="station-power-label-load-today" class="label" title="<?= htmlspecialchars($cells['load_today_title'], ENT_QUOTES, 'UTF-8') ?>">DC load today</span>
+                        <span id="station-power-value-load-today" class="value"><?= $cells['load_today'] ?></span>
                     </div>
                 </div>
             </div>
-            <?php endif; ?>
+            </div>
         </section>
         <?php endif; ?>
 
@@ -2419,6 +2328,14 @@ const METAR_STALE_ERROR_SECONDS = <?= getMetarStaleErrorSeconds() ?>;
 const METAR_STALE_FAILCLOSED_SECONDS = <?= getMetarStaleFailclosedSeconds() ?>;
 
 const SECONDS_PER_HOUR = 3600;
+
+<?php if (!empty($showStationPowerBlock)): ?>
+const STATION_POWER_POLL_MS = <?= (int) ($stationPowerPollSeconds * 1000) ?>;
+const HAS_STATION_POWER_UI = true;
+<?php else: ?>
+const STATION_POWER_POLL_MS = 0;
+const HAS_STATION_POWER_UI = false;
+<?php endif; ?>
 
 // Production logging removed - only log errors in console
 
@@ -6984,17 +6901,268 @@ function updateStationPowerTimestamp() {
     }
     updateTimestampDisplay(el, ts);
     const warningElem = document.getElementById('station-power-timestamp-warning');
-    if (!warningElem) {
-        return;
-    }
-    if (clientClockSkewDetected) {
+    if (warningElem) {
+        // Facility telemetry: do not use weather fail-closed staleness for this indicator.
         warningElem.style.display = 'none';
+    }
+}
+
+let isFetchingStationPower = false;
+
+/**
+ * Format station power time-to-go for display (matches PHP dashboard rules).
+ * @param {string|null|undefined} s Raw display string from cache
+ * @returns {string}
+ */
+function formatStationPowerTtg(s) {
+    if (s === null || s === undefined) {
+        return '---';
+    }
+    const t = String(s).trim();
+    if (t === '') {
+        return '---';
+    }
+    if (/^\d+$/.test(t)) {
+        const n = parseInt(t, 10);
+        const unit = n === 1 ? 'hr' : 'hrs';
+
+        return `${n} ${unit}`;
+    }
+    const hm = t.match(/^(\d+)\s*h$/i);
+    if (hm) {
+        const n = parseInt(hm[1], 10);
+        const unit = n === 1 ? 'hr' : 'hrs';
+
+        return `${n} ${unit}`;
+    }
+    return t;
+}
+
+/**
+ * Update station power metric DOM nodes from a canonical `station_power` object (client refresh).
+ * Mirrors `stationPowerDashboardFormatCells` / `formatStationPowerTtg` rules on the server.
+ *
+ * @param {object} sp Station power payload from `/api/station-power.php`
+ */
+function displayStationPower(sp) {
+    let solarTotal = null;
+    if (sp.solar_total_watts !== null && sp.solar_total_watts !== undefined && !Number.isNaN(Number(sp.solar_total_watts))) {
+        solarTotal = Number(sp.solar_total_watts);
+    } else {
+        const pc = sp.solar_pc_watts;
+        const pb = sp.solar_pb_watts;
+        const pcN = pc !== null && pc !== undefined && !Number.isNaN(Number(pc)) ? Number(pc) : null;
+        const pbN = pb !== null && pb !== undefined && !Number.isNaN(Number(pb)) ? Number(pb) : null;
+        if (pcN !== null || pbN !== null) {
+            solarTotal = (pcN || 0) + (pbN || 0);
+        }
+    }
+
+    const elSolarNow = document.getElementById('station-power-value-solar-now');
+    if (elSolarNow) {
+        if (solarTotal === null || Number.isNaN(solarTotal)) {
+            elSolarNow.textContent = '---';
+        } else {
+            elSolarNow.textContent = `${Math.round(solarTotal)} W`;
+        }
+    }
+
+    let solarTodayWh = null;
+    let solarTitle = 'Cumulative solar energy from local midnight to now (hourly buckets, airport timezone).';
+    if (sp.solar_daily_wh_local !== null && sp.solar_daily_wh_local !== undefined && !Number.isNaN(Number(sp.solar_daily_wh_local))) {
+        solarTodayWh = Number(sp.solar_daily_wh_local);
+    } else if (sp.solar_daily_kwh_utc !== null && sp.solar_daily_kwh_utc !== undefined && !Number.isNaN(Number(sp.solar_daily_kwh_utc))) {
+        solarTodayWh = Number(sp.solar_daily_kwh_utc) * 1000.0;
+        solarTitle = 'Cumulative solar energy for the UTC calendar day (local-day hourly data unavailable).';
+    }
+    const lblSolar = document.getElementById('station-power-label-solar-today');
+    if (lblSolar) {
+        lblSolar.setAttribute('title', solarTitle);
+    }
+    const elSolarToday = document.getElementById('station-power-value-solar-today');
+    if (elSolarToday) {
+        if (solarTodayWh === null || Number.isNaN(solarTodayWh)) {
+            elSolarToday.textContent = '---';
+        } else {
+            elSolarToday.textContent = `${Math.round(solarTodayWh)} Wh`;
+        }
+    }
+
+    const elLoadNow = document.getElementById('station-power-value-dc-load-now');
+    if (elLoadNow) {
+        const lw = sp.load_watts;
+        if (lw === null || lw === undefined || Number.isNaN(Number(lw))) {
+            elLoadNow.textContent = '---';
+        } else {
+            elLoadNow.textContent = `${Math.round(Number(lw))} W`;
+        }
+    }
+
+    let loadTodayWh = null;
+    let loadTitle = 'Cumulative DC energy from local midnight to now (hourly buckets, airport timezone).';
+    if (sp.load_daily_wh_local !== null && sp.load_daily_wh_local !== undefined && !Number.isNaN(Number(sp.load_daily_wh_local))) {
+        loadTodayWh = Number(sp.load_daily_wh_local);
+    } else if (sp.load_daily_kwh_utc !== null && sp.load_daily_kwh_utc !== undefined && !Number.isNaN(Number(sp.load_daily_kwh_utc))) {
+        loadTodayWh = Number(sp.load_daily_kwh_utc) * 1000.0;
+        loadTitle = 'Cumulative DC energy for the UTC calendar day (local-day hourly data unavailable).';
+    }
+    const lblLoad = document.getElementById('station-power-label-load-today');
+    if (lblLoad) {
+        lblLoad.setAttribute('title', loadTitle);
+    }
+    const elLoadToday = document.getElementById('station-power-value-load-today');
+    if (elLoadToday) {
+        if (loadTodayWh === null || Number.isNaN(loadTodayWh)) {
+            elLoadToday.textContent = '---';
+        } else {
+            elLoadToday.textContent = `${Math.round(loadTodayWh)} Wh`;
+        }
+    }
+
+    const elV = document.getElementById('station-power-value-battery-volts');
+    if (elV) {
+        const v = sp.battery_volts;
+        if (v === null || v === undefined || Number.isNaN(Number(v))) {
+            elV.textContent = '---';
+        } else {
+            elV.textContent = `${Number(v).toFixed(1)}v`;
+        }
+    }
+
+    const elTtg = document.getElementById('station-power-value-ttg');
+    if (elTtg) {
+        elTtg.textContent = formatStationPowerTtg(sp.time_to_go_display);
+    }
+
+    const socRaw = sp.battery_soc_percent;
+    let socVal = null;
+    if (socRaw !== null && socRaw !== undefined && !Number.isNaN(Number(socRaw))) {
+        socVal = Math.max(0, Math.min(100, Number(socRaw)));
+    }
+    const socText = document.getElementById('station-power-soc-text');
+    const meter = document.getElementById('station-power-soc-meter');
+    const fallback = document.getElementById('station-power-soc-fallback');
+    if (socText && meter && fallback) {
+        if (socVal === null) {
+            socText.textContent = '---';
+            meter.style.display = 'none';
+            fallback.style.display = 'block';
+            fallback.textContent = '---';
+        } else {
+            socText.textContent = `${socVal.toFixed(1)}%`;
+            meter.style.display = 'inline-block';
+            fallback.style.display = 'none';
+            meter.value = String(socVal);
+            meter.textContent = `${socVal.toFixed(1)} percent`;
+            let mc = 'station-power-meter';
+            if (socVal < 40) {
+                mc += ' station-power-meter--low';
+            } else if (socVal < 60) {
+                mc += ' station-power-meter--medium';
+            }
+            meter.setAttribute('class', mc);
+        }
+    }
+}
+
+/**
+ * Toggle empty vs data panel and refresh metrics when the API reports a displayable cache row.
+ *
+ * @param {boolean} displayable Whether `fetched_at` is within the station power retention window
+ * @param {object|null} sp Canonical `station_power` object, or null when not displayable
+ */
+function applyStationPowerView(displayable, sp) {
+    const emptyEl = document.getElementById('station-power-empty-state');
+    const dataEl = document.getElementById('station-power-data');
+    const row = document.getElementById('station-power-last-updated-row');
+    if (!emptyEl || !dataEl) {
         return;
     }
-    const updateDate = new Date(ts * 1000);
-    const diffSeconds = Math.floor((new Date() - updateDate) / 1000);
-    const isStale = diffSeconds >= STALE_FAILCLOSED_SECONDS;
-    warningElem.style.display = isStale ? 'inline' : 'none';
+    if (!displayable || !sp) {
+        emptyEl.style.display = 'block';
+        dataEl.style.display = 'none';
+        if (row) {
+            row.style.display = 'none';
+        }
+        return;
+    }
+    emptyEl.style.display = 'none';
+    dataEl.style.display = 'block';
+    if (row) {
+        row.style.display = 'block';
+    }
+    displayStationPower(sp);
+    const sampleMs = sp.sample_time_ms;
+    const tsSec = sampleMs > 0 ? Math.floor(sampleMs / 1000) : 0;
+    const lu = document.getElementById('station-power-last-updated');
+    if (lu) {
+        if (tsSec > 0) {
+            lu.dataset.timestamp = String(tsSec);
+        } else {
+            delete lu.dataset.timestamp;
+        }
+        updateStationPowerTimestamp();
+    }
+}
+
+/**
+ * GET `/api/station-power.php` (same-origin JSON). On HTTP or parse errors, leaves the last successful render.
+ *
+ * @returns {void}
+ */
+function fetchStationPower() {
+    if (!HAS_STATION_POWER_UI || isFetchingStationPower) {
+        return;
+    }
+    isFetchingStationPower = true;
+    const url = `/api/station-power.php?airport=${encodeURIComponent(AIRPORT_ID)}&_=${Date.now()}`;
+    fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+        .then((res) => {
+            if (!res.ok) {
+                throw new Error('station_power_http_' + res.status);
+            }
+            const ct = res.headers.get('Content-Type') || '';
+            if (!ct.includes('application/json')) {
+                throw new Error('station_power_non_json');
+            }
+            return res.json();
+        })
+        .then((data) => {
+            if (!data || data.success !== true) {
+                return;
+            }
+            const raw = data.station_power;
+            const stationPowerPayload = (raw !== null && typeof raw === 'object' && !Array.isArray(raw))
+                ? raw
+                : null;
+            applyStationPowerView(!!data.displayable, stationPowerPayload);
+        })
+        .catch(() => {
+            /* keep last good render */
+        })
+        .finally(() => {
+            isFetchingStationPower = false;
+        });
+}
+
+let stationPowerFocusDebounce = null;
+
+/**
+ * Debounced refresh after tab focus or visibility return (avoids bursts with the timer poll).
+ *
+ * @returns {void}
+ */
+function scheduleStationPowerFetchOnResume() {
+    if (!HAS_STATION_POWER_UI) {
+        return;
+    }
+    if (stationPowerFocusDebounce) {
+        clearTimeout(stationPowerFocusDebounce);
+    }
+    stationPowerFocusDebounce = setTimeout(() => {
+        stationPowerFocusDebounce = null;
+        fetchStationPower();
+    }, 400);
 }
 
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
@@ -7223,6 +7391,16 @@ const weatherTimestampRefreshMs = TIMER_IS_MOBILE ? 10000 : 1000;
 registerTimer('weather-timestamp-refresh', weatherTimestampRefreshMs, updateWeatherTimestamp);
 if (document.getElementById('station-power-last-updated')) {
     registerTimer('station-power-timestamp-refresh', weatherTimestampRefreshMs, updateStationPowerTimestamp);
+}
+
+if (typeof HAS_STATION_POWER_UI !== 'undefined' && HAS_STATION_POWER_UI && STATION_POWER_POLL_MS > 0) {
+    registerTimer('station-power-poll', STATION_POWER_POLL_MS, fetchStationPower);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            scheduleStationPowerFetchOnResume();
+        }
+    });
+    window.addEventListener('focus', scheduleStationPowerFetchOnResume);
 }
 
 // Initialize and update outage banner

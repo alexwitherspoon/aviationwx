@@ -4825,6 +4825,53 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('station_power_worker_pool_size', implode(' ', $result['errors']));
     }
 
+    public function testStationPowerRefreshSeconds_GlobalValid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['station_power_refresh_seconds'] = 900;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+    }
+
+    public function testStationPowerRefreshSeconds_GlobalInvalid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['station_power_refresh_seconds'] = 10;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('station_power_refresh_seconds', implode(' ', $result['errors']));
+    }
+
+    public function testStationPowerRefreshSeconds_AirportValid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['station_power_refresh_seconds'] = 120;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+    }
+
+    public function testStationPowerRefreshSeconds_AirportInvalid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['station_power_refresh_seconds'] = 30;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('station_power_refresh_seconds', implode(' ', $result['errors']));
+    }
+
+    public function testGetStationPowerRefreshSeconds_UsesAirportOverride(): void
+    {
+        $airport = ['station_power_refresh_seconds' => 600];
+        $this->assertSame(600, getStationPowerRefreshSeconds($airport));
+    }
+
+    public function testGetStationPowerRefreshSeconds_FallsBackWhenAirportValueTooSmall(): void
+    {
+        $airport = ['station_power_refresh_seconds' => 30];
+        $sec = getStationPowerRefreshSeconds($airport);
+        $this->assertGreaterThanOrEqual(60, $sec);
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================

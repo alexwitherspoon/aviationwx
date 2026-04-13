@@ -912,7 +912,30 @@ function getStationPowerWorkerPoolSize(): int {
 }
 
 /**
+ * Dashboard poll interval for station power JSON (`/api/station-power.php`).
+ * Global default `config.station_power_refresh_seconds`, overridden per airport with `station_power_refresh_seconds`.
+ *
+ * @param array<string,mixed> $airport Airport config row
+ * @return int Seconds between client polls (minimum 60)
+ */
+function getStationPowerRefreshSeconds(array $airport): int
+{
+    if (isset($airport['station_power_refresh_seconds'])) {
+        $v = (int) $airport['station_power_refresh_seconds'];
+        if ($v >= 60) {
+            return $v;
+        }
+    }
+    $global = getGlobalConfig('station_power_refresh_seconds', STATION_POWER_DEFAULT_REFRESH_SECONDS);
+
+    return max(60, (int) $global);
+}
+
+/**
  * Whether the airport has a supported station_power block (provider + config).
+ *
+ * @param array<string,mixed> $airport Airport config row
+ * @return bool True when a supported provider and config are present
  */
 function isAirportStationPowerConfigured(array $airport): bool {
     if (!isset($airport['station_power']) || !is_array($airport['station_power'])) {
@@ -932,6 +955,7 @@ function isAirportStationPowerConfigured(array $airport): bool {
  * Disabled airports are skipped.
  *
  * @param array<string,mixed> $airport Airport config row
+ * @return bool True when the worker may run fetches for this airport
  */
 function shouldFetchStationPowerForAirport(array $airport): bool
 {
@@ -3546,6 +3570,13 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.station_power_worker_pool_size must be a positive integer";
                 }
             }
+
+            // station_power_refresh_seconds: dashboard poll interval for /api/station-power.php (default in constants)
+            if (isset($cfg['station_power_refresh_seconds'])) {
+                if (!is_int($cfg['station_power_refresh_seconds']) || $cfg['station_power_refresh_seconds'] < 60) {
+                    $errors[] = "config.station_power_refresh_seconds must be an integer >= 60";
+                }
+            }
             
             // notam_api_client_id: FAA NOTAM API client ID (string)
             if (isset($cfg['notam_api_client_id'])) {
@@ -3855,6 +3886,13 @@ function validateAirportsJsonStructure(array $config): array {
             $val = $airport['webcam_refresh_seconds'];
             if (!validateRefreshInterval($val, 5)) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_refresh_seconds: {$val} (must be integer >= 5 seconds)";
+            }
+        }
+
+        if (isset($airport['station_power_refresh_seconds'])) {
+            $val = $airport['station_power_refresh_seconds'];
+            if (!is_int($val) || $val < 60) {
+                $errors[] = "Airport '{$airportCode}' has invalid station_power_refresh_seconds: {$val} (must be integer >= 60 seconds)";
             }
         }
         

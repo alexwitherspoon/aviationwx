@@ -1,0 +1,14 @@
+{
+  "provider": "vrm",
+  "fetched_at": 1700000000,
+  "sample_time_ms": 1700000000000,
+  "battery_soc_percent": 62.5,
+  "load_watts": 210,
+  "solar_total_watts": 1500,
+  "solar_pc_watts": null,
+  "solar_pb_watts": null,
+  "battery_volts": 52.3,
+  "time_to_go_display": "5",
+  "solar_daily_wh_local": 12000,
+  "load_daily_wh_local": 8000
+}

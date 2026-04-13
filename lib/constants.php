@@ -377,6 +377,16 @@ if (!defined('STATION_POWER_FETCH_INTERVAL_SECONDS')) {
 if (!defined('STATION_POWER_CACHE_MAX_DISPLAY_AGE_SECONDS')) {
     define('STATION_POWER_CACHE_MAX_DISPLAY_AGE_SECONDS', 30 * SECONDS_PER_DAY);
 }
+/** Default dashboard poll interval for station power JSON (seconds); overridable via config. */
+if (!defined('STATION_POWER_DEFAULT_REFRESH_SECONDS')) {
+    define('STATION_POWER_DEFAULT_REFRESH_SECONDS', 15 * SECONDS_PER_MINUTE);
+}
+if (!defined('RATE_LIMIT_STATION_POWER_MAX')) {
+    define('RATE_LIMIT_STATION_POWER_MAX', 60);
+}
+if (!defined('RATE_LIMIT_STATION_POWER_WINDOW')) {
+    define('RATE_LIMIT_STATION_POWER_WINDOW', 60);
+}
 if (!defined('SECONDS_PER_WEEK')) {
     define('SECONDS_PER_WEEK', 604800);
 }
