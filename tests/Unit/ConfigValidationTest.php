@@ -4774,6 +4774,57 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('limited_availability', implode(' ', $result['errors']));
     }
 
+    public function testStationPowerProviderMustBeVrm(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['limited_availability'] = true;
+        $config['airports']['kspb']['station_power'] = [
+            'provider' => 'other',
+            'config' => [
+                'installation_id' => 1,
+                'access_token' => 'x',
+            ],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString("station_power.provider must be 'vrm'", implode(' ', $result['errors']));
+    }
+
+    public function testStationPowerVrmRequiresInstallationId(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['limited_availability'] = true;
+        $config['airports']['kspb']['station_power'] = [
+            'provider' => 'vrm',
+            'config' => [
+                'access_token' => 'x',
+            ],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('installation_id', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test station_power_worker_pool_size validation (global config)
+     */
+    public function testStationPowerWorkerPoolSize_Valid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['station_power_worker_pool_size'] = 2;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+    }
+
+    public function testStationPowerWorkerPoolSize_Invalid(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['station_power_worker_pool_size'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('station_power_worker_pool_size', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================
