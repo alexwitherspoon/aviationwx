@@ -4744,6 +4744,36 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('metar_refresh_seconds', implode(' ', $result['errors']));
     }
 
+    public function testStationPowerValidWithLimitedAvailability(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['limited_availability'] = true;
+        $config['airports']['kspb']['station_power'] = [
+            'provider' => 'vrm',
+            'config' => [
+                'installation_id' => 12345,
+                'access_token' => 'test_token_for_validation_only',
+            ],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+    }
+
+    public function testStationPowerRequiresLimitedAvailability(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['station_power'] = [
+            'provider' => 'vrm',
+            'config' => [
+                'installation_id' => 1,
+                'access_token' => 'x',
+            ],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('limited_availability', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================

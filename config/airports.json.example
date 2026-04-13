@@ -68,6 +68,8 @@
     "notam_refresh_seconds": 600,
     "notam_cache_ttl_seconds": 3600,
     "notam_worker_pool_size": 1,
+    "_comment_station_power": "station_power_worker_pool_size: concurrent workers for scripts/fetch-station-power.php (VRM installation stats). Per-airport station_power block requires limited_availability true; see docs/CONFIGURATION.md.",
+    "station_power_worker_pool_size": 1,
     "notam_api_client_id": "nMrmYk4UzonK4Ny1mGNGBpecTM4hodoGgyEZzsk3dYdaHAq8",
     "notam_api_client_secret": "p3rJGiTJgsOTWn8gMqmdhu7F1hqPPebakpAYhWTT1gNwKK2TOQuQlU1Sv66NFxk8",
     "notam_api_base_url": "https://api-staging.cgifederal-aim.com",
@@ -435,7 +437,7 @@
       ]
     },
     "2id3": {
-      "_comment": "Josephine Creek Ranch - off-grid/solar. Webcams only, no METAR. limited_availability banner shows when webcams go stale (default 30 min; override with limited_availability_outage_seconds).",
+      "_comment": "Josephine Creek Ranch - off-grid/solar. Webcams only, no METAR. limited_availability banner shows when webcams go stale (default 30 min; override with limited_availability_outage_seconds). Optional station_power (VRM) shows battery SoC when configured.",
       "name": "Josephine Creek Ranch Airport",
       "enabled": true,
       "limited_availability": true,
@@ -456,7 +458,15 @@
         {"name": "South - POE", "url": "https://example.com/south.jpg"}
       ],
       "partners": [],
-      "weather_sources": []
+      "weather_sources": [],
+      "_comment_station_power_example": "Remove or replace with real VRM installation_id and personal access token; requires limited_availability above.",
+      "station_power": {
+        "provider": "vrm",
+        "config": {
+          "installation_id": 12345,
+          "access_token": "replace_with_vrm_personal_access_token"
+        }
+      }
     },
     "4or9": {
       "name": "Country Squire Airpark",

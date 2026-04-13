@@ -1070,6 +1070,157 @@ h3 {
     margin-bottom: 0.5rem;
 }
 
+/* Station power (facility metrics; neutral chrome) */
+.station-power-section {
+    margin-bottom: 1.5rem;
+    padding: 1.25rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #c0c8b8;
+    border-top: 3px solid #6b8e23;
+    background: #fafcf8;
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.station-power-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    color: #1a1a1a;
+}
+
+.station-power-subtitle {
+    font-size: 0.85rem;
+    color: #666;
+    margin: 0 0 1rem 0;
+}
+
+.station-power-empty {
+    margin: 0;
+    color: #555;
+    font-size: 0.95rem;
+}
+
+.station-power-layout {
+    display: grid;
+    grid-template-columns: 1fr minmax(140px, 1.2fr) 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 768px) {
+    .station-power-layout {
+        grid-template-columns: 1fr;
+    }
+    .station-power-hero {
+        order: -1;
+    }
+}
+
+.station-power-inputs,
+.station-power-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.station-power-metric .label {
+    display: block;
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 0.15rem;
+}
+
+.station-power-metric .value {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #222;
+}
+
+.station-power-hero {
+    text-align: center;
+    padding: 0 0.25rem;
+}
+
+.station-power-hero-label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 0.15rem;
+}
+
+.station-power-soc {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #1a1a1a;
+    margin-bottom: 0.35rem;
+}
+
+.station-power-meter {
+    width: 100%;
+    height: 1rem;
+}
+
+.station-power-meter-fallback {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #666;
+}
+
+.station-power-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+body.dark-mode .station-power-section {
+    background: #1e1e1e;
+    border-color: #444;
+    border-top-color: #8fbc8f;
+}
+
+body.dark-mode .station-power-title,
+body.dark-mode .station-power-soc {
+    color: #e8e8e8;
+}
+
+body.dark-mode .station-power-subtitle,
+body.dark-mode .station-power-metric .label,
+body.dark-mode .station-power-hero-label,
+body.dark-mode .station-power-meta {
+    color: #aaa;
+}
+
+body.dark-mode .station-power-metric .value {
+    color: #ddd;
+}
+
+body.night-mode .station-power-section {
+    background: #1a1a0a;
+    border-color: #3a3a2a;
+    border-top-color: #8a9a6a;
+}
+
+body.night-mode .station-power-title,
+body.night-mode .station-power-soc {
+    color: #e8e8c8;
+}
+
+body.night-mode .station-power-subtitle,
+body.night-mode .station-power-metric .label,
+body.night-mode .station-power-hero-label,
+body.night-mode .station-power-meta {
+    color: #a0a080;
+}
+
+body.night-mode .station-power-metric .value {
+    color: #d8d8b8;
+}
+
 /* Partnerships & Credits Section */
 .partnerships-section {
     background: #f0f7ff;

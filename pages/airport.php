@@ -7,6 +7,8 @@ require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/weather/outage-detection.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/station-power/station-power-cache.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/runways.php';
 
@@ -1973,6 +1975,116 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
         </section>
+
+        <?php
+        $showStationPowerBlock = isAirportLimitedAvailability($airport) && isAirportStationPowerConfigured($airport);
+        $stationPowerData = null;
+        $stationPowerDisplayable = false;
+        if ($showStationPowerBlock) {
+            $stationPowerData = loadStationPowerCache($airportId);
+            $stationPowerDisplayable = is_array($stationPowerData) && stationPowerCacheIsDisplayable($stationPowerData);
+        }
+        ?>
+        <?php if ($showStationPowerBlock): ?>
+        <section class="station-power-section" aria-labelledby="station-power-heading">
+            <h2 id="station-power-heading" class="station-power-title">Station power</h2>
+            <p class="station-power-subtitle">15-minute averages</p>
+            <?php if (!$stationPowerDisplayable): ?>
+                <p class="station-power-empty">No station power data yet.</p>
+            <?php else: ?>
+                <?php
+                /** @var array<string,mixed> $stationPowerData */
+                $sp = $stationPowerData;
+                $tz = $airport['timezone'] ?? 'UTC';
+                $fmtMs = static function (?int $ms) use ($tz): string {
+                    if ($ms === null) {
+                        return '---';
+                    }
+                    try {
+                        $dt = new DateTime('@' . (int) floor($ms / 1000));
+                        $dt->setTimezone(new DateTimeZone($tz));
+                        return $dt->format('M j, g:i A T');
+                    } catch (\Exception $e) {
+                        return '---';
+                    }
+                };
+                $fmtFetched = static function (?int $t) use ($tz): string {
+                    if ($t === null || $t <= 0) {
+                        return '---';
+                    }
+                    try {
+                        $dt = new DateTime('@' . $t);
+                        $dt->setTimezone(new DateTimeZone($tz));
+                        return $dt->format('M j, g:i A T');
+                    } catch (\Exception $e) {
+                        return '---';
+                    }
+                };
+                $fmtW = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 0)) . ' W';
+                };
+                $fmtV = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 2)) . ' V';
+                };
+                $fmtSoc = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 1)) . '%';
+                };
+                $socVal = isset($sp['battery_soc_percent']) && is_numeric($sp['battery_soc_percent'])
+                    ? max(0.0, min(100.0, (float) $sp['battery_soc_percent']))
+                    : null;
+                ?>
+            <div class="station-power-layout">
+                <div class="station-power-inputs">
+                    <div class="station-power-metric">
+                        <span class="label">Solar (to loads)</span>
+                        <span class="value"><?= $fmtW($sp['solar_pc_watts'] ?? null) ?></span>
+                    </div>
+                    <div class="station-power-metric">
+                        <span class="label">Solar (to battery)</span>
+                        <span class="value"><?= $fmtW($sp['solar_pb_watts'] ?? null) ?></span>
+                    </div>
+                </div>
+                <div class="station-power-hero">
+                    <div class="station-power-hero-label">Battery charge</div>
+                    <?php if ($socVal !== null): ?>
+                    <div class="station-power-soc"><?= $fmtSoc($socVal) ?></div>
+                    <meter class="station-power-meter" min="0" max="100" value="<?= htmlspecialchars((string) $socVal) ?>" aria-label="Battery state of charge"><?= htmlspecialchars((string) round($socVal, 1)) ?> percent</meter>
+                    <?php else: ?>
+                    <div class="station-power-soc">---</div>
+                    <p class="station-power-meter-fallback" role="status">---</p>
+                    <?php endif; ?>
+                </div>
+                <div class="station-power-outputs">
+                    <div class="station-power-metric">
+                        <span class="label">DC load</span>
+                        <span class="value"><?= $fmtW($sp['load_watts'] ?? null) ?></span>
+                    </div>
+                    <div class="station-power-metric">
+                        <span class="label">Battery</span>
+                        <span class="value"><?= $fmtV($sp['battery_volts'] ?? null) ?></span>
+                    </div>
+                    <div class="station-power-metric">
+                        <span class="label" title="Time to go">TTG</span>
+                        <span class="value"><?= isset($sp['time_to_go_display']) && is_string($sp['time_to_go_display']) ? htmlspecialchars($sp['time_to_go_display']) : '---' ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="station-power-meta">
+                <span>Sample time: <?= htmlspecialchars($fmtMs(isset($sp['sample_time_ms']) ? (int) $sp['sample_time_ms'] : null)) ?></span>
+                <span>Last updated: <?= htmlspecialchars($fmtFetched(isset($sp['fetched_at']) ? (int) $sp['fetched_at'] : null)) ?></span>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
 
         <!-- Partnerships & Credits -->
         <?php

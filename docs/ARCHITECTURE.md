@@ -189,6 +189,10 @@ aviationwx.org/
 - Called by scheduler for periodic NOTAM updates
 - Fetches, parses, filters, and caches NOTAMs per airport
 
+### Station power (facility metrics)
+
+Optional **station power** telemetry on airport pages for `limited_availability` sites: **`lib/station-power/`** with a **provider** abstraction (canonical JSON cache under `cache/station-power/`). **`scripts/fetch-station-power.php`** runs from the scheduler; **v1** implements the **vrm** provider (upstream HTTP isolated in **`provider/VrmStationPowerProvider.php`**). Staleness and display rules are **separate** from flight-weather data; the UI uses neutral labels only.
+
 **Key Features**:
 - **Dual Query Strategy**: 
   - Location query by ICAO code (for airport-specific NOTAMs)

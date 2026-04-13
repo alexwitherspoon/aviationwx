@@ -29,6 +29,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `weather_worker_pool_size` | `5` | Concurrent weather workers |
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
+| `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
 | `faa_crop_margins` | see below | Default crop margins for FAA profile (percentages) |
@@ -90,6 +91,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning—logged at info, exit 2 (skip) so process pool does not log "worker failed". |
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
+| `station_power` | — | Optional facility power telemetry for `limited_availability` sites. Object shape: `provider` (string, e.g. `vrm`) and `config` (provider-specific). **Requires** `limited_availability: true`. Staleness for this block is **not** tied to METAR/weather fail-closed rules. The dashboard uses neutral **Station power** labels only (no vendor branding in the UI). |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |

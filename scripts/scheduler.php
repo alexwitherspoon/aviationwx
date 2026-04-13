@@ -21,6 +21,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
@@ -194,6 +195,7 @@ register_shutdown_function(function() use ($lockFp, $lockFile, &$loopCount, $sta
 $weatherPool = null;
 $webcamPool = null;
 $notamPool = null;
+$stationPowerPool = null;
 $webcamScheduleQueue = null; // Priority queue for efficient webcam scheduling
 $invocationId = aviationwx_get_invocation_id();
 
@@ -255,6 +257,7 @@ while ($running) {
                 $weatherPoolSize = getWeatherWorkerPoolSize();
                 $webcamPoolSize = getWebcamWorkerPoolSize();
                 $notamPoolSize = getNotamWorkerPoolSize();
+                $stationPowerPoolSize = getStationPowerWorkerPoolSize();
                 $workerTimeout = getWorkerTimeout();
                 
                 $weatherPool = new ProcessPool(
@@ -276,6 +279,13 @@ while ($running) {
                     $notamPoolSize,
                     $workerTimeout,
                     'fetch-notam.php',
+                    $invocationId
+                );
+
+                $stationPowerPool = new ProcessPool(
+                    $stationPowerPoolSize,
+                    $workerTimeout,
+                    'fetch-station-power.php',
                     $invocationId
                 );
                 
@@ -313,6 +323,7 @@ while ($running) {
             $weatherPoolSize = getWeatherWorkerPoolSize();
             $webcamPoolSize = getWebcamWorkerPoolSize();
             $notamPoolSize = getNotamWorkerPoolSize();
+            $stationPowerPoolSize = getStationPowerWorkerPoolSize();
             $workerTimeout = getWorkerTimeout();
             
             $weatherPool = new ProcessPool(
@@ -334,6 +345,13 @@ while ($running) {
                 $notamPoolSize,
                 $workerTimeout,
                 'fetch-notam.php',
+                $invocationId
+            );
+
+            $stationPowerPool = new ProcessPool(
+                $stationPowerPoolSize,
+                $workerTimeout,
+                'fetch-station-power.php',
                 $invocationId
             );
             
@@ -417,6 +435,27 @@ while ($running) {
                 }
             }
         }
+
+        // Station power updates (non-blocking)
+        if ($stationPowerPool !== null && isset($config['airports'])) {
+            foreach ($config['airports'] as $airportId => $airport) {
+                if (!is_array($airport) || !isAirportEnabled($airport)) {
+                    continue;
+                }
+                if (!isAirportLimitedAvailability($airport) || !isAirportStationPowerConfigured($airport)) {
+                    continue;
+                }
+                $refreshInterval = STATION_POWER_FETCH_INTERVAL_SECONDS;
+                $minRefresh = getMinimumRefreshInterval();
+                $refreshInterval = max($minRefresh, $refreshInterval);
+                $stagger = crc32((string) $airportId) % max(1, (int) (STATION_POWER_FETCH_INTERVAL_SECONDS / 10));
+                $cacheFile = getStationPowerCachePath($airportId);
+                $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
+                if ($cacheAge >= ($refreshInterval + $stagger)) {
+                    $stationPowerPool->addJob([$airportId]);
+                }
+            }
+        }
         
         // Cleanup finished workers (non-blocking)
         if ($weatherPool !== null) {
@@ -430,6 +469,10 @@ while ($running) {
         if ($notamPool !== null) {
             $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $notamPool->cleanupFinished($dummyStats);
+        }
+        if ($stationPowerPool !== null) {
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+            $stationPowerPool->cleanupFinished($dummyStats);
         }
         
         // Reap any zombie child processes that proc_close() may have missed

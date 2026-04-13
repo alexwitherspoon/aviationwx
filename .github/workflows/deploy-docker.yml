@@ -1054,7 +1054,7 @@ jobs:
           # shellcheck disable=SC2086
           CACHE_MKDIRS="/tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp \
             /tmp/aviationwx-cache/weather /tmp/aviationwx-cache/weather/history \
-            /tmp/aviationwx-cache/ftp /tmp/aviationwx-cache/notam /tmp/aviationwx-cache/partners \
+            /tmp/aviationwx-cache/ftp /tmp/aviationwx-cache/notam /tmp/aviationwx-cache/station-power /tmp/aviationwx-cache/partners \
             /tmp/aviationwx-cache/rate_limits \
             /tmp/aviationwx-cache/metrics/hourly /tmp/aviationwx-cache/metrics/daily /tmp/aviationwx-cache/metrics/weekly \
             /tmp/aviationwx-cache/peak_gusts /tmp/aviationwx-cache/temp_extremes /tmp/aviationwx-cache/runways \
@@ -1087,7 +1087,7 @@ jobs:
           # Ensure directory permissions allow www-data to write
           # Use 775 for webcams (group writable) and 755 for parent
           sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
-            for d in webcams sftp weather weather/history ftp notam partners rate_limits \
+            for d in webcams sftp weather weather/history ftp notam station-power partners rate_limits \
               metrics metrics/hourly metrics/daily metrics/weekly \
               peak_gusts temp_extremes runways geomag map_tiles; do
               sudo chmod 775 "/tmp/aviationwx-cache/${d}" 2>/dev/null || chmod 775 "/tmp/aviationwx-cache/${d}" || true
