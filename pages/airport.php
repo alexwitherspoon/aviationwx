@@ -1980,23 +1980,14 @@ if ($themeCookie === 'dark') {
         $showStationPowerBlock = isAirportLimitedAvailability($airport) && isAirportStationPowerConfigured($airport);
         $stationPowerData = null;
         $stationPowerDisplayable = false;
-        $stationPowerObservedLastUpdated = null;
+        $stationPowerSampleTsSec = 0;
         if ($showStationPowerBlock) {
             $stationPowerData = loadStationPowerCache($airportId);
             $stationPowerDisplayable = is_array($stationPowerData) && stationPowerCacheIsDisplayable($stationPowerData);
             if ($stationPowerDisplayable && is_array($stationPowerData)) {
-                $tzSp = $airport['timezone'] ?? 'UTC';
                 $sampleMs = isset($stationPowerData['sample_time_ms']) ? (int) $stationPowerData['sample_time_ms'] : 0;
                 if ($sampleMs > 0) {
-                    try {
-                        $dtObs = new DateTime('@' . (int) floor($sampleMs / 1000));
-                        $dtObs->setTimezone(new DateTimeZone($tzSp));
-                        $stationPowerObservedLastUpdated = $dtObs->format('M j, g:i A T');
-                    } catch (\Exception $e) {
-                        $stationPowerObservedLastUpdated = '---';
-                    }
-                } else {
-                    $stationPowerObservedLastUpdated = '---';
+                    $stationPowerSampleTsSec = (int) floor($sampleMs / 1000);
                 }
             }
         }
@@ -2007,8 +1998,8 @@ if ($themeCookie === 'dark') {
                 <div class="station-power-header-titles">
                     <h2 id="station-power-heading" class="station-power-title">Station Power</h2>
                 </div>
-                <?php if ($stationPowerDisplayable && $stationPowerObservedLastUpdated !== null): ?>
-                <p class="station-power-last-updated">Last updated: <span id="station-power-last-updated" title="Latest observation time for displayed averages (not server fetch time)"><?= htmlspecialchars($stationPowerObservedLastUpdated) ?></span></p>
+                <?php if ($stationPowerDisplayable): ?>
+                <p class="station-power-last-updated weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="station-power-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="station-power-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="station-power-last-updated"<?= $stationPowerSampleTsSec > 0 ? ' data-timestamp="' . htmlspecialchars((string) $stationPowerSampleTsSec, ENT_QUOTES, 'UTF-8') . '"' : '' ?> title="Latest observation time for displayed averages (not server fetch time)">--</span></p>
                 <?php endif; ?>
             </div>
             <?php if (!$stationPowerDisplayable): ?>
@@ -6781,8 +6772,9 @@ function checkClockSkewFromServerTime(serverTimeUtc) {
     if (wasDetected !== clientClockSkewDetected) {
         updateClockSkewIndicators();
         // Refresh timestamp displays (switch between relative and absolute time)
-        if (typeof updateWebcamTimestamps === 'function') updateWebcamTimestamps();
+        if (typeof updateWebcamTimestamps === 'function')         updateWebcamTimestamps();
         updateWeatherTimestamp();
+        updateStationPowerTimestamp();
     }
 }
 
@@ -6972,6 +6964,37 @@ function updateTimestampDisplay(elem, timestamp) {
     }
     
     elem.dataset.timestamp = timestampNum.toString();
+}
+
+/** Refreshes station power last-updated text; delegates formatting to updateTimestampDisplay. */
+function updateStationPowerTimestamp() {
+    const el = document.getElementById('station-power-last-updated');
+    if (!el) {
+        return;
+    }
+    const raw = el.dataset.timestamp;
+    const ts = raw ? parseInt(raw, 10) : 0;
+    if (!ts || ts <= 0) {
+        el.textContent = '--';
+        const w = document.getElementById('station-power-timestamp-warning');
+        if (w) {
+            w.style.display = 'none';
+        }
+        return;
+    }
+    updateTimestampDisplay(el, ts);
+    const warningElem = document.getElementById('station-power-timestamp-warning');
+    if (!warningElem) {
+        return;
+    }
+    if (clientClockSkewDetected) {
+        warningElem.style.display = 'none';
+        return;
+    }
+    const updateDate = new Date(ts * 1000);
+    const diffSeconds = Math.floor((new Date() - updateDate) / 1000);
+    const isStale = diffSeconds >= STALE_FAILCLOSED_SECONDS;
+    warningElem.style.display = isStale ? 'inline' : 'none';
 }
 
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
@@ -7194,9 +7217,13 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 <?php endif; ?>
 
 updateWeatherTimestamp();
+updateStationPowerTimestamp();
 // Update weather timestamp - 1 second on desktop for smooth counting, 10 seconds on mobile to save battery
 const weatherTimestampRefreshMs = TIMER_IS_MOBILE ? 10000 : 1000;
 registerTimer('weather-timestamp-refresh', weatherTimestampRefreshMs, updateWeatherTimestamp);
+if (document.getElementById('station-power-last-updated')) {
+    registerTimer('station-power-timestamp-refresh', weatherTimestampRefreshMs, updateStationPowerTimestamp);
+}
 
 // Initialize and update outage banner
 function initializeOutageBanner() {
