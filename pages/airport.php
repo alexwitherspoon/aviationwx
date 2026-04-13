@@ -7,6 +7,8 @@ require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/weather/outage-detection.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/station-power/station-power-cache.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/runways.php';
 
@@ -1973,6 +1975,186 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
         </section>
+
+        <?php
+        $showStationPowerBlock = isAirportLimitedAvailability($airport) && isAirportStationPowerConfigured($airport);
+        $stationPowerData = null;
+        $stationPowerDisplayable = false;
+        $stationPowerObservedLastUpdated = null;
+        if ($showStationPowerBlock) {
+            $stationPowerData = loadStationPowerCache($airportId);
+            $stationPowerDisplayable = is_array($stationPowerData) && stationPowerCacheIsDisplayable($stationPowerData);
+            if ($stationPowerDisplayable && is_array($stationPowerData)) {
+                $tzSp = $airport['timezone'] ?? 'UTC';
+                $sampleMs = isset($stationPowerData['sample_time_ms']) ? (int) $stationPowerData['sample_time_ms'] : 0;
+                if ($sampleMs > 0) {
+                    try {
+                        $dtObs = new DateTime('@' . (int) floor($sampleMs / 1000));
+                        $dtObs->setTimezone(new DateTimeZone($tzSp));
+                        $stationPowerObservedLastUpdated = $dtObs->format('M j, g:i A T');
+                    } catch (\Exception $e) {
+                        $stationPowerObservedLastUpdated = '---';
+                    }
+                } else {
+                    $stationPowerObservedLastUpdated = '---';
+                }
+            }
+        }
+        ?>
+        <?php if ($showStationPowerBlock): ?>
+        <section class="station-power-section" aria-labelledby="station-power-heading">
+            <div class="station-power-header">
+                <div class="station-power-header-titles">
+                    <h2 id="station-power-heading" class="station-power-title">Station Power</h2>
+                </div>
+                <?php if ($stationPowerDisplayable && $stationPowerObservedLastUpdated !== null): ?>
+                <p class="station-power-last-updated">Last updated: <span id="station-power-last-updated" title="Latest observation time for displayed averages (not server fetch time)"><?= htmlspecialchars($stationPowerObservedLastUpdated) ?></span></p>
+                <?php endif; ?>
+            </div>
+            <?php if (!$stationPowerDisplayable): ?>
+                <p class="station-power-empty">No station power data yet.</p>
+            <?php else: ?>
+                <?php
+                /** @var array<string,mixed> $stationPowerData */
+                $sp = $stationPowerData;
+                $fmtW = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 0)) . ' W';
+                };
+                // Local-day totals are stored as Wh; VRM UTC-day totals are kWh in *_kwh_utc keys.
+                $fmtWh = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 0)) . ' Wh';
+                };
+                $fmtBatteryVolts = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 1)) . 'v';
+                };
+                $fmtSoc = static function ($v): string {
+                    if ($v === null || !is_numeric($v)) {
+                        return '---';
+                    }
+                    return htmlspecialchars((string) round((float) $v, 1)) . '%';
+                };
+                $fmtTtg = static function (?string $s): string {
+                    if ($s === null) {
+                        return '---';
+                    }
+                    $t = trim($s);
+                    if ($t === '') {
+                        return '---';
+                    }
+                    if (ctype_digit($t)) {
+                        $n = (int) $t;
+                        $unit = $n === 1 ? 'hr' : 'hrs';
+
+                        return htmlspecialchars((string) $n) . ' ' . $unit;
+                    }
+                    if (preg_match('/^(\d+)\s*h$/i', $t, $m)) {
+                        $n = (int) $m[1];
+                        $unit = $n === 1 ? 'hr' : 'hrs';
+
+                        return htmlspecialchars((string) $n) . ' ' . $unit;
+                    }
+
+                    return htmlspecialchars($t);
+                };
+                $socVal = isset($sp['battery_soc_percent']) && is_numeric($sp['battery_soc_percent'])
+                    ? max(0.0, min(100.0, (float) $sp['battery_soc_percent']))
+                    : null;
+                $socMeterClass = 'station-power-meter';
+                if ($socVal !== null) {
+                    if ($socVal < 40.0) {
+                        $socMeterClass .= ' station-power-meter--low';
+                    } elseif ($socVal < 60.0) {
+                        $socMeterClass .= ' station-power-meter--medium';
+                    }
+                }
+                $solarTotalWatts = null;
+                if (isset($sp['solar_total_watts']) && is_numeric($sp['solar_total_watts'])) {
+                    $solarTotalWatts = (float) $sp['solar_total_watts'];
+                } else {
+                    $pcW = isset($sp['solar_pc_watts']) && is_numeric($sp['solar_pc_watts']) ? (float) $sp['solar_pc_watts'] : null;
+                    $pbW = isset($sp['solar_pb_watts']) && is_numeric($sp['solar_pb_watts']) ? (float) $sp['solar_pb_watts'] : null;
+                    if ($pcW !== null || $pbW !== null) {
+                        $solarTotalWatts = (float) ($pcW ?? 0.0) + (float) ($pbW ?? 0.0);
+                    }
+                }
+                $solarTodayWh = isset($sp['solar_daily_wh_local']) && is_numeric($sp['solar_daily_wh_local'])
+                    ? (float) $sp['solar_daily_wh_local']
+                    : null;
+                $solarTodayTitle = 'Cumulative solar energy from local midnight to now (hourly buckets, airport timezone).';
+                if ($solarTodayWh === null && isset($sp['solar_daily_kwh_utc']) && is_numeric($sp['solar_daily_kwh_utc'])) {
+                    $solarTodayWh = (float) $sp['solar_daily_kwh_utc'] * 1000.0;
+                    $solarTodayTitle = 'Cumulative solar energy for the VRM UTC calendar day (local-day hourly data unavailable).';
+                }
+                $loadTodayWh = isset($sp['load_daily_wh_local']) && is_numeric($sp['load_daily_wh_local'])
+                    ? (float) $sp['load_daily_wh_local']
+                    : null;
+                $loadTodayTitle = 'Cumulative DC energy from local midnight to now (hourly buckets, airport timezone).';
+                if ($loadTodayWh === null && isset($sp['load_daily_kwh_utc']) && is_numeric($sp['load_daily_kwh_utc'])) {
+                    $loadTodayWh = (float) $sp['load_daily_kwh_utc'] * 1000.0;
+                    $loadTodayTitle = 'Cumulative DC energy for the VRM UTC calendar day (local-day hourly data unavailable).';
+                }
+                $ttgDisplay = isset($sp['time_to_go_display']) && is_string($sp['time_to_go_display']) && $sp['time_to_go_display'] !== ''
+                    ? $sp['time_to_go_display']
+                    : null;
+                ?>
+            <div class="station-power-layout">
+                <div class="station-power-inputs">
+                    <div class="station-power-metric">
+                        <span class="label">Solar production now</span>
+                        <span class="value"><?= $fmtW($solarTotalWatts) ?></span>
+                    </div>
+                    <div class="station-power-metric">
+                        <span class="label" title="<?= htmlspecialchars($solarTodayTitle) ?>">Solar production today</span>
+                        <span class="value"><?= $fmtWh($solarTodayWh) ?></span>
+                    </div>
+                </div>
+                <div class="station-power-hero" role="group" aria-labelledby="station-power-battery-heading">
+                    <div class="station-power-metric">
+                        <span class="label" id="station-power-battery-heading">Battery charge</span>
+                    </div>
+                    <div class="station-power-battery-trio">
+                        <div class="station-power-metric station-power-battery-side station-power-battery-volts">
+                            <span class="label" title="Last sampled battery voltage">Volts</span>
+                            <span class="value station-power-battery-secondary"><?= $fmtBatteryVolts($sp['battery_volts'] ?? null) ?></span>
+                        </div>
+                        <div class="station-power-battery-center">
+                            <?php if ($socVal !== null): ?>
+                            <div class="station-power-soc"><?= $fmtSoc($socVal) ?></div>
+                            <meter class="<?= htmlspecialchars($socMeterClass, ENT_QUOTES, 'UTF-8') ?>" min="0" max="100" value="<?= htmlspecialchars((string) $socVal) ?>" aria-label="Battery state of charge"><?= htmlspecialchars((string) round($socVal, 1)) ?> percent</meter>
+                            <?php else: ?>
+                            <div class="station-power-soc">---</div>
+                            <p class="station-power-meter-fallback" role="status">---</p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="station-power-metric station-power-battery-side station-power-battery-ttg">
+                            <span class="label" title="Estimated time left on battery at current loads">Time left</span>
+                            <span class="value station-power-battery-secondary"><?= $fmtTtg($ttgDisplay) ?></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="station-power-outputs">
+                    <div class="station-power-metric">
+                        <span class="label">DC load now</span>
+                        <span class="value"><?= $fmtW($sp['load_watts'] ?? null) ?></span>
+                    </div>
+                    <div class="station-power-metric">
+                        <span class="label" title="<?= htmlspecialchars($loadTodayTitle) ?>">DC load today</span>
+                        <span class="value"><?= $fmtWh($loadTodayWh) ?></span>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
 
         <!-- Partnerships & Credits -->
         <?php

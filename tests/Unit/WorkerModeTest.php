@@ -133,4 +133,37 @@ class WorkerModeTest extends TestCase
         $this->assertNotEquals(1, $exitCode, 'Unlisted airport should not exit 1 (would emit process pool: worker failed)');
         $this->assertContains($exitCode, [0, 2], 'Unlisted airport should exit 0 (success) or 2 (skip)');
     }
+
+    /**
+     * fetch-station-power.php without --worker exits 2 with usage (manual refresh uses --worker like the scheduler).
+     */
+    public function testFetchStationPower_NoWorkerArgs_Exit2(): void
+    {
+        $script = __DIR__ . '/../../scripts/fetch-station-power.php';
+        if (!file_exists($script)) {
+            $this->markTestSkipped('fetch-station-power.php not found');
+            return;
+        }
+        $cmd = sprintf('php %s 2>&1', escapeshellarg($script));
+        exec($cmd, $output, $exitCode);
+        $this->assertSame(2, $exitCode, 'No --worker should exit 2');
+        $outputStr = implode("\n", $output);
+        $this->assertStringContainsString('--worker', $outputStr);
+    }
+
+    /**
+     * fetch-station-power.php --help exits 0
+     */
+    public function testFetchStationPower_Help_Exit0(): void
+    {
+        $script = __DIR__ . '/../../scripts/fetch-station-power.php';
+        if (!file_exists($script)) {
+            $this->markTestSkipped('fetch-station-power.php not found');
+            return;
+        }
+        $cmd = sprintf('php %s --help 2>&1', escapeshellarg($script));
+        exec($cmd, $output, $exitCode);
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('--worker', implode("\n", $output));
+    }
 }

@@ -369,6 +369,14 @@ if (!defined('SECONDS_PER_HOUR')) {
 if (!defined('SECONDS_PER_DAY')) {
     define('SECONDS_PER_DAY', 86400);
 }
+
+// Station power (facility metrics; not flight-safety tier -- separate staleness from weather/METAR)
+if (!defined('STATION_POWER_FETCH_INTERVAL_SECONDS')) {
+    define('STATION_POWER_FETCH_INTERVAL_SECONDS', 600); // 10 minutes
+}
+if (!defined('STATION_POWER_CACHE_MAX_DISPLAY_AGE_SECONDS')) {
+    define('STATION_POWER_CACHE_MAX_DISPLAY_AGE_SECONDS', 30 * SECONDS_PER_DAY);
+}
 if (!defined('SECONDS_PER_WEEK')) {
     define('SECONDS_PER_WEEK', 604800);
 }

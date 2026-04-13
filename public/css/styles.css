@@ -68,9 +68,34 @@ body {
     
     /* Explicit rules for specific section classes to ensure they get dark background */
     body:not(.dark-mode):not(.night-mode):not(.light-mode) section.weather-section,
-    body:not(.dark-mode):not(.night-mode):not(.light-mode) section.webcam-section {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section.webcam-section,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section.station-power-section {
         background: var(--dark-bg-section) !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .station-power-last-updated {
+        color: var(--dark-text-muted);
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .station-power-soc {
+        color: var(--dark-text-bright);
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .station-power-meter {
+        accent-color: var(--dark-accent);
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .station-power-meter.station-power-meter--low {
+        accent-color: #ef5350;
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .station-power-meter.station-power-meter--medium {
+        accent-color: #ffca28;
+    }
+
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #station-power-last-updated {
+        color: var(--dark-text-muted);
     }
     
     body:not(.dark-mode):not(.night-mode):not(.light-mode) section h2 {
@@ -1068,6 +1093,238 @@ h3 {
     color: #aaa;
     display: block;
     margin-bottom: 0.5rem;
+}
+
+/* Station power: layout grid and header row */
+
+.station-power-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.station-power-header-titles {
+    min-width: 0;
+}
+
+.station-power-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    color: #1a1a1a;
+}
+
+.station-power-last-updated {
+    font-size: 0.85rem;
+    color: #555;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.station-power-empty {
+    margin: 0;
+    color: #555;
+    font-size: 0.95rem;
+}
+
+.station-power-layout {
+    display: grid;
+    grid-template-columns: 1fr minmax(140px, 1.2fr) 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 768px) {
+    .station-power-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .station-power-last-updated {
+        width: 100%;
+        margin-top: 0.25rem;
+    }
+
+    .station-power-layout {
+        grid-template-columns: 1fr;
+    }
+    .station-power-hero {
+        order: -1;
+    }
+}
+
+@media (min-width: 769px) {
+    /* Right-align load metrics in the third grid column */
+    .station-power-outputs {
+        text-align: right;
+    }
+}
+
+.station-power-inputs,
+.station-power-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Block labels; uses global `.label` typography */
+.station-power-metric .label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.station-power-metric .value {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #222;
+}
+
+.station-power-hero {
+    text-align: center;
+    padding: 0 0.25rem;
+}
+
+/* Hero metric: battery charge label (centered) */
+.station-power-hero > .station-power-metric:first-child {
+    text-align: center;
+    width: 100%;
+}
+
+.station-power-battery-trio {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.station-power-battery-side {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.station-power-battery-volts {
+    text-align: left;
+}
+
+.station-power-battery-ttg {
+    text-align: right;
+}
+
+.station-power-battery-center {
+    flex: 1 1 auto;
+    min-width: 6rem;
+    max-width: 52%;
+    text-align: center;
+}
+
+.station-power-battery-secondary {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #222;
+    line-height: 1.2;
+}
+
+.station-power-soc {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #1a1a1a;
+    margin-bottom: 0.35rem;
+}
+
+.station-power-meter {
+    width: 100%;
+    height: 1rem;
+    accent-color: #0066cc;
+}
+
+.station-power-meter--low {
+    accent-color: #c62828;
+}
+
+.station-power-meter--medium {
+    accent-color: #f9a825;
+}
+
+.station-power-meter-fallback {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #666;
+}
+
+body.dark-mode .station-power-last-updated,
+body.dark-mode #station-power-last-updated {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .station-power-empty {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .station-power-meter-fallback {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .station-power-soc {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .station-power-battery-secondary {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .station-power-meter {
+    accent-color: var(--dark-accent);
+}
+
+body.dark-mode .station-power-meter.station-power-meter--low {
+    accent-color: #e53935;
+}
+
+body.dark-mode .station-power-meter.station-power-meter--medium {
+    accent-color: #ffca28;
+}
+
+body.night-mode .station-power-last-updated {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .station-power-empty {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .station-power-meter-fallback {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .station-power-soc {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .station-power-battery-secondary {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .station-power-meter {
+    accent-color: var(--night-accent);
+}
+
+body.night-mode .station-power-meter.station-power-meter--low {
+    accent-color: #e53935;
+}
+
+body.night-mode .station-power-meter.station-power-meter--medium {
+    accent-color: #ffca28;
+}
+
+body.night-mode #station-power-last-updated {
+    color: var(--night-text-muted) !important;
 }
 
 /* Partnerships & Credits Section */

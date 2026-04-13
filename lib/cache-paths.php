@@ -27,6 +27,8 @@
  * /var/sftp/{username}/files/      # SFTP uploads (ftp:www-data 2775)
  * ├── notam/
  * │   └── {airport}.json           # NOTAM cache
+ * ├── station-power/
+ * │   └── {airport}.json           # Canonical station power snapshot (provider-agnostic)
  * ├── partners/
  * │   └── {hash}.{ext}             # Partner logo cache
  * ├── map_tiles/
@@ -480,6 +482,24 @@ function getNotamTokenCachePath(): string {
 }
 
 // =============================================================================
+// STATION POWER CACHE PATHS
+// =============================================================================
+
+if (!defined('CACHE_STATION_POWER_DIR')) {
+    define('CACHE_STATION_POWER_DIR', CACHE_BASE_DIR . '/station-power');
+}
+
+/**
+ * Path to canonical station power JSON for an airport (provider-agnostic schema).
+ *
+ * @param string $airportId Airport identifier (e.g. kspb)
+ * @return string Absolute path to cache file
+ */
+function getStationPowerCachePath(string $airportId): string {
+    return CACHE_STATION_POWER_DIR . '/' . strtolower($airportId) . '.json';
+}
+
+// =============================================================================
 // PARTNER LOGO CACHE PATHS
 // =============================================================================
 
@@ -798,6 +818,7 @@ function ensureAllCacheDirs(): array {
         CACHE_UPLOADS_DIR,
         CACHE_SFTP_DIR,
         CACHE_NOTAM_DIR,
+        CACHE_STATION_POWER_DIR,
         CACHE_PARTNERS_DIR,
         CACHE_RATE_LIMITS_DIR,
         CACHE_METRICS_DIR,
@@ -829,6 +850,7 @@ function getAirportCachePaths(string $airportId): array {
         'ftp_uploads_dir' => CACHE_UPLOADS_DIR . '/' . $airportId,
         'sftp_dir' => CACHE_SFTP_DIR,  // SFTP uses flat structure by username
         'notam' => getNotamCachePath($airportId),
+        'station_power' => getStationPowerCachePath($airportId),
         'outage' => getOutageStatePath($airportId),
         'peak_gusts' => getPeakGustTrackingPath($airportId),
         'temp_extremes' => getTempExtremesTrackingPath($airportId),

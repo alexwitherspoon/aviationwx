@@ -903,6 +903,45 @@ function getNotamWorkerPoolSize(): int {
 }
 
 /**
+ * Station power worker pool size (global config, default 1).
+ *
+ * @return int Concurrent workers for fetch-station-power.php
+ */
+function getStationPowerWorkerPoolSize(): int {
+    return (int) getGlobalConfig('station_power_worker_pool_size', 1);
+}
+
+/**
+ * Whether the airport has a supported station_power block (provider + config).
+ */
+function isAirportStationPowerConfigured(array $airport): bool {
+    if (!isset($airport['station_power']) || !is_array($airport['station_power'])) {
+        return false;
+    }
+    $provider = $airport['station_power']['provider'] ?? '';
+    if (!is_string($provider) || $provider === '') {
+        return false;
+    }
+    return $provider === 'vrm';
+}
+
+/**
+ * Whether the station power worker should fetch for this airport.
+ *
+ * Facility telemetry continues when the airport is in maintenance mode (maintenance is a UI banner only).
+ * Disabled airports are skipped.
+ *
+ * @param array<string,mixed> $airport Airport config row
+ */
+function shouldFetchStationPowerForAirport(array $airport): bool
+{
+    if (!isAirportEnabled($airport)) {
+        return false;
+    }
+    return isAirportLimitedAvailability($airport) && isAirportStationPowerConfigured($airport);
+}
+
+/**
  * Get NOTAM API client ID from global config
  * @return string Client ID or empty string if not configured
  */
@@ -3500,6 +3539,13 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.notam_worker_pool_size must be a positive integer";
                 }
             }
+
+            // station_power_worker_pool_size: concurrent station power fetch workers
+            if (isset($cfg['station_power_worker_pool_size'])) {
+                if (!is_int($cfg['station_power_worker_pool_size']) || $cfg['station_power_worker_pool_size'] < 1) {
+                    $errors[] = "config.station_power_worker_pool_size must be a positive integer";
+                }
+            }
             
             // notam_api_client_id: FAA NOTAM API client ID (string)
             if (isset($cfg['notam_api_client_id'])) {
@@ -3686,6 +3732,35 @@ function validateAirportsJsonStructure(array $config): array {
             $val = $airport['limited_availability_outage_seconds'];
             if (!is_numeric($val) || (int)$val < MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS) {
                 $errors[] = "Airport '{$airportCode}' limited_availability_outage_seconds must be integer >= " . MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS;
+            }
+        }
+
+        // station_power (optional): facility power telemetry; requires limited_availability
+        if (isset($airport['station_power'])) {
+            if (!is_array($airport['station_power'])) {
+                $errors[] = "Airport '{$airportCode}' station_power must be an object";
+            } else {
+                $sp = $airport['station_power'];
+                if (!isset($sp['provider']) || !is_string($sp['provider']) || $sp['provider'] === '') {
+                    $errors[] = "Airport '{$airportCode}' station_power.provider is required";
+                } elseif ($sp['provider'] !== 'vrm') {
+                    $errors[] = "Airport '{$airportCode}' station_power.provider must be 'vrm' (only supported provider)";
+                } else {
+                    if (!isset($sp['config']) || !is_array($sp['config'])) {
+                        $errors[] = "Airport '{$airportCode}' station_power.config is required for provider vrm";
+                    } else {
+                        $vc = $sp['config'];
+                        if (!isset($vc['installation_id']) || !is_numeric($vc['installation_id']) || (int) $vc['installation_id'] <= 0) {
+                            $errors[] = "Airport '{$airportCode}' station_power.config.installation_id must be a positive integer";
+                        }
+                        if (!isset($vc['access_token']) || !is_string($vc['access_token']) || trim($vc['access_token']) === '') {
+                            $errors[] = "Airport '{$airportCode}' station_power.config.access_token must be a non-empty string";
+                        }
+                    }
+                }
+                if (!isset($airport['limited_availability']) || $airport['limited_availability'] !== true) {
+                    $errors[] = "Airport '{$airportCode}' station_power requires limited_availability true";
+                }
             }
         }
         
