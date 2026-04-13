@@ -2,7 +2,15 @@
 /**
  * Station power fetcher (scheduler worker). Writes canonical cache per airport.
  *
- * Usage: php fetch-station-power.php --worker <airport_id>
+ * The scheduler runs this with --worker; you can run the same command manually for an immediate
+ * refresh instead of waiting for the next scheduler cycle.
+ *
+ * Usage:
+ *   php fetch-station-power.php --worker <airport_id>
+ *   php fetch-station-power.php --help
+ *
+ * Docker (from repo root, containers up):
+ *   make station-power-fetch AIRPORT=2u7
  */
 
 declare(strict_types=1);
@@ -17,6 +25,13 @@ $isWorkerMode = false;
 $workerAirportId = null;
 
 if (PHP_SAPI === 'cli' && isset($argv) && is_array($argv)) {
+    if (in_array('--help', $argv, true) || in_array('-h', $argv, true)) {
+        fwrite(STDOUT, "Usage: php fetch-station-power.php --worker <airport_id>\n\n");
+        fwrite(STDOUT, "Fetches station power for one airport and writes cache/station-power/<airport_id>.json.\n");
+        fwrite(STDOUT, "Same command the scheduler uses; run anytime for a manual refresh.\n");
+        fwrite(STDOUT, "Requires station_power in config and limited_availability for that airport.\n");
+        exit(0);
+    }
     if (isset($argv[1]) && $argv[1] === '--worker' && isset($argv[2])) {
         $isWorkerMode = true;
         $workerAirportId = $argv[2];
@@ -44,11 +59,7 @@ function processAirportStationPower(string $airportId, string $invocationId, boo
         return false;
     }
 
-    if (!isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
-        return true;
-    }
-
-    if (!isAirportLimitedAvailability($airport) || !isAirportStationPowerConfigured($airport)) {
+    if (!shouldFetchStationPowerForAirport($airport)) {
         return true;
     }
 
@@ -57,7 +68,8 @@ function processAirportStationPower(string $airportId, string $invocationId, boo
         return true;
     }
 
-    $canonical = StationPowerRegistry::fetchCanonical($stationPower);
+    $airportTz = isset($airport['timezone']) && is_string($airport['timezone']) ? $airport['timezone'] : null;
+    $canonical = StationPowerRegistry::fetchCanonical($stationPower, $airportTz);
     if ($canonical === null) {
         $level = $expectFailures ? 'info' : 'warning';
         aviationwx_log($level, 'station_power fetch: upstream failed; retaining prior cache if any', [
@@ -106,5 +118,6 @@ if ($isWorkerMode) {
     exit($success ? 0 : ($expectFailures ? 2 : 1));
 }
 
-aviationwx_log('info', 'station_power fetch: invoke with --worker <airport_id>', [], 'app');
-exit(0);
+fwrite(STDERR, "Usage: php fetch-station-power.php --worker <airport_id>\n");
+fwrite(STDERR, "Try --help for more. (Manual refresh uses the same --worker invocation as the scheduler.)\n");
+exit(2);

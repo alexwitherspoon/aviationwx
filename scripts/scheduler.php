@@ -439,10 +439,7 @@ while ($running) {
         // Station power updates (non-blocking)
         if ($stationPowerPool !== null && isset($config['airports'])) {
             foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !isAirportEnabled($airport)) {
-                    continue;
-                }
-                if (!isAirportLimitedAvailability($airport) || !isAirportStationPowerConfigured($airport)) {
+                if (!is_array($airport) || !shouldFetchStationPowerForAirport($airport)) {
                     continue;
                 }
                 $refreshInterval = STATION_POWER_FETCH_INTERVAL_SECONDS;

@@ -926,6 +926,22 @@ function isAirportStationPowerConfigured(array $airport): bool {
 }
 
 /**
+ * Whether the station power worker should fetch for this airport.
+ *
+ * Facility telemetry continues when the airport is in maintenance mode (maintenance is a UI banner only).
+ * Disabled airports are skipped.
+ *
+ * @param array<string,mixed> $airport Airport config row
+ */
+function shouldFetchStationPowerForAirport(array $airport): bool
+{
+    if (!isAirportEnabled($airport)) {
+        return false;
+    }
+    return isAirportLimitedAvailability($airport) && isAirportStationPowerConfigured($airport);
+}
+
+/**
  * Get NOTAM API client ID from global config
  * @return string Client ID or empty string if not configured
  */

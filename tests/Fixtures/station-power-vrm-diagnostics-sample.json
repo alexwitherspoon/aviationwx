@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "records": [
+    {
+      "code": "bv",
+      "name": "Battery voltage",
+      "rawValue": 26.29,
+      "formattedValue": "26.29 V"
+    },
+    {
+      "code": "ttg",
+      "name": "Time to go",
+      "formattedValue": "240h"
+    }
+  ]
+}

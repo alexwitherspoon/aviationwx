@@ -15,9 +15,10 @@ final class StationPowerRegistry
      * Fetch canonical station power snapshot for the given airport config block.
      *
      * @param array<string,mixed> $stationPower Airport `station_power` object (provider + config)
+     * @param string|null $airportTimezone PHP timezone id (e.g. from airport `timezone`) for local-day energy
      * @return array<string,mixed>|null
      */
-    public static function fetchCanonical(array $stationPower): ?array
+    public static function fetchCanonical(array $stationPower, ?string $airportTimezone = null): ?array
     {
         $provider = isset($stationPower['provider']) && is_string($stationPower['provider'])
             ? $stationPower['provider']
@@ -27,7 +28,7 @@ final class StationPowerRegistry
             : [];
 
         if ($provider === self::PROVIDER_VRM) {
-            return VrmStationPowerProvider::fetchCanonical($config);
+            return VrmStationPowerProvider::fetchCanonical($config, $airportTimezone);
         }
 
         return null;
