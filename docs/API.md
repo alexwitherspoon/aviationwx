@@ -12,7 +12,7 @@ This document describes the **Internal API** endpoints used by the AviationWX.or
 > Visit **[api.aviationwx.org](https://api.aviationwx.org)** for documentation.
 >
 > **Canonical Public API base URL (AviationWX production):** `https://api.aviationwx.org/v1`  
-> Requests to `/api/v1/...` on `aviationwx.org`, `*.aviationwx.org`, or `embed.aviationwx.org` receive **HTTP 301** to the matching path under that canonical base. Integrations should call `https://api.aviationwx.org/v1/...` directly. Self-hosted deployments may set `config.public_api.canonical_base_url` so documentation reflects their public API origin.
+> Requests to `/api/v1/...` on `aviationwx.org`, `*.aviationwx.org`, `embed.aviationwx.org`, or `api.aviationwx.org` (mistaken legacy path on the API host) receive **HTTP 301** to the matching path under that canonical base. Integrations should call `https://api.aviationwx.org/v1/...` directly. Self-hosted deployments may set `config.public_api.canonical_base_url` so documentation reflects their public API origin.
 
 ---
 

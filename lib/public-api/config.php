@@ -49,15 +49,16 @@ function getPublicApiVersion(): string
 }
 
 /**
- * Canonical HTTPS base URL for Public API v1 documentation and integrator-facing links (no trailing slash).
+ * Canonical HTTP(S) base URL for Public API v1 documentation and integrator-facing links (no trailing slash).
  *
  * Self-hosted and fork deployments may set `config.public_api.canonical_base_url` in `airports.json` so the API
- * docs page and related copy match their public origin. When omitted, returns DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL
- * (AviationWX production).
+ * docs page and related copy match their public origin. Values must use an absolute URL with `http://` or `https://`
+ * (validation in `validatePublicApiConfig()`). When omitted, returns DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL
+ * (HTTPS, AviationWX production).
  *
  * On AviationWX production, nginx issues HTTP 301 from legacy `/api/v1/` paths on `aviationwx.org`,
- * `*.aviationwx.org`, and `embed.aviationwx.org` to the matching path under the production base. Local development
- * typically hits PHP directly (e.g. Docker nginx to `/api/v1/`); see project docs.
+ * `*.aviationwx.org`, `embed.aviationwx.org`, and `api.aviationwx.org` to the matching path under the production base.
+ * Local development typically hits PHP directly (e.g. Docker nginx to `/api/v1/`); see project docs.
  *
  * @return string Base URL for v1 paths, e.g. `https://api.aviationwx.org/v1` or a self-hosted equivalent
  */
