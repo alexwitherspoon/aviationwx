@@ -89,6 +89,7 @@
     },
     "public_api": {
       "enabled": false,
+      "_comment_canonical_base_url": "Optional. Public API v1 base URL for docs (no trailing slash). Omit to use the AviationWX production default (https://api.aviationwx.org/v1). Set for self-hosted forks.",
       "version": "1",
       "rate_limits": {
         "anonymous": {

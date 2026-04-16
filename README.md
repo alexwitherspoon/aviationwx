@@ -76,6 +76,7 @@ AviationWX provides a free public API for developers to integrate aviation weath
 
 - **Documentation:** [api.aviationwx.org](https://api.aviationwx.org)
 - **OpenAPI Spec:** [api.aviationwx.org/openapi.json](https://api.aviationwx.org/openapi.json)
+- **Canonical base URL (v1):** `https://api.aviationwx.org/v1` -- use this for all Public API v1 requests against the public AviationWX service. Older `/api/v1/` paths on other AviationWX hostnames redirect here (HTTP 301). Self-hosted: set `config.public_api.canonical_base_url` in `airports.json` so docs and examples match your origin.
 
 ### Quick Start
 
