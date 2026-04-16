@@ -1530,7 +1530,7 @@ When `config.public_api.enabled` is true, the Public API and weather history fea
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `canonical_base_url` | (see code) | HTTPS (or `http://` for local dev) base URL for Public API v1 without a trailing slash, used by the API docs page and integrator-facing helpers (`getCanonicalPublicApiV1BaseUrl()`). Omit to use the AviationWX production default. Set this on self-hosted or fork deployments so documentation matches your public origin. |
+| `canonical_base_url` | `https://api.aviationwx.org/v1` | Optional. Absolute `http://` or `https://` base URL for Public API v1 with no trailing slash. Used by `getCanonicalPublicApiV1BaseUrl()` and the API docs page. Omit to use this default. Set when your deployment’s public API origin differs (self-hosted). |
 
 ### Rate limits
 

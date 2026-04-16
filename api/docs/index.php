@@ -2,8 +2,7 @@
 /**
  * Public API Documentation Page
  *
- * Landing page for api.aviationwx.org. Shows the canonical Public API v1 base URL
- * (see getCanonicalPublicApiV1BaseUrl()) for third-party integrations.
+ * Landing page for api.aviationwx.org. When the Public API is enabled, displays `getCanonicalPublicApiV1BaseUrl()`.
  */
 
 require_once __DIR__ . '/../../lib/public-api/config.php';
@@ -453,9 +452,9 @@ $attribution = getPublicApiAttributionText();
         ?>
         <div class="canonical-base" role="region" aria-label="Canonical API base URL">
             <h3>Canonical base URL (v1)</h3>
-            <p>Use this HTTP(S) origin and <code>/v1</code> prefix for all Public API v1 requests for this deployment (when unset, the default matches the public AviationWX service; <code>http://</code> is for local development only):</p>
+            <p>Use this HTTP(S) base URL and <code>/v1</code> prefix for Public API v1 requests to this deployment.</p>
             <p class="canonical-url"><code><?= htmlspecialchars($canonicalV1, ENT_QUOTES, 'UTF-8') ?></code></p>
-            <p class="canonical-note">Example: <code><?= htmlspecialchars($canonicalV1, ENT_QUOTES, 'UTF-8') ?>/airports/kspb/weather</code>. Legacy <code>/api/v1/</code> entry points on <code>aviationwx.org</code>, <code>*.aviationwx.org</code>, <code>embed.aviationwx.org</code>, and <code>api.aviationwx.org</code> redirect here (HTTP 301). Self-hosted: set <code>config.public_api.canonical_base_url</code> in <code>airports.json</code> so this page matches your public origin.</p>
+            <p class="canonical-note">Example: <code><?= htmlspecialchars($canonicalV1, ENT_QUOTES, 'UTF-8') ?>/airports/kspb/weather</code>. Legacy <code>/api/v1/</code> paths on <code>aviationwx.org</code>, <code>*.aviationwx.org</code>, <code>embed.aviationwx.org</code>, or <code>api.aviationwx.org</code> redirect here (HTTP 301). Override with <code>config.public_api.canonical_base_url</code> in <code>airports.json</code> when your public origin differs.</p>
         </div>
         
         <div class="quick-start">

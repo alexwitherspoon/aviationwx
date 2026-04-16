@@ -1562,7 +1562,7 @@ function validateCropMargins(mixed $margins, string $context): array {
  * - bulk_max_airports
  * - weather_history settings
  * - partner_keys
- * - canonical_base_url (optional override for docs and integrator copy; explicit null is invalid)
+ * - canonical_base_url (optional; must be string if key present)
  * 
  * @param mixed $publicApi The public_api config value to validate
  * @return array Array of error messages (empty if valid)
@@ -1632,8 +1632,7 @@ function validatePublicApiConfig(mixed $publicApi): array {
         }
     }
     
-    // canonical_base_url: optional absolute URL for Public API v1 base (docs, OSS forks)
-    // Use array_key_exists so explicit JSON null is rejected (isset() would skip validation)
+    // canonical_base_url: optional absolute URL; array_key_exists rejects explicit null
     if (array_key_exists('canonical_base_url', $publicApi)) {
         if (!is_string($publicApi['canonical_base_url'])) {
             $errors[] = "config.public_api.canonical_base_url must be a string";

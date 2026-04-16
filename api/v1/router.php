@@ -2,10 +2,8 @@
 /**
  * Public API v1 Router
  *
- * Entry point for versioned Public API requests. Integrators should use the base URL from
- * `getCanonicalPublicApiV1BaseUrl()` (AviationWX production by default; override via `config.public_api.canonical_base_url` for OSS/self-hosted).
- *
- * Routing parses the request path (after stripping `/api/v1` or `/v1`) and dispatches to endpoint handlers.
+ * Dispatches requests after path normalization (strip `/api/v1` or `/v1`). Client-facing base URL:
+ * `getCanonicalPublicApiV1BaseUrl()` (optional `config.public_api.canonical_base_url` in `airports.json`).
  */
 
 // Start output buffering to catch any stray output
@@ -31,7 +29,7 @@ if (empty($path)) {
 // Process through middleware (checks API enabled, auth, rate limits)
 $context = processPublicApiRequest();
 
-// Deployment version JSON: not a REST route; shared middleware/rate limits apply (same as other /v1 calls).
+// /version.php: deployment metadata JSON; uses the same middleware and rate limits as other v1 routes.
 if ($path === '/version.php') {
     ob_clean();
     require_once __DIR__ . '/version.php';

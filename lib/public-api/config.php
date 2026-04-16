@@ -10,7 +10,7 @@
 require_once __DIR__ . '/../config.php';
 
 /**
- * Default Public API v1 base URL for AviationWX production when `config.public_api.canonical_base_url` is omitted (no trailing slash).
+ * Default Public API v1 base URL when `config.public_api.canonical_base_url` is absent or unused (HTTPS, no trailing slash).
  */
 const DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL = 'https://api.aviationwx.org/v1';
 
@@ -49,18 +49,16 @@ function getPublicApiVersion(): string
 }
 
 /**
- * Canonical HTTP(S) base URL for Public API v1 documentation and integrator-facing links (no trailing slash).
+ * Public API v1 base URL for documentation and integrator-facing links (no trailing slash).
  *
- * Self-hosted and fork deployments may set `config.public_api.canonical_base_url` in `airports.json` so the API
- * docs page and related copy match their public origin. Values must use an absolute URL with `http://` or `https://`
- * (validation in `validatePublicApiConfig()`). When omitted, returns DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL
- * (HTTPS, AviationWX production).
+ * Optional `config.public_api.canonical_base_url` in `airports.json` overrides the default. Values must be absolute
+ * `http://` or `https://` URLs; validation is in `validatePublicApiConfig()`. Otherwise returns DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL.
  *
- * On AviationWX production, nginx issues HTTP 301 from legacy `/api/v1/` paths on `aviationwx.org`,
- * `*.aviationwx.org`, `embed.aviationwx.org`, and `api.aviationwx.org` to the matching path under the production base.
- * Local development typically hits PHP directly (e.g. Docker nginx to `/api/v1/`); see project docs.
+ * Production nginx returns HTTP 301 for legacy `/api/v1/` paths on `aviationwx.org`, `*.aviationwx.org`,
+ * `embed.aviationwx.org`, and `api.aviationwx.org` to `https://api.aviationwx.org/v1/...`.
+ * Local development serves `/api/v1/` and `/v1/` via Docker; see `docs/LOCAL_SETUP.md`.
  *
- * @return string Base URL for v1 paths, e.g. `https://api.aviationwx.org/v1` or a self-hosted equivalent
+ * @return string Base URL for appending v1 paths (e.g. `/airports/...`)
  */
 function getCanonicalPublicApiV1BaseUrl(): string
 {
