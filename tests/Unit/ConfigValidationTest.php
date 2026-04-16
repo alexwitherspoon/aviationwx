@@ -4721,6 +4721,20 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
+    /**
+     * Test public_api.canonical_base_url validation - explicit null must fail (not silently ignored)
+     */
+    public function testPublicApiCanonicalBaseUrl_InvalidNull()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => null,
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Null canonical_base_url should be invalid');
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Existing Config Fields - Ensure Still Validated
     // =========================================================================
