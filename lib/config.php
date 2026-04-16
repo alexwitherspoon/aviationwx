@@ -1562,6 +1562,7 @@ function validateCropMargins(mixed $margins, string $context): array {
  * - bulk_max_airports
  * - weather_history settings
  * - partner_keys
+ * - canonical_base_url (optional; must be string if key present)
  * 
  * @param mixed $publicApi The public_api config value to validate
  * @return array Array of error messages (empty if valid)
@@ -1628,6 +1629,20 @@ function validatePublicApiConfig(mixed $publicApi): array {
     if (isset($publicApi['attribution_text'])) {
         if (!is_string($publicApi['attribution_text'])) {
             $errors[] = "config.public_api.attribution_text must be a string";
+        }
+    }
+    
+    // canonical_base_url: optional absolute URL; array_key_exists rejects explicit null
+    if (array_key_exists('canonical_base_url', $publicApi)) {
+        if (!is_string($publicApi['canonical_base_url'])) {
+            $errors[] = "config.public_api.canonical_base_url must be a string";
+        } else {
+            $trimmed = trim($publicApi['canonical_base_url']);
+            if ($trimmed === '') {
+                $errors[] = "config.public_api.canonical_base_url must be a non-empty string when set";
+            } elseif (!preg_match('#^https?://#i', $trimmed)) {
+                $errors[] = "config.public_api.canonical_base_url must start with http:// or https://";
+            }
         }
     }
     

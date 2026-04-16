@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "AviationWX.org Public API",
-    "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.",
+    "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.\n\nPublic deployment server URL: https://api.aviationwx.org/v1. Paths in this spec are relative to that base. Legacy /api/v1/ URLs on aviationwx.org, *.aviationwx.org, embed.aviationwx.org, and api.aviationwx.org receive HTTP 301 to this host. Optional config.public_api.canonical_base_url overrides the documented base for self-hosted installs.",
     "version": "1.0.0",
     "contact": {
       "name": "AviationWX.org",

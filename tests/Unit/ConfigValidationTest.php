@@ -4680,6 +4680,61 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid wind_rose_period_label should pass: ' . implode(', ', $result['errors']));
     }
 
+    /**
+     * Test public_api.canonical_base_url validation - Valid HTTPS URL
+     */
+    public function testPublicApiCanonicalBaseUrl_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://api.example.com/v1',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid canonical_base_url should pass: ' . implode(', ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.canonical_base_url validation - Invalid (not a URL prefix)
+     */
+    public function testPublicApiCanonicalBaseUrl_InvalidScheme()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'ftp://example.com/v1',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'ftp canonical_base_url should be invalid');
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.canonical_base_url validation - Invalid (empty when set)
+     */
+    public function testPublicApiCanonicalBaseUrl_InvalidEmpty()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => '   ',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Whitespace-only canonical_base_url should be invalid');
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.canonical_base_url validation - explicit null must fail (not silently ignored)
+     */
+    public function testPublicApiCanonicalBaseUrl_InvalidNull()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => null,
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Null canonical_base_url should be invalid');
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Existing Config Fields - Ensure Still Validated
     // =========================================================================

@@ -434,5 +434,58 @@ class PublicApiConfigTest extends TestCase
 
         $this->assertSame('last 3 hours', $label);
     }
+
+    /**
+     * Default canonical base matches AviationWX production when config omits canonical_base_url
+     */
+    public function testGetCanonicalPublicApiV1BaseUrl_Default(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $this->assertSame(DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL, getCanonicalPublicApiV1BaseUrl());
+    }
+
+    /**
+     * canonical_base_url in config overrides the default (OSS / self-hosted)
+     */
+    public function testGetCanonicalPublicApiV1BaseUrl_ConfigOverride(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'canonical_base_url' => 'https://weather.example.com/v1',
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $this->assertSame('https://weather.example.com/v1', getCanonicalPublicApiV1BaseUrl());
+    }
+
+    /**
+     * Trailing slashes on canonical_base_url are normalized away
+     */
+    public function testGetCanonicalPublicApiV1BaseUrl_TrimsTrailingSlash(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'canonical_base_url' => 'https://weather.example.com/v1///',
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $this->assertSame('https://weather.example.com/v1', getCanonicalPublicApiV1BaseUrl());
+    }
 }
 

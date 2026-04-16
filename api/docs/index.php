@@ -1,9 +1,8 @@
 <?php
 /**
  * Public API Documentation Page
- * 
- * Serves as the landing page for api.aviationwx.org
- * Displays comprehensive API documentation in a styled HTML format.
+ *
+ * Landing page for api.aviationwx.org. When the Public API is enabled, displays `getCanonicalPublicApiV1BaseUrl()`.
  */
 
 require_once __DIR__ . '/../../lib/public-api/config.php';
@@ -190,6 +189,31 @@ $attribution = getPublicApiAttributionText();
         .quick-start h3 {
             margin-top: 0;
             color: var(--accent-green);
+        }
+        
+        .canonical-base {
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .canonical-base h3 {
+            margin-top: 0;
+            color: var(--accent-blue);
+            font-size: 1.1rem;
+        }
+        
+        .canonical-base .canonical-url code {
+            font-size: 1rem;
+            word-break: break-all;
+        }
+        
+        .canonical-base .canonical-note {
+            margin-bottom: 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
         }
         
         code {
@@ -422,6 +446,16 @@ $attribution = getPublicApiAttributionText();
             <p>The public API is not currently enabled. Please check back later.</p>
         </div>
         <?php else: ?>
+        
+        <?php
+        $canonicalV1 = getCanonicalPublicApiV1BaseUrl();
+        ?>
+        <div class="canonical-base" role="region" aria-label="Canonical API base URL">
+            <h3>Canonical base URL (v1)</h3>
+            <p>Use this HTTP(S) base URL and <code>/v1</code> prefix for Public API v1 requests to this deployment.</p>
+            <p class="canonical-url"><code><?= htmlspecialchars($canonicalV1, ENT_QUOTES, 'UTF-8') ?></code></p>
+            <p class="canonical-note">Example: <code><?= htmlspecialchars($canonicalV1, ENT_QUOTES, 'UTF-8') ?>/airports/kspb/weather</code>. Legacy <code>/api/v1/</code> paths on <code>aviationwx.org</code>, <code>*.aviationwx.org</code>, <code>embed.aviationwx.org</code>, or <code>api.aviationwx.org</code> redirect here (HTTP 301). Override with <code>config.public_api.canonical_base_url</code> in <code>airports.json</code> when your public origin differs.</p>
+        </div>
         
         <div class="quick-start">
             <h3>🚀 Quick Start</h3>
