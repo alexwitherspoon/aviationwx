@@ -72,6 +72,19 @@ class ErrorHandlingTest extends TestCase
     }
 
     /**
+     * parseTempestResponse: list-shaped obs[0] is invalid federated shape (avoids bogus field reads).
+     */
+    public function testParseTempestResponse_ObsFirstElementNumericList_ReturnsNull()
+    {
+        $response = json_encode([
+            'status' => ['status_code' => 0, 'status_message' => 'OK'],
+            'obs' => [[1, 2, 3, 4]],
+        ]);
+        $result = parseTempestResponse($response);
+        $this->assertNull($result, 'Should return null when obs[0] is a list, not a federated object');
+    }
+
+    /**
      * Test parseTempestResponse with missing required fields (graceful degradation)
      */
     public function testParseTempestResponse_MissingFields()

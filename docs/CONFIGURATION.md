@@ -494,6 +494,8 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 ]
 ```
 
+**Fetch behavior (safety-critical):** The worker always requests the **federated station** observation URL first. If WeatherFlow returns HTTP success but **no usable `obs` row**, or **`obs[0]` exists but has no sensor measurements** (e.g. only a timestamp), the same fetch cycle **automatically** calls the **stations metadata** endpoint, resolves the first **`ST`** (Tempest sensor) `device_id`, and requests **`/observations/device/{device_id}`**. Parsing then maps WeatherFlow's **`obs_st`** numeric layout into the same internal fields as a normal station response. You still configure only `station_id` and `api_key`; no extra fields are required for standard hub-plus-one-Tempest installs. Stations with multiple `ST` devices use the **first `ST` entry** in the API device list (documented for deterministic behavior).
+
 ### Ambient Weather
 
 ```json

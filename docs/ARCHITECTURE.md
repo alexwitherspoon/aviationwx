@@ -118,7 +118,7 @@ aviationwx.org/
 1. Request validation (airport ID, rate limiting)
 2. Cache check (fresh/stale/expired)
 3. Build source list (primary + backup + METAR)
-4. Fetch all sources in parallel via `curl_multi`
+4. Fetch all sources in parallel via `curl_multi` (Tempest may perform up to two **sequential** follow-up HTTP calls per airport source when federated station `obs` is empty: `GET /stations/{id}` then `GET /observations/device/{st_id}`; see [DATA_FLOW.md](DATA_FLOW.md#tempest-weatherflow-api))
 5. Parse responses into `WeatherSnapshot` objects
 6. Aggregate using `WeatherAggregator` with freshness-based selection:
    - Wind fields must come from single source (complete group)

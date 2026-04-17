@@ -239,6 +239,10 @@ function fetchAllSources(array $sources, string $airportId): array {
         // The aggregator and staleness system will handle missing/old weather data
         if ($httpCode >= 200 && $httpCode < 300) {
             // Success: API returned valid response (even if weather data is null/empty)
+            // Tempest: avoid losing primary data when federation returns empty `obs` but ST still reports (tempest-v1.php).
+            if ($sourceType === 'tempest' && is_string($response)) {
+                $response = tempestApplyDeviceFallbackIfNeeded($response, $sources[$sourceKey], $airportId);
+            }
             $responses[$sourceKey] = $response; // Pass through even if empty - aggregator will handle it
             recordWeatherSuccess($airportId, $sourceType);
             weather_health_track_fetch($airportId, $sourceType, true, $httpCode);
