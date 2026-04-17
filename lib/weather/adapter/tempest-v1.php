@@ -48,6 +48,12 @@ class TempestAdapter {
     
     /** Source type identifier */
     public const SOURCE_TYPE = 'tempest';
+
+    /**
+     * Timeout (seconds) for follow-up `/stations` and `/observations/device` HTTP calls.
+     * Capped below the primary `CURL_TIMEOUT` so fallback cannot stack three full primary waits serially.
+     */
+    public const FALLBACK_HTTP_TIMEOUT_SECONDS = 8;
     
     /**
      * Get fields this adapter can provide
@@ -171,12 +177,13 @@ class TempestAdapter {
 }
 
 /**
- * GET helper for Tempest REST; test mode consults fixtures before curl so CI stays deterministic.
+ * GET helper for Tempest REST; test mode consults fixtures before curl (no network in CI).
  *
  * @param string $url Full request URL
+ * @param int|null $requestTimeoutSeconds CURLOPT_TIMEOUT; null uses CURL_TIMEOUT or 30s default
  * @return string|null Response body or null on failure
  */
-function tempestHttpGet(string $url): ?string {
+function tempestHttpGet(string $url, ?int $requestTimeoutSeconds = null): ?string {
     $mock = getMockHttpResponse($url);
     if ($mock !== null) {
         return $mock;
@@ -185,11 +192,14 @@ function tempestHttpGet(string $url): ?string {
     if ($ch === false) {
         return null;
     }
-    $timeout = defined('CURL_TIMEOUT') ? CURL_TIMEOUT : 30;
+    $timeout = $requestTimeoutSeconds ?? (defined('CURL_TIMEOUT') ? CURL_TIMEOUT : 30);
+    $connectTimeout = $requestTimeoutSeconds !== null
+        ? max(3, min(10, $requestTimeoutSeconds))
+        : 10;
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => $timeout,
-        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => $connectTimeout,
         CURLOPT_USERAGENT => 'AviationWX/2.0',
         CURLOPT_FAILONERROR => false,
         CURLOPT_FOLLOWLOCATION => true,
@@ -327,7 +337,10 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     if ($metaUrl === null) {
         return $stationObservationBody;
     }
-    $stationsBody = tempestHttpGet($metaUrl);
+    $fallbackTimeout = defined('CURL_TIMEOUT')
+        ? max(5, min(TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS, (int) CURL_TIMEOUT))
+        : TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS;
+    $stationsBody = tempestHttpGet($metaUrl, $fallbackTimeout);
     if ($stationsBody === null) {
         return $stationObservationBody;
     }
@@ -336,7 +349,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
         return $stationObservationBody;
     }
     $deviceUrl = TempestAdapter::buildDeviceObservationsUrl($deviceId, $apiKey);
-    $deviceBody = tempestHttpGet($deviceUrl);
+    $deviceBody = tempestHttpGet($deviceUrl, $fallbackTimeout);
     if ($deviceBody === null) {
         return $stationObservationBody;
     }

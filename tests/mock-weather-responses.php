@@ -2,8 +2,9 @@
 /**
  * Mock Weather API Responses for Testing
  *
- * Provides deterministic JSON fixtures. For WeatherFlow (`swd.weatherflow.com`), `lib/test-mocks.php`
- * selects the fixture by URL path: federated station observation, `/rest/stations/`, or `/observations/device/`.
+ * JSON fixtures for tests (many responses use `time()` for observation freshness). For WeatherFlow
+ * (`swd.weatherflow.com`), `lib/test-mocks.php` selects the fixture by URL path: federated station observation,
+ * `/rest/stations/`, or `/observations/device/`.
  */
 
 /**
@@ -61,9 +62,10 @@ function getMockTempestStationsMetadataResponse(): string {
  * @return string JSON
  */
 function getMockTempestDeviceObsStResponse(): string {
-    $t = time();
+    // Fixed epoch so obs_st mock is stable across runs (station mock still uses time() for freshness).
+    $epoch = 1700000000;
     $row = array_fill(0, 22, 0);
-    $row[0] = $t;
+    $row[0] = $epoch;
     $row[2] = 2.5;
     $row[3] = 3.2;
     $row[4] = 89;
