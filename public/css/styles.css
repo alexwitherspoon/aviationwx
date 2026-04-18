@@ -1314,10 +1314,21 @@ body.night-mode .station-power-battery-secondary {
 /* Night vision: <meter> fill comes from UA optimum/suboptimum bands (WebKit/Mozilla pseudos), not accent-color; override so the bar matches the red theme */
 body.night-mode .station-power-meter {
     accent-color: var(--night-text-bright);
+    background-color: var(--night-bg-item);
+    border: 1px solid var(--night-border-light);
+    border-radius: 999px;
+}
+
+body.night-mode .station-power-meter.station-power-meter--medium {
+    accent-color: var(--night-text-primary);
+}
+
+body.night-mode .station-power-meter.station-power-meter--low {
+    accent-color: var(--night-text-muted);
 }
 
 body.night-mode .station-power-meter::-webkit-meter-inner-element {
-    border: 1px solid var(--night-border-light);
+    border: none;
     border-radius: 999px;
 }
 
