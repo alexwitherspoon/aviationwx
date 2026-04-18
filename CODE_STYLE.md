@@ -335,8 +335,7 @@ lib/
     parser.php           # Weather data parsing
     calculator.php        # Weather calculations (density altitude, etc.)
     adapter/
-      tempest-v1.php     # Tempest API adapter v1
-      tempest-v2.php     # Tempest API adapter v2
+      tempest-v1.php     # Tempest API adapter (federated station + ST device fallback, obs_st mapping)
       ambient-v1.php     # Ambient Weather API adapter
       weatherlink-v1.php # WeatherLink API adapter
       metar-v1.php       # METAR adapter
@@ -622,18 +621,9 @@ lib/constants/
 Use adapter pattern for each API provider with versioning:
 
 ```php
-// lib/weather/adapter/tempest-v1.php
-class TempestApiV1 {
-    public function fetchWeather(string $stationId, string $apiKey): ?array {
-        // Tempest API v1 implementation
-    }
-}
-
-// lib/weather/adapter/tempest-v2.php
-class TempestApiV2 {
-    public function fetchWeather(string $stationId, string $apiKey): ?array {
-        // Tempest API v2 implementation
-    }
+// lib/weather/adapter/tempest-v1.php -- TempestAdapter + parseTempestResponse(); device fallback when station obs empty
+class TempestAdapter {
+    public static function buildUrl(array $config): ?string { /* ... */ }
 }
 ```
 

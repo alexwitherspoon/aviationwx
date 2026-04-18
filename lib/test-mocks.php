@@ -1,32 +1,32 @@
 <?php
 /**
  * Test Mocking Infrastructure
- * 
- * Provides HTTP request mocking for test environments.
- * Intercepts file_get_contents() and curl_exec() calls to return mock responses
- * instead of making real HTTP requests.
+ *
+ * `getMockHttpResponse($url)` returns fixtures in test mode so adapters skip real HTTP. WeatherFlow URLs are
+ * routed by path (station observation vs `/rest/stations/` vs `/observations/device/`).
  */
 
 require_once __DIR__ . '/config.php';
 
 /**
- * Get mock HTTP response for a given URL
- * 
- * Maps API URLs to appropriate mock responses based on the provider type.
- * Returns null if no mock is available (allows real request to proceed).
- * 
- * @param string $url The URL to get a mock response for
- * @return string|null Mock response string, or null if no mock available
+ * Resolve a canned HTTP body for a URL in test mode, or null so callers may use real HTTP.
+ *
+ * @param string $url Request URL
+ * @return string|null Fixture body, or null when not mocked
  */
 function getMockHttpResponse(string $url): ?string {
     if (!isTestMode()) {
-        return null; // Not in test mode, don't mock
+        return null;
     }
-    
-    // Map URLs to mock responses
+
     if (strpos($url, 'swd.weatherflow.com') !== false) {
-        // Tempest API
         require_once __DIR__ . '/../tests/mock-weather-responses.php';
+        if (strpos($url, '/observations/device/') !== false) {
+            return getMockTempestDeviceObsStResponse();
+        }
+        if (strpos($url, '/rest/stations/') !== false) {
+            return getMockTempestStationsMetadataResponse();
+        }
         return getMockTempestResponse();
     }
     

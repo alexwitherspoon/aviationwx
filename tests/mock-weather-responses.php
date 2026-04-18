@@ -1,7 +1,10 @@
 <?php
 /**
  * Mock Weather API Responses for Testing
- * This file provides mock responses for weather APIs to avoid requiring real API keys
+ *
+ * JSON fixtures for tests (many responses use `time()` for observation freshness). For WeatherFlow
+ * (`swd.weatherflow.com`), `lib/test-mocks.php` selects the fixture by URL path: federated station observation,
+ * `/rest/stations/`, or `/observations/device/`.
  */
 
 /**
@@ -28,6 +31,57 @@ function getMockTempestResponse() {
             'dew_point' => 4.6  // Celsius
         ]]
     ]);
+}
+
+/**
+ * Mock GET /swd/rest/stations/{id} (hub + ST) for tests that exercise Tempest device fallback.
+ *
+ * @return string JSON
+ */
+function getMockTempestStationsMetadataResponse(): string {
+    return json_encode([
+        'status' => [
+            'status_code' => 0,
+            'status_message' => 'SUCCESS',
+        ],
+        'stations' => [
+            [
+                'station_id' => 123456,
+                'devices' => [
+                    ['device_id' => 900001, 'device_type' => 'HB', 'serial_number' => 'HB-MOCK'],
+                    ['device_id' => 900002, 'device_type' => 'ST', 'serial_number' => 'ST-MOCK'],
+                ],
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR);
+}
+
+/**
+ * Mock GET /swd/rest/observations/device/{id} (obs_st numeric row) aligned with getMockTempestResponse().
+ *
+ * @return string JSON
+ */
+function getMockTempestDeviceObsStResponse(): string {
+    // Fixed epoch so obs_st mock is stable across runs (station mock still uses time() for freshness).
+    $epoch = 1700000000;
+    $row = array_fill(0, 22, 0);
+    $row[0] = $epoch;
+    $row[2] = 2.5;
+    $row[3] = 3.2;
+    $row[4] = 89;
+    $row[6] = 1019.2;
+    $row[7] = 5.6;
+    $row[8] = 93;
+    $row[18] = 11.94;
+    return json_encode([
+        'status' => [
+            'status_code' => 0,
+            'status_message' => 'OK',
+        ],
+        'device_id' => 900002,
+        'type' => 'obs_st',
+        'obs' => [$row],
+    ], JSON_THROW_ON_ERROR);
 }
 
 /**

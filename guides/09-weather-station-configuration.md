@@ -255,6 +255,10 @@ Tempest is our **recommended default** for new community installs.
 }
 ```
 
+### How AviationWX reads Tempest data
+
+The integration always calls WeatherFlow's **federated station** observation endpoint first (the same URL pattern documented above). If that response is HTTP success but has **no observation row**, or a row with **no real sensor values** (for example only a timestamp while federation is stuck), AviationWX **automatically** loads station metadata, picks the first **Tempest sensor (`ST`)** device, and reads **`/observations/device/{id}`** so pilots still see current conditions when the sensor is online. You do **not** need a separate device ID in config for a normal hub + one Tempest setup. Details: [DATA_FLOW.md](../docs/DATA_FLOW.md#tempest-weatherflow-api) and [CONFIGURATION.md](../docs/CONFIGURATION.md#tempest-weather).
+
 ### API Documentation
 
 - [WeatherFlow Tempest API](https://weatherflow.github.io/Tempest/api/)

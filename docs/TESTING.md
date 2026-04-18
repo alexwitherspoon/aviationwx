@@ -145,6 +145,7 @@ vendor/bin/phpunit --testsuite Unit
 - Weather calculations
 - Data parsing and formatting
 - Utility functions
+- **Tempest / WeatherFlow:** `tests/Unit/TempestAdapterTest.php` locks in federated parsing, **`obs_st` device row normalization**, ST device discovery from `/stations` JSON, device fallback when federated `obs` is empty, URL builders, and rejection of malformed `obs[0]` list payloads (safety). Related error-path coverage: `tests/Unit/ErrorHandlingTest.php` (Tempest malformed `obs`). Mock routing for `swd.weatherflow.com` is **path-specific** in `lib/test-mocks.php` (station vs `/rest/stations/` vs `/observations/device/`).
 
 ### Integration Tests (`tests/Integration/`)
 

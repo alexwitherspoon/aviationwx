@@ -164,7 +164,7 @@ See the [Deployment Guide](docs/DEPLOYMENT.md) for:
 ## Weather Sources
 
 AviationWX supports multiple weather data sources. See the [Configuration Guide](docs/CONFIGURATION.md) for complete setup instructions and examples for:
-- Tempest Weather
+- Tempest Weather (including automatic device fallback when federated station `obs` is empty; see [DATA_FLOW.md](docs/DATA_FLOW.md#tempest-weatherflow-api))
 - Ambient Weather
 - Davis WeatherLink
 - PWSWeather.com (via AerisWeather API)

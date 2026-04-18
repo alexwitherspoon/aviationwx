@@ -64,15 +64,25 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 ### Primary Weather Sources
 
 #### Tempest WeatherFlow API
-- **Endpoint**: `https://swd.weatherflow.com/swd/rest/observations/station/{station_id}?token={api_key}`
-- **Data Provided**:
+- **Primary endpoint (federated station snapshot)**: `https://swd.weatherflow.com/swd/rest/observations/station/{station_id}?token={api_key}`
+  - WeatherFlow builds this from devices on the station; it can be empty while a physical sensor still has data (federation gap).
+- **Automatic device fallback** (when the primary response does not parse, or parses to a timestamp-only / sensor-empty federated row with no temperature, humidity, pressure, dew point, wind, or non-zero precip):
+  1. `GET https://swd.weatherflow.com/swd/rest/stations/{station_id}?token={api_key}` -- response lists devices (typically hub `HB` plus one Tempest unit `ST`).
+  2. The integration selects the **first device with `device_type` `ST`** (the Tempest unit that publishes `obs_st` rows).
+  3. `GET https://swd.weatherflow.com/swd/rest/observations/device/{device_id}?token={api_key}` -- latest observation uses the **`obs_st` numeric row layout** from WeatherFlow's API docs.
+  4. The adapter maps that row into the same internal shape as federated `obs[0]`, then applies the same unit conversions. **Dew point** is not present on raw `obs_st` rows; it may be derived later from temperature and humidity when both exist (same as any missing dew point path).
+  5. **Pressure**: device index 6 is station pressure in mb and is run through the same mb → inHg path as federated `sea_level_pressure`; when only the device path is used, treat displayed pressure as sensor-reported pressure, not a guaranteed sea-level reduction.
+  6. **Logging**: when the device path is used, an internal structured log records `airport_id`, `station_id`, and `device_id` (no secrets).
+  7. **Device body guard**: if `/observations/device` returns HTTP success but parses to another sensor-less row, the integration keeps the original station response (no success log, same as a failed follow-up).
+- **Malformed guard**: if `obs[0]` is a JSON list (numeric array) instead of a federated object, parsing returns null so numeric indices are never mis-read as field names.
+- **Data Provided** (after successful parse, federated or device fallback):
   - Temperature (Celsius)
   - Humidity (%)
   - Pressure (mb, converted to inHg)
   - Wind speed (m/s, converted to knots)
   - Wind direction (degrees)
   - Gust speed (m/s, converted to knots)
-  - Dewpoint (Celsius)
+  - Dewpoint (Celsius) when present on federated obs; otherwise may be computed from T/RH downstream
   - Precipitation accumulation (mm, converted to inches)
   - Observation timestamp (Unix seconds)
 - **Unit Conversions** (see [Server-Side Conversions](#server-side-conversions-api-adapters) for formulas):
