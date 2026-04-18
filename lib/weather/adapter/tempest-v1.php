@@ -50,8 +50,8 @@ class TempestAdapter {
     public const SOURCE_TYPE = 'tempest';
 
     /**
-     * Timeout (seconds) for follow-up `/stations` and `/observations/device` HTTP calls.
-     * Capped below the primary `CURL_TIMEOUT` so fallback cannot stack three full primary waits serially.
+     * Upper bound (seconds) for follow-up `/stations` and `/observations/device` per-hop CURLOPT_TIMEOUT.
+     * Actual timeout is `min(self, max(1, CURL_TIMEOUT))` so each hop never exceeds the primary fetch budget.
      */
     public const FALLBACK_HTTP_TIMEOUT_SECONDS = 8;
     
@@ -245,6 +245,16 @@ function tempestHttpTimeoutWithinDeadline(int $preferredSeconds, float $deadline
 }
 
 /**
+ * Per-hop CURLOPT_TIMEOUT for Tempest device fallback HTTP (never above primary `CURL_TIMEOUT`).
+ */
+function tempestFallbackPerHopTimeoutSeconds(): int {
+    if (!defined('CURL_TIMEOUT')) {
+        return TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS;
+    }
+    return min(TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS, max(1, (int) CURL_TIMEOUT));
+}
+
+/**
  * Map one WeatherFlow `obs_st` numeric row to federated-style keys for a single code path through conversions.
  * Index 6 is mb on the wire; it is stored in `sea_level_pressure` so the same mb→inHg path runs as for federated obs.
  *
@@ -366,9 +376,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     if ($metaUrl === null) {
         return $stationObservationBody;
     }
-    $fallbackTimeout = defined('CURL_TIMEOUT')
-        ? max(5, min(TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS, (int) CURL_TIMEOUT))
-        : TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS;
+    $fallbackTimeout = tempestFallbackPerHopTimeoutSeconds();
     $deadline = tempestDeviceFallbackSequenceDeadline($fallbackTimeout);
     $tStations = tempestHttpTimeoutWithinDeadline($fallbackTimeout, $deadline);
     if ($tStations === null) {

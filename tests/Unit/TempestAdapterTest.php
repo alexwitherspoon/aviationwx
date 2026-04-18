@@ -258,4 +258,13 @@ class TempestAdapterTest extends TestCase
             'deadline span should not exceed CURL_MULTI_OVERALL_TIMEOUT when defined'
         );
     }
+
+    public function testTempestFallbackPerHopTimeoutSeconds_LteCurlTimeoutAndFallbackCap(): void
+    {
+        $this->assertTrue(defined('CURL_TIMEOUT'));
+        $t = tempestFallbackPerHopTimeoutSeconds();
+        $this->assertGreaterThanOrEqual(1, $t);
+        $this->assertLessThanOrEqual((int) CURL_TIMEOUT, $t);
+        $this->assertLessThanOrEqual(TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS, $t);
+    }
 }
