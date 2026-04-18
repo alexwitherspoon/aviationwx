@@ -1311,16 +1311,57 @@ body.night-mode .station-power-battery-secondary {
     color: var(--night-text-bright) !important;
 }
 
+/* Night vision: <meter> fill comes from UA optimum/suboptimum bands (WebKit/Mozilla pseudos), not accent-color; override so the bar matches the red theme */
 body.night-mode .station-power-meter {
-    accent-color: var(--night-accent);
+    accent-color: var(--night-text-bright);
 }
 
-body.night-mode .station-power-meter.station-power-meter--low {
-    accent-color: #e53935;
+body.night-mode .station-power-meter::-webkit-meter-inner-element {
+    border: 1px solid var(--night-border-light);
+    border-radius: 999px;
 }
 
-body.night-mode .station-power-meter.station-power-meter--medium {
-    accent-color: #ffca28;
+body.night-mode .station-power-meter::-webkit-meter-bar {
+    background: var(--night-bg-item);
+    border-radius: 999px;
+}
+
+body.night-mode .station-power-meter::-webkit-meter-optimum-value,
+body.night-mode .station-power-meter::-webkit-meter-suboptimum-value,
+body.night-mode .station-power-meter::-webkit-meter-even-less-good-value {
+    background: var(--night-text-bright);
+    border-radius: 999px;
+}
+
+body.night-mode .station-power-meter.station-power-meter--medium::-webkit-meter-optimum-value,
+body.night-mode .station-power-meter.station-power-meter--medium::-webkit-meter-suboptimum-value,
+body.night-mode .station-power-meter.station-power-meter--medium::-webkit-meter-even-less-good-value {
+    background: var(--night-text-primary);
+}
+
+body.night-mode .station-power-meter.station-power-meter--low::-webkit-meter-optimum-value,
+body.night-mode .station-power-meter.station-power-meter--low::-webkit-meter-suboptimum-value,
+body.night-mode .station-power-meter.station-power-meter--low::-webkit-meter-even-less-good-value {
+    background: var(--night-text-muted);
+}
+
+body.night-mode .station-power-meter:-moz-meter-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter:-moz-meter-sub-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+    background: var(--night-text-bright);
+    border-radius: 999px;
+}
+
+body.night-mode .station-power-meter.station-power-meter--medium:-moz-meter-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter.station-power-meter--medium:-moz-meter-sub-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter.station-power-meter--medium:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+    background: var(--night-text-primary);
+}
+
+body.night-mode .station-power-meter.station-power-meter--low:-moz-meter-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter.station-power-meter--low:-moz-meter-sub-optimum::-moz-meter-bar,
+body.night-mode .station-power-meter.station-power-meter--low:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+    background: var(--night-text-muted);
 }
 
 body.night-mode #station-power-last-updated {
