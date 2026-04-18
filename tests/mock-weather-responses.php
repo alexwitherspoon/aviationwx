@@ -53,7 +53,7 @@ function getMockTempestStationsMetadataResponse(): string {
                 ],
             ],
         ],
-    ]);
+    ], JSON_THROW_ON_ERROR);
 }
 
 /**
@@ -81,7 +81,7 @@ function getMockTempestDeviceObsStResponse(): string {
         'device_id' => 900002,
         'type' => 'obs_st',
         'obs' => [$row],
-    ]);
+    ], JSON_THROW_ON_ERROR);
 }
 
 /**

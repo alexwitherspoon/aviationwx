@@ -100,7 +100,9 @@ class TempestAdapter {
         if (!isset($config['api_key']) || !isset($config['station_id'])) {
             return null;
         }
-        return "https://swd.weatherflow.com/swd/rest/observations/station/{$config['station_id']}?token={$config['api_key']}";
+        $sid = rawurlencode((string) $config['station_id']);
+        $tok = rawurlencode((string) $config['api_key']);
+        return "https://swd.weatherflow.com/swd/rest/observations/station/{$sid}?token={$tok}";
     }
 
     /**
@@ -113,7 +115,9 @@ class TempestAdapter {
         if (!isset($config['api_key']) || !isset($config['station_id'])) {
             return null;
         }
-        return "https://swd.weatherflow.com/swd/rest/stations/{$config['station_id']}?token={$config['api_key']}";
+        $sid = rawurlencode((string) $config['station_id']);
+        $tok = rawurlencode((string) $config['api_key']);
+        return "https://swd.weatherflow.com/swd/rest/stations/{$sid}?token={$tok}";
     }
 
     /**
@@ -357,7 +361,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     if ($parsedDevice === null || !tempestParsedObservationHasUsableSensorFields($parsedDevice)) {
         return $stationObservationBody;
     }
-    aviationwx_log('info', 'Tempest: using device observations after empty or sensor-less federated station obs', [
+    aviationwx_log('debug', 'Tempest: using device observations after empty or sensor-less federated station obs', [
         'airport_id' => $airportId,
         'station_id' => (string) $stationId,
         'device_id' => $deviceId,
@@ -479,11 +483,10 @@ function fetchTempestWeather($source): ?array {
         return null;
     }
     
-    $apiKey = $source['api_key'];
-    $stationId = $source['station_id'];
-    
-    // Fetch current observation
-    $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
+    $url = TempestAdapter::buildUrl($source);
+    if ($url === null) {
+        return null;
+    }
     
     // Check for mock response in test mode
     $mockResponse = getMockHttpResponse($url);

@@ -228,12 +228,13 @@ class TempestAdapterTest extends TestCase
 
     public function test_givenTempestConfig_whenBuildUrls_thenPathsAndEncodingAreCorrect(): void
     {
-        $cfg = ['station_id' => '214348', 'api_key' => 'ab-cd'];
+        $cfg = ['station_id' => '214348', 'api_key' => 'a+b/c'];
         $stationObs = TempestAdapter::buildUrl($cfg);
         $this->assertStringContainsString('/observations/station/214348', $stationObs);
-        $this->assertStringContainsString('token=ab-cd', $stationObs);
+        $this->assertStringContainsString('token=a%2Bb%2Fc', $stationObs);
         $meta = TempestAdapter::buildStationsMetadataUrl($cfg);
         $this->assertStringContainsString('/rest/stations/214348', $meta);
+        $this->assertStringContainsString('token=a%2Bb%2Fc', $meta);
         $dev = TempestAdapter::buildDeviceObservationsUrl(1215470, 'tok/1');
         $this->assertStringContainsString('/observations/device/1215470', $dev);
         $this->assertStringContainsString('token=tok%2F1', $dev);
