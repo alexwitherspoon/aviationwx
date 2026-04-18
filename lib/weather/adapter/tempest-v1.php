@@ -220,6 +220,31 @@ function tempestHttpGet(string $url, ?int $requestTimeoutSeconds = null): ?strin
 }
 
 /**
+ * Wall-clock deadline for the two-request Tempest device fallback (`/stations` then `/observations/device`).
+ * Caps total wait near `CURL_MULTI_OVERALL_TIMEOUT` so serial follow-ups do not dominate the worker budget.
+ *
+ * @param int $fallbackTimeoutPerRequest Seconds passed to CURLOPT_TIMEOUT for each hop
+ */
+function tempestDeviceFallbackSequenceDeadline(int $fallbackTimeoutPerRequest): float {
+    $pairCeiling = 2 * $fallbackTimeoutPerRequest;
+    if (defined('CURL_MULTI_OVERALL_TIMEOUT')) {
+        $pairCeiling = min($pairCeiling, (int) CURL_MULTI_OVERALL_TIMEOUT);
+    }
+    return microtime(true) + $pairCeiling;
+}
+
+/**
+ * CURLOPT_TIMEOUT for one request within a deadline (null if under 1s remains).
+ */
+function tempestHttpTimeoutWithinDeadline(int $preferredSeconds, float $deadlineSeconds): ?int {
+    $remain = (int) floor($deadlineSeconds - microtime(true));
+    if ($remain < 1) {
+        return null;
+    }
+    return max(1, min($preferredSeconds, $remain));
+}
+
+/**
  * Map one WeatherFlow `obs_st` numeric row to federated-style keys for a single code path through conversions.
  * Index 6 is mb on the wire; it is stored in `sea_level_pressure` so the same mb→inHg path runs as for federated obs.
  *
@@ -344,7 +369,12 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     $fallbackTimeout = defined('CURL_TIMEOUT')
         ? max(5, min(TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS, (int) CURL_TIMEOUT))
         : TempestAdapter::FALLBACK_HTTP_TIMEOUT_SECONDS;
-    $stationsBody = tempestHttpGet($metaUrl, $fallbackTimeout);
+    $deadline = tempestDeviceFallbackSequenceDeadline($fallbackTimeout);
+    $tStations = tempestHttpTimeoutWithinDeadline($fallbackTimeout, $deadline);
+    if ($tStations === null) {
+        return $stationObservationBody;
+    }
+    $stationsBody = tempestHttpGet($metaUrl, $tStations);
     if ($stationsBody === null) {
         return $stationObservationBody;
     }
@@ -353,7 +383,11 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
         return $stationObservationBody;
     }
     $deviceUrl = TempestAdapter::buildDeviceObservationsUrl($deviceId, $apiKey);
-    $deviceBody = tempestHttpGet($deviceUrl, $fallbackTimeout);
+    $tDevice = tempestHttpTimeoutWithinDeadline($fallbackTimeout, $deadline);
+    if ($tDevice === null) {
+        return $stationObservationBody;
+    }
+    $deviceBody = tempestHttpGet($deviceUrl, $tDevice);
     if ($deviceBody === null) {
         return $stationObservationBody;
     }
@@ -365,7 +399,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
         'airport_id' => $airportId,
         'station_id' => (string) $stationId,
         'device_id' => $deviceId,
-    ], 'app', true);
+    ], 'app', false);
     return $deviceBody;
 }
 

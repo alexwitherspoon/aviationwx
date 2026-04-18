@@ -18,7 +18,7 @@ require_once __DIR__ . '/../mock-weather-responses.php';
 
 class TempestAdapterTest extends TestCase
 {
-    public function test_givenFederatedStationJson_whenParsed_thenFieldsMatchStationContract(): void
+    public function testParseTempestResponse_FederatedMockJson_HasTemperaturePressureDewpoint(): void
     {
         $response = getMockTempestResponse();
         $result = parseTempestResponse($response);
@@ -28,7 +28,7 @@ class TempestAdapterTest extends TestCase
         $this->assertNotNull($result['dewpoint']);
     }
 
-    public function test_givenDeviceObsStJson_whenParsed_thenUsesLastRowAndNullDewpoint(): void
+    public function testParseTempestResponse_DeviceObsStTwoRows_UsesLastRowNullDewpoint(): void
     {
         $early = array_fill(0, 22, 0);
         $early[0] = 100;
@@ -50,7 +50,7 @@ class TempestAdapterTest extends TestCase
         $this->assertNull($result['dewpoint']);
     }
 
-    public function test_givenObsStWithEmptyObs_whenParsed_thenReturnsNull(): void
+    public function testParseTempestResponse_ObsStEmptyObs_ReturnsNull(): void
     {
         $response = json_encode([
             'type' => 'obs_st',
@@ -59,7 +59,7 @@ class TempestAdapterTest extends TestCase
         $this->assertNull(parseTempestResponse($response));
     }
 
-    public function test_givenObsStRowMissingEpoch_whenMappedToAssoc_thenReturnsNull(): void
+    public function testTempestObsStRowToStationObservationAssoc_MissingEpoch_ReturnsNull(): void
     {
         $row = array_fill(0, 22, 0);
         $row[7] = 20.0;
@@ -67,13 +67,13 @@ class TempestAdapterTest extends TestCase
         $this->assertNull(tempestObsStRowToStationObservationAssoc($row));
     }
 
-    public function test_givenStationsMetadataWithHbAndSt_whenExtractSt_thenReturnsStDeviceId(): void
+    public function testTempestExtractStDeviceIdFromStationsJson_HubAndSensor_ReturnsSensorDeviceId(): void
     {
         $json = getMockTempestStationsMetadataResponse();
         $this->assertSame(900002, tempestExtractStDeviceIdFromStationsJson($json));
     }
 
-    public function test_givenStationsMetadataWithTwoStDevices_whenExtractSt_thenReturnsFirstSt(): void
+    public function testTempestExtractStDeviceIdFromStationsJson_TwoSensorDevices_ReturnsFirstSensor(): void
     {
         $json = json_encode([
             'stations' => [[
@@ -86,7 +86,7 @@ class TempestAdapterTest extends TestCase
         $this->assertSame(111, tempestExtractStDeviceIdFromStationsJson($json));
     }
 
-    public function test_givenStationsMetadataWithoutSt_whenExtractSt_thenReturnsNull(): void
+    public function testTempestExtractStDeviceIdFromStationsJson_OnlyHub_ReturnsNull(): void
     {
         $json = json_encode([
             'stations' => [[
@@ -98,12 +98,12 @@ class TempestAdapterTest extends TestCase
         $this->assertNull(tempestExtractStDeviceIdFromStationsJson($json));
     }
 
-    public function test_givenInvalidStationsJson_whenExtractSt_thenReturnsNull(): void
+    public function testTempestExtractStDeviceIdFromStationsJson_InvalidJson_ReturnsNull(): void
     {
         $this->assertNull(tempestExtractStDeviceIdFromStationsJson('not-json'));
     }
 
-    public function test_givenFederatedObsFirstElementIsList_whenParsed_thenReturnsNull(): void
+    public function testParseTempestResponse_FederatedObsListShapedFirstElement_ReturnsNull(): void
     {
         $response = json_encode([
             'status' => ['status_code' => 0],
@@ -112,7 +112,7 @@ class TempestAdapterTest extends TestCase
         $this->assertNull(parseTempestResponse($response));
     }
 
-    public function test_givenEmptyStationObsAndValidSource_whenApplyDeviceFallback_thenReturnsParsableDeviceBody(): void
+    public function testTempestApplyDeviceFallbackIfNeeded_EmptyFederatedObs_ReturnsDeviceObservationPayload(): void
     {
         $station = json_encode([
             'status' => ['status_code' => 0],
@@ -129,7 +129,7 @@ class TempestAdapterTest extends TestCase
         $this->assertEqualsWithDelta(5.6, $parsed['temperature'], 0.0001);
     }
 
-    public function test_givenFederatedSkeletonObsOnlyTimestamp_whenApplyDeviceFallback_thenReturnsParsableDeviceBody(): void
+    public function testTempestApplyDeviceFallbackIfNeeded_TimestampOnlySkeleton_ReturnsDeviceObservationPayload(): void
     {
         $station = json_encode([
             'status' => ['status_code' => 0],
@@ -151,7 +151,7 @@ class TempestAdapterTest extends TestCase
         $this->assertEqualsWithDelta(5.6, $parsed['temperature'], 0.0001);
     }
 
-    public function test_givenParsableStationBody_whenApplyDeviceFallback_thenReturnsOriginalBody(): void
+    public function testTempestApplyDeviceFallbackIfNeeded_UsableFederatedObs_ReturnsOriginalBody(): void
     {
         $station = getMockTempestResponse();
         $source = [
@@ -162,7 +162,7 @@ class TempestAdapterTest extends TestCase
         $this->assertSame($station, tempestApplyDeviceFallbackIfNeeded($station, $source, 'kxxx'));
     }
 
-    public function test_givenEmptyStationObsAndMissingApiKey_whenApplyDeviceFallback_thenReturnsOriginalBody(): void
+    public function testTempestApplyDeviceFallbackIfNeeded_MissingApiKey_ReturnsOriginalBody(): void
     {
         $station = json_encode(['status' => ['status_code' => 0], 'obs' => []], JSON_THROW_ON_ERROR);
         $source = [
@@ -172,7 +172,7 @@ class TempestAdapterTest extends TestCase
         $this->assertSame($station, tempestApplyDeviceFallbackIfNeeded($station, $source, 'kxxx'));
     }
 
-    public function test_givenDeviceObsStBody_whenParseToSnapshot_thenIsValid(): void
+    public function testTempestAdapter_ParseToSnapshot_DeviceObsSt_ReturnsValidSnapshot(): void
     {
         $snap = TempestAdapter::parseToSnapshot(getMockTempestDeviceObsStResponse(), []);
         $this->assertNotNull($snap);
@@ -181,7 +181,7 @@ class TempestAdapterTest extends TestCase
         $this->assertFalse($snap->dewpoint->hasValue());
     }
 
-    public function test_tempestParsedObservationHasUsableSensorFields_trueForWindOrPrecipOrTemp(): void
+    public function testTempestParsedObservationHasUsableSensorFields_WindOrPrecipOrTemp_ReturnsTrue(): void
     {
         $this->assertTrue(tempestParsedObservationHasUsableSensorFields([
             'temperature' => null,
@@ -215,7 +215,7 @@ class TempestAdapterTest extends TestCase
         ]));
     }
 
-    public function test_tempestParsedObservationHasUsableSensorFields_falseWhenOnlyTimestampLikeParsedOutput(): void
+    public function testTempestParsedObservationHasUsableSensorFields_TimestampOnly_ReturnsFalse(): void
     {
         $skeleton = json_encode([
             'status' => ['status_code' => 0],
@@ -226,7 +226,7 @@ class TempestAdapterTest extends TestCase
         $this->assertFalse(tempestParsedObservationHasUsableSensorFields($parsed));
     }
 
-    public function test_givenTempestConfig_whenBuildUrls_thenPathsAndEncodingAreCorrect(): void
+    public function testTempestAdapter_BuildUrlAndStationsUrl_EncodeReservedCharactersInToken(): void
     {
         $cfg = ['station_id' => '214348', 'api_key' => 'a+b/c'];
         $stationObs = TempestAdapter::buildUrl($cfg);
@@ -238,5 +238,24 @@ class TempestAdapterTest extends TestCase
         $dev = TempestAdapter::buildDeviceObservationsUrl(1215470, 'tok/1');
         $this->assertStringContainsString('/observations/device/1215470', $dev);
         $this->assertStringContainsString('token=tok%2F1', $dev);
+    }
+
+    public function testTempestHttpTimeoutWithinDeadline_Expired_ReturnsNull(): void
+    {
+        $this->assertNull(tempestHttpTimeoutWithinDeadline(8, microtime(true) - 1.0));
+    }
+
+    public function testTempestHttpTimeoutWithinDeadline_AmpleTime_ReturnsPreferred(): void
+    {
+        $this->assertSame(8, tempestHttpTimeoutWithinDeadline(8, microtime(true) + 60.0));
+    }
+
+    public function testTempestDeviceFallbackSequenceDeadline_RespectsCurlMultiOverallCap(): void
+    {
+        $this->assertLessThanOrEqual(
+            15.0,
+            tempestDeviceFallbackSequenceDeadline(8) - microtime(true),
+            'deadline span should not exceed CURL_MULTI_OVERALL_TIMEOUT when defined'
+        );
     }
 }
