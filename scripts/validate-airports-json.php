@@ -4,8 +4,8 @@
  * Master Validation Script for airports.json
  * 
  * This script runs all validation checks on airports.json, including:
+ * - Runtime schema rules (same as production loadConfig(): push webcams, airport keys, etc.)
  * - ICAO code validation against official airport list
- * - Future validations can be added here
  * 
  * This script is designed to be called from CI/CD workflows in both
  * the main repo and the secrets repo, ensuring consistent validation.
@@ -85,8 +85,22 @@ if (!$structureResult['valid']) {
     }
 }
 
-// Validation 2: ICAO Code Validation (against real airport list)
-echo "\n2. Validating ICAO codes against official airport list...\n";
+// Validation 2: Runtime schema (must match loadConfig() or production will return 500)
+echo "\n2. Validating runtime schema (production loadConfig rules)...\n";
+$runtimeResult = validateRuntimeConfigSchema($config);
+
+if (!$runtimeResult['valid']) {
+    $allValid = false;
+    $errors = array_merge($errors, $runtimeResult['errors']);
+    foreach ($runtimeResult['errors'] as $error) {
+        echo "  ❌ {$error}\n";
+    }
+} else {
+    echo "  ✓ Runtime schema is valid\n";
+}
+
+// Validation 3: ICAO Code Validation (against real airport list)
+echo "\n3. Validating ICAO codes against official airport list...\n";
 $icaoResult = validateAirportsIcaoCodes($config);
 
 if (!$icaoResult['valid']) {

@@ -1760,6 +1760,88 @@ function getDefaultPreferencesForAirport(string $airportId): array {
 }
 
 /**
+ * Validate config against the same rules loadConfig() enforces after JSON decode.
+ * Use in CI and local scripts so push webcam / airport-key errors fail before deploy.
+ *
+ * @param array $config Decoded root object (must contain airports per schema)
+ * @return array{valid: bool, errors: list<string>}
+ */
+function validateRuntimeConfigSchema(array $config): array {
+    $errors = [];
+
+    if (isset($config['config']) && !is_array($config['config'])) {
+        $errors[] = 'Root.config must be an object';
+    }
+
+    if (!isset($config['airports']) || !is_array($config['airports'])) {
+        $errors[] = 'Root.airports must be an object';
+    } else {
+        if (isset($config['push_webcam_settings'])) {
+            require_once __DIR__ . '/push-webcam-validator.php';
+            $settingsValidation = validatePushWebcamSettings($config['push_webcam_settings']);
+            if (!$settingsValidation['valid']) {
+                $errors = array_merge($errors, $settingsValidation['errors']);
+            }
+        }
+
+        foreach ($config['airports'] as $aid => $ap) {
+            if (!is_array($ap)) {
+                $errors[] = "Airport '{$aid}' must be an object";
+                continue;
+            }
+            if (preg_match('/[A-Z]/', $aid)) {
+                $errors[] = "Airport key '{$aid}' contains uppercase letters (must be lowercase)";
+            } elseif (!validateAirportId($aid)) {
+                $errors[] = "Airport key '{$aid}' is invalid (must be 3-50 lowercase alphanumeric characters, hyphens allowed)";
+            }
+
+            if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
+                continue;
+            }
+            foreach ($ap['webcams'] as $idx => $cam) {
+                $isPush = (isset($cam['type']) && $cam['type'] === 'push')
+                    || isset($cam['push_config']);
+
+                if ($isPush) {
+                    require_once __DIR__ . '/push-webcam-validator.php';
+                    $pushValidation = validatePushWebcamConfig(
+                        $cam,
+                        $aid,
+                        $idx,
+                        getCacheFileMaxSizeMbFromRootConfig($config)
+                    );
+                    if (!$pushValidation['valid']) {
+                        $errors = array_merge($errors, $pushValidation['errors']);
+                    }
+                } else {
+                    if (!isset($cam['name']) || !isset($cam['url'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} missing required fields (name,url)";
+                        continue;
+                    }
+                    if (isset($cam['type']) && !in_array($cam['type'], ['rtsp', 'mjpeg', 'static_jpeg', 'static_png', 'push'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid type '{$cam['type']}'";
+                    }
+                    if (isset($cam['rtsp_transport']) && !in_array(strtolower($cam['rtsp_transport']), ['tcp', 'udp'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid rtsp_transport";
+                    }
+                }
+            }
+        }
+
+        require_once __DIR__ . '/push-webcam-validator.php';
+        $usernameValidation = validateUniquePushUsernames($config);
+        if (!$usernameValidation['valid']) {
+            $errors = array_merge($errors, $usernameValidation['errors']);
+        }
+    }
+
+    return [
+        'valid' => $errors === [],
+        'errors' => $errors,
+    ];
+}
+
+/**
  * Load airport configuration with caching
  * 
  * Uses APCu cache if available, falls back to static variable for request lifetime.
@@ -1918,85 +2000,9 @@ function loadConfig(bool $useCache = true): ?array {
         // This helps catch config errors like having two "weather_source" keys in an airport.
     }
 
-    // Basic schema validation (lightweight)
-    $errors = [];
-    
-    // Validate global config section if present (optional)
-    if (isset($config['config']) && !is_array($config['config'])) {
-        $errors[] = 'Root.config must be an object';
-    }
-    
-    if (!isset($config['airports']) || !is_array($config['airports'])) {
-        $errors[] = 'Root.airports must be an object';
-    } else {
-        // Validate push_webcam_settings if present
-        if (isset($config['push_webcam_settings'])) {
-            require_once __DIR__ . '/push-webcam-validator.php';
-            $settingsValidation = validatePushWebcamSettings($config['push_webcam_settings']);
-            if (!$settingsValidation['valid']) {
-                $errors = array_merge($errors, $settingsValidation['errors']);
-            }
-        }
-        
-        foreach ($config['airports'] as $aid => $ap) {
-            if (!is_array($ap)) {
-                $errors[] = "Airport '{$aid}' must be an object";
-                continue;
-            }
-            // Reject uppercase letters to prevent case sensitivity bugs in file paths
-            if (preg_match('/[A-Z]/', $aid)) {
-                $errors[] = "Airport key '{$aid}' contains uppercase letters (must be lowercase)";
-            } elseif (!validateAirportId($aid)) {
-                $errors[] = "Airport key '{$aid}' is invalid (must be 3-50 lowercase alphanumeric characters, hyphens allowed)";
-            }
-            
-            if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
-                // Allow no webcams
-                continue;
-            }
-            foreach ($ap['webcams'] as $idx => $cam) {
-                // Check if push camera
-                $isPush = (isset($cam['type']) && $cam['type'] === 'push') 
-                       || isset($cam['push_config']);
-                
-                if ($isPush) {
-                    // Validate push camera configuration
-                    require_once __DIR__ . '/push-webcam-validator.php';
-                    $pushValidation = validatePushWebcamConfig(
-                        $cam,
-                        $aid,
-                        $idx,
-                        getCacheFileMaxSizeMbFromRootConfig($config)
-                    );
-                    if (!$pushValidation['valid']) {
-                        $errors = array_merge($errors, $pushValidation['errors']);
-                    }
-                } else {
-                    // Validate pull camera (existing logic)
-                    if (!isset($cam['name']) || !isset($cam['url'])) {
-                        $errors[] = "Airport '{$aid}' webcam index {$idx} missing required fields (name,url)";
-                        continue;
-                    }
-                    if (isset($cam['type']) && !in_array($cam['type'], ['rtsp','mjpeg','static_jpeg','static_png','push'])) {
-                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid type '{$cam['type']}'";
-                    }
-                    if (isset($cam['rtsp_transport']) && !in_array(strtolower($cam['rtsp_transport']), ['tcp','udp'])) {
-                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid rtsp_transport";
-                    }
-                }
-            }
-        }
-        
-        // Check for duplicate push usernames
-        require_once __DIR__ . '/push-webcam-validator.php';
-        $usernameValidation = validateUniquePushUsernames($config);
-        if (!$usernameValidation['valid']) {
-            $errors = array_merge($errors, $usernameValidation['errors']);
-        }
-    }
-    if (!empty($errors)) {
-        // Log and fail-fast
-        aviationwx_log('error', 'config schema errors', ['errors' => $errors], 'app', true);
+    $schemaResult = validateRuntimeConfigSchema($config);
+    if (!$schemaResult['valid']) {
+        aviationwx_log('error', 'config schema errors', ['errors' => $schemaResult['errors']], 'app', true);
         return null;
     }
 
