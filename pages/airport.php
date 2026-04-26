@@ -4691,16 +4691,23 @@ function displayWeather(weather) {
         
         <!-- Temperature -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="13"><span class="label">Today's High</span><span class="weather-value">${formatTemp(sanitizedWeather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(sanitizedWeather.temp_high_ts)}</div>
             <div class="weather-item" data-mobile-priority="2"><span class="label">Current Temperature</span><span class="weather-value">${formatTemp(sanitizedWeather.temperature)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="13"><span class="label">Today's High</span><span class="weather-value">${formatTemp(sanitizedWeather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(sanitizedWeather.temp_high_ts)}</div>
             <div class="weather-item" data-mobile-priority="14"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(sanitizedWeather.temp_low_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(sanitizedWeather.temp_low_ts)}</div>
         </div>
         
-        <!-- Moisture & Precipitation -->
+        <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="8"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(sanitizedWeather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item" data-mobile-priority="7"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(sanitizedWeather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
+            <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+        </div>
+        
+        <!-- Moisture -->
+        <div class="weather-group">
             <div class="weather-item" data-mobile-priority="9"><span class="label">Humidity</span><span class="weather-value">${sanitizedWeather.humidity !== null && sanitizedWeather.humidity !== undefined ? Math.round(sanitizedWeather.humidity) : '--'}</span><span class="weather-unit">${sanitizedWeather.humidity !== null && sanitizedWeather.humidity !== undefined ? '%' : ''}</span></div>
+            <div class="weather-item" data-mobile-priority="7"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(sanitizedWeather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="8"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(sanitizedWeather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
         </div>
         
         <!-- Precipitation & Daylight -->
@@ -4722,12 +4729,6 @@ function displayWeather(weather) {
             </div>
         </div>
         
-        <!-- Pressure & Altitude -->
-        <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
-            <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
-            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
-        </div>
     `;
 }
 
@@ -4751,16 +4752,23 @@ function displayEmptyWeather() {
         
         <!-- Temperature -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="13"><span class="label">Today's High</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item" data-mobile-priority="2"><span class="label">Current Temperature</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="13"><span class="label">Today's High</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item" data-mobile-priority="14"><span class="label">Today's Low</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
         </div>
         
-        <!-- Moisture & Precipitation -->
+        <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="8"><span class="label">Dewpoint Spread</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item" data-mobile-priority="7"><span class="label">Dewpoint</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">--</span><span class="weather-unit">${getPressureUnit()}</span></div>
+            <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+        </div>
+        
+        <!-- Moisture -->
+        <div class="weather-group">
             <div class="weather-item" data-mobile-priority="9"><span class="label">Humidity</span><span class="weather-value">--</span><span class="weather-unit"></span></div>
+            <div class="weather-item" data-mobile-priority="7"><span class="label">Dewpoint</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item" data-mobile-priority="8"><span class="label">Dewpoint Spread</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
         </div>
         
         <!-- Precipitation & Daylight -->
@@ -4782,18 +4790,11 @@ function displayEmptyWeather() {
             </div>
         </div>
         
-        <!-- Pressure & Altitude -->
-        <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">--</span><span class="weather-unit">${getPressureUnit()}</span></div>
-            <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
-            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
-        </div>
     `;
 }
 
 function displayError(msg) {
-    // Legacy function - now redirects to displayEmptyWeather for better UX
-    // Error messages are logged to console but not shown to users
+    // Log weather errors for diagnostics while preserving a stable empty-field UI
     console.error('[Weather] Error (showing empty fields):', msg);
     displayEmptyWeather();
 }
