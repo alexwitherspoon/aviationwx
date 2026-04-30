@@ -448,6 +448,140 @@ class NotamFilterTest extends TestCase {
         // Caldwell is ~200 NM from Ogden, should not show this TFR
         $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
     }
+
+    /**
+     * Polygon TFR (no NM radius in text): point-in-polygon plus ring closure rules
+     * (regression: first vertex + 30 NM default falsely included Elk Ridge for U88-area TFR).
+     */
+    public function testParseTfrPolygonVertices_GardenValleyIncidentPolygon() {
+        $text = $this->gardenValleyPolygonTfrText();
+        $meta = parseTfrPolygonVerticesMeta($text);
+        $this->assertTrue($meta['ring_closed'], 'Explicit repeat-to-origin or POO must mark a closed ring');
+        $vertices = $meta['vertices'];
+        $this->assertGreaterThanOrEqual(5, count($vertices), 'Expect closed polygon without duplicate closing point');
+        $this->assertEqualsWithDelta(44.09166667, $vertices[0]['lat'], 0.0001);
+        $this->assertEqualsWithDelta(-115.85, $vertices[0]['lon'], 0.0001);
+    }
+
+    public function testParseTfrPolygonVerticesMeta_OpenRingWithoutPooIsNotClosed() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W';
+        $meta = parseTfrPolygonVerticesMeta($text);
+        $this->assertFalse($meta['ring_closed']);
+        $this->assertCount(3, $meta['vertices']);
+    }
+
+    public function testParseTfrPolygonVerticesMeta_RepeatedFirstVertexClosesRing() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W TO 450000N1220100W TO 450000N1220000W';
+        $meta = parseTfrPolygonVerticesMeta($text);
+        $this->assertTrue($meta['ring_closed']);
+        $this->assertCount(4, $meta['vertices']);
+    }
+
+    public function testPolygonCentroidLatLonFromVertices_KnownQuad() {
+        $vertices = [
+            ['lat' => 44.0, 'lon' => -116.0],
+            ['lat' => 44.01, 'lon' => -116.0],
+            ['lat' => 44.01, 'lon' => -116.01],
+            ['lat' => 44.0, 'lon' => -116.01],
+        ];
+        $c = polygonCentroidLatLonFromVertices($vertices);
+        $this->assertNotNull($c);
+        $this->assertEqualsWithDelta(44.005, $c['lat'], 0.002);
+        $this->assertEqualsWithDelta(-116.005, $c['lon'], 0.002);
+    }
+
+    public function testPolygonCentroidLatLonFromVertices_RejectsTooFewPoints() {
+        $this->assertNull(polygonCentroidLatLonFromVertices([
+            ['lat' => 44.0, 'lon' => -116.0],
+            ['lat' => 44.01, 'lon' => -116.0],
+        ]));
+    }
+
+    public function testIsTfrRelevantToAirport_PolygonNearU88_ElkRidgeExcluded() {
+        $tfr = ['text' => $this->gardenValleyPolygonTfrText()];
+        $airport = [
+            'name' => 'Elk Ridge Airport',
+            'lat' => 44.7235833,
+            'lon' => -116.0219861,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_PolygonNearU88_GardenValleyIncluded() {
+        $tfr = ['text' => $this->gardenValleyPolygonTfrText()];
+        $airport = [
+            'name' => 'Garden Valley Airport',
+            'faa' => 'U88',
+            'lat' => 44.2311,
+            'lon' => -115.9828,
+        ];
+        $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_PolygonNearU88_BoiseExcluded() {
+        $tfr = ['text' => $this->gardenValleyPolygonTfrText()];
+        $airport = [
+            'icao' => 'KBOI',
+            'name' => 'Boise Air Terminal',
+            'lat' => 43.5644,
+            'lon' => -116.2228,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_OpenPolygonFailsClosedEvenNearCenter() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 45.008333,
+            'lon' => -121.991667,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_ClosedPolygonInsideTrue() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W TO 450000N1220100W TO POINT OF ORIGIN SFC-5000FT';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 45.008333,
+            'lon' => -121.991667,
+        ];
+        $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_ClosedPolygonOutsideFalse() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W TO 450000N1220100W TO POINT OF ORIGIN SFC-5000FT';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 46.0,
+            'lon' => -122.0,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_ClosedPolygonOutsideButWithinBufferTrue() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W TO 450000N1220100W TO POINT OF ORIGIN SFC-5000FT';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 44.99,
+            'lon' => -121.991667,
+        ];
+        $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    /**
+     * @return string NOTAM body with polygon coords (slashes as in FAA XML-derived text)
+     */
+    private function gardenValleyPolygonTfrText(): string {
+        return 'ID..AIRSPACE 3 NM NW OF U88, GARDEN VALLEY AIRPORT, GARDEN VALLEY, ID, ID..TEMPORARY FLIGHT RESTRICTIONS. '
+            . 'PURSUANT TO 14 CFR SECTION 91.137(A)(1) WI AN AREA DEFINED AS 440530N1155100W (BOI007035.6) TO 440230N1155230W '
+            . '(BOI008032.4) TO 440330N1155500W (BOI004032.6) TO 440400N1155600W (BOI003032.8) TO 440530N1155430W (BOI004034.6) '
+            . 'TO 440530N1155100W (BOI007035.6) TO POINT OF ORIGIN SFC-7500FT.';
+    }
     
     public function testIsTfrRelevantToAirport_LargeTfrRadius() {
         // Large TFR (30 NM radius) - tests that we use parsed radius, not default
