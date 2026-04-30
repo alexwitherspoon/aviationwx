@@ -35,8 +35,8 @@ function tfrCoordinatePairRegex(): string {
  * Decode one DDMMSSN / DDDMMSSW match from {@see tfrCoordinatePairRegex()}.
  *
  * Rejects components outside FAA-style ranges (minutes and seconds 0--59,
- * latitude magnitude at most 90°, longitude magnitude at most 180°) so OCR
- * or formatting glitches do not shift decoded positions silently.
+ * latitude degrees 0--90, longitude degrees 0--180) so corrupted or
+ * non-conforming text does not shift decoded positions silently.
  *
  * @param array<int|string,string> $m Match array: full at [0], groups 1-8 for lat/lon fields
  * @return array{lat: float, lon: float}|null Invalid groups or out-of-range coordinates
@@ -233,6 +233,7 @@ function tfrPolygonProjectVerticesToLocalPlaneNm(array $vertices): ?array {
  *
  * @param float[] $xs Easting (NM) per vertex
  * @param float[] $ys Northing (NM) per vertex
+ * @return float Signed double area in square NM; zero if fewer than three vertices or length mismatch
  */
 function tfrPolygonSignedDoubleAreaNm2(array $xs, array $ys): float {
     $n = count($xs);
@@ -255,6 +256,7 @@ function tfrPolygonSignedDoubleAreaNm2(array $xs, array $ys): float {
  * @param float $py Airport northing (NM)
  * @param float[] $xs Polygon eastings (NM)
  * @param float[] $ys Polygon northings (NM)
+ * @return bool True if the test point lies inside the ring (boundary excluded by ray parity)
  */
 function pointInPolygonRayCastLocalNm(float $px, float $py, array $xs, array $ys): bool {
     $n = count($xs);
@@ -290,6 +292,7 @@ function pointInPolygonRayCastLocalNm(float $px, float $py, array $xs, array $ys
  * @param float $py Airport northing (NM)
  * @param float[] $xs Polygon eastings (NM)
  * @param float[] $ys Polygon northings (NM)
+ * @return float Shortest distance to any edge (NM), or PHP_FLOAT_MAX if fewer than two vertices
  */
 function minDistancePointToPolygonRingNm(float $px, float $py, array $xs, array $ys): float {
     $n = count($xs);
