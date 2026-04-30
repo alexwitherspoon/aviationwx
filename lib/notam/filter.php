@@ -34,6 +34,10 @@ function tfrCoordinatePairRegex(): string {
 /**
  * Decode one DDMMSSN / DDDMMSSW match from {@see tfrCoordinatePairRegex()}.
  *
+ * Rejects components outside FAA-style ranges (minutes and seconds 0--59,
+ * latitude magnitude at most 90°, longitude magnitude at most 180°) so OCR
+ * or formatting glitches do not shift decoded positions silently.
+ *
  * @param array<int|string,string> $m Match array: full at [0], groups 1-8 for lat/lon fields
  * @return array{lat: float, lon: float}|null Invalid groups or out-of-range coordinates
  */
@@ -50,6 +54,24 @@ function tfrDecodeCoordinateGroups(array $m): ?array {
     $lonMin = (int)$m[6];
     $lonSec = (int)$m[7];
     $lonDir = strtoupper((string)$m[8]);
+
+    if (
+        $latDeg < 0 || $latDeg > 90
+        || $lonDeg < 0 || $lonDeg > 180
+        || $latMin < 0 || $latMin > 59
+        || $latSec < 0 || $latSec > 59
+        || $lonMin < 0 || $lonMin > 59
+        || $lonSec < 0 || $lonSec > 59
+        || ($latDir !== 'N' && $latDir !== 'S')
+        || ($lonDir !== 'E' && $lonDir !== 'W')
+    ) {
+        return null;
+    }
+
+    if (($latDeg === 90 && ($latMin > 0 || $latSec > 0))
+        || ($lonDeg === 180 && ($lonMin > 0 || $lonSec > 0))) {
+        return null;
+    }
 
     $lat = $latDeg + ($latMin / 60) + ($latSec / 3600);
     $lon = $lonDeg + ($lonMin / 60) + ($lonSec / 3600);
@@ -409,10 +431,11 @@ function polygonCentroidLatLonFromVertices(array $vertices): ?array {
  *
  * @param string $text NOTAM body
  * @param array<int, array{lat: float, lon: float}>|null $vertices Pre-parsed vertices to avoid a second scan of $text; null parses from $text
+ * @param float|null $parsedRadiusNm When set, skips re-parsing radius from $text (must match {@see parseTfrRadiusNm()} for the same body when applicable)
  * @return array{lat: float, lon: float, radius_nm: float}|null Unusable or polygon path (null when polygon applies to PiP instead)
  */
-function parseTfrGeographicRelevanceReference(string $text, ?array $vertices = null): ?array {
-    $parsedRadius = parseTfrRadiusNm($text);
+function parseTfrGeographicRelevanceReference(string $text, ?array $vertices = null, ?float $parsedRadiusNm = null): ?array {
+    $parsedRadius = $parsedRadiusNm ?? parseTfrRadiusNm($text);
     if ($vertices === null) {
         $vertices = parseTfrPolygonVertices($text);
     }
@@ -764,7 +787,7 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
         return isAirportInsideOrNearTfrPolygonRing($vertices, $airportLat, $airportLon);
     }
 
-    $geoRef = parseTfrGeographicRelevanceReference($text, $vertices);
+    $geoRef = parseTfrGeographicRelevanceReference($text, $vertices, $parsedRadius);
     if ($geoRef === null) {
         return false;
     }

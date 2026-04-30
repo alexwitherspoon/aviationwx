@@ -1463,7 +1463,7 @@ A TFR is treated as relevant to an airport when any of these holds:
 
 #### Coordinate parsing (all paths)
 
-All coordinate pairs use the same pattern scan over the NOTAM `text` field:
+All coordinate pairs use the same pattern scan over the NOTAM `text` field. Each decoded pair must use **minutes and seconds in 0--59**, **latitude degrees 0--90** (no fractional overflow beyond the pole), **longitude degrees 0--180** with the same pole rule at 180°, and **N/S/E/W** hemispheres; otherwise the pair is dropped so bad text cannot silently move geometry.
 
 - **Format**: `DDMMSSN/S` then `DDDMMSSW/E` (e.g., `413900N1122300W`)
 - **Meaning**: Degrees, minutes, seconds with hemisphere indicator

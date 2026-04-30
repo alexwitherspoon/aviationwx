@@ -190,6 +190,21 @@ class NotamFilterTest extends TestCase {
         
         $this->assertNull($coords);
     }
+
+    public function testParseTfrCoordinates_RejectsSecondsOutOfRange() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 450160N1220000W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
+
+    public function testParseTfrCoordinates_RejectsLatitudeDegreesOver90() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 910000N1220000W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
+
+    public function testParseTfrCoordinates_RejectsInvalidHemisphere() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 450000X1220000W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
     
     public function testParseTfrCoordinates_RealWorldTfr() {
         // Real TFR text from the bug report
