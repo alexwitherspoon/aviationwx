@@ -1452,46 +1452,62 @@ A NOTAM is classified as a TFR if (and not a cancellation) its text contains any
 
 ### TFR Geographic Relevance
 
-**Problem**: The NMS API returns TFRs by ARTCC region, not geographic proximity. A TFR in Utah (ZLC ARTCC) would appear for airports in Idaho that share the same ARTCC.
+**Design context**: The NMS API can return TFR NOTAMs for a broad airspace region (for example the same ARTCC as the airport). `lib/notam/filter.php` applies geographic rules so dashboard banners align with the airport position and the geometry described in the NOTAM text.
 
-**Solution**: Parse TFR coordinates and calculate actual distance to determine relevance.
+A TFR is treated as relevant to an airport when any of these holds:
 
-A TFR is considered relevant to an airport if any of these conditions are met:
-1. The NOTAM `location` field matches an airport identifier
-2. The NOTAM `airport_name` field matches the airport name
-3. The TFR text explicitly mentions the airport name or identifier
-4. The airport is within the TFR's geographic boundary (radius + buffer)
+1. The NOTAM `location` field matches an airport identifier (ICAO, IATA, FAA, or historical `formerly` codes).
+2. The NOTAM `airport_name` field matches the airport name (word-boundary rules prevent substring false positives).
+3. The TFR text explicitly mentions the airport name or an identifier (same word-boundary rules).
+4. **Geographic geometry** applies: the airport has configured `lat`/`lon`, and the case falls into one of the paths below.
 
-#### Coordinate Parsing
+#### Coordinate parsing (all paths)
 
-TFR coordinates are parsed from the NOTAM text using the standard aviation format:
-- **Format**: `DDMMSSN/S DDDMMSSW/E` (e.g., "413900N1122300W")
+All coordinate pairs use the same pattern scan over the NOTAM `text` field:
+
+- **Format**: `DDMMSSN/S` then `DDDMMSSW/E` (e.g., `413900N1122300W`)
 - **Meaning**: Degrees, minutes, seconds with hemisphere indicator
-- **Example**: 413900N1122300W = 41°39'00"N, 112°23'00"W (Ogden, UT)
+- **Example**: `413900N1122300W` = 41°39'00"N, 112°23'00"W
 
-#### Radius Parsing
+#### Radius parsing (circle TFR path only)
 
-TFR radius is parsed from text patterns:
-- "5NM RADIUS" or "5 NM RADIUS"
-- "RADIUS OF 5NM"
-- "WITHIN 5NM"
-- "5 NAUTICAL MILE RADIUS"
+When any of these patterns matches, the NOTAM is treated as a **circle** TFR for geometry (first coordinate pair in document order is the center):
 
-If radius cannot be parsed, a default of 30 NM is used (`TFR_DEFAULT_RADIUS_NM`).
+- `5NM RADIUS` or `5 NM RADIUS`
+- `RADIUS OF 5NM`
+- `WITHIN 5NM` (numeric nautical miles)
+- `5 NAUTICAL MILE RADIUS`
 
-#### Distance Calculation
+Parsed values must lie between `TFR_RADIUS_MIN_NM` and `TFR_RADIUS_MAX_NM` in `lib/constants.php`.
 
-The haversine formula calculates great-circle distance in nautical miles between the airport and TFR center. The TFR is relevant if:
+#### Circle TFR geometry
+
+For a circle TFR, **haversine** distance in nautical miles is computed between the airport and the circle center. The TFR is relevant when:
 
 ```
-distance ≤ (TFR radius + relevance buffer)
+distance NM ≤ (parsed radius NM + TFR_RELEVANCE_BUFFER_NM)
 ```
 
-The relevance buffer is 10 NM by default (`TFR_RELEVANCE_BUFFER_NM`), ensuring airports just outside a TFR boundary are still warned.
+`TFR_RELEVANCE_BUFFER_NM` defaults to **10 NM** so airports immediately outside the published circle still receive a warning.
 
-#### Conservative Filtering
+#### Polygon TFR geometry
 
-When coordinates cannot be parsed from the TFR text, the system takes a conservative approach and excludes the TFR. This prevents showing distant TFRs when location cannot be verified, avoiding false positives that could desensitize pilots to warnings.
+When **no** circle radius is parsed and **three or more** distinct vertices remain after parsing, the NOTAM uses the **polygon** path:
+
+- **Closed ring requirement**: The ring is valid only if the first and last decoded vertices coincide (after dropping consecutive duplicates), **or** the text contains the phrase **POINT OF ORIGIN** with at least three vertices (implicit closure to the first vertex). Otherwise geographic relevance is **not** applied for the polygon (fail closed).
+- **Plane and units**: Vertices and the airport are projected to a local east/north plane in **nautical miles** using the mean vertex latitude as the tangent reference. This matches small CONUS incident polygons; `cos(latitude)` near zero rejects the projection (fail closed).
+- **Non-degenerate ring**: The absolute signed shoelace double-area in that plane must be at least `TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2` in `lib/notam/filter.php`. Smaller values are treated as a degenerate ring and excluded.
+- **Inside or near boundary**: A **ray-casting** point-in-polygon test runs in the projected plane. If the airport is outside the ring, the shortest distance to any polygon edge (NM in that plane) must be **≤ `TFR_RELEVANCE_BUFFER_NM`** for relevance.
+
+Inside the polygon, relevance does **not** depend on distance to a single center point; any interior position matches.
+
+#### Legacy point TFR (no radius, fewer than three vertices)
+
+When no radius is parsed and fewer than three vertices are available, the first coordinate is used as a center with **`TFR_DEFAULT_RADIUS_NM`** (30 NM) plus `TFR_RELEVANCE_BUFFER_NM` and haversine distance. This covers sparse coordinate text that is not a closed polygon.
+
+#### Conservative filtering (safety-critical)
+
+Geographic relevance is **withheld** when coordinate geometry cannot be established, a polygon ring is not provably closed, or the projected polygon is degenerate. Missing airport coordinates also skip geometry (identifier and text rules may still match). Omitting uncertain geometry avoids showing distant or mis-scoped TFR banners that could reduce trust in the NOTAM strip.
 
 ### Status Classification
 
@@ -1654,7 +1670,7 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 - **Visibility**: Only shown when active or upcoming_today NOTAMs exist
 - **Types Displayed**:
   - **Aerodrome Closures**: Runway or airport closures/hazards
-  - **TFRs**: Temporary Flight Restrictions affecting the airport
+  - **TFRs**: Temporary flight restrictions that pass relevance rules (including circle, polygon, or legacy geometry in [TFR Geographic Relevance](#tfr-geographic-relevance))
 
 #### NOTAM Content
 - **ID**: NOTAM identifier with link to official FAA source
