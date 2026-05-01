@@ -12,54 +12,461 @@ require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../airport-identifiers.php';
 require_once __DIR__ . '/../weather/utils.php';
 
+/** Epsilon for comparing decoded TFR vertices (degrees) */
+const TFR_VERTEX_EQUAL_EPSILON_DEG = 1.0e-6;
+
+/**
+ * Minimum absolute signed double-area (NM^2) for a polygon ring to be treated as
+ * a non-degenerate closed shape. Below this, relevance fails closed.
+ */
+const TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2 = 1e-8;
+
+/**
+ * PCRE pattern for one FAA coordinate pair (DDMMSSN then DDDMMSSW/E).
+ * Capture groups 1-8: lat deg,min,sec,hem; lon deg,min,sec,hem.
+ *
+ * @return string Regex pattern with delimiters
+ */
+function tfrCoordinatePairRegex(): string {
+    return '/(\d{2})(\d{2})(\d{2})([NS])\s*(\d{2,3})(\d{2})(\d{2})([EW])/i';
+}
+
+/**
+ * Decode one DDMMSSN / DDDMMSSW match from {@see tfrCoordinatePairRegex()}.
+ *
+ * Rejects components outside FAA-style ranges (minutes and seconds 0--59,
+ * latitude degrees 0--90, longitude degrees 0--180) so corrupted or
+ * non-conforming text does not shift decoded positions silently.
+ *
+ * @param array<int|string,string> $m Match array: full at [0], groups 1-8 for lat/lon fields
+ * @return array{lat: float, lon: float}|null Invalid groups or out-of-range coordinates
+ */
+function tfrDecodeCoordinateGroups(array $m): ?array {
+    if (!isset($m[8])) {
+        return null;
+    }
+    $latDeg = (int)$m[1];
+    $latMin = (int)$m[2];
+    $latSec = (int)$m[3];
+    $latDir = strtoupper((string)$m[4]);
+
+    $lonDeg = (int)$m[5];
+    $lonMin = (int)$m[6];
+    $lonSec = (int)$m[7];
+    $lonDir = strtoupper((string)$m[8]);
+
+    if (
+        $latDeg < 0 || $latDeg > 90
+        || $lonDeg < 0 || $lonDeg > 180
+        || $latMin < 0 || $latMin > 59
+        || $latSec < 0 || $latSec > 59
+        || $lonMin < 0 || $lonMin > 59
+        || $lonSec < 0 || $lonSec > 59
+        || ($latDir !== 'N' && $latDir !== 'S')
+        || ($lonDir !== 'E' && $lonDir !== 'W')
+    ) {
+        return null;
+    }
+
+    if (($latDeg === 90 && ($latMin > 0 || $latSec > 0))
+        || ($lonDeg === 180 && ($lonMin > 0 || $lonSec > 0))) {
+        return null;
+    }
+
+    $lat = $latDeg + ($latMin / 60) + ($latSec / 3600);
+    $lon = $lonDeg + ($lonMin / 60) + ($lonSec / 3600);
+
+    if ($latDir === 'S') {
+        $lat = -$lat;
+    }
+    if ($lonDir === 'W') {
+        $lon = -$lon;
+    }
+
+    if ($lat >= -90 && $lat <= 90 && $lon >= -180 && $lon <= 180) {
+        return ['lat' => $lat, 'lon' => $lon];
+    }
+
+    return null;
+}
+
 /**
  * Parse coordinates from TFR NOTAM text
- * 
- * Parses the first coordinate pair found in standard aviation format.
- * Note: Only parses single-point TFRs; multi-point polygon TFRs will use only the first point.
- * 
+ *
+ * Returns the first coordinate pair in standard aviation format. For polygon
+ * definitions, use {@see parseTfrPolygonVertices()}, {@see parseTfrPolygonVerticesMeta()},
+ * or {@see parseTfrGeographicRelevanceReference()}.
+ *
  * Supported formats:
  * - DDMMSSN/DDDMMSSW (e.g., 413900N1122300W)
- * - With optional whitespace between lat/lon
- * 
+ * - With optional whitespace between lat/lon hemispheres and longitude digits
+ *
  * @param string $text NOTAM text to parse (empty string returns null)
  * @return array{lat: float, lon: float}|null Decimal degrees or null if no valid coordinates found
  */
 function parseTfrCoordinates(string $text): ?array {
-    // Pattern: DDMMSSN/S followed by DDDMMSSW/E
-    // Example: 413900N1122300W = 41°39'00"N 112°23'00"W
-    $pattern = '/(\d{2})(\d{2})(\d{2})([NS])\s*(\d{2,3})(\d{2})(\d{2})([EW])/i';
-    
-    if (preg_match($pattern, $text, $matches)) {
-        $latDeg = (int)$matches[1];
-        $latMin = (int)$matches[2];
-        $latSec = (int)$matches[3];
-        $latDir = strtoupper($matches[4]);
-        
-        $lonDeg = (int)$matches[5];
-        $lonMin = (int)$matches[6];
-        $lonSec = (int)$matches[7];
-        $lonDir = strtoupper($matches[8]);
-        
-        // Convert to decimal degrees
-        $lat = $latDeg + ($latMin / 60) + ($latSec / 3600);
-        $lon = $lonDeg + ($lonMin / 60) + ($lonSec / 3600);
-        
-        // Apply direction
-        if ($latDir === 'S') {
-            $lat = -$lat;
+    if (preg_match(tfrCoordinatePairRegex(), $text, $matches)) {
+        return tfrDecodeCoordinateGroups($matches);
+    }
+
+    return null;
+}
+
+/**
+ * Detect FAA phrasing that closes a polygon without repeating the first coordinate.
+ *
+ * @param string $text NOTAM body (case-insensitive match)
+ * @return bool True when POINT OF ORIGIN appears as a whole phrase
+ */
+function tfrPolygonHasPointOfOriginClosurePhrase(string $text): bool {
+    return preg_match('/\bPOINT\s+OF\s+ORIGIN\b/i', $text) === 1;
+}
+
+/**
+ * Parse all DDMMSSN/DDDMMSSW coordinate pairs from TFR text in document order.
+ *
+ * Collapses consecutive duplicates and removes a closing vertex equal to the first
+ * when present. {@see parseTfrPolygonVerticesMeta()} also records whether the ring
+ * is watertight (explicit closure or POINT OF ORIGIN).
+ *
+ * @param string $text NOTAM text
+ * @return array<int, array{lat: float, lon: float}> Ordered vertices (may be empty)
+ */
+function parseTfrPolygonVertices(string $text): array {
+    return parseTfrPolygonVerticesMeta($text)['vertices'];
+}
+
+/**
+ * Parse polygon vertices and whether the NOTAM defines a closed ring.
+ *
+ * ring_closed is true when the first and last decoded coordinates coincide (after
+ * deduping consecutive repeats), or when the text contains "POINT OF ORIGIN" so
+ * the last edge returns to the first vertex. Otherwise fail closed for polygon TFRs.
+ *
+ * @param string $text NOTAM text
+ * @return array{vertices: array<int, array{lat: float, lon: float}>, ring_closed: bool}
+ */
+function parseTfrPolygonVerticesMeta(string $text): array {
+    if (!preg_match_all(tfrCoordinatePairRegex(), $text, $matches, PREG_SET_ORDER)) {
+        return ['vertices' => [], 'ring_closed' => false];
+    }
+
+    $vertices = [];
+    foreach ($matches as $row) {
+        $pt = tfrDecodeCoordinateGroups($row);
+        if ($pt === null) {
+            continue;
         }
-        if ($lonDir === 'W') {
-            $lon = -$lon;
+        $last = end($vertices);
+        if ($last !== false
+            && abs($last['lat'] - $pt['lat']) < TFR_VERTEX_EQUAL_EPSILON_DEG
+            && abs($last['lon'] - $pt['lon']) < TFR_VERTEX_EQUAL_EPSILON_DEG) {
+            continue;
         }
-        
-        // Validate ranges
-        if ($lat >= -90 && $lat <= 90 && $lon >= -180 && $lon <= 180) {
-            return ['lat' => $lat, 'lon' => $lon];
+        $vertices[] = $pt;
+    }
+
+    $ringClosed = false;
+    $n = count($vertices);
+    if ($n >= 2) {
+        $first = $vertices[0];
+        $last = $vertices[$n - 1];
+        if (abs($first['lat'] - $last['lat']) < TFR_VERTEX_EQUAL_EPSILON_DEG
+            && abs($first['lon'] - $last['lon']) < TFR_VERTEX_EQUAL_EPSILON_DEG) {
+            $ringClosed = true;
+            array_pop($vertices);
         }
     }
-    
+
+    if (!$ringClosed && tfrPolygonHasPointOfOriginClosurePhrase($text) && count($vertices) >= 3) {
+        $ringClosed = true;
+    }
+
+    return ['vertices' => $vertices, 'ring_closed' => $ringClosed];
+}
+
+/**
+ * Project geodetic vertices to local east/north plane (NM) for small polygons.
+ *
+ * @param array<int, array{lat: float, lon: float}> $vertices Vertex list (non-empty)
+ * @return array{ref_lat: float, ref_lon: float, xs: float[], ys: float[], cos_ref: float}|null Null if empty or near-pole (unreliable plane)
+ */
+function tfrPolygonProjectVerticesToLocalPlaneNm(array $vertices): ?array {
+    $n = count($vertices);
+    if ($n < 1) {
+        return null;
+    }
+    $refLat = 0.0;
+    $refLon = 0.0;
+    foreach ($vertices as $v) {
+        $refLat += $v['lat'];
+        $refLon += $v['lon'];
+    }
+    $refLat /= $n;
+    $refLon /= $n;
+
+    $refLatRad = deg2rad($refLat);
+    $cosRef = cos($refLatRad);
+    if (abs($cosRef) < 1e-8) {
+        return null;
+    }
+
+    $rNm = EARTH_RADIUS_NAUTICAL_MILES;
+    $xs = [];
+    $ys = [];
+    foreach ($vertices as $v) {
+        $xs[] = $rNm * $cosRef * deg2rad($v['lon'] - $refLon);
+        $ys[] = $rNm * deg2rad($v['lat'] - $refLat);
+    }
+
+    return [
+        'ref_lat' => $refLat,
+        'ref_lon' => $refLon,
+        'xs' => $xs,
+        'ys' => $ys,
+        'cos_ref' => $cosRef,
+    ];
+}
+
+/**
+ * Signed double area (NM^2) of a simple polygon in the local plane (shoelace).
+ *
+ * @param float[] $xs Easting (NM) per vertex
+ * @param float[] $ys Northing (NM) per vertex
+ * @return float Signed double area in square NM; zero if fewer than three vertices or length mismatch
+ */
+function tfrPolygonSignedDoubleAreaNm2(array $xs, array $ys): float {
+    $n = count($xs);
+    if ($n < 3 || $n !== count($ys)) {
+        return 0.0;
+    }
+    $twice = 0.0;
+    for ($i = 0; $i < $n; $i++) {
+        $j = ($i + 1) % $n;
+        $twice += $xs[$i] * $ys[$j] - $xs[$j] * $ys[$i];
+    }
+
+    return $twice;
+}
+
+/**
+ * Ray casting point-in-polygon test in local NM plane.
+ *
+ * @param float $px Airport easting (NM) in the same frame as $xs/$ys
+ * @param float $py Airport northing (NM)
+ * @param float[] $xs Polygon eastings (NM)
+ * @param float[] $ys Polygon northings (NM)
+ * @return bool True if the test point lies inside the ring (boundary excluded by ray parity)
+ */
+function pointInPolygonRayCastLocalNm(float $px, float $py, array $xs, array $ys): bool {
+    $n = count($xs);
+    if ($n < 3 || $n !== count($ys)) {
+        return false;
+    }
+    $inside = false;
+    for ($i = 0, $j = $n - 1; $i < $n; $j = $i++) {
+        $xi = $xs[$i];
+        $yi = $ys[$i];
+        $xj = $xs[$j];
+        $yj = $ys[$j];
+        $crosses = ($yi > $py) !== ($yj > $py);
+        if ($crosses) {
+            $denom = $yj - $yi;
+            if (abs($denom) < 1e-18) {
+                continue;
+            }
+            $xInt = $xi + ($xj - $xi) * ($py - $yi) / $denom;
+            if ($px < $xInt) {
+                $inside = !$inside;
+            }
+        }
+    }
+
+    return $inside;
+}
+
+/**
+ * Shortest distance from a point to a closed polygon edge (NM) in the local plane.
+ *
+ * @param float $px Airport easting (NM)
+ * @param float $py Airport northing (NM)
+ * @param float[] $xs Polygon eastings (NM)
+ * @param float[] $ys Polygon northings (NM)
+ * @return float Shortest distance to any edge (NM), or PHP_FLOAT_MAX if fewer than two vertices
+ */
+function minDistancePointToPolygonRingNm(float $px, float $py, array $xs, array $ys): float {
+    $n = count($xs);
+    if ($n < 2 || $n !== count($ys)) {
+        return PHP_FLOAT_MAX;
+    }
+    $minSq = PHP_FLOAT_MAX;
+    for ($i = 0; $i < $n; $i++) {
+        $j = ($i + 1) % $n;
+        $x1 = $xs[$i];
+        $y1 = $ys[$i];
+        $x2 = $xs[$j];
+        $y2 = $ys[$j];
+        $dx = $x2 - $x1;
+        $dy = $y2 - $y1;
+        $lenSq = $dx * $dx + $dy * $dy;
+        if ($lenSq < 1e-24) {
+            $t = 0.0;
+        } else {
+            $t = (($px - $x1) * $dx + ($py - $y1) * $dy) / $lenSq;
+            $t = max(0.0, min(1.0, $t));
+        }
+        $qx = $x1 + $t * $dx;
+        $qy = $y1 + $t * $dy;
+        $dsq = ($px - $qx) * ($px - $qx) + ($py - $qy) * ($py - $qy);
+        if ($dsq < $minSq) {
+            $minSq = $dsq;
+        }
+    }
+
+    return sqrt(max(0.0, $minSq));
+}
+
+/**
+ * True when the airport lies inside the closed polygon or within the relevance buffer
+ * outside its boundary (NM, local plane).
+ *
+ * @param array<int, array{lat: float, lon: float}> $vertices At least three corners (ring not repeated)
+ * @return bool False when polygon is degenerate in the projected plane
+ */
+function isAirportInsideOrNearTfrPolygonRing(array $vertices, float $airportLat, float $airportLon): bool {
+    $n = count($vertices);
+    if ($n < 3) {
+        return false;
+    }
+
+    $plane = tfrPolygonProjectVerticesToLocalPlaneNm($vertices);
+    if ($plane === null) {
+        return false;
+    }
+
+    $refLat = $plane['ref_lat'];
+    $refLon = $plane['ref_lon'];
+    $cosRef = $plane['cos_ref'];
+    $xs = $plane['xs'];
+    $ys = $plane['ys'];
+    $rNm = EARTH_RADIUS_NAUTICAL_MILES;
+
+    $signedDouble = tfrPolygonSignedDoubleAreaNm2($xs, $ys);
+    if (abs($signedDouble) < TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2) {
+        return false;
+    }
+
+    $px = $rNm * $cosRef * deg2rad($airportLon - $refLon);
+    $py = $rNm * deg2rad($airportLat - $refLat);
+
+    if (pointInPolygonRayCastLocalNm($px, $py, $xs, $ys)) {
+        return true;
+    }
+
+    $distEdge = minDistancePointToPolygonRingNm($px, $py, $xs, $ys);
+
+    return $distEdge <= TFR_RELEVANCE_BUFFER_NM;
+}
+
+/**
+ * Planar polygon centroid in lat/lon using a local equirectangular tangent plane (NM).
+ *
+ * Suitable for small TFR polygons (CONUS incident airspace). Returns null when
+ * fewer than three vertices or the polygon is degenerate (near-zero area), so
+ * callers can fail closed.
+ *
+ * @param array<int, array{lat: float, lon: float}> $vertices Closed ring not required; algorithm treats edge N-1 to 0 as closing
+ * @return array{lat: float, lon: float}|null Centroid or null if not computable
+ */
+function polygonCentroidLatLonFromVertices(array $vertices): ?array {
+    $n = count($vertices);
+    if ($n < 3) {
+        return null;
+    }
+
+    $plane = tfrPolygonProjectVerticesToLocalPlaneNm($vertices);
+    if ($plane === null) {
+        return null;
+    }
+
+    $refLat = $plane['ref_lat'];
+    $refLon = $plane['ref_lon'];
+    $cosRef = $plane['cos_ref'];
+    $xs = $plane['xs'];
+    $ys = $plane['ys'];
+    $rNm = EARTH_RADIUS_NAUTICAL_MILES;
+
+    $doubleArea = 0.0;
+    $sumCx = 0.0;
+    $sumCy = 0.0;
+    for ($i = 0; $i < $n; $i++) {
+        $j = ($i + 1) % $n;
+        $cross = $xs[$i] * $ys[$j] - $xs[$j] * $ys[$i];
+        $doubleArea += $cross;
+        $sumCx += ($xs[$i] + $xs[$j]) * $cross;
+        $sumCy += ($ys[$i] + $ys[$j]) * $cross;
+    }
+
+    if (abs($doubleArea) < TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2) {
+        return null;
+    }
+
+    $centroidX = $sumCx / (3.0 * $doubleArea);
+    $centroidY = $sumCy / (3.0 * $doubleArea);
+
+    $centLat = $refLat + rad2deg($centroidY / $rNm);
+    $centLon = $refLon + rad2deg($centroidX / ($rNm * $cosRef));
+
+    if ($centLat >= -90 && $centLat <= 90 && $centLon >= -180 && $centLon <= 180) {
+        return ['lat' => $centLat, 'lon' => $centLon];
+    }
+
     return null;
+}
+
+/**
+ * Reference point and inner radius (NM) for circle or legacy point TFRs only.
+ *
+ * Circle TFRs (explicit NM radius in text): first coordinate is center, parsed radius used.
+ * Polygon TFRs (no radius, three or more vertices) use point-in-polygon in
+ * {@see isTfrRelevantToAirport()}; this function returns null for that case.
+ * Otherwise: first coordinate with {@see TFR_DEFAULT_RADIUS_NM} (legacy single-point behavior).
+ *
+ * @param string $text NOTAM body
+ * @param array<int, array{lat: float, lon: float}>|null $vertices Pre-parsed vertices to avoid a second scan of $text; null parses from $text
+ * @param float|null $parsedRadiusNm When set, skips re-parsing radius from $text (must match {@see parseTfrRadiusNm()} for the same body when applicable)
+ * @return array{lat: float, lon: float, radius_nm: float}|null Unusable or polygon path (null when polygon applies to PiP instead)
+ */
+function parseTfrGeographicRelevanceReference(string $text, ?array $vertices = null, ?float $parsedRadiusNm = null): ?array {
+    $parsedRadius = $parsedRadiusNm ?? parseTfrRadiusNm($text);
+    if ($vertices === null) {
+        $vertices = parseTfrPolygonVertices($text);
+    }
+    if ($vertices === []) {
+        return null;
+    }
+
+    if ($parsedRadius !== null) {
+        $center = $vertices[0];
+
+        return [
+            'lat' => $center['lat'],
+            'lon' => $center['lon'],
+            'radius_nm' => $parsedRadius,
+        ];
+    }
+
+    if (count($vertices) >= 3) {
+        return null;
+    }
+
+    $center = $vertices[0];
+
+    return [
+        'lat' => $center['lat'],
+        'lon' => $center['lon'],
+        'radius_nm' => TFR_DEFAULT_RADIUS_NM,
+    ];
 }
 
 /**
@@ -314,7 +721,9 @@ function isTfr(array $notam): bool {
  * 1. The NOTAM location field matches an airport identifier
  * 2. The NOTAM airport_name field matches the airport name (word boundary match)
  * 3. The TFR text explicitly mentions the airport's name or identifier
- * 4. The airport is within the TFR's geographic boundary (radius + buffer)
+ * 4. The airport is inside a closed polygon TFR (explicit ring closure or POINT OF
+ *    ORIGIN), or within {@see TFR_RELEVANCE_BUFFER_NM} of its boundary; otherwise circle
+ *    or legacy point-radius distance rules apply
  * 
  * All distance calculations use nautical miles (standard aviation unit).
  * Conservative approach: excludes TFR when coordinates cannot be parsed.
@@ -355,7 +764,7 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
         }
     }
     
-    // Geographic relevance check - parse TFR coordinates and check distance
+    // Geographic relevance: polygon uses PiP + boundary buffer; circle/legacy use great-circle distance
     if (!isset($airport['lat']) || !isset($airport['lon'])) {
         // No airport coordinates - be conservative and exclude
         return false;
@@ -363,27 +772,37 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
     
     $airportLat = (float)$airport['lat'];
     $airportLon = (float)$airport['lon'];
-    
-    // Parse TFR center coordinates from text
-    $tfrCoords = parseTfrCoordinates($text);
-    if ($tfrCoords === null) {
-        // Cannot parse coordinates - be conservative and exclude
+
+    $parsedRadius = parseTfrRadiusNm($text);
+    $polygonMeta = parseTfrPolygonVerticesMeta($text);
+    $vertices = $polygonMeta['vertices'];
+
+    if ($vertices === []) {
         return false;
     }
-    
-    // Parse TFR radius in nautical miles (or use default)
-    $tfrRadiusNm = parseTfrRadiusNm($text) ?? TFR_DEFAULT_RADIUS_NM;
-    
-    // Calculate distance from airport to TFR center
+
+    // Polygon TFR (no NM radius in text): require watertight ring, then point-in-polygon
+    if ($parsedRadius === null && count($vertices) >= 3) {
+        if (!$polygonMeta['ring_closed']) {
+            return false;
+        }
+
+        return isAirportInsideOrNearTfrPolygonRing($vertices, $airportLat, $airportLon);
+    }
+
+    $geoRef = parseTfrGeographicRelevanceReference($text, $vertices, $parsedRadius);
+    if ($geoRef === null) {
+        return false;
+    }
+
     $distanceNm = calculateDistanceNm(
         $airportLat,
         $airportLon,
-        $tfrCoords['lat'],
-        $tfrCoords['lon']
+        $geoRef['lat'],
+        $geoRef['lon']
     );
-    
-    // TFR is relevant if airport is within (TFR radius + buffer)
-    return $distanceNm <= ($tfrRadiusNm + TFR_RELEVANCE_BUFFER_NM);
+
+    return $distanceNm <= ($geoRef['radius_nm'] + TFR_RELEVANCE_BUFFER_NM);
 }
 
 /**
