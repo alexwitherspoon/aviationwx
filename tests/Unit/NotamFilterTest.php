@@ -205,6 +205,26 @@ class NotamFilterTest extends TestCase {
         $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 450000X1220000W';
         $this->assertNull(parseTfrCoordinates($text));
     }
+
+    public function testParseTfrCoordinates_RejectsMinutesOutOfRange() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 456099N1220000W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
+
+    public function testParseTfrCoordinates_RejectsLongitudeDegreesOver180() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 450000N1810101E';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
+
+    public function testParseTfrCoordinates_RejectsNonZeroMinutesOn180Longitude() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 450000N1800100W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
+
+    public function testParseTfrCoordinates_RejectsNonZeroSecondsOn90North() {
+        $text = 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 900001N1220000W';
+        $this->assertNull(parseTfrCoordinates($text));
+    }
     
     public function testParseTfrCoordinates_RealWorldTfr() {
         // Real TFR text from the bug report
@@ -510,6 +530,38 @@ class NotamFilterTest extends TestCase {
             ['lat' => 44.0, 'lon' => -116.0],
             ['lat' => 44.01, 'lon' => -116.0],
         ]));
+    }
+
+    public function testPolygonCentroidLatLonFromVertices_RejectsDegenerateCollinearRing() {
+        $collinear = [
+            ['lat' => 45.0, 'lon' => -122.0],
+            ['lat' => 45.0166667, 'lon' => -122.0],
+            ['lat' => 45.0333333, 'lon' => -122.0],
+        ];
+        $this->assertNull(polygonCentroidLatLonFromVertices($collinear));
+        $this->assertFalse(isAirportInsideOrNearTfrPolygonRing($collinear, 45.016, -122.0));
+    }
+
+    public function testIsTfrRelevantToAirport_DegenerateCollinearPolygonWithPooFailsClosed() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450200N1220000W TO POINT OF ORIGIN SFC-5000FT';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 45.0166667,
+            'lon' => -122.0,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    public function testIsTfrRelevantToAirport_ClosedPolygonBeyondBufferFailsClosed() {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO 450100N1220000W TO 450100N1220100W TO 450000N1220100W TO POINT OF ORIGIN SFC-5000FT';
+        $tfr = ['text' => $text];
+        $airport = [
+            'name' => 'Off Grid Test',
+            'lat' => 44.82,
+            'lon' => -121.991667,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
     }
 
     public function testIsTfrRelevantToAirport_PolygonNearU88_ElkRidgeExcluded() {
