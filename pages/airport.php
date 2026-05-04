@@ -1859,78 +1859,26 @@ if ($themeCookie === 'dark') {
 
             <div class="links">
                 <?php
-                // Get the best available identifier for external links (ICAO > IATA > FAA)
-                $linkIdentifier = getBestIdentifierForLinks($airport);
-                $aviationRegion = getAviationRegionFromAirport($airport);
-                
-                // AirNav link (manual override or auto-generated)
-                $airnavUrl = null;
-                if (!empty($airport['airnav_url'])) {
-                    $airnavUrl = $airport['airnav_url'];
-                } elseif ($linkIdentifier !== null) {
-                    $airnavUrl = 'https://www.airnav.com/airport/' . $linkIdentifier;
-                }
-                if ($airnavUrl !== null): ?>
-                <a href="<?= htmlspecialchars($airnavUrl) ?>" target="_blank" rel="noopener" class="btn" title="View airport information on AirNav (opens in new tab)">
-                    AirNav
+                $resolvedBuiltinLinks = airportExternalLinksBuildResolvedList($airport);
+                foreach ($resolvedBuiltinLinks as $bl) {
+                    $lbl = $bl['label'];
+                    $u = $bl['url'];
+                    $isForeflight = ($lbl === 'ForeFlight');
+                    $btnClass = $isForeflight ? 'btn foreflight-link' : 'btn';
+                    $title = $isForeflight
+                        ? 'Open this airport in ForeFlight app'
+                        : ($lbl === 'AirNav'
+                            ? 'View airport information on AirNav (opens in new tab)'
+                            : ($lbl === 'FAA Weather'
+                                ? 'View FAA weather cameras for this area (opens in new tab)'
+                                : 'View ' . htmlspecialchars($lbl) . ' (opens in new tab)'));
+                    ?>
+                <a href="<?= htmlspecialchars($u) ?>" target="_blank" rel="noopener" class="<?= htmlspecialchars($btnClass) ?>" title="<?= htmlspecialchars($title) ?>">
+                    <?= htmlspecialchars($lbl) ?>
                 </a>
-                <?php endif; ?>
-                
                 <?php
-                // FAA Weather link (US-focused; manual override or auto-generated for US airports only)
-                $faaWeatherUrl = null;
-                if (!empty($airport['faa_weather_url'])) {
-                    $faaWeatherUrl = $airport['faa_weather_url'];
-                } elseif ($aviationRegion === 'US' && $linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
-                    // Generate FAA Weather Cams URL
-                    // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{identifier}/
-                    $buffer = 2.0;
-                    $min_lon = $airport['lon'] - $buffer;
-                    $min_lat = $airport['lat'] - $buffer;
-                    $max_lon = $airport['lon'] + $buffer;
-                    $max_lat = $airport['lat'] + $buffer;
-                    // Remove K prefix from identifier if present (e.g., KSPB -> SPB)
-                    $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
-                    $faaWeatherUrl = sprintf(
-                        'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-                        $min_lon,
-                        $min_lat,
-                        $max_lon,
-                        $max_lat,
-                        $faa_identifier
-                    );
                 }
-                if ($faaWeatherUrl !== null): ?>
-                <a href="<?= htmlspecialchars($faaWeatherUrl) ?>" target="_blank" rel="noopener" class="btn" title="View FAA weather cameras for this area (opens in new tab)">
-                    FAA Weather
-                </a>
-                <?php endif; ?>
-                
-                <?php
-                $regionalWeatherLink = getRegionalWeatherLinkForAirport($airport);
-                if ($regionalWeatherLink !== null):
-                    $regionalLabel = $regionalWeatherLink['label'];
                 ?>
-                <a href="<?= htmlspecialchars($regionalWeatherLink['url']) ?>" target="_blank" rel="noopener" class="btn" title="View <?= htmlspecialchars($regionalLabel) ?> (opens in new tab)">
-                    <?= htmlspecialchars($regionalLabel) ?>
-                </a>
-                <?php endif; ?>
-                
-                <?php
-                // ForeFlight link (manual override or auto-generated) - mobile only
-                // ForeFlight accepts ICAO, IATA, or FAA codes (prefer ICAO > IATA > FAA)
-                $foreflightUrl = null;
-                if (!empty($airport['foreflight_url'])) {
-                    $foreflightUrl = $airport['foreflight_url'];
-                } elseif ($linkIdentifier !== null) {
-                    // ForeFlight deeplink format: foreflightmobile://maps/search?q={identifier}
-                    $foreflightUrl = 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier);
-                }
-                if ($foreflightUrl !== null): ?>
-                <a href="<?= htmlspecialchars($foreflightUrl) ?>" target="_blank" rel="noopener" class="btn foreflight-link" title="Open this airport in ForeFlight app">
-                    ForeFlight
-                </a>
-                <?php endif; ?>
                 <?php
                 // Render custom links if configured
                 if (!empty($airport['links']) && is_array($airport['links'])) {

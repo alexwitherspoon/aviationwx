@@ -81,6 +81,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         'icao' => $airport['icao'] ?? null,
         'iata' => $airport['iata'] ?? null,
         'faa' => $airport['faa'] ?? null,
+        'iso_country' => getEffectiveIso3166Alpha2ForAirport($airport),
         'lat' => $airport['lat'] ?? null,
         'lon' => $airport['lon'] ?? null,
         'elevation_ft' => $airport['elevation_ft'] ?? null,
@@ -200,53 +201,6 @@ function formatAirportDetails(string $airportId, array $airport): array
  */
 function buildResolvedExternalLinks(array $airport): array
 {
-    $links = [];
-    $linkIdentifier = getBestIdentifierForLinks($airport);
-    $aviationRegion = getAviationRegionFromAirport($airport);
-
-    // AirNav
-    $airnavUrl = !empty($airport['airnav_url'])
-        ? $airport['airnav_url']
-        : ($linkIdentifier ? 'https://www.airnav.com/airport/' . $linkIdentifier : null);
-    if ($airnavUrl !== null) {
-        $links[] = ['label' => 'AirNav', 'url' => $airnavUrl];
-    }
-
-    // FAA Weather (US or manual override)
-    $faaWeatherUrl = null;
-    if (!empty($airport['faa_weather_url'])) {
-        $faaWeatherUrl = $airport['faa_weather_url'];
-    } elseif ($aviationRegion === 'US' && $linkIdentifier !== null && isset($airport['lat']) && isset($airport['lon'])) {
-        $buffer = 2.0;
-        $minLon = (float)$airport['lon'] - $buffer;
-        $minLat = (float)$airport['lat'] - $buffer;
-        $maxLon = (float)$airport['lon'] + $buffer;
-        $maxLat = (float)$airport['lat'] + $buffer;
-        $faaId = preg_replace('/^K/', '', $linkIdentifier);
-        $faaWeatherUrl = sprintf(
-            'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-            $minLon, $minLat, $maxLon, $maxLat,
-            $faaId
-        );
-    }
-    if ($faaWeatherUrl !== null) {
-        $links[] = ['label' => 'FAA Weather', 'url' => $faaWeatherUrl];
-    }
-
-    // Regional weather (CA, AU, or manual override)
-    $regionalLink = getRegionalWeatherLinkForAirport($airport);
-    if ($regionalLink !== null) {
-        $links[] = ['label' => $regionalLink['label'], 'url' => $regionalLink['url']];
-    }
-
-    // ForeFlight
-    $foreflightUrl = !empty($airport['foreflight_url'])
-        ? $airport['foreflight_url']
-        : ($linkIdentifier ? 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier) : null);
-    if ($foreflightUrl !== null) {
-        $links[] = ['label' => 'ForeFlight', 'url' => $foreflightUrl];
-    }
-
-    return $links;
+    return airportExternalLinksBuildResolvedList($airport);
 }
 
