@@ -256,7 +256,7 @@ function countryResolutionPointInPart(float $lon, float $lat, array $part): bool
     if (!countryResolutionPointInRing($lon, $lat, $part['exterior'])) {
         return false;
     }
-    foreach ($part['holes'] as $hole) {
+    foreach ($part['holes'] ?? [] as $hole) {
         if ($hole !== [] && countryResolutionPointInRing($lon, $lat, $hole)) {
             return false;
         }
