@@ -18,6 +18,7 @@
  * - Weather cache: 7 days (should be continuously updated)
  * - NOTAM cache: 24 hours (primary: 1 hour refresh)
  * - Webcam images: 7 days (should be continuously updated)
+ * - Airport country resolution aggregate: 7 days (scheduler refreshes daily)
  * 
  * LAYER 3 - Orphan cleanup:
  * Files for airports no longer in configuration.
@@ -101,6 +102,7 @@ define('CLEANUP_OURAIRPORTS_AGE', 2592000);       // 30 days (primary: 7 days)
 define('CLEANUP_ICAO_AIRPORTS_AGE', 5184000);     // 60 days (primary: 30 days)
 define('CLEANUP_MAPPING_CACHE_AGE', 5184000);     // 60 days
 define('CLEANUP_GEOMAG_AGE', 2592000);            // 30 days (geomag cache TTL 7 days)
+define('CLEANUP_AIRPORT_COUNTRY_RESOLUTION_AGE', 604800); // 7 days (scheduler refreshes daily; safety net)
 
 // Disk usage warning thresholds
 define('DISK_USAGE_WARNING_PERCENT', 80);
@@ -359,6 +361,13 @@ cleanupFilesByPattern(
     CACHE_GEOMAG_DIR . '/*.json',
     CLEANUP_GEOMAG_AGE,
     'Geomag declination cache',
+    $stats, $dryRun, $verbose
+);
+
+cleanupFilesByAge(
+    CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE,
+    CLEANUP_AIRPORT_COUNTRY_RESOLUTION_AGE,
+    'Airport country resolution aggregate',
     $stats, $dryRun, $verbose
 );
 
