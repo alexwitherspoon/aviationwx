@@ -57,15 +57,18 @@ function checkSystemHealth(): array {
 
     $configSha256ForStatus = '';
     if ($resolvedConfigPath !== null && is_readable($resolvedConfigPath)) {
-        $rawCfgForSha = file_get_contents($resolvedConfigPath);
+        // @ suppresses fopen warnings if the path flips unreadable between is_readable and read (TOCTOU).
+        $rawCfgForSha = @file_get_contents($resolvedConfigPath);
         if ($rawCfgForSha !== false && $rawCfgForSha !== '') {
             $configSha256ForStatus = hash('sha256', $rawCfgForSha);
         }
     }
 
-    $configMtime = ($resolvedConfigPath !== null && file_exists($resolvedConfigPath))
-        ? (int) filemtime($resolvedConfigPath)
-        : 0;
+    $configMtime = 0;
+    if ($resolvedConfigPath !== null && file_exists($resolvedConfigPath)) {
+        $mt = @filemtime($resolvedConfigPath);
+        $configMtime = ($mt !== false) ? (int) $mt : 0;
+    }
     $health['components']['configuration'] = [
         'name' => 'Configuration',
         'status' => $configReadable && $configValid ? 'operational' : 'down',
