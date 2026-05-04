@@ -19,9 +19,7 @@ function encodeEmailBody($text) {
     return implode('%0A', $encodedLines);
 }
 
-// Use CONFIG_PATH environment variable if set (for production), otherwise use default path
-$envConfigPath = getenv('CONFIG_PATH');
-$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+$configFile = getConfigFilePath() ?? (__DIR__ . '/../config/airports.json');
 $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
@@ -1274,9 +1272,7 @@ Best regards,
             
             <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
             <?php
-            $envConfigPath = getenv('CONFIG_PATH');
-            $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
-            $config = json_decode(file_get_contents($configFileForList), true);
+            $config = json_decode(file_get_contents($configFile), true);
             // Only show listed airports (excludes unlisted airports from display)
             $airports = getListedAirports($config ?? []);
             $airportsPerPage = 9;

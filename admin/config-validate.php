@@ -146,7 +146,8 @@ if (!$configFilePath || !file_exists($configFilePath)) {
 
 // Check environment
 $info[] = "APP_ENV: " . (getenv('APP_ENV') ?: 'not set');
-$info[] = "CONFIG_PATH: " . (getenv('CONFIG_PATH') ?: 'not set');
+$info[] = 'CONFIG_PATH (env): ' . (getenv('CONFIG_PATH') !== false && getenv('CONFIG_PATH') !== '' ? getenv('CONFIG_PATH') : 'not set');
+$info[] = 'Resolved config: ' . ($configFilePath ?? 'NOT FOUND');
 $info[] = "Test mode: " . (isTestMode() ? 'YES' : 'NO');
 $info[] = "Mock mode: " . (shouldMockExternalServices() ? 'YES' : 'NO');
 $info[] = "Production: " . (isProduction() ? 'YES' : 'NO');

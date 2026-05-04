@@ -222,18 +222,23 @@ Optional **station power** telemetry on airport pages for `limited_availability`
   - Environment-aware config resolution
   - Mock mode detection for development
 
-**Configuration Resolution Order**:
-1. `APP_ENV=testing` → `tests/Fixtures/airports.json.test`
-2. `CONFIG_PATH` env var → specified file
-3. `secrets/airports.json` → Docker secrets mount
-4. `config/airports.json` → local development
+**Configuration Resolution Order** (single implementation: `resolveAirportsConfigFilePath()` in `lib/config.php`; used by `loadConfig()`, `getConfigFilePath()`, and status checks):
+
+1. `CONFIG_PATH` when set and the path exists as a regular file (PHPUnit/bootstrap sets this to `tests/Fixtures/airports.json.test`)
+2. `/var/www/html/secrets/airports.json` (Docker production mount)
+3. `config/airports.json` (repository default)
+4. Non-production only: adjacent `aviationwx.org-secrets` / `aviationwx-secrets` paths (local maintainer layout)
+5. `/var/www/html/airports.json` (host mount last resort)
+
+See [CONFIGURATION.md](CONFIGURATION.md) for the same list in the operator guide.
 
 **Key Functions**:
+- `resolveAirportsConfigFilePath()`: Locates `airports.json` without loading JSON
 - `loadConfig()`: Main entry point, returns validated config
 - `isTestMode()`: True when `APP_ENV=testing`
 - `isProduction()`: True in production environment
 - `shouldMockExternalServices()`: True when APIs should be mocked
-- `getConfigFilePath()`: Returns resolved config path
+- `getConfigFilePath()`: Alias of `resolveAirportsConfigFilePath()` (stable name for callers)
 
 **Country resolution (geometry aggregate)**:
 - `scripts/refresh-airport-country-resolution.php` builds `cache/airport_country_resolution.json` from airport coordinates and bundled Admin-0 polygons (`data/geo/ne_110m_admin_0_countries.geojson`, Natural Earth).

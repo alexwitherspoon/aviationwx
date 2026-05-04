@@ -1,18 +1,15 @@
 <?php
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/config.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
 $ok = true;
 $errors = [];
 
-// Config readable
-$configPath = getenv('CONFIG_PATH');
-if ($configPath === false || trim($configPath) === '') {
-    $configPath = __DIR__ . '/../config/airports.json';
-}
-if (!file_exists($configPath) || !is_readable($configPath)) {
+$resolvedConfig = getConfigFilePath();
+if ($resolvedConfig === null || !is_readable($resolvedConfig)) {
     $ok = false;
     $errors[] = 'config_unreadable';
 }

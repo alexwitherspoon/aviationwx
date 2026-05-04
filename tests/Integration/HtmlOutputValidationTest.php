@@ -289,7 +289,7 @@ class HtmlOutputValidationTest extends TestCase
         }
         
         // Load test config to check if links are configured
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test configuration not found");
             return;
@@ -793,7 +793,7 @@ class HtmlOutputValidationTest extends TestCase
         }
         
         // Load test config to check services configuration
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test configuration not found");
             return;
@@ -894,7 +894,7 @@ class HtmlOutputValidationTest extends TestCase
         }
         
         // Load test config to verify coordinates
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test configuration not found");
             return;
@@ -961,7 +961,7 @@ class HtmlOutputValidationTest extends TestCase
         }
         
         // Load test config to verify address
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test configuration not found");
             return;
@@ -999,7 +999,7 @@ class HtmlOutputValidationTest extends TestCase
         }
         
         // Load test config
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test configuration not found");
             return;

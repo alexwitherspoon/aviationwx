@@ -358,39 +358,64 @@ function shouldMockExternalServices(): bool {
 }
 
 /**
- * Get the resolved config file path without loading config
- * 
- * Helper function to determine which config file would be used.
- * Used by shouldMockExternalServices() to avoid circular dependency.
- * 
- * @return string|null Path to config file, or null if not found
+ * Resolve the airports.json path used by loadConfig(), getConfigFilePath(), and status checks.
+ *
+ * One ordered list of candidates so every caller uses the same file for parse, SHA, and mtime.
+ * When multiple candidates exist, the first match in the list below is returned.
+ *
+ * Order:
+ * 1. CONFIG_PATH when set and points at an existing regular file
+ * 2. /var/www/html/secrets/airports.json (Docker production mount)
+ * 3. Repository default config/airports.json
+ * 4. Non-production only: adjacent aviationwx.org-secrets then aviationwx-secrets paths
+ * 5. /var/www/html/airports.json (host mount last resort)
+ *
+ * @return string|null Path to an existing regular file, or null if none match
  */
-function getConfigFilePath(): ?string {
-    // Check CONFIG_PATH environment variable first
+function resolveAirportsConfigFilePath(): ?string {
     $envConfigPath = getenv('CONFIG_PATH');
-    if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
+    if (is_string($envConfigPath) && $envConfigPath !== '' && file_exists($envConfigPath) && is_file($envConfigPath)) {
         return $envConfigPath;
     }
-    
-    // Check secrets path (Docker mount)
-    $secretsPath = '/var/www/html/secrets/airports.json';
-    if (file_exists($secretsPath)) {
-        return $secretsPath;
+
+    $dockerSecrets = '/var/www/html/secrets/airports.json';
+    if (file_exists($dockerSecrets) && is_file($dockerSecrets)) {
+        return $dockerSecrets;
     }
-    
-    // Check default config path
+
     $defaultPath = __DIR__ . '/../config/airports.json';
     if (file_exists($defaultPath) && is_file($defaultPath)) {
         return $defaultPath;
     }
-    
-    // Check adjacent secrets repo (local dev)
-    $adjacentSecrets = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
-    if (file_exists($adjacentSecrets)) {
-        return $adjacentSecrets;
+
+    if (!isProduction()) {
+        $adjacentPrimary = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
+        if (file_exists($adjacentPrimary) && is_file($adjacentPrimary)) {
+            return $adjacentPrimary;
+        }
+        $adjacentAlt = __DIR__ . '/../../aviationwx-secrets/airports.json';
+        if (file_exists($adjacentAlt) && is_file($adjacentAlt)) {
+            return $adjacentAlt;
+        }
     }
-    
+
+    $hostMount = '/var/www/html/airports.json';
+    if (file_exists($hostMount) && is_file($hostMount)) {
+        return $hostMount;
+    }
+
     return null;
+}
+
+/**
+ * Get the resolved airports.json path without loading or parsing it.
+ *
+ * {@see resolveAirportsConfigFilePath()}
+ *
+ * @return string|null Path to an existing regular file, or null if none match
+ */
+function getConfigFilePath(): ?string {
+    return resolveAirportsConfigFilePath();
 }
 
 /**
@@ -1868,32 +1893,20 @@ function validateRuntimeConfigSchema(array $config): array {
  */
 function loadConfig(bool $useCache = true): ?array {
     static $cachedConfig = null;
-    
-    // Get config file path
+
     $envConfigPath = getenv('CONFIG_PATH');
-    
-    // Check if CONFIG_PATH is set and is a file (not a directory)
-    if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
-        $configFile = $envConfigPath;
-    } else {
-        // Fall back to default path
-        $configFile = __DIR__ . '/../config/airports.json';
-        // If default path doesn't exist and not in production, try secrets path (for local dev)
-        if ((!file_exists($configFile) || is_dir($configFile)) && !isProduction()) {
-            $secretsPath = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
-            $secretsPathAlt = __DIR__ . '/../../aviationwx-secrets/airports.json';
-            if (file_exists($secretsPath)) {
-                $configFile = $secretsPath;
-            } elseif (file_exists($secretsPathAlt)) {
-                $configFile = $secretsPathAlt;
-            }
+    $configFile = resolveAirportsConfigFilePath();
+
+    if ($configFile === null) {
+        if (!isProduction()) {
+            aviationwx_log('info', 'config file not found (no candidate airports.json)', [], 'app');
+        } else {
+            aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', [], 'app', true);
+            error_log('CRITICAL: airports.json not found in production (resolveAirportsConfigFilePath returned null)');
         }
-        // Last resort: try /var/www/html/airports.json (production mount point)
-        if ((!file_exists($configFile) || is_dir($configFile))) {
-            $configFile = '/var/www/html/airports.json';
-        }
+        return null;
     }
-    
+
     // SECURITY: Prevent test data from being used in production
     $isProduction = isProduction();
     if ($isProduction) {
@@ -1918,25 +1931,14 @@ function loadConfig(bool $useCache = true): ?array {
         }
     }
     
-    // Validate file exists and is not a directory
-    // Note: In CI (GitHub Actions), airports.json doesn't exist - this is expected and handled gracefully
-    if (!file_exists($configFile)) {
-        // In CI, this is normal - tests use CONFIG_PATH pointing to test fixtures
-        // In production, this is a critical failure - airports.json MUST exist
+    // Validate path still usable (race: file removed after resolve)
+    if (!file_exists($configFile) || !is_file($configFile)) {
         if (!isProduction()) {
-            // Non-production: log as info (expected in CI/test environments)
             aviationwx_log('info', 'config file not found (using defaults)', ['path' => $configFile], 'app');
         } else {
-            // Production: CRITICAL ERROR - airports.json is required, fail immediately
             aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', ['path' => $configFile], 'app', true);
             error_log('CRITICAL: airports.json not found in production at: ' . $configFile);
-            // In production, we cannot continue without airports.json - return null to fail fast
-            // The application should handle this gracefully by showing an error page
         }
-        return null;
-    }
-    if (is_dir($configFile)) {
-        aviationwx_log('error', 'config path is directory', ['path' => $configFile], 'app', true);
         return null;
     }
     
