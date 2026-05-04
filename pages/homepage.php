@@ -34,9 +34,13 @@ $imagesProcessed24h = $rolling24h['global']['variants_generated'] ?? 0;
 $cfAnalytics = getCloudflareAnalytics();
 $pilotsServedToday = $cfAnalytics['unique_visitors_today'] ?? 0;
 
-if (file_exists($configFile)) {
-    $config = json_decode(file_get_contents($configFile), true);
-    if (isset($config['airports'])) {
+if (is_readable($configFile)) {
+    $config = null;
+    $configJson = file_get_contents($configFile);
+    if ($configJson !== false && $configJson !== '') {
+        $config = json_decode($configJson, true);
+    }
+    if (is_array($config) && isset($config['airports'])) {
         // Only count enabled airports
         $enabledAirports = getEnabledAirports($config);
         $totalAirports = count($enabledAirports);
@@ -1270,9 +1274,10 @@ Best regards,
                 🗺️ <a href="https://airports.aviationwx.org" style="color: #0066cc; font-weight: 500; font-size: 1.05rem;">View All Airports on Interactive Map →</a>
             </p>
             
-            <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
+            <?php if ($totalAirports > 0 && is_readable($configFile)): ?>
             <?php
-            $config = json_decode(file_get_contents($configFile), true);
+            $configJson = file_get_contents($configFile);
+            $config = ($configJson !== false && $configJson !== '') ? json_decode($configJson, true) : null;
             // Only show listed airports (excludes unlisted airports from display)
             $airports = getListedAirports($config ?? []);
             $airportsPerPage = 9;
