@@ -423,7 +423,7 @@ function checkRunwayCacheHealth(?array $config): array {
  * @param string|null $configSha256 SHA-256 hex of raw airports.json; when null or empty, SHA is taken from getConfigFilePath()
  * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
  */
-function airport_country_resolution_health_compute(?array $config, ?string $configSha256): array {
+function computeAirportCountryResolutionHealth(?array $config, ?string $configSha256): array {
     $name = 'Airport country resolution';
     $path = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
     $basename = basename($path);
@@ -629,7 +629,7 @@ function airport_country_resolution_health_compute(?array $config, ?string $conf
  */
 function checkAirportCountryResolutionHealth(?array $config, ?string $configSha256 = null): array {
     if (isTestMode()) {
-        return airport_country_resolution_health_compute($config, $configSha256);
+        return computeAirportCountryResolutionHealth($config, $configSha256);
     }
 
     $aggPath = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
@@ -643,7 +643,7 @@ function checkAirportCountryResolutionHealth(?array $config, ?string $configSha2
 
     return getCachedData(
         static function () use ($config, $configSha256): array {
-            return airport_country_resolution_health_compute($config, $configSha256);
+            return computeAirportCountryResolutionHealth($config, $configSha256);
         },
         $cacheKey,
         null,
