@@ -3,9 +3,10 @@
  * Aviation link regions and built-in external link profiles.
  *
  * Effective ISO is computed in `lib/config.php`; this module maps alpha-2 to a link-region id and
- * resolves dashboard and Public API built-ins. The US profile omits SkyVector (AirNav agreement).
- * AirNav appears only in the `us` profile and in `unknown` override rows (type `airnav`); other
- * regions use regional authority URLs or SkyVector, not a duplicate AirNav row.
+ * resolves dashboard and Public API built-ins. The `us` profile lists AirNav, FAA Weather, and
+ * ForeFlight only (no SkyVector row in that profile). AirNav appears only in the `us` profile and in
+ * `unknown` override rows (type `airnav`); other regions use regional authority URLs or SkyVector,
+ * not a duplicate AirNav row.
  * Adding a region or static URL implies updating profiles here, `aviationLinkRegionFromIso()`, tests,
  * and scheduled URL probes (which read profiles plus sample programmatic URLs).
  *
