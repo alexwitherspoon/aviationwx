@@ -218,7 +218,7 @@ class PublicApiIntegrationTest extends TestCase
     }
 
     /**
-     * GET /v1/airports/{id} uses custom_links (config links) and external_links (built-ins); not `links`.
+     * GET /v1/airports/{id} exposes custom_links and external_links; legacy top-level links key is absent.
      */
     public function testGetAirport_CustomLinksAndExternalLinksKeys(): void
     {
@@ -238,7 +238,7 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertArrayHasKey('external_links', $airport);
         $this->assertIsArray($airport['custom_links']);
         $this->assertIsArray($airport['external_links']);
-        $this->assertArrayNotHasKey('links', $airport, 'Legacy `links` key removed; use custom_links');
+        $this->assertArrayNotHasKey('links', $airport, 'Response must not use legacy links key; use custom_links');
     }
     
     /**

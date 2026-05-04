@@ -1321,7 +1321,7 @@ Logos are cached locally for 30 days. Text fallback if logo fails.
 
 ### Custom Links
 
-Appear after standard links (AirNav, FAA Weather, etc.):
+Appear in the dashboard link row after built-in links (AirNav, FAA Weather, regional, ForeFlight when shown). In the Public API, the same entries are returned under `custom_links` on `GET /v1/airports/{id}` (config file key remains `links`).
 
 ```json
 "links": [
