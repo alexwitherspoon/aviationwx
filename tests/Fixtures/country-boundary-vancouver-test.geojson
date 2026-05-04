@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"ISO_A2": "CA", "NAME": "Fixture-CA-patch"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-123.25, 48.98], [-122.2, 48.98], [-122.2, 49.45], [-123.25, 49.45], [-123.25, 48.98]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {"ISO_A2": "US", "NAME": "Fixture-US-patch"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-123.05, 48.65], [-122.2, 48.65], [-122.2, 49.08], [-123.05, 49.08], [-123.05, 48.65]]]
+      }
+    }
+  ]
+}
