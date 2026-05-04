@@ -851,7 +851,7 @@
               },
               "external_links": {
                 "type": "array",
-                "description": "Resolved external links (AirNav, AOPA, etc.)",
+                "description": "Resolved external links (AirNav, FAA Weather, regional cameras, ForeFlight, etc.)",
                 "items": {
                   "type": "object",
                   "properties": {

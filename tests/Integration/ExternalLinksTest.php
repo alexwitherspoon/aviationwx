@@ -2,7 +2,7 @@
 /**
  * External Links Validation Tests
  * 
- * Tests that external links (AirNav, AOPA, FAA Weather, ForeFlight) are:
+ * Tests that external links (AirNav, FAA Weather, ForeFlight) are:
  * - Generating correct URL formats
  * - Supporting manual overrides
  * - Reachable (returning valid HTTP status codes)
@@ -76,35 +76,6 @@ class ExternalLinksTest extends TestCase
             $this->assertTrue(
                 $result['valid'],
                 "AirNav URL for {$identifier} should be valid: {$result['message']}"
-            );
-        }
-    }
-    
-    /**
-     * Test AOPA URLs are valid and reachable (US airports only, or manual override)
-     */
-    public function testAOPALinks_AreValid()
-    {
-        foreach ($this->testAirports as $airportId => $airport) {
-            $region = getAviationRegionFromAirport($airport);
-            if (empty($airport['aopa_url']) && $region !== 'US') {
-                continue; // AOPA only shown for US airports
-            }
-            if (!empty($airport['aopa_url'])) {
-                $url = $airport['aopa_url'];
-            } else {
-                $linkIdentifier = getBestIdentifierForLinks($airport);
-                if ($linkIdentifier === null) {
-                    $this->markTestIncomplete("No identifier available for AOPA URL: $airportId");
-                    continue;
-                }
-                $url = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
-            }
-            $result = $this->validateUrl($url, 'aopa.org');
-            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
-            $this->assertTrue(
-                $result['valid'],
-                "AOPA URL for {$identifier} should be valid: {$result['message']}"
             );
         }
     }
@@ -275,18 +246,6 @@ class ExternalLinksTest extends TestCase
         foreach ($this->testAirports as $airportId => $airport) {
             $linkIdentifier = getBestIdentifierForLinks($airport);
             $region = getAviationRegionFromAirport($airport);
-            
-            // Test AOPA format (US only, or override)
-            if ($linkIdentifier !== null && ($region === 'US' || !empty($airport['aopa_url']))) {
-                $aopaUrl = !empty($airport['aopa_url']) 
-                    ? $airport['aopa_url'] 
-                    : "https://www.aopa.org/destinations/airports/$linkIdentifier";
-                $this->assertMatchesRegularExpression(
-                    '/^https:\/\/www\.aopa\.org\/destinations\/airports\/[A-Z0-9]+$/',
-                    $aopaUrl,
-                    "AOPA URL format should match expected pattern for {$linkIdentifier}"
-                );
-            }
             
             // Test FAA Weather format (US only, or override)
             if ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])

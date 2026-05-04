@@ -128,8 +128,8 @@ function generateWebSiteSchema() {
  *
  * Creates Schema.org Airport structured data for airport pages.
  * Uses the specific Airport type (better than generic LocalBusiness) with
- * aviation-specific properties like icaoCode, iataCode, and sameAs links
- * to authoritative aviation databases.
+ * aviation-specific properties like icaoCode, iataCode, and a sameAs URL
+ * for the airport on AirNav (primary identifier).
  *
  * PostalAddress is omitted when the configured address is GPS-style text
  * (addressLooksLikeGpsCoordinates); location is expressed with GeoCoordinates only.
@@ -177,14 +177,9 @@ function generateAirportSchema($airport, $airportId) {
         $schema['iataCode'] = $airport['iata'];
     }
     
-    // Build sameAs links to authoritative aviation databases
+    // sameAs: AirNav (works with ICAO, FAA LID, or other primary identifier)
     $sameAs = [];
-    // AirNav works with any identifier (ICAO, FAA LID, etc.)
     $sameAs[] = 'https://www.airnav.com/airport/' . $primaryIdentifier;
-    // AOPA works best with ICAO codes
-    if (!empty($airport['icao'])) {
-        $sameAs[] = 'https://www.aopa.org/destinations/airports/' . $airport['icao'];
-    }
     $schema['sameAs'] = $sameAs;
     
     $addr = isset($airport['address']) ? trim((string) $airport['address']) : '';
