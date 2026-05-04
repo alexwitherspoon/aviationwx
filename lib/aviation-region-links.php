@@ -82,7 +82,8 @@ function aviationLinkRegionFromIso(?string $iso): string
 
 /**
  * Built-in link definitions for a region (order preserved). Each item: id, label, and either
- * static url or type for programmatic URLs.
+ * static url or type for programmatic URLs. The unknown region lists override slots only (no
+ * type/url); built-in URLs are never auto-generated there.
  *
  * @param string $regionId Region id from aviationLinkRegionFromIso()
  * @return list<array{id: string, label: string, url?: string, type?: string}>
@@ -141,7 +142,13 @@ function aviationRegionBuiltinLinkDefinitions(string $regionId): array
             ['id' => 'skyvector', 'label' => 'SkyVector', 'type' => 'skyvector'],
             ['id' => 'foreflight', 'label' => 'ForeFlight', 'type' => 'foreflight'],
         ],
-        AVIATION_LINK_REGION_UNKNOWN => [],
+        // Override slots only (no type/url): auto links are suppressed in aviationRegionResolveBuiltinExternalLinks().
+        AVIATION_LINK_REGION_UNKNOWN => [
+            ['id' => 'airnav', 'label' => 'AirNav'],
+            ['id' => 'faa_weather', 'label' => 'FAA Weather'],
+            ['id' => 'regional_weather', 'label' => 'Regional weather'],
+            ['id' => 'foreflight', 'label' => 'ForeFlight'],
+        ],
     ];
     return $profiles[$regionId] ?? [];
 }

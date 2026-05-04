@@ -83,4 +83,15 @@ class AviationRegionLinksTest extends TestCase
         $this->assertSame('AirNav', $links[0]['label']);
         $this->assertSame('https://example.com/nav', $links[0]['url']);
     }
+
+    public function testResolveUnknownRegionNoOverridesYieldsNoBuiltins(): void
+    {
+        $airport = [
+            'icao' => 'EGLL',
+            'lat' => 51.47,
+            'lon' => -0.45,
+        ];
+        $links = aviationRegionResolveBuiltinExternalLinks($airport, AVIATION_LINK_REGION_UNKNOWN, 'EGLL');
+        $this->assertSame([], $links);
+    }
 }
