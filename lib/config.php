@@ -2263,17 +2263,19 @@ function getBestIdentifierForLinks(array $airport): ?string {
 }
 
 /**
- * Infer aviation region from ICAO code for link display.
+ * Infer ISO 3166-1 alpha-2 from ICAO letter scheme only (no link profiles).
  *
- * Used to show region-appropriate external links (e.g., FAA Weather for US,
- * NAV Canada Weather for Canada). ICAO prefixes follow geographic structure.
+ * Used when `iso_country` is absent so effective country can fall back to K/C/Y-style
+ * prefixes. This is not {@see getAviationRegionFromAirport()}; link regions come from
+ * {@see aviationLinkRegionFromIso()} after the full effective ISO pipeline.
  *
  * @param string|null $icao ICAO code (e.g., KSPB, CYAV, EGLL)
- * @return string 'US'|'CA'|'AU'|'default'
+ * @return string|null Uppercase US, CA, AU when the prefix convention matches, otherwise null
  */
-function getAviationRegionFromIcao(?string $icao): string {
-    if (empty($icao)) {
-        return 'default';
+function inferIso3166Alpha2FromIcaoPrefix(?string $icao): ?string
+{
+    if ($icao === null || trim($icao) === '') {
+        return null;
     }
     $icao = strtoupper(trim($icao));
     $first = $icao[0] ?? '';
@@ -2283,7 +2285,7 @@ function getAviationRegionFromIcao(?string $icao): string {
         return 'US';
     }
     if (in_array($prefix2, ['PA', 'PH', 'PG', 'PM', 'PW'], true)) {
-        return 'US'; // Alaska, Hawaii, US Pacific
+        return 'US';
     }
     if ($first === 'C') {
         return 'CA';
@@ -2291,13 +2293,14 @@ function getAviationRegionFromIcao(?string $icao): string {
     if ($first === 'Y') {
         return 'AU';
     }
-    return 'default';
+
+    return null;
 }
 
 /**
  * Effective ISO 3166-1 alpha-2 country for an airport (operator override through geometry and address).
  *
- * Precedence: optional `iso_country` in config → ICAO-derived region as ISO → FAA (US) →
+ * Precedence: optional `iso_country` in config → ICAO prefix inference ({@see inferIso3166Alpha2FromIcaoPrefix()}) → FAA (US) →
  * scheduler geometry aggregate (`_country_resolution_geo_iso`) → US/CA from address → null.
  *
  * @param array<string, mixed> $airport Airport configuration (may include merged `_country_resolution_geo_iso`)
@@ -2311,14 +2314,9 @@ function getEffectiveIso3166Alpha2ForAirport(array $airport): ?string {
         }
     }
 
-    $icaoRegion = getAviationRegionFromIcao($airport['icao'] ?? null);
-    if ($icaoRegion !== 'default') {
-        return match ($icaoRegion) {
-            'US' => 'US',
-            'CA' => 'CA',
-            'AU' => 'AU',
-            default => null,
-        };
+    $fromIcaoPrefix = inferIso3166Alpha2FromIcaoPrefix($airport['icao'] ?? null);
+    if ($fromIcaoPrefix !== null) {
+        return $fromIcaoPrefix;
     }
 
     if (!empty($airport['faa']) && is_string($airport['faa'])) {

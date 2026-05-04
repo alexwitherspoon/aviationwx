@@ -81,18 +81,15 @@ function aviationLinkRegionFromIso(?string $iso): string
 }
 
 /**
- * Built-in link definitions for a region (order preserved). Each item: id, label, and either
- * static url or type for programmatic URLs. The unknown region lists override slots only (no
- * type/url); built-in URLs are never auto-generated there.
+ * Built-in link profile map keyed by link-region id (single source for definitions and URL audits).
  *
- * @param string $regionId Region id from aviationLinkRegionFromIso()
- * @return list<array{id: string, label: string, url?: string, type?: string}>
+ * @return array<string, list<array{id: string, label: string, url?: string, type?: string}>>
  */
-function aviationRegionBuiltinLinkDefinitions(string $regionId): array
+function aviationRegionBuiltinProfilesMap(): array
 {
     static $profiles = null;
     if ($profiles !== null) {
-        return $profiles[$regionId] ?? [];
+        return $profiles;
     }
     $profiles = [
         'us' => [
@@ -150,7 +147,73 @@ function aviationRegionBuiltinLinkDefinitions(string $regionId): array
             ['id' => 'foreflight', 'label' => 'ForeFlight'],
         ],
     ];
-    return $profiles[$regionId] ?? [];
+
+    return $profiles;
+}
+
+/**
+ * Built-in link definitions for a region (order preserved). Each item: id, label, and either
+ * static url or type for programmatic URLs. The unknown region lists override slots only (no
+ * type/url); built-in URLs are never auto-generated there.
+ *
+ * @param string $regionId Region id from aviationLinkRegionFromIso()
+ * @return list<array{id: string, label: string, url?: string, type?: string}>
+ */
+function aviationRegionBuiltinLinkDefinitions(string $regionId): array
+{
+    return aviationRegionBuiltinProfilesMap()[$regionId] ?? [];
+}
+
+/**
+ * HTTPS URLs to verify on a schedule (static profile entries plus representative programmatic URLs).
+ *
+ * Covers third-party regional pages, AirNav and SkyVector URL shapes, FAA Weather Cams map links,
+ * and the meteoblue path built by {@see aviationRegionMeteoblueCurrentUrl()}. Non-HTTP ForeFlight
+ * URIs are intentionally omitted.
+ *
+ * @return list<string>
+ */
+function aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck(): array
+{
+    $seen = [];
+    $out = [];
+    $add = static function (string $u) use (&$seen, &$out): void {
+        if ($u === '' || !str_starts_with($u, 'https://')) {
+            return;
+        }
+        if (isset($seen[$u])) {
+            return;
+        }
+        $seen[$u] = true;
+        $out[] = $u;
+    };
+
+    foreach (aviationRegionBuiltinProfilesMap() as $defs) {
+        foreach ($defs as $def) {
+            $u = $def['url'] ?? '';
+            if (is_string($u)) {
+                $add($u);
+            }
+        }
+    }
+
+    $add(aviationRegionMeteoblueCurrentUrl(48.3538, 11.7861));
+
+    $airnav = aviationRegionResolveBuiltinLinkUrl(['id' => 'x', 'label' => 'y', 'type' => 'airnav'], [], 'KSEA');
+    if (is_string($airnav)) {
+        $add($airnav);
+    }
+    $skyvector = aviationRegionResolveBuiltinLinkUrl(['id' => 'x', 'label' => 'y', 'type' => 'skyvector'], [], 'CYVR');
+    if (is_string($skyvector)) {
+        $add($skyvector);
+    }
+    $faaAirport = ['lat' => 45.77, 'lon' => -122.86];
+    $faa = aviationRegionResolveBuiltinLinkUrl(['id' => 'x', 'label' => 'y', 'type' => 'faa_weather_cams'], $faaAirport, 'KSPB');
+    if (is_string($faa)) {
+        $add($faa);
+    }
+
+    return $out;
 }
 
 /**
@@ -175,7 +238,7 @@ function aviationRegionMeteoblueCurrentUrl(float $lat, float $lon): string
  *
  * @param array{id: string, label: string, url?: string, type?: string} $def
  * @param array<string, mixed> $airport
- * @return string|null Absolute URL or null
+ * @return string|null Resolved target: https URL, static `url` field, `foreflightmobile:` URI for ForeFlight, or null when inputs are insufficient
  */
 function aviationRegionResolveBuiltinLinkUrl(array $def, array $airport, ?string $linkIdentifier): ?string
 {
@@ -239,6 +302,8 @@ function aviationRegionResolveBuiltinLinkUrl(array $def, array $airport, ?string
  * Override URL for a built-in link id from airport config, if set.
  *
  * @param array<string, mixed> $airport
+ * @param string $linkId Built-in row id (airnav, faa_weather, foreflight, regional_weather)
+ * @return string|null Override URL or null
  */
 function aviationRegionBuiltinLinkOverrideUrl(array $airport, string $linkId): ?string
 {

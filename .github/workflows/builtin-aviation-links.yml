@@ -1,0 +1,45 @@
+name: Built-in aviation link URLs
+
+run-name: "Built-in aviation URLs (${{ github.event_name }})"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/aviation-region-links.php'
+      - 'scripts/check-builtin-aviation-links.php'
+      - '.github/workflows/builtin-aviation-links.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/aviation-region-links.php'
+      - 'scripts/check-builtin-aviation-links.php'
+      - '.github/workflows/builtin-aviation-links.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: builtin-aviation-links-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: HTTPS HEAD probe (built-in regional links)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl
+          coverage: none
+
+      - name: Probe URLs from lib/aviation-region-links.php
+        run: php scripts/check-builtin-aviation-links.php

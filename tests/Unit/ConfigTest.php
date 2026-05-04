@@ -453,55 +453,55 @@ class ConfigTest extends TestCase {
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns US for K prefix
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns US for K prefix
      */
-    public function testGetAviationRegionFromIcao_ReturnsUsForKPrefix(): void {
-        $this->assertSame('US', getAviationRegionFromIcao('KSPB'));
-        $this->assertSame('US', getAviationRegionFromIcao('KDEN'));
-        $this->assertSame('US', getAviationRegionFromIcao('ksea'));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsUsForKPrefix(): void {
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('KSPB'));
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('KDEN'));
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('ksea'));
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns US for Pacific prefixes
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns US for Pacific prefixes
      */
-    public function testGetAviationRegionFromIcao_ReturnsUsForPacificPrefixes(): void {
-        $this->assertSame('US', getAviationRegionFromIcao('PANC'));
-        $this->assertSame('US', getAviationRegionFromIcao('PHNL'));
-        $this->assertSame('US', getAviationRegionFromIcao('PGUM'));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsUsForPacificPrefixes(): void {
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('PANC'));
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('PHNL'));
+        $this->assertSame('US', inferIso3166Alpha2FromIcaoPrefix('PGUM'));
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns CA for Canadian prefix
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns CA for Canadian prefix
      */
-    public function testGetAviationRegionFromIcao_ReturnsCaForCanadianPrefix(): void {
-        $this->assertSame('CA', getAviationRegionFromIcao('CYAV'));
-        $this->assertSame('CA', getAviationRegionFromIcao('CYVR'));
-        $this->assertSame('CA', getAviationRegionFromIcao('cyav'));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsCaForCanadianPrefix(): void {
+        $this->assertSame('CA', inferIso3166Alpha2FromIcaoPrefix('CYAV'));
+        $this->assertSame('CA', inferIso3166Alpha2FromIcaoPrefix('CYVR'));
+        $this->assertSame('CA', inferIso3166Alpha2FromIcaoPrefix('cyav'));
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns AU for Australian prefix
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns AU for Australian prefix
      */
-    public function testGetAviationRegionFromIcao_ReturnsAuForAustralianPrefix(): void {
-        $this->assertSame('AU', getAviationRegionFromIcao('YSSY'));
-        $this->assertSame('AU', getAviationRegionFromIcao('YMEL'));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsAuForAustralianPrefix(): void {
+        $this->assertSame('AU', inferIso3166Alpha2FromIcaoPrefix('YSSY'));
+        $this->assertSame('AU', inferIso3166Alpha2FromIcaoPrefix('YMEL'));
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns default for other regions
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns null for other regions
      */
-    public function testGetAviationRegionFromIcao_ReturnsDefaultForOtherRegions(): void {
-        $this->assertSame('default', getAviationRegionFromIcao('EGLL'));
-        $this->assertSame('default', getAviationRegionFromIcao('LFPG'));
-        $this->assertSame('default', getAviationRegionFromIcao('NZWN'));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsNullForOtherRegions(): void {
+        $this->assertNull(inferIso3166Alpha2FromIcaoPrefix('EGLL'));
+        $this->assertNull(inferIso3166Alpha2FromIcaoPrefix('LFPG'));
+        $this->assertNull(inferIso3166Alpha2FromIcaoPrefix('NZWN'));
     }
 
     /**
-     * Test getAviationRegionFromIcao() returns default for null/empty
+     * Test inferIso3166Alpha2FromIcaoPrefix() returns null for null/empty
      */
-    public function testGetAviationRegionFromIcao_ReturnsDefaultForNullOrEmpty(): void {
-        $this->assertSame('default', getAviationRegionFromIcao(null));
-        $this->assertSame('default', getAviationRegionFromIcao(''));
+    public function testInferIso3166Alpha2FromIcaoPrefix_ReturnsNullForNullOrEmpty(): void {
+        $this->assertNull(inferIso3166Alpha2FromIcaoPrefix(null));
+        $this->assertNull(inferIso3166Alpha2FromIcaoPrefix(''));
     }
 
     /**

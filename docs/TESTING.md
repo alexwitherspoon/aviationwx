@@ -37,6 +37,21 @@ make test-ci
 
 **Real Example**: A syntax error (unmatched brace) in `process-push-webcams.php` passed `make test` locally because no tests load that script, but failed in GitHub CI which runs syntax validation on all files.
 
+## Scheduled link checks (GitHub Actions)
+
+These jobs use the network and are **not** part of `make test-ci` (tests stay deterministic without outbound calls):
+
+| Workflow | What it checks |
+|----------|----------------|
+| [`.github/workflows/weekly-link-check.yml`](../.github/workflows/weekly-link-check.yml) | Production dashboard URLs via `scripts/link-check.php`, then built-in aviation HTTPS targets via `scripts/check-builtin-aviation-links.php` (static regional links in `lib/aviation-region-links.php`, plus sample AirNav, SkyVector, FAA Weather Cams, and meteoblue path URLs from `aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck()`). |
+| [`.github/workflows/builtin-aviation-links.yml`](../.github/workflows/builtin-aviation-links.yml) | Same PHP probe on pull requests and pushes to `main` when `lib/aviation-region-links.php` or the script changes. |
+
+Local manual run (needs outbound HTTPS):
+
+```bash
+php scripts/check-builtin-aviation-links.php
+```
+
 ## Isolated Test Environment
 
 The test environment runs in a separate Docker container that is completely isolated from development:

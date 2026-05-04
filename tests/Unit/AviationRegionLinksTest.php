@@ -94,4 +94,18 @@ class AviationRegionLinksTest extends TestCase
         $links = aviationRegionResolveBuiltinExternalLinks($airport, AVIATION_LINK_REGION_UNKNOWN, 'EGLL');
         $this->assertSame([], $links);
     }
+
+    public function testBuiltinHttpsUrlsForHealthCheck_IncludesStaticRegionalAndProgrammaticPatterns(): void
+    {
+        $urls = aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck();
+        $flat = implode("\n", $urls);
+        $this->assertGreaterThan(8, count($urls), 'expected multiple unique HTTPS targets');
+        $this->assertStringContainsString('plan.navcanada.ca', $flat);
+        $this->assertStringContainsString('metoffice.gov.uk/aviation', $flat);
+        $this->assertStringContainsString('eurocontrol.int', $flat);
+        $this->assertStringContainsString('www.meteoblue.com/en/weather/today/', $flat);
+        $this->assertStringContainsString('www.airnav.com/airport/', $flat);
+        $this->assertStringContainsString('skyvector.com/airport/', $flat);
+        $this->assertStringContainsString('weathercams.faa.gov/map/', $flat);
+    }
 }
