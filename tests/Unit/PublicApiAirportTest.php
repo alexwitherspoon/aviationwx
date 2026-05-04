@@ -174,6 +174,8 @@ class PublicApiAirportTest extends TestCase
 
         $labels = array_column($formatted['external_links'], 'label');
         $this->assertContains('NAV Canada Weather', $labels);
+        $this->assertContains('SkyVector', $labels);
+        $this->assertContains('ForeFlight', $labels);
     }
 
     public function testFormatAirportDetails_AirportWithoutPartnersReturnsEmptyArray(): void

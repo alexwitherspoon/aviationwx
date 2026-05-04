@@ -115,12 +115,12 @@ All configuration lives in a single `airports.json` file with two sections:
 | `links` | `[]` | Custom external links (Public API `GET /v1/airports/{id}` returns these as `custom_links`; built-in links are `external_links`). |
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
-| `faa_weather_url` | auto | Override FAA Weather link (US airports only by default) |
-| `regional_weather_url` | — | Override or add regional weather camera link (Canada, Australia, or custom) |
+| `faa_weather_url` | auto | Override FAA Weather link (US link bundle only) |
+| `regional_weather_url` | — | Override the primary built-in regional authority URL for that airport's link region |
 | `regional_weather_label` | — | Label for regional weather link (e.g., "NAV Canada WxCam") |
 | `foreflight_url` | auto | Override ForeFlight link |
 
-**Regional link behavior:** Built-in AirNav, FAA Weather (US), NAV Canada / Airservices regional links, and ForeFlight are emitted only when effective country resolves to a supported aviation region (US, Canada, Australia, or US territories treated as US). Precedence for effective country: optional `iso_country` → ICAO prefix → FAA LID (implies US) → merged geometry aggregate in `airport_country_resolution.json` when that file exists and its `config_sha256` matches the current `airports.json` (otherwise the merge is skipped) → US or Canada from `address` parsing. When none of these yield a supported region, auto-generated standard links are omitted; explicit URL overrides (`airnav_url`, `faa_weather_url`, `regional_weather_url`, `foreflight_url`) and custom `links` still appear. Use `regional_weather_url` to point at a specific regional camera site when needed. The scheduler rebuilds that aggregate when `airports.json` changes (SHA mismatch), the file is missing or invalid, or the file is older than the configured max age (30 days by default), so geometry-derived hints stay aligned with policy without recomputing every day.
+**Regional link behavior:** Built-in external links use a **data-driven profile** per link region derived from effective country (ISO 3166-1 alpha-2): optional `iso_country` → ICAO prefix (K/C/Y hints) → FAA LID (implies US) → merged geometry aggregate in `airport_country_resolution.json` when `config_sha256` matches (otherwise merge skipped) → US or Canada from `address` parsing. First-pass regions include **us** (no SkyVector in profile; AirNav agreement), **ca**, **au**, **nz**, **gb**, **eu** (EU members, EEA, CH, and listed microstates), **mx**, **br**, **jp**, with US territories grouped under **us**. When the region is **unknown**, only explicit overrides (`airnav_url`, `faa_weather_url`, `regional_weather_url`, `foreflight_url`) produce built-ins; use custom `links` for anything else. The scheduler rebuilds the geometry aggregate when `airports.json` changes, the aggregate is missing or invalid, or it is older than the configured max age (30 days by default).
 
 ### Radio frequencies
 

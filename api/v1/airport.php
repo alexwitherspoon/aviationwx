@@ -61,8 +61,8 @@ function handleGetAirport(array $params, array $context): void
  * Format airport data for detailed response
  * 
  * Mirrors data displayed on the airport dashboard for API parity.
- * Uses existing config helpers (getBestIdentifierForLinks, getAviationRegionFromAirport,
- * getRegionalWeatherLinkForAirport) - no additional I/O, minimal CPU cost.
+ * Uses existing config helpers (getBestIdentifierForLinks, airportExternalLinksBuildResolvedList)
+ * only; no additional I/O, minimal CPU cost.
  * 
  * @param string $airportId Airport ID
  * @param array $airport Airport configuration

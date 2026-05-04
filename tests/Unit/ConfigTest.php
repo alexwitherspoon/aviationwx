@@ -536,7 +536,7 @@ class ConfigTest extends TestCase {
     }
 
     /**
-     * Test getRegionalWeatherLinkForAirport() returns null for default region
+     * Test getRegionalWeatherLinkForAirport() returns null for unknown link region
      */
     public function testGetRegionalWeatherLinkForAirport_DefaultRegion_ReturnsNull(): void {
         $airport = ['icao' => 'EGLL', 'name' => 'London Heathrow'];
@@ -575,7 +575,7 @@ class ConfigTest extends TestCase {
      */
     public function testGetAviationRegionFromAirport_FaaLidOnly_ReturnsUs(): void {
         $airport = ['faa' => '7S5', 'lat' => 44.87, 'lon' => -123.20, 'address' => 'Independence, OR, 97351'];
-        $this->assertSame('US', getAviationRegionFromAirport($airport));
+        $this->assertSame('us', getAviationRegionFromAirport($airport));
     }
 
     /**
@@ -583,7 +583,7 @@ class ConfigTest extends TestCase {
      */
     public function testGetAviationRegionFromAirport_CoordinatesOnly_Canada_ReturnsCa(): void {
         $airport = ['lat' => 50.06, 'lon' => -97.03, 'address' => 'Winnipeg, MB'];
-        $this->assertSame('CA', getAviationRegionFromAirport($airport));
+        $this->assertSame('ca', getAviationRegionFromAirport($airport));
     }
 
     /**
@@ -591,7 +591,7 @@ class ConfigTest extends TestCase {
      */
     public function testGetAviationRegionFromAirport_AddressOnly_UsState_ReturnsUs(): void {
         $airport = ['address' => '123 Main St, Independence, OR, 97351'];
-        $this->assertSame('US', getAviationRegionFromAirport($airport));
+        $this->assertSame('us', getAviationRegionFromAirport($airport));
     }
 
     /**
@@ -599,7 +599,7 @@ class ConfigTest extends TestCase {
      */
     public function testGetAviationRegionFromAirport_IcaoTakesPrecedence(): void {
         $airport = ['icao' => 'CYAV', 'faa' => 'YAV', 'lat' => 50.06, 'lon' => -97.03];
-        $this->assertSame('CA', getAviationRegionFromAirport($airport));
+        $this->assertSame('ca', getAviationRegionFromAirport($airport));
     }
 
     /**

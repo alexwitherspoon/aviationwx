@@ -9,6 +9,7 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/airport-identifiers.php';
 require_once __DIR__ . '/country-resolution.php';
+require_once __DIR__ . '/aviation-region-links.php';
 
 /**
  * Shared Configuration Utilities
@@ -2294,32 +2295,6 @@ function getAviationRegionFromIcao(?string $icao): string {
 }
 
 /**
- * Map ISO 3166-1 alpha-2 to aviation link bucket (US / CA / AU / default).
- *
- * US-affiliated territories used for FAA-style links are grouped with US.
- *
- * @param string|null $iso Uppercase alpha-2 or null when unknown
- * @return string 'US'|'CA'|'AU'|'default'
- */
-function aviationRegionBucketFromIsoAlpha2(?string $iso): string {
-    if ($iso === null || $iso === '') {
-        return 'default';
-    }
-    $iso = strtoupper($iso);
-    $usFamily = ['US', 'AS', 'GU', 'MP', 'PR', 'VI', 'UM'];
-    if (in_array($iso, $usFamily, true)) {
-        return 'US';
-    }
-    if ($iso === 'CA') {
-        return 'CA';
-    }
-    if ($iso === 'AU') {
-        return 'AU';
-    }
-    return 'default';
-}
-
-/**
  * Effective ISO 3166-1 alpha-2 country for an airport (operator override through geometry and address).
  *
  * Precedence: optional `iso_country` in config → ICAO-derived region as ISO → FAA (US) →
@@ -2378,114 +2353,54 @@ function getEffectiveIso3166Alpha2ForAirport(array $airport): ?string {
 }
 
 /**
- * Infer aviation region from full airport config (ICAO, FAA, geometry aggregate, address).
+ * Infer aviation link region from full airport config (effective ISO maps to a link bundle id).
  *
- * Uses getEffectiveIso3166Alpha2ForAirport() then maps to US / CA / AU / default for link selection.
+ * Uses getEffectiveIso3166Alpha2ForAirport() then {@see aviationLinkRegionFromIso()} (e.g. us, ca, eu, unknown).
  *
  * @param array<string, mixed> $airport Airport config with icao, faa, lat, lon, address, optional iso_country and merged geometry ISO
- * @return string 'US'|'CA'|'AU'|'default'
+ * @return string Region id such as us, ca, au, eu, or AVIATION_LINK_REGION_UNKNOWN
  */
-function getAviationRegionFromAirport(array $airport): string {
-    return aviationRegionBucketFromIsoAlpha2(getEffectiveIso3166Alpha2ForAirport($airport));
+function getAviationRegionFromAirport(array $airport): string
+{
+    return aviationLinkRegionFromIso(getEffectiveIso3166Alpha2ForAirport($airport));
 }
 
 /**
  * Get regional weather link for airport dashboard.
  *
- * Returns URL and label for region-appropriate weather resource (Canada, Australia)
- * or manual override. Used for external link display on airport pages.
+ * Returns the primary built-in regional authority URL for the link row, or a manual override.
  *
- * @param array $airport Airport config with optional icao, regional_weather_url, regional_weather_label
+ * @param array<string, mixed> $airport Airport config with optional regional_weather_url, regional_weather_label
  * @return array{url: string, label: string}|null Link data or null if no regional link applies
  */
-function getRegionalWeatherLinkForAirport(array $airport): ?array {
-    if (!empty($airport['regional_weather_url'])) {
+function getRegionalWeatherLinkForAirport(array $airport): ?array
+{
+    if (!empty($airport['regional_weather_url']) && is_string($airport['regional_weather_url'])) {
         return [
             'url' => $airport['regional_weather_url'],
-            'label' => $airport['regional_weather_label'] ?? 'Weather Cams',
+            'label' => aviationRegionRegionalWeatherOverrideLabel($airport),
         ];
     }
-    $region = getAviationRegionFromAirport($airport);
-    if ($region === 'CA') {
-        return [
-            'url' => 'https://plan.navcanada.ca/wxrecall/',
-            'label' => 'NAV Canada Weather',
-        ];
-    }
-    if ($region === 'AU') {
-        return [
-            'url' => 'https://weathercams.airservicesaustralia.com/',
-            'label' => 'Airservices Weather Cams',
-        ];
-    }
-    return null;
+    $iso = getEffectiveIso3166Alpha2ForAirport($airport);
+
+    return aviationRegionBuiltInRegionalWeatherSlot(aviationLinkRegionFromIso($iso));
 }
 
 /**
- * Built-in external links (AirNav, FAA Weather, regional, ForeFlight) for dashboard and Public API.
+ * Built-in external links for dashboard and Public API (data-driven by link region).
  *
- * When aviation region is `default`, auto-generated standard links are suppressed; explicit URL
- * overrides and `regional_weather_url` still apply. Custom `links` are rendered separately by callers.
+ * When the region is unknown, only explicit URL overrides apply. Custom `links` are separate.
  *
  * @param array<string, mixed> $airport Airport configuration
  * @return list<array{label: string, url: string}>
  */
 function airportExternalLinksBuildResolvedList(array $airport): array
 {
-    $links = [];
     $linkIdentifier = getBestIdentifierForLinks($airport);
-    $aviationRegion = getAviationRegionFromAirport($airport);
-    $autoAllowed = ($aviationRegion !== 'default');
+    $iso = getEffectiveIso3166Alpha2ForAirport($airport);
+    $regionId = aviationLinkRegionFromIso($iso);
 
-    $airnavUrl = null;
-    if (!empty($airport['airnav_url'])) {
-        $airnavUrl = $airport['airnav_url'];
-    } elseif ($autoAllowed && $linkIdentifier !== null) {
-        $airnavUrl = 'https://www.airnav.com/airport/' . $linkIdentifier;
-    }
-    if ($airnavUrl !== null) {
-        $links[] = ['label' => 'AirNav', 'url' => $airnavUrl];
-    }
-
-    $faaWeatherUrl = null;
-    if (!empty($airport['faa_weather_url'])) {
-        $faaWeatherUrl = $airport['faa_weather_url'];
-    } elseif ($autoAllowed && $aviationRegion === 'US' && $linkIdentifier !== null && isset($airport['lat']) && isset($airport['lon'])) {
-        $buffer = 2.0;
-        $minLon = (float) $airport['lon'] - $buffer;
-        $minLat = (float) $airport['lat'] - $buffer;
-        $maxLon = (float) $airport['lon'] + $buffer;
-        $maxLat = (float) $airport['lat'] + $buffer;
-        $faaId = preg_replace('/^K/', '', $linkIdentifier);
-        $faaWeatherUrl = sprintf(
-            'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-            $minLon,
-            $minLat,
-            $maxLon,
-            $maxLat,
-            $faaId
-        );
-    }
-    if ($faaWeatherUrl !== null) {
-        $links[] = ['label' => 'FAA Weather', 'url' => $faaWeatherUrl];
-    }
-
-    $regionalLink = getRegionalWeatherLinkForAirport($airport);
-    if ($regionalLink !== null) {
-        $links[] = ['label' => $regionalLink['label'], 'url' => $regionalLink['url']];
-    }
-
-    $foreflightUrl = null;
-    if (!empty($airport['foreflight_url'])) {
-        $foreflightUrl = $airport['foreflight_url'];
-    } elseif ($autoAllowed && $linkIdentifier !== null) {
-        $foreflightUrl = 'foreflightmobile://maps/search?q=' . rawurlencode($linkIdentifier);
-    }
-    if ($foreflightUrl !== null) {
-        $links[] = ['label' => 'ForeFlight', 'url' => $foreflightUrl];
-    }
-
-    return $links;
+    return aviationRegionResolveBuiltinExternalLinks($airport, $regionId, $linkIdentifier);
 }
 
 /**
