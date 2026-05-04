@@ -382,7 +382,7 @@ curl https://aviationwx.org/health.php
 curl https://aviationwx.org/diagnostics.php
 ```
 
-**Public API v1 (nginx):** Committed `docker/nginx.conf` defines HTTP 301 redirects from legacy `/api/v1/` paths to the canonical API host. Production should keep redirect targets aligned with `config.public_api.canonical_base_url` when set; deployment may generate or install nginx configuration from deployment `airports.json` (nginx does not read JSON at request time).
+**Public API v1 (nginx):** Committed `docker/nginx.conf` includes `/api/v1/` redirect rules toward the default canonical API base. Production should keep redirect targets aligned with `config.public_api.canonical_base_url` when set; deployment may generate or install nginx configuration from deployment `airports.json` (nginx does not read JSON at request time).
 
 ### 5. Scheduler Daemon (Automatic)
 

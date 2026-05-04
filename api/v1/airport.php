@@ -5,7 +5,7 @@
  * GET /v1/airports/{id}
  * 
  * Returns detailed metadata for a single airport including
- * runways, frequencies, services, access info, and external links.
+ * runways, frequencies, services, access info, custom_links, external_links, and related fields.
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -66,7 +66,8 @@ function handleGetAirport(array $params, array $context): void
  * 
  * @param string $airportId Airport ID
  * @param array $airport Airport configuration
- * @return array Formatted airport details
+ * @return array<string, mixed> Formatted airport detail payload. Operator-defined URLs from
+ *         config `links` appear as `custom_links`; built-in resolved URLs as `external_links`.
  */
 function formatAirportDetails(string $airportId, array $airport): array
 {
@@ -159,9 +160,9 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['partners'] = [];
     }
 
-    // Custom links from config
+    // Config key is links[]; API uses custom_links[] to distinguish from external_links[].
     if (isset($airport['links']) && is_array($airport['links'])) {
-        $formatted['links'] = array_values(array_filter(array_map(function ($link) {
+        $formatted['custom_links'] = array_values(array_filter(array_map(function ($link) {
             if (!is_array($link) || empty($link['label']) || empty($link['url'])) {
                 return null;
             }
@@ -171,10 +172,10 @@ function formatAirportDetails(string $airportId, array $airport): array
             ];
         }, $airport['links'])));
     } else {
-        $formatted['links'] = [];
+        $formatted['custom_links'] = [];
     }
 
-    // Resolved external links (same logic as dashboard - AirNav, FAA Weather, etc.)
+    // Built-in link targets only (operator links are custom_links above).
     $formatted['external_links'] = buildResolvedExternalLinks($airport);
     
     // Add availability flags
@@ -186,11 +187,11 @@ function formatAirportDetails(string $airportId, array $airport): array
 }
 
 /**
- * Build resolved external link URLs for dashboard parity.
+ * Build resolved URLs for standard dashboard resources (not operator custom links).
  *
- * Matches the dashboard links section: AirNav, FAA Weather (US or override),
- * regional weather when applicable, ForeFlight. Per-airport custom links are
- * returned separately in the v1 airport detail payload under `links`.
+ * Order matches the built-in link row on the airport dashboard (AirNav, FAA Weather,
+ * regional when applicable, ForeFlight). Config `links` are exposed separately as
+ * `custom_links` in formatAirportDetails().
  *
  * Uses config helpers only (no network I/O).
  *

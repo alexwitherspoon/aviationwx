@@ -54,8 +54,6 @@ function getPublicApiVersion(): string
  * Optional `config.public_api.canonical_base_url` in `airports.json` overrides the default. Values must be absolute
  * `http://` or `https://` URLs; validation is in `validatePublicApiConfig()`. Otherwise returns DEFAULT_CANONICAL_PUBLIC_API_V1_BASE_URL.
  *
- * Production serves HTTP 301 for legacy `/api/v1/` paths on `aviationwx.org`, `*.aviationwx.org`,
- * `embed.aviationwx.org`, and `api.aviationwx.org` toward the canonical API host (`https://api.aviationwx.org/v1/...` by default).
  * The running vhost should stay aligned with `canonical_base_url` when set. Deployment may generate or install nginx
  * configuration from the same `airports.json` as the application. Committed `docker/nginx.conf` is the local Docker default; see `docs/LOCAL_SETUP.md`.
  *

@@ -111,7 +111,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `frequencies` | `{}` | Radio frequencies (see [Radio frequencies](#radio-frequencies)) |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
-| `links` | `[]` | Custom external links |
+| `links` | `[]` | Custom external links (Public API `GET /v1/airports/{id}` returns these as `custom_links`; built-in links are `external_links`). |
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
 | `faa_weather_url` | auto | Override FAA Weather link (US airports only by default) |
@@ -1321,7 +1321,7 @@ Logos are cached locally for 30 days. Text fallback if logo fails.
 
 ### Custom Links
 
-Appear after standard links (AirNav, FAA Weather, etc.):
+Appear in the dashboard link row after built-in links (AirNav, FAA Weather, regional, ForeFlight when shown). In the Public API, the same entries are returned under `custom_links` on `GET /v1/airports/{id}` (config file key remains `links`).
 
 ```json
 "links": [
@@ -1533,7 +1533,7 @@ When `config.public_api.enabled` is true, the Public API and weather history fea
 |--------|---------|-------------|
 | `canonical_base_url` | `https://api.aviationwx.org/v1` | Optional. Absolute `http://` or `https://` base URL for Public API v1 with no trailing slash. Used by `getCanonicalPublicApiV1BaseUrl()` and the API docs page. Omit to use this default. Set when your deployment’s public API origin differs (self-hosted). |
 
-**Nginx:** Legacy `/api/v1/` redirects must target the same host and path prefix as this value. The committed `docker/nginx.conf` uses the public default; production CD may render or push the vhost from deployment `airports.json` so nginx stays aligned with PHP (nginx does not read JSON at request time).
+**Nginx:** `/api/v1/` redirect rules (if present) must target the same host and path prefix as this value. The committed `docker/nginx.conf` uses the public default; production CD may render or push the vhost from deployment `airports.json` so nginx stays aligned with PHP (nginx does not read JSON at request time).
 
 ### Rate limits
 

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "AviationWX.org Public API",
-    "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.\n\nPublic deployment server URL: https://api.aviationwx.org/v1. Paths in this spec are relative to that base. Legacy /api/v1/ URLs on aviationwx.org, *.aviationwx.org, embed.aviationwx.org, and api.aviationwx.org receive HTTP 301 to this host. Optional config.public_api.canonical_base_url overrides the documented base for self-hosted installs.",
+    "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.\n\nPublic deployment server URL: https://api.aviationwx.org/v1. Paths in this spec are relative to that base. Optional config.public_api.canonical_base_url overrides the documented base for self-hosted installs.",
     "version": "1.0.0",
     "contact": {
       "name": "AviationWX.org",
@@ -72,7 +72,7 @@
     "/airports/{id}": {
       "get": {
         "summary": "Get airport details",
-        "description": "Returns detailed metadata for a single airport including runways, frequencies, and services.",
+        "description": "Returns detailed metadata for a single airport including runways, frequencies, services, custom_links, external_links, and related fields.",
         "operationId": "getAirport",
         "tags": ["Airports"],
         "parameters": [
@@ -838,9 +838,9 @@
                   }
                 }
               },
-              "links": {
+              "custom_links": {
                 "type": "array",
-                "description": "Custom links from airport config",
+                "description": "Operator-defined links from airport config (the `links` array in airports.json). Built-in resolved URLs are listed in `external_links`.",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -851,7 +851,7 @@
               },
               "external_links": {
                 "type": "array",
-                "description": "Resolved external links (AirNav, FAA Weather, regional cameras, ForeFlight, etc.)",
+                "description": "Built-in resolved links (AirNav, FAA Weather, regional cameras, ForeFlight, etc.)",
                 "items": {
                   "type": "object",
                   "properties": {
