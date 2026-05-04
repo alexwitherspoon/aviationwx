@@ -159,9 +159,9 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['partners'] = [];
     }
 
-    // Custom links from config
+    // Custom links from config (`links` in airports.json; `custom_links` in API for clarity)
     if (isset($airport['links']) && is_array($airport['links'])) {
-        $formatted['links'] = array_values(array_filter(array_map(function ($link) {
+        $formatted['custom_links'] = array_values(array_filter(array_map(function ($link) {
             if (!is_array($link) || empty($link['label']) || empty($link['url'])) {
                 return null;
             }
@@ -171,7 +171,7 @@ function formatAirportDetails(string $airportId, array $airport): array
             ];
         }, $airport['links'])));
     } else {
-        $formatted['links'] = [];
+        $formatted['custom_links'] = [];
     }
 
     // Resolved external links (same logic as dashboard - AirNav, FAA Weather, etc.)
@@ -190,7 +190,7 @@ function formatAirportDetails(string $airportId, array $airport): array
  *
  * Matches the dashboard links section: AirNav, FAA Weather (US or override),
  * regional weather when applicable, ForeFlight. Per-airport custom links are
- * returned separately in the v1 airport detail payload under `links`.
+ * returned separately in the v1 airport detail payload under `custom_links`.
  *
  * Uses config helpers only (no network I/O).
  *

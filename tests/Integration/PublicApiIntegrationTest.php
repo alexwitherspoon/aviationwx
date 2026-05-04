@@ -216,6 +216,30 @@ class PublicApiIntegrationTest extends TestCase
             );
         }
     }
+
+    /**
+     * GET /v1/airports/{id} uses custom_links (config links) and external_links (built-ins); not `links`.
+     */
+    public function testGetAirport_CustomLinksAndExternalLinksKeys(): void
+    {
+        $this->skipIfApiDisabled();
+
+        $response = $this->apiRequest('/airports/kspb');
+
+        if ($response['code'] !== 200) {
+            $this->markTestSkipped('Airport kspb not available (got ' . $response['code'] . ')');
+            return;
+        }
+
+        $airport = $response['json']['airport'] ?? null;
+        $this->assertNotNull($airport, 'Response should include airport');
+
+        $this->assertArrayHasKey('custom_links', $airport);
+        $this->assertArrayHasKey('external_links', $airport);
+        $this->assertIsArray($airport['custom_links']);
+        $this->assertIsArray($airport['external_links']);
+        $this->assertArrayNotHasKey('links', $airport, 'Legacy `links` key removed; use custom_links');
+    }
     
     /**
      * Unknown endpoint should return 404

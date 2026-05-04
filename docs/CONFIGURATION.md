@@ -111,7 +111,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `frequencies` | `{}` | Radio frequencies (see [Radio frequencies](#radio-frequencies)) |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
-| `links` | `[]` | Custom external links |
+| `links` | `[]` | Custom external links (Public API `GET /v1/airports/{id}` returns these as `custom_links`; built-in links are `external_links`). |
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
 | `faa_weather_url` | auto | Override FAA Weather link (US airports only by default) |

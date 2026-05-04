@@ -838,9 +838,9 @@
                   }
                 }
               },
-              "links": {
+              "custom_links": {
                 "type": "array",
-                "description": "Custom links from airport config",
+                "description": "Operator-defined links from airport config (the `links` array in airports.json). Distinct from `external_links`, which are built-in resolved URLs.",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -851,7 +851,7 @@
               },
               "external_links": {
                 "type": "array",
-                "description": "Resolved external links (AirNav, FAA Weather, regional cameras, ForeFlight, etc.)",
+                "description": "Built-in resolved links (AirNav, FAA Weather, regional cameras, ForeFlight, etc.)",
                 "items": {
                   "type": "object",
                   "properties": {

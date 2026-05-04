@@ -4,7 +4,7 @@
  *
  * Tests formatAirportDetails and buildResolvedExternalLinks to ensure
  * API response matches dashboard data (access_type, tower_status,
- * partners, links, external_links).
+ * partners, custom_links, external_links).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -108,11 +108,11 @@ class PublicApiAirportTest extends TestCase
         $airport = $this->getTestAirport('kspb');
         $formatted = formatAirportDetails('kspb', $airport);
 
-        $this->assertArrayHasKey('links', $formatted);
-        $this->assertIsArray($formatted['links']);
-        $this->assertCount(2, $formatted['links']);
-        $this->assertSame('Airport Website', $formatted['links'][0]['label']);
-        $this->assertSame('https://example.com/airport', $formatted['links'][0]['url']);
+        $this->assertArrayHasKey('custom_links', $formatted);
+        $this->assertIsArray($formatted['custom_links']);
+        $this->assertCount(2, $formatted['custom_links']);
+        $this->assertSame('Airport Website', $formatted['custom_links'][0]['label']);
+        $this->assertSame('https://example.com/airport', $formatted['custom_links'][0]['url']);
     }
 
     public function testFormatAirportDetails_IncludesTimezoneDisplay(): void
@@ -180,8 +180,8 @@ class PublicApiAirportTest extends TestCase
         $airport = $this->getTestAirport('pdx');
         $formatted = formatAirportDetails('pdx', $airport);
 
-        $this->assertArrayHasKey('links', $formatted);
-        $this->assertSame([], $formatted['links']);
+        $this->assertArrayHasKey('custom_links', $formatted);
+        $this->assertSame([], $formatted['custom_links']);
     }
 
     public function testFormatAirportDetails_ServicesAndFrequenciesReturnObjectWhenEmpty(): void
