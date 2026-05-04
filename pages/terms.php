@@ -341,6 +341,8 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                 
                 <h3>Map and Visualization Data</h3>
                 <ul>
+                    <li><strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a></strong> - 
+                    Admin-0 country boundaries (110m scale) used offline to infer country at airport coordinates. Subject to <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">Natural Earth terms of use</a>.</li>
                     <li><strong><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></strong> - 
                     Base map tiles. © OpenStreetMap contributors. Data licensed under <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">ODbL</a>.</li>
                     <li><strong><a href="https://openweathermap.org" target="_blank" rel="noopener">OpenWeatherMap</a></strong> - 

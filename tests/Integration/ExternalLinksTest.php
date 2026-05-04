@@ -87,7 +87,7 @@ class ExternalLinksTest extends TestCase
     {
         foreach ($this->testAirports as $airportId => $airport) {
             $region = getAviationRegionFromAirport($airport);
-            if (empty($airport['faa_weather_url']) && $region !== 'US') {
+            if (empty($airport['faa_weather_url']) && $region !== 'us') {
                 continue; // FAA Weather only shown for US airports
             }
             if (!empty($airport['faa_weather_url'])) {
@@ -249,7 +249,7 @@ class ExternalLinksTest extends TestCase
             
             // Test FAA Weather format (US only, or override)
             if ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])
-                && ($region === 'US' || !empty($airport['faa_weather_url']))) {
+                && ($region === 'us' || !empty($airport['faa_weather_url']))) {
                 if (!empty($airport['faa_weather_url'])) {
                     $faaUrl = $airport['faa_weather_url'];
                 } else {

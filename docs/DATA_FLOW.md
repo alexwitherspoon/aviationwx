@@ -1,6 +1,6 @@
 # Weather, Webcam, and NOTAM Data Flow Documentation
 
-This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
+This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. It also summarizes the **airport country resolution** aggregate (geometry-only ISO hints merged at config load). This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
 
 ## Table of Contents
 
@@ -14,7 +14,8 @@ This document describes how weather, webcam, and NOTAM data is fetched, processe
 8. [NOTAM Data Fetching](#notam-data-fetching)
 9. [NOTAM Data Processing](#notam-data-processing)
 10. [Data Display on Dashboard](#data-display-on-dashboard)
-11. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
+11. [Airport country resolution (geometry aggregate)](#airport-country-resolution-geometry-aggregate)
+12. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
 
 ---
 
@@ -1820,6 +1821,33 @@ These conversions happen in the browser for user display preferences:
 - User can toggle between: in, cm
 - Preference stored in cookies
 - Applied to: Rainfall today
+
+---
+
+## Airport country resolution (geometry aggregate)
+
+This path is separate from weather, webcam, and NOTAM pipelines. It supplies **geometry-only** ISO 3166-1 alpha-2 hints for each airport coordinate for `loadConfig()` merge and downstream effective country / external link logic.
+
+### Build (`scripts/refresh-airport-country-resolution.php`)
+
+1. CLI sets `AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE` and calls `loadConfig()` so the worker does not merge a half-built aggregate.
+2. Reads current `airports.json` from disk and computes **SHA-256** for `config_sha256` in the output.
+3. Loads bundled Admin-0 polygons from `data/geo/ne_110m_admin_0_countries.geojson`, normalizes rings, and runs point-in-polygon per airport lat/lon.
+4. Writes **`cache/airport_country_resolution.json`** atomically (temp file + `rename()`), including `version`, `generated_at`, `config_sha256`, `boundary_dataset`, and per-airport `iso_country` rows (geometry only).
+
+### Merge (`loadConfig()` via `lib/airport-country-resolution-merge.php`)
+
+- After config validates, the aggregate is read if present. Merge applies **only** when `config_sha256` matches the current file and `version` matches; otherwise merge is skipped, any existing `_country_resolution_geo_iso` keys are removed from the in-memory config (fail closed for auto geometry, including stale APCu rows).
+- Matched rows set internal `_country_resolution_geo_iso` on each airport. Effective country for the UI and Public API follows the precedence chain documented in **CONFIGURATION.md** (operator `iso_country`, ICAO, FAA, geometry, address).
+
+### Scheduler (`scripts/scheduler.php`)
+
+- Evaluates whether to run the worker at **most once per hour** (`COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL`), with an **immediate** evaluation on the first eligible loop iteration after startup (same pattern as other infrequent tasks: avoid work every 1s tick).
+- Runs the worker when the aggregate is missing, unreadable, invalid, schema mismatch, **SHA mismatch** (any `airports.json` edit), or the aggregate file is **older than** `COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS` (default **30 days**) so geometry-derived country is refreshed on a long cadence unless the config changed first.
+
+### Cache cleanup (`scripts/cleanup-cache.php`)
+
+- Layer-2 age cleanup for the aggregate uses a **90-day** threshold so a healthy file is not deleted while the 30-day policy still considers it usable between scheduler passes.
 
 ---
 

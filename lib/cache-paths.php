@@ -43,6 +43,7 @@
  * ├── temp_extremes/               # Per-airport daily temperature extremes
  * │   └── {airport}.json
  * ├── outage_{airport}.json        # Outage detection state
+ * ├── airport_country_resolution.json  # Geometry-derived ISO per airport (scheduler)
  * └── memory_history.json          # Memory usage tracking
  * 
  * Note: Webcam history is stored directly in the camera directory (unified storage).
@@ -636,6 +637,10 @@ function getTempExtremesTrackingPath(string $airportId): string {
 
 if (!defined('CACHE_MEMORY_HISTORY_FILE')) {
     define('CACHE_MEMORY_HISTORY_FILE', CACHE_BASE_DIR . '/memory_history.json');
+}
+
+if (!defined('CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE')) {
+    define('CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE', CACHE_BASE_DIR . '/airport_country_resolution.json');
 }
 
 if (!defined('CACHE_PUBLIC_API_HEALTH_FILE')) {

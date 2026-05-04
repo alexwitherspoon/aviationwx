@@ -14,6 +14,8 @@
  * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
  * - Per-camera refresh_seconds with config hierarchy: camera > airport > global > default
  * - Rate bounds: MIN_WEBCAM_REFRESH (10s) to MAX_WEBCAM_REFRESH (1hr)
+ * - Runways cache refresh (weekly; startup if missing)
+ * - Airport country resolution aggregate (first-loop evaluation; then hourly checks; worker when missing, stale SHA, invalid, or aggregate older than policy max age)
  * 
  * Usage:
  *   Start: nohup php scheduler.php > /dev/null 2>&1 &
@@ -30,6 +32,7 @@ require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
+require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 // Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
 
 // Lock file location
@@ -49,6 +52,8 @@ $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastDynamicDnsCheck = 0;
 $lastRunwaysFetch = 0;
+$lastCountryResolutionSchedulerCheck = 0;
+$countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $runwaysFetchOnStartupDone = false;
@@ -612,6 +617,35 @@ while ($running) {
                         'exit_code' => $exitCode,
                         'output' => implode("\n", $output)
                     ], 'app');
+                }
+            }
+        }
+
+        // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
+        $countryResolutionScript = __DIR__ . '/refresh-airport-country-resolution.php';
+        $countryResolutionEvalDue = !$countryResolutionSchedulerStartupEval
+            || (($now - $lastCountryResolutionSchedulerCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
+        if ($countryResolutionEvalDue
+            && file_exists($countryResolutionScript)
+            && $config !== null
+            && $lastConfigSha !== null) {
+            $lastCountryResolutionSchedulerCheck = $now;
+            $countryResolutionSchedulerStartupEval = true;
+            $cfgPath = getConfigFilePath();
+            if ($cfgPath !== null && is_readable($cfgPath)) {
+                $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
+                if ($countryNeedsRefresh) {
+                    $output = [];
+                    $exitCode = 0;
+                    exec('php ' . escapeshellarg($countryResolutionScript) . ' 2>&1', $output, $exitCode);
+                    if ($exitCode === 0) {
+                        aviationwx_log('info', 'scheduler: airport country resolution refresh complete', [], 'app');
+                    } else {
+                        aviationwx_log('warning', 'scheduler: airport country resolution refresh failed', [
+                            'exit_code' => $exitCode,
+                            'output' => implode("\n", array_slice($output, 0, 20)),
+                        ], 'app');
+                    }
                 }
             }
         }
