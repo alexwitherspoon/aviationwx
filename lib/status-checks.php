@@ -451,7 +451,8 @@ function computeAirportCountryResolutionHealth(?array $config, ?string $configSh
         ];
     }
 
-    $mtime = filemtime($path);
+    // @ below: TOCTOU if aggregate is removed or swapped after is_file / is_readable (same rationale as checkSystemHealth).
+    $mtime = @filemtime($path);
     if ($mtime === false) {
         $mtime = 0;
     }
@@ -466,7 +467,7 @@ function computeAirportCountryResolutionHealth(?array $config, ?string $configSh
         ];
     }
 
-    $raw = file_get_contents($path);
+    $raw = @file_get_contents($path);
     if ($raw === false || $raw === '') {
         return [
             'name' => $name,
@@ -544,7 +545,8 @@ function computeAirportCountryResolutionHealth(?array $config, ?string $configSh
     } else {
         $cfgPath = getConfigFilePath();
         if (is_string($cfgPath) && $cfgPath !== '' && is_readable($cfgPath)) {
-            $cfgRaw = file_get_contents($cfgPath);
+            // @: path can race unreadable between is_readable and read.
+            $cfgRaw = @file_get_contents($cfgPath);
             if ($cfgRaw !== false && $cfgRaw !== '') {
                 $currentSha = hash('sha256', $cfgRaw);
             }
