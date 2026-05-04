@@ -178,7 +178,7 @@ vendor/bin/phpunit --testsuite Integration
 - HTML output validation
 - Webcam refresh initialization
 
-**Partner logo HTTP checks (`tests/Integration/PartnerLogoApiTest.php`):** These curl `http://localhost:8080` (or `TEST_BASE_URL`) by default. If nothing is listening, every case **marks itself skipped**, so GitHub Actions and `make test-unit` do not exercise the live HTTP path. **Regression coverage without a web server** lives in `tests/Unit/PartnerLogoCachePathsTest.php` (subprocess runs `lib/partner-logo-cache.php` and `api/partner-logo.php` with `CONFIG_PATH` pointed at the fixture config).
+**Partner logo HTTP checks (`tests/Integration/PartnerLogoApiTest.php`):** Base URL is **`TEST_API_URL`**, then **`TEST_BASE_URL`**, then **`http://localhost:8080`** (same order as `WeatherEndpointTest` and `SmokeTest`). So `make test-local` / `make test-e2e`, which set `TEST_API_URL=http://localhost:9080`, exercise these tests against the isolated stack when it is running. If nothing is listening, every case **marks itself skipped**, so GitHub Actions jobs without a web server and plain `make test-unit` do not hit the live HTTP path. **Regression coverage without a web server** lives in `tests/Unit/PartnerLogoCachePathsTest.php` (subprocess runs `lib/partner-logo-cache.php` and `api/partner-logo.php` with `CONFIG_PATH` pointed at the fixture config).
 
 **`make test-ci` and integration:** The Makefile treats PHPUnit integration exit code `1` as **warnings** (only exit codes `> 1` fail the target). Treat red integration output seriously even when `make test-ci` prints a green-style summary for that step.
 
