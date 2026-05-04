@@ -509,13 +509,16 @@ if (!defined('CACHE_PARTNERS_DIR')) {
 }
 
 /**
- * Get path to cached partner logo
- * 
- * @param string $hash URL hash
- * @param string $extension File extension
- * @return string Full path to cached logo
+ * Build filesystem path for a partner logo cache file from URL hash and extension.
+ *
+ * For resolve-or-download behavior from a logo URL, use {@see getPartnerLogoCachePath()}
+ * in `lib/partner-logo-cache.php` (single string argument).
+ *
+ * @param string $hash MD5 or other stable hash of the remote logo URL
+ * @param string $extension File extension without dot (e.g. jpg, png)
+ * @return string Full path under CACHE_PARTNERS_DIR
  */
-function getPartnerLogoCachePath(string $hash, string $extension): string {
+function getPartnerLogoCachedFilePath(string $hash, string $extension): string {
     return CACHE_PARTNERS_DIR . '/' . $hash . '.' . $extension;
 }
 

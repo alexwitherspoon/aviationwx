@@ -8,16 +8,19 @@
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 
 /**
  * Get cache directory for partner logos
- * 
+ *
+ * Uses CACHE_PARTNERS_DIR from cache-paths.php so layout stays consistent with the rest of the app.
+ *
  * @return string Cache directory path
  */
 function getPartnerLogoCacheDir(): string {
-    $cacheDir = __DIR__ . '/../cache/partners';
+    $cacheDir = CACHE_PARTNERS_DIR;
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0755, true);
     }
@@ -26,14 +29,15 @@ function getPartnerLogoCacheDir(): string {
 
 /**
  * Generate cache filename from logo URL
- * 
+ *
  * @param string $logoUrl Logo URL
  * @return string Cache file path
  */
 function getPartnerLogoCacheFile(string $logoUrl): string {
-    $cacheDir = getPartnerLogoCacheDir();
+    getPartnerLogoCacheDir();
+
     $hash = md5($logoUrl);
-    
+
     // Try to extract extension from URL
     $ext = 'jpg'; // default
     $parsed = parse_url($logoUrl);
@@ -43,8 +47,8 @@ function getPartnerLogoCacheFile(string $logoUrl): string {
             $ext = ($pathExt === 'jpeg') ? 'jpg' : $pathExt;
         }
     }
-    
-    return $cacheDir . '/' . $hash . '.' . $ext;
+
+    return getPartnerLogoCachedFilePath($hash, $ext);
 }
 
 /**

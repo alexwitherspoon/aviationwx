@@ -178,6 +178,10 @@ vendor/bin/phpunit --testsuite Integration
 - HTML output validation
 - Webcam refresh initialization
 
+**Partner logo HTTP checks (`tests/Integration/PartnerLogoApiTest.php`):** These curl `http://localhost:8080` (or `TEST_BASE_URL`) by default. If nothing is listening, every case **marks itself skipped**, so GitHub Actions and `make test-unit` do not exercise the live HTTP path. **Regression coverage without a web server** lives in `tests/Unit/PartnerLogoCachePathsTest.php` (subprocess runs `lib/partner-logo-cache.php` and `api/partner-logo.php` with `CONFIG_PATH` pointed at the fixture config).
+
+**`make test-ci` and integration:** The Makefile treats PHPUnit integration exit code `1` as **warnings** (only exit codes `> 1` fail the target). Treat red integration output seriously even when `make test-ci` prints a green-style summary for that step.
+
 ### Node.js unit tests (`tests/js/`)
 
 Small **Node** test runners (no Jest) for shared frontend utilities. Run via `make test-ci` (or `node tests/js/<file>.test.js`).
