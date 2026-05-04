@@ -8,6 +8,7 @@ define('AVIATIONWX_CONFIG_LOADED', true);
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/airport-identifiers.php';
+require_once __DIR__ . '/country-resolution.php';
 
 /**
  * Shared Configuration Utilities
@@ -1826,6 +1827,14 @@ function validateRuntimeConfigSchema(array $config): array {
                     }
                 }
             }
+
+            if (array_key_exists('iso_country', $ap) && $ap['iso_country'] !== null) {
+                if (!is_string($ap['iso_country'])) {
+                    $errors[] = "Airport '{$aid}' iso_country must be a string (ISO 3166-1 alpha-2)";
+                } elseif (trim($ap['iso_country']) === '' || !countryResolutionIsValidIso3166Alpha2($ap['iso_country'])) {
+                    $errors[] = "Airport '{$aid}' iso_country must be a valid ISO 3166-1 alpha-2 code (two letters)";
+                }
+            }
         }
 
         require_once __DIR__ . '/push-webcam-validator.php';
@@ -1942,7 +1951,8 @@ function loadConfig(bool $useCache = true): ?array {
     $fileSha = hash('sha256', $jsonContent);
     $cacheKey = 'aviationwx_config';
     $cacheShaKey = 'aviationwx_config_sha';
-    
+    $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] = $configFile;
+
     // Try APCu cache first (if available)
     if ($useCache && function_exists('apcu_fetch')) {
         // Check if cached SHA hash matches current file SHA
@@ -1954,7 +1964,9 @@ function loadConfig(bool $useCache = true): ?array {
             if ($cached !== false) {
                 // Also update static cache
                 $cachedConfig = $cached;
-                return $cached;
+                require_once __DIR__ . '/airport-country-resolution-merge.php';
+                countryResolutionMergeAggregateFileIntoConfig($cachedConfig, $fileSha);
+                return $cachedConfig;
             }
         } else {
             // File changed or cache expired, clear old cache
@@ -1973,6 +1985,8 @@ function loadConfig(bool $useCache = true): ?array {
         $cachedConfigPath === $configFile && 
         $cachedConfigSha === $fileSha) {
         // File hasn't changed in this request, return cached config
+        require_once __DIR__ . '/airport-country-resolution-merge.php';
+        countryResolutionMergeAggregateFileIntoConfig($cachedConfig, $fileSha);
         return $cachedConfig;
     }
     
@@ -2006,6 +2020,9 @@ function loadConfig(bool $useCache = true): ?array {
         return null;
     }
 
+    require_once __DIR__ . '/airport-country-resolution-merge.php';
+    countryResolutionMergeAggregateFileIntoConfig($config, $fileSha);
+
     aviationwx_log('info', 'config loaded', ['path' => $configFile, 'sha' => substr($fileSha, 0, 8)], 'app');
     
     // Cache in static variable (with SHA hash and path)
@@ -2035,6 +2052,8 @@ function clearConfigCache(): void {
         apcu_delete('aviationwx_config');
         apcu_delete('aviationwx_config_sha');
     }
+    require_once __DIR__ . '/airport-country-resolution-merge.php';
+    countryResolutionResetMergeFingerprint();
 }
 
 /**
@@ -2275,47 +2294,74 @@ function getAviationRegionFromIcao(?string $icao): string {
 }
 
 /**
- * Infer aviation region from full airport config (ICAO, FAA, coordinates, address).
+ * Map ISO 3166-1 alpha-2 to aviation link bucket (US / CA / AU / default).
  *
- * Fallback for airports without ICAO (e.g. 7S5 with FAA LID only). Uses:
- * 1. ICAO if present
- * 2. FAA LID (US-only identifier)
- * 3. Coordinates (lat/lon bounding boxes for US, Canada, Australia)
- * 4. Address (US state / Canadian province abbreviations)
+ * US-affiliated territories used for FAA-style links are grouped with US.
  *
- * @param array $airport Airport config with icao, faa, lat, lon, address
+ * @param string|null $iso Uppercase alpha-2 or null when unknown
  * @return string 'US'|'CA'|'AU'|'default'
  */
-function getAviationRegionFromAirport(array $airport): string {
-    $region = getAviationRegionFromIcao($airport['icao'] ?? null);
-    if ($region !== 'default') {
-        return $region;
+function aviationRegionBucketFromIsoAlpha2(?string $iso): string {
+    if ($iso === null || $iso === '') {
+        return 'default';
+    }
+    $iso = strtoupper($iso);
+    $usFamily = ['US', 'AS', 'GU', 'MP', 'PR', 'VI', 'UM'];
+    if (in_array($iso, $usFamily, true)) {
+        return 'US';
+    }
+    if ($iso === 'CA') {
+        return 'CA';
+    }
+    if ($iso === 'AU') {
+        return 'AU';
+    }
+    return 'default';
+}
+
+/**
+ * Effective ISO 3166-1 alpha-2 country for an airport (operator override through geometry and address).
+ *
+ * Precedence: optional `iso_country` in config → ICAO-derived region as ISO → FAA (US) →
+ * scheduler geometry aggregate (`_country_resolution_geo_iso`) → US/CA from address → null.
+ *
+ * @param array<string, mixed> $airport Airport configuration (may include merged `_country_resolution_geo_iso`)
+ * @return string|null Uppercase alpha-2 or null when unknown
+ */
+function getEffectiveIso3166Alpha2ForAirport(array $airport): ?string {
+    if (isset($airport['iso_country']) && is_string($airport['iso_country'])) {
+        $raw = strtoupper(trim($airport['iso_country']));
+        if ($raw !== '' && countryResolutionIsValidIso3166Alpha2($raw)) {
+            return $raw;
+        }
     }
 
-    // FAA LID is US-only; presence strongly indicates US
+    $icaoRegion = getAviationRegionFromIcao($airport['icao'] ?? null);
+    if ($icaoRegion !== 'default') {
+        return match ($icaoRegion) {
+            'US' => 'US',
+            'CA' => 'CA',
+            'AU' => 'AU',
+            default => null,
+        };
+    }
+
     if (!empty($airport['faa']) && is_string($airport['faa'])) {
         return 'US';
     }
 
-    // Coordinate-based fallback
-    $lat = isset($airport['lat']) ? (float) $airport['lat'] : null;
-    $lon = isset($airport['lon']) ? (float) $airport['lon'] : null;
-    if ($lat !== null && $lon !== null) {
-        if ($lat >= -44 && $lat <= -10 && $lon >= 113 && $lon <= 154) {
-            return 'AU'; // Australia
-        }
-        if ($lat >= 42 && $lat <= 84 && $lon >= -141 && $lon <= -52) {
-            if ($lon < -130 && $lat >= 51) {
-                return 'US'; // Alaska (west of 130°W)
+    if (array_key_exists('_country_resolution_geo_iso', $airport)) {
+        $g = $airport['_country_resolution_geo_iso'];
+        if ($g === null) {
+            // explicit unknown from aggregate
+        } elseif (is_string($g)) {
+            $g = strtoupper(trim($g));
+            if ($g !== '' && countryResolutionIsValidIso3166Alpha2($g)) {
+                return $g;
             }
-            return 'CA'; // Canada (east of Alaska)
-        }
-        if ($lat >= 17 && $lat <= 72 && $lon >= -180 && $lon <= -52) {
-            return 'US'; // Continental US, Hawaii, Puerto Rico, Guam, etc.
         }
     }
 
-    // Address fallback: US state or Canadian province abbreviations
     $address = $airport['address'] ?? '';
     if (is_string($address) && $address !== '') {
         $usStates = 'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|VI|GU';
@@ -2328,7 +2374,19 @@ function getAviationRegionFromAirport(array $airport): string {
         }
     }
 
-    return 'default';
+    return null;
+}
+
+/**
+ * Infer aviation region from full airport config (ICAO, FAA, geometry aggregate, address).
+ *
+ * Uses getEffectiveIso3166Alpha2ForAirport() then maps to US / CA / AU / default for link selection.
+ *
+ * @param array<string, mixed> $airport Airport config with icao, faa, lat, lon, address, optional iso_country and merged geometry ISO
+ * @return string 'US'|'CA'|'AU'|'default'
+ */
+function getAviationRegionFromAirport(array $airport): string {
+    return aviationRegionBucketFromIsoAlpha2(getEffectiveIso3166Alpha2ForAirport($airport));
 }
 
 /**
@@ -2361,6 +2419,73 @@ function getRegionalWeatherLinkForAirport(array $airport): ?array {
         ];
     }
     return null;
+}
+
+/**
+ * Built-in external links (AirNav, FAA Weather, regional, ForeFlight) for dashboard and Public API.
+ *
+ * When aviation region is `default`, auto-generated standard links are suppressed; explicit URL
+ * overrides and `regional_weather_url` still apply. Custom `links` are rendered separately by callers.
+ *
+ * @param array<string, mixed> $airport Airport configuration
+ * @return list<array{label: string, url: string}>
+ */
+function airportExternalLinksBuildResolvedList(array $airport): array
+{
+    $links = [];
+    $linkIdentifier = getBestIdentifierForLinks($airport);
+    $aviationRegion = getAviationRegionFromAirport($airport);
+    $autoAllowed = ($aviationRegion !== 'default');
+
+    $airnavUrl = null;
+    if (!empty($airport['airnav_url'])) {
+        $airnavUrl = $airport['airnav_url'];
+    } elseif ($autoAllowed && $linkIdentifier !== null) {
+        $airnavUrl = 'https://www.airnav.com/airport/' . $linkIdentifier;
+    }
+    if ($airnavUrl !== null) {
+        $links[] = ['label' => 'AirNav', 'url' => $airnavUrl];
+    }
+
+    $faaWeatherUrl = null;
+    if (!empty($airport['faa_weather_url'])) {
+        $faaWeatherUrl = $airport['faa_weather_url'];
+    } elseif ($autoAllowed && $aviationRegion === 'US' && $linkIdentifier !== null && isset($airport['lat']) && isset($airport['lon'])) {
+        $buffer = 2.0;
+        $minLon = (float) $airport['lon'] - $buffer;
+        $minLat = (float) $airport['lat'] - $buffer;
+        $maxLon = (float) $airport['lon'] + $buffer;
+        $maxLat = (float) $airport['lat'] + $buffer;
+        $faaId = preg_replace('/^K/', '', $linkIdentifier);
+        $faaWeatherUrl = sprintf(
+            'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
+            $minLon,
+            $minLat,
+            $maxLon,
+            $maxLat,
+            $faaId
+        );
+    }
+    if ($faaWeatherUrl !== null) {
+        $links[] = ['label' => 'FAA Weather', 'url' => $faaWeatherUrl];
+    }
+
+    $regionalLink = getRegionalWeatherLinkForAirport($airport);
+    if ($regionalLink !== null) {
+        $links[] = ['label' => $regionalLink['label'], 'url' => $regionalLink['url']];
+    }
+
+    $foreflightUrl = null;
+    if (!empty($airport['foreflight_url'])) {
+        $foreflightUrl = $airport['foreflight_url'];
+    } elseif ($autoAllowed && $linkIdentifier !== null) {
+        $foreflightUrl = 'foreflightmobile://maps/search?q=' . rawurlencode($linkIdentifier);
+    }
+    if ($foreflightUrl !== null) {
+        $links[] = ['label' => 'ForeFlight', 'url' => $foreflightUrl];
+    }
+
+    return $links;
 }
 
 /**
@@ -3867,6 +3992,14 @@ function validateAirportsJsonStructure(array $config): array {
                     $faaMap[$faaKey] = [];
                 }
                 $faaMap[$faaKey][] = $airportCode;
+            }
+        }
+
+        if (array_key_exists('iso_country', $airport) && $airport['iso_country'] !== null) {
+            if (!is_string($airport['iso_country'])) {
+                $errors[] = "Airport '{$airportCode}' iso_country must be a string (ISO 3166-1 alpha-2)";
+            } elseif (trim($airport['iso_country']) === '' || !countryResolutionIsValidIso3166Alpha2($airport['iso_country'])) {
+                $errors[] = "Airport '{$airportCode}' iso_country must be a valid ISO 3166-1 alpha-2 code (two letters)";
             }
         }
         

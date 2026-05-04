@@ -289,6 +289,18 @@ if (!defined('RUNWAYS_APCU_TTL')) {
     define('RUNWAYS_APCU_TTL', 2592000); // 30 days (match cache max age)
 }
 
+// Airport country resolution (geometry aggregate under CACHE_BASE_DIR; see scripts/refresh-airport-country-resolution.php)
+if (!defined('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION')) {
+    define('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION', 1);
+}
+if (!defined('COUNTRY_RESOLUTION_BOUNDARY_DATASET_ID')) {
+    // Label stored in aggregate JSON; matches vendored file under data/geo/
+    define('COUNTRY_RESOLUTION_BOUNDARY_DATASET_ID', 'ne_110m_admin_0_countries-v5.2.0');
+}
+if (!defined('COUNTRY_RESOLUTION_REFRESH_INTERVAL')) {
+    define('COUNTRY_RESOLUTION_REFRESH_INTERVAL', 86400);
+}
+
 // Circuit breaker / backoff
 // Circuit breaker failure threshold - require this many consecutive failures before opening
 if (!defined('CIRCUIT_BREAKER_FAILURE_THRESHOLD')) {
