@@ -1533,7 +1533,7 @@ When `config.public_api.enabled` is true, the Public API and weather history fea
 |--------|---------|-------------|
 | `canonical_base_url` | `https://api.aviationwx.org/v1` | Optional. Absolute `http://` or `https://` base URL for Public API v1 with no trailing slash. Used by `getCanonicalPublicApiV1BaseUrl()` and the API docs page. Omit to use this default. Set when your deployment’s public API origin differs (self-hosted). |
 
-**Nginx:** Legacy `/api/v1/` redirects must target the same host and path prefix as this value. The committed `docker/nginx.conf` uses the public default; production CD may render or push the vhost from deployment `airports.json` so nginx stays aligned with PHP (nginx does not read JSON at request time).
+**Nginx:** `/api/v1/` redirect rules (if present) must target the same host and path prefix as this value. The committed `docker/nginx.conf` uses the public default; production CD may render or push the vhost from deployment `airports.json` so nginx stays aligned with PHP (nginx does not read JSON at request time).
 
 ### Rate limits
 
