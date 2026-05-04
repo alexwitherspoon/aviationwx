@@ -1871,7 +1871,7 @@ if ($themeCookie === 'dark') {
                             ? 'View airport information on AirNav (opens in new tab)'
                             : ($lbl === 'FAA Weather'
                                 ? 'View FAA weather cameras for this area (opens in new tab)'
-                                : 'View ' . htmlspecialchars($lbl) . ' (opens in new tab)'));
+                                : 'View ' . $lbl . ' (opens in new tab)'));
                     ?>
                 <a href="<?= htmlspecialchars($u) ?>" target="_blank" rel="noopener" class="<?= htmlspecialchars($btnClass) ?>" title="<?= htmlspecialchars($title) ?>">
                     <?= htmlspecialchars($lbl) ?>
