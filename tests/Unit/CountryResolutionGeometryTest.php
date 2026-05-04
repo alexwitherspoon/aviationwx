@@ -22,6 +22,7 @@ final class CountryResolutionGeometryTest extends TestCase
     {
         $features = countryResolutionLoadAdmin0FeaturesFromGeoJson(self::$fixturePath);
         $this->assertNotEmpty($features);
+        $this->assertArrayHasKey('_bbox', $features[0]['parts'][0]);
         // Bellingham Intl (public reference coordinates)
         $iso = countryResolutionFindIsoAlpha2AtLatLon(48.7927, -122.5375, $features);
         $this->assertSame('US', $iso);

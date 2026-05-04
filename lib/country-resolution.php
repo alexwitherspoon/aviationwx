@@ -29,6 +29,7 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
         return false;
     }
     static $allowed = null;
+    static $allowlistWarned = false;
     if ($allowed === null) {
         $path = __DIR__ . '/data/iso3166-alpha2-codes.txt';
         $allowed = [];
@@ -40,6 +41,13 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
                 }
             }
         }
+        if ($allowed === [] && !$allowlistWarned) {
+            $allowlistWarned = true;
+            error_log(
+                'aviationwx country-resolution: iso3166-alpha2-codes.txt missing, unreadable, or empty; '
+                . 'countryResolutionIsValidIso3166Alpha2() rejects all codes until the file is restored.'
+            );
+        }
     }
     return isset($allowed[$code]);
 }
@@ -47,13 +55,13 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
 /**
  * Parse Natural Earth-style Admin-0 GeoJSON into a normalized feature list for hit testing.
  *
- * Each returned element: `iso_a2` (string), `parts` (list of array{exterior: ring, holes: list<ring>}),
- * where each ring is a list of [lon, lat] vertices (closed or unclosed).
+ * Each element has `iso_a2` and `parts`. Each part has `exterior` and `holes` rings (vertices as
+ * `[lon, lat]`) plus `_bbox` on the exterior for fast rejection before ray tests.
  *
  * Skips features without a usable ISO_A2 (e.g. Natural Earth "-99" sentinels).
  *
  * @param string $path Absolute path to GeoJSON FeatureCollection file
- * @return list<array{iso_a2: string, parts: list<array{exterior: list<list{0: float, 1: float}>, holes: list<list<list{0: float, 1: float}>}>}>
+ * @return list<array{iso_a2: string, parts: list<array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>, _bbox?: array{minLon: float, maxLon: float, minLat: float, maxLat: float}}>}>
  */
 function countryResolutionLoadAdmin0FeaturesFromGeoJson(string $path): array
 {
@@ -89,6 +97,9 @@ function countryResolutionLoadAdmin0FeaturesFromGeoJson(string $path): array
         if ($parts === []) {
             continue;
         }
+        foreach ($parts as $pi => $part) {
+            $parts[$pi] = array_merge($part, ['_bbox' => countryResolutionPartBBox($part)]);
+        }
         $out[] = ['iso_a2' => $iso, 'parts' => $parts];
     }
     return $out;
@@ -96,7 +107,7 @@ function countryResolutionLoadAdmin0FeaturesFromGeoJson(string $path): array
 
 /**
  * @param array<string, mixed> $geometry GeoJSON geometry object
- * @return list<array{exterior: list<list{0: float, 1: float}>, holes: list<list<list{0: float, 1: float}>}>}>
+ * @return list<array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>}>
  */
 function countryResolutionNormalizeGeometryToParts(array $geometry): array
 {
@@ -218,7 +229,10 @@ function countryResolutionRingBBox(array $ring): array
 }
 
 /**
- * @param array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>} $part
+ * Axis-aligned bounding box of a part's exterior ring (holes ignored for the coarse test).
+ *
+ * @param array{exterior: list<array{0: float, 1: float}>, holes?: list<list<array{0: float, 1: float}>>, _bbox?: array{minLon: float, maxLon: float, minLat: float, maxLat: float}} $part
+ * @return array{minLon: float, maxLon: float, minLat: float, maxLat: float}
  */
 function countryResolutionPartBBox(array $part): array
 {
@@ -235,7 +249,7 @@ function countryResolutionBboxContainsPoint(array $bb, float $lon, float $lat): 
 }
 
 /**
- * @param array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>} $part
+ * @param array{exterior: list<array{0: float, 1: float}>, holes?: list<list<array{0: float, 1: float}>>, _bbox?: array{minLon: float, maxLon: float, minLat: float, maxLat: float}} $part
  */
 function countryResolutionPointInPart(float $lon, float $lat, array $part): bool
 {
@@ -257,7 +271,7 @@ function countryResolutionPointInPart(float $lon, float $lat, array $part): bool
  *
  * @param float $lat WGS84 latitude
  * @param float $lon WGS84 longitude
- * @param list<array{iso_a2: string, parts: list<array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>}>}> $features From countryResolutionLoadAdmin0FeaturesFromGeoJson()
+ * @param list<array{iso_a2: string, parts: list<array{exterior: list<array{0: float, 1: float}>, holes: list<list<array{0: float, 1: float}>>, _bbox?: array{minLon: float, maxLon: float, minLat: float, maxLat: float}}>}> $features From countryResolutionLoadAdmin0FeaturesFromGeoJson()
  * @return string|null Uppercase alpha-2 or null if not inside any feature
  */
 function countryResolutionFindIsoAlpha2AtLatLon(float $lat, float $lon, array $features): ?string
@@ -268,7 +282,9 @@ function countryResolutionFindIsoAlpha2AtLatLon(float $lat, float $lon, array $f
             continue;
         }
         foreach ($feature['parts'] as $part) {
-            $bb = countryResolutionPartBBox($part);
+            $bb = isset($part['_bbox']) && is_array($part['_bbox'])
+                ? $part['_bbox']
+                : countryResolutionPartBBox($part);
             if (!countryResolutionBboxContainsPoint($bb, $lon, $lat)) {
                 continue;
             }
