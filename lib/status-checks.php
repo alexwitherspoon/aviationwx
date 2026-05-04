@@ -611,14 +611,14 @@ function airport_country_resolution_health_compute(?array $config, ?string $conf
  * Read-only health for the scheduler-built airport country resolution aggregate file.
  *
  * Non-testing: result is cached in APCu (getCachedData, TTL STATUS_HEALTH_CACHE_TTL); cache key includes
- * aggregate and config mtimes. APP_ENV=testing skips APCu for deterministic PHPUnit runs.
+ * aggregate and config mtimes. isTestMode() skips APCu for deterministic PHPUnit runs.
  *
  * @param array<string, mixed>|null $config Loaded config (for airport count sanity only)
  * @param string|null $configSha256 SHA-256 hex of raw airports.json when the caller already read the file (avoids a second read)
  * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
  */
 function checkAirportCountryResolutionHealth(?array $config, ?string $configSha256 = null): array {
-    if (defined('APP_ENV') && APP_ENV === 'testing') {
+    if (isTestMode()) {
         return airport_country_resolution_health_compute($config, $configSha256);
     }
 
