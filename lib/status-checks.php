@@ -16,6 +16,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/cached-data-loader.php';
 require_once __DIR__ . '/process-utils.php';
 require_once __DIR__ . '/webcam-metadata.php';
 require_once __DIR__ . '/webcam-variant-manifest.php';
@@ -45,16 +46,29 @@ function checkSystemHealth(): array {
         'components' => []
     ];
     
-    $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../config/airports.json';
-    $configReadable = file_exists($configPath) && is_readable($configPath);
+    $resolvedConfigPath = resolveAirportsConfigFilePath();
+    $configReadable = $resolvedConfigPath !== null && is_readable($resolvedConfigPath);
     $config = null;
     $configValid = false;
     if ($configReadable) {
         $config = loadConfig(false); // Don't use cache for status check
         $configValid = $config !== null;
     }
-    
-    $configMtime = $configReadable ? filemtime($configPath) : 0;
+
+    $configSha256ForStatus = '';
+    if ($resolvedConfigPath !== null && is_readable($resolvedConfigPath)) {
+        // @ suppresses fopen warnings if the path flips unreadable between is_readable and read (TOCTOU).
+        $rawCfgForSha = @file_get_contents($resolvedConfigPath);
+        if ($rawCfgForSha !== false && $rawCfgForSha !== '') {
+            $configSha256ForStatus = hash('sha256', $rawCfgForSha);
+        }
+    }
+
+    $configMtime = 0;
+    if ($resolvedConfigPath !== null && file_exists($resolvedConfigPath) && is_file($resolvedConfigPath)) {
+        $mt = @filemtime($resolvedConfigPath);
+        $configMtime = ($mt !== false) ? (int) $mt : 0;
+    }
     $health['components']['configuration'] = [
         'name' => 'Configuration',
         'status' => $configReadable && $configValid ? 'operational' : 'down',
@@ -299,7 +313,11 @@ function checkSystemHealth(): array {
     // Runway cache (FAA/OurAirports)
     $runwayCacheHealth = checkRunwayCacheHealth($config);
     $health['components']['runway_cache'] = $runwayCacheHealth;
-    
+    $health['components']['airport_country_resolution'] = checkAirportCountryResolutionHealth(
+        $config,
+        $configSha256ForStatus !== '' ? $configSha256ForStatus : null
+    );
+
     // Magnetic declination (NOAA geomag) - only when geomag_api_key is configured
     $geomagKey = getGlobalConfig('geomag_api_key');
     if ($geomagKey !== null && $geomagKey !== '' && trim((string) $geomagKey) !== '') {
@@ -397,6 +415,251 @@ function checkRunwayCacheHealth(?array $config): array {
         'lastChanged' => $fetchedAt,
         'details' => $details,
     ];
+}
+
+/**
+ * Compute airport country resolution health (uncached).
+ *
+ * @internal Use checkAirportCountryResolutionHealth() from product code.
+ *
+ * @param array<string, mixed>|null $config Loaded config (for airport count sanity only)
+ * @param string|null $configSha256 SHA-256 hex of raw airports.json; when null or empty, SHA is taken from getConfigFilePath()
+ * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
+ */
+function computeAirportCountryResolutionHealth(?array $config, ?string $configSha256): array {
+    $name = 'Airport country resolution';
+    $path = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
+    $basename = basename($path);
+
+    if (!file_exists($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate not present yet (scheduler writes ' . $basename . ')',
+            'lastChanged' => 0,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    if (!is_file($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate path exists but is not a regular file (' . $basename . ')',
+            'lastChanged' => 0,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    // @ below: TOCTOU if aggregate is removed or swapped after is_file / is_readable (same rationale as checkSystemHealth).
+    $mtime = @filemtime($path);
+    if ($mtime === false) {
+        $mtime = 0;
+    }
+
+    if (!is_readable($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate exists but is not readable',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate file is empty or unreadable',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    try {
+        $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (\JsonException) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate is not valid JSON',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    if (!is_array($data)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate JSON is not an object',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    if (($data['version'] ?? null) !== COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate schema version mismatch (worker should rewrite)',
+            'lastChanged' => $mtime,
+            'details' => [
+                'file' => $basename,
+                'version' => $data['version'] ?? null,
+                'expected' => COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION,
+            ],
+        ];
+    }
+
+    if (!isset($data['airports']) || !is_array($data['airports'])) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate missing airports map',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    $airportsMap = $data['airports'];
+    $nAgg = count($airportsMap);
+
+    $checked = 0;
+    $structureOk = true;
+    foreach ($airportsMap as $row) {
+        if (!is_array($row) || !array_key_exists('iso_country', $row)) {
+            $structureOk = false;
+            break;
+        }
+        if (++$checked >= 5) {
+            break;
+        }
+    }
+
+    $currentSha = '';
+    if ($configSha256 !== null && $configSha256 !== '') {
+        $currentSha = $configSha256;
+    } else {
+        $cfgPath = getConfigFilePath();
+        if (is_string($cfgPath) && $cfgPath !== '' && is_readable($cfgPath)) {
+            // @: path can race unreadable between is_readable and read.
+            $cfgRaw = @file_get_contents($cfgPath);
+            if ($cfgRaw !== false && $cfgRaw !== '') {
+                $currentSha = hash('sha256', $cfgRaw);
+            }
+        }
+    }
+
+    $aggSha = isset($data['config_sha256']) && is_string($data['config_sha256']) ? $data['config_sha256'] : '';
+    $shaComparable = $currentSha !== '' && $aggSha !== '';
+    $shaMatches = $shaComparable
+        && strlen($currentSha) === strlen($aggSha)
+        && hash_equals($currentSha, $aggSha);
+
+    $generatedAt = $data['generated_at'] ?? null;
+    $lastChanged = $mtime;
+    if (is_string($generatedAt)) {
+        $ts = strtotime($generatedAt);
+        if ($ts !== false && $ts > 0) {
+            $lastChanged = $ts;
+        }
+    }
+
+    $ageSec = $mtime > 0 ? time() - $mtime : 0;
+    $pastPolicyAge = $mtime > 0 && $ageSec >= COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS;
+
+    $configAirportCount = 0;
+    if (is_array($config) && isset($config['airports']) && is_array($config['airports'])) {
+        $configAirportCount = count($config['airports']);
+    }
+
+    $issues = [];
+    if ($shaComparable && !$shaMatches) {
+        $issues[] = 'aggregate predates current airports.json (merge skipped until worker runs)';
+    }
+    if ($pastPolicyAge) {
+        $issues[] = 'file age past refresh policy (scheduler should rebuild)';
+    }
+    if (!$structureOk) {
+        $issues[] = 'sample rows missing iso_country field';
+    }
+    if ($nAgg === 0 && $configAirportCount > 0) {
+        $issues[] = 'aggregate empty while config lists airports';
+    }
+
+    $status = $issues === [] ? 'operational' : 'degraded';
+    $parts = [];
+    $parts[] = $nAgg . ' airports in aggregate';
+    if ($shaComparable) {
+        $parts[] = $shaMatches ? 'SHA matches current config' : 'SHA does not match current config';
+    }
+    if ($mtime > 0) {
+        $parts[] = 'file mtime ' . $ageSec . 's ago';
+    }
+    if (is_string($generatedAt) && $generatedAt !== '') {
+        $parts[] = 'generated_at ' . $generatedAt;
+    }
+    if ($issues !== []) {
+        $parts[] = implode('; ', $issues);
+    }
+
+    return [
+        'name' => $name,
+        'status' => $status,
+        'message' => implode(' • ', $parts),
+        'lastChanged' => $lastChanged,
+        'details' => [
+            'file' => $basename,
+            'airport_count' => $nAgg,
+            'file_mtime' => $mtime,
+            'generated_at' => is_string($generatedAt) ? $generatedAt : null,
+            'config_sha_matches' => $shaComparable ? $shaMatches : null,
+            'boundary_dataset' => $data['boundary_dataset'] ?? null,
+        ],
+    ];
+}
+
+/**
+ * Read-only health for the scheduler-built airport country resolution aggregate file.
+ *
+ * Non-testing: result is cached in APCu (getCachedData, TTL STATUS_HEALTH_CACHE_TTL); cache key includes
+ * aggregate and config mtimes. isTestMode() skips APCu for deterministic PHPUnit runs.
+ *
+ * @param array<string, mixed>|null $config Loaded config (for airport count sanity only)
+ * @param string|null $configSha256 SHA-256 hex of raw airports.json when the caller already read the file (avoids a second read)
+ * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
+ */
+function checkAirportCountryResolutionHealth(?array $config, ?string $configSha256 = null): array {
+    if (isTestMode()) {
+        return computeAirportCountryResolutionHealth($config, $configSha256);
+    }
+
+    $aggPath = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
+    $aggMtime = 0;
+    if (file_exists($aggPath) && is_file($aggPath)) {
+        $mt = @filemtime($aggPath);
+        $aggMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $cfgPath = getConfigFilePath();
+    $cfgMtime = 0;
+    if (is_string($cfgPath) && $cfgPath !== '' && file_exists($cfgPath) && is_file($cfgPath)) {
+        $mt = @filemtime($cfgPath);
+        $cfgMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $cacheBasis = $aggMtime . "\x1e" . $cfgMtime;
+    $cacheKey = 'status_acr_health_' . substr(hash('sha256', $cacheBasis), 0, 16);
+
+    return getCachedData(
+        static function () use ($config, $configSha256): array {
+            return computeAirportCountryResolutionHealth($config, $configSha256);
+        },
+        $cacheKey,
+        null,
+        STATUS_HEALTH_CACHE_TTL
+    );
 }
 
 /**

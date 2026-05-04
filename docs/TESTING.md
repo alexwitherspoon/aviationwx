@@ -229,16 +229,16 @@ make test-down
 ┌─────────────────────────────────────────────────────────────┐
 │                    Config Resolution                         │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. APP_ENV=testing → tests/Fixtures/airports.json.test     │
+│ Single function: resolveAirportsConfigFilePath() (config.php)│
+│ Used by loadConfig(), getConfigFilePath(), status checks.    │
 │                                                              │
-│ 2. CONFIG_PATH env var → use specified file                 │
+│ 1. CONFIG_PATH when the path exists (phpunit.xml / bootstrap) │
+│ 2. /var/www/html/secrets/airports.json (Docker)             │
+│ 3. config/airports.json                                      │
+│ 4. Non-production: adjacent *-secrets/airports.json          │
+│ 5. /var/www/html/airports.json (last resort)                 │
 │                                                              │
-│ 3. secrets/airports.json exists → production mode           │
-│                                                              │
-│ 4. config/airports.json exists → development mode           │
-│    (auto-detects mock mode from config contents)            │
-│                                                              │
-│ 5. No config found → error with setup instructions          │
+│ See docs/CONFIGURATION.md for full detail.                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -254,7 +254,7 @@ See `lib/config.php:shouldMockExternalServices()` for implementation.
 ### Test Fixtures
 
 **`tests/Fixtures/airports.json.test`**
-- Used by all tests when `APP_ENV=testing`
+- Used by tests via `CONFIG_PATH` (see `phpunit.xml` / `tests/bootstrap.php`) and `resolveAirportsConfigFilePath()`
 - Contains airports with test API keys
 - Webcam URLs point to `example.com`
 - Designed for deterministic, reproducible tests

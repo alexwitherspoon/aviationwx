@@ -43,7 +43,7 @@ class MultiIdentifierApiTest extends TestCase
     public function testFindAirportByIdentifier_WithRealConfig()
     {
         // Use test fixture
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Test fixture not found: $configPath");
             return;

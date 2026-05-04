@@ -243,14 +243,11 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
 
-    // Check if we should use mock weather data (only during tests or when explicitly enabled)
-    // Mock weather is enabled when:
-    // 1. Using test config (CONFIG_PATH contains airports.json.test), OR
-    // 2. Running in test environment (APP_ENV=testing, set by PHPUnit), OR
-    // 3. Explicitly enabled via MOCK_WEATHER=true (manual override), OR
-    // 4. shouldMockExternalServices() (test keys, example.com URLs - local dev with test fixture)
-    $envConfigPath = getenv('CONFIG_PATH');
-    $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false);
+    // Check if we should use mock weather data
+    // Mock when: resolved config filename is airports.json.test, APP_ENV=testing, MOCK_WEATHER=true,
+    // or shouldMockExternalServices() (test keys / example.com URLs in config).
+    $resolvedPath = getConfigFilePath();
+    $isTestConfig = ($resolvedPath !== null && strpos($resolvedPath, 'airports.json.test') !== false);
     $isTestEnvironment = (getenv('APP_ENV') === 'testing');
     $useMockWeather = $isTestConfig || $isTestEnvironment || (getenv('MOCK_WEATHER') === 'true')
         || (function_exists('shouldMockExternalServices') && shouldMockExternalServices());

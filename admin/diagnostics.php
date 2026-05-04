@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/config.php';
 header('Content-Type: text/html; charset=utf-8');
 
 $issues = [];
@@ -17,15 +18,16 @@ if (version_compare(PHP_VERSION, '7.4.0', '>=')) {
     $issues[] = "❌ PHP version too old: " . PHP_VERSION . " (needs 7.4+)";
 }
 
-// Check airports.json exists
-$configFile = __DIR__ . '/../config/airports.json';
-if (file_exists($configFile)) {
-    $success[] = "✅ airports.json exists";
-    
+// airports.json: path from getConfigFilePath()
+$resolvedConfigPath = getConfigFilePath();
+if ($resolvedConfigPath !== null && file_exists($resolvedConfigPath)) {
+    $configFile = $resolvedConfigPath;
+    $success[] = '✅ airports.json exists (' . htmlspecialchars($configFile, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ')';
+
     // Check if readable
     if (is_readable($configFile)) {
         $success[] = "✅ airports.json is readable";
-        
+
         $config = json_decode(file_get_contents($configFile), true);
         if ($config && isset($config['airports'])) {
             $airportCount = count($config['airports']);
@@ -49,7 +51,7 @@ if (file_exists($configFile)) {
         $issues[] = "❌ airports.json is not readable (check permissions)";
     }
 } else {
-    $issues[] = "❌ airports.json does not exist. Copy from config/airports.json.example";
+    $issues[] = '❌ airports.json not found. Set CONFIG_PATH, mount /var/www/html/secrets/airports.json, or copy from config/airports.json.example';
 }
 
 // Check cache directory with actual write test
@@ -139,12 +141,16 @@ foreach ($importantFiles as $file) {
     }
 }
 
-// Check environment variables
+// CONFIG_PATH (informational) and resolved path from getConfigFilePath()
 $envConfigPath = getenv('CONFIG_PATH');
+$resolvedForEnv = getConfigFilePath();
 if ($envConfigPath) {
-    $success[] = "✅ CONFIG_PATH env var set: " . htmlspecialchars($envConfigPath);
+    $success[] = '✅ CONFIG_PATH env var set: ' . htmlspecialchars((string) $envConfigPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 } else {
-    $success[] = "ℹ️ CONFIG_PATH not set (using default)";
+    $success[] = 'ℹ️ CONFIG_PATH not set (see CONFIGURATION.md for resolver order)';
+}
+if ($resolvedForEnv !== null) {
+    $success[] = '✅ Resolved config path: ' . htmlspecialchars($resolvedForEnv, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 // Show global config values (from airports.json config section)
@@ -418,10 +424,8 @@ if (is_dir($cacheDir)) {
 }
 
 // Check configuration cache status
-require_once __DIR__ . '/../lib/config.php';
-$envConfigPath = getenv('CONFIG_PATH');
-$configFilePath = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
-if (file_exists($configFilePath)) {
+$configFilePath = getConfigFilePath();
+if ($configFilePath !== null && file_exists($configFilePath)) {
     $fileMtime = filemtime($configFilePath);
     $fileMtimeStr = date('Y-m-d H:i:s', $fileMtime);
     $success[] = "📄 Config file modified: {$fileMtimeStr}";

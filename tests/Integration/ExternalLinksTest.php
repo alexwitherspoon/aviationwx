@@ -30,8 +30,7 @@ class ExternalLinksTest extends TestCase
             $this->markTestSkipped('cURL not available');
         }
         
-        // Load test airports configuration
-        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        $configPath = getConfigFilePath() ?? __DIR__ . '/../Fixtures/airports.json.test';
         if (!file_exists($configPath)) {
             $this->markTestSkipped("Airport configuration not found at: $configPath");
             return;

@@ -37,8 +37,10 @@ function getSitemapUrls(): array
     
     $today = date('Y-m-d');
     
-    $configFile = __DIR__ . '/../config/airports.json';
-    $configLastmod = file_exists($configFile) ? date('Y-m-d', filemtime($configFile)) : $today;
+    $configFile = getConfigFilePath();
+    $configLastmod = ($configFile !== null && file_exists($configFile))
+        ? date('Y-m-d', (int) filemtime($configFile))
+        : $today;
     
     // Main pages
     $urls['main'][] = [

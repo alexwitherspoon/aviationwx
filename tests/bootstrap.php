@@ -110,6 +110,7 @@ function cleanTestCache(): void {
         CACHE_BACKOFF_FILE,
         CACHE_PEAK_GUSTS_FILE,
         CACHE_TEMP_EXTREMES_FILE,
+        CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE,
     ];
     
     // Patterns to clean (weather in CACHE_WEATHER_DIR, outage in CACHE_BASE_DIR)

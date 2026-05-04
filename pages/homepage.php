@@ -19,9 +19,7 @@ function encodeEmailBody($text) {
     return implode('%0A', $encodedLines);
 }
 
-// Use CONFIG_PATH environment variable if set (for production), otherwise use default path
-$envConfigPath = getenv('CONFIG_PATH');
-$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+$configFile = getConfigFilePath() ?? (__DIR__ . '/../config/airports.json');
 $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
@@ -36,9 +34,14 @@ $imagesProcessed24h = $rolling24h['global']['variants_generated'] ?? 0;
 $cfAnalytics = getCloudflareAnalytics();
 $pilotsServedToday = $cfAnalytics['unique_visitors_today'] ?? 0;
 
-if (file_exists($configFile)) {
-    $config = json_decode(file_get_contents($configFile), true);
-    if (isset($config['airports'])) {
+if (is_readable($configFile)) {
+    $config = null;
+    // @: TOCTOU after is_readable; avoid notices leaking into HTML (same idea as checkSystemHealth).
+    $configJson = @file_get_contents($configFile);
+    if ($configJson !== false && $configJson !== '') {
+        $config = json_decode($configJson, true);
+    }
+    if (is_array($config) && isset($config['airports'])) {
         // Only count enabled airports
         $enabledAirports = getEnabledAirports($config);
         $totalAirports = count($enabledAirports);
@@ -1272,11 +1275,11 @@ Best regards,
                 🗺️ <a href="https://airports.aviationwx.org" style="color: #0066cc; font-weight: 500; font-size: 1.05rem;">View All Airports on Interactive Map →</a>
             </p>
             
-            <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
+            <?php if ($totalAirports > 0 && is_readable($configFile)): ?>
             <?php
-            $envConfigPath = getenv('CONFIG_PATH');
-            $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
-            $config = json_decode(file_get_contents($configFileForList), true);
+            // @: TOCTOU after is_readable (same as top-of-page config read).
+            $configJson = @file_get_contents($configFile);
+            $config = ($configJson !== false && $configJson !== '') ? json_decode($configJson, true) : null;
             // Only show listed airports (excludes unlisted airports from display)
             $airports = getListedAirports($config ?? []);
             $airportsPerPage = 9;

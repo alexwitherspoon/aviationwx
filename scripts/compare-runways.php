@@ -12,17 +12,19 @@
  *   php scripts/compare-runways.php [--config path] [--tolerance 0.0001]
  *
  * Options:
- *   --config path    Config file (default: CONFIG_PATH or config/airports.json)
+ *   --config path    Config file (default: getConfigFilePath() if non-null, else config/airports.json)
  *   --tolerance deg  Max diff to consider "match" in degrees (default: 0.0001 ≈ 11m)
  */
 
 error_reporting(E_ALL & ~E_DEPRECATED);
 
+require_once __DIR__ . '/../lib/config.php';
+
 $OURAIRPORTS_RUNWAYS_URL = 'https://davidmegginson.github.io/ourairports-data/runways.csv';
 $FAA_RUNWAYS_URL = 'https://ngda-transportation-geoplatform.hub.arcgis.com/api/download/v1/items/110af7b8a9424a59a3fb1d8fc69a2172/csv?layers=0';
 
 $options = getopt('', ['config:', 'tolerance:', 'help']);
-$configPath = $options['config'] ?? getenv('CONFIG_PATH') ?: __DIR__ . '/../config/airports.json';
+$configPath = $options['config'] ?? getConfigFilePath() ?? (__DIR__ . '/../config/airports.json');
 $tolerance = isset($options['tolerance']) ? (float) $options['tolerance'] : 0.0001;
 
 if (isset($options['help'])) {

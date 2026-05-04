@@ -4,6 +4,18 @@ All configuration lives in a single `airports.json` file with two sections:
 - **`config`** - Global defaults
 - **`airports`** - Per-airport settings
 
+### Which `airports.json` file is used?
+
+`resolveAirportsConfigFilePath()` in `lib/config.php` is the single resolver used by `loadConfig()`, `getConfigFilePath()`, and the status page. The first path that exists as a **regular file** wins:
+
+1. **`CONFIG_PATH`** (when set and the path is an existing file)
+2. **`/var/www/html/secrets/airports.json`** (Docker production mount)
+3. **`config/airports.json`** (repository default next to `lib/`)
+4. **Non-production only:** `../aviationwx.org-secrets/airports.json` then `../aviationwx-secrets/airports.json` (local maintainer layout)
+5. **`/var/www/html/airports.json`** (host mount last resort)
+
+If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candidates are evaluated in order.
+
 ---
 
 ## Quick Reference
