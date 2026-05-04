@@ -36,7 +36,8 @@ $pilotsServedToday = $cfAnalytics['unique_visitors_today'] ?? 0;
 
 if (is_readable($configFile)) {
     $config = null;
-    $configJson = file_get_contents($configFile);
+    // @: TOCTOU after is_readable; avoid notices leaking into HTML (same idea as checkSystemHealth).
+    $configJson = @file_get_contents($configFile);
     if ($configJson !== false && $configJson !== '') {
         $config = json_decode($configJson, true);
     }
@@ -1276,7 +1277,8 @@ Best regards,
             
             <?php if ($totalAirports > 0 && is_readable($configFile)): ?>
             <?php
-            $configJson = file_get_contents($configFile);
+            // @: TOCTOU after is_readable (same as top-of-page config read).
+            $configJson = @file_get_contents($configFile);
             $config = ($configJson !== false && $configJson !== '') ? json_decode($configJson, true) : null;
             // Only show listed airports (excludes unlisted airports from display)
             $airports = getListedAirports($config ?? []);

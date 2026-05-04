@@ -65,7 +65,7 @@ function checkSystemHealth(): array {
     }
 
     $configMtime = 0;
-    if ($resolvedConfigPath !== null && file_exists($resolvedConfigPath)) {
+    if ($resolvedConfigPath !== null && file_exists($resolvedConfigPath) && is_file($resolvedConfigPath)) {
         $mt = @filemtime($resolvedConfigPath);
         $configMtime = ($mt !== false) ? (int) $mt : 0;
     }
