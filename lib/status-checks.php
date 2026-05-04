@@ -638,11 +638,17 @@ function checkAirportCountryResolutionHealth(?array $config, ?string $configSha2
     }
 
     $aggPath = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
-    $aggMtime = file_exists($aggPath) ? (int) filemtime($aggPath) : 0;
+    $aggMtime = 0;
+    if (file_exists($aggPath) && is_file($aggPath)) {
+        $mt = @filemtime($aggPath);
+        $aggMtime = ($mt !== false) ? (int) $mt : 0;
+    }
     $cfgPath = getConfigFilePath();
-    $cfgMtime = (is_string($cfgPath) && $cfgPath !== '' && file_exists($cfgPath))
-        ? (int) filemtime($cfgPath)
-        : 0;
+    $cfgMtime = 0;
+    if (is_string($cfgPath) && $cfgPath !== '' && file_exists($cfgPath) && is_file($cfgPath)) {
+        $mt = @filemtime($cfgPath);
+        $cfgMtime = ($mt !== false) ? (int) $mt : 0;
+    }
     $cacheBasis = $aggMtime . "\x1e" . $cfgMtime;
     $cacheKey = 'status_acr_health_' . substr(hash('sha256', $cacheBasis), 0, 16);
 
