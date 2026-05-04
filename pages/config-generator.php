@@ -708,9 +708,6 @@ function generateConfigSnippet($formData) {
     if (!empty($formData['airnav_url'] ?? '')) {
         $airport['airnav_url'] = trim($formData['airnav_url']);
     }
-    if (!empty($formData['aopa_url'] ?? '')) {
-        $airport['aopa_url'] = trim($formData['aopa_url']);
-    }
     if (!empty($formData['faa_weather_url'] ?? '')) {
         $airport['faa_weather_url'] = trim($formData['faa_weather_url']);
     }
@@ -1594,13 +1591,6 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <input type="url" id="airnav_url" name="airnav_url"
                                value="<?= htmlspecialchars($_POST['airnav_url'] ?? '') ?>"
                                placeholder="https://www.airnav.com/airport/KSPB">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="aopa_url">AOPA URL</label>
-                        <input type="url" id="aopa_url" name="aopa_url"
-                               value="<?= htmlspecialchars($_POST['aopa_url'] ?? '') ?>"
-                               placeholder="https://www.aopa.org/destinations/airports/KSPB">
                     </div>
                     
                     <div class="form-group">

@@ -1877,20 +1877,6 @@ if ($themeCookie === 'dark') {
                 <?php endif; ?>
                 
                 <?php
-                // AOPA link (US-focused; manual override or auto-generated for US airports only)
-                $aopaUrl = null;
-                if (!empty($airport['aopa_url'])) {
-                    $aopaUrl = $airport['aopa_url'];
-                } elseif ($aviationRegion === 'US' && $linkIdentifier !== null) {
-                    $aopaUrl = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
-                }
-                if ($aopaUrl !== null): ?>
-                <a href="<?= htmlspecialchars($aopaUrl) ?>" target="_blank" rel="noopener" class="btn" title="View AOPA airport directory page (opens in new tab)">
-                    AOPA
-                </a>
-                <?php endif; ?>
-                
-                <?php
                 // FAA Weather link (US-focused; manual override or auto-generated for US airports only)
                 $faaWeatherUrl = null;
                 if (!empty($airport['faa_weather_url'])) {

@@ -174,7 +174,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['links'] = [];
     }
 
-    // Resolved external links (same logic as dashboard - AirNav, AOPA, etc.)
+    // Resolved external links (same logic as dashboard - AirNav, FAA Weather, etc.)
     $formatted['external_links'] = buildResolvedExternalLinks($airport);
     
     // Add availability flags
@@ -186,10 +186,14 @@ function formatAirportDetails(string $airportId, array $airport): array
 }
 
 /**
- * Build resolved external link URLs for dashboard parity
- * 
- * Uses config helpers - no I/O. Returns array of {label, url} for display.
- * 
+ * Build resolved external link URLs for dashboard parity.
+ *
+ * Matches the dashboard links section: AirNav, FAA Weather (US or override),
+ * regional weather when applicable, ForeFlight. Per-airport custom links are
+ * returned separately in the v1 airport detail payload under `links`.
+ *
+ * Uses config helpers only (no network I/O).
+ *
  * @param array $airport Airport configuration
  * @return array<array{label: string, url: string}>
  */
@@ -205,14 +209,6 @@ function buildResolvedExternalLinks(array $airport): array
         : ($linkIdentifier ? 'https://www.airnav.com/airport/' . $linkIdentifier : null);
     if ($airnavUrl !== null) {
         $links[] = ['label' => 'AirNav', 'url' => $airnavUrl];
-    }
-
-    // AOPA (US or manual override)
-    $aopaUrl = !empty($airport['aopa_url'])
-        ? $airport['aopa_url']
-        : (($aviationRegion === 'US' && $linkIdentifier) ? 'https://www.aopa.org/destinations/airports/' . $linkIdentifier : null);
-    if ($aopaUrl !== null) {
-        $links[] = ['label' => 'AOPA', 'url' => $aopaUrl];
     }
 
     // FAA Weather (US or manual override)
