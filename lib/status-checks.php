@@ -438,6 +438,16 @@ function airport_country_resolution_health_compute(?array $config, ?string $conf
         ];
     }
 
+    if (!is_file($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Aggregate path exists but is not a regular file (' . $basename . ')',
+            'lastChanged' => 0,
+            'details' => ['file' => $basename],
+        ];
+    }
+
     $mtime = filemtime($path);
     if ($mtime === false) {
         $mtime = 0;
