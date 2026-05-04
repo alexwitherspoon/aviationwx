@@ -2008,15 +2008,8 @@ if ($themeCookie === 'dark') {
                         <?php foreach ($partners as $partner): ?>
                         <div class="partner-item">
                             <a href="<?= htmlspecialchars($partner['url']) ?>" target="_blank" rel="noopener" class="partner-link" title="<?= htmlspecialchars($partner['description'] ?? $partner['name']) ?>">
-                                <?php if (!empty($partner['logo'])):
-                                    $partnerLogoPath = $partner['logo'];
-                                    // Local logos live under partner-logos volume; serve directly so nginx/apache can
-                                    // bypass partner-logo.php (avoids proxy/handler issues on airport subdomains).
-                                    $partnerLogoSrc = (is_string($partnerLogoPath) && strpos($partnerLogoPath, '/partner-logos/') === 0)
-                                        ? $partnerLogoPath
-                                        : '/api/partner-logo.php?url=' . urlencode($partnerLogoPath);
-                                    ?>
-                                <img src="<?= htmlspecialchars($partnerLogoSrc, ENT_QUOTES, 'UTF-8') ?>" 
+                                <?php if (!empty($partner['logo'])): ?>
+                                <img src="/api/partner-logo.php?url=<?= urlencode($partner['logo']) ?>" 
                                      alt="<?= htmlspecialchars($partner['name']) ?> logo" 
                                      class="partner-logo"
                                      onerror="this.style.display='none';">
