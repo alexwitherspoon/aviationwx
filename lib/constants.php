@@ -297,8 +297,17 @@ if (!defined('COUNTRY_RESOLUTION_BOUNDARY_DATASET_ID')) {
     // Label stored in aggregate JSON; matches vendored file under data/geo/
     define('COUNTRY_RESOLUTION_BOUNDARY_DATASET_ID', 'ne_110m_admin_0_countries-v5.2.0');
 }
+// How long a valid aggregate (matching config SHA) may sit before scheduler rebuilds geometry (policy: refresh country-at-point).
+if (!defined('COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS')) {
+    define('COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS', 2592000); // 30 days
+}
+// Scheduler evaluates refresh at most this often (avoids reading/decoding aggregate every main-loop tick).
+if (!defined('COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL')) {
+    define('COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL', 3600); // 1 hour
+}
+// @deprecated Use COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS; kept for backward compatibility (same value).
 if (!defined('COUNTRY_RESOLUTION_REFRESH_INTERVAL')) {
-    define('COUNTRY_RESOLUTION_REFRESH_INTERVAL', 86400);
+    define('COUNTRY_RESOLUTION_REFRESH_INTERVAL', COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS);
 }
 
 // Circuit breaker / backoff

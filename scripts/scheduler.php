@@ -15,7 +15,7 @@
  * - Per-camera refresh_seconds with config hierarchy: camera > airport > global > default
  * - Rate bounds: MIN_WEBCAM_REFRESH (10s) to MAX_WEBCAM_REFRESH (1hr)
  * - Runways cache refresh (weekly; startup if missing)
- * - Airport country resolution aggregate (startup if missing or config SHA mismatch; daily)
+ * - Airport country resolution aggregate (first-loop evaluation; then hourly checks; worker when missing, stale SHA, invalid, or aggregate older than policy max age)
  * 
  * Usage:
  *   Start: nohup php scheduler.php > /dev/null 2>&1 &
@@ -52,7 +52,8 @@ $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastDynamicDnsCheck = 0;
 $lastRunwaysFetch = 0;
-$lastCountryResolutionRefresh = time();
+$lastCountryResolutionSchedulerCheck = 0;
+$countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $runwaysFetchOnStartupDone = false;
@@ -620,17 +621,23 @@ while ($running) {
             }
         }
 
-        // 8b. Airport country resolution aggregate (startup if missing or SHA mismatch; then daily)
+        // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
         $countryResolutionScript = __DIR__ . '/refresh-airport-country-resolution.php';
-        if (file_exists($countryResolutionScript) && $config !== null && $lastConfigSha !== null) {
+        $countryResolutionEvalDue = !$countryResolutionSchedulerStartupEval
+            || (($now - $lastCountryResolutionSchedulerCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
+        if ($countryResolutionEvalDue
+            && file_exists($countryResolutionScript)
+            && $config !== null
+            && $lastConfigSha !== null) {
+            $lastCountryResolutionSchedulerCheck = $now;
+            $countryResolutionSchedulerStartupEval = true;
             $cfgPath = getConfigFilePath();
             if ($cfgPath !== null && is_readable($cfgPath)) {
                 $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
-                if ($countryNeedsRefresh || (($now - $lastCountryResolutionRefresh) >= COUNTRY_RESOLUTION_REFRESH_INTERVAL)) {
+                if ($countryNeedsRefresh) {
                     $output = [];
                     $exitCode = 0;
                     exec('php ' . escapeshellarg($countryResolutionScript) . ' 2>&1', $output, $exitCode);
-                    $lastCountryResolutionRefresh = $now;
                     if ($exitCode === 0) {
                         aviationwx_log('info', 'scheduler: airport country resolution refresh complete', [], 'app');
                     } else {

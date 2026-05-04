@@ -237,8 +237,8 @@ Optional **station power** telemetry on airport pages for `limited_availability`
 
 **Country resolution (geometry aggregate)**:
 - `scripts/refresh-airport-country-resolution.php` builds `cache/airport_country_resolution.json` from airport coordinates and bundled Admin-0 polygons (`data/geo/ne_110m_admin_0_countries.geojson`, Natural Earth).
-- The scheduler runs that script when the aggregate is missing, the schema version mismatches, or the embedded `config_sha256` differs from the current `airports.json`; it also runs on a daily interval (`COUNTRY_RESOLUTION_REFRESH_INTERVAL`).
-- `loadConfig()` merges the aggregate into each airport as `_country_resolution_geo_iso` only when SHA matches (strict; no merge on mismatch). Effective ISO and external link selection use `getEffectiveIso3166Alpha2ForAirport()` in `lib/config.php`.
+- The scheduler evaluates refresh at most hourly (`COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL`), with an immediate check on the first eligible loop iteration. It runs the script when the aggregate is missing, unreadable, invalid, the schema version mismatches, the embedded `config_sha256` differs from the current `airports.json`, or the aggregate file age exceeds `COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS` (30 days, geometry refresh policy).
+- `loadConfig()` merges the aggregate into each airport as `_country_resolution_geo_iso` only when SHA matches (strict; no merge on mismatch). If the file is missing, invalid, or mismatched, merged geometry keys are cleared so APCu-backed config does not retain stale auto-geometry. Effective ISO and external link selection use `getEffectiveIso3166Alpha2ForAirport()` in `lib/config.php`.
 
 **Mock Mode Detection**:
 Mock mode activates automatically when:

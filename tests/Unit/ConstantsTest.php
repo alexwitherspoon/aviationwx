@@ -206,6 +206,25 @@ class ConstantsTest extends TestCase
         $this->assertGreaterThanOrEqual(MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS, DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS,
             'DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS should be >= MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS');
     }
+
+    /**
+     * Country resolution aggregate policy constants stay aligned (scheduler cadence vs max age).
+     */
+    public function testCountryResolutionPolicyConstants_AreConsistent(): void
+    {
+        $this->assertSame(
+            COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS,
+            COUNTRY_RESOLUTION_REFRESH_INTERVAL,
+            'COUNTRY_RESOLUTION_REFRESH_INTERVAL should alias aggregate max age'
+        );
+        $this->assertSame(3600, COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
+        $this->assertSame(2592000, COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS);
+        $this->assertLessThan(
+            COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS,
+            COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL * 700,
+            'Scheduler gate interval should be far shorter than aggregate max age'
+        );
+    }
     
     /**
      * Test that sentinel value constants are defined

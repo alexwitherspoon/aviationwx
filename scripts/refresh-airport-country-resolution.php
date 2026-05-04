@@ -3,7 +3,9 @@
 /**
  * Build airport_country_resolution.json from airports.json lat/lon and bundled Admin-0 polygons.
  *
- * Run by the scheduler (startup when stale/missing, then periodically). Writes an atomic JSON
+ * Run by the scheduler (first eligible loop iteration after startup, then at most hourly evaluation).
+ * Rebuild when aggregate is missing, invalid, config SHA mismatch, schema mismatch, or aggregate file
+ * age exceeds COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS (default 30 days). Writes an atomic JSON
  * aggregate under CACHE_BASE_DIR for loadConfig() to merge as `_country_resolution_geo_iso`.
  *
  * Usage:
