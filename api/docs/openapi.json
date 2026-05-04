@@ -768,6 +768,11 @@
                 "type": "string",
                 "nullable": true
               },
+              "iso_country": {
+                "type": "string",
+                "nullable": true,
+                "description": "Effective ISO 3166-1 alpha-2 country (uppercase). From optional operator iso_country, ICAO/FAA hints, merged geometry aggregate when present and config SHA matches, or address parsing. Null when unknown."
+              },
               "address": {
                 "type": "string",
                 "nullable": true

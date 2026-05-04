@@ -82,6 +82,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `icao` | — | ICAO code (e.g., `KSPB`) |
 | `iata` | — | IATA code (e.g., `SPB`) |
 | `faa` | — | FAA LID (e.g., `03S`) |
+| `iso_country` | — | Optional ISO 3166-1 alpha-2 (two letters, validated). Highest-precedence hint for effective country, Public API `iso_country`, and aviation-region link selection. |
 | `formerly` | `[]` | Previous identifiers for NOTAM matching |
 | **Location** |||
 | `address` | — | City, State display |
@@ -119,7 +120,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `regional_weather_label` | — | Label for regional weather link (e.g., "NAV Canada WxCam") |
 | `foreflight_url` | auto | Override ForeFlight link |
 
-**Regional link behavior:** FAA Weather is shown only for US airports. For Canadian airports, "NAV Canada Weather" (plan.navcanada.ca/wxrecall) is shown by default. For Australian airports, "Airservices Weather Cams" is shown. Region is inferred from ICAO first; for airports without ICAO (e.g. 7S5 with FAA LID only), region falls back to FAA LID (US), coordinates (lat/lon), or address (US state / Canadian province abbreviations). Use `regional_weather_url` to override with a specific camera site (e.g., a NAV Canada metcam site with known ID) or to add a regional link for other areas. Use `links` for additional custom links.
+**Regional link behavior:** Built-in AirNav, FAA Weather (US), NAV Canada / Airservices regional links, and ForeFlight are emitted only when effective country resolves to a supported aviation region (US, Canada, Australia, or US territories treated as US). Precedence for effective country: optional `iso_country` → ICAO prefix → FAA LID (implies US) → merged geometry aggregate in `airport_country_resolution.json` when that file exists and its `config_sha256` matches the current `airports.json` (otherwise the merge is skipped) → US or Canada from `address` parsing. When none of these yield a supported region, auto-generated standard links are omitted; explicit URL overrides (`airnav_url`, `faa_weather_url`, `regional_weather_url`, `foreflight_url`) and custom `links` still appear. Use `regional_weather_url` to point at a specific regional camera site when needed.
 
 ### Radio frequencies
 

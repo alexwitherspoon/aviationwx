@@ -4,7 +4,7 @@
  *
  * Tests formatAirportDetails and buildResolvedExternalLinks to ensure
  * API response matches dashboard data (access_type, tower_status,
- * partners, custom_links, external_links).
+ * partners, custom_links, external_links, iso_country).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -32,6 +32,18 @@ class PublicApiAirportTest extends TestCase
     {
         $config = loadConfig();
         return $config['airports'][$airportId] ?? null;
+    }
+
+    public function testFormatAirportDetails_IncludesIsoCountry(): void
+    {
+        self::loadFormatAirportDetails();
+        $airport = $this->getTestAirport('kspb');
+        $this->assertNotNull($airport, 'kspb should exist in test fixture');
+
+        $formatted = formatAirportDetails('kspb', $airport);
+
+        $this->assertArrayHasKey('iso_country', $formatted);
+        $this->assertSame('US', $formatted['iso_country']);
     }
 
     public function testFormatAirportDetails_IncludesAccessTypeAndPermissionRequired(): void

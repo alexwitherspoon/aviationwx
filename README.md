@@ -254,6 +254,7 @@ AviationWX uses the following external data sources. See [Terms of Service](http
 
 ### Airport and Aviation Data
 - **OurAirports** ([ourairports.com/data](https://ourairports.com/data/)) – Airport identifiers, ICAO/IATA/FAA (Public Domain)
+- **Natural Earth** ([naturalearthdata.com](https://www.naturalearthdata.com/)) – Admin-0 country polygons (110m) for offline country-at-point hints; see [Natural Earth terms of use](https://www.naturalearthdata.com/about/terms-of-use/)
 - **lxndrblz/Airports** ([GitHub](https://github.com/lxndrblz/Airports)) – ICAO fallback (CC-BY-SA-4.0)
 - **FAA NOTAM** – Via CGI Federal NMS API (U.S. Government)
 

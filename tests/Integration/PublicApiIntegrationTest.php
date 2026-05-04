@@ -236,6 +236,11 @@ class PublicApiIntegrationTest extends TestCase
 
         $this->assertArrayHasKey('custom_links', $airport);
         $this->assertArrayHasKey('external_links', $airport);
+        $this->assertArrayHasKey('iso_country', $airport);
+        $this->assertTrue(
+            $airport['iso_country'] === null || is_string($airport['iso_country']),
+            'iso_country must be null or string'
+        );
         $this->assertIsArray($airport['custom_links']);
         $this->assertIsArray($airport['external_links']);
         $this->assertArrayNotHasKey('links', $airport, 'Response must not use legacy links key; use custom_links');

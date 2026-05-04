@@ -235,6 +235,11 @@ Optional **station power** telemetry on airport pages for `limited_availability`
 - `shouldMockExternalServices()`: True when APIs should be mocked
 - `getConfigFilePath()`: Returns resolved config path
 
+**Country resolution (geometry aggregate)**:
+- `scripts/refresh-airport-country-resolution.php` builds `cache/airport_country_resolution.json` from airport coordinates and bundled Admin-0 polygons (`data/geo/ne_110m_admin_0_countries.geojson`, Natural Earth).
+- The scheduler runs that script when the aggregate is missing, the schema version mismatches, or the embedded `config_sha256` differs from the current `airports.json`; it also runs on a daily interval (`COUNTRY_RESOLUTION_REFRESH_INTERVAL`).
+- `loadConfig()` merges the aggregate into each airport as `_country_resolution_geo_iso` only when SHA matches (strict; no merge on mismatch). Effective ISO and external link selection use `getEffectiveIso3166Alpha2ForAirport()` in `lib/config.php`.
+
 **Mock Mode Detection**:
 Mock mode activates automatically when:
 - `LOCAL_DEV_MOCK=1` environment variable is set, OR
