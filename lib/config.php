@@ -2263,14 +2263,13 @@ function getBestIdentifierForLinks(array $airport): ?string {
 }
 
 /**
- * Infer ISO 3166-1 alpha-2 from ICAO letter scheme only (no link profiles).
+ * Infer ISO 3166-1 alpha-2 from ICAO letter scheme only (K, C, Y, and US Pacific prefixes).
  *
- * Used when `iso_country` is absent so effective country can fall back to K/C/Y-style
- * prefixes. This is not {@see getAviationRegionFromAirport()}; link regions come from
- * {@see aviationLinkRegionFromIso()} after the full effective ISO pipeline.
+ * Used only inside {@see getEffectiveIso3166Alpha2ForAirport()} when `iso_country` is missing or invalid.
+ * Link rows and bundles use {@see getAviationRegionFromAirport()} after the full ISO pipeline, not this helper.
  *
  * @param string|null $icao ICAO code (e.g., KSPB, CYAV, EGLL)
- * @return string|null Uppercase US, CA, AU when the prefix convention matches, otherwise null
+ * @return string|null Uppercase `US`, `CA`, or `AU` when the prefix convention matches; otherwise null
  */
 function inferIso3166Alpha2FromIcaoPrefix(?string $icao): ?string
 {

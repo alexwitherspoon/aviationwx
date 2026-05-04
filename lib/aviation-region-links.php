@@ -1,10 +1,11 @@
 <?php
 /**
- * Aviation link region ids and built-in external link profiles (data-driven).
+ * Aviation link regions and built-in external link profiles.
  *
- * Country comes from getEffectiveIso3166Alpha2ForAirport() in config.php. This file maps ISO
- * alpha-2 to a region id and resolves built-in dashboard/API links for that region. US profile
- * intentionally omits SkyVector (AirNav agreement); other regions include SkyVector where listed.
+ * Effective ISO is computed in `lib/config.php`; this module maps alpha-2 to a link-region id and
+ * resolves dashboard and Public API built-ins. The US profile omits SkyVector (AirNav agreement).
+ * Adding a region or static URL implies updating profiles here, `aviationLinkRegionFromIso()`, tests,
+ * and scheduled URL probes (which read profiles plus sample programmatic URLs).
  *
  * @package AviationWX
  */
@@ -81,7 +82,11 @@ function aviationLinkRegionFromIso(?string $iso): string
 }
 
 /**
- * Built-in link profile map keyed by link-region id (single source for definitions and URL audits).
+ * Built-in link profile map keyed by link-region id.
+ *
+ * Single source for `aviationRegionBuiltinLinkDefinitions()` and for enumerating static `https://`
+ * URLs in `aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck()` so new profile URLs enter CI
+ * probes without a second list.
  *
  * @return array<string, list<array{id: string, label: string, url?: string, type?: string}>>
  */
@@ -139,7 +144,7 @@ function aviationRegionBuiltinProfilesMap(): array
             ['id' => 'skyvector', 'label' => 'SkyVector', 'type' => 'skyvector'],
             ['id' => 'foreflight', 'label' => 'ForeFlight', 'type' => 'foreflight'],
         ],
-        // Override slots only (no type/url): auto links are suppressed in aviationRegionResolveBuiltinExternalLinks().
+        // Unknown: rows are id+label only so overrides still run; auto-built URLs stay off until ISO maps to a profile.
         AVIATION_LINK_REGION_UNKNOWN => [
             ['id' => 'airnav', 'label' => 'AirNav'],
             ['id' => 'faa_weather', 'label' => 'FAA Weather'],
@@ -165,11 +170,11 @@ function aviationRegionBuiltinLinkDefinitions(string $regionId): array
 }
 
 /**
- * HTTPS URLs to verify on a schedule (static profile entries plus representative programmatic URLs).
+ * HTTPS URLs for scheduled reachability checks (CI and `scripts/check-builtin-aviation-links.php`).
  *
- * Covers third-party regional pages, AirNav and SkyVector URL shapes, FAA Weather Cams map links,
- * and the meteoblue path built by {@see aviationRegionMeteoblueCurrentUrl()}. Non-HTTP ForeFlight
- * URIs are intentionally omitted.
+ * Includes every static `https://` profile `url`, one sample {@see aviationRegionMeteoblueCurrentUrl()}
+ * path, and sample AirNav, SkyVector, and FAA Weather Cams URLs from {@see aviationRegionResolveBuiltinLinkUrl()}.
+ * ForeFlight app URIs are skipped (not HTTP).
  *
  * @return list<string>
  */
@@ -197,6 +202,7 @@ function aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck(): array
         }
     }
 
+    // Arbitrary coordinates: only validates the meteoblue segment format used by the EU profile type.
     $add(aviationRegionMeteoblueCurrentUrl(48.3538, 11.7861));
 
     $airnav = aviationRegionResolveBuiltinLinkUrl(['id' => 'x', 'label' => 'y', 'type' => 'airnav'], [], 'KSEA');
@@ -217,7 +223,9 @@ function aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck(): array
 }
 
 /**
- * Build meteoblue "current" URL from WGS84 coordinates (portable path segment).
+ * Build meteoblue "today" page URL from WGS84 coordinates (path segment after `/en/weather/today/`).
+ *
+ * If meteoblue changes this path, update EU profile expectations and `aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck()`.
  *
  * @param float $lat WGS84 latitude
  * @param float $lon WGS84 longitude
@@ -324,7 +332,10 @@ function aviationRegionBuiltinLinkOverrideUrl(array $airport, string $linkId): ?
 }
 
 /**
- * Default label when regional_weather_url is set without regional_weather_label.
+ * Label for the regional built-in row when the operator sets `regional_weather_url` only.
+ *
+ * @param array<string, mixed> $airport Airport configuration
+ * @return string Display label (default `Weather Cams` when `regional_weather_label` is absent or blank)
  */
 function aviationRegionRegionalWeatherOverrideLabel(array $airport): string
 {
@@ -373,9 +384,10 @@ function aviationRegionResolveBuiltinExternalLinks(array $airport, string $regio
 }
 
 /**
- * First built-in regional authority link for the region (for backward-compatible helpers).
+ * First static `regional_weather` URL from the link-region profile (dashboard helper).
  *
- * @return array{url: string, label: string}|null
+ * @param string $regionId Link-region id from {@see aviationLinkRegionFromIso()}
+ * @return array{url: string, label: string}|null Null when the profile has no static `regional_weather` row with a `url`
  */
 function aviationRegionBuiltInRegionalWeatherSlot(string $regionId): ?array
 {

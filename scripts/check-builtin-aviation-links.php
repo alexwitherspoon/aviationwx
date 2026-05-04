@@ -1,10 +1,10 @@
 #!/usr/bin/env php
 <?php
 /**
- * HTTP(S) HEAD probe for built-in aviation region URLs (see aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck()).
+ * CLI: HEAD-probe each HTTPS URL from {@see aviationRegionBuiltinHttpsUrlsForPeriodicHealthCheck()}.
  *
- * Intended for scheduled GitHub Actions (networked). Exits non-zero if any URL returns an HTTP status
- * outside the allowed success range after optional GET fallback when HEAD is rejected.
+ * Exit 0 when every URL ends in HTTP 2xx/3xx after follow; exit 1 on any hard failure. Intended for
+ * GitHub Actions (`weekly-link-check.yml`, `builtin-aviation-links.yml`) and optional `make check-builtin-aviation-links`.
  *
  * @package AviationWX
  */
@@ -14,7 +14,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/aviation-region-links.php';
 
 /**
- * Probe one URL with HEAD, then GET on 405/501 if needed.
+ * HEAD first; on 404, 405, 501, or transport failure (code 0), retry a tiny GET (`Range: bytes=0-0`).
+ *
+ * Some hosts answer HEAD differently than GET; some return synthetic 404 for uncommon user agents.
  *
  * @return array{ok: bool, code: int, error: string}
  */
@@ -37,7 +39,7 @@ function builtinAviationLinkProbe(string $url, int $timeoutSeconds = 20): array
             CURLOPT_CONNECTTIMEOUT => $timeoutSeconds,
             CURLOPT_TIMEOUT => $timeoutSeconds,
             CURLOPT_SSL_VERIFYPEER => true,
-            // gob.mx and some CDNs return 404 for non-browser user agents on HEAD; use a common browser string.
+            // Browser-like UA: several government sites return 404 to uncommon or bot-like strings; keep probes honest for pilot-facing links.
             CURLOPT_USERAGENT => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 AviationWX-link-check/1.0',
         ];
         if ($method === 'HEAD') {
