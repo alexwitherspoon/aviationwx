@@ -4,8 +4,8 @@
  *
  * `getMockHttpResponse($url)` returns fixtures in test mode so adapters skip real HTTP. WeatherFlow URLs are
  * routed by path (station observation vs `/rest/stations/` vs `/observations/device/`). Partner logo downloads
- * (`lib/partner-logo-cache.php`) use this when `shouldMockExternalServices()` is true and the URL matches
- * example.com / test / mock patterns.
+ * (`lib/partner-logo-cache.php`) use this when `isTestMode()` is true and the URL matches example.com /
+ * test / mock patterns (fixtures are not returned outside test mode).
  */
 
 require_once __DIR__ . '/config.php';

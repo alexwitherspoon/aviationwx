@@ -1,7 +1,7 @@
 <?php
 /**
  * Unit tests: partner logo cache paths align with cache-paths helpers; subprocess checks cover CI without
- * depending on outbound HTTP for example.com URLs (mocked when shouldMockExternalServices() is true).
+ * depending on outbound HTTP for example.com URLs (mocked when `isTestMode()` is true).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -72,7 +72,8 @@ PHP;
     /**
      * Remote logo file path must match getPartnerLogoCachedFilePath(hash, ext) for the same URL.
      * Runs in a subprocess with CACHE_BASE_DIR under sys_get_temp_dir() so the unit suite does not
-     * create cache/partners under the repository (cleanTestCache does not remove partner files).
+     * create cache/partners under the repository (avoids untracked files; `cleanTestCache()` also
+     * clears `CACHE_PARTNERS_DIR/*` between runs).
      */
     public function testGetPartnerLogoCacheFile_MatchesCachedFilePathHelper(): void
     {

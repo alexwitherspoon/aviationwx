@@ -30,9 +30,9 @@ function getPartnerLogoCacheDir(): string {
 /**
  * Generate cache filename from logo URL
  *
- * When `shouldMockExternalServices()` is true and the host is `example.com`, the on-disk extension is
- * always `jpg` because `getMockHttpResponse()` serves a JPEG placeholder, so `api/partner-logo.php`
- * Content-Type matches file contents.
+ * When `isTestMode()` is true and the host is `example.com`, the on-disk extension is
+ * always `jpg` because `getMockHttpResponse()` serves a JPEG placeholder (test mode only), so
+ * `api/partner-logo.php` Content-Type matches file contents.
  *
  * @param string $logoUrl Logo URL
  * @return string Cache file path
@@ -52,9 +52,9 @@ function getPartnerLogoCacheFile(string $logoUrl): string {
         }
     }
 
-    // Mocked responses for example.com are JPEG placeholders (see lib/test-mocks.php); use .jpg on disk
-    // so Content-Type from the cache path matches file contents.
-    if (shouldMockExternalServices()) {
+    // Mocked responses for example.com are JPEG placeholders in test mode only (see lib/test-mocks.php
+    // and getMockHttpResponse() which returns null when not isTestMode()).
+    if (isTestMode()) {
         $host = strtolower($parsed['host'] ?? '');
         if ($host === 'example.com' || str_ends_with($host, '.example.com')) {
             $ext = 'jpg';
@@ -82,8 +82,10 @@ function isPartnerLogoCacheFresh(string $cacheFile): bool {
 /**
  * Download and cache partner logo
  *
- * In mock mode (`shouldMockExternalServices()`), uses `getMockHttpResponse()` when available
- * (e.g. example.com fixture) so tests do not open real outbound cURL connections.
+ * In test mode (`isTestMode()`), uses `getMockHttpResponse()` when available (e.g. example.com fixture)
+ * so PHPUnit and subprocess tests do not open real outbound cURL connections. `getMockHttpResponse()`
+ * itself only returns fixtures when `isTestMode()` is true; contributor mock mode without test mode
+ * still uses cURL.
  *
  * Downloads logo from URL, validates it's an image, and saves to cache.
  * Converts PNG to JPEG for consistency. Uses atomic file operations.
@@ -103,7 +105,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
     $httpCode = 0;
     $error = '';
 
-    if (shouldMockExternalServices()) {
+    if (isTestMode()) {
         require_once __DIR__ . '/test-mocks.php';
         $mockBody = getMockHttpResponse($logoUrl);
         if ($mockBody !== null && strlen($mockBody) >= 100) {
