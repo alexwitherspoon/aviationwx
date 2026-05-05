@@ -39,6 +39,15 @@ class PartnerLogoCachePathsTest extends TestCase
 
     private function subprocessBootstrapPreamble(): string
     {
+        $cacheId = bin2hex(random_bytes(8));
+        $cacheBootstrap = <<<BOOT
+if (!defined('CACHE_BASE_DIR')) {
+    define('CACHE_BASE_DIR', sys_get_temp_dir() . '/aviationwx_partner_logo_sub_{$cacheId}');
+}
+@mkdir(CACHE_BASE_DIR, 0755, true);
+
+BOOT;
+
         return <<<'PHP'
 <?php
 putenv('APP_ENV=testing');
@@ -51,6 +60,9 @@ if (!defined('AVIATIONWX_LOG_DIR')) {
 @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
 @touch(AVIATIONWX_LOG_DIR . '/app.log');
 @touch(AVIATIONWX_LOG_DIR . '/user.log');
+
+PHP
+            . $cacheBootstrap . <<<'PHP'
 $root = getenv('PARTNER_LOGO_TEST_ROOT');
 
 PHP;

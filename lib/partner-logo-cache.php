@@ -68,10 +68,13 @@ function isPartnerLogoCacheFresh(string $cacheFile): bool {
 
 /**
  * Download and cache partner logo
- * 
+ *
+ * In mock mode (`shouldMockExternalServices()`), uses `getMockHttpResponse()` when available
+ * (e.g. example.com fixture) so tests do not open real outbound cURL connections.
+ *
  * Downloads logo from URL, validates it's an image, and saves to cache.
  * Converts PNG to JPEG for consistency. Uses atomic file operations.
- * 
+ *
  * @param string $logoUrl Logo URL to download
  * @return bool True on success, false on failure
  */
@@ -82,32 +85,47 @@ function downloadPartnerLogo(string $logoUrl): bool {
     if (isPartnerLogoCacheFresh($cacheFile)) {
         return true;
     }
-    
-    // Download logo
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $logoUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => CURL_TIMEOUT,
-        CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
-        CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
-    ]);
-    
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    
-    if ($error) {
+
+    $data = null;
+    $httpCode = 0;
+    $error = '';
+
+    if (shouldMockExternalServices()) {
+        require_once __DIR__ . '/test-mocks.php';
+        $mockBody = getMockHttpResponse($logoUrl);
+        if ($mockBody !== null && strlen($mockBody) >= 100) {
+            $data = $mockBody;
+            $httpCode = 200;
+        }
+    }
+
+    if ($data === null) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $logoUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
+            CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+        ]);
+
+        $data = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+    }
+
+    if ($error !== '') {
         aviationwx_log('warning', 'partner logo download failed', [
             'url' => $logoUrl,
             'error' => $error
         ], 'app');
         return false;
     }
-    
+
     if ($httpCode !== 200 || !$data || strlen($data) < 100) {
         aviationwx_log('warning', 'partner logo download invalid response', [
             'url' => $logoUrl,
