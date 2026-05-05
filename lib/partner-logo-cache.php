@@ -8,16 +8,19 @@
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 
 /**
  * Get cache directory for partner logos
- * 
+ *
+ * Uses CACHE_PARTNERS_DIR from cache-paths.php so layout stays consistent with the rest of the app.
+ *
  * @return string Cache directory path
  */
 function getPartnerLogoCacheDir(): string {
-    $cacheDir = __DIR__ . '/../cache/partners';
+    $cacheDir = CACHE_PARTNERS_DIR;
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0755, true);
     }
@@ -26,14 +29,19 @@ function getPartnerLogoCacheDir(): string {
 
 /**
  * Generate cache filename from logo URL
- * 
+ *
+ * When `isTestMode()` is true and the host is `example.com`, the on-disk extension is
+ * always `jpg` because `getMockHttpResponse()` serves a JPEG placeholder (test mode only), so
+ * `api/partner-logo.php` Content-Type matches file contents.
+ *
  * @param string $logoUrl Logo URL
  * @return string Cache file path
  */
 function getPartnerLogoCacheFile(string $logoUrl): string {
-    $cacheDir = getPartnerLogoCacheDir();
+    getPartnerLogoCacheDir();
+
     $hash = md5($logoUrl);
-    
+
     // Try to extract extension from URL
     $ext = 'jpg'; // default
     $parsed = parse_url($logoUrl);
@@ -43,8 +51,17 @@ function getPartnerLogoCacheFile(string $logoUrl): string {
             $ext = ($pathExt === 'jpeg') ? 'jpg' : $pathExt;
         }
     }
-    
-    return $cacheDir . '/' . $hash . '.' . $ext;
+
+    // Mocked responses for example.com are JPEG placeholders in test mode only (see lib/test-mocks.php
+    // and getMockHttpResponse() which returns null when not isTestMode()).
+    if (isTestMode()) {
+        $host = strtolower($parsed['host'] ?? '');
+        if ($host === 'example.com' || str_ends_with($host, '.example.com')) {
+            $ext = 'jpg';
+        }
+    }
+
+    return getPartnerLogoCachedFilePath($hash, $ext);
 }
 
 /**
@@ -64,10 +81,15 @@ function isPartnerLogoCacheFresh(string $cacheFile): bool {
 
 /**
  * Download and cache partner logo
- * 
+ *
+ * In test mode (`isTestMode()`), uses `getMockHttpResponse()` when available (e.g. example.com fixture)
+ * so PHPUnit and subprocess tests do not open real outbound cURL connections. `getMockHttpResponse()`
+ * itself only returns fixtures when `isTestMode()` is true; contributor mock mode without test mode
+ * still uses cURL.
+ *
  * Downloads logo from URL, validates it's an image, and saves to cache.
  * Converts PNG to JPEG for consistency. Uses atomic file operations.
- * 
+ *
  * @param string $logoUrl Logo URL to download
  * @return bool True on success, false on failure
  */
@@ -78,32 +100,47 @@ function downloadPartnerLogo(string $logoUrl): bool {
     if (isPartnerLogoCacheFresh($cacheFile)) {
         return true;
     }
-    
-    // Download logo
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $logoUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => CURL_TIMEOUT,
-        CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
-        CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
-    ]);
-    
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    
-    if ($error) {
+
+    $data = null;
+    $httpCode = 0;
+    $error = '';
+
+    if (isTestMode()) {
+        require_once __DIR__ . '/test-mocks.php';
+        $mockBody = getMockHttpResponse($logoUrl);
+        if ($mockBody !== null && strlen($mockBody) >= 100) {
+            $data = $mockBody;
+            $httpCode = 200;
+        }
+    }
+
+    if ($data === null) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $logoUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
+            CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+        ]);
+
+        $data = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+    }
+
+    if ($error !== '') {
         aviationwx_log('warning', 'partner logo download failed', [
             'url' => $logoUrl,
             'error' => $error
         ], 'app');
         return false;
     }
-    
+
     if ($httpCode !== 200 || !$data || strlen($data) < 100) {
         aviationwx_log('warning', 'partner logo download invalid response', [
             'url' => $logoUrl,
@@ -112,7 +149,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
         ], 'app');
         return false;
     }
-    
+
     // Validate and process image
     $tmpFile = getUniqueTmpFile($cacheFile);
     

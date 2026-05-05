@@ -92,6 +92,7 @@ function isRunningInCI(): bool {
  * - Circuit breaker state (backoff.json)
  * - Weather cache files (weather_*.json)
  * - Webcam images (webcams/*.jpg, *.webp)
+ * - Partner logo cache files (partners/* under CACHE_PARTNERS_DIR)
  * - Daily tracking files (peak_gusts.json, temp_extremes.json)
  * - Outage detection files (outage_*.json)
  * - Rate limit files (rate_limits/{prefix}/*.json)
@@ -154,7 +155,18 @@ function cleanTestCache(): void {
             }
         }
     }
-    
+
+    // Partner logo cache files (flat hash.ext under CACHE_PARTNERS_DIR)
+    $partnerPattern = CACHE_PARTNERS_DIR . '/*';
+    $partnerFiles = glob($partnerPattern);
+    if ($partnerFiles !== false) {
+        foreach ($partnerFiles as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    }
+
     // Clean files matching base patterns
     foreach ($basePatterns as $pattern) {
         $files = glob($pattern);

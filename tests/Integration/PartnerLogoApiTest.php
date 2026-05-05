@@ -11,8 +11,10 @@ class PartnerLogoApiTest extends TestCase
     
     protected function setUp(): void
     {
-        // Get base URL from environment or use default
-        $this->baseUrl = getenv('TEST_BASE_URL') ?: 'http://localhost:8080';
+        // Match WeatherEndpointTest / SmokeTest: isolated local runs use TEST_API_URL (e.g. :9080).
+        $this->baseUrl = getenv('TEST_API_URL')
+            ?: getenv('TEST_BASE_URL')
+            ?: 'http://localhost:8080';
     }
     
     /**

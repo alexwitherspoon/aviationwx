@@ -94,4 +94,14 @@ class CachePathsStructureTest extends TestCase
         $this->assertStringContainsString('rate_limits/ab/', $path);
         $this->assertStringEndsWith('ab.json', $path);
     }
+
+    /**
+     * Partner logo on-disk cache path uses CACHE_PARTNERS_DIR with hash and extension
+     */
+    public function testGetPartnerLogoCachedFilePath_UsesPartnersDirAndExtension(): void
+    {
+        $path = getPartnerLogoCachedFilePath('deadbeef', 'png');
+        $this->assertStringContainsString('partners/deadbeef.png', $path);
+        $this->assertStringEndsWith('deadbeef.png', $path);
+    }
 }

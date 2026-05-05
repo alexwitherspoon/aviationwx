@@ -138,6 +138,30 @@ class SmokeTest extends TestCase
     }
     
     /**
+     * Partner logo proxy must respond without server errors (validates PHP bootstrap, e.g. no redeclare fatals).
+     */
+    public function testPartnerLogoEndpoint_RejectsMissingUrl()
+    {
+        $response = $this->makeRequest('api/partner-logo.php');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+
+        $this->assertNotEquals(
+            500,
+            $response['http_code'],
+            "Partner logo endpoint should not return 500 (got: {$response['http_code']})"
+        );
+        $this->assertEquals(
+            400,
+            $response['http_code'],
+            "Missing url should return 400 (got: {$response['http_code']})"
+        );
+    }
+
+    /**
      * Test webcam endpoint is accessible
      */
     public function testWebcamEndpoint_IsAccessible()

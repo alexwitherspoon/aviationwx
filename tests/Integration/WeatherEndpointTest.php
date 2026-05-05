@@ -61,6 +61,23 @@ class WeatherEndpointTest extends TestCase
         $this->assertNotNull($data, "Response should be valid JSON");
         $this->assertIsArray($data, "Response should be an array");
     }
+
+    /**
+     * Partner logo API must bootstrap without 500 (regression: duplicate getPartnerLogoCachePath fatals).
+     */
+    public function testPartnerLogoEndpoint_MissingUrlReturns400(): void
+    {
+        $response = $this->makeRequest('api/partner-logo.php');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped('Endpoint not available');
+            return;
+        }
+
+        $this->assertNotEquals(500, $response['http_code'], 'Partner logo endpoint must not 500');
+        $this->assertEquals(400, $response['http_code'], 'Missing url should return 400');
+        $this->assertStringContainsString('Missing url', (string) $response['body']);
+    }
     
     /**
      * Test weather endpoint response structure
