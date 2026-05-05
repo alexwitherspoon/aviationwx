@@ -1,6 +1,7 @@
 <?php
 /**
- * Unit tests: partner logo cache paths align with cache-paths helpers; subprocess checks cover CI without HTTP.
+ * Unit tests: partner logo cache paths align with cache-paths helpers; subprocess checks cover CI without
+ * depending on outbound HTTP for example.com URLs (mocked when shouldMockExternalServices() is true).
  */
 
 use PHPUnit\Framework\TestCase;
