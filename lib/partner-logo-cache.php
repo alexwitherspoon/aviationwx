@@ -30,6 +30,10 @@ function getPartnerLogoCacheDir(): string {
 /**
  * Generate cache filename from logo URL
  *
+ * When `shouldMockExternalServices()` is true and the host is `example.com`, the on-disk extension is
+ * always `jpg` because `getMockHttpResponse()` serves a JPEG placeholder, so `api/partner-logo.php`
+ * Content-Type matches file contents.
+ *
  * @param string $logoUrl Logo URL
  * @return string Cache file path
  */
@@ -45,6 +49,15 @@ function getPartnerLogoCacheFile(string $logoUrl): string {
         $pathExt = strtolower(pathinfo($parsed['path'], PATHINFO_EXTENSION));
         if (in_array($pathExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
             $ext = ($pathExt === 'jpeg') ? 'jpg' : $pathExt;
+        }
+    }
+
+    // Mocked responses for example.com are JPEG placeholders (see lib/test-mocks.php); use .jpg on disk
+    // so Content-Type from the cache path matches file contents.
+    if (shouldMockExternalServices()) {
+        $host = strtolower($parsed['host'] ?? '');
+        if ($host === 'example.com' || str_ends_with($host, '.example.com')) {
+            $ext = 'jpg';
         }
     }
 
@@ -134,7 +147,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
         ], 'app');
         return false;
     }
-    
+
     // Validate and process image
     $tmpFile = getUniqueTmpFile($cacheFile);
     

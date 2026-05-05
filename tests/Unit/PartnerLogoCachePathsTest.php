@@ -70,33 +70,51 @@ PHP;
     }
 
     /**
-     * Remote logo file path must match getPartnerLogoCachedFilePath(hash, ext) for the same URL
+     * Remote logo file path must match getPartnerLogoCachedFilePath(hash, ext) for the same URL.
+     * Runs in a subprocess with CACHE_BASE_DIR under sys_get_temp_dir() so the unit suite does not
+     * create cache/partners under the repository (cleanTestCache does not remove partner files).
      */
     public function testGetPartnerLogoCacheFile_MatchesCachedFilePathHelper(): void
     {
-        require_once __DIR__ . '/../../lib/partner-logo-cache.php';
-
-        $pngUrl = 'https://example.com/sponsor/logo.png';
-        $this->assertSame(
-            getPartnerLogoCachedFilePath(md5($pngUrl), 'png'),
-            getPartnerLogoCacheFile($pngUrl)
-        );
-
-        $jpegUrl = 'https://example.com/sponsor/photo.jpeg';
-        $this->assertSame(
-            getPartnerLogoCachedFilePath(md5($jpegUrl), 'jpg'),
-            getPartnerLogoCacheFile($jpegUrl)
-        );
+        $body = <<<'PHP'
+require $root . '/lib/constants.php';
+require $root . '/lib/logger.php';
+require $root . '/lib/partner-logo-cache.php';
+$pngUrl = 'https://example.com/sponsor/logo.png';
+if (getPartnerLogoCachedFilePath(md5($pngUrl), 'jpg') !== getPartnerLogoCacheFile($pngUrl)) {
+    fwrite(STDERR, "example.com URL with .png path must map to .jpg cache file (mock placeholder is JPEG)\n");
+    exit(1);
+}
+$jpegUrl = 'https://example.com/sponsor/photo.jpeg';
+if (getPartnerLogoCachedFilePath(md5($jpegUrl), 'jpg') !== getPartnerLogoCacheFile($jpegUrl)) {
+    fwrite(STDERR, "jpeg path mismatch\n");
+    exit(1);
+}
+echo "ok\n";
+PHP;
+        $result = $this->runPartnerLogoSubprocess($body);
+        $this->assertSame(0, $result['exit'], $result['output']);
+        $this->assertStringContainsString('ok', $result['output']);
     }
 
     /**
-     * Partner cache directory must stay aligned with CACHE_PARTNERS_DIR
+     * Partner cache directory must stay aligned with CACHE_PARTNERS_DIR (subprocess; see path test).
      */
     public function testGetPartnerLogoCacheDir_EqualsCachePartnersDir(): void
     {
-        require_once __DIR__ . '/../../lib/partner-logo-cache.php';
-
-        $this->assertSame(CACHE_PARTNERS_DIR, getPartnerLogoCacheDir());
+        $body = <<<'PHP'
+require $root . '/lib/constants.php';
+require $root . '/lib/logger.php';
+require $root . '/lib/partner-logo-cache.php';
+if (CACHE_PARTNERS_DIR !== getPartnerLogoCacheDir()) {
+    fwrite(STDERR, "dir mismatch\n");
+    exit(1);
+}
+echo "ok\n";
+PHP;
+        $result = $this->runPartnerLogoSubprocess($body);
+        $this->assertSame(0, $result['exit'], $result['output']);
+        $this->assertStringContainsString('ok', $result['output']);
     }
 
     /**
