@@ -427,7 +427,7 @@ function checkRunwayCacheHealth(?array $config): array {
  * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
  */
 function computeAirportCountryResolutionHealth(?array $config, ?string $configSha256): array {
-    $name = 'Airport country resolution';
+    $name = 'Airport Location Service';
     $path = CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE;
     $basename = basename($path);
 
