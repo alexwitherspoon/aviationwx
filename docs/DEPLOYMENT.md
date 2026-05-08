@@ -516,6 +516,10 @@ git push origin main
 
 See `.github/workflows/deploy-docker.yml` for workflow details.
 
+### Nginx and `embed.aviationwx.org` (CD)
+
+Production CD **rsyncs** `docker/nginx.conf` from the repo to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). Host routing changes for **`embed.aviationwx.org`** therefore ship with application commits; there is no separate generated vhost in CD. The deploy workflow runs **`scripts/verify-embed-nginx-conf.php`** before deployment and again on the server after rsync so the embed server block keeps Public API v1 **on-host** routing (needed so third-party iframe `fetch()` sees CORS on the first response).
+
 ## Maintenance
 
 ### Update Application
