@@ -89,6 +89,10 @@ aviationwx.org/
 
 ## Core Components
 
+### HTTP edge (`docker/nginx.conf`)
+
+TLS terminates in nginx. **`api.aviationwx.org`** exposes Public API v1; **`embed.aviationwx.org`** serves the embed generator and forwards `/api/v1/...` to **`api/v1/router.php`** on that host so `fetch()` from the embed origin receives CORS on the first hop. **`aviationwx.org`** and **`*.aviationwx.org`** serve the dashboard. The committed **`docker/nginx.conf`** is bind-mounted in production (see **`docs/DEPLOYMENT.md`**).
+
 ### Routing System (`index.php`)
 
 - **Purpose**: Routes requests to appropriate pages

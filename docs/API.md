@@ -1,20 +1,14 @@
 # Internal API Documentation
 
-This document describes the **Internal API** endpoints used by the AviationWX.org web interface. These endpoints are designed for the frontend and are not versioned. The Internal API is long-lived and distinct from the Public API.
+The **Internal API** is the set of first-party HTTP endpoints used by the AviationWX.org web interface (`api/*.php` on the main site host). Responses are tailored to the dashboard; endpoints are not versioned as a public contract.
 
-**Terminology:** Always refer to these routes as the **Internal API**. They are actively maintained first-party endpoints for the dashboard and site UI. **Do not** call them "legacy API" or "legacy endpoints" -- that wording is reserved for older file formats, optional query flags (e.g. `?legacy=1`), or vendor-specific cases (e.g. Davis legacy hardware), not for `api/weather.php` / `api/webcam.php` themselves.
+The **Public API** (`https://api.aviationwx.org/v1/...`) is the supported integration surface for third-party apps; see [api.aviationwx.org](https://api.aviationwx.org).
 
-> **For Third-Party Developers:** If you're building an application that integrates with AviationWX, please use the [**Public API**](https://api.aviationwx.org) instead. The Public API provides:
-> - Stable, versioned endpoints (`/v1/...`)
-> - OpenAPI specification
-> - Rate limit headers
-> - Consistent JSON responses
-> - Support for API keys with higher rate limits
->
-> Visit **[api.aviationwx.org](https://api.aviationwx.org)** for documentation.
->
+**Wording:** Use **Internal API** for these routes. Use **legacy** only for older file formats, optional flags such as `?legacy=1`, or vendor-specific hardware lines -- not as a label for `api/weather.php` / `api/webcam.php`.
+
+> **For third-party developers:** Use the [**Public API**](https://api.aviationwx.org): stable `/v1/...` paths, OpenAPI, rate-limit headers, and API keys.  
 > **Canonical Public API base URL (public deployment):** `https://api.aviationwx.org/v1`  
-> Integrations should call that base directly. Self-hosted deployments may set `config.public_api.canonical_base_url` so documentation matches their public origin.
+> Self-hosted deployments may set `config.public_api.canonical_base_url` so docs match their origin.
 
 ---
 

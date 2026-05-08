@@ -382,7 +382,7 @@ curl https://aviationwx.org/health.php
 curl https://aviationwx.org/diagnostics.php
 ```
 
-**Public API v1 (nginx):** Committed `docker/nginx.conf` includes `/api/v1/` redirect rules toward the default canonical API base. Production should keep redirect targets aligned with `config.public_api.canonical_base_url` when set; deployment may generate or install nginx configuration from deployment `airports.json` (nginx does not read JSON at request time).
+**Nginx / Public API v1:** Production loads **`docker/nginx.conf`** from the deployed repository (CD copies it to the server and bind-mounts it for the nginx container). Routing layout and embed checks: [Nginx and `embed.aviationwx.org` (CD)](#nginx-and-embedaviationwxorg-cd).
 
 ### 5. Scheduler Daemon (Automatic)
 
@@ -518,7 +518,7 @@ See `.github/workflows/deploy-docker.yml` for workflow details.
 
 ### Nginx and `embed.aviationwx.org` (CD)
 
-Production CD **rsyncs** `docker/nginx.conf` from the repo to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). Host routing changes for **`embed.aviationwx.org`** therefore ship with application commits; there is no separate generated vhost in CD. The deploy workflow runs **`scripts/verify-embed-nginx-conf.php`** before deployment and again on the server after rsync so the embed server block keeps Public API v1 **on-host** routing (needed so third-party iframe `fetch()` sees CORS on the first response).
+CD **rsyncs** `docker/nginx.conf` to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). **`embed.aviationwx.org`** routing ships with application commits; nginx does not read `airports.json`. The deploy workflow runs **`scripts/verify-embed-nginx-conf.php`** on the Actions runner before SSH and again on the server after rsync. The embed server block keeps Public API v1 on-host (rewrite + `location /v1/`) so browsers get CORS on the first hop for `/api/v1/...` requests.
 
 ## Maintenance
 

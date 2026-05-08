@@ -984,7 +984,7 @@ Stores recent frames for time-lapse playback. Webcam images are stored at `cache
 
 ### Configuration
 
-History retention is now time-based using `webcam_history_retention_hours`:
+History retention uses `webcam_history_retention_hours`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -1144,7 +1144,7 @@ Both services are proxied through `/api/map-tiles.php` for server-side caching a
 
 The precipitation radar layer is always enabled and accessible through the map controls (☔).
 
-**Note (January 2026 API Changes)**: RainViewer's API now limits tile requests to zoom level 7 and 100 requests/IP/minute. The map automatically handles this by fetching tiles at zoom 7 and scaling them up when zoomed in further. Server-side caching ensures the rate limit is rarely a concern.
+RainViewer limits tile requests to zoom level **7** and **100 requests per IP per minute**. The map client requests tiles at zoom 7 and scales them at higher zoom. Server-side caching reduces pressure on that limit.
 
 ---
 
@@ -1546,7 +1546,7 @@ When `config.public_api.enabled` is true, the Public API and weather history fea
 |--------|---------|-------------|
 | `canonical_base_url` | `https://api.aviationwx.org/v1` | Optional. Absolute `http://` or `https://` base URL for Public API v1 with no trailing slash. Used by `getCanonicalPublicApiV1BaseUrl()` and the API docs page. Omit to use this default. Set when your deployment’s public API origin differs (self-hosted). |
 
-**Nginx:** `/api/v1/` redirect rules on **api.aviationwx.org** (if present) must target the same host and path prefix as this value. Production CD **rsyncs** `docker/nginx.conf` from the repo into `~/aviationwx/` and bind-mounts it into the nginx container (see `docker/docker-compose.prod.yml`); optional host overrides must keep `embed.aviationwx.org` routing consistent so browser `fetch()` to `/api/v1` on the embed host does not follow an off-host redirect before CORS applies. Deploy runs `scripts/verify-embed-nginx-conf.php` to gate bad configs.
+**Nginx:** On **api.aviationwx.org**, `/api/v1/` redirects must target the same host and path prefix as this value. CD installs **`docker/nginx.conf`** from the repository (see `docker/docker-compose.prod.yml`). Any manual nginx overlay must preserve **`embed.aviationwx.org`** on-host Public API v1 routing (rewrite + `/v1/` → `api/v1/router.php`) so cross-origin `fetch()` to `/api/v1` on the embed host does not hit an off-host redirect before CORS. Deploy runs **`scripts/verify-embed-nginx-conf.php`** against the synced file.
 
 ### Rate limits
 

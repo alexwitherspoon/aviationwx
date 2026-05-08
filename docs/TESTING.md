@@ -16,12 +16,12 @@ AviationWX uses a unified testing strategy based on `APP_ENV`:
 
 ## API terminology (Internal vs Public)
 
-Use consistent wording in docs, comments, and reviews:
+| Term | Meaning |
+|------|---------|
+| **Internal API** | First-party JSON and binary endpoints on the main site host (`api/weather.php`, `api/webcam.php`, `api/notam.php`, ...). Documented in [`docs/API.md`](API.md). Used by the dashboard and site UI; not versioned. |
+| **Public API** | Versioned JSON under `https://api.aviationwx.org/v1/...` for integrations, OpenAPI, and embed JSON contracts. |
 
-- **Internal API** -- First-party JSON and image endpoints on the main site host, e.g. [`api/weather.php`](../api/weather.php), [`api/webcam.php`](../api/webcam.php), [`api/notam.php`](../api/notam.php). Described in [`docs/API.md`](API.md). Actively maintained for the dashboard; **not** deprecated.
-- **Public API** -- Versioned JSON at `https://api.aviationwx.org/v1/...` for integrations and embed data contracts.
-
-**Do not** refer to Internal API routes as "legacy API." Reserve **legacy** for older *formats*, optional *flags* (e.g. `?legacy=1`), vendor *hardware* (e.g. Davis legacy devices), or unrelated code paths -- not for the main weather/webcam HTTP endpoints.
+Reserve **legacy** for older response formats, optional query flags such as `?legacy=1`, vendor hardware lines (e.g. Davis WeatherLink legacy devices), or unrelated features -- not for the Internal API weather/webcam routes.
 
 ## Quick Start
 
