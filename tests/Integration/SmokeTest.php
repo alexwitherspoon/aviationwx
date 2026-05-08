@@ -1,10 +1,13 @@
 <?php
 /**
  * Smoke Tests for Production Endpoint
- * 
+ *
  * Basic health checks and endpoint availability tests.
  * These tests verify that critical endpoints are accessible and functioning.
- * 
+ *
+ * Exercises the Internal API on the main host (for example api/weather.php, api/webcam.php),
+ * not exclusively Public API v1 on api.aviationwx.org. See docs/API.md for terminology.
+ *
  * These tests can be run against production to verify deployment health.
  */
 

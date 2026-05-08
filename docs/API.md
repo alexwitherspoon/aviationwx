@@ -2,6 +2,8 @@
 
 This document describes the **Internal API** endpoints used by the AviationWX.org web interface. These endpoints are designed for the frontend and are not versioned. The Internal API is long-lived and distinct from the Public API.
 
+**Terminology:** Always refer to these routes as the **Internal API**. They are actively maintained first-party endpoints for the dashboard and site UI. **Do not** call them "legacy API" or "legacy endpoints" -- that wording is reserved for older file formats, optional query flags (e.g. `?legacy=1`), or vendor-specific cases (e.g. Davis legacy hardware), not for `api/weather.php` / `api/webcam.php` themselves.
+
 > **For Third-Party Developers:** If you're building an application that integrates with AviationWX, please use the [**Public API**](https://api.aviationwx.org) instead. The Public API provides:
 > - Stable, versioned endpoints (`/v1/...`)
 > - OpenAPI specification

@@ -100,7 +100,9 @@ aviationwx.org/
 
 ### Weather System (`api/weather.php`)
 
-- **Purpose**: Fetches and serves weather data as JSON API
+Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard; distinct from the versioned Public API on `api.aviationwx.org`.
+
+- **Purpose**: Fetches and serves weather data as JSON for first-party consumers
 - **Key Features**:
   - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR, Nav Canada Weather for Canadian airports)
   - **Unified Fetcher** (default): Clean aggregation pipeline with predictable behavior
@@ -110,7 +112,7 @@ aviationwx.org/
   - Caching with stale-while-revalidate
   - Rate limiting
   - Debug endpoint (`?debug=1`) for troubleshooting
-  - Legacy fallback (`?legacy=1`) for backward compatibility
+  - Optional backward-compatible response shape (`?legacy=1` query flag; not related to "legacy API" terminology)
 
 **Wind direction**: All internal values use true north. Display layers use `wind_direction_magnetic`; fail closed (`---`) when missing. See [Wind Direction: True North](SAFETY_CRITICAL_CALCULATIONS.md#wind-direction-true-north) and [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source). Conversion in `lib/heading-conversion.php` (safety-critical).
 

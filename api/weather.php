@@ -1,7 +1,11 @@
 <?php
 /**
- * Weather Data Fetcher
- * Fetches weather data from configured source for the specified airport
+ * Internal API -- Weather JSON endpoint for the dashboard and site UI.
+ *
+ * Documented as the Internal API in docs/API.md (paths under api/ on the main host).
+ * Distinct from the versioned Public API at api.aviationwx.org.
+ *
+ * Fetches weather data from configured sources for the specified airport.
  */
 
 require_once __DIR__ . '/../lib/config.php';
