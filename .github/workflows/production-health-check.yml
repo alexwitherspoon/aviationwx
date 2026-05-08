@@ -1,0 +1,45 @@
+name: Production health check
+
+run-name: "Production health (${{ github.event_name }})"
+
+on:
+  schedule:
+    # Daily 06:15 UTC (after weekly link-check Monday slot)
+    - cron: '15 6 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: production-health-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: External HTTPS probes (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl
+          coverage: none
+
+      - name: Run production health checks
+        env:
+          HEALTH_CHECK_MAIN: https://aviationwx.org
+          HEALTH_CHECK_API: https://api.aviationwx.org
+          HEALTH_CHECK_EMBED: https://embed.aviationwx.org
+          HEALTH_CHECK_ICAO: kspb
+          HEALTH_CHECK_TIMEOUT: '25'
+        run: php scripts/production-health-check.php
+
+      - name: Built-in aviation HTTPS URLs
+        run: php scripts/check-builtin-aviation-links.php
