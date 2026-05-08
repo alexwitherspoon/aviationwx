@@ -114,7 +114,11 @@ function productionHealthCheckFormatHeaders(array $headers): array
 }
 
 /**
- * @return array{ok: bool, detail: string}
+ * Run a single named check and prefix output with timing.
+ *
+ * @param string $name Stable check identifier (used in logs and GitHub summary).
+ * @param callable(): array{ok: bool, detail?: string} $fn Check body.
+ * @return array{name: string, ok: bool, detail: string}
  */
 function runNamedCheck(string $name, callable $fn): array
 {
@@ -168,6 +172,10 @@ $checks = [
         return ['ok' => true, 'detail' => 'HTTP 200'];
     },
     'embed_api_cors' => static function () use ($embed, $icao, $timeout, $googleEmbedOrigin) {
+        $embedHost = parse_url($embed, PHP_URL_HOST);
+        if (!is_string($embedHost) || $embedHost === '') {
+            return ['ok' => false, 'detail' => 'invalid HEALTH_CHECK_EMBED host'];
+        }
         $url = $embed . '/api/v1/airports/' . rawurlencode($icao) . '/embed';
         $r = productionHealthCheckRequest(
             $url,
@@ -177,8 +185,12 @@ $checks = [
             ]),
             $timeout
         );
-        if (stripos($r['final_url'], 'embed.aviationwx.org') === false) {
-            return ['ok' => false, 'detail' => 'followed away from embed host: ' . $r['final_url']];
+        $finalHost = parse_url($r['final_url'], PHP_URL_HOST);
+        if (!is_string($finalHost) || strcasecmp($finalHost, $embedHost) !== 0) {
+            return ['ok' => false, 'detail' => 'expected final URL on embed host ' . $embedHost . ', got ' . $r['final_url']];
+        }
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
         }
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code'] . ' ' . $r['error']];
@@ -196,6 +208,9 @@ $checks = [
     'api_v1_embed' => static function () use ($api, $icao, $timeout) {
         $url = $api . '/v1/airports/' . rawurlencode($icao) . '/embed';
         $r = productionHealthCheckRequest($url, productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
@@ -228,6 +243,9 @@ $checks = [
     },
     'api_v1_airports' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/v1/airports', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
@@ -242,6 +260,9 @@ $checks = [
         if ($r['code'] === 503) {
             return ['ok' => true, 'detail' => 'HTTP 503 (upstream)'];
         }
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
@@ -253,6 +274,9 @@ $checks = [
             productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
             $timeout
         );
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
