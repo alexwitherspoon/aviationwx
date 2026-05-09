@@ -128,6 +128,21 @@ class PublicApiRateLimitTest extends TestCase
             $this->assertTrue($result['allowed'], 'Health check request ' . $i . ' should be allowed');
         }
     }
+
+    /**
+     * Health check bypass must match the normal rate-limit result shape so header helpers do not warn.
+     */
+    public function testGetPublicApiRateLimitHeaders_AfterHealthCheckBypass(): void
+    {
+        $result = checkPublicApiRateLimit('hc_' . uniqid(), 'anonymous', true);
+        $headers = getPublicApiRateLimitHeaders($result);
+
+        $this->assertArrayHasKey('X-RateLimit-Limit', $headers);
+        $this->assertArrayHasKey('X-RateLimit-Remaining', $headers);
+        $this->assertArrayHasKey('X-RateLimit-Reset', $headers);
+        $this->assertSame((string) $result['limits']['minute'], $headers['X-RateLimit-Limit']);
+        $this->assertSame((string) $result['remaining']['minute'], $headers['X-RateLimit-Remaining']);
+    }
     
     /**
      * Rate limit should be enforced after exceeding limit

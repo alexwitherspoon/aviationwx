@@ -32,15 +32,26 @@ function checkPublicApiRateLimit(string $identifier, string $tier = 'anonymous',
     // Health checks bypass rate limiting
     if ($isHealthCheck) {
         $limits = getPublicApiRateLimits($tier);
+        $now = time();
+        // Same nested shape as the normal return path so getPublicApiRateLimitHeaders()
+        // receives minute/hour/day keys (not requests_per_* from getPublicApiRateLimits).
         return [
             'allowed' => true,
             'tier' => $tier,
-            'limits' => $limits,
-            'remaining' => $limits,
+            'limits' => [
+                'minute' => $limits['requests_per_minute'],
+                'hour' => $limits['requests_per_hour'],
+                'day' => $limits['requests_per_day'],
+            ],
+            'remaining' => [
+                'minute' => $limits['requests_per_minute'],
+                'hour' => $limits['requests_per_hour'],
+                'day' => $limits['requests_per_day'],
+            ],
             'reset' => [
-                'minute' => time() + 60,
-                'hour' => time() + 3600,
-                'day' => time() + 86400,
+                'minute' => $now + 60,
+                'hour' => $now + 3600,
+                'day' => $now + 86400,
             ],
             'retry_after' => null,
         ];
