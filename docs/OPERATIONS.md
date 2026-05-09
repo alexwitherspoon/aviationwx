@@ -112,7 +112,7 @@ docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 
 ### Metrics System
 
-Live counters live in APCu (per PHP-FPM worker). Each worker writes a spill snapshot at shutdown to `cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}.json`. The scheduler merges those shards into canonical hourly files:
+Live counters live in APCu (per PHP-FPM worker). Each worker writes spill snapshots after requests (unique filenames under `cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}_{hex}.json`) so unconsumed shards are not overwritten. The scheduler merges those shards into canonical hourly files:
 
 - **Hourly**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
 - **Daily**: `cache/metrics/daily/YYYY-MM-DD.json`

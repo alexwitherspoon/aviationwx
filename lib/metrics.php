@@ -735,17 +735,19 @@ function variant_health_flush_via_http(): bool {
         ? $data['results']
         : [];
     $endpointErr = $responseResults['flush_endpoint_error'] ?? null;
-    $variantErr = $responseResults['variant_health_flush_error'] ?? null;
+    $exceptionErr = $responseResults['error'] ?? null;
+    $variantFlushOk = $responseResults['variant_health_flush'] ?? null;
 
     if (($now - $lastLogTime) >= 300) {
         $hasDiag = ($endpointErr !== null && $endpointErr !== '')
-            || ($variantErr !== null && $variantErr !== '');
+            || ($exceptionErr !== null && $exceptionErr !== '');
         $level = $hasDiag ? 'error' : 'warning';
         aviationwx_log($level, 'variant health: HTTP flush failed', [
             'http_code' => $httpCode,
             'curl_error' => $curlError ?: 'unknown',
             'flush_endpoint_error' => $endpointErr,
-            'variant_health_flush_error' => $variantErr,
+            'exception_message' => $exceptionErr,
+            'variant_health_flush' => $variantFlushOk,
             'response' => substr($response ?: '', 0, 200),
             'url' => $url,
         ], 'app');
@@ -1882,7 +1884,10 @@ function metrics_prometheus_export(): array {
 /**
  * Persist pending APCu counters to a spill file and reset counters on success.
  *
- * Spill path: CACHE_METRICS_SPILL_DIR/{hourId}/{pid}.json (see cache-paths.php).
+ * Uses a unique filename per call so successive request shutdowns do not overwrite unconsumed shards.
+ * Each file holds counters accumulated since the last successful spill for this worker (delta shard).
+ *
+ * Spill path: CACHE_METRICS_SPILL_DIR/{hourId}/{pid}_{uniq}.json (see cache-paths.php).
  *
  * @return bool True if nothing to write, or spill written and APCu reset
  */
@@ -1898,7 +1903,7 @@ function metrics_write_spill_snapshot_and_reset_counters(): bool {
 
     $hourId = metrics_get_hour_id();
     $pid = getmypid();
-    $target = getMetricsSpillPathForWorker($hourId, $pid);
+    $target = getMetricsSpillSnapshotPath($hourId, $pid);
     $dir = dirname($target);
     if (!ensureCacheDir($dir)) {
         aviationwx_log('warning', 'metrics spill: could not create spill directory', ['dir' => $dir], 'app');
@@ -1940,6 +1945,8 @@ function metrics_write_spill_snapshot_and_reset_counters(): bool {
 
 /**
  * Shutdown hook: spill metrics when running under web SAPI (Apache worker).
+ *
+ * Runs after each HTTP request ends (PHP lifecycle), not only when an FPM worker process exits.
  *
  * @return void
  */

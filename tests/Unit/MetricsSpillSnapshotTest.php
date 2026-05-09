@@ -36,7 +36,10 @@ class MetricsSpillSnapshotTest extends TestCase
         $this->assertSame(0, metrics_get('global_page_views'));
 
         $hourId = metrics_get_hour_id();
-        $path = getMetricsSpillPathForWorker($hourId, getmypid());
+        $pattern = getMetricsSpillHourDir($hourId) . '/' . getmypid() . '_*.json';
+        $files = glob($pattern) ?: [];
+        $this->assertCount(1, $files, 'Expected exactly one spill shard for this PID');
+        $path = $files[0];
         $this->assertFileExists($path);
 
         $raw = file_get_contents($path);

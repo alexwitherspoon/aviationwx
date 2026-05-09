@@ -595,14 +595,18 @@ function getMetricsSpillHourDir(string $hourId): string {
 }
 
 /**
- * Per-worker spill snapshot path (overwrite with tmp+rename from PHP worker).
+ * Unique JSON path for one spill snapshot (tmp+rename from PHP worker).
+ *
+ * Multiple snapshots per worker per hour are expected (request shutdown); the aggregator merges and deletes each file.
  *
  * @param string $hourId Hour identifier (metrics_get_hour_id)
- * @param int $pid Process ID (Apache worker)
+ * @param int $pid Process ID (FPM worker)
  * @return string Absolute path to JSON spill file
  */
-function getMetricsSpillPathForWorker(string $hourId, int $pid): string {
-    return getMetricsSpillHourDir($hourId) . '/' . $pid . '.json';
+function getMetricsSpillSnapshotPath(string $hourId, int $pid): string {
+    $uniq = bin2hex(random_bytes(8));
+
+    return getMetricsSpillHourDir($hourId) . '/' . $pid . '_' . $uniq . '.json';
 }
 
 /**

@@ -106,16 +106,18 @@ class CachePathsStructureTest extends TestCase
     }
 
     /**
-     * Metrics spill paths nest under spill/{hourId}/{pid}.json under metrics cache root
+     * Metrics spill snapshots use unique filenames under spill/{hourId}/ so workers do not overwrite pending shards
      */
-    public function testMetricsSpillPaths_UseHourAndPid(): void
+    public function testMetricsSpillSnapshotPath_IsUniquePerCall(): void
     {
         $hourId = '2026-05-09-14';
         $dir = getMetricsSpillHourDir($hourId);
         $this->assertStringContainsString('spill', $dir);
         $this->assertStringContainsString($hourId, $dir);
-        $path = getMetricsSpillPathForWorker($hourId, 4242);
-        $this->assertStringEndsWith($hourId . '/4242.json', $path);
+        $p1 = getMetricsSpillSnapshotPath($hourId, 4242);
+        $p2 = getMetricsSpillSnapshotPath($hourId, 4242);
+        $this->assertNotSame($p1, $p2);
+        $this->assertMatchesRegularExpression('#/4242_[a-f0-9]{16}\.json$#', $p1);
         $this->assertSame(getMetricsSpillRootDir() . '/' . $hourId, $dir);
     }
 

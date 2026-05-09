@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/metrics-spill-aggregator.php';
 
-metrics_run_spill_aggregator_once();
+$stats = metrics_run_spill_aggregator_once();
 
-exit(0);
+// Lock contention alone is benign (another merge holds the lock); real failures set errors[].
+$fatal = !empty($stats['errors']);
+exit($fatal ? 1 : 0);

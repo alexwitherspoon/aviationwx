@@ -146,21 +146,25 @@ class MetricsInternalHealthEndpointsIntegrationTest extends TestCase
     {
         $url = $this->baseUrl . '/' . ltrim($path, '/');
         $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 25,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_HTTPHEADER => ['X-Scheduler-Request: 1'],
-        ]);
+        try {
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 25,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_HTTPHEADER => ['X-Scheduler-Request: 1'],
+            ]);
 
-        $body = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $body = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        return [
-            'http_code' => $httpCode,
-            'body' => $body === false ? '' : (string) $body,
-        ];
+            return [
+                'http_code' => $httpCode,
+                'body' => $body === false ? '' : (string) $body,
+            ];
+        } finally {
+            curl_close($ch);
+        }
     }
 }

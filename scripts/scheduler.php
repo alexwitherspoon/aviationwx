@@ -494,6 +494,11 @@ while ($running) {
                 if ($exitCode === 0) {
                     $lastMetricsSpillMerge = $now;
                     metrics_status_bundle_mirror_refresh_via_http();
+                } elseif ($exitCode !== 0) {
+                    aviationwx_log('warning', 'scheduler: metrics spill merge CLI reported failure', [
+                        'exit_code' => $exitCode,
+                        'output_lines' => array_slice($aggOutput, 0, 30),
+                    ], 'app');
                 }
             }
         }
