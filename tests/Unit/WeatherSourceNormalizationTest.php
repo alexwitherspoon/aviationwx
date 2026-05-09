@@ -47,6 +47,9 @@ class WeatherSourceNormalizationTest extends TestCase
     
     /**
      * Test hasWeatherSources - Returns false when sources array is empty
+     *
+     * Scheduler and fetch-weather.php use this to avoid weather workers when an airport is
+     * enabled for webcams or display only and has no `weather_sources` (matches api/weather.php).
      */
     public function testHasWeatherSources_EmptySources_ReturnsFalse()
     {

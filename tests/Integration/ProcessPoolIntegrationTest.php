@@ -39,7 +39,7 @@ class ProcessPoolIntegrationTest extends TestCase
         exec($cmd, $output, $exitCode);
         $outputStr = implode("\n", $output);
         
-        $this->assertStringContainsString('Processing', $outputStr, 'Should show process pool output');
+        $this->assertStringContainsString('Queueing', $outputStr, 'Should show queueing / pool output');
         $this->assertStringContainsString('workers', $outputStr, 'Should mention workers');
         $this->assertStringContainsString('Done!', $outputStr, 'Should show completion message');
     }

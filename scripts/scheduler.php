@@ -33,6 +33,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
+require_once __DIR__ . '/../lib/weather/utils.php';
 // Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
 
 // Lock file location
@@ -400,6 +401,11 @@ while ($running) {
                 if (!is_array($airport) || !isAirportEnabled($airport)) {
                     continue;
                 }
+
+                // No sensor / no weather_sources: nothing to refresh (matches api/weather.php gate)
+                if (!hasWeatherSources($airport)) {
+                    continue;
+                }
                 
                 // Get refresh interval (per-airport, then global default, then function default)
                 $refreshInterval = isset($airport['weather_refresh_seconds'])
@@ -712,7 +718,7 @@ while ($running) {
         }
 
         // 10. Status page caches pre-warm (every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL, non-blocking)
-        // Health, metrics bundle, performance JSON — aligned TTL (STATUS_PAGE_CACHE_TTL)
+        // Health, metrics bundle, performance JSON - aligned TTL (STATUS_PAGE_CACHE_TTL)
         if (($now - $lastStatusPageCachesFetch) >= STATUS_PAGE_BACKGROUND_FETCH_INTERVAL) {
             $statusScripts = [
                 'fetch-status-health.php',

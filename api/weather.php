@@ -587,7 +587,7 @@ function generateMockWeatherData($airportId, $airport) {
         http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
         aviationwx_log('info', 'no weather source configured', ['airport' => $airportId], 'app');
         ob_clean();
-        echo json_encode(['success' => false, 'error' => 'Weather source not configured']);
+        echo json_encode(['success' => false, 'error' => WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED]);
         exit;
     }
     

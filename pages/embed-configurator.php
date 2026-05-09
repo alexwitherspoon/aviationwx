@@ -1225,11 +1225,11 @@ $shouldNoIndex = $hasQueryParams;
                     <div class="size-mode-toggle">
                         <label class="radio-item size-mode-option">
                             <input type="radio" name="size_mode" value="responsive" checked>
-                            <span><strong>Responsive</strong> — Fills container width, height adjusts automatically</span>
+                            <span><strong>Responsive</strong>: Fills container width, height adjusts automatically</span>
                         </label>
                         <label class="radio-item size-mode-option">
                             <input type="radio" name="size_mode" value="fixed">
-                            <span><strong>Fixed size</strong> — Set exact width and height in pixels</span>
+                            <span><strong>Fixed size</strong>: Set exact width and height in pixels</span>
                         </label>
                     </div>
                     <div id="size-fixed-inputs" class="size-inputs" style="display: none;">

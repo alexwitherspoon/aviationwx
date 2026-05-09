@@ -21,7 +21,7 @@ AviationWX uses a unified testing strategy based on `APP_ENV`:
 | **Internal API** | First-party JSON and binary endpoints on the main site host (`api/weather.php`, `api/webcam.php`, `api/notam.php`, ...). Documented in [`docs/API.md`](API.md). Used by the dashboard and site UI; not versioned. |
 | **Public API** | Versioned JSON under `https://api.aviationwx.org/v1/...` for integrations, OpenAPI, and embed JSON contracts. |
 
-Reserve **legacy** for older response formats, optional query flags such as `?legacy=1`, vendor hardware lines (e.g. Davis WeatherLink legacy devices), or unrelated features -- not for the Internal API weather/webcam routes.
+Reserve **legacy** for older response formats, optional query flags such as `?legacy=1`, vendor hardware lines (e.g. Davis WeatherLink legacy devices), or unrelated features - not for the Internal API weather/webcam routes.
 
 ## Quick Start
 

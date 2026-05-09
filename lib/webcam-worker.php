@@ -224,11 +224,27 @@ class WebcamWorker
             $reason = $acquisitionResult->errorReason;
             $isCommissioning = isAirportUnlisted($this->airportConfig);
 
-            // Expected/configuration issues - log as info (camera not set up yet)
+            $configurationNotReadyReasons = [
+                'webcam_not_configured',
+                'missing_base_url',
+            ];
+            if (in_array($reason, $configurationNotReadyReasons, true)) {
+                aviationwx_log('info', 'Webcam acquisition skipped (not configured)', [
+                    'airport' => $this->airportId,
+                    'cam' => $this->camIndex,
+                    'reason' => $reason,
+                    'source' => $acquisitionResult->sourceType,
+                    'metadata' => $acquisitionResult->metadata
+                ], 'app');
+                return WorkerResult::skip($reason, [
+                    'source' => $acquisitionResult->sourceType,
+                    'metadata' => $acquisitionResult->metadata
+                ]);
+            }
+
+            // Expected environment or setup issues (not a remote camera fault)
             $expectedReasons = [
-                'no_username_configured',  // Push camera not set up
                 'ffmpeg_not_available',    // RTSP not supported on this system
-                'missing_base_url'         // Federation not configured
             ];
 
             // Transient network/camera issues - log as warning (camera may come online)

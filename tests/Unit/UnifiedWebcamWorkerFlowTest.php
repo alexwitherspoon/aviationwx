@@ -449,7 +449,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     // ========================================
 
     /**
-     * Push strategy fails gracefully without username
+     * Push strategy fails gracefully without username (same gate as scheduler skip)
      */
     public function testPushStrategy_FailsWithoutUsername()
     {
@@ -457,7 +457,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         $result = $strategy->acquire();
 
         $this->assertFalse($result->success);
-        $this->assertEquals('no_username_configured', $result->errorReason);
+        $this->assertEquals('webcam_not_configured', $result->errorReason);
     }
 
     /**

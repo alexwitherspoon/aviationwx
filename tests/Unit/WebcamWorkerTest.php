@@ -148,7 +148,7 @@ class WebcamWorkerTest extends TestCase
     }
 
     /**
-     * Test PushAcquisitionStrategy returns failure for missing username
+     * Test PushAcquisitionStrategy returns failure when push credentials are absent
      */
     public function testPushStrategyFailsWithoutUsername()
     {
@@ -156,7 +156,7 @@ class WebcamWorkerTest extends TestCase
         $result = $strategy->acquire();
 
         $this->assertFalse($result->success, 'Should fail without username');
-        $this->assertEquals('no_username_configured', $result->errorReason, 'Error reason should indicate missing username');
+        $this->assertEquals('webcam_not_configured', $result->errorReason, 'Error reason should indicate webcam not configured');
     }
 
     /**

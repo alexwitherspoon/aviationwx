@@ -13,6 +13,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/internal-http-url.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
+require_once __DIR__ . '/../lib/weather/utils.php';
 
 // Check for worker mode
 $isWorkerMode = false;
@@ -45,12 +46,15 @@ function getWeatherBaseUrl(): string {
  * When expectFailures is true (maintenance or unlisted/commissioning), failures
  * are logged at info level so process pool does not treat as errors.
  *
+ * Returns true when the airport has no weather sources configured (503 + JSON error
+ * WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED): refresh is a no-op and must not count as a worker failure.
+ *
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param string $baseUrl Base URL for weather API (e.g., 'http://localhost')
  * @param string $invocationId Invocation ID for log correlation
  * @param string $triggerType Trigger type ('cron_job', 'web_request', 'manual_cli')
  * @param bool $expectFailures True if failures are expected (maintenance or commissioning/unlisted)
- * @return bool True on success, false on failure
+ * @return bool True on success or intentional skip (no sources), false on failure
  */
 function processAirportWeather(string $airportId, string $baseUrl, string $invocationId, string $triggerType, bool $expectFailures = false): bool
 {
@@ -106,17 +110,18 @@ function processAirportWeather(string $airportId, string $baseUrl, string $invoc
             $success = false;
         }
     } else {
-        // Parse error response to determine log level
-        $data = json_decode($response, true);
-        $errorMessage = $data['error'] ?? null;
-        
-        // If not configured, log as info (expected state), not error
-        if ($httpCode === 503 && $errorMessage === 'Weather source not configured') {
+        // Failed curl or invalid JSON must not trigger array offset warnings on decoded values
+        $data = json_decode(is_string($response) ? $response : '', true);
+        $errorMessage = is_array($data) ? ($data['error'] ?? null) : null;
+
+        // Unconfigured airport: success so the process pool does not treat this as a worker failure
+        if ($httpCode === 503 && $errorMessage === WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED) {
             aviationwx_log('info', 'weather refresh skipped (not configured)', [
                 'invocation_id' => $invocationId,
                 'trigger' => $triggerType,
                 'airport' => $airportId
             ], 'app');
+            $success = true;
         } else {
             $logLevel = $expectFailures ? 'info' : 'error';
             aviationwx_log($logLevel, 'weather refresh failed', [
@@ -126,8 +131,8 @@ function processAirportWeather(string $airportId, string $baseUrl, string $invoc
                 'http_code' => $httpCode,
                 'error' => $error ?: $errorMessage
             ], 'app');
+            $success = false;
         }
-        $success = false;
     }
     
     return $success;
@@ -163,6 +168,13 @@ if ($isWorkerMode) {
     }
     // Downgrade errors for maintenance (repairs) or unlisted (commissioning - new airport setup)
     $expectFailures = isAirportInMaintenance($airport) || isAirportUnlisted($airport);
+
+    if (!hasWeatherSources($airport)) {
+        aviationwx_log('info', 'weather worker skipped (no weather sources in config)', [
+            'airport' => $workerAirportId,
+        ], 'app');
+        exit(0);
+    }
 
     $baseUrl = getWeatherBaseUrl();
     $invocationId = aviationwx_get_invocation_id();
@@ -218,12 +230,12 @@ if ($isWeb) {
         .info { color: #666; }
     </style></head><body>";
     echo "<div class='header'><h1>AviationWX Weather Fetcher</h1></div>";
-    echo "<p>Processing " . count($config['airports']) . " airports with {$poolSize} workers...</p>";
+    echo "<p>Queueing weather refresh for airports with configured sources (of " . count($config['airports']) . " in config) using {$poolSize} workers...</p>";
 } else {
     // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "AviationWX Weather Fetcher\n");
     @fwrite(STDERR, "========================\n\n");
-    @fwrite(STDERR, "Processing " . count($config['airports']) . " airports with {$poolSize} workers...\n\n");
+    @fwrite(STDERR, "Queueing weather refresh for airports with configured sources (of " . count($config['airports']) . " in config) using {$poolSize} workers...\n\n");
 }
 
 $pool = new ProcessPool($poolSize, $workerTimeout, basename(__FILE__), $invocationId);
@@ -232,12 +244,18 @@ register_shutdown_function(function() use ($pool) {
 });
 
 $skipped = 0;
+$weatherJobsEligible = 0;
 foreach ($config['airports'] as $airportId => $airport) {
     // Only process enabled airports; skip malformed entries
     if (!is_array($airport) || !isAirportEnabled($airport)) {
         continue;
     }
-    
+
+    if (!hasWeatherSources($airport)) {
+        continue;
+    }
+
+    $weatherJobsEligible++;
     if (!$pool->addJob([$airportId])) {
         $skipped++;
     }
@@ -271,7 +289,8 @@ aviationwx_log('info', 'weather fetch script completed', [
     'trigger' => $triggerType,
     'trigger_context' => $triggerContext,
     'duration_ms' => $scriptDuration,
-    'airports_processed' => $totalAirports,
+    'airports_in_config' => $totalAirports,
+    'weather_jobs_eligible' => $weatherJobsEligible,
     'stats' => $stats
 ], 'app');
 

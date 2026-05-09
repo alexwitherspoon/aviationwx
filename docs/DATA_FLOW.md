@@ -68,9 +68,9 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 - **Primary endpoint (federated station snapshot)**: `https://swd.weatherflow.com/swd/rest/observations/station/{station_id}?token={api_key}`
   - WeatherFlow builds this from devices on the station; it can be empty while a physical sensor still has data (federation gap).
 - **Automatic device fallback** (when the primary response does not parse, or parses to a timestamp-only / sensor-empty federated row with no temperature, humidity, pressure, dew point, wind, or non-zero precip):
-  1. `GET https://swd.weatherflow.com/swd/rest/stations/{station_id}?token={api_key}` -- response lists devices (typically hub `HB` plus one Tempest unit `ST`).
+  1. `GET https://swd.weatherflow.com/swd/rest/stations/{station_id}?token={api_key}` - response lists devices (typically hub `HB` plus one Tempest unit `ST`).
   2. The integration selects the **first device with `device_type` `ST`** (the Tempest unit that publishes `obs_st` rows).
-  3. `GET https://swd.weatherflow.com/swd/rest/observations/device/{device_id}?token={api_key}` -- latest observation uses the **`obs_st` numeric row layout** from WeatherFlow's API docs.
+  3. `GET https://swd.weatherflow.com/swd/rest/observations/device/{device_id}?token={api_key}` - latest observation uses the **`obs_st` numeric row layout** from WeatherFlow's API docs.
   4. The adapter maps that row into the same internal shape as federated `obs[0]`, then applies the same unit conversions. **Dew point** is not present on raw `obs_st` rows; it may be derived later from temperature and humidity when both exist (same as any missing dew point path).
   5. **Pressure**: device index 6 is station pressure in mb and is run through the same mb → inHg path as federated `sea_level_pressure`; when only the device path is used, treat displayed pressure as sensor-reported pressure, not a guaranteed sea-level reduction.
   6. **Logging**: when the device path is used, an internal structured log records `airport_id`, `station_id`, and `device_id` (no secrets).
@@ -637,7 +637,7 @@ Sunrise, sunset, and twilight times for display and night mode. Uses NOAA Solar 
 
 **References**:
 - [NOAA Solar Calculator Equations](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)
-- [FAA 14 CFR §1.1](https://www.ecfr.gov/current/title-14/chapter-I/subchapter-A/part-1/subpart-A/section-1.1) — "Night" definition
+- [FAA 14 CFR §1.1](https://www.ecfr.gov/current/title-14/chapter-I/subchapter-A/part-1/subpart-A/section-1.1) - "Night" definition
 
 ---
 
@@ -1655,7 +1655,7 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 - **Format**: JPEG or WebP (based on browser support)
 - **Refresh**: Automatic refresh based on cache age
 - **Loading State**: Shown during fetch
-- **Stale Overlay**: When image exceeds fail-closed threshold but history has frames—shows last image dimmed with overlay "Live image unavailable. Tap for time-lapse history." and timestamp; user can tap to open history player
+- **Stale Overlay**: When image exceeds fail-closed threshold but history has frames, shows last image dimmed with overlay "Live image unavailable. Tap for time-lapse history." and timestamp; user can tap to open history player
 - **Placeholder**: Shown when no image exists or history unavailable (no frames, history disabled)
 
 #### Timestamp Display

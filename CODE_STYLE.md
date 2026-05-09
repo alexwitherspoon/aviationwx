@@ -621,7 +621,7 @@ lib/constants/
 Use adapter pattern for each API provider with versioning:
 
 ```php
-// lib/weather/adapter/tempest-v1.php -- TempestAdapter + parseTempestResponse(); device fallback when station obs empty
+// lib/weather/adapter/tempest-v1.php - TempestAdapter + parseTempestResponse(); device fallback when station obs empty
 class TempestAdapter {
     public static function buildUrl(array $config): ?string { /* ... */ }
 }

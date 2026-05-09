@@ -243,7 +243,7 @@ Tap (or click) any webcam image to open the **24-hour history player**:
 +-----------------------------------------------------------------------------+
 |                                                                             |
 |                              SWIPE LEFT/RIGHT                               |
-|                           <-- -- -- -- -- -- -->                            |
+|                           <-- - - - - - -->                            |
 |                              Navigate frames                                |
 |                                                                             |
 |          +-----------------------------------------------+                  |
@@ -430,7 +430,7 @@ If data sources experience issues, you'll see a banner at the top of the page:
 
 ```
 +-----------------------------------------------------------------------------+
-|  ! WEATHER DATA OUTAGE -- Last successful update: 45 min ago                |
+|  ! WEATHER DATA OUTAGE - Last successful update: 45 min ago                |
 |    Some readings may be outdated. Check official sources.                   |
 +-----------------------------------------------------------------------------+
 ```
@@ -441,7 +441,7 @@ Active NOTAMs for the airport appear at the top:
 
 ```
 +-----------------------------------------------------------------------------+
-|  ! ACTIVE NOTAM -- Runway 15/33 closed for maintenance                      |
+|  ! ACTIVE NOTAM - Runway 15/33 closed for maintenance                      |
 |    Effective: Dec 20 0800Z - Dec 20 1700Z                                   |
 +-----------------------------------------------------------------------------+
 ```
@@ -453,8 +453,8 @@ Active NOTAMs for the airport appear at the top:
 Want to display an AviationWX dashboard on your own website, FBO lobby screen, or flight school? Use the **Embed Generator** at [embed.aviationwx.org](https://embed.aviationwx.org).
 
 **What you get:**
-- **Web component** (default) — Best for modern sites. Paste a script tag and a custom element. Responsive by default.
-- **iframe** — For platforms that restrict JavaScript (e.g., some CMS blocks). Add `responsive=1` to the URL for auto-height.
+- **Web component** (default) - Best for modern sites. Paste a script tag and a custom element. Responsive by default.
+- **iframe** - For platforms that restrict JavaScript (e.g., some CMS blocks). Add `responsive=1` to the URL for auto-height.
 
 ```
 +-----------------------------------------------------------------------------+
@@ -527,7 +527,7 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 
 ```
 +-----------------------------------------------------------------------------+
-|  AVIATIONWX DASHBOARD -- QUICK REFERENCE                                    |
+|  AVIATIONWX DASHBOARD - QUICK REFERENCE                                    |
 +-----------------------------------------------------------------------------+
 |                                                                             |
 |  WEBCAM PLAYER KEYS                   FLIGHT CATEGORIES                     |

@@ -4,7 +4,7 @@ The **Internal API** is the set of first-party HTTP endpoints used by the Aviati
 
 The **Public API** (`https://api.aviationwx.org/v1/...`) is the supported integration surface for third-party apps; see [api.aviationwx.org](https://api.aviationwx.org).
 
-**Wording:** Use **Internal API** for these routes. Use **legacy** only for older file formats, optional flags such as `?legacy=1`, or vendor-specific hardware lines -- not as a label for `api/weather.php` / `api/webcam.php`.
+**Wording:** Use **Internal API** for these routes. Use **legacy** only for older file formats, optional flags such as `?legacy=1`, or vendor-specific hardware lines - not as a label for `api/weather.php` / `api/webcam.php`.
 
 > **For third-party developers:** Use the [**Public API**](https://api.aviationwx.org): stable `/v1/...` paths, OpenAPI, rate-limit headers, and API keys.  
 > **Canonical Public API base URL (public deployment):** `https://api.aviationwx.org/v1`  

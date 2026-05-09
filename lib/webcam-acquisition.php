@@ -11,6 +11,7 @@
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/webcam-source-validation.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/exif-utils.php';
@@ -325,6 +326,10 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         // Check for mock mode
         if (function_exists('shouldMockExternalServices') && shouldMockExternalServices()) {
             return $this->acquireMock();
+        }
+
+        if (!hasWebcamAcquisitionConfigured($this->camConfig)) {
+            return AcquisitionResult::failure('webcam_not_configured', $this->sourceType);
         }
 
         $stagingPath = $this->getStagingPath();
@@ -1021,9 +1026,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
     public function acquire(): AcquisitionResult
     {
-        $username = $this->camConfig['push_config']['username'] ?? null;
-        if (!$username) {
-            return AcquisitionResult::failure('no_username_configured', 'push');
+        if (!hasWebcamAcquisitionConfigured($this->camConfig)) {
+            return AcquisitionResult::failure('webcam_not_configured', 'push');
         }
 
         if (empty($this->uploadDirs)) {

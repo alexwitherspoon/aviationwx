@@ -37,7 +37,7 @@ class ProcessPoolOutputTest extends TestCase
         $outputStr = implode("\n", $output);
         
         $this->assertStringContainsString('AviationWX Weather Fetcher', $outputStr, 'Should show header');
-        $this->assertStringContainsString('Processing', $outputStr, 'Should show processing message');
+        $this->assertStringContainsString('Queueing', $outputStr, 'Should show queueing message');
         $this->assertStringContainsString('airports', $outputStr, 'Should mention airports');
         $this->assertStringContainsString('workers', $outputStr, 'Should mention workers');
     }
@@ -84,7 +84,7 @@ class ProcessPoolOutputTest extends TestCase
         exec($cmd, $output, $exitCode);
         $outputStr = implode("\n", $output);
         
-        $this->assertStringNotContainsString('Processing', $outputStr, 'Worker mode should not show processing message');
+        $this->assertStringNotContainsString('Queueing', $outputStr, 'Worker mode should not show queueing message');
         $this->assertStringNotContainsString('workers', $outputStr, 'Worker mode should not mention workers');
         $this->assertStringNotContainsString('Done!', $outputStr, 'Worker mode should not show done message');
     }

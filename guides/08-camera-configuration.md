@@ -426,7 +426,7 @@ UniFi Protect can be a great fit if the airport/FBO already has a UniFi ecosyste
 
 ### UniFi Protect RTSP URL (Local RTSP only)
 
-UniFi Protect exposes an RTSP stream that works when the Bridge is on the same network as the NVR. UniFi's UI gives you an RTSPS URL—you must convert it to Local RTSP format.
+UniFi Protect exposes an RTSP stream that works when the Bridge is on the same network as the NVR. UniFi's UI gives you an RTSPS URL; you must convert it to Local RTSP format.
 
 **Step 1: Get the stream URL from UniFi Protect**
 
@@ -458,7 +458,7 @@ rtsp://192.168.1.1:7447/QxJCVMefFHfBnqrp
 
 **Step 3: Use in the AviationWX Bridge**
 
-Enter the converted URL in the Bridge web console. The Bridge must be on the same local network as the NVR. Leave the username and password fields empty—UniFi Local RTSP does not use authentication.
+Enter the converted URL in the Bridge web console. The Bridge must be on the same local network as the NVR. Leave the username and password fields empty - UniFi Local RTSP does not use authentication.
 
 ---
 
