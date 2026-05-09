@@ -84,6 +84,27 @@ function reapZombies(): int {
 }
 
 /**
+ * Parse spills_merged from aggregate-metrics-spills.php stdout (last JSON object line).
+ *
+ * @param array<int, string> $lines exec output lines
+ * @return int|null spills_merged count, or null if no summary line (legacy CLI)
+ */
+function scheduler_parse_metrics_aggregator_stdout(array $lines): ?int {
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = trim($lines[$i]);
+        if ($line === '') {
+            continue;
+        }
+        $decoded = json_decode($line, true);
+        if (is_array($decoded) && array_key_exists('spills_merged', $decoded)) {
+            return (int) $decoded['spills_merged'];
+        }
+    }
+
+    return null;
+}
+
+/**
  * Acquire lock file with exclusive lock
  * 
  * Prevents duplicate scheduler instances from running.
@@ -491,15 +512,24 @@ while ($running) {
                 $aggOutput = [];
                 $exitCode = 0;
                 exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' 2>&1', $aggOutput, $exitCode);
+                // Always advance after an attempt so failures do not retry every 1s loop tick.
+                $lastMetricsSpillMerge = $now;
                 if ($exitCode === 0) {
-                    $lastMetricsSpillMerge = $now;
-                    metrics_status_bundle_mirror_refresh_via_http();
-                } elseif ($exitCode !== 0) {
+                    $spillsMerged = scheduler_parse_metrics_aggregator_stdout($aggOutput);
+                    if ($spillsMerged === null || $spillsMerged > 0) {
+                        metrics_status_bundle_mirror_refresh_via_http();
+                    }
+                } else {
                     aviationwx_log('warning', 'scheduler: metrics spill merge CLI reported failure', [
                         'exit_code' => $exitCode,
                         'output_lines' => array_slice($aggOutput, 0, 30),
                     ], 'app');
                 }
+            } else {
+                $lastMetricsSpillMerge = $now;
+                aviationwx_log('warning', 'scheduler: aggregate-metrics-spills.php missing', [
+                    'path' => $aggScript,
+                ], 'app');
             }
         }
 
