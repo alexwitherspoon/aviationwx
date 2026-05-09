@@ -46,8 +46,8 @@ function getWeatherBaseUrl(): string {
  * When expectFailures is true (maintenance or unlisted/commissioning), failures
  * are logged at info level so process pool does not treat as errors.
  *
- * Returns true when the airport has no weather sources configured (503 + known message):
- * refresh is a no-op and must not count as a worker failure.
+ * Returns true when the airport has no weather sources configured (503 + JSON error
+ * WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED): refresh is a no-op and must not count as a worker failure.
  *
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param string $baseUrl Base URL for weather API (e.g., 'http://localhost')
@@ -115,7 +115,7 @@ function processAirportWeather(string $airportId, string $baseUrl, string $invoc
         $errorMessage = is_array($data) ? ($data['error'] ?? null) : null;
 
         // Unconfigured airport: success so the process pool does not treat this as a worker failure
-        if ($httpCode === 503 && $errorMessage === 'Weather source not configured') {
+        if ($httpCode === 503 && $errorMessage === WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED) {
             aviationwx_log('info', 'weather refresh skipped (not configured)', [
                 'invocation_id' => $invocationId,
                 'trigger' => $triggerType,

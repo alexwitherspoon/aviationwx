@@ -180,6 +180,8 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 
 **Scheduling:** The scheduler only runs acquisition for cameras with `enabled !== false` and enough configuration to fetch: pull cameras need a non-empty `url`, except `type: aviationwx_api`, which uses `base_url` instead; push cameras need `push_config.username`. Placeholder slots (`enabled: false` or missing acquisition fields) are skipped, matching the weather pipeline rule for airports without `weather_sources`.
 
+**Config hygiene:** Use JSON boolean `true` / `false` for `enabled` (a string like `"false"` is not treated as disabled). For non-push cameras, omit `push_config` entirely. If `push_config` is present, the slot is treated as a push camera for scheduling and validation, even when `type` is something else. Remove stale `push_config` blocks when switching a slot to pull or `aviationwx_api`.
+
 ### Configuration Hierarchy
 
 Settings resolve in this order (first match wins):

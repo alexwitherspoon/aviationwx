@@ -87,6 +87,10 @@ Shows:
 - **Per-airport weather**: based on observation timestamps in the weather cache (same family of values as the public API).
 - **Per-airport webcams**: freshness uses **last completed frame** time on disk (aligned with the image pipeline and API), not the `current.jpg` symlink mtime alone.
 
+**Schedulers and missing sensors**
+
+When an airport has no `weather_sources` or a webcam slot has no acquisition settings, schedulers **skip those workers** on purpose. Cron noise goes down, but you should still watch **staleness on the dashboard** and **status page per-airport rows**. Silence from `fetch-weather.php` / unified webcam workers does not prove observations are fresh; it means nothing was queued for that slot.
+
 ### Health Endpoints
 
 | Endpoint | Purpose |

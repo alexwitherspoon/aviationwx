@@ -29,6 +29,12 @@ if (!defined('DEFAULT_WEATHER_REFRESH')) {
     define('DEFAULT_WEATHER_REFRESH', 60);
 }
 
+// Internal api/weather.php JSON `error` when the airport has no `weather_sources`.
+// scripts/fetch-weather.php must recognize the same value with HTTP 503 so cron workers do not fail closed.
+if (!defined('WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED')) {
+    define('WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED', 'Weather source not configured');
+}
+
 // RTSP/ffmpeg timeouts
 if (!defined('RTSP_DEFAULT_TIMEOUT')) {
     define('RTSP_DEFAULT_TIMEOUT', 10);
