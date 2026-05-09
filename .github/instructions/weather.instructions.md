@@ -2,7 +2,7 @@
 applyTo: "lib/weather/**/*.php,api/weather.php"
 ---
 
-# Weather Subsystem -- Safety-Critical
+# Weather Subsystem - Safety-Critical
 
 ## Data Flow
 

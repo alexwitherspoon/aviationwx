@@ -196,7 +196,7 @@ form-action 'self';
 The CSP explicitly allows:
 - ✅ **Cloudflare Web Analytics** (`static.cloudflareinsights.com`, `cloudflareinsights.com`)
 - ✅ **Cloudflare Email Obfuscation** (via `/cdn-cgi/` paths covered by `'self'`)
-- ✅ **Inline scripts** (via `'unsafe-inline'` -- required for inline dashboard scripts)
+- ✅ **Inline scripts** (via `'unsafe-inline'` - required for inline dashboard scripts)
 
 ### Weather Overlay Services
 

@@ -319,12 +319,12 @@ UniFi Protect doesn't offer scheduled FTP uploads. The Bridge connects to the RT
 
 1. **Get the URL from UniFi Protect:** Home → Protect → UniFi Devices → (select camera) → Settings → Advanced → toggle the resolution you want → copy the URL (e.g., `rtsps://192.168.1.1:7441/QxJCVMefFHfBnqrp?enableSrtp`)
 
-2. **Convert it** — UniFi's URL needs a few adjustments. Apply these three changes:
+2. **Convert it** - UniFi's URL needs a few adjustments. Apply these three changes:
    - Change `rtsps://` to `rtsp://` (remove the second `s`)
    - Change port `7441` to `7447`
    - Remove `?enableSrtp` from the end
 
-3. **Use in the Bridge:** Enter the converted URL in the Bridge web console. Leave the username and password fields empty—UniFi Local RTSP does not use authentication.
+3. **Use in the Bridge:** Enter the converted URL in the Bridge web console. Leave the username and password fields empty - UniFi Local RTSP does not use authentication.
 
 **Example:**
 ```
@@ -362,13 +362,13 @@ At remote sites where reliability matters most:
 ## Troubleshooting
 
 ### "Camera captures are failing"
-- **Test RTSP separately:** To confirm the feed is reachable, try it from a computer on the same network as the camera or NVR. Open **VLC** (Media → Open Network Stream) and paste your RTSP URL. If VLC can play the stream, the Bridge should be able to reach it too. If VLC fails, the issue is likely with the network or camera configuration—troubleshoot that first.
+- **Test RTSP separately:** To confirm the feed is reachable, try it from a computer on the same network as the camera or NVR. Open **VLC** (Media → Open Network Stream) and paste your RTSP URL. If VLC can play the stream, the Bridge should be able to reach it too. If VLC fails, the issue is likely with the network or camera configuration - troubleshoot that first.
 - Verify the camera URL is reachable from the Bridge device
 - For RTSP, confirm the stream path (and that username/password are empty for UniFi Local RTSP)
 - Check the Bridge logs via the web console
 
 ### "Uploads aren't happening"
-- **Test SFTP/FTPS separately:** Use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can connect and upload a test file, the Bridge should be able to as well. If FileZilla fails, the issue is likely with credentials or network connectivity—check those first.
+- **Test SFTP/FTPS separately:** Use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can connect and upload a test file, the Bridge should be able to as well. If FileZilla fails, the issue is likely with credentials or network connectivity - check those first.
 - Verify internet connectivity from the Bridge device
 - Check upload credentials in the web console
 - Look for queue buildup (images waiting to upload)

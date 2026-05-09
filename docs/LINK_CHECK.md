@@ -7,7 +7,7 @@ The link check workflow discovers external links on airport dashboards, validate
 1. **Discovery:** Fetches `https://aviationwx.org/sitemap.xml`, extracts airport dashboard URLs
 2. **Scrape:** Fetches each dashboard HTML, extracts external `<a href>` links
 3. **Check:** HEAD request to each URL; treats 301/302/4xx/5xx/timeout as unhealthy
-4. **Issues:** Per-link GitHub issues—create when broken, update with comment each run, close when healthy
+4. **Issues:** Per-link GitHub issues - create when broken, update with comment each run, close when healthy
 
 ## Setup Requirements
 

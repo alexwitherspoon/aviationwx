@@ -255,10 +255,10 @@ if (!defined('STATUS_PAGE_CACHE_TTL')) {
     define('STATUS_PAGE_CACHE_TTL', 600); // 10 minutes
 }
 if (!defined('STATUS_PAGE_BACKGROUND_FETCH_INTERVAL')) {
-    define('STATUS_PAGE_BACKGROUND_FETCH_INTERVAL', 120); // 2 minutes -- refresh well before TTL
+    define('STATUS_PAGE_BACKGROUND_FETCH_INTERVAL', 120); // 2 minutes - refresh well before TTL
 }
 
-// Legacy aliases -- same values (health, metrics bundle, performance JSON caches)
+// Legacy aliases - same values (health, metrics bundle, performance JSON caches)
 if (!defined('STATUS_HEALTH_CACHE_TTL')) {
     define('STATUS_HEALTH_CACHE_TTL', STATUS_PAGE_CACHE_TTL);
 }
@@ -427,7 +427,7 @@ if (!defined('SECONDS_PER_DAY')) {
     define('SECONDS_PER_DAY', 86400);
 }
 
-// Station power (facility metrics; not flight-safety tier -- separate staleness from weather/METAR)
+// Station power (facility metrics; not flight-safety tier - separate staleness from weather/METAR)
 if (!defined('STATION_POWER_FETCH_INTERVAL_SECONDS')) {
     define('STATION_POWER_FETCH_INTERVAL_SECONDS', 600); // 10 minutes
 }

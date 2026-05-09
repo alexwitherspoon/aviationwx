@@ -254,7 +254,7 @@ function createOrUpdateIssue(
     $title = '[Link Check] ' . strtoupper($airportId) . ' - ' . $label;
     $statusText = $error !== '' ? $error : "HTTP {$status}";
     $redirectNote = ($status >= 301 && $status < 400) ? "\n\n**Suggested fix:** Update config URL to: {$finalUrl}" : '';
-    $body = "{$mentionUser} -- Broken link detected.\n\n"
+    $body = "{$mentionUser} - Broken link detected.\n\n"
         . "## Link Details\n"
         . "- **Airport:** " . strtoupper($airportId) . "\n"
         . "- **Link label:** {$label}\n"
