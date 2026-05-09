@@ -21,7 +21,12 @@ declare(strict_types=1);
 /**
  * HTTP GET with optional request headers; follows redirects.
  *
+ * With redirects, the response body is only the final hop; header lines are collected in
+ * order and reset on each HTTP status line so the final response supplies CORS and content headers.
+ *
+ * @param string $url Request URL
  * @param array<int, string> $requestHeaders Raw header lines (e.g. "Origin: https://...")
+ * @param int $timeoutSeconds Connect and total operation timeout
  * @return array{
  *     code: int,
  *     headers: array<string, string>,
@@ -51,9 +56,8 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
             'final_url' => $url,
         ];
     }
-    // With CURLOPT_FOLLOWLOCATION, CURLOPT_HEADER + CURLINFO_HEADER_SIZE only describe the
-    // final hop; raw output would concatenate all redirect bodies incorrectly. Body-only return
-    // plus HEADERFUNCTION; reset headers on each HTTP status line so we keep the final response.
+    // CURLOPT_HEADER false: final body only; HEADERFUNCTION collects lines; reset on new status
+    // so multi-hop redirects do not mix header sets or append prior bodies to the payload.
     $headerLines = [];
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -106,8 +110,10 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
 }
 
 /**
- * @param array<string, string> $headers Associative name => value
- * @return array<int, string>
+ * Format associative headers as cURL request header lines.
+ *
+ * @param array<string, string> $headers Header name (no colon) to value
+ * @return array<int, string> Lines for CURLOPT_HTTPHEADER
  */
 function productionHealthCheckFormatHeaders(array $headers): array
 {
@@ -115,14 +121,17 @@ function productionHealthCheckFormatHeaders(array $headers): array
     foreach ($headers as $k => $v) {
         $out[] = $k . ': ' . $v;
     }
+
     return $out;
 }
 
 /**
  * Run a single named check and prefix output with timing.
  *
- * @param string $name Stable check identifier (used in logs and GitHub summary).
- * @param callable(): array{ok: bool, detail?: string} $fn Check body.
+ * Callback exceptions are caught and reported as a failed check row.
+ *
+ * @param string $name Stable check identifier (used in logs and GitHub summary)
+ * @param callable(): array{ok: bool, detail?: string} $fn Check body
  * @return array{name: string, ok: bool, detail: string}
  */
 function runNamedCheck(string $name, callable $fn): array

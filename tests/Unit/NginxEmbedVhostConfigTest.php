@@ -16,6 +16,8 @@ class NginxEmbedVhostConfigTest extends TestCase
 {
     /**
      * Path to nginx config relative to repository root.
+     *
+     * @return string Absolute filesystem path
      */
     private static function nginxConfPath(): string
     {

@@ -4,7 +4,7 @@
  * CLI: verify docker/nginx.conf embed vhost has correct Public API v1 routing.
  *
  * Exit 0 when valid, 1 when validation fails, 2 when file/path error.
- * Used by deploy-docker.yml (pre-deploy + post-rsync on server).
+ * Used by deploy (docker compose exec on the web container) and locally.
  *
  * Usage: php scripts/verify-embed-nginx-conf.php [path/to/nginx.conf]
  *
