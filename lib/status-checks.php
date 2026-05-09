@@ -785,7 +785,7 @@ function getSchedulerStatus(): array {
 
 /**
  * Resolved listener ports for status display (defaults merged with config.network_ports).
- * List-shaped or invalid values are ignored (defaults) — same integer-only rule as validateAirportsJsonStructure.
+ * List-shaped or invalid values are ignored (defaults) -- same integer-only rule as validateAirportsJsonStructure.
  *
  * @return array{ftp_control:int,ftps_explicit_tls:int,sftp:int}
  */

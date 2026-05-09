@@ -26,10 +26,10 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 |--------|---------|-------------|
 | `default_timezone` | `UTC` | Fallback timezone for airports |
 | `base_domain` | `aviationwx.org` | Base domain for subdomains. Used for CORS allowlist on M2M API (*.aviationwx.org). |
-| `public_ip` | — | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
-| `public_ipv6` | — | Optional: reserved for future IPv6 support |
+| `public_ip` | --- | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
+| `public_ipv6` | --- | Optional: reserved for future IPv6 support |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
-| `network_ports` | — | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
+| `network_ports` | --- | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `cache_file_max_size_mb` | `25` | Max size in MiB for webcam pipeline loads, HTTP/MJPEG pull downloads, partner logo fetches, and **default** push upload acceptance (integer **1--100**). |
@@ -51,20 +51,20 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_history_retention_hours` | `24` | Hours of history to retain (preferred) |
 | `webcam_history_default_hours` | `3` | Default period shown in UI |
 | `webcam_history_preset_hours` | `[1, 3, 6, 24]` | Period options in UI |
-| `webcam_history_max_frames` | — | *Deprecated* - use retention_hours |
+| `webcam_history_max_frames` | --- | *Deprecated* - use retention_hours |
 | `http_integrity_digest_cache_ttl_seconds` | max(webcam_history, weather_history) | APCu TTL for Content-Digest/MD5 cache; defaults to longest retention (images + weather) |
-| `default_preferences` | — | Default unit toggle settings (see below) |
+| `default_preferences` | --- | Default unit toggle settings (see below) |
 | `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport |
-| `geomag_api_key` | — | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
+| `geomag_api_key` | --- | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
-| `notam_api_client_id` | — | NOTAM API client ID |
-| `notam_api_client_secret` | — | NOTAM API client secret |
+| `notam_api_client_id` | --- | NOTAM API client ID |
+| `notam_api_client_secret` | --- | NOTAM API client secret |
 | **OpenWeatherMap Integration** |||
-| `openweathermap_api_key` | — | API key for cloud layer tiles (optional, [free at openweathermap.org](https://home.openweathermap.org/api_keys)) |
+| `openweathermap_api_key` | --- | API key for cloud layer tiles (optional, [free at openweathermap.org](https://home.openweathermap.org/api_keys)) |
 | **Cloudflare Analytics** |||
-| `cloudflare.api_token` | — | Cloudflare API token (Analytics:Read) |
-| `cloudflare.zone_id` | — | Cloudflare Zone ID |
-| `cloudflare.account_id` | — | Cloudflare Account ID |
+| `cloudflare.api_token` | --- | Cloudflare API token (Analytics:Read) |
+| `cloudflare.zone_id` | --- | Cloudflare Zone ID |
+| `cloudflare.account_id` | --- | Cloudflare Account ID |
 | **Client Version Management** |||
 | `dead_man_switch_days` | `7` | Days without update before cleanup (0 = disabled) |
 | `force_cleanup` | `false` | Emergency flag to force all clients to cleanup |
@@ -87,26 +87,26 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | Option | Default | Description |
 |--------|---------|-------------|
 | **Required** |||
-| `name` | — | Display name |
+| `name` | --- | Display name |
 | `enabled` | `false` | Must be `true` to activate |
-| `lat` | — | Latitude |
-| `lon` | — | Longitude |
+| `lat` | --- | Latitude |
+| `lon` | --- | Longitude |
 | **Identifiers** |||
-| `icao` | — | ICAO code (e.g., `KSPB`) |
-| `iata` | — | IATA code (e.g., `SPB`) |
-| `faa` | — | FAA LID (e.g., `03S`) |
-| `iso_country` | — | Optional ISO 3166-1 alpha-2 (two letters, validated). Highest-precedence hint for effective country, Public API `iso_country`, and aviation-region link selection. |
+| `icao` | --- | ICAO code (e.g., `KSPB`) |
+| `iata` | --- | IATA code (e.g., `SPB`) |
+| `faa` | --- | FAA LID (e.g., `03S`) |
+| `iso_country` | --- | Optional ISO 3166-1 alpha-2 (two letters, validated). Highest-precedence hint for effective country, Public API `iso_country`, and aviation-region link selection. |
 | `formerly` | `[]` | Previous identifiers for NOTAM matching |
 | **Location** |||
-| `address` | — | City, State display |
-| `elevation_ft` | — | Field elevation in feet |
+| `address` | --- | City, State display |
+| `elevation_ft` | --- | Field elevation in feet |
 | `timezone` | global default | Timezone (e.g., `America/Los_Angeles`) |
 | **Status** |||
 | `maintenance` | `false` | Show maintenance banner |
-| `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning—logged at info, exit 2 (skip) so process pool does not log "worker failed". |
+| `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning; logged at info, exit 2 (skip) so process pool does not log "worker failed". |
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
-| `station_power` | — | Optional facility power telemetry for `limited_availability` sites. Object shape: `provider` (string, e.g. `vrm`) and `config` (provider-specific). **Requires** `limited_availability: true`. Staleness for this block is **not** tied to METAR/weather fail-closed rules. The dashboard uses neutral **Station Power** labels only (no vendor branding in the UI). **Manual refresh:** same command as the scheduler: `php scripts/fetch-station-power.php --worker <airport_id>`; with local Docker: `make station-power-fetch AIRPORT=<airport_id>` (containers must be running). |
+| `station_power` | --- | Optional facility power telemetry for `limited_availability` sites. Object shape: `provider` (string, e.g. `vrm`) and `config` (provider-specific). **Requires** `limited_availability: true`. Staleness for this block is **not** tied to METAR/weather fail-closed rules. The dashboard uses neutral **Station Power** labels only (no vendor branding in the UI). **Manual refresh:** same command as the scheduler: `php scripts/fetch-station-power.php --worker <airport_id>`; with local Docker: `make station-power-fetch AIRPORT=<airport_id>` (containers must be running). |
 | `station_power_refresh_seconds` | `config.station_power_refresh_seconds` or 900 | Per-airport override for how often the browser polls `/api/station-power.php` (minimum 60). Scheduler fetch interval for upstream data is separate (`STATION_POWER_FETCH_INTERVAL_SECONDS`, default 10 minutes). |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
@@ -129,8 +129,8 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
 | `faa_weather_url` | auto | Override FAA Weather link (US link bundle only) |
-| `regional_weather_url` | — | Override the primary built-in regional authority URL for that airport's link region |
-| `regional_weather_label` | — | Label for regional weather link (e.g., "NAV Canada WxCam") |
+| `regional_weather_url` | --- | Override the primary built-in regional authority URL for that airport's link region |
+| `regional_weather_label` | --- | Label for regional weather link (e.g., "NAV Canada WxCam") |
 | `foreflight_url` | auto | Override ForeFlight link |
 
 **Regional link behavior:** Built-in external links use a **data-driven profile** per link region derived from effective country (ISO 3166-1 alpha-2): optional `iso_country` → `inferIso3166Alpha2FromIcaoPrefix()` (K/C/Y-style ICAO hints) → FAA LID (implies US) → merged geometry aggregate in `airport_country_resolution.json` when `config_sha256` matches (otherwise merge skipped) → US or Canada from `address` parsing. First-pass regions include **us** (built-in rows: AirNav, FAA Weather, ForeFlight; no SkyVector row in that profile), **ca**, **au**, **nz**, **gb**, **eu** (EU members, EEA, CH, and listed microstates), **mx**, **br**, **jp**, with US territories grouped under **us**. When the region is **unknown**, only explicit overrides (`airnav_url`, `faa_weather_url`, `regional_weather_url`, `foreflight_url`) produce built-ins; use custom `links` for anything else. The scheduler rebuilds the geometry aggregate when `airports.json` changes, the aggregate is missing or invalid, or it is older than the configured max age (30 days by default).
@@ -142,7 +142,7 @@ The `frequencies` object maps service names to MHz strings. Align keys with char
 | Key | When to use |
 |-----|-------------|
 | `tower`, `ground`, `atis`, `clearance_delivery`, `approach`, `departure` | As published for controlled airports. |
-| `ctaf` | Common traffic frequency at non-towered airports. When the source lists **CTAF/UNICOM** on **one** frequency, use **`ctaf` only**—do not also add `unicom` with the same MHz (duplicate line in the UI, not two services). |
+| `ctaf` | Common traffic frequency at non-towered airports. When the source lists **CTAF/UNICOM** on **one** frequency, use **`ctaf` only**. Do not also add `unicom` with the same MHz (duplicate line in the UI, not two services). |
 | `unicom` | When UNICOM is **distinct** from CTAF (e.g. towered field FBO/airport advisory on 122.8 while traffic uses tower), or when only UNICOM is given without a separate CTAF. |
 | `awos`, `asos` | Automated weather as published. |
 
@@ -152,45 +152,51 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| **Required** |||
-| `name` | — | Display name |
-| `url` | — | Stream/image URL (not for push type) |
+| **Common** |||
+| `name` | --- | Display name |
+| `enabled` | `true` | When `false`, the slot stays in config/UI but acquisition fields such as `url`, `push_config`, and `base_url` are not required and workers do not run for this camera |
+| **Conditional** |||
+| `url` | --- | Stream/image URL for pull types (`http` / `mjpeg` / `static_jpeg` / `static_png` / `rtsp`). Not used for `push` (credentials live under `push_config`) or for `aviationwx_api` (use `base_url`). Omit for `enabled: false` placeholders. |
 | **Optional** |||
-| `type` | auto-detect | `rtsp`, `mjpeg`, `static_jpeg`, `static_png`, `push` |
+| `type` | auto-detect | `rtsp`, `mjpeg`, `static_jpeg`, `static_png`, `push`, `aviationwx_api` |
 | `refresh_seconds` | airport default | Override refresh for this camera |
-| `enabled` | `true` | When `false`, the slot stays in config/UI but fetch workers do not run for this camera |
 | `crop_margins` | global default | FAA profile crop margins override (percentages) |
 | **RTSP Options** |||
 | `rtsp_transport` | `tcp` | `tcp` or `udp` |
 | `rtsp_fetch_timeout` | `10` | Frame capture timeout (seconds) |
 | `rtsp_max_runtime` | `6` | Max ffmpeg runtime (seconds) |
 | **Push Options** |||
-| `push_config.username` | — | 14 alphanumeric chars |
-| `push_config.password` | — | 14 alphanumeric chars |
+| `push_config.username` | --- | 14 alphanumeric chars |
+| `push_config.password` | --- | 14 alphanumeric chars |
 | `push_config.max_file_size_mb` | *(inherit global)* | Optional per-camera cap (integer **1** through **`config.cache_file_max_size_mb`**). Omit to use the global `cache_file_max_size_mb` for FTP/SFTP acceptance. Set lower to limit a single camera (bandwidth or policy). |
 | `push_config.allowed_extensions` | `["jpg","jpeg","png","webp"]` | Allowed file types (subset of **jpg, jpeg, png, webp**) |
 | `push_config.upload_file_max_age_seconds` | `1800` | Max file age before abandonment (600-7200) |
 | `push_config.stability_check_timeout_seconds` | `15` | Stability check timeout (10-30) |
+| **aviationwx_api (federated)** |||
+| `base_url` | --- | Required when `type` is `aviationwx_api`: root URL of the Public API host |
+| `api_key` | --- | Optional API key when the remote endpoint requires authentication |
+| `timeout_seconds` | *(inherit)* | Optional HTTP timeout in seconds (integer **1**-**300**) |
+| `camera_index` | --- | Optional remote camera index (integer **0**-**99**) |
 
-**Scheduling:** The scheduler only runs acquisition for cameras that have enough configuration to fetch: non-push cameras need a non-empty `url` (or `type: aviationwx_api` with `base_url`); push cameras need `push_config.username`. Empty placeholder slots are skipped, matching the weather pipeline rule for airports without `weather_sources`.
+**Scheduling:** The scheduler only runs acquisition for cameras with `enabled !== false` and enough configuration to fetch: pull cameras need a non-empty `url`, except `type: aviationwx_api`, which uses `base_url` instead; push cameras need `push_config.username`. Placeholder slots (`enabled: false` or missing acquisition fields) are skipped, matching the weather pipeline rule for airports without `weather_sources`.
 
 ### Configuration Hierarchy
 
 Settings resolve in this order (first match wins):
 
-1. **Per-webcam** — `webcams[].refresh_seconds`
-2. **Per-airport** — `airport.webcam_refresh_seconds` or `airport.weather_refresh_seconds`
-3. **Global** — `config.webcam_refresh_default` or `config.weather_refresh_default`
-4. **Built-in default** — 60 seconds
+1. **Per-webcam** -- `webcams[].refresh_seconds`
+2. **Per-airport** -- `airport.webcam_refresh_seconds` or `airport.weather_refresh_seconds`
+3. **Global** -- `config.webcam_refresh_default` or `config.weather_refresh_default`
+4. **Built-in default** -- 60 seconds
 
 ### Default Preferences Hierarchy
 
 Unit toggle defaults resolve in this order (first match wins):
 
-1. **User preference** — stored in browser cookie/localStorage
-2. **Per-airport** — `airport.default_preferences`
-3. **Global** — `config.default_preferences`
-4. **Built-in default** — US aviation standards (12hr, °F, ft, inHg, kts)
+1. **User preference** -- stored in browser cookie/localStorage
+2. **Per-airport** -- `airport.default_preferences`
+3. **Global** -- `config.default_preferences`
+4. **Built-in default** -- US aviation standards (12hr, °F, ft, inHg, kts)
 
 ---
 
@@ -240,7 +246,7 @@ Unit toggle defaults resolve in this order (first match wins):
 }
 ```
 
-The `config` section is optional—sensible defaults apply if omitted.
+The `config` section is optional; sensible defaults apply if omitted.
 
 ### Network Configuration
 
@@ -255,14 +261,14 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | `network_ports` | object | Optional object defining TCP ports for self-hosted production (all port values must be JSON **numbers**, not strings). `deploy-configure-firewall.sh` applies host UFW/iptables/NAT; the web container entrypoint sets **vsftpd** `listen_port` from **`ftp_control`** only (passive range from the map), **sshd** (SFTP on `sftp`), and **fail2ban** jails. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ftps_explicit_tls`** is used for host firewall/fail2ban when that inbound port differs from `ftp_control`; vsftpd still binds a single control port (`ftp_control`). **`ssh`** opens the host admin SSH port in UFW only. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
 
-**Network ports (`network_ports`):** When `network_ports` is present, it must be a JSON **object** (not an array), and each set port field must be a JSON **number** (not a quoted string); config validation, `deploy-configure-firewall.sh`, and `docker-entrypoint.sh` enforce this. On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and configures **vsftpd** with a **single** control listener on **`ftp_control`** (plus passive ports), **sshd** (SFTP on `sftp`), and **fail2ban**. Host-facing ports such as **`ftps_explicit_tls`** and **`ftps_alt`** are for UFW/NAT/fail2ban when inbound ports differ from the container bind—they do not add a second vsftpd listener. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
+**Network ports (`network_ports`):** When `network_ports` is present, it must be a JSON **object** (not an array), and each set port field must be a JSON **number** (not a quoted string); config validation, `deploy-configure-firewall.sh`, and `docker-entrypoint.sh` enforce this. On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and configures **vsftpd** with a **single** control listener on **`ftp_control`** (plus passive ports), **sshd** (SFTP on `sftp`), and **fail2ban**. Host-facing ports such as **`ftps_explicit_tls`** and **`ftps_alt`** are for UFW/NAT/fail2ban when inbound ports differ from the container bind; they do not add a second vsftpd listener. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
 
 **FTP Passive Mode Resolution Priority:**
 
-1. **`public_ip`** — If set, use explicit IP (no DNS lookup). Use only when DNS is unavailable at startup.
-2. **`upload_hostname`** — If `public_ip` not set, resolve via DNS (recommended; survives IP changes)
-3. **`upload.{base_domain}`** — Default fallback if `upload_hostname` not set
-4. **`upload.aviationwx.org`** — Final fallback
+1. **`public_ip`** -- If set, use explicit IP (no DNS lookup). Use only when DNS is unavailable at startup.
+2. **`upload_hostname`** -- If `public_ip` not set, resolve via DNS (recommended; survives IP changes)
+3. **`upload.{base_domain}`** -- Default fallback if `upload_hostname` not set
+4. **`upload.aviationwx.org`** -- Final fallback
 
 **Recommended: Hostname (default)**
 
@@ -293,7 +299,7 @@ Set `public_ip` only if DNS is unavailable or unreliable at container startup (e
 
 **Dynamic DNS (DDNS) Support:**
 
-For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only—vsftpd resolves at connection time:
+For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only -- vsftpd resolves at connection time:
 
 ```json
 {
@@ -432,10 +438,10 @@ For self-hosted instances, configure your own domain. Hostname is recommended:
 ### Airport Identifiers
 
 Priority order for URL routing (highest first):
-1. **ICAO** — `KSPB` → `kspb.aviationwx.org`
-2. **IATA** — `SPB` → redirects to ICAO
-3. **FAA** — `03S` → `03s.aviationwx.org` (if no ICAO)
-4. **Airport ID** — JSON key as fallback
+1. **ICAO** -- `KSPB` → `kspb.aviationwx.org`
+2. **IATA** -- `SPB` → redirects to ICAO
+3. **FAA** -- `03S` → `03s.aviationwx.org` (if no ICAO)
+4. **Airport ID** -- JSON key as fallback
 
 All identifiers are case-insensitive. Non-primary identifiers 301 redirect to primary.
 
@@ -478,7 +484,7 @@ Affects daily statistics reset (midnight), sunrise/sunset display, and local tim
 
 ## Weather Sources
 
-All weather sources are configured in a unified `weather_sources` array. Sources are fetched in parallel and aggregated—the freshest data from any source wins for each field. METAR typically provides ceiling and cloud_cover (other sources do not provide these fields).
+All weather sources are configured in a unified `weather_sources` array. Sources are fetched in parallel and aggregated; the freshest data from any source wins for each field. METAR typically provides ceiling and cloud_cover (other sources do not provide these fields).
 
 ### Source Types
 
@@ -525,7 +531,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 ]
 ```
 
-`mac_address` is optional—uses first device if omitted.
+`mac_address` is optional and uses the first device if omitted.
 
 ### Davis WeatherLink v2 (Newer Devices)
 
@@ -1051,11 +1057,11 @@ The old `webcam_history_max_frames` setting is deprecated but still supported:
 
 ### Player URLs
 
-- `https://kspb.aviationwx.org/?cam=0` — Opens player
-- `https://kspb.aviationwx.org/?cam=0&autoplay` — Auto-plays
-- `https://kspb.aviationwx.org/?cam=0&autoplay&hideui` — Kiosk mode
-- `https://kspb.aviationwx.org/?cam=0&period=3h` — Opens with 3-hour period selected
-- `https://kspb.aviationwx.org/?cam=0&period=all` — Opens with all history
+- `https://kspb.aviationwx.org/?cam=0` -- Opens player
+- `https://kspb.aviationwx.org/?cam=0&autoplay` -- Auto-plays
+- `https://kspb.aviationwx.org/?cam=0&autoplay&hideui` -- Kiosk mode
+- `https://kspb.aviationwx.org/?cam=0&period=3h` -- Opens with 3-hour period selected
+- `https://kspb.aviationwx.org/?cam=0&period=all` -- Opens with all history
 
 ### Keyboard Shortcuts
 
@@ -1116,10 +1122,10 @@ Configure default units for the airport page toggle buttons. User preferences (s
 
 ### Priority Order
 
-1. **User preference** — stored in browser cookie/localStorage (persists across visits)
-2. **Per-airport** — `airport.default_preferences`
-3. **Global** — `config.default_preferences`
-4. **Built-in** — US aviation standards (12hr, °F, ft, inHg, kts)
+1. **User preference** -- stored in browser cookie/localStorage (persists across visits)
+2. **Per-airport** -- `airport.default_preferences`
+3. **Global** -- `config.default_preferences`
+4. **Built-in** -- US aviation standards (12hr, °F, ft, inHg, kts)
 
 Only include preferences you want to change from defaults. Users who have previously set a preference will keep their choice.
 
@@ -1587,12 +1593,12 @@ Example:
 
 ## Validation
 
-The validator uses strict checking—unknown fields are rejected.
+The validator uses strict checking: unknown fields are rejected.
 
 ### Adding New Fields
 
-1. Update `lib/config.php` — add to allowed fields, add validation
-2. Update `tests/Unit/ConfigValidationTest.php` — add tests
+1. Update `lib/config.php` -- add to allowed fields, add validation
+2. Update `tests/Unit/ConfigValidationTest.php` -- add tests
 3. Update this documentation
 4. Update `config/airports.json.example`
 

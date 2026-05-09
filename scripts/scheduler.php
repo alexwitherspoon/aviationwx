@@ -718,7 +718,7 @@ while ($running) {
         }
 
         // 10. Status page caches pre-warm (every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL, non-blocking)
-        // Health, metrics bundle, performance JSON — aligned TTL (STATUS_PAGE_CACHE_TTL)
+        // Health, metrics bundle, performance JSON -- aligned TTL (STATUS_PAGE_CACHE_TTL)
         if (($now - $lastStatusPageCachesFetch) >= STATUS_PAGE_BACKGROUND_FETCH_INTERVAL) {
             $statusScripts = [
                 'fetch-status-health.php',

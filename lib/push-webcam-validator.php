@@ -69,7 +69,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
         }
     }
     
-    // Port is informational only — not enforced by the server (listeners are config.network_ports / defaults).
+    // Port is informational only -- not enforced by the server (listeners are config.network_ports / defaults).
     
     // max_file_size_mb: optional (omit = inherit global cache_file_max_size_mb at runtime)
     if (isset($pushConfig['max_file_size_mb'])) {

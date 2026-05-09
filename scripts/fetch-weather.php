@@ -110,11 +110,11 @@ function processAirportWeather(string $airportId, string $baseUrl, string $invoc
             $success = false;
         }
     } else {
-        // Parse error response to determine log level (curl may return false; decode yields null)
+        // Failed curl or invalid JSON must not trigger array offset warnings on decoded values
         $data = json_decode(is_string($response) ? $response : '', true);
         $errorMessage = is_array($data) ? ($data['error'] ?? null) : null;
-        
-        // If not configured, treat as successful no-op (scheduler should skip these; belt-and-suspenders)
+
+        // Unconfigured airport: success so the process pool does not treat this as a worker failure
         if ($httpCode === 503 && $errorMessage === 'Weather source not configured') {
             aviationwx_log('info', 'weather refresh skipped (not configured)', [
                 'invocation_id' => $invocationId,
