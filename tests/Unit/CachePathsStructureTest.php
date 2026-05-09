@@ -104,4 +104,30 @@ class CachePathsStructureTest extends TestCase
         $this->assertStringContainsString('partners/deadbeef.png', $path);
         $this->assertStringEndsWith('deadbeef.png', $path);
     }
+
+    /**
+     * Metrics spill paths nest under spill/{hourId}/{pid}.json under metrics cache root
+     */
+    public function testMetricsSpillPaths_UseHourAndPid(): void
+    {
+        $hourId = '2026-05-09-14';
+        $dir = getMetricsSpillHourDir($hourId);
+        $this->assertStringContainsString('spill', $dir);
+        $this->assertStringContainsString($hourId, $dir);
+        $path = getMetricsSpillPathForWorker($hourId, 4242);
+        $this->assertStringEndsWith($hourId . '/4242.json', $path);
+        $this->assertSame(getMetricsSpillRootDir() . '/' . $hourId, $dir);
+    }
+
+    /**
+     * Aggregator lock and last-run paths live under metrics cache root with fixed basenames
+     */
+    public function testMetricsAggregatorPaths_UnderMetricsDir(): void
+    {
+        $lock = getMetricsAggregatorLockPath();
+        $run = getMetricsAggregatorLastRunPath();
+        $this->assertStringEndsWith('/' . METRICS_AGGREGATOR_LOCK_BASENAME, $lock);
+        $this->assertStringEndsWith('/' . METRICS_AGGREGATOR_LAST_RUN_BASENAME, $run);
+        $this->assertStringStartsWith(CACHE_METRICS_DIR . '/', $lock);
+    }
 }

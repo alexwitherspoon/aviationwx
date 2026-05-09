@@ -59,6 +59,7 @@ if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
 // Include core application files for testing (only those that don't have endpoint logic)
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+@mkdir(CACHE_METRICS_SPILL_DIR, 0755, true);
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../api/weather.php'; // api/weather.php now has a conditional to prevent endpoint execution
