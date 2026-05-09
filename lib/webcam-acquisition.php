@@ -1030,11 +1030,6 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('webcam_not_configured', 'push');
         }
 
-        $username = $this->camConfig['push_config']['username'] ?? null;
-        if (!$username) {
-            return AcquisitionResult::failure('no_username_configured', 'push');
-        }
-
         if (empty($this->uploadDirs)) {
             return AcquisitionResult::skip('no_upload_dir', 'push');
         }

@@ -4376,7 +4376,12 @@ function validateAirportsJsonStructure(array $config): array {
                         if (isset($webcam['enabled']) && !is_bool($webcam['enabled'])) {
                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] enabled must be a boolean";
                         }
-                        $webcamType = $webcam['type'] ?? 'http';
+
+                        // Reserved UI slots: no pull URL / push_config required (matches scheduler skip)
+                        $skipAcquisitionValidation = isset($webcam['enabled']) && $webcam['enabled'] === false;
+
+                        if (!$skipAcquisitionValidation) {
+                            $webcamType = $webcam['type'] ?? 'http';
                         
                         if ($webcamType === 'push') {
                             // Define allowed fields for push cameras
@@ -4453,6 +4458,33 @@ function validateAirportsJsonStructure(array $config): array {
                             if (!isset($webcam['url'])) {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (rtsp type) missing 'url' field";
                             }
+                        } elseif ($webcamType === 'aviationwx_api') {
+                            $allowedFederatedWebcamFields = [
+                                'name', 'type', 'base_url', 'api_key', 'timeout_seconds',
+                                'camera_index', 'refresh_seconds', 'variant_heights', 'crop_margins', 'enabled',
+                            ];
+                            foreach ($webcam as $key => $value) {
+                                if (!in_array($key, $allowedFederatedWebcamFields, true)) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (aviationwx_api) has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedFederatedWebcamFields);
+                                }
+                            }
+                            if (!isset($webcam['base_url']) || trim((string) $webcam['base_url']) === '') {
+                                $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (aviationwx_api) missing 'base_url'";
+                            } elseif (!$validateUrl($webcam['base_url'])) {
+                                $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (aviationwx_api) has invalid base_url: must be a valid URL";
+                            }
+                            if (isset($webcam['timeout_seconds'])) {
+                                $ts = $webcam['timeout_seconds'];
+                                if (!is_int($ts) || $ts < 1 || $ts > 300) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (aviationwx_api) timeout_seconds must be integer 1-300";
+                                }
+                            }
+                            if (isset($webcam['camera_index'])) {
+                                $ci = $webcam['camera_index'];
+                                if (!is_int($ci) || $ci < 0 || $ci > 99) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (aviationwx_api) camera_index must be integer 0-99";
+                                }
+                            }
                         } else {
                             // Define allowed fields for pull cameras (http/mjpeg/static_jpeg/static_png)
                             $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights', 'crop_margins', 'enabled'];
@@ -4468,7 +4500,8 @@ function validateAirportsJsonStructure(array $config): array {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] missing required 'url' field";
                             }
                         }
-                        
+                        }
+
                         if (isset($webcam['url']) && !$validateUrl($webcam['url'])) {
                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] has invalid url: must be a valid URL";
                         }

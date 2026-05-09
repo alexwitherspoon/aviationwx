@@ -33,6 +33,25 @@ class WebcamSourceValidationTest extends TestCase
         ]));
     }
 
+    public function testPushWithoutPushConfigArrayIsNotConfigured(): void
+    {
+        $this->assertFalse(hasWebcamAcquisitionConfigured([
+            'type' => 'push',
+            'name' => 'Incomplete push slot',
+        ]));
+    }
+
+    /**
+     * Usernames are strings; "0" must not be treated as missing (PHP falsy pitfall).
+     */
+    public function testPushUsernameStringZeroIsConfigured(): void
+    {
+        $this->assertTrue(hasWebcamAcquisitionConfigured([
+            'type' => 'push',
+            'push_config' => ['username' => '0'],
+        ]));
+    }
+
     public function testAviationwxApiRequiresBaseUrl(): void
     {
         $this->assertFalse(hasWebcamAcquisitionConfigured([

@@ -28,7 +28,11 @@ function hasWebcamAcquisitionConfigured(array $webcam): bool
         || isset($webcam['push_config']);
 
     if ($isPush) {
-        $user = $webcam['push_config']['username'] ?? '';
+        $pushConfig = $webcam['push_config'] ?? null;
+        if (!is_array($pushConfig)) {
+            return false;
+        }
+        $user = $pushConfig['username'] ?? '';
         return is_string($user) && trim($user) !== '';
     }
 

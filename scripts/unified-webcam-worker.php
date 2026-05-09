@@ -344,7 +344,7 @@ function runSingleMode(string $airportId, int $camIndex): int
 /**
  * Run all cameras mode
  * 
- * @return int Exit code (0 if any succeeded, 1 if all failed)
+ * @return int Exit code (success unless every attempted camera failed)
  */
 function runAllMode(): int
 {
@@ -387,6 +387,7 @@ function runAllMode(): int
         foreach ($webcams as $camIndex => $cam) {
             if (!is_array($cam) || !hasWebcamAcquisitionConfigured($cam)) {
                 echo "  [{$camIndex}] (not configured): skipped\n";
+                $skipped++;
                 continue;
             }
 
@@ -431,8 +432,12 @@ function runAllMode(): int
     echo "  Failed: {$failed}\n";
     echo "  Duration: {$elapsed}ms\n";
 
-    // Return success if any succeeded or all skipped (no failures)
-    return ($failed === $totalCameras) ? WorkerResult::FAILURE : WorkerResult::SUCCESS;
+    // FAILURE only when nothing succeeded and at least one configured worker reported failure
+    if ($totalCameras === 0) {
+        return WorkerResult::SUCCESS;
+    }
+
+    return ($failed === $totalCameras && $processed === 0) ? WorkerResult::FAILURE : WorkerResult::SUCCESS;
 }
 
 // =============================================================================

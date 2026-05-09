@@ -230,12 +230,12 @@ if ($isWeb) {
         .info { color: #666; }
     </style></head><body>";
     echo "<div class='header'><h1>AviationWX Weather Fetcher</h1></div>";
-    echo "<p>Processing " . count($config['airports']) . " airports with {$poolSize} workers...</p>";
+    echo "<p>Queueing weather refresh for airports with configured sources (of " . count($config['airports']) . " in config) using {$poolSize} workers...</p>";
 } else {
     // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "AviationWX Weather Fetcher\n");
     @fwrite(STDERR, "========================\n\n");
-    @fwrite(STDERR, "Processing " . count($config['airports']) . " airports with {$poolSize} workers...\n\n");
+    @fwrite(STDERR, "Queueing weather refresh for airports with configured sources (of " . count($config['airports']) . " in config) using {$poolSize} workers...\n\n");
 }
 
 $pool = new ProcessPool($poolSize, $workerTimeout, basename(__FILE__), $invocationId);
@@ -244,6 +244,7 @@ register_shutdown_function(function() use ($pool) {
 });
 
 $skipped = 0;
+$weatherJobsEligible = 0;
 foreach ($config['airports'] as $airportId => $airport) {
     // Only process enabled airports; skip malformed entries
     if (!is_array($airport) || !isAirportEnabled($airport)) {
@@ -253,7 +254,8 @@ foreach ($config['airports'] as $airportId => $airport) {
     if (!hasWeatherSources($airport)) {
         continue;
     }
-    
+
+    $weatherJobsEligible++;
     if (!$pool->addJob([$airportId])) {
         $skipped++;
     }
@@ -287,7 +289,8 @@ aviationwx_log('info', 'weather fetch script completed', [
     'trigger' => $triggerType,
     'trigger_context' => $triggerContext,
     'duration_ms' => $scriptDuration,
-    'airports_processed' => $totalAirports,
+    'airports_in_config' => $totalAirports,
+    'weather_jobs_eligible' => $weatherJobsEligible,
     'stats' => $stats
 ], 'app');
 

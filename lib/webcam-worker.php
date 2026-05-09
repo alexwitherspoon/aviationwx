@@ -227,7 +227,6 @@ class WebcamWorker
             $configurationNotReadyReasons = [
                 'webcam_not_configured',
                 'missing_base_url',
-                'no_username_configured',
             ];
             if (in_array($reason, $configurationNotReadyReasons, true)) {
                 aviationwx_log('info', 'Webcam acquisition skipped (not configured)', [

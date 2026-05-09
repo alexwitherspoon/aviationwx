@@ -1305,6 +1305,64 @@ class ConfigValidationTest extends TestCase
     }
 
     /**
+     * Reserved webcam slots may use enabled:false without URL or push_config (UI placeholder).
+     */
+    public function testWebcam_DisabledReservedSlotPassesWithoutAcquisitionFields(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Reserved camera slot',
+                            'enabled' => false,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Disabled placeholder webcam should pass without url or push_config');
+    }
+
+    /**
+     * Federated pull webcam uses base_url instead of url (matches PullAcquisitionStrategy).
+     */
+    public function testWebcam_ValidAviationwxApiCamera(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Federated runway cam',
+                            'type' => 'aviationwx_api',
+                            'base_url' => 'https://weather.example.com',
+                            'api_key' => 'ak_test_partner_key',
+                            'camera_index' => 0,
+                            'timeout_seconds' => 15,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'aviationwx_api webcam should validate with base_url');
+    }
+
+    /**
      * Test webcam validation - Invalid configurations
      */
     public function testWebcam_MissingUrlForPullCamera()
