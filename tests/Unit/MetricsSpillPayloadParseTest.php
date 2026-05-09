@@ -60,4 +60,40 @@ class MetricsSpillPayloadParseTest extends TestCase
 
         $this->assertNull(metrics_parse_spill_payload_for_merge($data, $hourId));
     }
+
+    public function testParse_NonNumericCounter_ReturnsNull(): void
+    {
+        $hourId = '2026-07-01-12';
+        $data = [
+            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
+            'hour_id' => $hourId,
+            'counters' => ['global_page_views' => 'not-a-number'],
+        ];
+
+        $this->assertNull(metrics_parse_spill_payload_for_merge($data, $hourId));
+    }
+
+    public function testParse_MixedValidAndInvalidCounter_ReturnsNull(): void
+    {
+        $hourId = '2026-07-01-12';
+        $data = [
+            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
+            'hour_id' => $hourId,
+            'counters' => ['global_page_views' => 1, 'bad' => 'x'],
+        ];
+
+        $this->assertNull(metrics_parse_spill_payload_for_merge($data, $hourId));
+    }
+
+    public function testParse_EmptyCountersMap_ReturnsNull(): void
+    {
+        $hourId = '2026-07-01-12';
+        $data = [
+            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
+            'hour_id' => $hourId,
+            'counters' => [],
+        ];
+
+        $this->assertNull(metrics_parse_spill_payload_for_merge($data, $hourId));
+    }
 }

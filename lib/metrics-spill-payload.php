@@ -10,8 +10,9 @@ require_once __DIR__ . '/constants.php';
 /**
  * Validate decoded spill JSON and return normalized counter keys for hourly merge.
  *
- * Used by the spill aggregator after reading a shard file; rejects schema mismatch or hour mismatch
- * so corrupt or cross-hour shards are never applied.
+ * Used by the spill aggregator after reading a shard file; rejects schema mismatch, hour mismatch,
+ * non-numeric counter values, empty counter maps, or invalid keys so corrupt shards are not merged
+ * and are left on disk for inspection.
  *
  * @param array<string, mixed> $data Decoded spill JSON object
  * @param string $expectedHourId UTC hour bucket id (must match directory and payload hour_id)
@@ -37,12 +38,16 @@ function metrics_parse_spill_payload_for_merge(array $data, string $expectedHour
     $flat = [];
     foreach ($counters as $k => $v) {
         if (!is_string($k)) {
-            continue;
+            return null;
         }
         if (!is_int($v) && !is_float($v)) {
-            continue;
+            return null;
         }
         $flat[$k] = (int) $v;
+    }
+
+    if ($flat === []) {
+        return null;
     }
 
     return ['counters' => $flat];

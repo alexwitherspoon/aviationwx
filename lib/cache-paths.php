@@ -897,6 +897,7 @@ function ensureAllCacheDirs(): array {
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,
         CACHE_METRICS_WEEKLY_DIR,
+        CACHE_METRICS_SPILL_DIR,
         CACHE_MAP_TILES_DIR,
     ];
     

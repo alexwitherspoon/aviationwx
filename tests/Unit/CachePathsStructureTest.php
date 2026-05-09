@@ -122,6 +122,16 @@ class CachePathsStructureTest extends TestCase
     }
 
     /**
+     * Spill root is part of ensureAllCacheDirs (Docker / deploy must stay aligned)
+     */
+    public function testEnsureAllCacheDirs_IncludesMetricsSpillDir(): void
+    {
+        $results = ensureAllCacheDirs();
+        $this->assertArrayHasKey(CACHE_METRICS_SPILL_DIR, $results);
+        $this->assertTrue($results[CACHE_METRICS_SPILL_DIR]);
+    }
+
+    /**
      * Aggregator lock and last-run paths live under metrics cache root with fixed basenames
      */
     public function testMetricsAggregatorPaths_UnderMetricsDir(): void
