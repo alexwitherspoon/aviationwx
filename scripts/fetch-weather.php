@@ -110,9 +110,9 @@ function processAirportWeather(string $airportId, string $baseUrl, string $invoc
             $success = false;
         }
     } else {
-        // Parse error response to determine log level
-        $data = json_decode($response, true);
-        $errorMessage = $data['error'] ?? null;
+        // Parse error response to determine log level (curl may return false; decode yields null)
+        $data = json_decode(is_string($response) ? $response : '', true);
+        $errorMessage = is_array($data) ? ($data['error'] ?? null) : null;
         
         // If not configured, treat as successful no-op (scheduler should skip these; belt-and-suspenders)
         if ($httpCode === 503 && $errorMessage === 'Weather source not configured') {
