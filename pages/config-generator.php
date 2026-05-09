@@ -538,7 +538,7 @@ function generateConfigSnippet($formData) {
                     'password' => $cam['push_password'] ?? generateRandomCredential(),
                     'protocol' => strtolower($cam['protocol'] ?? 'sftp'),
                     'port' => intval($cam['port'] ?? ($cam['protocol'] === 'sftp' ? 2222 : ($cam['protocol'] === 'ftps' ? 2122 : 2121))),
-                    'allowed_extensions' => ['jpg', 'jpeg', 'png']
+                    'allowed_extensions' => ['jpg', 'jpeg', 'png', 'webp']
                 ];
                 $mfs = $cam['max_file_size_mb'] ?? '';
                 if ($mfs !== '' && $mfs !== null && is_numeric($mfs) && (int) $mfs > 0) {

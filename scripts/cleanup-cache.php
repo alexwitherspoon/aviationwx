@@ -9,6 +9,7 @@
  * - Rate limit files older than 1 hour
  * - Webcam error files older than 7 days
  * - Outage state files older than 30 days
+ * - Push FTP/SFTP inbox debris (files not in the config-derived keep-list; see getPushUploadAllowedExtensionsForCleanup())
  * 
  * LAYER 2 - Backup cleanup for files WITH automatic cleanup:
  * More generous thresholds as a safety net in case primary cleanup fails.
@@ -83,6 +84,8 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 define('CLEANUP_RATE_LIMIT_AGE', 86400);          // 24 hours
 define('CLEANUP_WEBCAM_ERROR_AGE', 604800);       // 7 days
 define('CLEANUP_OUTAGE_STATE_AGE', 2592000);      // 30 days
+// Push upload dirs: MP4/TXT etc. are never processed by acquisition (images only); remove after 48h
+// (shared with scripts/cleanup-push-upload-debris.php hourly job)
 
 // Layer 2: Backup cleanup (more generous - safety net)
 define('CLEANUP_WEATHER_HISTORY_AGE', 172800);    // 48 hours (primary: 24h)
@@ -198,6 +201,12 @@ cleanupFilesByPattern(
     'Public API rate limit files',
     $stats, $dryRun, $verbose
 );
+
+// Push FTP/SFTP upload debris (e.g. Reolink MP4 + sidecar TXT; worker only ingests images)
+require_once __DIR__ . '/../lib/push-upload-debris-cleanup.php';
+echo "Push upload debris (FTP/SFTP non-image files)...\n";
+cleanupPushUploadDebris(CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, $stats, $dryRun, $verbose);
+echo "\n";
 
 // ============================================================================
 // LAYER 2: Backup cleanup (safety net for files with automatic cleanup)

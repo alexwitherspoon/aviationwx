@@ -332,6 +332,7 @@ if [ -d "${LOG_DIR}" ]; then
           "${LOG_DIR}/cron-weather.log" \
           "${LOG_DIR}/cron-push-webcams.log" \
           "${LOG_DIR}/cron-heartbeat.log" \
+          "${LOG_DIR}/cleanup-push-upload-debris.log" \
           "${LOG_DIR}/apache-access.log" \
           "${LOG_DIR}/apache-error.log" \
           "${LOG_DIR}/sshd.log" \
