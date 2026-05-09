@@ -75,7 +75,7 @@ function metrics_run_spill_aggregator_once(): array
             }
 
             $hourId = basename($hourDir);
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}-\d{2}$/', $hourId)) {
+            if (!metrics_hour_id_is_valid($hourId)) {
                 continue;
             }
 

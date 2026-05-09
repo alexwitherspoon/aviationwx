@@ -584,6 +584,31 @@ function metrics_get_hour_id(?int $timestamp = null): string {
 }
 
 /**
+ * Whether $hourId is a valid UTC calendar hour in metrics format (YYYY-MM-DD-HH).
+ *
+ * Rejects malformed strings, invalid calendar dates, and hour outside 00--23.
+ *
+ * @param string $hourId Candidate id (e.g. directory name under the spill root)
+ * @return bool True when the string is a real UTC calendar hour in metrics format
+ */
+function metrics_hour_id_is_valid(string $hourId): bool {
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})-(\d{2})$/', $hourId, $m)) {
+        return false;
+    }
+
+    $year = (int) $m[1];
+    $month = (int) $m[2];
+    $day = (int) $m[3];
+    $hour = (int) $m[4];
+
+    if ($hour > 23) {
+        return false;
+    }
+
+    return checkdate($month, $day, $year);
+}
+
+/**
  * Get current day bucket ID
  * 
  * @param int|null $timestamp Unix timestamp (default: now)
@@ -610,21 +635,26 @@ function metrics_get_week_id(?int $timestamp = null): string {
  *
  * @param string $hourId Bucket id from metrics_get_hour_id() (e.g. 2026-05-08-14)
  * @return array{0:int,1:int} Unix timestamps for bucket_start and bucket_end
+ *
+ * @throws InvalidArgumentException When $hourId is not a valid UTC metrics hour id
  */
 function metrics_hour_bucket_bounds_from_hour_id(string $hourId): array {
     if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})-(\d{2})$/', $hourId, $m)) {
-        $t = time();
-        $aligned = $t - ($t % 3600);
-
-        return [$aligned, $aligned + 3600];
+        throw new InvalidArgumentException('Invalid UTC metrics hour id: ' . $hourId);
     }
 
-    $ts = strtotime(sprintf('%s-%s-%s %02d:00:00 UTC', $m[1], $m[2], $m[3], (int) $m[4]));
-    if ($ts === false) {
-        $t = time();
-        $aligned = $t - ($t % 3600);
+    $year = (int) $m[1];
+    $month = (int) $m[2];
+    $day = (int) $m[3];
+    $hour = (int) $m[4];
 
-        return [$aligned, $aligned + 3600];
+    if ($hour > 23 || !checkdate($month, $day, $year)) {
+        throw new InvalidArgumentException('Invalid UTC metrics hour id: ' . $hourId);
+    }
+
+    $ts = gmmktime($hour, 0, 0, $month, $day, $year);
+    if ($ts === false) {
+        throw new InvalidArgumentException('Invalid UTC metrics hour id (conversion): ' . $hourId);
     }
 
     return [$ts, $ts + 3600];
@@ -634,6 +664,9 @@ function metrics_hour_bucket_bounds_from_hour_id(string $hourId): array {
  * New empty hourly metrics bucket for disk (hourly JSON file).
  *
  * @param string $hourId Hour identifier (metrics_get_hour_id format)
+ *
+ * @throws InvalidArgumentException When $hourId is not a valid UTC metrics hour id
+ *
  * @return array Hourly bucket structure
  */
 function metrics_new_empty_hour_bucket(string $hourId): array {
@@ -673,6 +706,9 @@ function metrics_new_empty_hour_bucket(string $hourId): array {
  *
  * @param array<string, mixed> $hourData Loaded or partial hour bucket (replaced in place)
  * @param string               $hourId   Canonical UTC hour id for this merge (directory name)
+ *
+ * @throws InvalidArgumentException When $hourId is not a valid UTC metrics hour id
+ *
  * @return void
  */
 function metrics_normalize_hour_bucket_for_merge(array &$hourData, string $hourId): void {
