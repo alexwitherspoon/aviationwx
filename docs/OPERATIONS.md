@@ -38,6 +38,8 @@ All logs are in `/var/log/aviationwx/` inside the container (mounted from `/var/
 | `apache-error.log` | HTTP error logs |
 | `php-error.log` | PHP runtime errors |
 | `cron-heartbeat.log` | Cron daemon status |
+| `cleanup-push-upload-debris.log` | Hourly push FTP/SFTP inbox debris cleanup (stdout) |
+| `cleanup-cache.log` | Daily full cache cleanup (stdout) |
 | `scheduler-health-check.log` | Scheduler health checks |
 
 **Log rotation**: 1 rotated file, 100MB max per file.

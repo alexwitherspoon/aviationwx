@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/constants.php';
 
 /**
  * Validate push webcam configuration
@@ -88,7 +89,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
         if (!is_array($pushConfig['allowed_extensions'])) {
             $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: allowed_extensions must be an array";
         } else {
-            $validExtensions = ['jpg', 'jpeg', 'png'];
+            $validExtensions = push_upload_master_image_extensions();
             foreach ($pushConfig['allowed_extensions'] as $ext) {
                 if (!in_array(strtolower($ext), $validExtensions)) {
                     $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: invalid extension '{$ext}' (allowed: " . implode(', ', $validExtensions) . ")";

@@ -555,6 +555,11 @@ if (!defined('MAX_UPLOAD_FILE_MAX_AGE_SECONDS')) {
     define('MAX_UPLOAD_FILE_MAX_AGE_SECONDS', 7200); // 2 hours maximum (config override)
 }
 
+// Push FTP/SFTP inbox debris: max file age (mtime) before deletion (hourly + daily cleanup scripts)
+if (!defined('CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS')) {
+    define('CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS', 172800); // 48 hours
+}
+
 // Push webcam adaptive stability checking
 // How long to wait in stability checking loop for in-progress upload
 if (!defined('DEFAULT_STABILITY_CHECK_TIMEOUT_SECONDS')) {
@@ -969,5 +974,18 @@ if (!defined('WEBCAM_WEBP_COMPRESSION_LEVEL')) {
 // - 10+: Visible artifacts
 if (!defined('WEBCAM_JPEG_QUALITY')) {
     define('WEBCAM_JPEG_QUALITY', 1);
+}
+
+/**
+ * Master allowlist of push upload image file extensions (lowercase, no dot).
+ *
+ * The acquisition worker only globs these types; config and debris cleanup may use subsets
+ * but must not list extensions outside this set.
+ *
+ * @return array<int, string>
+ */
+function push_upload_master_image_extensions(): array
+{
+    return ['jpg', 'jpeg', 'png', 'webp'];
 }
 

@@ -60,6 +60,8 @@
     "webcam_history_preset_hours": [1, 3, 6, 24],
     
     "webcam_variant_heights": [1080, 720, 360],
+    "_comment_push_upload_cleanup": "Optional. FTP/SFTP push inbox debris cleanup keeps files with these extensions plus each push camera push_config.allowed_extensions (subset of jpg,jpeg,png,webp). Omit key entirely for the same default without listing it.",
+    "push_upload_allowed_extensions": ["jpg", "jpeg", "png", "webp"],
     "_comment_legacy": "The following image_* options are deprecated. Use webcam_variant_heights instead.",
     "image_primary_size": "1920x1080",
     "image_max_resolution": "3840x2160",

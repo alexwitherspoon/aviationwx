@@ -1376,6 +1376,105 @@ function getWebcamHistoryUIConfig(string $airportId): array {
 }
 
 /**
+ * Normalize and validate an extension against the push master allowlist.
+ *
+ * @param mixed             $ext        Extension string (may include leading dot)
+ * @param array<string,int> $masterFlip flip(push_upload_master_image_extensions())
+ */
+function push_upload_filter_extension_to_master($ext, array $masterFlip): ?string
+{
+    if (!is_string($ext) && !is_int($ext)) {
+        return null;
+    }
+    $e = strtolower(ltrim(trim((string) $ext), '.'));
+    if ($e === '' || !isset($masterFlip[$e])) {
+        return null;
+    }
+
+    return $e;
+}
+
+/**
+ * Sorted unique list for stable comparisons and logging.
+ *
+ * @param array<int, string> $exts
+ * @return array<int, string>
+ */
+function push_upload_sorted_unique_extensions_list(array $exts): array
+{
+    $exts = array_unique(array_map(static function ($x): string {
+        return strtolower((string) $x);
+    }, $exts));
+    sort($exts);
+
+    return array_values($exts);
+}
+
+/**
+ * Effective allowlist of push inbox image extensions for FTP/SFTP debris cleanup.
+ *
+ * Merges optional global `config.push_upload_allowed_extensions` with every push camera's
+ * `push_config.allowed_extensions`. Values are intersected with {@see push_upload_master_image_extensions()}.
+ *
+ * When nothing is configured (no global key and no push cameras contribute extensions), returns
+ * the full master list (jpg, jpeg, png, webp).
+ *
+ * @return array<int, string>
+ */
+function getPushUploadAllowedExtensionsForCleanup(): array
+{
+    $master = push_upload_master_image_extensions();
+    $masterFlip = array_flip($master);
+
+    $merged = [];
+
+    $config = loadConfig();
+    if ($config === null) {
+        return push_upload_sorted_unique_extensions_list($master);
+    }
+
+    $cfgBlock = $config['config'] ?? [];
+    if (isset($cfgBlock['push_upload_allowed_extensions'])
+        && is_array($cfgBlock['push_upload_allowed_extensions'])
+        && $cfgBlock['push_upload_allowed_extensions'] !== []) {
+        foreach ($cfgBlock['push_upload_allowed_extensions'] as $ext) {
+            $e = push_upload_filter_extension_to_master($ext, $masterFlip);
+            if ($e !== null) {
+                $merged[$e] = true;
+            }
+        }
+    }
+
+    if (isset($config['airports']) && is_array($config['airports'])) {
+        foreach ($config['airports'] as $airport) {
+            $webcams = $airport['webcams'] ?? [];
+            foreach ($webcams as $cam) {
+                $pc = $cam['push_config'] ?? null;
+                if (!is_array($pc)) {
+                    continue;
+                }
+                $ae = $pc['allowed_extensions'] ?? null;
+                if (!is_array($ae)) {
+                    continue;
+                }
+                foreach ($ae as $ext) {
+                    $e = push_upload_filter_extension_to_master($ext, $masterFlip);
+                    if ($e !== null) {
+                        $merged[$e] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if ($merged === []) {
+        return push_upload_sorted_unique_extensions_list($master);
+    }
+
+    return push_upload_sorted_unique_extensions_list(array_keys($merged));
+}
+
+/**
  * Get HTTP integrity digest cache TTL in seconds
  *
  * Matches the oldest content we cache digests for: webcam history images
@@ -3394,6 +3493,28 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.dynamic_dns_refresh_seconds must be >= 60 seconds when enabled (or 0 to disable)";
                 }
             }
+
+            // Optional global allowlist for push FTP/SFTP inbox debris cleanup (union with per-push-camera allowed_extensions)
+            if (isset($cfg['push_upload_allowed_extensions'])) {
+                if (!is_array($cfg['push_upload_allowed_extensions'])) {
+                    $errors[] = 'config.push_upload_allowed_extensions must be an array';
+                } elseif ($cfg['push_upload_allowed_extensions'] === []) {
+                    $errors[] = 'config.push_upload_allowed_extensions must be non-empty when set (omit the key to use defaults)';
+                } else {
+                    $master = push_upload_master_image_extensions();
+                    $masterList = implode(', ', $master);
+                    foreach ($cfg['push_upload_allowed_extensions'] as $ext) {
+                        if (!is_string($ext)) {
+                            $errors[] = 'config.push_upload_allowed_extensions entries must be strings';
+                            break;
+                        }
+                        $e = strtolower(ltrim(trim((string) $ext), '.'));
+                        if (!in_array($e, $master, true)) {
+                            $errors[] = "config.push_upload_allowed_extensions: invalid extension '{$ext}' (allowed: {$masterList})";
+                        }
+                    }
+                }
+            }
             
             // Validate staleness thresholds (3-tier model)
             $stalenessKeys = [
@@ -4293,8 +4414,22 @@ function validateAirportsJsonStructure(array $config): array {
                                             $errors[] = "Airport '{$airportCode}' webcam index {$idx}: max_file_size_mb must be between 1 and {$upper} (global cache_file_max_size_mb is {$globalMb}; omit key to inherit)";
                                         }
                                     }
-                                    if (isset($pushConfig['allowed_extensions']) && !is_array($pushConfig['allowed_extensions'])) {
-                                        $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions must be an array";
+                                    if (isset($pushConfig['allowed_extensions'])) {
+                                        if (!is_array($pushConfig['allowed_extensions'])) {
+                                            $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions must be an array";
+                                        } else {
+                                            $masterList = push_upload_master_image_extensions();
+                                            foreach ($pushConfig['allowed_extensions'] as $pex) {
+                                                if (!is_string($pex)) {
+                                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions entries must be strings";
+                                                    break;
+                                                }
+                                                $e = strtolower(ltrim(trim((string) $pex), '.'));
+                                                if (!in_array($e, $masterList, true)) {
+                                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions: invalid extension '{$pex}' (allowed: " . implode(', ', $masterList) . ')';
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

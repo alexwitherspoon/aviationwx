@@ -32,6 +32,10 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # (both push and pull) with per-camera refresh_seconds configuration.
 # This cron job has been removed as part of the unified webcam worker refactor.
 
+# Push FTP/SFTP upload inbox debris (non-image files older than CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS)
+# Runs hourly; daily cleanup-cache.php also includes this step as a safety net.
+17 * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-push-upload-debris.php >> /var/log/aviationwx/cleanup-push-upload-debris.log 2>&1
+
 # Cache Cleanup - Runs daily at 4 AM
 # Two-layer cleanup strategy (belt and suspenders):
 # - Layer 1: Primary cleanup for files without automatic cleanup (rate limits, error files)

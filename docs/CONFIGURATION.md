@@ -33,6 +33,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `cache_file_max_size_mb` | `25` | Max size in MiB for webcam pipeline loads, HTTP/MJPEG pull downloads, partner logo fetches, and **default** push upload acceptance (integer **1--100**). |
+| `push_upload_allowed_extensions` | omit | Optional: extensions **preserved** during FTP/SFTP push inbox debris cleanup; merged with each push camera `push_config.allowed_extensions`. Values must be from **jpg, jpeg, png, webp**. Omit the key for the full default (all four). |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
 | `notam_refresh_seconds` | `600` | NOTAM refresh interval |
@@ -166,7 +167,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | `push_config.username` | — | 14 alphanumeric chars |
 | `push_config.password` | — | 14 alphanumeric chars |
 | `push_config.max_file_size_mb` | *(inherit global)* | Optional per-camera cap (integer **1** through **`config.cache_file_max_size_mb`**). Omit to use the global `cache_file_max_size_mb` for FTP/SFTP acceptance. Set lower to limit a single camera (bandwidth or policy). |
-| `push_config.allowed_extensions` | `["jpg","jpeg","png"]` | Allowed file types |
+| `push_config.allowed_extensions` | `["jpg","jpeg","png","webp"]` | Allowed file types (subset of **jpg, jpeg, png, webp**) |
 | `push_config.upload_file_max_age_seconds` | `1800` | Max file age before abandonment (600-7200) |
 | `push_config.stability_check_timeout_seconds` | `15` | Stability check timeout (10-30) |
 

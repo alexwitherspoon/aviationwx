@@ -1847,6 +1847,7 @@ This path is separate from weather, webcam, and NOTAM pipelines. It supplies **g
 
 ### Cache cleanup (`scripts/cleanup-cache.php`)
 
+- **Push FTP/SFTP inbox debris:** Same keep-list as above. **`scripts/cleanup-push-upload-debris.php`** runs **hourly** via cron; **`cleanup-cache.php`** still runs the same step daily as a backup.
 - Layer-2 age cleanup for the aggregate uses a **90-day** threshold so a healthy file is not deleted while the 30-day policy still considers it usable between scheduler passes.
 
 ---
