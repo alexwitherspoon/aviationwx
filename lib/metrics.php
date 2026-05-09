@@ -1909,6 +1909,8 @@ function metrics_prometheus_export(): array {
  *
  * Spill path: CACHE_METRICS_SPILL_DIR/{hourId}/{pid}_{uniq}.json (see cache-paths.php).
  *
+ * Never throws: path generation uses CSPRNG (may throw under extreme failure); shutdown hooks must stay safe.
+ *
  * @return bool True if nothing to write, or spill written and APCu reset
  */
 function metrics_write_spill_snapshot_and_reset_counters(): bool {
@@ -1921,46 +1923,53 @@ function metrics_write_spill_snapshot_and_reset_counters(): bool {
         return true;
     }
 
-    $hourId = metrics_get_hour_id();
-    $pid = getmypid();
-    $target = getMetricsSpillSnapshotPath($hourId, $pid);
-    $dir = dirname($target);
-    if (!ensureCacheDir($dir)) {
-        aviationwx_log('warning', 'metrics spill: could not create spill directory', ['dir' => $dir], 'app');
+    try {
+        $hourId = metrics_get_hour_id();
+        $pid = getmypid();
+        $target = getMetricsSpillSnapshotPath($hourId, $pid);
+        $dir = dirname($target);
+        if (!ensureCacheDir($dir)) {
+            aviationwx_log('warning', 'metrics spill: could not create spill directory', ['dir' => $dir], 'app');
+            return false;
+        }
+
+        $payload = [
+            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
+            'generated_at' => time(),
+            'hour_id' => $hourId,
+            'pid' => $pid,
+            'counters' => $counters,
+        ];
+
+        $json = json_encode($payload);
+        if ($json === false) {
+            aviationwx_log('warning', 'metrics spill: json_encode failed', ['error' => json_last_error_msg()], 'app');
+            return false;
+        }
+
+        $tmpFile = $target . '.tmp.' . $pid;
+        $written = @file_put_contents($tmpFile, $json, LOCK_EX);
+        if ($written === false) {
+            @unlink($tmpFile);
+            aviationwx_log('warning', 'metrics spill: temp write failed', ['path' => $tmpFile], 'app');
+            return false;
+        }
+
+        if (!@rename($tmpFile, $target)) {
+            @unlink($tmpFile);
+            aviationwx_log('warning', 'metrics spill: rename failed', ['path' => $target], 'app');
+            return false;
+        }
+
+        metrics_reset_all();
+
+        return true;
+    } catch (Throwable $e) {
+        aviationwx_log('warning', 'metrics spill: unexpected failure', [
+            'error' => $e->getMessage(),
+        ], 'app');
         return false;
     }
-
-    $payload = [
-        'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-        'generated_at' => time(),
-        'hour_id' => $hourId,
-        'pid' => $pid,
-        'counters' => $counters,
-    ];
-
-    $json = json_encode($payload);
-    if ($json === false) {
-        aviationwx_log('warning', 'metrics spill: json_encode failed', ['error' => json_last_error_msg()], 'app');
-        return false;
-    }
-
-    $tmpFile = $target . '.tmp.' . $pid;
-    $written = @file_put_contents($tmpFile, $json, LOCK_EX);
-    if ($written === false) {
-        @unlink($tmpFile);
-        aviationwx_log('warning', 'metrics spill: temp write failed', ['path' => $tmpFile], 'app');
-        return false;
-    }
-
-    if (!@rename($tmpFile, $target)) {
-        @unlink($tmpFile);
-        aviationwx_log('warning', 'metrics spill: rename failed', ['path' => $target], 'app');
-        return false;
-    }
-
-    metrics_reset_all();
-
-    return true;
 }
 
 /**
