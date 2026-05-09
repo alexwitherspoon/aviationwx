@@ -638,6 +638,13 @@ class ConfigTest extends TestCase {
     }
 
     /**
+     * Fixture omits cleanup_push_upload_debris_max_age_seconds; getter uses built-in default (3 hours).
+     */
+    public function testGetCleanupPushUploadDebrisMaxAgeSeconds_DefaultWhenUnset(): void {
+        $this->assertSame((int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, getCleanupPushUploadDebrisMaxAgeSeconds());
+    }
+
+    /**
      * normalizeCacheFileMaxSizeMb() clamps to 1--100 MiB and treats non-numeric input as 25 MiB.
      */
     public function testNormalizeCacheFileMaxSizeMb_ClampsAndDefaults(): void {

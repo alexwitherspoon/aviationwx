@@ -562,8 +562,14 @@ if (!defined('MAX_UPLOAD_FILE_MAX_AGE_SECONDS')) {
 }
 
 // Push FTP/SFTP inbox debris: max file age (mtime) before deletion (hourly + daily cleanup scripts)
+if (!defined('MIN_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS')) {
+    define('MIN_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS', 600); // 10 minutes (config override floor)
+}
+if (!defined('MAX_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS')) {
+    define('MAX_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS', 604800); // 7 days (config override ceiling)
+}
 if (!defined('CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS')) {
-    define('CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS', 172800); // 48 hours
+    define('CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS', 10800); // 3 hours default when config omits override
 }
 
 // Push webcam adaptive stability checking
