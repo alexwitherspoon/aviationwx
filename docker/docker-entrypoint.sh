@@ -205,6 +205,7 @@ METRICS_DIR="${CACHE_DIR}/metrics"
 METRICS_HOURLY_DIR="${METRICS_DIR}/hourly"
 METRICS_DAILY_DIR="${METRICS_DIR}/daily"
 METRICS_WEEKLY_DIR="${METRICS_DIR}/weekly"
+METRICS_SPILL_DIR="${METRICS_DIR}/spill"
 PEAK_GUSTS_DIR="${CACHE_DIR}/peak_gusts"
 TEMP_EXTREMES_DIR="${CACHE_DIR}/temp_extremes"
 RUNWAYS_DIR="${CACHE_DIR}/runways"
@@ -237,6 +238,7 @@ ensure_cache_subdirs() {
         "${METRICS_HOURLY_DIR}"
         "${METRICS_DAILY_DIR}"
         "${METRICS_WEEKLY_DIR}"
+        "${METRICS_SPILL_DIR}"
         "${MAP_TILES_DIR}"
     )
     if command -v runuser >/dev/null 2>&1; then

@@ -50,6 +50,10 @@
  * Retention is controlled by webcam_history_max_frames config setting.
  */
 
+// Metrics lock / spill schema basenames and related defaults live in lib/constants.php; load them here
+// so this file stays the single include for cache paths without duplicating defaults.
+require_once __DIR__ . '/constants.php';
+
 // =============================================================================
 // BASE CACHE DIRECTORY
 // =============================================================================
@@ -563,6 +567,62 @@ if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
     define('CACHE_METRICS_WEEKLY_DIR', CACHE_METRICS_DIR . '/weekly');
 }
 
+if (!defined('CACHE_METRICS_SPILL_DIR')) {
+    define('CACHE_METRICS_SPILL_DIR', CACHE_METRICS_DIR . '/spill');
+}
+
+/**
+ * Root directory for per-worker metric spill files before aggregator merge (hour subdirs).
+ *
+ * @return string Absolute path to spill root
+ */
+function getMetricsSpillRootDir(): string {
+    return CACHE_METRICS_SPILL_DIR;
+}
+
+/**
+ * Directory for one UTC hour bucket (metrics_get_hour_id format).
+ *
+ * @param string $hourId Hour identifier (e.g. 2026-05-09-14)
+ * @return string Absolute path
+ */
+function getMetricsSpillHourDir(string $hourId): string {
+    return CACHE_METRICS_SPILL_DIR . '/' . $hourId;
+}
+
+/**
+ * Unique JSON path for one spill snapshot (tmp+rename from PHP worker).
+ *
+ * Multiple snapshots per worker per hour are expected (request shutdown); the aggregator merges and deletes each file.
+ *
+ * @param string $hourId Hour identifier (metrics_get_hour_id)
+ * @param int $pid Process ID (FPM worker)
+ * @return string Absolute path to JSON spill file
+ */
+function getMetricsSpillSnapshotPath(string $hourId, int $pid): string {
+    $uniq = bin2hex(random_bytes(8));
+
+    return getMetricsSpillHourDir($hourId) . '/' . $pid . '_' . $uniq . '.json';
+}
+
+/**
+ * Exclusive singleton lock for metrics spill aggregator CLI (non-blocking flock).
+ *
+ * @return string Absolute path
+ */
+function getMetricsAggregatorLockPath(): string {
+    return CACHE_METRICS_DIR . '/' . METRICS_AGGREGATOR_LOCK_BASENAME;
+}
+
+/**
+ * Last-run telemetry JSON written by aggregator for ops visibility.
+ *
+ * @return string Absolute path
+ */
+function getMetricsAggregatorLastRunPath(): string {
+    return CACHE_METRICS_DIR . '/' . METRICS_AGGREGATOR_LAST_RUN_BASENAME;
+}
+
 /**
  * Get path to hourly metrics file
  * 
@@ -833,6 +893,7 @@ function ensureAllCacheDirs(): array {
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,
         CACHE_METRICS_WEEKLY_DIR,
+        CACHE_METRICS_SPILL_DIR,
         CACHE_MAP_TILES_DIR,
     ];
     

@@ -16,12 +16,14 @@ class MapTilesProxyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Use localhost for integration tests (assumes dev environment running)
-        $this->baseUrl = 'http://localhost:8080';
+        // Match isolated test stack (make test-local / TEST_API_URL=:9080) and dev (:8080).
+        $this->baseUrl = getenv('TEST_API_URL')
+            ?: getenv('TEST_BASE_URL')
+            ?: 'http://localhost:8080';
         
         // Check if Docker/server is running
         if (!$this->isServerRunning()) {
-            $this->markTestSkipped('Server not running on localhost:8080 - start with "make up"');
+            $this->markTestSkipped('Server not running at ' . $this->baseUrl . ' -- start test stack (make test-up) or dev (make up)');
         }
         
         // Check if we're rate limited (for tests that were run earlier)
@@ -351,10 +353,10 @@ class MapTilesProxyTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        // Should return 200 (success), 404 (timestamp might be invalid), or 429 (rate limited)
-        // Not 400 (validation error) or 503 (API key error)
-        $this->assertContains($httpCode, [200, 404, 429], 
-            'RainViewer layer should be accepted (200 success, 404 invalid timestamp, or 429 rate limited)');
+        // Proxy passes upstream codes through. RainViewer may return 410 Gone when the radar frame
+        // window does not include this timestamp (behavior varies by CDN / API version).
+        $this->assertContains($httpCode, [200, 404, 410, 429],
+            'RainViewer layer should be accepted (200, 404/410 no tile, or 429 rate limited)');
     }
     
     /**

@@ -242,9 +242,9 @@ function runWorkerMode(string $airportId, int $camIndex): int
         $worker = WebcamWorkerFactory::create($airportId, $camIndex);
         $result = $worker->run();
 
-        // Flush counters before exit - worker runs in isolated process
+        // Best-effort: workers do not use the FPM shutdown spill hook; write a CLI spill shard for the scheduler merge.
         variant_health_flush();
-        metrics_flush();
+        metrics_write_spill_snapshot_and_reset_counters();
 
         return $result->exitCode;
 
@@ -305,9 +305,9 @@ function runSingleMode(string $airportId, int $camIndex): int
         echo "  Duration: {$elapsed}ms\n";
         echo "\n";
 
-        // Flush counters before exit
+        // Flush counters before exit (CLI has no FPM shutdown spill hook; write shard for scheduler merge)
         variant_health_flush();
-        metrics_flush();
+        metrics_write_spill_snapshot_and_reset_counters();
 
         return $result->exitCode;
 
@@ -389,9 +389,8 @@ function runAllMode(): int
         echo "\n";
     }
 
-    // Flush counters before exit
     variant_health_flush();
-    metrics_flush();
+    metrics_write_spill_snapshot_and_reset_counters();
 
     $elapsed = round((microtime(true) - $startTime) * 1000, 2);
 

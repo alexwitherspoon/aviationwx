@@ -104,4 +104,42 @@ class CachePathsStructureTest extends TestCase
         $this->assertStringContainsString('partners/deadbeef.png', $path);
         $this->assertStringEndsWith('deadbeef.png', $path);
     }
+
+    /**
+     * Metrics spill snapshots use unique filenames under spill/{hourId}/ so workers do not overwrite pending shards
+     */
+    public function testMetricsSpillSnapshotPath_IsUniquePerCall(): void
+    {
+        $hourId = '2026-05-09-14';
+        $dir = getMetricsSpillHourDir($hourId);
+        $this->assertStringContainsString('spill', $dir);
+        $this->assertStringContainsString($hourId, $dir);
+        $p1 = getMetricsSpillSnapshotPath($hourId, 4242);
+        $p2 = getMetricsSpillSnapshotPath($hourId, 4242);
+        $this->assertNotSame($p1, $p2);
+        $this->assertMatchesRegularExpression('#/4242_[a-f0-9]{16}\.json$#', $p1);
+        $this->assertSame(getMetricsSpillRootDir() . '/' . $hourId, $dir);
+    }
+
+    /**
+     * Spill root is part of ensureAllCacheDirs (Docker / deploy must stay aligned)
+     */
+    public function testEnsureAllCacheDirs_IncludesMetricsSpillDir(): void
+    {
+        $results = ensureAllCacheDirs();
+        $this->assertArrayHasKey(CACHE_METRICS_SPILL_DIR, $results);
+        $this->assertTrue($results[CACHE_METRICS_SPILL_DIR]);
+    }
+
+    /**
+     * Aggregator lock and last-run paths live under metrics cache root with fixed basenames
+     */
+    public function testMetricsAggregatorPaths_UnderMetricsDir(): void
+    {
+        $lock = getMetricsAggregatorLockPath();
+        $run = getMetricsAggregatorLastRunPath();
+        $this->assertStringEndsWith('/' . METRICS_AGGREGATOR_LOCK_BASENAME, $lock);
+        $this->assertStringEndsWith('/' . METRICS_AGGREGATOR_LAST_RUN_BASENAME, $run);
+        $this->assertStringStartsWith(CACHE_METRICS_DIR . '/', $lock);
+    }
 }
