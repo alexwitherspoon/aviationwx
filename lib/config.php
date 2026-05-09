@@ -4373,11 +4373,14 @@ function validateAirportsJsonStructure(array $config): array {
                     if (!is_array($webcam)) {
                         $errors[] = "Airport '{$airportCode}' webcam[{$idx}] must be an object";
                     } else {
+                        if (isset($webcam['enabled']) && !is_bool($webcam['enabled'])) {
+                            $errors[] = "Airport '{$airportCode}' webcam[{$idx}] enabled must be a boolean";
+                        }
                         $webcamType = $webcam['type'] ?? 'http';
                         
                         if ($webcamType === 'push') {
                             // Define allowed fields for push cameras
-                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds', 'variant_heights', 'crop_margins'];
+                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds', 'variant_heights', 'crop_margins', 'enabled'];
                             
                             // Check for unknown fields in push webcam
                             foreach ($webcam as $key => $value) {
@@ -4435,7 +4438,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } elseif ($webcamType === 'rtsp') {
                             // Define allowed fields for RTSP cameras
-                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout', 'variant_heights', 'crop_margins'];
+                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout', 'variant_heights', 'crop_margins', 'enabled'];
                             
                             // Check for unknown fields in RTSP webcam
                             foreach ($webcam as $key => $value) {
@@ -4452,7 +4455,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } else {
                             // Define allowed fields for pull cameras (http/mjpeg/static_jpeg/static_png)
-                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights', 'crop_margins'];
+                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights', 'crop_margins', 'enabled'];
                             
                             // Check for unknown fields in pull webcam
                             foreach ($webcam as $key => $value) {

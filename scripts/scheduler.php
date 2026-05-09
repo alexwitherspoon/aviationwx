@@ -33,6 +33,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
+require_once __DIR__ . '/../lib/weather/utils.php';
 // Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
 
 // Lock file location
@@ -398,6 +399,11 @@ while ($running) {
         if ($weatherPool !== null && isset($config['airports'])) {
             foreach ($config['airports'] as $airportId => $airport) {
                 if (!is_array($airport) || !isAirportEnabled($airport)) {
+                    continue;
+                }
+
+                // No sensor / no weather_sources: nothing to refresh (matches api/weather.php gate)
+                if (!hasWeatherSources($airport)) {
                     continue;
                 }
                 

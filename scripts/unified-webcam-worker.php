@@ -40,6 +40,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-worker.php';
 require_once __DIR__ . '/../lib/variant-health.php';
 require_once __DIR__ . '/../lib/metrics.php';
+require_once __DIR__ . '/../lib/webcam-source-validation.php';
 
 // Verify exiftool is available (required for EXIF handling)
 require_once __DIR__ . '/../lib/exif-utils.php';
@@ -238,6 +239,29 @@ function runWorkerMode(string $airportId, int $camIndex): int
         return WorkerResult::FAILURE;
     }
 
+    $config = loadConfig(false);
+    if ($config === null || !isset($config['airports'][$airportId])) {
+        aviationwx_log('error', 'unified-webcam-worker: airport not found', [
+            'airport' => $airportId
+        ], 'app');
+        return WorkerResult::FAILURE;
+    }
+    $airportCfg = $config['airports'][$airportId];
+    if (!is_array($airportCfg)) {
+        aviationwx_log('error', 'unified-webcam-worker: malformed airport config', [
+            'airport' => $airportId
+        ], 'app');
+        return WorkerResult::FAILURE;
+    }
+    $slot = $airportCfg['webcams'][$camIndex] ?? null;
+    if (!is_array($slot) || !hasWebcamAcquisitionConfigured($slot)) {
+        aviationwx_log('info', 'unified-webcam-worker: skipped (webcam not configured)', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+        ], 'app');
+        return WorkerResult::SKIP;
+    }
+
     try {
         $worker = WebcamWorkerFactory::create($airportId, $camIndex);
         $result = $worker->run();
@@ -361,6 +385,11 @@ function runAllMode(): int
         echo str_repeat('-', 40) . "\n";
 
         foreach ($webcams as $camIndex => $cam) {
+            if (!is_array($cam) || !hasWebcamAcquisitionConfigured($cam)) {
+                echo "  [{$camIndex}] (not configured): skipped\n";
+                continue;
+            }
+
             $totalCameras++;
             $camName = $cam['name'] ?? "Camera {$camIndex}";
             echo "  [{$camIndex}] {$camName}: ";

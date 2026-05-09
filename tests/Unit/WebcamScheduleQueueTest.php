@@ -50,6 +50,50 @@ class WebcamScheduleQueueTest extends TestCase
     }
 
     /**
+     * Test placeholder webcams without pull URL or push username are not scheduled
+     */
+    public function testSkipsUnconfiguredWebcamSlots()
+    {
+        $airports = [
+            'kspb' => [
+                'name' => 'Test Airport',
+                'enabled' => true,
+                'webcams' => [
+                    ['url' => 'http://example.com/cam1.mjpg'],
+                    ['name' => 'Reserved slot'],
+                ],
+            ],
+        ];
+
+        $this->queue->initialize($airports);
+
+        $this->assertEquals(1, $this->queue->count(), 'Only configured cameras should be queued');
+    }
+
+    /**
+     * Optional per-webcam enabled:false skips scheduling (reserved UI slot)
+     */
+    public function testSkipsExplicitlyDisabledWebcam()
+    {
+        $airports = [
+            'kspb' => [
+                'name' => 'Test Airport',
+                'enabled' => true,
+                'webcams' => [
+                    ['url' => 'http://example.com/a.mjpg'],
+                    ['url' => 'http://example.com/b.mjpg', 'enabled' => false],
+                ],
+            ],
+        ];
+
+        $this->queue->initialize($airports);
+
+        $this->assertEquals(1, $this->queue->count());
+        $this->assertNotNull($this->queue->getEntry('kspb', 0));
+        $this->assertNull($this->queue->getEntry('kspb', 1));
+    }
+
+    /**
      * Test that disabled airports are skipped
      */
     public function testSkipsDisabledAirports()

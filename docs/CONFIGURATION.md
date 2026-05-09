@@ -158,6 +158,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | **Optional** |||
 | `type` | auto-detect | `rtsp`, `mjpeg`, `static_jpeg`, `static_png`, `push` |
 | `refresh_seconds` | airport default | Override refresh for this camera |
+| `enabled` | `true` | When `false`, the slot stays in config/UI but fetch workers do not run for this camera |
 | `crop_margins` | global default | FAA profile crop margins override (percentages) |
 | **RTSP Options** |||
 | `rtsp_transport` | `tcp` | `tcp` or `udp` |
@@ -170,6 +171,8 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | `push_config.allowed_extensions` | `["jpg","jpeg","png","webp"]` | Allowed file types (subset of **jpg, jpeg, png, webp**) |
 | `push_config.upload_file_max_age_seconds` | `1800` | Max file age before abandonment (600-7200) |
 | `push_config.stability_check_timeout_seconds` | `15` | Stability check timeout (10-30) |
+
+**Scheduling:** The scheduler only runs acquisition for cameras that have enough configuration to fetch: non-push cameras need a non-empty `url` (or `type: aviationwx_api` with `base_url`); push cameras need `push_config.username`. Empty placeholder slots are skipped, matching the weather pipeline rule for airports without `weather_sources`.
 
 ### Configuration Hierarchy
 

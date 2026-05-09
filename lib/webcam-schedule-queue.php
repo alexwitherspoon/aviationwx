@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/webcam-source-validation.php';
 
 /**
  * Camera entry in the schedule queue
@@ -118,8 +119,9 @@ class WebcamScheduleQueue
     /**
      * Initialize queue from airport configuration
      * 
-     * Populates the queue with all configured cameras.
-     * All cameras start as immediately due (dueTime = now).
+     * Populates the queue with configured cameras that have acquisition inputs (pull URL or push username).
+     * Placeholder slots and `enabled: false` entries are omitted so workers are not scheduled.
+     * All queued cameras start as immediately due (dueTime = now).
      * 
      * @param array $airports Airport configuration array
      * @param array $globalConfig Global configuration
@@ -141,6 +143,10 @@ class WebcamScheduleQueue
             }
 
             foreach ($webcams as $camIndex => $webcam) {
+                if (!is_array($webcam) || !hasWebcamAcquisitionConfigured($webcam)) {
+                    continue;
+                }
+
                 $refreshSeconds = $this->getRefreshSeconds($webcam, $airport, $globalConfig);
                 $isPush = $this->isPushCamera($webcam);
 
@@ -274,6 +280,10 @@ class WebcamScheduleQueue
 
             $webcams = $airport['webcams'] ?? [];
             foreach ($webcams as $camIndex => $webcam) {
+                if (!is_array($webcam) || !hasWebcamAcquisitionConfigured($webcam)) {
+                    continue;
+                }
+
                 $key = $airportId . '_' . $camIndex;
                 $refreshSeconds = $this->getRefreshSeconds($webcam, $airport, $globalConfig);
                 $isPush = $this->isPushCamera($webcam);
