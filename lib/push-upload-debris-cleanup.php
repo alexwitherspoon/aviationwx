@@ -71,64 +71,64 @@ function cleanupPushUploadDebris(
                 new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS),
                 RecursiveIteratorIterator::LEAVES_ONLY
             );
-        } catch (Exception $e) {
+
+            foreach ($iterator as $fileInfo) {
+                if (!$fileInfo->isFile()) {
+                    continue;
+                }
+
+                $path = $fileInfo->getPathname();
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                if ($ext !== '' && isset($allowedFlip[$ext])) {
+                    continue;
+                }
+
+                $stats['files_checked']++;
+                $mtime = @filemtime($path);
+                if ($mtime === false) {
+                    continue;
+                }
+
+                $age = $now - $mtime;
+                if ($age <= $maxAgeSeconds) {
+                    continue;
+                }
+
+                $size = @filesize($path);
+                if ($size === false) {
+                    $size = 0;
+                }
+
+                if ($verbose) {
+                    echo '  ' . ($dryRun ? 'Would delete' : 'Deleting') . ' ' . $path
+                        . ' (age: ' . formatPushUploadDebrisAge($age) . ", size: {$size} B)\n";
+                }
+
+                if ($dryRun) {
+                    $stats['files_deleted']++;
+                    $stats['bytes_freed'] += $size;
+                    $phaseDeleted++;
+                    $phaseBytes += $size;
+                    continue;
+                }
+
+                if (@unlink($path)) {
+                    $stats['files_deleted']++;
+                    $stats['bytes_freed'] += $size;
+                    $phaseDeleted++;
+                    $phaseBytes += $size;
+                } else {
+                    $stats['errors']++;
+                    echo "  Failed to delete: {$path}\n";
+                }
+            }
+        } catch (Throwable $e) {
             $stats['errors']++;
             aviationwx_log('warning', 'push upload debris cleanup: cannot iterate directory', [
                 'root' => $root,
                 'error' => $e->getMessage(),
             ], 'app');
             continue;
-        }
-
-        foreach ($iterator as $fileInfo) {
-            if (!$fileInfo->isFile()) {
-                continue;
-            }
-
-            $path = $fileInfo->getPathname();
-            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-            if ($ext !== '' && isset($allowedFlip[$ext])) {
-                continue;
-            }
-
-            $stats['files_checked']++;
-            $mtime = @filemtime($path);
-            if ($mtime === false) {
-                continue;
-            }
-
-            $age = $now - $mtime;
-            if ($age <= $maxAgeSeconds) {
-                continue;
-            }
-
-            $size = @filesize($path);
-            if ($size === false) {
-                $size = 0;
-            }
-
-            if ($verbose) {
-                echo '  ' . ($dryRun ? 'Would delete' : 'Deleting') . ' ' . $path
-                    . ' (age: ' . formatPushUploadDebrisAge($age) . ", size: {$size} B)\n";
-            }
-
-            if ($dryRun) {
-                $stats['files_deleted']++;
-                $stats['bytes_freed'] += $size;
-                $phaseDeleted++;
-                $phaseBytes += $size;
-                continue;
-            }
-
-            if (@unlink($path)) {
-                $stats['files_deleted']++;
-                $stats['bytes_freed'] += $size;
-                $phaseDeleted++;
-                $phaseBytes += $size;
-            } else {
-                $stats['errors']++;
-                echo "  Failed to delete: {$path}\n";
-            }
         }
     }
 

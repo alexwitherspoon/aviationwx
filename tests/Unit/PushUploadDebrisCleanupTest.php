@@ -155,6 +155,22 @@ final class PushUploadDebrisCleanupTest extends TestCase
         $this->assertStringContainsString('bmp', implode(' ', $result['errors']));
     }
 
+    public function testValidatePushUploadAllowedExtensionsRejectsNonStringEntries(): void
+    {
+        $config = [
+            'config' => [
+                'push_upload_allowed_extensions' => ['jpg', 123],
+            ],
+            'airports' => [],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString(
+            'config.push_upload_allowed_extensions entries must be strings',
+            implode(' ', $result['errors'])
+        );
+    }
+
     public function testFormatPushUploadDebrisAge(): void
     {
         $this->assertStringEndsWith('min', formatPushUploadDebrisAge(120));

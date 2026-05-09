@@ -3504,7 +3504,7 @@ function validateAirportsJsonStructure(array $config): array {
                     $master = push_upload_master_image_extensions();
                     $masterList = implode(', ', $master);
                     foreach ($cfg['push_upload_allowed_extensions'] as $ext) {
-                        if (!is_string($ext) && !is_int($ext)) {
+                        if (!is_string($ext)) {
                             $errors[] = 'config.push_upload_allowed_extensions entries must be strings';
                             break;
                         }
@@ -4420,7 +4420,7 @@ function validateAirportsJsonStructure(array $config): array {
                                         } else {
                                             $masterList = push_upload_master_image_extensions();
                                             foreach ($pushConfig['allowed_extensions'] as $pex) {
-                                                if (!is_string($pex) && !is_int($pex)) {
+                                                if (!is_string($pex)) {
                                                     $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config.allowed_extensions entries must be strings";
                                                     break;
                                                 }
