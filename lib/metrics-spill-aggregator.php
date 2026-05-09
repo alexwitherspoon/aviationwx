@@ -32,9 +32,16 @@ function metrics_run_spill_aggregator_once(): array
         'errors' => [],
     ];
 
-    ensureCacheDir(CACHE_METRICS_DIR);
-    ensureCacheDir(CACHE_METRICS_HOURLY_DIR);
-    ensureCacheDir(CACHE_METRICS_SPILL_DIR);
+    foreach ([CACHE_METRICS_DIR, CACHE_METRICS_HOURLY_DIR, CACHE_METRICS_SPILL_DIR] as $dir) {
+        if (!ensureCacheDir($dir)) {
+            $stats['errors'][] = 'metrics_cache_dir_unavailable';
+            aviationwx_log('error', 'metrics spill aggregator: required cache directory not available', [
+                'dir' => $dir,
+            ], 'app');
+
+            return $stats;
+        }
+    }
 
     $lockPath = getMetricsAggregatorLockPath();
     $lockFp = @fopen($lockPath, 'c+');

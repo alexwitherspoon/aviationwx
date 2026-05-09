@@ -16,9 +16,9 @@ class AirportEnabledTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Explicit TEST_BASE_URL wins when set; otherwise use TEST_API_URL (e.g. make test-local :9080), then dev default.
-        $this->baseUrl = getenv('TEST_BASE_URL')
-            ?: getenv('TEST_API_URL')
+        // Match other integration tests: isolated stack (TEST_API_URL e.g. :9080) then TEST_BASE_URL, then dev default.
+        $this->baseUrl = getenv('TEST_API_URL')
+            ?: getenv('TEST_BASE_URL')
             ?: 'http://localhost:8080';
     }
     

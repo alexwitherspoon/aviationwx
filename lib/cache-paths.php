@@ -50,6 +50,10 @@
  * Retention is controlled by webcam_history_max_frames config setting.
  */
 
+// Metrics lock / spill schema basenames and related defaults live in lib/constants.php; load them here
+// so this file stays the single include for cache paths without duplicating defaults.
+require_once __DIR__ . '/constants.php';
+
 // =============================================================================
 // BASE CACHE DIRECTORY
 // =============================================================================
@@ -565,14 +569,6 @@ if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
 
 if (!defined('CACHE_METRICS_SPILL_DIR')) {
     define('CACHE_METRICS_SPILL_DIR', CACHE_METRICS_DIR . '/spill');
-}
-
-// Match lib/constants.php when included standalone (e.g. unit tests without constants.php).
-if (!defined('METRICS_AGGREGATOR_LOCK_BASENAME')) {
-    define('METRICS_AGGREGATOR_LOCK_BASENAME', 'aggregator.lock');
-}
-if (!defined('METRICS_AGGREGATOR_LAST_RUN_BASENAME')) {
-    define('METRICS_AGGREGATOR_LAST_RUN_BASENAME', 'aggregator_last_run.json');
 }
 
 /**
