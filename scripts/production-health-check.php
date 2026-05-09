@@ -51,10 +51,13 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
             'final_url' => $url,
         ];
     }
+    // With CURLOPT_FOLLOWLOCATION, CURLOPT_HEADER + CURLINFO_HEADER_SIZE only describe the
+    // final hop; raw output would concatenate all redirect bodies incorrectly. Body-only return
+    // plus HEADERFUNCTION; reset headers on each HTTP status line so we keep the final response.
     $headerLines = [];
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HEADER => true,
+        CURLOPT_HEADER => false,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 5,
         CURLOPT_CONNECTTIMEOUT => $timeoutSeconds,
@@ -65,21 +68,25 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
         CURLOPT_HTTPHEADER => $requestHeaders,
         CURLOPT_HEADERFUNCTION => static function ($ch, $header) use (&$headerLines) {
             $len = strlen($header);
+            $trim = trim($header);
+            if ($trim !== '' && preg_match('/^HTTP\\/\\d/', $trim) === 1) {
+                $headerLines = [];
+            }
             $parts = explode(':', $header, 2);
             if (count($parts) === 2) {
                 $headerLines[strtolower(trim($parts[0]))] = trim($parts[1]);
             }
+
             return $len;
         },
     ]);
-    $raw = curl_exec($ch);
+    $body = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     $finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
     $curlErr = curl_error($ch);
     curl_close($ch);
 
-    if ($raw === false) {
+    if ($body === false) {
         return [
             'code' => 0,
             'headers' => $headerLines,
@@ -89,12 +96,10 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
         ];
     }
 
-    $body = substr($raw, $headerSize);
-
     return [
         'code' => $code,
         'headers' => $headerLines,
-        'body' => $body,
+        'body' => (string) $body,
         'error' => $curlErr,
         'final_url' => $finalUrl,
     ];

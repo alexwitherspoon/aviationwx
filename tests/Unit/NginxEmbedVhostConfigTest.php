@@ -8,9 +8,9 @@
  * @package AviationWX\Tests\Unit
  */
 
-require_once dirname(__DIR__, 2) . '/lib/nginx-embed-vhost-verify.php';
-
 use PHPUnit\Framework\TestCase;
+
+require_once dirname(__DIR__, 2) . '/lib/nginx-embed-vhost-verify.php';
 
 class NginxEmbedVhostConfigTest extends TestCase
 {
