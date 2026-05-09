@@ -33,7 +33,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
-// Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
+// Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -43,7 +43,8 @@ $loopCount = 0;
 $lastConfigReload = 0;
 $lastConfigMtime = null; // Track config file mtime to detect changes
 $lastConfigSha = null; // Track config file SHA hash to detect ANY content changes
-$lastMetricsFlush = 0;
+$lastMetricsSpillMerge = 0;
+$lastVariantHealthHttpFlush = 0;
 $lastMetricsHealthCheck = 0; // Separate timestamp for health checks
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
@@ -482,11 +483,25 @@ while ($running) {
         reapZombies();
         
         // Process metrics tasks (non-blocking)
-        // 1. Flush APCu counters to hourly file (every 5 minutes)
-        // Note: Uses HTTP endpoint because APCu is process-isolated (CLI vs PHP-FPM)
-        if (($now - $lastMetricsFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
-            if (metrics_flush_via_http()) {
-                $lastMetricsFlush = $now;
+        // 1. Merge PHP-FPM spill shards into hourly/*.json (APCu is per-worker; spills capture counters at shutdown)
+        if (($now - $lastMetricsSpillMerge) >= METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
+            $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
+            if (file_exists($aggScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                $aggOutput = [];
+                $exitCode = 0;
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' 2>&1', $aggOutput, $exitCode);
+                if ($exitCode === 0) {
+                    $lastMetricsSpillMerge = $now;
+                    metrics_status_bundle_mirror_refresh_via_http();
+                }
+            }
+        }
+
+        // 1b. Flush variant-health APCu counters to cache file inside PHP-FPM (CLI cannot see FPM APCu)
+        if (($now - $lastVariantHealthHttpFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
+            if (variant_health_flush_via_http()) {
+                $lastVariantHealthHttpFlush = $now;
             }
         }
         
@@ -561,7 +576,7 @@ while ($running) {
         }
         
         // 6. Flush weather health counters to cache file (every 60 seconds)
-        // Note: Variant health flush is handled by metrics_flush_via_http() above
+        // Variant health APCu flush runs via variant_health_flush_via_http() on METRICS_FLUSH_INTERVAL_SECONDS above.
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
             if (weather_health_flush()) {

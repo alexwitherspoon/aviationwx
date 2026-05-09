@@ -242,9 +242,8 @@ function runWorkerMode(string $airportId, int $camIndex): int
         $worker = WebcamWorkerFactory::create($airportId, $camIndex);
         $result = $worker->run();
 
-        // Flush counters before exit - worker runs in isolated process
+        // Best-effort: workers do not own metrics hourly rollups (spill + aggregator in production).
         variant_health_flush();
-        metrics_flush();
 
         return $result->exitCode;
 
@@ -305,9 +304,8 @@ function runSingleMode(string $airportId, int $camIndex): int
         echo "  Duration: {$elapsed}ms\n";
         echo "\n";
 
-        // Flush counters before exit
+        // Flush counters before exit (metrics hourly rollups use spill + aggregator in production)
         variant_health_flush();
-        metrics_flush();
 
         return $result->exitCode;
 
@@ -389,9 +387,7 @@ function runAllMode(): int
         echo "\n";
     }
 
-    // Flush counters before exit
     variant_health_flush();
-    metrics_flush();
 
     $elapsed = round((microtime(true) - $startTime) * 1000, 2);
 

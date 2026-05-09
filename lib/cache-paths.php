@@ -563,6 +563,66 @@ if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
     define('CACHE_METRICS_WEEKLY_DIR', CACHE_METRICS_DIR . '/weekly');
 }
 
+if (!defined('CACHE_METRICS_SPILL_DIR')) {
+    define('CACHE_METRICS_SPILL_DIR', CACHE_METRICS_DIR . '/spill');
+}
+
+// Match lib/constants.php when included standalone (e.g. unit tests without constants.php).
+if (!defined('METRICS_AGGREGATOR_LOCK_BASENAME')) {
+    define('METRICS_AGGREGATOR_LOCK_BASENAME', 'aggregator.lock');
+}
+if (!defined('METRICS_AGGREGATOR_LAST_RUN_BASENAME')) {
+    define('METRICS_AGGREGATOR_LAST_RUN_BASENAME', 'aggregator_last_run.json');
+}
+
+/**
+ * Root directory for per-worker metric spill files before aggregator merge (hour subdirs).
+ *
+ * @return string Absolute path to spill root
+ */
+function getMetricsSpillRootDir(): string {
+    return CACHE_METRICS_SPILL_DIR;
+}
+
+/**
+ * Directory for one UTC hour bucket (metrics_get_hour_id format).
+ *
+ * @param string $hourId Hour identifier (e.g. 2026-05-09-14)
+ * @return string Absolute path
+ */
+function getMetricsSpillHourDir(string $hourId): string {
+    return CACHE_METRICS_SPILL_DIR . '/' . $hourId;
+}
+
+/**
+ * Per-worker spill snapshot path (overwrite with tmp+rename from PHP worker).
+ *
+ * @param string $hourId Hour identifier (metrics_get_hour_id)
+ * @param int $pid Process ID (Apache worker)
+ * @return string Absolute path to JSON spill file
+ */
+function getMetricsSpillPathForWorker(string $hourId, int $pid): string {
+    return getMetricsSpillHourDir($hourId) . '/' . $pid . '.json';
+}
+
+/**
+ * Exclusive singleton lock for metrics spill aggregator CLI (non-blocking flock).
+ *
+ * @return string Absolute path
+ */
+function getMetricsAggregatorLockPath(): string {
+    return CACHE_METRICS_DIR . '/' . METRICS_AGGREGATOR_LOCK_BASENAME;
+}
+
+/**
+ * Last-run telemetry JSON written by aggregator for ops visibility.
+ *
+ * @return string Absolute path
+ */
+function getMetricsAggregatorLastRunPath(): string {
+    return CACHE_METRICS_DIR . '/' . METRICS_AGGREGATOR_LAST_RUN_BASENAME;
+}
+
 /**
  * Get path to hourly metrics file
  * 

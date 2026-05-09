@@ -377,7 +377,43 @@ if (!defined('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS')) {
     define('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS', 120);
 }
 if (!defined('METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY')) {
-    define('METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY', 'metrics_status_bundle_mirror_v1');
+    // Prefix dashboard_metrics_* so metrics_reset_all() (metrics_* counters only) does not delete this APCu entry
+    define('METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY', 'dashboard_metrics_status_bundle_mirror_v1');
+}
+
+/** Scheduler invokes spill aggregator CLI at this interval (seconds). */
+if (!defined('METRICS_SPILL_MERGE_INTERVAL_SECONDS')) {
+    define('METRICS_SPILL_MERGE_INTERVAL_SECONDS', 90);
+}
+
+/** Delete spill shard files older than this age if never consumed by aggregator (seconds). */
+if (!defined('METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS')) {
+    define('METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS', 3 * 3600);
+}
+
+/** Max spill JSON files processed per aggregator run (soft cap; logged if hit). */
+if (!defined('METRICS_SPILL_MERGE_MAX_FILES_PER_RUN')) {
+    define('METRICS_SPILL_MERGE_MAX_FILES_PER_RUN', 2000);
+}
+
+/** Max wall-clock milliseconds for one aggregator merge loop before yielding (soft cap). */
+if (!defined('METRICS_SPILL_MERGE_MAX_RUNTIME_MS')) {
+    define('METRICS_SPILL_MERGE_MAX_RUNTIME_MS', 250);
+}
+
+/** Basename for exclusive flock singleton lock under CACHE_METRICS_DIR. */
+if (!defined('METRICS_AGGREGATOR_LOCK_BASENAME')) {
+    define('METRICS_AGGREGATOR_LOCK_BASENAME', 'aggregator.lock');
+}
+
+/** Basename for last-run telemetry JSON under CACHE_METRICS_DIR. */
+if (!defined('METRICS_AGGREGATOR_LAST_RUN_BASENAME')) {
+    define('METRICS_AGGREGATOR_LAST_RUN_BASENAME', 'aggregator_last_run.json');
+}
+
+/** JSON schema version for per-worker spill snapshot files under CACHE_METRICS_SPILL_DIR. */
+if (!defined('METRICS_SPILL_FILE_SCHEMA_VERSION')) {
+    define('METRICS_SPILL_FILE_SCHEMA_VERSION', 1);
 }
 
 // Time constants (seconds)

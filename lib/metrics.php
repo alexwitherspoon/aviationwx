@@ -16,7 +16,8 @@
  * 
  * Storage:
  * - APCu for real-time counters (microsecond increment)
- * - JSON files flushed every 5 minutes
+ * - Per-worker spill JSON under cache/metrics/spill/ (shutdown on PHP-FPM workers)
+ * - Scheduler merges spills into hourly/*.json via CLI (singleton lock; soft caps)
  * - Hourly, daily, weekly aggregation buckets
  * - 14-day retention with automatic cleanup
  */
@@ -26,6 +27,7 @@ require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/internal-http-url.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/circuit-breaker.php';
+require_once __DIR__ . '/metrics-apply-counters.php';
 
 // =============================================================================
 // SCHEMA DEFINITIONS
@@ -502,35 +504,8 @@ function metrics_track_tile_serve(string $source): void {
 }
 
 // =============================================================================
-// STATUS BUNDLE MIRROR (APCu, best-effort after flush; telemetry only)
+// STATUS BUNDLE MIRROR (APCu, best-effort cache; telemetry only)
 // =============================================================================
-
-/**
- * Last metrics_flush() failure reason for diagnostics (not safety-critical).
- *
- * Set on failed flush paths; cleared at the start of each metrics_flush() attempt.
- *
- * @return string|null Short code if last flush failed, null on success or unknown
- */
-function metrics_get_last_metrics_flush_error(): ?string {
-    if (!isset($GLOBALS['aviationwx_metrics_flush_last_error'])) {
-        return null;
-    }
-    $e = $GLOBALS['aviationwx_metrics_flush_last_error'];
-    return is_string($e) && $e !== '' ? $e : null;
-}
-
-/**
- * Remove the status bundle APCu mirror before rebuilding after flush.
- *
- * @return void
- */
-function metrics_invalidate_status_bundle_mirror(): void {
-    if (!function_exists('apcu_delete')) {
-        return;
-    }
-    @apcu_delete(METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY);
-}
 
 /**
  * Try to read a fresh status bundle mirror from APCu.
@@ -556,9 +531,21 @@ function metrics_try_get_status_bundle_mirror(): ?array {
 }
 
 /**
- * Store status bundle snapshot in APCu after a successful flush.
+ * Drop the status bundle APCu mirror so the next metrics_get_status_bundle() rebuilds from disk.
  *
- * @param array $bundle From metrics_get_status_bundle()
+ * @return void
+ */
+function metrics_invalidate_status_bundle_mirror(): void {
+    if (!function_exists('apcu_delete')) {
+        return;
+    }
+    @apcu_delete(METRICS_STATUS_BUNDLE_MIRROR_APCU_KEY);
+}
+
+/**
+ * Store status bundle snapshot in APCu for fast status page reads (telemetry only).
+ *
+ * @param array $bundle Same shape as metrics_get_status_bundle() return value
  * @return void
  */
 function metrics_store_status_bundle_mirror(array $bundle): void {
@@ -619,75 +606,75 @@ function metrics_get_week_id(?int $timestamp = null): string {
 }
 
 /**
- * Flush APCu counters to hourly JSON file
+ * UTC hour window [start, end) for a metrics hour bucket id.
  *
- * Called periodically by scheduler. Reads current counters, adds to hourly bucket,
- * and resets counters. On failure, see metrics_get_last_metrics_flush_error().
- *
- * @return bool True on success
+ * @param string $hourId Bucket id from metrics_get_hour_id() (e.g. 2026-05-08-14)
+ * @return array{0:int,1:int} Unix timestamps for bucket_start and bucket_end
  */
-function metrics_flush(): bool {
-    // Cleared each attempt; failure paths set a short diagnostic code.
-    $GLOBALS['aviationwx_metrics_flush_last_error'] = null;
+function metrics_hour_bucket_bounds_from_hour_id(string $hourId): array {
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})-(\d{2})$/', $hourId, $m)) {
+        $t = time();
+        $aligned = $t - ($t % 3600);
 
-    // Ensure directories exist
-    ensureCacheDir(CACHE_METRICS_DIR);
-    ensureCacheDir(CACHE_METRICS_HOURLY_DIR);
-    ensureCacheDir(CACHE_METRICS_DAILY_DIR);
-    ensureCacheDir(CACHE_METRICS_WEEKLY_DIR);
-    
-    // Get current counters
-    $counters = metrics_get_all();
-    if (empty($counters)) {
-        // No APCu counters to persist; hourly file write and reset are unnecessary.
-        return true;
+        return [$aligned, $aligned + 3600];
     }
-    
-    $now = time();
-    $hourId = metrics_get_hour_id($now);
-    $hourFile = getMetricsHourlyPath($hourId);
-    
-    // Load existing hourly data
-    $hourData = [];
-    if (file_exists($hourFile)) {
-        $content = @file_get_contents($hourFile);
-        if ($content !== false) {
-            $hourData = @json_decode($content, true) ?: [];
-        }
+
+    $ts = strtotime(sprintf('%s-%s-%s %02d:00:00 UTC', $m[1], $m[2], $m[3], (int) $m[4]));
+    if ($ts === false) {
+        $t = time();
+        $aligned = $t - ($t % 3600);
+
+        return [$aligned, $aligned + 3600];
     }
-    
-    // Initialize structure if needed
-    if (!isset($hourData['bucket_type'])) {
-        $hourData = [
-            'bucket_type' => 'hourly',
-            'bucket_id' => $hourId,
-            'bucket_start' => strtotime(gmdate('Y-m-d H:00:00', $now) . ' UTC'),
-            'bucket_end' => strtotime(gmdate('Y-m-d H:00:00', $now) . ' UTC') + 3600,
-            'airports' => [],
-            'webcams' => [],
-            'webcam_uploads' => [], // Track accepted/rejected uploads per camera (legacy)
-            'webcam_images' => [],  // Track verified/rejected images per camera (used by status page)
-            'global' => [
-                'page_views' => 0,
-                'weather_requests' => 0,
-                'webcam_requests' => 0,
-                'webcam_serves' => 0,
-                'webcam_uploads_accepted' => 0,
-                'webcam_uploads_rejected' => 0,
-                'webcam_images_verified' => 0,
-                'webcam_images_rejected' => 0,
-                'variants_generated' => 0,
-                'tiles_served' => 0,
-                'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
-                'format_served' => ['jpg' => 0, 'webp' => 0],
-                'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-                'browser_support' => ['webp' => 0, 'jpg_only' => 0],
-                'cache' => ['hits' => 0, 'misses' => 0]
-            ]
-        ];
-    }
-    
-    // Ensure webcam_images structure exists for older data
+
+    return [$ts, $ts + 3600];
+}
+
+/**
+ * New empty hourly metrics bucket for disk (hourly JSON file).
+ *
+ * @param string $hourId Hour identifier (metrics_get_hour_id format)
+ * @return array Hourly bucket structure
+ */
+function metrics_new_empty_hour_bucket(string $hourId): array {
+    [$start, $end] = metrics_hour_bucket_bounds_from_hour_id($hourId);
+
+    return [
+        'bucket_type' => 'hourly',
+        'bucket_id' => $hourId,
+        'bucket_start' => $start,
+        'bucket_end' => $end,
+        'airports' => [],
+        'webcams' => [],
+        'webcam_uploads' => [],
+        'webcam_images' => [],
+        'global' => [
+            'page_views' => 0,
+            'weather_requests' => 0,
+            'webcam_requests' => 0,
+            'webcam_serves' => 0,
+            'webcam_uploads_accepted' => 0,
+            'webcam_uploads_rejected' => 0,
+            'webcam_images_verified' => 0,
+            'webcam_images_rejected' => 0,
+            'variants_generated' => 0,
+            'tiles_served' => 0,
+            'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
+            'format_served' => ['jpg' => 0, 'webp' => 0],
+            'size_served' => [],
+            'browser_support' => ['webp' => 0, 'jpg_only' => 0],
+            'cache' => ['hits' => 0, 'misses' => 0],
+        ],
+    ];
+}
+
+/**
+ * Ensure hourly bucket data has all nested keys (legacy or partial JSON).
+ *
+ * @param array $hourData Hour bucket (modified in place)
+ * @return void
+ */
+function metrics_fill_hour_data_defaults(array &$hourData): void {
     if (!isset($hourData['webcam_images'])) {
         $hourData['webcam_images'] = [];
     }
@@ -697,250 +684,31 @@ function metrics_flush(): bool {
     if (!isset($hourData['global']['webcam_images_rejected'])) {
         $hourData['global']['webcam_images_rejected'] = 0;
     }
-    
-    // Ensure webcam_requests field exists for older data structures
+
     if (!isset($hourData['global']['webcam_requests'])) {
         $hourData['global']['webcam_requests'] = 0;
     }
-    
-    // Ensure tile tracking fields exist for older data structures
+
     if (!isset($hourData['global']['tiles_served'])) {
         $hourData['global']['tiles_served'] = 0;
     }
     if (!isset($hourData['global']['tiles_by_source'])) {
         $hourData['global']['tiles_by_source'] = ['openweathermap' => 0, 'rainviewer' => 0];
     }
-    
-    // Merge counters into hourly data
-    foreach ($counters as $key => $value) {
-        // Parse key to determine where to store
-        if (preg_match('/^airport_([a-z0-9]+)_views$/', $key, $m)) {
-            $airportId = $m[1];
-            if (!isset($hourData['airports'][$airportId])) {
-                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
-            }
-            $hourData['airports'][$airportId]['page_views'] += $value;
-        } elseif (preg_match('/^airport_([a-z0-9]+)_weather$/', $key, $m)) {
-            $airportId = $m[1];
-            if (!isset($hourData['airports'][$airportId])) {
-                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
-            }
-            $hourData['airports'][$airportId]['weather_requests'] += $value;
-        } elseif (preg_match('/^airport_([a-z0-9]+)_webcam_requests$/', $key, $m)) {
-            $airportId = $m[1];
-            if (!isset($hourData['airports'][$airportId])) {
-                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
-            }
-            if (!isset($hourData['airports'][$airportId]['webcam_requests'])) {
-                $hourData['airports'][$airportId]['webcam_requests'] = 0;
-            }
-            $hourData['airports'][$airportId]['webcam_requests'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_requests$/', $key, $m)) {
-            // Per-camera request tracking (stored under webcams)
-            $webcamKey = $m[1] . '_' . $m[2];
-            if (!isset($hourData['webcams'][$webcamKey])) {
-                $hourData['webcams'][$webcamKey] = [
-                    'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
-                    'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
-                ];
-            }
-            if (!isset($hourData['webcams'][$webcamKey]['requests'])) {
-                $hourData['webcams'][$webcamKey]['requests'] = 0;
-            }
-            $hourData['webcams'][$webcamKey]['requests'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp)$/', $key, $m)) {
-            $webcamKey = $m[1] . '_' . $m[2];
-            $format = $m[3];
-            if (!isset($hourData['webcams'][$webcamKey])) {
-                $hourData['webcams'][$webcamKey] = [
-                    'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
-                    'by_size' => []
-                ];
-            }
-            $hourData['webcams'][$webcamKey]['by_format'][$format] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_size_(\w+)$/', $key, $m)) {
-            // Match both height-based (720, 360, 1080) and named (original) sizes
-            $webcamKey = $m[1] . '_' . $m[2];
-            $size = $m[3];
-            if (!isset($hourData['webcams'][$webcamKey])) {
-                $hourData['webcams'][$webcamKey] = [
-                    'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
-                    'by_size' => []
-                ];
-            }
-            if (!isset($hourData['webcams'][$webcamKey]['by_size'][$size])) {
-                $hourData['webcams'][$webcamKey]['by_size'][$size] = 0;
-            }
-            $hourData['webcams'][$webcamKey]['by_size'][$size] += $value;
-        } elseif (preg_match('/^format_(jpg|webp)_served$/', $key, $m)) {
-            $hourData['global']['format_served'][$m[1]] += $value;
-        } elseif (preg_match('/^size_(\w+)_served$/', $key, $m)) {
-            // Match both height-based and named sizes
-            $size = $m[1];
-            if (!isset($hourData['global']['size_served'][$size])) {
-                $hourData['global']['size_served'][$size] = 0;
-            }
-            $hourData['global']['size_served'][$size] += $value;
-        } elseif ($key === 'global_page_views') {
-            $hourData['global']['page_views'] += $value;
-        } elseif ($key === 'global_weather_requests') {
-            $hourData['global']['weather_requests'] += $value;
-        } elseif ($key === 'global_webcam_requests') {
-            $hourData['global']['webcam_requests'] += $value;
-        } elseif ($key === 'global_webcam_serves') {
-            $hourData['global']['webcam_serves'] += $value;
-        } elseif ($key === 'global_variants_generated') {
-            if (!isset($hourData['global']['variants_generated'])) {
-                $hourData['global']['variants_generated'] = 0;
-            }
-            $hourData['global']['variants_generated'] += $value;
-        } elseif ($key === 'global_tiles_served') {
-            $hourData['global']['tiles_served'] += $value;
-        } elseif (preg_match('/^tiles_(openweathermap|rainviewer)_served$/', $key, $m)) {
-            $source = $m[1];
-            if (!isset($hourData['global']['tiles_by_source'][$source])) {
-                $hourData['global']['tiles_by_source'][$source] = 0;
-            }
-            $hourData['global']['tiles_by_source'][$source] += $value;
-        } elseif ($key === 'browser_webp_support') {
-            $hourData['global']['browser_support']['webp'] += $value;
-        } elseif ($key === 'browser_jpg_only') {
-            $hourData['global']['browser_support']['jpg_only'] += $value;
-        } elseif ($key === 'cache_hits') {
-            $hourData['global']['cache']['hits'] += $value;
-        } elseif ($key === 'cache_misses') {
-            $hourData['global']['cache']['misses'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_accepted$/', $key, $m)) {
-            // Track accepted uploads per camera
-            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
-            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
-                $hourData['webcam_uploads'][$webcamKey] = [
-                    'accepted' => 0,
-                    'rejected' => 0,
-                    'rejection_reasons' => []
-                ];
-            }
-            $hourData['webcam_uploads'][$webcamKey]['accepted'] += $value;
-            $hourData['global']['webcam_uploads_accepted'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_rejected$/', $key, $m)) {
-            // Track rejected uploads per camera
-            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
-            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
-                $hourData['webcam_uploads'][$webcamKey] = [
-                    'accepted' => 0,
-                    'rejected' => 0,
-                    'rejection_reasons' => []
-                ];
-            }
-            $hourData['webcam_uploads'][$webcamKey]['rejected'] += $value;
-            $hourData['global']['webcam_uploads_rejected'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_rejection_(.+)$/', $key, $m)) {
-            // Track rejection reasons per camera
-            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
-            $reason = $m[3];
-            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
-                $hourData['webcam_uploads'][$webcamKey] = [
-                    'accepted' => 0,
-                    'rejected' => 0,
-                    'rejection_reasons' => []
-                ];
-            }
-            if (!isset($hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason])) {
-                $hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason] = 0;
-            }
-            $hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason] += $value;
-        } elseif ($key === 'webcam_uploads_accepted_global') {
-            $hourData['global']['webcam_uploads_accepted'] += $value;
-        } elseif ($key === 'webcam_uploads_rejected_global') {
-            $hourData['global']['webcam_uploads_rejected'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_images_verified$/', $key, $m)) {
-            // Track verified images per camera (from webcam-image-metrics.php)
-            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
-            if (!isset($hourData['webcam_images'][$webcamKey])) {
-                $hourData['webcam_images'][$webcamKey] = [
-                    'verified' => 0,
-                    'rejected' => 0,
-                    'rejection_reasons' => []
-                ];
-            }
-            $hourData['webcam_images'][$webcamKey]['verified'] += $value;
-            $hourData['global']['webcam_images_verified'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_images_rejected$/', $key, $m)) {
-            // Track rejected images per camera (from webcam-image-metrics.php)
-            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
-            if (!isset($hourData['webcam_images'][$webcamKey])) {
-                $hourData['webcam_images'][$webcamKey] = [
-                    'verified' => 0,
-                    'rejected' => 0,
-                    'rejection_reasons' => []
-                ];
-            }
-            $hourData['webcam_images'][$webcamKey]['rejected'] += $value;
-            $hourData['global']['webcam_images_rejected'] += $value;
-        } elseif ($key === 'webcam_images_verified_global') {
-            $hourData['global']['webcam_images_verified'] += $value;
-        } elseif ($key === 'webcam_images_rejected_global') {
-            $hourData['global']['webcam_images_rejected'] += $value;
-        } elseif (preg_match('/^webcam_rejection_reason_(.+)_global$/', $key, $m)) {
-            // Global rejection reason tracking (informational)
-            // Just increment global counter, per-camera reasons are tracked separately
-        }
-    }
-    
-    $hourData['last_flush'] = $now;
-
-    $jsonPayload = json_encode($hourData, JSON_PRETTY_PRINT);
-    if ($jsonPayload === false) {
-        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'json_encode_failed:' . json_last_error_msg();
-        return false;
-    }
-
-    // Write hourly data atomically
-    $tmpFile = $hourFile . '.tmp.' . getmypid();
-    $written = @file_put_contents($tmpFile, $jsonPayload, LOCK_EX);
-    if ($written === false) {
-        @unlink($tmpFile);
-        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'hourly_tmp_write_failed';
-        return false;
-    }
-
-    if (!@rename($tmpFile, $hourFile)) {
-        @unlink($tmpFile);
-        $GLOBALS['aviationwx_metrics_flush_last_error'] = 'hourly_rename_failed';
-        return false;
-    }
-
-    // Reset APCu counters
-    metrics_reset_all();
-
-    // Refresh APCu mirror so status bundle reads avoid full disk merge until TTL (best-effort)
-    metrics_invalidate_status_bundle_mirror();
-    $bundle = metrics_get_status_bundle();
-    metrics_store_status_bundle_mirror($bundle);
-
-    return true;
 }
 
 /**
- * Flush metrics via HTTP to PHP-FPM context
+ * Flush variant health APCu counters to cache via HTTP (PHP-FPM context).
  *
- * APCu is process-isolated: CLI processes (like the scheduler) cannot access
- * counters incremented by PHP-FPM workers. This function calls an internal
- * endpoint via localhost to trigger the flush within PHP-FPM context.
- *
- * URL base comes from getInternalApacheBaseUrl() (WEATHER_REFRESH_URL in production).
- *
- * Use this from CLI scripts instead of metrics_flush() directly.
+ * APCu is process-isolated: CLI cannot see counters incremented by PHP-FPM workers.
+ * Call this from the scheduler instead of variant_health_flush() directly.
  *
  * @return bool True on success
  */
-function metrics_flush_via_http(): bool {
+function variant_health_flush_via_http(): bool {
     $ch = curl_init();
 
-    $url = getInternalApacheBaseUrl() . '/health/metrics-flush.php';
+    $url = getInternalApacheBaseUrl() . '/health/variant-health-flush.php';
 
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
@@ -961,24 +729,69 @@ function metrics_flush_via_http(): bool {
         return true;
     }
 
-    // Log failure with rate limiting; prefer error when the server reported a flush reason (e.g. disk)
     static $lastLogTime = 0;
     $now = time();
     $responseResults = is_array($data) && isset($data['results']) && is_array($data['results'])
         ? $data['results']
         : [];
-    $flushErr = $responseResults['metrics_flush_error'] ?? null;
     $endpointErr = $responseResults['flush_endpoint_error'] ?? null;
+    $variantErr = $responseResults['variant_health_flush_error'] ?? null;
 
     if (($now - $lastLogTime) >= 300) {
-        $hasDiag = ($flushErr !== null && $flushErr !== '')
-            || ($endpointErr !== null && $endpointErr !== '');
+        $hasDiag = ($endpointErr !== null && $endpointErr !== '')
+            || ($variantErr !== null && $variantErr !== '');
         $level = $hasDiag ? 'error' : 'warning';
-        aviationwx_log($level, 'metrics: HTTP flush failed', [
+        aviationwx_log($level, 'variant health: HTTP flush failed', [
             'http_code' => $httpCode,
             'curl_error' => $curlError ?: 'unknown',
-            'metrics_flush_error' => $flushErr,
             'flush_endpoint_error' => $endpointErr,
+            'variant_health_flush_error' => $variantErr,
+            'response' => substr($response ?: '', 0, 200),
+            'url' => $url,
+        ], 'app');
+        $lastLogTime = $now;
+    }
+
+    return false;
+}
+
+/**
+ * Rebuild status bundle from disk and store APCu mirror (PHP-FPM context).
+ *
+ * Used by the scheduler after spill merges so status page reads stay hot without waiting for TTL.
+ *
+ * @return bool True on HTTP 200 with success
+ */
+function metrics_status_bundle_mirror_refresh_via_http(): bool {
+    $ch = curl_init();
+
+    $url = getInternalApacheBaseUrl() . '/health/status-bundle-mirror-refresh.php';
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_HTTPHEADER => ['X-Scheduler-Request: 1'],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    $data = is_string($response) ? json_decode($response, true) : null;
+    if ($httpCode === 200 && is_array($data) && ($data['success'] ?? false) === true) {
+        return true;
+    }
+
+    static $lastLogTime = 0;
+    $now = time();
+    if (($now - $lastLogTime) >= 300) {
+        aviationwx_log('warning', 'metrics: status bundle mirror HTTP refresh failed', [
+            'http_code' => $httpCode,
+            'curl_error' => $curlError ?: 'unknown',
             'response' => substr($response ?: '', 0, 200),
             'url' => $url,
         ], 'app');
@@ -1540,8 +1353,9 @@ function metrics_get_empty_status_bundle(): array {
  * Returns rolling7, rolling1, and today from a single pass over metrics files.
  * The live merge uses metrics_get_current_hour() at the same Unix time as the start of the pass
  * so bucket boundaries match the file aggregation.
- * Multi-period is built separately via metrics_get_multi_period(). After a successful flush, an APCu
- * mirror may serve this payload for a short TTL.
+ * Multi-period is built separately via metrics_get_multi_period(). An APCu mirror may short-circuit
+ * this read when present and fresh (same TTL as METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS). After a
+ * cold build from disk, the result is stored in APCu for subsequent requests.
  *
  * @return array {rolling7: array, rolling1: array, today: array}
  */
@@ -1642,7 +1456,10 @@ function metrics_get_status_bundle(): array {
     metrics_merge_webcams($today['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($today['global'], $liveHour['global'] ?? []);
 
-    return ['rolling7' => $rolling7, 'rolling1' => $rolling1, 'today' => $today];
+    $bundle = ['rolling7' => $rolling7, 'rolling1' => $rolling1, 'today' => $today];
+    metrics_store_status_bundle_mirror($bundle);
+
+    return $bundle;
 }
 
 /**
@@ -2056,5 +1873,83 @@ function metrics_prometheus_export(): array {
     }
     
     return $lines;
+}
+
+// =============================================================================
+// METRICS SPILL (per-worker snapshot for aggregator merge)
+// =============================================================================
+
+/**
+ * Persist pending APCu counters to a spill file and reset counters on success.
+ *
+ * Spill path: CACHE_METRICS_SPILL_DIR/{hourId}/{pid}.json (see cache-paths.php).
+ *
+ * @return bool True if nothing to write, or spill written and APCu reset
+ */
+function metrics_write_spill_snapshot_and_reset_counters(): bool {
+    if (!metrics_is_apcu_available()) {
+        return true;
+    }
+
+    $counters = metrics_get_all();
+    if ($counters === []) {
+        return true;
+    }
+
+    $hourId = metrics_get_hour_id();
+    $pid = getmypid();
+    $target = getMetricsSpillPathForWorker($hourId, $pid);
+    $dir = dirname($target);
+    if (!ensureCacheDir($dir)) {
+        aviationwx_log('warning', 'metrics spill: could not create spill directory', ['dir' => $dir], 'app');
+        return false;
+    }
+
+    $payload = [
+        'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
+        'generated_at' => time(),
+        'hour_id' => $hourId,
+        'pid' => $pid,
+        'counters' => $counters,
+    ];
+
+    $json = json_encode($payload);
+    if ($json === false) {
+        aviationwx_log('warning', 'metrics spill: json_encode failed', ['error' => json_last_error_msg()], 'app');
+        return false;
+    }
+
+    $tmpFile = $target . '.tmp.' . $pid;
+    $written = @file_put_contents($tmpFile, $json, LOCK_EX);
+    if ($written === false) {
+        @unlink($tmpFile);
+        aviationwx_log('warning', 'metrics spill: temp write failed', ['path' => $tmpFile], 'app');
+        return false;
+    }
+
+    if (!@rename($tmpFile, $target)) {
+        @unlink($tmpFile);
+        aviationwx_log('warning', 'metrics spill: rename failed', ['path' => $target], 'app');
+        return false;
+    }
+
+    metrics_reset_all();
+
+    return true;
+}
+
+/**
+ * Shutdown hook: spill metrics when running under web SAPI (Apache worker).
+ *
+ * @return void
+ */
+function metrics_shutdown_spill_if_needed(): void {
+    metrics_write_spill_snapshot_and_reset_counters();
+}
+
+if (PHP_SAPI !== 'cli') {
+    register_shutdown_function(static function (): void {
+        metrics_shutdown_spill_if_needed();
+    });
 }
 
