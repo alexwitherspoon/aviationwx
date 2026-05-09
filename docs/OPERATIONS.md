@@ -112,27 +112,26 @@ docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 
 ### Metrics System
 
-Metrics tracked in APCu, flushed to JSON files every 5 minutes:
+Live counters live in APCu (per PHP-FPM worker). Each worker writes a spill snapshot at shutdown to `cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}.json`. The scheduler merges those shards into canonical hourly files:
+
 - **Hourly**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
 - **Daily**: `cache/metrics/daily/YYYY-MM-DD.json`
+- **Spill root**: `cache/metrics/spill/`
+- **Aggregator telemetry**: `cache/metrics/aggregator_last_run.json`
 
-**Tracked metrics:**
-- Airport page views
-- Weather API requests
-- Webcam serves (by format and size)
-- Map tile serves (by source: OpenWeatherMap, RainViewer)
-- Browser format support
-- Cache hit/miss rates
+Merge cadence is `METRICS_SPILL_MERGE_INTERVAL_SECONDS` (scheduler invokes `scripts/aggregate-metrics-spills.php` via CLI). After a successful merge, the scheduler calls `metrics_status_bundle_mirror_refresh_via_http()` so PHP-FPM rebuilds the status bundle from disk and repopulates the APCu mirror (`METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS`). Web requests also warm the mirror on a cold read. Variant-health APCu counters are flushed over HTTP on `METRICS_FLUSH_INTERVAL_SECONDS` because CLI cannot see FPM APCu.
 
-Manual flush (from the host or inside the web container; must be localhost for the internal endpoint):
+**Tracked metrics:** (unchanged) airport page views, weather requests, webcam serves, map tiles, browser format support, cache hit/miss, etc.
+
+Manual variant-health flush (localhost only; same security model as before):
 
 ```bash
-curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/metrics-flush.php'
+curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/variant-health-flush.php'
 ```
 
-Expect JSON with `"success":true` (boolean) and `"metrics_flush":true`. The HTTP client treats only boolean `true` as success, not a string or other truthy value. The scheduler uses the same URL base as weather refresh (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in production). When `WEATHER_REFRESH_URL` is unset, the fallback is `http://localhost:` plus `APP_PORT`, then `PORT`, then `8080`.
+Expect JSON with `"success":true` (boolean) and `"results":{"variant_health_flush":true}`. The scheduler uses `getInternalApacheBaseUrl()` (`WEATHER_REFRESH_URL`, typically `http://localhost:8080` in Docker). When `WEATHER_REFRESH_URL` is unset, the fallback is `http://localhost:` plus `APP_PORT`, then `PORT`, then `8080`.
 
-#### Internal flush endpoint (`health/metrics-flush.php`)
+#### Internal endpoint (`health/variant-health-flush.php`)
 
 Security: only `127.0.0.1` and `::1` (`REMOTE_ADDR`; not `X-Forwarded-For`).
 
@@ -140,27 +139,39 @@ Security: only `127.0.0.1` and `::1` (`REMOTE_ADDR`; not `X-Forwarded-For`).
 
 | Field | Type | Notes |
 |-------|------|--------|
-| `success` | bool | `true` only if both flushes succeed. |
+| `success` | bool | `true` only if variant health flush succeeds. |
 | `timestamp` | int | Unix time. |
-| `results.metrics_flush` | bool | |
-| `results.metrics_flush_error` | string or null | Set when `metrics_flush` is false: code from `metrics_get_last_metrics_flush_error()` or `unknown`. |
 | `results.variant_health_flush` | bool | |
 
-**Uncaught exception (response body is still returned; HTTP status is typically 200 unless the server overrides):**
+**Uncaught exception:**
 
 | Field | Type | Notes |
 |-------|------|--------|
 | `success` | bool | `false` |
 | `timestamp` | int | |
 | `results.error` | string | Exception message (duplicate of `flush_endpoint_error`). |
-| `results.flush_endpoint_error` | string | Failure from either metrics or variant health; do not treat as metrics-only. `metrics_flush_error` is not set on this path. |
+| `results.flush_endpoint_error` | string | PHP exception message before variant flush finished. |
 
-### Metrics flush failing (status page day/week zeros, logs show HTTP flush failed)
+Manual spill merge (operators; runs the same merge pass as the scheduler):
 
-1. **Permissions on the cache bind mount** (host): `cache/metrics` and subdirs must be writable by `www-data`. CD should create them and `chown` the tree; see `docs/DEPLOYMENT.md`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
-2. **Internal URL**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `metrics_flush_via_http()` never reaches PHP-FPM.
-3. **Response body**: `curl` the internal URL above; if `"metrics_flush":false`, read `"metrics_flush_error"` (e.g. `hourly_rename_failed`, `json_encode_failed:...`). If PHP throws before finishing, look at `"flush_endpoint_error"` (and `"error"`) in `results` -- that can be either metrics or variant health, not only metrics flush.
-4. **Application log**: `grep metrics /var/log/aviationwx/app.log` (paths may vary; see logging section above).
+```bash
+php scripts/aggregate-metrics-spills.php
+```
+
+Manual status-bundle mirror refresh (localhost only; invalidates APCu mirror, rebuilds from `cache/metrics/*`, re-stores APCu):
+
+```bash
+curl -sS -H 'X-Scheduler-Request: 1' 'http://127.0.0.1:8080/health/status-bundle-mirror-refresh.php'
+```
+
+Expect `"success":true`. Same `WEATHER_REFRESH_URL` / Apache requirement as other internal health HTTP calls. On failure (PHP exception during rebuild) the endpoint returns HTTP **500** with JSON `"success":false` and `"error"` carrying the exception message.
+
+### Metrics spill merge failing (status page gaps, logs show aggregator issues)
+
+1. **Permissions on the cache bind mount** (host): `cache/metrics`, `cache/metrics/spill`, and `cache/metrics/hourly` must be writable by `www-data`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
+2. **Internal URL (variant health and status bundle mirror refresh)**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `variant_health_flush_via_http()` and `metrics_status_bundle_mirror_refresh_via_http()` never reach PHP-FPM.
+3. **Aggregator lock**: only one merge process should hold `cache/metrics/aggregator.lock`. If merges stall, inspect `aggregator_last_run.json` and spill shard ages under `cache/metrics/spill/`.
+4. **Application log**: `grep -E 'metrics|variant health|aggregator|status bundle mirror' /var/log/aviationwx/app.log` (paths may vary; see logging section above).
 
 ---
 
