@@ -424,8 +424,21 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
+      - name: Build Docker image for PHP validation
+        run: |
+          set -euo pipefail
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Docker image for pre-deploy PHP checks (same Dockerfile as production web)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          docker build -f docker/Dockerfile -t aviationwx:deploy-check .
+          echo "✓ aviationwx:deploy-check"
+
       - name: Pre-deployment validation (block bad code)
         run: |
+          source scripts/deploy-helpers.sh
+          WS="${GITHUB_WORKSPACE:-$(pwd)}"
+          IMG="aviationwx:deploy-check"
+
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Pre-Deployment Validation"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -475,8 +488,12 @@ jobs:
           
           # Validation 2: Check for syntax errors that might be missed
           echo ""
-          echo "2. Checking PHP syntax..."
-          PHP_ERRORS=$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          echo "2. Checking PHP syntax (inside Docker, same PHP as production web)..."
+          PHP_ERRORS=$(docker run --rm \
+            -v "${WS}:/var/www/html" \
+            -w /var/www/html \
+            --entrypoint bash "${IMG}" \
+            -euo pipefail -c 'find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \;' 2>&1 | grep -v "No syntax errors" || true)
           if [ -n "$PHP_ERRORS" ]; then
             VALIDATION_FAILED=true
             FAILURE_REASONS+=("PHP syntax errors found")
@@ -534,11 +551,29 @@ jobs:
             echo "✓ Docker configuration valid"
           fi
           
+          # Composer deps on the workspace for scripts that require vendor/autoload
+          echo ""
+          echo "Installing Composer dependencies via Docker (production PHP image, workspace bind-mount)..."
+          if ! docker run --rm \
+            -v "${WS}:/var/www/html" \
+            -w /var/www/html \
+            --entrypoint bash "${IMG}" \
+            -euo pipefail -c 'composer install --no-dev --no-interaction'; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("composer install failed inside Docker (see output above)")
+          else
+            echo "✓ Composer install OK"
+          fi
+          
           # Validation 5: Check JSON files are valid
           echo ""
           echo "5. Validating JSON configuration files..."
           if [ -f "config/airports.json.example" ]; then
-            if ! php -r "json_decode(file_get_contents('config/airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { exit(1); }" 2>/dev/null; then
+            if ! docker run --rm \
+              -v "${WS}:/var/www/html" \
+              -w /var/www/html \
+              --entrypoint php "${IMG}" \
+              -r 'json_decode(file_get_contents("config/airports.json.example"), true); if (json_last_error() !== JSON_ERROR_NONE) { exit(1); }'; then
               VALIDATION_FAILED=true
               FAILURE_REASONS+=("config/airports.json.example is invalid JSON")
             else
@@ -550,7 +585,11 @@ jobs:
           echo ""
           echo "6. Validating airports.json (ICAO codes and other checks)..."
           if [ -f "config/airports.json" ]; then
-            if php scripts/validate-airports-json.php config/airports.json; then
+            if docker run --rm \
+              -v "${WS}:/var/www/html" \
+              -w /var/www/html \
+              --entrypoint php "${IMG}" \
+              scripts/validate-airports-json.php config/airports.json; then
               echo "✓ All airports.json validations passed"
             else
               VALIDATION_FAILED=true
@@ -564,7 +603,11 @@ jobs:
           echo ""
           echo "7. Validating guides..."
           if [ -d "guides" ]; then
-            if php scripts/validate-guides.php; then
+            if docker run --rm \
+              -v "${WS}:/var/www/html" \
+              -w /var/www/html \
+              --entrypoint php "${IMG}" \
+              scripts/validate-guides.php; then
               echo "✓ Guides validation passed"
             else
               VALIDATION_FAILED=true
