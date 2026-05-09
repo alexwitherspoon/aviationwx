@@ -34,6 +34,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `cache_file_max_size_mb` | `25` | Max size in MiB for webcam pipeline loads, HTTP/MJPEG pull downloads, partner logo fetches, and **default** push upload acceptance (integer **1--100**). |
 | `push_upload_allowed_extensions` | omit | Optional: extensions **preserved** during FTP/SFTP push inbox debris cleanup; merged with each push camera `push_config.allowed_extensions`. Values must be from **jpg, jpeg, png, webp**. Omit the key for the full default (all four). |
+| `cleanup_push_upload_debris_max_age_seconds` | `10800` (3 hours) | Optional: minimum file age (mtime) before a non-allowed extension is deleted from push FTP/SFTP inboxes. Integer **600--604800** (10 minutes to 7 days). Hourly `scripts/cleanup-push-upload-debris.php` and the daily `cleanup-cache.php` step use this value. |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
 | `notam_refresh_seconds` | `600` | NOTAM refresh interval |

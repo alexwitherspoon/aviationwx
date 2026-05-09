@@ -3360,6 +3360,77 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid cache_file_max_size_mb should pass validation');
     }
 
+    public function testGlobalConfig_InvalidCleanupPushUploadDebrisMaxAgeSeconds_NotInteger(): void
+    {
+        $config = [
+            'config' => [
+                'cleanup_push_upload_debris_max_age_seconds' => '10800',
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString(
+            'config.cleanup_push_upload_debris_max_age_seconds must be an integer',
+            implode(' ', $result['errors'])
+        );
+    }
+
+    public function testGlobalConfig_InvalidCleanupPushUploadDebrisMaxAgeSeconds_OutOfRange(): void
+    {
+        $config = [
+            'config' => [
+                'cleanup_push_upload_debris_max_age_seconds' => 300,
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString(
+            'config.cleanup_push_upload_debris_max_age_seconds must be between',
+            implode(' ', $result['errors'])
+        );
+    }
+
+    public function testGlobalConfig_ValidCleanupPushUploadDebrisMaxAgeSeconds(): void
+    {
+        $config = [
+            'config' => [
+                'cleanup_push_upload_debris_max_age_seconds' => 21600,
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid']);
+    }
+
     public function testGlobalConfig_InvalidWeatherRefreshDefault()
     {
         $config = [

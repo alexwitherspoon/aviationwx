@@ -56,7 +56,7 @@ final class PushUploadDebrisCleanupTest extends TestCase
             'errors' => 0,
         ];
 
-        $maxAge = 172800;
+        $maxAge = (int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS;
 
         cleanupPushUploadDebris($maxAge, $stats, false, false, [$this->tempRoot], push_upload_master_image_extensions());
 
@@ -84,7 +84,7 @@ final class PushUploadDebrisCleanupTest extends TestCase
             'errors' => 0,
         ];
 
-        cleanupPushUploadDebris(172800, $stats, false, false, [$this->tempRoot], push_upload_master_image_extensions());
+        cleanupPushUploadDebris((int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, $stats, false, false, [$this->tempRoot], push_upload_master_image_extensions());
 
         $this->assertFileDoesNotExist($junk);
         $this->assertSame(1, $stats['files_deleted']);
@@ -106,7 +106,7 @@ final class PushUploadDebrisCleanupTest extends TestCase
             'errors' => 0,
         ];
 
-        cleanupPushUploadDebris(172800, $stats, false, false, [$this->tempRoot], ['png']);
+        cleanupPushUploadDebris((int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, $stats, false, false, [$this->tempRoot], ['png']);
 
         $this->assertFileDoesNotExist($oldJpg);
         $this->assertSame(1, $stats['files_deleted']);
@@ -128,7 +128,7 @@ final class PushUploadDebrisCleanupTest extends TestCase
             'errors' => 0,
         ];
 
-        cleanupPushUploadDebris(172800, $stats, true, false, [$this->tempRoot], push_upload_master_image_extensions());
+        cleanupPushUploadDebris((int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, $stats, true, false, [$this->tempRoot], push_upload_master_image_extensions());
 
         $this->assertFileExists($mp4);
         $this->assertGreaterThanOrEqual(1, $stats['files_deleted']);

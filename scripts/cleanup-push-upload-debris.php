@@ -45,7 +45,7 @@ if ($dryRun) {
 }
 
 cleanupPushUploadDebris(
-    (int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS,
+    getCleanupPushUploadDebrisMaxAgeSeconds(),
     $stats,
     $dryRun,
     $verbose

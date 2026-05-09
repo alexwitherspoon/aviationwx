@@ -596,6 +596,27 @@ function isDynamicDnsEnabled(): bool {
     return getDynamicDnsRefreshSeconds() > 0;
 }
 
+/**
+ * Max mtime age in seconds before non-allowlisted push FTP/SFTP inbox files are deleted.
+ *
+ * Uses `config.cleanup_push_upload_debris_max_age_seconds` when it is an integer
+ * (clamped to min/max). Otherwise {@see CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS}.
+ * Used by `scripts/cleanup-push-upload-debris.php` (hourly) and `scripts/cleanup-cache.php` (daily).
+ *
+ * @return int Effective threshold in seconds
+ */
+function getCleanupPushUploadDebrisMaxAgeSeconds(): int {
+    $raw = getGlobalConfig('cleanup_push_upload_debris_max_age_seconds');
+    if ($raw === null || !is_int($raw)) {
+        return (int) CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS;
+    }
+
+    return min(
+        MAX_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS,
+        max(MIN_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS, $raw)
+    );
+}
+
 // =============================================================================
 // STALENESS THRESHOLD HELPERS (3-Tier Model)
 // =============================================================================
@@ -3513,6 +3534,22 @@ function validateAirportsJsonStructure(array $config): array {
                             $errors[] = "config.push_upload_allowed_extensions: invalid extension '{$ext}' (allowed: {$masterList})";
                         }
                     }
+                }
+            }
+
+            if (isset($cfg['cleanup_push_upload_debris_max_age_seconds'])) {
+                $v = $cfg['cleanup_push_upload_debris_max_age_seconds'];
+                if (!is_int($v)) {
+                    $errors[] = 'config.cleanup_push_upload_debris_max_age_seconds must be an integer';
+                } elseif (
+                    $v < MIN_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS
+                    || $v > MAX_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS
+                ) {
+                    $errors[] = sprintf(
+                        'config.cleanup_push_upload_debris_max_age_seconds must be between %d and %d seconds',
+                        MIN_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS,
+                        MAX_CLEANUP_PUSH_UPLOAD_DEBRIS_MAX_AGE_SECONDS
+                    );
                 }
             }
             
