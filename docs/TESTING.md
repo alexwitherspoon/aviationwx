@@ -14,6 +14,15 @@ AviationWX uses a unified testing strategy based on `APP_ENV`:
 | Testing (Isolated Docker) | `testing` | tests/Fixtures/airports.json.test | Fully mocked | 9080 |
 | CI | `testing` | tests/Fixtures/airports.json.test | Fully mocked | 9080 |
 
+## API terminology (Internal vs Public)
+
+| Term | Meaning |
+|------|---------|
+| **Internal API** | First-party JSON and binary endpoints on the main site host (`api/weather.php`, `api/webcam.php`, `api/notam.php`, ...). Documented in [`docs/API.md`](API.md). Used by the dashboard and site UI; not versioned. |
+| **Public API** | Versioned JSON under `https://api.aviationwx.org/v1/...` for integrations, OpenAPI, and embed JSON contracts. |
+
+Reserve **legacy** for older response formats, optional query flags such as `?legacy=1`, vendor hardware lines (e.g. Davis WeatherLink legacy devices), or unrelated features -- not for the Internal API weather/webcam routes.
+
 ## Quick Start
 
 **⚠️ IMPORTANT: Always run `make test-ci` before committing or pushing code.**
@@ -45,12 +54,14 @@ These jobs use the network and are **not** part of `make test-ci` (unit tests st
 |----------|----------------|
 | [`.github/workflows/weekly-link-check.yml`](../.github/workflows/weekly-link-check.yml) | Live dashboard URLs (`scripts/link-check.php`), then built-in aviation HTTPS targets (`scripts/check-builtin-aviation-links.php`, URL list from `lib/aviation-region-links.php`). |
 | [`.github/workflows/builtin-aviation-links.yml`](../.github/workflows/builtin-aviation-links.yml) | Same built-in probe on PRs and pushes to `main` when `lib/aviation-region-links.php`, the script, or this workflow file changes. |
+| [`.github/workflows/production-health-check.yml`](../.github/workflows/production-health-check.yml) | Daily HTTPS probes against production (`scripts/production-health-check.php`), then `check-builtin-aviation-links.php`. Requires outbound network; not part of `make test-ci`. |
 
-A red run usually means a third party moved or blocked a URL; confirm in a browser, then update the static `url` in profiles or the probe script (for example user-agent or HEAD vs GET behavior), and re-run the failed workflow or `make check-builtin-aviation-links`.
+Link-check and built-in URL failures usually mean a third party moved or blocked a URL; confirm in a browser, then update the static `url` in profiles or the probe script (for example user-agent or HEAD vs GET behavior), and re-run the failed workflow or `make check-builtin-aviation-links`.
 
-Local manual run (needs outbound HTTPS):
+Local manual runs (need outbound HTTPS):
 
 ```bash
+make production-health-check
 php scripts/check-builtin-aviation-links.php
 ```
 

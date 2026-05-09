@@ -6,7 +6,7 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 
 ### Option 1: Web Component (Recommended for Modern Sites)
 
-Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code—it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy.
+Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code; it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy.
 
 ```html
 <!-- Include the widget script once per page -->
@@ -32,17 +32,17 @@ A compact card showing essential weather data including wind, temperature, altim
 **Style Code:** `card`
 
 ### Webcam Only Single (450×380)
-Displays a single webcam feed with footer. Webcams and footer only—no weather metrics.
+Displays a single webcam feed with footer. Webcams and footer only (no weather metrics).
 
 **Style Code:** `webcam-only`
 
 ### Webcam Only Dual (600×250)
-Shows two webcams side by side with footer. Webcams and footer only—no weather metrics.
+Shows two webcams side by side with footer. Webcams and footer only (no weather metrics).
 
 **Style Code:** `dual-only`
 
 ### Webcam Only Quad (600×400)
-Displays up to four webcams in a compact grid with footer. Webcams and footer only—no weather metrics.
+Displays up to four webcams in a compact grid with footer. Webcams and footer only (no weather metrics).
 
 **Style Code:** `multi-only`
 
@@ -247,7 +247,9 @@ GET /api/v1/airports/{id}/embed?refresh=1
 - Airport topic includes: `id`, `name`, `icao`, `lat`, `lon`, `elevation_ft`, `timezone`, `webcams`, `runways`, `weather_sources` (all data needed for embed widgets)
 - Explicit observed times for staleness validation
 
-**CORS:** Permissive (`*`) for third-party embedding.
+**CORS:** Responses include permissive `Access-Control-Allow-Origin` for third-party embedding.
+
+**Embed host routing:** `widget.js` calls the Public API on **`embed.aviationwx.org`** (same origin as the script). Nginx maps `/api/v1/...` on that host to `api/v1/router.php` without redirecting the browser to **`api.aviationwx.org`** first, so the initial response carries CORS headers required by `fetch()` from embedded contexts. Configuration lives in **`docker/nginx.conf`** (embed `server` block).
 
 ## Local Development
 
@@ -269,23 +271,19 @@ http://localhost:8080/public/widget-demo.html
 
 ## Nginx Configuration
 
-The embed subdomain requires modified security headers to allow iframe embedding on third-party sites. Key differences from the main site:
-
-- No `X-Frame-Options` header (allows embedding anywhere)
-- Modified CSP `frame-ancestors *` (allows embedding from any origin)
-- Allows connections to `*.aviationwx.org` for webcam images
+Defined in **`docker/nginx.conf`**. The **`embed.aviationwx.org`** `server` block relaxes framing (`frame-ancestors *`, no `X-Frame-Options`) and CSP compared to the main site so widgets load in third-party iframes. Public API v1 paths use internal rewrite + **`location /v1/`** so embed-origin `fetch()` stays on the embed host (see [Embed API JSON](#embed-api-json)). Production deploy bind-mounts this file from the repository (see **`docs/DEPLOYMENT.md`**).
 
 ## Content Security Policy (CSP)
 
 If your site uses a Content Security Policy, add these directives so embeds work:
 
 **Web component** (script + fetch):
-- `script-src` — Include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget script)
-- `connect-src` — Include `https://aviationwx.org` and `https://*.aviationwx.org` (API, webcam images)
-- `style-src` — Include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget CSS)
+- **script-src**: include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget script)
+- **connect-src**: include `https://aviationwx.org` and `https://*.aviationwx.org` (API, webcam images)
+- **style-src**: include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget CSS)
 
 **iframe embed:**
-- `frame-src` — Include `https://embed.aviationwx.org`
+- **frame-src**: include `https://embed.aviationwx.org`
 
 **Example CSP additions** (append to your existing policy):
 ```
@@ -299,7 +297,7 @@ Sites without CSP (e.g., most WordPress, Squarespace) work without changes. Add 
 
 ## Caching and Updates
 
-The widget script uses short cache headers (`max-age=300`, `stale-while-revalidate=3600`) so updates propagate within ~5 minutes of deploy. For immediate cache busting, use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org)—it appends `?v=<timestamp>` based on file modification time, so new embeds always fetch the latest script.
+The widget script uses short cache headers (`max-age=300`, `stale-while-revalidate=3600`) so updates propagate within ~5 minutes of deploy. For immediate cache busting, use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org); it appends `?v=<timestamp>` based on file modification time, so new embeds fetch the latest script.
 
 ## Troubleshooting
 

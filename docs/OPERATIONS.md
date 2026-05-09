@@ -93,6 +93,10 @@ Shows:
 | `/admin/diagnostics.php` | Detailed system info |
 | `/admin/metrics.php` | Prometheus-format metrics |
 
+### External probes (GitHub Actions)
+
+The **`production-health-check`** workflow runs **`scripts/production-health-check.php`** on a schedule against public HTTPS URLs (main site, Public API, embed host, internal-style routes). **`docs/TESTING.md`** lists the workflow and **`make production-health-check`** for manual runs.
+
 ### Scheduler Verification
 
 ```bash

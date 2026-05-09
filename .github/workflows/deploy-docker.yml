@@ -456,6 +456,9 @@ jobs:
             "docker/sshd_config"
             "docker/docker-compose.prod.yml"
             "docker/Dockerfile"
+            "docker/nginx.conf"
+            "lib/nginx-embed-vhost-verify.php"
+            "scripts/verify-embed-nginx-conf.php"
           )
           
           for file in "${CRITICAL_FILES[@]}"; do
@@ -568,6 +571,16 @@ jobs:
             fi
           else
             echo "⚠ Guides directory not found - skipping validation"
+          fi
+          
+          # Validation 8: Embed host nginx must route Public API v1 on-host (CORS / iframe fetch)
+          echo ""
+          echo "8. Verifying embed.aviationwx.org nginx vhost (docker/nginx.conf)..."
+          if php scripts/verify-embed-nginx-conf.php docker/nginx.conf; then
+            echo "✓ Embed nginx Public API v1 routing checks passed"
+          else
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("docker/nginx.conf embed vhost failed verification (run scripts/verify-embed-nginx-conf.php)")
           fi
           
           # Final check
@@ -1182,6 +1195,15 @@ jobs:
               "1. Check network connectivity: ping ${{ secrets.HOST }}\n2. Verify SSH connection: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'echo Connection OK'\n3. Check server disk space: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'df -h'\n4. Verify permissions on server: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'ls -la ~/aviationwx'\n5. Check rsync logs for specific errors\n6. Retry deployment after resolving issues"
           fi
           echo "✓ Repository synced successfully"
+
+      - name: Verify embed nginx vhost on server (post-rsync)
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          php scripts/verify-embed-nginx-conf.php docker/nginx.conf
+          echo "✓ Server copy of docker/nginx.conf passes embed Public API v1 checks"
+          EOF
 
       - name: Configure firewall ports
         run: |

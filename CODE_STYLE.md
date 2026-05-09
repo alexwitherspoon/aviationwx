@@ -468,7 +468,7 @@ const meters = AviationWX.units.feetToMeters(3000);
 
 When creating or modifying weather adapters:
 
-1. **Parse raw data** using the legacy parser function
+1. **Parse raw data** using the adapter's source-specific parser (per vendor/API shape)
 2. **Create WeatherSnapshot** using factory methods for each field
 3. **Document units** in the adapter's parseToSnapshot PHPDoc
 
