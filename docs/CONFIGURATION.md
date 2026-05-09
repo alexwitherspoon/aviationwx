@@ -1546,7 +1546,7 @@ When `config.public_api.enabled` is true, the Public API and weather history fea
 |--------|---------|-------------|
 | `canonical_base_url` | `https://api.aviationwx.org/v1` | Optional. Absolute `http://` or `https://` base URL for Public API v1 with no trailing slash. Used by `getCanonicalPublicApiV1BaseUrl()` and the API docs page. Omit to use this default. Set when your deployment’s public API origin differs (self-hosted). |
 
-**Nginx:** On **api.aviationwx.org**, `/api/v1/` redirects must target the same host and path prefix as this value. CD installs **`docker/nginx.conf`** from the repository (see `docker/docker-compose.prod.yml`). Any manual nginx overlay must preserve **`embed.aviationwx.org`** on-host Public API v1 routing (rewrite + `/v1/` → `api/v1/router.php`) so cross-origin `fetch()` to `/api/v1` on the embed host does not hit an off-host redirect before CORS. Deploy runs **`scripts/verify-embed-nginx-conf.php`** against the synced file.
+**Nginx:** On **api.aviationwx.org**, `/api/v1/` redirects must target the same host and path prefix as this value. CD installs **`docker/nginx.conf`** from the repository (see `docker/docker-compose.prod.yml`). Any manual nginx overlay must preserve **`embed.aviationwx.org`** on-host Public API v1 routing (rewrite + `/v1/` → `api/v1/router.php`) so cross-origin `fetch()` to `/api/v1` on the embed host does not hit an off-host redirect before CORS. Deploy runs **`scripts/verify-embed-nginx-conf.php`** in the **`web` container** after image build (not on the bare host). CI covers the same rules via **`tests/Unit/NginxEmbedVhostConfigTest.php`**.
 
 ### Rate limits
 

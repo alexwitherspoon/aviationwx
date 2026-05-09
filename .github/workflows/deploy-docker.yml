@@ -459,6 +459,7 @@ jobs:
             "docker/nginx.conf"
             "lib/nginx-embed-vhost-verify.php"
             "scripts/verify-embed-nginx-conf.php"
+            "tests/Unit/NginxEmbedVhostConfigTest.php"
           )
           
           for file in "${CRITICAL_FILES[@]}"; do
@@ -573,15 +574,8 @@ jobs:
             echo "⚠ Guides directory not found - skipping validation"
           fi
           
-          # Validation 8: Embed host nginx must route Public API v1 on-host (CORS / iframe fetch)
-          echo ""
-          echo "8. Verifying embed.aviationwx.org nginx vhost (docker/nginx.conf)..."
-          if php scripts/verify-embed-nginx-conf.php docker/nginx.conf; then
-            echo "✓ Embed nginx Public API v1 routing checks passed"
-          else
-            VALIDATION_FAILED=true
-            FAILURE_REASONS+=("docker/nginx.conf embed vhost failed verification (run scripts/verify-embed-nginx-conf.php)")
-          fi
+          # Embed nginx routing is covered by tests/Unit/NginxEmbedVhostConfigTest.php (QA workflow)
+          # and verified on the server inside the web container after image build (see Deploy via Docker Compose).
           
           # Final check
           if [ "$VALIDATION_FAILED" = "true" ]; then
@@ -1196,15 +1190,6 @@ jobs:
           fi
           echo "✓ Repository synced successfully"
 
-      - name: Verify embed nginx vhost on server (post-rsync)
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          cd ~/aviationwx
-          php scripts/verify-embed-nginx-conf.php docker/nginx.conf
-          echo "✓ Server copy of docker/nginx.conf passes embed Public API v1 checks"
-          EOF
-
       - name: Configure firewall ports
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
@@ -1646,6 +1631,17 @@ jobs:
             echo "  The sync will retry on container startup."
             # Don't fail deployment - just warn
           fi
+          
+          echo "Verifying embed nginx.conf in deployed web image (Public API v1 routing)..."
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php \
+            /var/www/html/scripts/verify-embed-nginx-conf.php \
+            /var/www/html/docker/nginx.conf; then
+            deployment_error \
+              "Embed nginx verification" \
+              "docker/nginx.conf in the web container failed embed Public API v1 checks" \
+              "1. Fix docker/nginx.conf embed server block (rewrite + location /v1/)\n2. Run locally: php scripts/verify-embed-nginx-conf.php docker/nginx.conf\n3. See docs/DEPLOYMENT.md (Nginx and embed.aviationwx.org)"
+          fi
+          echo "✓ docker/nginx.conf passes embed Public API v1 checks (web image)"
           
           # Clean up Docker resources conditionally (only if disk usage is high)
           # Check disk usage before cleanup to avoid unnecessary operations

@@ -518,7 +518,7 @@ See `.github/workflows/deploy-docker.yml` for workflow details.
 
 ### Nginx and `embed.aviationwx.org` (CD)
 
-CD **rsyncs** `docker/nginx.conf` to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). **`embed.aviationwx.org`** routing ships with application commits; nginx does not read `airports.json`. The deploy workflow runs **`scripts/verify-embed-nginx-conf.php`** on the Actions runner before SSH and again on the server after rsync. The embed server block keeps Public API v1 on-host (rewrite + `location /v1/`) so browsers get CORS on the first hop for `/api/v1/...` requests.
+CD **rsyncs** `docker/nginx.conf` to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). **`embed.aviationwx.org`** routing ships with application commits; nginx does not read `airports.json`. **Quality Assurance** CI runs **`tests/Unit/NginxEmbedVhostConfigTest.php`** against `docker/nginx.conf`. Deploy runs **`scripts/verify-embed-nginx-conf.php`** **inside the `web` container** after `docker compose up --build` (same pattern as **`docker compose exec` PHP** for `sync-push-config.php`), against **`/var/www/html/docker/nginx.conf`** in the built image. The embed server block keeps Public API v1 on-host (rewrite + `location /v1/`) so browsers get CORS on the first hop for `/api/v1/...` requests.
 
 ## Maintenance
 
