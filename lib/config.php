@@ -4380,6 +4380,22 @@ function validateAirportsJsonStructure(array $config): array {
                         // Reserved UI slots: no pull URL / push_config required (matches scheduler skip)
                         $skipAcquisitionValidation = isset($webcam['enabled']) && $webcam['enabled'] === false;
 
+                        // Still reject unknown top-level keys so typos cannot slip through (e.g. refesh_seconds)
+                        if ($skipAcquisitionValidation) {
+                            $allowedDisabledWebcamFields = [
+                                'api_key', 'base_url', 'camera_index', 'crop_margins', 'enabled', 'name',
+                                'push_config', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime',
+                                'rtsp_transport', 'timeout_seconds', 'transcode_timeout', 'type', 'url',
+                                'variant_heights',
+                            ];
+                            foreach ($webcam as $key => $_val) {
+                                if (!in_array($key, $allowedDisabledWebcamFields, true)) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (disabled placeholder) has unknown field '{$key}'. Allowed fields: "
+                                        . implode(', ', $allowedDisabledWebcamFields);
+                                }
+                            }
+                        }
+
                         if (!$skipAcquisitionValidation) {
                             $webcamType = $webcam['type'] ?? 'http';
                         

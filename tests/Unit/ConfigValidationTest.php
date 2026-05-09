@@ -1332,6 +1332,36 @@ class ConfigValidationTest extends TestCase
     }
 
     /**
+     * Disabled placeholders still reject unknown top-level keys (strict field vocabulary).
+     */
+    public function testWebcam_DisabledPlaceholderRejectsUnknownField(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Reserved camera slot',
+                            'enabled' => false,
+                            'refesh_seconds' => 60,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('unknown field', implode(' ', $result['errors']));
+        $this->assertStringContainsString('refesh_seconds', implode(' ', $result['errors']));
+    }
+
+    /**
      * Federated pull webcam uses base_url instead of url (matches PullAcquisitionStrategy).
      */
     public function testWebcam_ValidAviationwxApiCamera(): void
