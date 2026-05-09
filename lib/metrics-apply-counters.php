@@ -2,13 +2,19 @@
 /**
  * Merge flat APCu-style counter keys into hourly metrics bucket structure.
  *
- * Mutates $hourData in place; callers must pass an initialized hourly bucket (see metrics_new_empty_hour_bucket).
+ * Mutates $hourData in place. When `bucket_id` is set, normalizes against {@see metrics_normalize_hour_bucket_for_merge()}
+ * so partial legacy hourly JSON cannot fatal on missing nested keys (PHP 8+).
  *
  * @param array<string, mixed> $hourData Hourly metrics structure (by reference)
  * @param array<string, int|float> $counters Flat counter keys from APCu or spill payloads
  * @return void
  */
 function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $counters): void {
+    $bucketId = $hourData['bucket_id'] ?? '';
+    if (is_string($bucketId) && $bucketId !== '') {
+        metrics_normalize_hour_bucket_for_merge($hourData, $bucketId);
+    }
+
     foreach ($counters as $key => $value) {
         if (preg_match('/^airport_([a-z0-9]+)_views$/', $key, $m)) {
             $airportId = $m[1];

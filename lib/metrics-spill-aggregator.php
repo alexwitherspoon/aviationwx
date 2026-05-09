@@ -99,7 +99,7 @@ function metrics_run_spill_aggregator_once(): array
                 $hourData = metrics_new_empty_hour_bucket($hourId);
             }
 
-            metrics_fill_hour_data_defaults($hourData);
+            metrics_normalize_hour_bucket_for_merge($hourData, $hourId);
 
             $pendingDeletes = [];
 

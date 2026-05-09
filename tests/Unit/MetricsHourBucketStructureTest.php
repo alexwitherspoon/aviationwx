@@ -26,6 +26,22 @@ class MetricsHourBucketStructureTest extends TestCase
         $this->assertSame($end, $h['bucket_end']);
     }
 
+    public function testNormalizeHourBucketForMerge_FillsNestedGlobalsFromPartialDiskJson(): void
+    {
+        $hourId = '2026-09-20-08';
+        $partial = [
+            'bucket_type' => 'hourly',
+            'bucket_id' => $hourId,
+            'global' => [
+                'page_views' => 1,
+            ],
+        ];
+        metrics_normalize_hour_bucket_for_merge($partial, $hourId);
+        $this->assertSame([ 'jpg' => 0, 'webp' => 0 ], $partial['global']['format_served']);
+        $this->assertSame([ 'webp' => 0, 'jpg_only' => 0 ], $partial['global']['browser_support']);
+        $this->assertSame([ 'hits' => 0, 'misses' => 0 ], $partial['global']['cache']);
+    }
+
     public function testFillDefaults_AddsMissingNestedKeysOnPartialData(): void
     {
         $partial = [

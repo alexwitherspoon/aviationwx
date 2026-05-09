@@ -669,7 +669,27 @@ function metrics_new_empty_hour_bucket(string $hourId): array {
 }
 
 /**
+ * Overlay partial or legacy hourly JSON onto a canonical empty bucket so merge paths never fatals on missing nested keys.
+ *
+ * @param array<string, mixed> $hourData Loaded or partial hour bucket (replaced in place)
+ * @param string               $hourId   Canonical UTC hour id for this merge (directory name)
+ * @return void
+ */
+function metrics_normalize_hour_bucket_for_merge(array &$hourData, string $hourId): void {
+    $base = metrics_new_empty_hour_bucket($hourId);
+    $merged = array_replace_recursive($base, $hourData);
+    [$start, $end] = metrics_hour_bucket_bounds_from_hour_id($hourId);
+    $merged['bucket_type'] = 'hourly';
+    $merged['bucket_id'] = $hourId;
+    $merged['bucket_start'] = $start;
+    $merged['bucket_end'] = $end;
+    $hourData = $merged;
+}
+
+/**
  * Ensure hourly bucket data has all nested keys (legacy or partial JSON).
+ *
+ * Prefer {@see metrics_normalize_hour_bucket_for_merge()} when the UTC hour id is known (spill aggregator).
  *
  * @param array $hourData Hour bucket (modified in place)
  * @return void

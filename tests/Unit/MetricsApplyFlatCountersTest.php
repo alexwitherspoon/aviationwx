@@ -34,4 +34,24 @@ class MetricsApplyFlatCountersTest extends TestCase
 
         $this->assertSame(3, $hourData['airports']['kfoo']['page_views']);
     }
+
+    public function testApply_PartialLegacyHourJson_DoesNotFatalOnNestedCounters(): void
+    {
+        $hourId = '2026-08-10-15';
+        $hourData = [
+            'bucket_type' => 'hourly',
+            'bucket_id' => $hourId,
+            'global' => [
+                'page_views' => 3,
+            ],
+        ];
+        metrics_apply_flat_counters_to_hour_data($hourData, [
+            'cache_hits' => 4,
+            'browser_webp_support' => 2,
+        ]);
+
+        $this->assertSame(4, $hourData['global']['cache']['hits']);
+        $this->assertSame(2, $hourData['global']['browser_support']['webp']);
+        $this->assertSame(3, $hourData['global']['page_views']);
+    }
 }
