@@ -8,12 +8,14 @@ use PHPUnit\Framework\TestCase;
 
 class EmbedEndpointTest extends TestCase
 {
-    private $baseUrl;
+    private string $baseUrl;
     
     protected function setUp(): void
     {
         parent::setUp();
-        $this->baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
+        $this->baseUrl = getenv('TEST_API_URL')
+            ?: getenv('TEST_BASE_URL')
+            ?: 'http://localhost:8080';
         
         if (!function_exists('curl_init')) {
             $this->markTestSkipped('cURL not available');
@@ -23,7 +25,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed configurator page is accessible
      */
-    public function testEmbedConfigurator_IsAccessible()
+    public function testEmbedConfigurator_IsAccessible(): void
     {
         $response = $this->makeRequest('?embed');
         
@@ -56,7 +58,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed configurator contains required UI elements
      */
-    public function testEmbedConfigurator_HasRequiredElements()
+    public function testEmbedConfigurator_HasRequiredElements(): void
     {
         $response = $this->makeRequest('?embed');
         
@@ -114,7 +116,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with card style
      */
-    public function testEmbedRenderer_CardStyle()
+    public function testEmbedRenderer_CardStyle(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
         
@@ -150,7 +152,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with webcam-only single style
      */
-    public function testEmbedRenderer_WebcamOnlySingleStyle()
+    public function testEmbedRenderer_WebcamOnlySingleStyle(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
 
@@ -187,7 +189,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with multi webcam-only style
      */
-    public function testEmbedRenderer_MultiOnlyStyle()
+    public function testEmbedRenderer_MultiOnlyStyle(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=multi-only&theme=light&cams=0,1,2,3&render=1');
         
@@ -214,7 +216,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with full widget style
      */
-    public function testEmbedRenderer_FullStyle()
+    public function testEmbedRenderer_FullStyle(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=full&theme=light&webcam=0&render=1');
         
@@ -241,7 +243,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with dark theme
      */
-    public function testEmbedRenderer_DarkTheme()
+    public function testEmbedRenderer_DarkTheme(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=dark&render=1');
         
@@ -268,7 +270,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with unit parameters
      */
-    public function testEmbedRenderer_WithUnitParameters()
+    public function testEmbedRenderer_WithUnitParameters(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&temp=C&dist=m&wind=kmh&baro=hPa&render=1');
         
@@ -287,7 +289,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer with invalid airport
      */
-    public function testEmbedRenderer_InvalidAirport()
+    public function testEmbedRenderer_InvalidAirport(): void
     {
         $response = $this->makeRequest('?embed&airport=invalid_airport_xyz&style=card&theme=light&render=1');
         
@@ -307,7 +309,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed renderer without required parameters
      */
-    public function testEmbedRenderer_MissingParameters()
+    public function testEmbedRenderer_MissingParameters(): void
     {
         $response = $this->makeRequest('?embed&airport=');
         
@@ -333,7 +335,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed card style contains dashboard link
      */
-    public function testEmbedRenderer_CardStyle_ContainsDashboardLink()
+    public function testEmbedRenderer_CardStyle_ContainsDashboardLink(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
 
@@ -341,6 +343,8 @@ class EmbedEndpointTest extends TestCase
             $this->markTestSkipped("Endpoint not available");
             return;
         }
+
+        $this->assertEmbedHttpSuccessOrNotFound($response, 'Embed renderer');
 
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
@@ -354,7 +358,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed webcam-only style includes data attributes for stale webcam fallback
      */
-    public function testEmbedRenderer_WebcamOnlyStyle_IncludesStaleFallbackDataAttributes()
+    public function testEmbedRenderer_WebcamOnlyStyle_IncludesStaleFallbackDataAttributes(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
 
@@ -362,6 +366,8 @@ class EmbedEndpointTest extends TestCase
             $this->markTestSkipped("Endpoint not available");
             return;
         }
+
+        $this->assertEmbedHttpSuccessOrNotFound($response, 'Embed renderer');
 
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
@@ -385,7 +391,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed webcam-only style contains per-webcam link to history player
      */
-    public function testEmbedRenderer_WebcamOnlyStyle_ContainsHistoryPlayerLink()
+    public function testEmbedRenderer_WebcamOnlyStyle_ContainsHistoryPlayerLink(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
 
@@ -393,6 +399,8 @@ class EmbedEndpointTest extends TestCase
             $this->markTestSkipped("Endpoint not available");
             return;
         }
+
+        $this->assertEmbedHttpSuccessOrNotFound($response, 'Embed renderer');
 
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
@@ -416,7 +424,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed API returns per-webcam links for multi-cam styles
      */
-    public function testEmbedApi_MultiOnlyStyle_ContainsPerWebcamLinks()
+    public function testEmbedApi_MultiOnlyStyle_ContainsPerWebcamLinks(): void
     {
         $response = $this->makeRequest('/api/embed-widget.php?airport=kspb&style=multi-only&theme=light&cams=0,1,2,3');
 
@@ -424,6 +432,8 @@ class EmbedEndpointTest extends TestCase
             $this->markTestSkipped("Endpoint not available");
             return;
         }
+
+        $this->assertEmbedHttpSuccessOrNotFound($response, 'Embed API');
 
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
@@ -442,7 +452,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed has proper footer with attribution
      */
-    public function testEmbedRenderer_HasProperAttribution()
+    public function testEmbedRenderer_HasProperAttribution(): void
     {
         $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
         
@@ -450,6 +460,8 @@ class EmbedEndpointTest extends TestCase
             $this->markTestSkipped("Endpoint not available");
             return;
         }
+
+        $this->assertEmbedHttpSuccessOrNotFound($response, 'Embed renderer');
         
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
@@ -469,7 +481,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test embed API endpoints return CORS headers for cross-origin embedding
      */
-    public function testEmbedApiEndpoints_ReturnCorsHeaders()
+    public function testEmbedApiEndpoints_ReturnCorsHeaders(): void
     {
         $endpoints = [
             '/api/embed-widget.php?airport=kspb&style=card',
@@ -500,7 +512,7 @@ class EmbedEndpointTest extends TestCase
     /**
      * Test OPTIONS preflight returns CORS headers
      */
-    public function testEmbedApi_OptionsPreflight_ReturnsCorsHeaders()
+    public function testEmbedApi_OptionsPreflight_ReturnsCorsHeaders(): void
     {
         $url = rtrim($this->baseUrl, '/') . '/api/embed-widget.php?airport=kspb';
         
@@ -531,6 +543,20 @@ class EmbedEndpointTest extends TestCase
         $this->assertArrayHasKey('access-control-allow-origin', $headers, "OPTIONS should include CORS header");
     }
     
+    /**
+     * Assert 200 or 404 so a broken stack surfaces as failure, not a risky test.
+     *
+     * @param array{http_code:int} $response
+     */
+    private function assertEmbedHttpSuccessOrNotFound(array $response, string $role): void
+    {
+        $this->assertContains(
+            $response['http_code'],
+            [200, 404],
+            "{$role} should return 200 or 404 (got: {$response['http_code']})"
+        );
+    }
+
     /**
      * Helper method to make HTTP request
      */

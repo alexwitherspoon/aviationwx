@@ -15,7 +15,10 @@ class WebcamRefreshInitializationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->baseUrl = getenv('TEST_BASE_URL') ?: 'http://localhost:8080';
+        // Match isolated stack (TEST_API_URL=:9080) then TEST_BASE_URL then dev default.
+        $this->baseUrl = getenv('TEST_API_URL')
+            ?: getenv('TEST_BASE_URL')
+            ?: 'http://localhost:8080';
     }
     
     /**
