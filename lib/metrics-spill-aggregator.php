@@ -116,7 +116,7 @@ function metrics_run_spill_aggregator_once(): array
                     continue;
                 }
 
-                metrics_apply_flat_counters_to_hour_data($hourData, $parsed['counters']);
+                metrics_apply_flat_counters_to_hour_data($hourData, $parsed['counters'], true);
                 $pendingDeletes[] = $spillPath;
                 $filesMergedThisRun++;
                 $stats['spills_merged']++;
@@ -224,35 +224,42 @@ function metrics_spill_aggregator_prune_orphan_spills(array &$stats, $t0Ns): voi
         return;
     }
 
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($spillRoot, FilesystemIterator::SKIP_DOTS)
-    );
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($spillRoot, FilesystemIterator::SKIP_DOTS)
+        );
 
-    foreach ($iterator as $fileInfo) {
-        if (metrics_spill_aggregator_runtime_ms($t0Ns) >= METRICS_SPILL_MERGE_MAX_RUNTIME_MS) {
-            break;
-        }
+        foreach ($iterator as $fileInfo) {
+            if (metrics_spill_aggregator_runtime_ms($t0Ns) >= METRICS_SPILL_MERGE_MAX_RUNTIME_MS) {
+                break;
+            }
 
-        if (!$fileInfo->isFile()) {
-            continue;
-        }
+            if (!$fileInfo->isFile()) {
+                continue;
+            }
 
-        $name = $fileInfo->getFilename();
-        if (strpos($name, '.tmp.') !== false) {
-            continue;
-        }
-        if (!str_ends_with($name, '.json')) {
-            continue;
-        }
+            $name = $fileInfo->getFilename();
+            if (strpos($name, '.tmp.') !== false) {
+                continue;
+            }
+            if (!str_ends_with($name, '.json')) {
+                continue;
+            }
 
-        $age = time() - $fileInfo->getMTime();
-        if ($age <= METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS) {
-            continue;
-        }
+            $age = time() - $fileInfo->getMTime();
+            if ($age <= METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS) {
+                continue;
+            }
 
-        if (@unlink($fileInfo->getPathname())) {
-            $stats['orphans_pruned']++;
+            if (@unlink($fileInfo->getPathname())) {
+                $stats['orphans_pruned']++;
+            }
         }
+    } catch (Throwable $e) {
+        $stats['errors'][] = 'orphan_prune_iterator_failed';
+        aviationwx_log('warning', 'metrics spill orphan prune iterator failed', [
+            'error' => $e->getMessage(),
+        ], 'app');
     }
 }
 

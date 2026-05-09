@@ -6,12 +6,14 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/metrics-apply-counters.php';
 
 /**
  * Validate decoded spill JSON and return normalized counter keys for hourly merge.
  *
  * Used by the spill aggregator after reading a shard file; rejects schema mismatch, hour mismatch,
- * non-numeric counter values, empty counter maps, or invalid keys so corrupt shards are not merged
+ * non-numeric counter values, empty counter maps, unreadable keys, or any counter name not recognized
+ * by {@see metrics_flat_counter_key_is_recognized()} so corrupt or forward-incompatible shards are not merged
  * and are left on disk for inspection.
  *
  * @param array<string, mixed> $data Decoded spill JSON object
@@ -41,6 +43,9 @@ function metrics_parse_spill_payload_for_merge(array $data, string $expectedHour
             return null;
         }
         if (!is_int($v) && !is_float($v)) {
+            return null;
+        }
+        if (!metrics_flat_counter_key_is_recognized($k)) {
             return null;
         }
         $flat[$k] = (int) $v;

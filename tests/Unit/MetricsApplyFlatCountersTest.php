@@ -54,4 +54,11 @@ class MetricsApplyFlatCountersTest extends TestCase
         $this->assertSame(2, $hourData['global']['browser_support']['webp']);
         $this->assertSame(3, $hourData['global']['page_views']);
     }
+
+    public function testFlatCounterKeyRecognition_MatchesKnownPatterns(): void
+    {
+        $this->assertTrue(metrics_flat_counter_key_is_recognized('global_page_views'));
+        $this->assertTrue(metrics_flat_counter_key_is_recognized('airport_ksea_views'));
+        $this->assertFalse(metrics_flat_counter_key_is_recognized('not_a_metric_key'));
+    }
 }

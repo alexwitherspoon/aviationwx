@@ -2,16 +2,18 @@
 /**
  * Merge flat APCu-style counter keys into hourly metrics bucket structure.
  *
- * Mutates $hourData in place. When `bucket_id` is set, normalizes against {@see metrics_normalize_hour_bucket_for_merge()}
- * so partial legacy hourly JSON cannot fatal on missing nested keys (PHP 8+).
+ * Mutates $hourData in place. When `bucket_id` is set and `$skipHourBucketNormalization` is false,
+ * normalizes via {@see metrics_normalize_hour_bucket_for_merge()} so partial legacy hourly JSON cannot fatal on missing nested keys (PHP 8+).
+ * The spill aggregator passes true for `$skipHourBucketNormalization` after it has already normalized once per hour.
  *
  * @param array<string, mixed> $hourData Hourly metrics structure (by reference)
  * @param array<string, int|float> $counters Flat counter keys from APCu or spill payloads
+ * @param bool $skipHourBucketNormalization When true, do not re-run merge normalization (caller already normalized)
  * @return void
  */
-function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $counters): void {
+function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $counters, bool $skipHourBucketNormalization = false): void {
     $bucketId = $hourData['bucket_id'] ?? '';
-    if (is_string($bucketId) && $bucketId !== '') {
+    if (!$skipHourBucketNormalization && is_string($bucketId) && $bucketId !== '') {
         metrics_normalize_hour_bucket_for_merge($hourData, $bucketId);
     }
 
@@ -191,4 +193,47 @@ function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $count
             // Just increment global counter, per-camera reasons are tracked separately
         }
     }
+}
+
+/**
+ * Whether {@see metrics_apply_flat_counters_to_hour_data()} handles this flat counter name.
+ *
+ * Spill merge uses this to reject shards whose keys are not yet implemented, so unknown keys are not
+ * silently dropped while the file is deleted. Add new keys here and in apply together; bump
+ * {@see METRICS_SPILL_FILE_SCHEMA_VERSION} when expanding the wire format.
+ *
+ * @param string $key Flat counter key (same syntax as APCu / spill JSON)
+ * @return bool True when the apply function has a matching branch (including intentional no-ops)
+ */
+function metrics_flat_counter_key_is_recognized(string $key): bool
+{
+    return preg_match('/^airport_([a-z0-9]+)_views$/', $key) === 1
+        || preg_match('/^airport_([a-z0-9]+)_weather$/', $key) === 1
+        || preg_match('/^airport_([a-z0-9]+)_webcam_requests$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_requests$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp)$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_size_(\w+)$/', $key) === 1
+        || preg_match('/^format_(jpg|webp)_served$/', $key) === 1
+        || preg_match('/^size_(\w+)_served$/', $key) === 1
+        || $key === 'global_page_views'
+        || $key === 'global_weather_requests'
+        || $key === 'global_webcam_requests'
+        || $key === 'global_webcam_serves'
+        || $key === 'global_variants_generated'
+        || $key === 'global_tiles_served'
+        || preg_match('/^tiles_(openweathermap|rainviewer)_served$/', $key) === 1
+        || $key === 'browser_webp_support'
+        || $key === 'browser_jpg_only'
+        || $key === 'cache_hits'
+        || $key === 'cache_misses'
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_accepted$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_rejected$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_rejection_(.+)$/', $key) === 1
+        || $key === 'webcam_uploads_accepted_global'
+        || $key === 'webcam_uploads_rejected_global'
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_images_verified$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_images_rejected$/', $key) === 1
+        || $key === 'webcam_images_verified_global'
+        || $key === 'webcam_images_rejected_global'
+        || preg_match('/^webcam_rejection_reason_(.+)_global$/', $key) === 1;
 }
