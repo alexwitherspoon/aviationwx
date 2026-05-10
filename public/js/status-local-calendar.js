@@ -116,7 +116,7 @@
     const TITLE_STALE =
         'Metrics cache not warmed yet (scheduler will populate). Local sum unavailable until hourly buckets load.';
     const TITLE_OK =
-        'Your calendar day in %TZ%, summed from UTC hour buckets on the server. Current UTC hour uses the same live partial totals as /hour.';
+        'Page views for your local calendar day in %TZ% (summed from UTC hour buckets on the server).';
 
     /**
      * Update .views-local-calendar-day nodes from hourly_profile.
