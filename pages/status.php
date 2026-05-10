@@ -1016,8 +1016,10 @@ if (php_sapi_name() === 'cli') {
         $titleWeekViews = 'Rolling calendar window: seven prior UTC days (daily files) plus today hourly; bundle cache can lag a few minutes.';
         ?>
         <div class="status-card">
-            <div class="status-card-header airport-card-header" 
-                 onclick="toggleAirport('<?php echo htmlspecialchars($airport['id']); ?>')">
+            <div class="status-card-header airport-card-header"
+                 role="button"
+                 tabindex="0"
+                 data-airport-toggle="<?php echo htmlspecialchars($airport['id'], ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="airport-header-col airport-header-col--title">
                     <h2>
                         <span class="expand-icon">▶</span>
@@ -1362,12 +1364,20 @@ if (php_sapi_name() === 'cli') {
             }
 
             function toggleAirport(airportId) {
-                const header = document.querySelector(`[onclick="toggleAirport('${airportId}')"]`);
-                const body = document.getElementById(`airport-${airportId}-body`);
-                
+                var headers = document.querySelectorAll('.airport-card-header[data-airport-toggle]');
+                var header = null;
+                var i;
+                for (i = 0; i < headers.length; i++) {
+                    if (headers[i].getAttribute('data-airport-toggle') === airportId) {
+                        header = headers[i];
+                        break;
+                    }
+                }
+                var body = document.getElementById('airport-' + airportId + '-body');
+
                 if (header && body) {
-                    const isExpanded = header.classList.contains('expanded');
-                    
+                    var isExpanded = header.classList.contains('expanded');
+
                     if (isExpanded) {
                         header.classList.remove('expanded');
                         body.classList.remove('expanded');
@@ -1379,9 +1389,26 @@ if (php_sapi_name() === 'cli') {
                     }
                 }
             }
-            
-            // Expose to global scope for onclick handlers
+
             window.toggleAirport = toggleAirport;
+
+            document.querySelectorAll('.airport-card-header[data-airport-toggle]').forEach(function (hdr) {
+                hdr.addEventListener('click', function () {
+                    var id = hdr.getAttribute('data-airport-toggle');
+                    if (id) {
+                        toggleAirport(id);
+                    }
+                });
+                hdr.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        var id = hdr.getAttribute('data-airport-toggle');
+                        if (id) {
+                            toggleAirport(id);
+                        }
+                    }
+                });
+            });
         })();
     </script>
 </body>

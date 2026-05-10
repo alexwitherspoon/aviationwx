@@ -2,7 +2,7 @@
 /**
  * Status Metrics Pre-warm Worker
  *
- * Computes metrics bundle (rolling7, rolling1, today, hourly_profile) for status page
+ * Computes metrics bundle (rolling7, rolling1, today, hourly_profile, multiPeriod) for status page
  * and writes to file cache in getCachedData envelope format.
  * Invoked by scheduler every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL seconds.
  * Page loads read from APCu/file cache for fast access.
