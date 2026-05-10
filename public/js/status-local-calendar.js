@@ -135,7 +135,7 @@
             const tz = resolvedTimeZone();
             for (let i = 0; i < nodes.length; i++) {
                 nodes[i].classList.add('views-local-stale');
-                nodes[i].textContent = '---/loc';
+                nodes[i].textContent = '---/d';
                 nodes[i].setAttribute('title', TITLE_STALE);
                 nodes[i].setAttribute('data-local-tz', tz);
             }
@@ -153,7 +153,7 @@
                 continue;
             }
             const n = sumLocalDayViewsForAirport(profile, aid, tz, nowMs, dayStartMs);
-            el.textContent = n.toLocaleString() + '/loc';
+            el.textContent = n.toLocaleString() + '/d';
             el.setAttribute('title', TITLE_OK.replace('%TZ%', tz));
             el.setAttribute('data-local-tz', tz);
         }

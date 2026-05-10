@@ -1025,11 +1025,11 @@ if (php_sapi_name() === 'cli') {
                     </h2>
                 </div>
                 <div class="airport-header-col airport-header-col--views">
-                    <div class="airport-views-summary airport-views-summary-compact" title="View counts: live partial hour from server; /loc is your local calendar day; /wk is a rolling UTC week.">
+                    <div class="airport-views-summary airport-views-summary-compact" title="View counts: live partial hour from server; /d is your local calendar day; /wk is a rolling UTC week.">
                         <span class="views-label">Views</span>
                         <span class="views-period" title="<?php echo htmlspecialchars($titleHourViews); ?>"><?php echo number_format($hourViews); ?>/hr</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period views-local-calendar-day" data-airport="<?php echo htmlspecialchars(strtolower($airport['id'])); ?>" title="Your local calendar day (summed from UTC hour buckets). Waiting for hourly cache if shown as ---.">---/loc</span>
+                        <span class="views-period views-local-calendar-day" data-airport="<?php echo htmlspecialchars(strtolower($airport['id'])); ?>" title="Your local calendar day (summed from UTC hour buckets). Waiting for hourly cache if shown as ---.">---/d</span>
                         <span class="views-sep">·</span>
                         <span class="views-period" title="<?php echo htmlspecialchars($titleWeekViews); ?>"><?php echo number_format($weekViews); ?>/wk</span>
                     </div>
