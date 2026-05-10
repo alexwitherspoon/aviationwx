@@ -172,6 +172,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a1b️⃣  Runway Label Layout Tests (JS)..."
 	@node tests/js/runway-label-layout.test.js || { echo "❌ Runway label layout JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a1c️⃣  Status local calendar Tests (JS)..."
+	@node tests/js/status-local-calendar.test.js || { echo "❌ Status local calendar JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a2️⃣  Webcam Player Cache Tests (JS)..."
 	@node tests/js/webcam-player-cache.test.js || { echo "❌ Webcam player cache JS tests failed"; exit 1; }
 	@echo ""

@@ -2,7 +2,8 @@
 /**
  * Status Metrics Pre-warm Worker
  *
- * Computes metrics bundle (rolling7, rolling1, today) and writes to file cache.
+ * Computes metrics bundle (rolling7, rolling1, today, hourly_profile) for status page
+ * and writes to file cache in getCachedData envelope format.
  * Invoked by scheduler every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL seconds.
  * Page loads read from APCu/file cache for fast access.
  *
@@ -17,6 +18,12 @@ require_once __DIR__ . '/../lib/cached-data-loader.php';
 require_once __DIR__ . '/../lib/metrics.php';
 
 $bundle = metrics_get_status_bundle();
+if (!isset($bundle['hourly_profile']['schema_version'], $bundle['multiPeriod'])) {
+    aviationwx_log('warning', 'fetch-status-metrics: bundle missing expected keys', [
+        'has_schema' => isset($bundle['hourly_profile']['schema_version']),
+        'has_multi_period' => isset($bundle['multiPeriod']),
+    ], 'app');
+}
 
 $fileData = [
     'cached_at' => time(),
