@@ -19,10 +19,12 @@ require_once __DIR__ . '/../lib/metrics.php';
 
 $bundle = metrics_get_status_bundle();
 if (!isset($bundle['hourly_profile']['schema_version'], $bundle['multiPeriod'])) {
-    aviationwx_log('warning', 'fetch-status-metrics: bundle missing expected keys', [
-        'has_schema' => isset($bundle['hourly_profile']['schema_version']),
-        'has_multi_period' => isset($bundle['multiPeriod']),
-    ], 'app');
+    if (metrics_should_log_warning('fetch_status_metrics_bundle_shape', 3600)) {
+        aviationwx_log('warning', 'fetch-status-metrics: bundle missing expected keys', [
+            'has_schema' => isset($bundle['hourly_profile']['schema_version']),
+            'has_multi_period' => isset($bundle['multiPeriod']),
+        ], 'app');
+    }
 }
 
 $fileData = [

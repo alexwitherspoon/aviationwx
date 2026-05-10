@@ -58,7 +58,7 @@ $rolling1Calendar = $metricsBundle['rolling1'];
 
 $statusLocalCalendarJsPath = __DIR__ . '/../public/js/status-local-calendar.js';
 $statusLocalCalendarJsReadable = is_readable($statusLocalCalendarJsPath);
-if (!$statusLocalCalendarJsReadable) {
+if (!$statusLocalCalendarJsReadable && metrics_should_log_warning('status_local_calendar_js_unreadable', 300)) {
     aviationwx_log(
         'warning',
         'status page: status-local-calendar.js is not readable',
