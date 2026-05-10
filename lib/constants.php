@@ -378,6 +378,14 @@ if (!defined('METRICS_FLUSH_INTERVAL_SECONDS')) {
 if (!defined('METRICS_STATUS_PAGE_DAYS')) {
     define('METRICS_STATUS_PAGE_DAYS', 7); // Show 7-day rolling window on status page
 }
+/** Completed UTC hour slices before current hour in {@see metrics_get_status_hourly_profile()} (plus one partial hour). */
+if (!defined('METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS')) {
+    define('METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS', 26);
+}
+/** Bump when hourly_profile JSON shape changes (invalidates APCu bundle mirror). */
+if (!defined('METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION')) {
+    define('METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION', 1);
+}
 if (!defined('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS')) {
     // APCu snapshot of metrics_get_status_bundle() after flush; best-effort telemetry only
     define('METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS', 120);

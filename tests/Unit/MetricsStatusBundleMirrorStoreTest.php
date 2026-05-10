@@ -38,6 +38,10 @@ class MetricsStatusBundleMirrorStoreTest extends TestCase
         $this->assertIsArray($raw);
         $this->assertArrayHasKey('bundle', $raw);
         $this->assertSame(gmdate('Y-m-d'), $raw['today_bucket_id'] ?? null);
+        $b = $raw['bundle'];
+        $this->assertArrayHasKey('hourly_profile', $b);
+        $this->assertSame(METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION, $b['hourly_profile']['schema_version'] ?? null);
+        $this->assertArrayHasKey('multiPeriod', $b);
 
         $again = metrics_get_status_bundle();
         $this->assertSame($bundle['today']['bucket_id'] ?? null, $again['today']['bucket_id'] ?? null);

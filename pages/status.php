@@ -47,13 +47,25 @@ if ($config === null) {
     die('Service Unavailable: Configuration cannot be loaded');
 }
 
-// Load usage metrics bundle (single read for rolling7/rolling1/multiPeriod)
+// Load usage metrics bundle (rolling7, rolling1, today, hourly_profile, multiPeriod)
 require_once __DIR__ . '/../lib/status-metrics.php';
 $metricsBundle = getStatusMetricsBundle();
+$hourlyProfileMetrics = $metricsBundle['hourly_profile'] ?? metrics_get_empty_hourly_profile();
 $usageMetrics = $metricsBundle['rolling7'];
 $multiPeriodMetrics = $metricsBundle['multiPeriod'];
 // Calendar rollup: full prior UTC day (daily file) + today hourly -- not metrics_get_rolling_hours(24)
 $rolling1Calendar = $metricsBundle['rolling1'];
+
+$statusLocalCalendarJsPath = __DIR__ . '/../public/js/status-local-calendar.js';
+$statusLocalCalendarJsReadable = is_readable($statusLocalCalendarJsPath);
+if (!$statusLocalCalendarJsReadable && metrics_should_log_warning('status_local_calendar_js_unreadable', 300)) {
+    aviationwx_log(
+        'warning',
+        'status page: status-local-calendar.js is not readable',
+        ['path' => $statusLocalCalendarJsPath],
+        'app'
+    );
+}
 
 // Get local performance metrics (STATUS_PAGE_CACHE_TTL; scheduler pre-warms every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL)
 require_once __DIR__ . '/../lib/performance-metrics.php';
@@ -243,14 +255,6 @@ if (php_sapi_name() === 'cli') {
             color: #999;
             margin-top: 0.25rem;
         }
-            margin-bottom: 0.5rem;
-            color: #1a1a1a;
-        }
-        
-        .header .subtitle {
-            color: #555;
-            font-size: 0.9rem;
-        }
         
         .status-indicator {
             font-size: 1.5rem;
@@ -300,6 +304,32 @@ if (php_sapi_name() === 'cli') {
         .airport-card-header:hover {
             background-color: #f9fafb;
         }
+
+        /* Three columns: equal outer tracks keep the views block visually centered. */
+        .status-card-header.airport-card-header {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            align-items: center;
+            column-gap: 1rem;
+        }
+
+        .airport-header-col {
+            min-width: 0;
+        }
+
+        .airport-header-col--title {
+            justify-self: start;
+        }
+
+        .airport-header-col--views {
+            justify-self: center;
+        }
+
+        .airport-header-col--status {
+            justify-self: end;
+            display: flex;
+            justify-content: flex-end;
+        }
         
         .airport-card-header h2 {
             font-size: 1.25rem;
@@ -310,21 +340,13 @@ if (php_sapi_name() === 'cli') {
             gap: 0.75rem;
         }
         
-        .airport-header-content {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 1.5rem;
-            flex: 1;
-        }
-        
         .airport-views-summary {
             font-size: 0.75rem;
             color: #888;
             display: flex;
             align-items: center;
             gap: 0.35rem;
-            flex: 1;
+            flex-wrap: wrap;
             justify-content: center;
         }
         
@@ -340,10 +362,10 @@ if (php_sapi_name() === 'cli') {
         .airport-views-summary .views-sep {
             color: #ccc;
         }
-        
-        .usage-metrics-block {
-            font-size: 0.85rem;
-            color: #666;
+
+        .airport-views-summary .views-local-stale {
+            color: #999;
+            font-style: italic;
         }
         
         .usage-metrics-block .metrics-line {
@@ -565,16 +587,16 @@ if (php_sapi_name() === 'cli') {
             
             /* Airport header stacks vertically on mobile */
             .status-card-header.airport-card-header {
-                flex-direction: column;
+                grid-template-columns: 1fr;
                 align-items: flex-start;
-                gap: 0.75rem;
+                justify-items: stretch;
+                row-gap: 0.75rem;
             }
-            
-            .airport-header-content {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-                width: 100%;
+
+            .airport-header-col--title,
+            .airport-header-col--views,
+            .airport-header-col--status {
+                justify-self: stretch;
             }
             
             .airport-views-summary {
@@ -670,6 +692,10 @@ if (php_sapi_name() === 'cli') {
         
         body.dark-mode .airport-views-summary .views-sep {
             color: #555;
+        }
+
+        body.dark-mode .airport-views-summary .views-local-stale {
+            color: #666;
         }
         
         body.dark-mode .usage-metrics-block .metric-label {
@@ -990,23 +1016,30 @@ if (php_sapi_name() === 'cli') {
         $titleWeekViews = 'Rolling calendar window: seven prior UTC days (daily files) plus today hourly; bundle cache can lag a few minutes.';
         ?>
         <div class="status-card">
-            <div class="status-card-header airport-card-header" 
-                 onclick="toggleAirport('<?php echo htmlspecialchars($airport['id']); ?>')">
-                <div class="airport-header-content">
+            <div class="status-card-header airport-card-header"
+                 role="button"
+                 tabindex="0"
+                 data-airport-toggle="<?php echo htmlspecialchars($airport['id'], ENT_QUOTES, 'UTF-8'); ?>">
+                <div class="airport-header-col airport-header-col--title">
                     <h2>
                         <span class="expand-icon">▶</span>
                         <?php echo htmlspecialchars($airport['id']); ?>
                     </h2>
-                    <div class="airport-views-summary">
-                        <span class="views-label">Views:</span>
-                        <span class="views-period" title="<?php echo htmlspecialchars($titleHourViews); ?>"><?php echo number_format($hourViews); ?>/hour</span>
+                </div>
+                <div class="airport-header-col airport-header-col--views">
+                    <div class="airport-views-summary airport-views-summary-compact" title="View counts: UTC hour/day/week from server; /loc sums UTC buckets into your browser timezone.">
+                        <span class="views-label">Views</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleHourViews); ?>"><?php echo number_format($hourViews); ?>/hr</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="<?php echo htmlspecialchars($titleDayViews); ?>"><?php echo number_format($dayViews); ?>/day</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleDayViews); ?>"><?php echo number_format($dayViews); ?>/d</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="<?php echo htmlspecialchars($titleWeekViews); ?>"><?php echo number_format($weekViews); ?>/week</span>
+                        <span class="views-period views-local-calendar-day" data-airport="<?php echo htmlspecialchars(strtolower($airport['id'])); ?>" title="Local calendar day (browser). Waiting for hourly cache if shown as ---.">---/loc</span>
+                        <span class="views-sep">·</span>
+                        <span class="views-period" title="<?php echo htmlspecialchars($titleWeekViews); ?>"><?php echo number_format($weekViews); ?>/wk</span>
                     </div>
                 </div>
-                <span class="status-badge">
+                <div class="airport-header-col airport-header-col--status">
+                    <span class="status-badge">
                     <?php if ($airport['status'] === 'maintenance'): ?>
                         Under Maintenance <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>"><?php echo getStatusIcon($airport['status']); ?></span>
                     <?php elseif ($airport['status'] === 'down' && !empty($airport['limited_availability']) && !empty($airport['all_sources_down'])): ?>
@@ -1018,7 +1051,8 @@ if (php_sapi_name() === 'cli') {
                         </span>
                         <?php echo ucfirst($airport['status']); ?>
                     <?php endif; ?>
-                </span>
+                    </span>
+                </div>
             </div>
             <div class="status-card-body airport-card-body collapsed" 
                  id="airport-<?php echo htmlspecialchars($airport['id']); ?>-body">
@@ -1312,17 +1346,38 @@ if (php_sapi_name() === 'cli') {
         </div>
     </div>
     
+    <?php if ($statusLocalCalendarJsReadable): ?>
+    <script src="/public/js/status-local-calendar.js?v=<?php echo htmlspecialchars((string) filemtime($statusLocalCalendarJsPath), ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php endif; ?>
     <script>
         (function() {
             'use strict';
-            
+            var profile = <?php
+            $profileJson = json_encode(
+                $hourlyProfileMetrics,
+                JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES
+            );
+            echo $profileJson !== false ? $profileJson : '{}';
+            ?>;
+            if (window.AviationWX && AviationWX.statusLocalCalendar) {
+                AviationWX.statusLocalCalendar.applyLocalCalendarDayViewsToDom(profile);
+            }
+
             function toggleAirport(airportId) {
-                const header = document.querySelector(`[onclick="toggleAirport('${airportId}')"]`);
-                const body = document.getElementById(`airport-${airportId}-body`);
-                
+                var headers = document.querySelectorAll('.airport-card-header[data-airport-toggle]');
+                var header = null;
+                var i;
+                for (i = 0; i < headers.length; i++) {
+                    if (headers[i].getAttribute('data-airport-toggle') === airportId) {
+                        header = headers[i];
+                        break;
+                    }
+                }
+                var body = document.getElementById('airport-' + airportId + '-body');
+
                 if (header && body) {
-                    const isExpanded = header.classList.contains('expanded');
-                    
+                    var isExpanded = header.classList.contains('expanded');
+
                     if (isExpanded) {
                         header.classList.remove('expanded');
                         body.classList.remove('expanded');
@@ -1334,9 +1389,26 @@ if (php_sapi_name() === 'cli') {
                     }
                 }
             }
-            
-            // Expose to global scope for onclick handlers
+
             window.toggleAirport = toggleAirport;
+
+            document.querySelectorAll('.airport-card-header[data-airport-toggle]').forEach(function (hdr) {
+                hdr.addEventListener('click', function () {
+                    var id = hdr.getAttribute('data-airport-toggle');
+                    if (id) {
+                        toggleAirport(id);
+                    }
+                });
+                hdr.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        var id = hdr.getAttribute('data-airport-toggle');
+                        if (id) {
+                            toggleAirport(id);
+                        }
+                    }
+                });
+            });
         })();
     </script>
 </body>

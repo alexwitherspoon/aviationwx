@@ -527,7 +527,22 @@ function metrics_try_get_status_bundle_mirror(): ?array {
     if ($raw['today_bucket_id'] !== gmdate('Y-m-d', $now)) {
         return null;
     }
-    return is_array($raw['bundle']) ? $raw['bundle'] : null;
+    $bundle = is_array($raw['bundle']) ? $raw['bundle'] : null;
+    if ($bundle === null) {
+        return null;
+    }
+    // Invalidate mirrors from before hourly_profile / multiPeriod were embedded
+    if (!isset($bundle['hourly_profile']['hours']) || !is_array($bundle['hourly_profile']['hours'])) {
+        return null;
+    }
+    if ((int) ($bundle['hourly_profile']['schema_version'] ?? 0) < METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION) {
+        return null;
+    }
+    if (!array_key_exists('multiPeriod', $bundle) || !is_array($bundle['multiPeriod'])) {
+        return null;
+    }
+
+    return $bundle;
 }
 
 /**
@@ -545,7 +560,7 @@ function metrics_invalidate_status_bundle_mirror(): void {
 /**
  * Store status bundle snapshot in APCu for fast status page reads (telemetry only).
  *
- * @param array $bundle Same shape as metrics_get_status_bundle() return value
+ * @param array $bundle Same shape as metrics_get_status_bundle() return value (includes hourly_profile)
  * @return void
  */
 function metrics_store_status_bundle_mirror(array $bundle): void {
@@ -1367,9 +1382,33 @@ function metrics_get_today(?array $liveHourOverride = null, ?int $atTimestamp = 
 }
 
 /**
+ * Empty hourly profile shape (matches metrics_get_status_hourly_profile() keys).
+ *
+ * @param int|null $generatedAt Unix time for generated_at (default now)
+ * @return array{generated_at:int,current_hour_id:string,window_completed_hours:int,schema_version:int,hours:array}
+ */
+function metrics_get_empty_hourly_profile(?int $generatedAt = null): array {
+    $t = $generatedAt ?? time();
+
+    return [
+        'generated_at' => $t,
+        'current_hour_id' => '',
+        'window_completed_hours' => (int) METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS,
+        'schema_version' => METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION,
+        'hours' => [],
+    ];
+}
+
+/**
  * Empty status bundle shape for cold cache when web requests skip synchronous aggregation.
  *
- * @return array{rolling7: array, rolling1: array, today: array} Empty metrics structure matching metrics_get_status_bundle()
+ * @return array{
+ *   rolling7: array,
+ *   rolling1: array,
+ *   today: array,
+ *   hourly_profile: array,
+ *   multiPeriod: array
+ * }
  */
 function metrics_get_empty_status_bundle(): array {
     $now = time();
@@ -1402,20 +1441,26 @@ function metrics_get_empty_status_bundle(): array {
             'global' => metrics_get_empty_global(),
             'generated_at' => $now,
         ],
+        'hourly_profile' => metrics_get_empty_hourly_profile($now),
+        'multiPeriod' => [],
     ];
 }
 
 /**
- * Get status page metrics bundle - reads each file once
+ * Get status page metrics bundle - reads metrics files and attaches hourly_profile
  *
- * Returns rolling7, rolling1, and today from a single pass over metrics files.
- * The live merge uses metrics_get_current_hour() at the same Unix time as the start of the pass
- * so bucket boundaries match the file aggregation.
- * Multi-period is built separately via metrics_get_multi_period(). An APCu mirror may short-circuit
- * this read when present and fresh (same TTL as METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS). After a
- * cold build from disk, the result is stored in APCu for subsequent requests.
+ * Returns rolling7, rolling1, today from disk aggregation, plus sparse UTC hourly_profile (completed
+ * hours from disk, current hour file + APCu). Uses one Unix snapshot for live hour merges.
+ * `multiPeriod` is built from those same merged `$today` / `$rolling7` / `$liveHour` structures (no second file pass).
+ * An APCu mirror may short-circuit file reads when fresh.
  *
- * @return array {rolling7: array, rolling1: array, today: array}
+ * @return array {
+ *   rolling7: array,
+ *   rolling1: array,
+ *   today: array,
+ *   hourly_profile: array,
+ *   multiPeriod: array
+ * }
  */
 function metrics_get_status_bundle(): array {
     $mirrored = metrics_try_get_status_bundle_mirror();
@@ -1453,6 +1498,9 @@ function metrics_get_status_bundle(): array {
         'global' => metrics_get_empty_global(),
         'generated_at' => $now
     ];
+
+    /** @var array<string,array<string,int>> $hourSparseDiskCache */
+    $hourSparseDiskCache = [];
 
     for ($d = 1; $d <= 7; $d++) {
         $dateId = gmdate('Y-m-d', $now - ($d * 86400));
@@ -1492,6 +1540,7 @@ function metrics_get_status_bundle(): array {
         if (!is_array($hourData)) {
             continue;
         }
+        $hourSparseDiskCache[$hourId] = metrics_sparse_page_views_from_hour_aggregate($hourData);
         metrics_merge_airports($rolling7['airports'], $hourData['airports'] ?? []);
         metrics_merge_webcams($rolling7['webcams'], $hourData['webcams'] ?? []);
         metrics_merge_global($rolling7['global'], $hourData['global'] ?? []);
@@ -1514,7 +1563,16 @@ function metrics_get_status_bundle(): array {
     metrics_merge_webcams($today['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($today['global'], $liveHour['global'] ?? []);
 
-    $bundle = ['rolling7' => $rolling7, 'rolling1' => $rolling1, 'today' => $today];
+    // Reuse aggregates merged above; avoids re-reading the same daily/hour files for multiPeriod.
+    $multiPeriod = metrics_build_multi_period_from_periods($liveHour, $today, $rolling7);
+
+    $bundle = [
+        'rolling7' => $rolling7,
+        'rolling1' => $rolling1,
+        'today' => $today,
+        'hourly_profile' => metrics_get_status_hourly_profile($now, $liveHour, $hourSparseDiskCache),
+        'multiPeriod' => $multiPeriod,
+    ];
     metrics_store_status_bundle_mirror($bundle);
 
     return $bundle;
@@ -1571,15 +1629,19 @@ function metrics_build_multi_period_from_periods(array $hourly, array $daily, ar
 }
 
 /**
- * Build multi-period metrics for the status page (same result as metrics_get_multi_period()).
+ * Build multi-period metrics for the status page (same result as metrics_get_multi_period() when bundle is fresh).
  *
- * The bundle argument is ignored; it exists so getStatusMetricsBundle() can keep a stable shape.
- * Day and week values always come from a single live snapshot so they stay consistent with /hour.
+ * When {@see metrics_get_status_bundle()} populated multiPeriod, returns it so hour/day/week stay aligned
+ * with hourly_profile.generated_at and the same live hour merge.
  *
- * @param array $_bundle Ignored (pass metrics_get_status_bundle() output for API compatibility)
+ * @param array $_bundle Ignored unless it contains multiPeriod (pass metrics_get_status_bundle() output)
  * @return array Multi-period metrics indexed by airport
  */
 function metrics_build_multi_period_from_bundle(array $_bundle): array {
+    if (array_key_exists('multiPeriod', $_bundle) && is_array($_bundle['multiPeriod'])) {
+        return $_bundle['multiPeriod'];
+    }
+
     return metrics_get_multi_period();
 }
 
@@ -1601,6 +1663,98 @@ function metrics_get_multi_period(): array {
         metrics_get_today($live, $snapshot),
         metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live, $snapshot)
     );
+}
+
+/**
+ * Sparse airport_id => page_views for status hourly profile JSON (non-zero only).
+ *
+ * @param array $hourAggregate Hour bucket with optional `airports` map
+ * @return array<string,int> Lowercase airport id => page views
+ */
+function metrics_sparse_page_views_from_hour_aggregate(array $hourAggregate): array {
+    $out = [];
+    foreach ($hourAggregate['airports'] ?? [] as $airportId => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $pv = (int) ($row['page_views'] ?? 0);
+        if ($pv > 0) {
+            $out[strtolower((string) $airportId)] = $pv;
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * UTC hourly profile for status page local-calendar presentation.
+ *
+ * Includes METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS completed UTC hours read from disk only,
+ * plus the current UTC hour from {@see metrics_get_current_hour()} (hourly file + APCu) so the
+ * partial hour matches `/hour` and today UTC totals.
+ *
+ * @param int|null                       $atTimestamp        Single Unix snapshot for ids (default now)
+ * @param array|null                     $liveHourOverride   Output of metrics_get_current_hour($atTimestamp) when
+ *                                                          already computed (avoids duplicate APCu merge when building bundle)
+ * @param array<string,array<string,int>> $diskSparseByHourId Optional hour_id => sparse page_views map for
+ *                                                          hours already read from disk (e.g. today's hours during bundle build).
+ * @return array{
+ *   generated_at:int,
+ *   current_hour_id:string,
+ *   window_completed_hours:int,
+ *   schema_version:int,
+ *   hours:list<array{hour_id:string,complete:bool,views:array<string,int>}>
+ * }
+ */
+function metrics_get_status_hourly_profile(
+    ?int $atTimestamp = null,
+    ?array $liveHourOverride = null,
+    array $diskSparseByHourId = []
+): array {
+    $now = $atTimestamp ?? time();
+    $completed = (int) METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS;
+    $live = $liveHourOverride ?? metrics_get_current_hour($now);
+    $currentHourId = metrics_get_hour_id($now);
+
+    $hours = [];
+    for ($offset = $completed; $offset >= 1; $offset--) {
+        $t = $now - ($offset * 3600);
+        $hourId = metrics_get_hour_id($t);
+        $views = [];
+        if (array_key_exists($hourId, $diskSparseByHourId)) {
+            $views = $diskSparseByHourId[$hourId];
+        } else {
+            $path = getMetricsHourlyPath($hourId);
+            if (file_exists($path)) {
+                $content = @file_get_contents($path);
+                if ($content !== false) {
+                    $hourData = @json_decode($content, true);
+                    if (is_array($hourData)) {
+                        $views = metrics_sparse_page_views_from_hour_aggregate($hourData);
+                    }
+                }
+            }
+        }
+        $hours[] = [
+            'hour_id' => $hourId,
+            'complete' => true,
+            'views' => $views,
+        ];
+    }
+
+    $hours[] = [
+        'hour_id' => $currentHourId,
+        'complete' => false,
+        'views' => metrics_sparse_page_views_from_hour_aggregate($live),
+    ];
+
+    return [
+        'generated_at' => $now,
+        'current_hour_id' => $currentHourId,
+        'window_completed_hours' => $completed,
+        'schema_version' => METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION,
+        'hours' => $hours,
+    ];
 }
 
 // =============================================================================

@@ -3,8 +3,9 @@
  * Status Page Metrics Loading
  *
  * Provides optimized access to metrics data for the status page with APCu caching.
- * Uses single bundle read (rolling7, rolling1, today) to eliminate duplicate file reads.
- * Multi-period uses metrics_get_multi_period() (one live snapshot per request for hour/day/week).
+ * Single bundle read (rolling7, rolling1, today, hourly_profile, multiPeriod) via warm JSON + APCu.
+ * multiPeriod is embedded in the warm bundle so it aligns with hourly_profile.generated_at; legacy caches
+ * fall back to metrics_build_multi_period_from_bundle().
  */
 
 require_once __DIR__ . '/cached-data-loader.php';
@@ -13,15 +14,16 @@ require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/constants.php';
 
 /**
- * Get status metrics bundle (rolling7, rolling1, multiPeriod)
+ * Get status metrics bundle (rolling7, rolling1, today, hourly_profile, multiPeriod)
  *
- * Reads each metrics file once for rolling7/rolling1/today. multiPeriod is computed via
- * metrics_get_multi_period() so hour/day/week share one APCu snapshot.
+ * metrics_get_status_bundle() includes sparse UTC hourly_profile and multiPeriod aligned to the same snapshot.
  *
- * @return array {
- *   rolling7: array 7-day rolling metrics,
- *   rolling1: array 1-day rolling metrics,
- *   multiPeriod: array per-airport hour/day/week metrics
+ * @return array{
+ *   rolling7: array,
+ *   rolling1: array,
+ *   today: array,
+ *   hourly_profile: array,
+ *   multiPeriod: array
  * }
  */
 function getStatusMetricsBundle(): array {
@@ -33,7 +35,10 @@ function getStatusMetricsBundle(): array {
         $ttl,
         metrics_get_empty_status_bundle()
     );
-    $bundle['multiPeriod'] = metrics_build_multi_period_from_bundle($bundle);
+    if (!array_key_exists('multiPeriod', $bundle)) {
+        $bundle['multiPeriod'] = metrics_build_multi_period_from_bundle($bundle);
+    }
+
     return $bundle;
 }
 

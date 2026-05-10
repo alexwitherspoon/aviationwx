@@ -108,6 +108,9 @@ class StatusMetricsBundleTest extends TestCase
         $this->assertArrayHasKey('rolling7', $bundle);
         $this->assertArrayHasKey('rolling1', $bundle);
         $this->assertArrayHasKey('multiPeriod', $bundle);
+        $this->assertArrayHasKey('hourly_profile', $bundle);
+        $this->assertArrayHasKey('schema_version', $bundle['hourly_profile']);
+        $this->assertSame(METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION, $bundle['hourly_profile']['schema_version']);
 
         $this->assertArrayHasKey('airports', $bundle['rolling7']);
         $this->assertArrayHasKey('global', $bundle['rolling7']);
@@ -198,12 +201,21 @@ class StatusMetricsBundleTest extends TestCase
     }
 
     /**
-     * Status multi-period path must match full live aggregation (today + rolling include APCu).
+     * Bundled multiPeriod must match a rebuild at the same snapshot as hourly_profile.
      */
     public function testMetricsBuildMultiPeriodFromBundle_MatchesFromPeriods(): void
     {
         $bundle = metrics_get_status_bundle();
         $fromBundle = metrics_build_multi_period_from_bundle($bundle);
-        $this->assertEquals(metrics_get_multi_period(), $fromBundle);
+        $this->assertSame($bundle['multiPeriod'], $fromBundle);
+
+        $snapshot = (int) ($bundle['hourly_profile']['generated_at'] ?? time());
+        $live = metrics_get_current_hour($snapshot);
+        $expected = metrics_build_multi_period_from_periods(
+            $live,
+            metrics_get_today($live, $snapshot),
+            metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $live, $snapshot)
+        );
+        $this->assertEquals($expected, $fromBundle);
     }
 }

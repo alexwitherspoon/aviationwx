@@ -67,5 +67,16 @@ class FetchStatusMetricsTest extends TestCase
         $this->assertArrayHasKey('rolling7', $data);
         $this->assertArrayHasKey('rolling1', $data);
         $this->assertArrayHasKey('today', $data);
+        $this->assertArrayHasKey('hourly_profile', $data);
+        $this->assertArrayHasKey('multiPeriod', $data);
+        $this->assertIsArray($data['multiPeriod']);
+
+        $hp = $data['hourly_profile'];
+        $this->assertArrayHasKey('schema_version', $hp);
+        $this->assertSame(METRICS_STATUS_HOURLY_PROFILE_SCHEMA_VERSION, $hp['schema_version']);
+        $this->assertArrayHasKey('hours', $hp);
+        $this->assertArrayHasKey('current_hour_id', $hp);
+        $this->assertArrayHasKey('window_completed_hours', $hp);
+        $this->assertCount(METRICS_STATUS_HOURLY_PROFILE_COMPLETED_HOURS + 1, $hp['hours']);
     }
 }

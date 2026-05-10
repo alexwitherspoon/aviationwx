@@ -9,7 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/process-utils.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
-require_once __DIR__ . '/../../pages/status.php';
+require_once __DIR__ . '/../../lib/status-utils.php';
+require_once __DIR__ . '/../../lib/status-checks.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
 
 class StatusPageTest extends TestCase
