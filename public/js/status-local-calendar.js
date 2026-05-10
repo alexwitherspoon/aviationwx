@@ -75,11 +75,15 @@
      * @param {string} airportId lowercase airport id
      * @param {string} timeZone IANA zone
      * @param {number} [nowMs]
+     * @param {number} [dayStartMsOpt] If set, skips recomputing {@link startOfLocalCalendarDayMs} (batch DOM updates)
      * @returns {number}
      */
-    function sumLocalDayViewsForAirport(profile, airportId, timeZone, nowMs) {
+    function sumLocalDayViewsForAirport(profile, airportId, timeZone, nowMs, dayStartMsOpt) {
         const end = typeof nowMs === 'number' ? nowMs : Date.now();
-        const dayStart = startOfLocalCalendarDayMs(timeZone, end);
+        const dayStart =
+            typeof dayStartMsOpt === 'number'
+                ? dayStartMsOpt
+                : startOfLocalCalendarDayMs(timeZone, end);
         const rows = profile && profile.hours ? profile.hours : [];
         let sum = 0;
         for (let i = 0; i < rows.length; i++) {
@@ -139,6 +143,8 @@
         }
 
         const tz = resolvedTimeZone();
+        const nowMs = Date.now();
+        const dayStartMs = startOfLocalCalendarDayMs(tz, nowMs);
         for (let i = 0; i < nodes.length; i++) {
             const el = nodes[i];
             el.classList.remove('views-local-stale');
@@ -146,7 +152,7 @@
             if (!aid) {
                 continue;
             }
-            const n = sumLocalDayViewsForAirport(profile, aid, tz);
+            const n = sumLocalDayViewsForAirport(profile, aid, tz, nowMs, dayStartMs);
             el.textContent = n.toLocaleString() + '/loc';
             el.setAttribute('title', TITLE_OK.replace('%TZ%', tz));
             el.setAttribute('data-local-tz', tz);

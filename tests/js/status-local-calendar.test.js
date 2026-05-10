@@ -84,6 +84,22 @@ function runTests() {
         assertStrictEqual(sum, 7, '2+5');
     });
 
+    test('sumLocalDayViewsForAirport: precomputed dayStartMs matches one-call path', () => {
+        const tz = 'UTC';
+        const fixedNow = Date.UTC(2025, 5, 15, 14, 30, 0);
+        const profile = {
+            hours: [
+                { hour_id: '2025-06-15-13', complete: true, views: { kspb: 2 } },
+                { hour_id: '2025-06-15-14', complete: false, views: { kspb: 5 } }
+            ]
+        };
+        const dayStartMs = startOfLocalCalendarDayMs(tz, fixedNow);
+        const implicit = sumLocalDayViewsForAirport(profile, 'kspb', tz, fixedNow);
+        const explicit = sumLocalDayViewsForAirport(profile, 'kspb', tz, fixedNow, dayStartMs);
+        assertStrictEqual(explicit, implicit, 'batch path equals single-call');
+        assertStrictEqual(explicit, 7, 'total unchanged');
+    });
+
     test('resolvedTimeZone: returns a non-empty string', () => {
         const z = resolvedTimeZone();
         if (typeof z !== 'string' || z.length < 2) {

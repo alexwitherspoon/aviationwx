@@ -1451,6 +1451,7 @@ function metrics_get_empty_status_bundle(): array {
  *
  * Returns rolling7, rolling1, today from disk aggregation, plus sparse UTC hourly_profile (completed
  * hours from disk, current hour file + APCu). Uses one Unix snapshot for live hour merges.
+ * `multiPeriod` is built from those same merged `$today` / `$rolling7` / `$liveHour` structures (no second file pass).
  * An APCu mirror may short-circuit file reads when fresh.
  *
  * @return array {
@@ -1562,11 +1563,8 @@ function metrics_get_status_bundle(): array {
     metrics_merge_webcams($today['webcams'], $liveHour['webcams'] ?? []);
     metrics_merge_global($today['global'], $liveHour['global'] ?? []);
 
-    $multiPeriod = metrics_build_multi_period_from_periods(
-        $liveHour,
-        metrics_get_today($liveHour, $now),
-        metrics_get_rolling(METRICS_STATUS_PAGE_DAYS, $liveHour, $now)
-    );
+    // Reuse aggregates merged above; avoids re-reading the same daily/hour files for multiPeriod.
+    $multiPeriod = metrics_build_multi_period_from_periods($liveHour, $today, $rolling7);
 
     $bundle = [
         'rolling7' => $rolling7,

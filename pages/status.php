@@ -57,9 +57,15 @@ $multiPeriodMetrics = $metricsBundle['multiPeriod'];
 $rolling1Calendar = $metricsBundle['rolling1'];
 
 $statusLocalCalendarJsPath = __DIR__ . '/../public/js/status-local-calendar.js';
-$statusLocalCalendarJsVer = is_readable($statusLocalCalendarJsPath)
-    ? (string) filemtime($statusLocalCalendarJsPath)
-    : (string) time();
+$statusLocalCalendarJsReadable = is_readable($statusLocalCalendarJsPath);
+if (!$statusLocalCalendarJsReadable) {
+    aviationwx_log(
+        'warning',
+        'status page: status-local-calendar.js is not readable',
+        ['path' => $statusLocalCalendarJsPath],
+        'app'
+    );
+}
 
 // Get local performance metrics (STATUS_PAGE_CACHE_TTL; scheduler pre-warms every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL)
 require_once __DIR__ . '/../lib/performance-metrics.php';
@@ -1338,7 +1344,9 @@ if (php_sapi_name() === 'cli') {
         </div>
     </div>
     
-    <script src="/public/js/status-local-calendar.js?v=<?php echo htmlspecialchars($statusLocalCalendarJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php if ($statusLocalCalendarJsReadable): ?>
+    <script src="/public/js/status-local-calendar.js?v=<?php echo htmlspecialchars((string) filemtime($statusLocalCalendarJsPath), ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php endif; ?>
     <script>
         (function() {
             'use strict';
