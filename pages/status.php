@@ -1009,11 +1009,9 @@ if (php_sapi_name() === 'cli') {
         $airportPeriodMetrics = $multiPeriodMetrics[$airportIdLower] ?? null;
         // Get view counts (default to 0 if no metrics)
         $hourViews = $airportPeriodMetrics['hour']['page_views'] ?? 0;
-        $dayViews = $airportPeriodMetrics['day']['page_views'] ?? 0;
         $weekViews = $airportPeriodMetrics['week']['page_views'] ?? 0;
-        $titleHourViews = 'Live: current UTC hour (persisted file plus counters not yet flushed to disk).';
-        $titleDayViews = 'Today UTC from persisted hourly files; may trail the hour figure briefly until counters flush. Bundle cache can lag a few minutes.';
-        $titleWeekViews = 'Rolling calendar window: seven prior UTC days (daily files) plus today hourly; bundle cache can lag a few minutes.';
+        $titleHourViews = 'Views so far in the current metrics hour (partial hour until it completes).';
+        $titleWeekViews = 'Rolling week in UTC (seven prior UTC days plus today hourly); bundle cache can lag a few minutes.';
         ?>
         <div class="status-card">
             <div class="status-card-header airport-card-header"
@@ -1027,13 +1025,11 @@ if (php_sapi_name() === 'cli') {
                     </h2>
                 </div>
                 <div class="airport-header-col airport-header-col--views">
-                    <div class="airport-views-summary airport-views-summary-compact" title="View counts: UTC hour/day/week from server; /loc sums UTC buckets into your browser timezone.">
+                    <div class="airport-views-summary airport-views-summary-compact" title="View counts: live partial hour from server; /d is your local calendar day; /wk is a rolling UTC week.">
                         <span class="views-label">Views</span>
                         <span class="views-period" title="<?php echo htmlspecialchars($titleHourViews); ?>"><?php echo number_format($hourViews); ?>/hr</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="<?php echo htmlspecialchars($titleDayViews); ?>"><?php echo number_format($dayViews); ?>/d</span>
-                        <span class="views-sep">·</span>
-                        <span class="views-period views-local-calendar-day" data-airport="<?php echo htmlspecialchars(strtolower($airport['id'])); ?>" title="Local calendar day (browser). Waiting for hourly cache if shown as ---.">---/loc</span>
+                        <span class="views-period views-local-calendar-day" data-airport="<?php echo htmlspecialchars(strtolower($airport['id'])); ?>" title="Your local calendar day (summed from UTC hour buckets). Waiting for hourly cache if shown as ---.">---/d</span>
                         <span class="views-sep">·</span>
                         <span class="views-period" title="<?php echo htmlspecialchars($titleWeekViews); ?>"><?php echo number_format($weekViews); ?>/wk</span>
                     </div>

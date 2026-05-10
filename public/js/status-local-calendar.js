@@ -116,7 +116,7 @@
     const TITLE_STALE =
         'Metrics cache not warmed yet (scheduler will populate). Local sum unavailable until hourly buckets load.';
     const TITLE_OK =
-        'Your calendar day in %TZ%, summed from UTC hour buckets on the server. Current UTC hour uses the same live partial totals as /hour.';
+        'Page views for your local calendar day in %TZ% (summed from UTC hour buckets on the server).';
 
     /**
      * Update .views-local-calendar-day nodes from hourly_profile.
@@ -135,7 +135,7 @@
             const tz = resolvedTimeZone();
             for (let i = 0; i < nodes.length; i++) {
                 nodes[i].classList.add('views-local-stale');
-                nodes[i].textContent = '---/loc';
+                nodes[i].textContent = '---/d';
                 nodes[i].setAttribute('title', TITLE_STALE);
                 nodes[i].setAttribute('data-local-tz', tz);
             }
@@ -153,7 +153,7 @@
                 continue;
             }
             const n = sumLocalDayViewsForAirport(profile, aid, tz, nowMs, dayStartMs);
-            el.textContent = n.toLocaleString() + '/loc';
+            el.textContent = n.toLocaleString() + '/d';
             el.setAttribute('title', TITLE_OK.replace('%TZ%', tz));
             el.setAttribute('data-local-tz', tz);
         }
