@@ -9,7 +9,7 @@
 # /var/log/aviationwx, so www-data cannot swap the path for a symlink before root appends.
 #
 # Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Runs as root so vsftpd.conf
-# edits and vsftpd restart succeed.
+# edits and vsftpd restart succeed. Config interval is read via runuser www-data (not root PHP on the app tree).
 
 set -euo pipefail
 
@@ -19,8 +19,9 @@ cd /var/www/html
 
 export CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 
+# Read interval as www-data so root never executes PHP from the www-data-owned app tree (Copilot).
 INTERVAL="$(
-    /usr/local/bin/php -r 'require_once "/var/www/html/lib/config.php"; echo (int) getDynamicDnsRefreshSeconds();' 2>/dev/null || echo 0
+    runuser -u www-data -- /usr/local/bin/php -r 'require_once "/var/www/html/lib/config.php"; echo (int) getDynamicDnsRefreshSeconds();' 2>/dev/null || echo 0
 )"
 INTERVAL="$(printf '%s' "${INTERVAL}" | tr -d '[:space:]')"
 
