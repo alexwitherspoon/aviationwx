@@ -422,6 +422,24 @@ class WeatherCalculationsTest extends TestCase
         $this->assertNull($result);
     }
 
+    /**
+     * Magnus uses log(RH/100); RH at 0% yields non-finite math and must not reach the API payload.
+     */
+    public function testCalculateDewpoint_ZeroHumidity_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint(20.0, 0));
+        $this->assertNull(calculateDewpoint(20.0, 0.0));
+    }
+
+    /**
+     * RH above 100% is invalid for this formula; reject rather than emit bogus dewpoint.
+     */
+    public function testCalculateDewpoint_HumidityAbove100_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint(20.0, 100.1));
+        $this->assertNull(calculateDewpoint(20.0, 150.0));
+    }
+
     public function testCalculateHumidityFromDewpoint_100PercentHumidity()
     {
         $tempC = 20.0;

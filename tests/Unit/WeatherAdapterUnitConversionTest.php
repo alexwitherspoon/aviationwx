@@ -284,5 +284,29 @@ class WeatherAdapterUnitConversionTest extends TestCase
         $this->assertNotNull($out['dewpoint'], 'addCalculatedFields should set dewpoint from humidity');
         $this->assertEqualsWithDelta($expectedTd, (float) $out['dewpoint'], 0.001);
     }
+
+    /**
+     * 0% RH is invalid for Magnus log(RH/100); dewpoint must stay unset (no NaN in output).
+     */
+    public function testAddCalculatedFields_ZeroHumidity_DoesNotSetDewpoint(): void
+    {
+        $airport = createTestAirport(['elevation_ft' => 1000]);
+        $data = [
+            'temperature' => 20.0,
+            'humidity' => 0.0,
+            'dewpoint' => null,
+            'pressure' => 29.92,
+            'wind_speed' => null,
+            'wind_direction' => null,
+            'visibility' => 10,
+            'ceiling' => null,
+            'cloud_cover' => null,
+            'gust_speed' => null,
+            'last_updated' => time(),
+            'last_updated_iso' => date('c'),
+        ];
+        $out = addCalculatedFields($data, $airport);
+        $this->assertNull($out['dewpoint']);
+    }
 }
 

@@ -252,6 +252,8 @@ Td = (c × γ) / (b - γ)
 **Valid Range**: -40°C to +50°C  
 **Accuracy**: ±0.4°C within valid range
 
+**Input validation**: Relative humidity must lie in **(0, 100]** percent for `calculateDewpoint()` (Magnus uses ln(RH/100)). Values outside that interval, non-finite temperatures, or non-finite dewpoint results return **null** so aggregated weather payloads never carry `NaN`.
+
 **Alternative Constants**: b=17.27, c=237.7 (Buck, 1981) - commonly used for 0°C to 50°C
 
 ### From Dewpoint to Humidity (Reverse Magnus)
@@ -280,6 +282,8 @@ Where:
   - 3 dewpoint tests covering saturated, typical, and dry conditions
   - Tests Magnus formula accuracy across humidity ranges
 - **Implementation Tests**: `tests/Unit/WeatherCalculationsTest.php`
+  - Round-trip, missing fields, and invalid RH (0% and above 100%) for `calculateDewpoint()`
+- **Adapter integration**: `tests/Unit/WeatherAdapterUnitConversionTest.php` exercises `addCalculatedFields()` dewpoint backfill from humidity
 
 ### Official Sources
 
