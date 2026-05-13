@@ -85,10 +85,8 @@ for config_file in "${SECURE_CONFIG_FILES[@]}"; do
 done
 echo "✓ Config files secured (640 root:www-data)"
 
-# ---------------------------------------------------------------------------
 # TCP port map: optional config.network_ports (defaults match deploy-configure-firewall.sh).
 # Applies to vsftpd, sshd (SFTP), and fail2ban inside this container.
-# ---------------------------------------------------------------------------
 HOST_HTTP_PORT=80
 HOST_HTTPS_PORT=443
 FTP_CONTROL_PORT=2121
@@ -102,7 +100,7 @@ validate_tcp_port() {
     local p="$1"
     local name="$2"
     if ! [[ "$p" =~ ^[0-9]+$ ]] || [ "$p" -lt 1 ] || [ "$p" -gt 65535 ]; then
-        echo "⚠️  Warning: invalid $name ($p), must be 1-65535 — using default"
+        echo "⚠️  Warning: invalid $name ($p), must be 1-65535 - using default"
         return 1
     fi
     return 0
@@ -115,7 +113,7 @@ load_network_ports_from_config() {
         return 0
     fi
     if ! command -v jq >/dev/null 2>&1; then
-        echo "⚠️  Warning: jq missing — network ports default to stock Docker values"
+        echo "⚠️  Warning: jq missing; network ports use stock Docker defaults"
         return 0
     fi
     if jq -e '(.config | has("host_firewall"))' "$config" >/dev/null 2>&1; then
@@ -123,7 +121,7 @@ load_network_ports_from_config() {
         exit 1
     fi
     if ! jq -e '(.config.network_ports != null)' "$config" >/dev/null 2>&1; then
-        echo "✓ Network ports: not set — using defaults"
+        echo "✓ Network ports: not set - using defaults"
         return 0
     fi
     if ! jq -e '(.config.network_ports | type == "object")' "$config" >/dev/null 2>&1; then
@@ -155,7 +153,7 @@ load_network_ports_from_config() {
     if validate_tcp_port "$sshp" "network_ports.ssh"; then SSH_PORT="$sshp"; fi
 
     if [ "$FTP_PASSIVE_MIN" -ge "$FTP_PASSIVE_MAX" ]; then
-        echo "⚠️  Warning: network_ports passive range invalid (min >= max) — using 50000-51000"
+        echo "⚠️  Warning: network_ports passive range invalid (min >= max) - using 50000-51000"
         FTP_PASSIVE_MIN=50000
         FTP_PASSIVE_MAX=51000
     fi
@@ -190,7 +188,7 @@ fi
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions
 echo "Initializing cache directory..."
-# Subdirectories must match lib/cache-paths.php ensureAllCacheDirs() (except CACHE_SFTP_DIR = /var/sftp, handled below).
+# Subdirectories must match lib/cache-paths.php ensureAllCacheDirs() (except /var/sftp: chroot parent is set in scripts/set-cache-permissions.sh with cache/FTP).
 CACHE_DIR="/var/www/html/cache"
 WEBCAM_CACHE_DIR="${CACHE_DIR}/webcams"
 WEATHER_CACHE_DIR="${CACHE_DIR}/weather"
@@ -209,6 +207,13 @@ STATION_POWER_DIR="${CACHE_DIR}/station-power"
 PARTNERS_DIR="${CACHE_DIR}/partners"
 RATE_LIMITS_DIR="${CACHE_DIR}/rate_limits"
 MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
+
+# runuser (util-linux) is required: cache dirs and the scheduler must be created/run as
+# www-data, never as root, so webcam cache permissions stay consistent with Apache.
+if ! command -v runuser >/dev/null 2>&1; then
+    echo "ERROR: runuser is required in this image (package util-linux) but was not found." >&2
+    exit 1
+fi
 
 # Create cache dirs as www-data first. Production bind-mounts cache from the host
 # (often owned by www-data). Under rootless Docker, container "root" maps to an
@@ -235,52 +240,21 @@ ensure_cache_subdirs() {
         "${METRICS_SPILL_DIR}"
         "${MAP_TILES_DIR}"
     )
-    if command -v runuser >/dev/null 2>&1; then
-        if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
-            return 0
-        fi
-    fi
-    mkdir -p "${dirs[@]}"
+    runuser -u www-data -- mkdir -p "${dirs[@]}"
 }
 
 echo "Ensuring cache subdirectories exist..."
 ensure_cache_subdirs
 
-# Set ownership to www-data:www-data (UID 33, GID 33)
-# This ensures the web server can write to the cache directory
+# Ownership and modes for cache (including webcams setgid), FTP parent, SFTP chroot parent.
+# Shared with nightly root cron: scripts/set-cache-permissions.sh
+if [ ! -x /var/www/html/scripts/set-cache-permissions.sh ]; then
+    echo "ERROR: /var/www/html/scripts/set-cache-permissions.sh missing or not executable." >&2
+    exit 1
+fi
+/var/www/html/scripts/set-cache-permissions.sh
+
 if [ -d "${CACHE_DIR}" ]; then
-    # Try to change ownership - may fail if not running as root, but that's OK
-    # The directory might already have correct ownership
-    chown -R www-data:www-data "${CACHE_DIR}" 2>/dev/null || {
-        echo "Warning: Could not change ownership of cache directory (may already be correct)"
-    }
-    
-    # Set permissions: 755 for parent, 775 for subdirectories (group writable)
-    chmod 755 "${CACHE_DIR}" 2>/dev/null || true
-    if [ -d "${WEBCAM_CACHE_DIR}" ]; then
-        chmod 775 "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
-        # Setgid + root:www-data on webcams only: new date/hour dirs keep group www-data so
-        # Apache can write FAA variants even if a process briefly creates dirs as root.
-        chown root:www-data "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
-        chmod 2775 "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
-        chmod g+s "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
-    fi
-    if [ -d "${WEATHER_CACHE_DIR}" ]; then
-        chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
-    fi
-    # Writable app data under cache (www-data); ftp/ is re-owned root below for vsftpd
-    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${GEOMAG_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
-        if [ -d "${_d}" ]; then
-            chmod 775 "${_d}" 2>/dev/null || true
-        fi
-    done
-    if [ -d "${METRICS_DIR}" ]; then
-        chmod 775 "${METRICS_DIR}" 2>/dev/null || true
-        chmod 775 "${METRICS_HOURLY_DIR}" 2>/dev/null || true
-        chmod 775 "${METRICS_DAILY_DIR}" 2>/dev/null || true
-        chmod 775 "${METRICS_WEEKLY_DIR}" 2>/dev/null || true
-    fi
-    
     echo "✓ Cache directory initialized"
     
     # Clear circuit breaker state on container startup
@@ -307,14 +281,8 @@ fi
 # Scheduler runs as www-data so cache and worker subprocesses match Apache (see ProcessPool).
 # Must start after cache permissions (including webcams setgid) are applied.
 echo "Starting scheduler daemon..."
-if command -v runuser >/dev/null 2>&1; then
-    runuser -u www-data -- /bin/bash -c 'cd /var/www/html && nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &'
-    echo "✓ Scheduler started as www-data"
-else
-    echo "⚠️  runuser not found; starting scheduler as current user (not recommended)"
-    nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &
-    echo "✓ Scheduler started (PID: $!)"
-fi
+runuser -u www-data -- /bin/bash -c 'cd /var/www/html && nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &'
+echo "✓ Scheduler started as www-data"
 
 # Initialize log directory with correct permissions
 # This directory stores file-based logs for cron jobs and Apache
@@ -338,16 +306,17 @@ if [ -d "${LOG_DIR}" ]; then
     # Set permissions: 755 for directory, allow group write for cron (root) and www-data
     chmod 755 "${LOG_DIR}" 2>/dev/null || true
     
-    # Create initial log files with proper permissions
-    touch "${LOG_DIR}/cron-webcam.log" \
-          "${LOG_DIR}/cron-weather.log" \
-          "${LOG_DIR}/cron-push-webcams.log" \
-          "${LOG_DIR}/cron-heartbeat.log" \
+    # Create initial log files with proper permissions (align with config/crontab + Apache)
+    touch "${LOG_DIR}/cron-heartbeat.log" \
+          "${LOG_DIR}/scheduler-health-check.log" \
+          "${LOG_DIR}/memory-sampler.log" \
           "${LOG_DIR}/cleanup-push-upload-debris.log" \
+          "${LOG_DIR}/cleanup-cache.log" \
           "${LOG_DIR}/apache-access.log" \
           "${LOG_DIR}/apache-error.log" \
           "${LOG_DIR}/sshd.log" \
           "${LOG_DIR}/service-watchdog.log" \
+          "${LOG_DIR}/set-cache-permissions.log" \
           "${LOG_DIR}/app.log" \
           "${LOG_DIR}/user.log" 2>/dev/null || true
     
@@ -357,8 +326,8 @@ if [ -d "${LOG_DIR}" ]; then
     chown www-data:www-data "${LOG_DIR}"/*.log 2>/dev/null || true
     chmod 644 "${LOG_DIR}"/*.log 2>/dev/null || true
     # System logs owned by root
-    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
-    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
+    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/set-cache-permissions.log" 2>/dev/null || true
+    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/set-cache-permissions.log" 2>/dev/null || true
     # Ensure heartbeat log is writable by both www-data and root
     chmod 666 "${LOG_DIR}/cron-heartbeat.log" 2>/dev/null || true
     
@@ -367,40 +336,7 @@ else
     echo "⚠️  Warning: Log directory does not exist and could not be created"
 fi
 
-# Initialize FTP uploads directory (for vsftpd virtual users)
-echo "Initializing FTP uploads directory..."
-FTP_DIR="${CACHE_DIR}/ftp"
-
-# Create FTP directory if it doesn't exist
-if [ ! -d "${FTP_DIR}" ]; then
-    echo "Creating FTP uploads directory: ${FTP_DIR}"
-    mkdir -p "${FTP_DIR}"
-fi
-
-# FTP uploads use simple directory structure (no chroot needed for vsftpd)
-chown root:root "${FTP_DIR}" 2>/dev/null || true
-chmod 755 "${FTP_DIR}" 2>/dev/null || true
-
-echo "✓ FTP uploads directory initialized at ${FTP_DIR}"
-
-# Initialize SFTP directory (completely separate from cache for SSH chroot)
-# SSH ChrootDirectory requires ALL parent directories to be root-owned
-# /var/sftp/ works because /var/ is already root:root
-echo "Initializing SFTP directory..."
-SFTP_DIR="/var/sftp"
-
-# Create SFTP directory if it doesn't exist
-if [ ! -d "${SFTP_DIR}" ]; then
-    echo "Creating SFTP directory: ${SFTP_DIR}"
-    mkdir -p "${SFTP_DIR}"
-fi
-
-# Set strict ownership for SFTP chroot requirements
-# CRITICAL: Must be root:root 755 for SSH ChrootDirectory to work
-chown root:root "${SFTP_DIR}" 2>/dev/null || true
-chmod 755 "${SFTP_DIR}" 2>/dev/null || true
-
-echo "✓ SFTP directory initialized at ${SFTP_DIR}"
+# FTP/SFTP parent dirs: scripts/set-cache-permissions.sh (called with cache init above)
 
 # Sync vsftpd listen_port and passive range with network_ports (ftp_control, ftp_passive_*)
 VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
@@ -638,7 +574,7 @@ if [ "$SSL_ENABLED" = false ]; then
     fi
 fi
 
-# Start vsftpd instances (only if IPs were resolved)
+# Start vsftpd (dual-stack listener; PASV address configured above)
 echo "Starting vsftpd..."
 
 # Start vsftpd instance and verify it's healthy
@@ -784,7 +720,7 @@ if [ -f /etc/ssh/sshd_config ]; then
     fi
     echo "✓ sshd Port=${SFTP_PORT}"
 else
-    echo "⚠️  Warning: /etc/ssh/sshd_config not found — SFTP port not applied"
+    echo "⚠️  Warning: /etc/ssh/sshd_config not found - SFTP port not applied"
 fi
 
 # Start sshd (if not already running)
@@ -863,7 +799,7 @@ action = iptables-multiport[name=SSHD-SFTP, port="${SFTP_PORT}", protocol=tcp]
 EOF
 cat > /etc/fail2ban/filter.d/sshd-sftp.conf << EOF
 # Fail2ban filter for sshd SFTP (jail listens on config.network_ports.sftp = ${SFTP_PORT}).
-# auth.log "port N" is the client ephemeral port, not the server listen port — match any digits.
+# auth.log "port N" is the client ephemeral port, not the server listen port; match any digits.
 
 [Definition]
 failregex = ^.*Failed password for .* from <HOST> port [0-9]+.*$

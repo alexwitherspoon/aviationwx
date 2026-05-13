@@ -8,6 +8,7 @@ FROM php:8.4-apache
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
+    util-linux \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
@@ -102,8 +103,11 @@ RUN mkdir -p /var/www/html/cache/webcams \
     && mkdir -p /var/lib/aviationwx \
     && chown root:root /var/lib/aviationwx \
     && chmod 700 /var/lib/aviationwx \
-    && chown root:root /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh \
-    && chmod 755 /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh
+    && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chown root:root /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh /var/www/html/scripts/set-cache-permissions.sh \
+    && chmod 755 /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh /var/www/html/scripts/set-cache-permissions.sh
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration
