@@ -98,7 +98,12 @@ COPY --chown=www-data:www-data . /var/www/html/
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache \
-    && chmod +x /var/www/html/scripts/maybe-run-update-pasv-address.sh
+    && chmod +x /var/www/html/scripts/maybe-run-update-pasv-address.sh \
+    && mkdir -p /var/lib/aviationwx \
+    && chown root:root /var/lib/aviationwx \
+    && chmod 700 /var/lib/aviationwx \
+    && chown root:root /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh \
+    && chmod 755 /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration

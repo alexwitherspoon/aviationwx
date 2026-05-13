@@ -5,6 +5,7 @@
 #
 # Throttle: STATE is updated only when update-pasv-address.sh exits 0 or 2 so exit 1
 # (transient DNS or vsftpd errors) can retry on the next minute instead of waiting the full interval.
+# File lives under /var/lib/aviationwx (root-only, created in the image) instead of /tmp to avoid symlink races.
 #
 # Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Runs as root so vsftpd.conf
 # edits and vsftpd restart succeed.
@@ -28,7 +29,7 @@ if [ "${INTERVAL}" -eq 0 ]; then
     exit 0
 fi
 
-STATE=/tmp/aviationwx-pasv-ddns.last
+STATE=/var/lib/aviationwx/pasv-ddns.last
 NOW="$(date +%s)"
 LAST=0
 if [ -f "${STATE}" ]; then

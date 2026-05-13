@@ -315,7 +315,7 @@ For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use 
 ```
 
 When `dynamic_dns_refresh_seconds` is enabled:
-- Root cron in the container runs `scripts/maybe-run-update-pasv-address.sh` every minute; the script reads `getDynamicDnsRefreshSeconds()` and only invokes `scripts/update-pasv-address.sh` when the interval has elapsed (same interval semantics as before; resolution is within one minute because cron is minutely).
+- Root cron in the container runs `scripts/maybe-run-update-pasv-address.sh` every minute; the script reads `getDynamicDnsRefreshSeconds()` and only invokes `scripts/update-pasv-address.sh` when the interval has elapsed (same interval semantics as before; resolution is within one minute because cron is minutely). The throttle timestamp is stored at `/var/lib/aviationwx/pasv-ddns.last` (root-only directory in the image, not world-writable `/tmp`).
 - If the IP has changed, vsftpd's `pasv_address` is updated automatically
 - vsftpd is restarted to apply the new IP (brief interruption to active FTP sessions)
 - If `public_ip` is set, dynamic DNS refresh is automatically disabled (not needed)
