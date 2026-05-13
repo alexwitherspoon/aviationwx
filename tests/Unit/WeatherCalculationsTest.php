@@ -440,6 +440,28 @@ class WeatherCalculationsTest extends TestCase
         $this->assertNull(calculateDewpoint(20.0, 150.0));
     }
 
+    /**
+     * Non-numeric strings must not coerce to 0.0 via (float) cast (safety: bogus dewpoint).
+     */
+    public function testCalculateDewpoint_NonNumericScalars_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint('not-a-number', 50));
+        $this->assertNull(calculateDewpoint(20, 'not-a-number'));
+        $this->assertNull(calculateDewpoint('not-a-number', '50'));
+    }
+
+    /**
+     * Numeric strings from JSON are still valid inputs.
+     */
+    public function testCalculateDewpoint_NumericStrings_Accepted(): void
+    {
+        $a = calculateDewpoint('20', '50');
+        $b = calculateDewpoint(20.0, 50.0);
+        $this->assertNotNull($a);
+        $this->assertNotNull($b);
+        $this->assertEqualsWithDelta($b, $a, 1e-9);
+    }
+
     public function testCalculateHumidityFromDewpoint_100PercentHumidity()
     {
         $tempC = 20.0;

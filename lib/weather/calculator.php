@@ -35,12 +35,20 @@
  *   - Lawrence, M. G. (2005): "The Relationship between Relative Humidity and the
  *     Dewpoint Temperature in Moist Air", Bulletin of the American Meteorological Society
  * 
- * @param float|null $tempC Temperature in Celsius
- * @param float|null $humidity Relative humidity percentage; must be in (0, 100] or null is returned
+ * @param float|null $tempC Temperature in Celsius (numeric scalar only; non-numeric strings are rejected)
+ * @param float|null $humidity Relative humidity percentage; must be in (0, 100] or null is returned (numeric scalar only)
  * @return float|null Dewpoint in Celsius, or null if inputs are invalid or non-finite
  */
 function calculateDewpoint($tempC, $humidity) {
     if ($tempC === null || $humidity === null) {
+        return null;
+    }
+
+    // Reject non-scalars and non-numeric strings before casting: (float) 'bad' is 0.0 in PHP.
+    if (!is_scalar($tempC) || !is_scalar($humidity)) {
+        return null;
+    }
+    if (!is_numeric($tempC) || !is_numeric($humidity)) {
         return null;
     }
 
