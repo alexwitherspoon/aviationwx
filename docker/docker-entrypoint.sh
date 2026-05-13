@@ -218,8 +218,9 @@ fi
 # Create cache dirs as www-data first. Production bind-mounts cache from the host
 # (often owned by www-data). Under rootless Docker, container "root" maps to an
 # unprivileged host UID and cannot mkdir inside that tree; www-data can.
-# CI (docker-compose.yml) may bind-mount a host dir root-owned until chown runs; if www-data
-# cannot mkdir, fall back to root once, then set-cache-permissions.sh fixes ownership.
+# CI (docker-compose.yml) may bind-mount a host dir root-owned; container root can chown the mount
+# root so www-data can mkdir. If that still fails, fall back to root mkdir once, then
+# set-cache-permissions.sh fixes ownership.
 ensure_cache_subdirs() {
     local dirs=(
         "${CACHE_DIR}"
@@ -242,6 +243,10 @@ ensure_cache_subdirs() {
         "${METRICS_SPILL_DIR}"
         "${MAP_TILES_DIR}"
     )
+    if [ -d "${CACHE_DIR}" ] && ! runuser -u www-data -- test -w "${CACHE_DIR}" 2>/dev/null; then
+        chown www-data:www-data "${CACHE_DIR}" 2>/dev/null || true
+        chmod 755 "${CACHE_DIR}" 2>/dev/null || true
+    fi
     if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
         return 0
     fi
