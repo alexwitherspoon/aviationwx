@@ -280,6 +280,7 @@ function hasExifTimestamp(string $filePath): bool {
  * Execute exiftool with timeout and retry
  *
  * Uses proc_open() with an argv array (no shell) for reliable termination and to avoid defunct shells.
+ * Retries on non-zero exit up to EXIFTOOL_MAX_RETRIES with EXIFTOOL_RETRY_DELAY_MS between attempts.
  *
  * @param array<int, string> $argv Full argv: exiftool binary name or path, then flags and file paths
  * @return array{success: bool, exit_code: int, output: array<int, string>}
@@ -429,7 +430,6 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     $gpsDate = gmdate('Y:m:d', $timestamp);
     $gpsTime = gmdate('H:i:s', $timestamp);
     
-    // argv for exiftool: one argument per element so runExiftoolWithRetry never invokes /bin/sh -c
     $argv = ['exiftool', '-overwrite_original', '-q', '-P'];
     if (!$preserveOriginalDateTime) {
         $argv[] = '-DateTimeOriginal=' . $localDateTime;

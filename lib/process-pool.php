@@ -159,7 +159,7 @@ class ProcessPool {
     }
     
     /**
-     * Spawn a worker subprocess (`php … --worker …`) via proc_open() using an argv array.
+     * Spawn a worker subprocess (`php ... --worker ...`) via proc_open() using an argv array.
      *
      * argv form avoids `/bin/sh -c`, so long-lived parents (scheduler) do not accumulate defunct shells.
      * When timeout(1) exists, wraps the worker for pool timeout + 10s with --kill-after=5 so stuck I/O

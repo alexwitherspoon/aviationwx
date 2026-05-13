@@ -261,7 +261,7 @@ class WeatherAdapterUnitConversionTest extends TestCase
     /**
      * When dewpoint is null but temperature and humidity are set, addCalculatedFields fills dewpoint using calculateDewpoint().
      */
-    public function testAddCalculatedFields_MissingDewpointWithHumidity_ComputesDewpoint()
+    public function testAddCalculatedFields_MissingDewpointWithHumidity_ComputesDewpoint(): void
     {
         $airport = createTestAirport(['elevation_ft' => 1000]);
         $data = [
