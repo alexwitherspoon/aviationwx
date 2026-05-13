@@ -366,27 +366,24 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
 }
 
 /**
- * Add calculated fields to weather data
- * 
- * Uses existing calculator functions that expect $weather and $airport arrays.
- * Handles all derived calculations from raw weather data.
+ * Add calculated fields to weather data (Magnus dewpoint/humidity, flight category, altitudes, solar, timestamps).
  *
- * After calculations, normalizes `last_updated` and `last_updated_iso` so stale or zero
- * aggregate timestamps cannot hide fresher primary or METAR metadata (see normalizeAggregateLastUpdatedTimes).
+ * Delegates to lib/weather/calculator.php and related helpers. Normalizes `last_updated` and `last_updated_iso` so stale
+ * or zero aggregate timestamps cannot hide fresher primary or METAR metadata (see normalizeAggregateLastUpdatedTimes).
  *
- * @param array $data Weather data
- * @param array $airport Airport configuration
- * @return array Weather data with calculated fields and normalized display timestamps
+ * @param array<string, mixed> $data Weather data
+ * @param array<string, mixed> $airport Airport configuration
+ * @return array<string, mixed> Weather data with calculated fields and normalized display timestamps
  */
 function addCalculatedFields(array $data, array $airport): array {
-    // Calculate dewpoint from humidity if missing
+    // Dewpoint from RH when sources omit Td but report humidity (e.g. some PWS JSON paths)
     if (($data['dewpoint'] ?? null) === null && 
         ($data['temperature'] ?? null) !== null && 
         ($data['humidity'] ?? null) !== null) {
-        $data['dewpoint'] = calculateDewpointFromHumidity($data['temperature'], $data['humidity']);
+        $data['dewpoint'] = calculateDewpoint($data['temperature'], $data['humidity']);
     }
     
-    // Calculate humidity from dewpoint if missing
+    // RH from dewpoint when humidity is omitted but Td is present
     if (($data['humidity'] ?? null) === null && 
         ($data['temperature'] ?? null) !== null && 
         ($data['dewpoint'] ?? null) !== null) {

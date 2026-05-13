@@ -257,5 +257,32 @@ class WeatherAdapterUnitConversionTest extends TestCase
                 "METAR: Pressure should be below max bound");
         }
     }
+
+    /**
+     * When dewpoint is null but temperature and humidity are set, addCalculatedFields fills dewpoint using calculateDewpoint().
+     */
+    public function testAddCalculatedFields_MissingDewpointWithHumidity_ComputesDewpoint()
+    {
+        $airport = createTestAirport(['elevation_ft' => 1000]);
+        $data = [
+            'temperature' => 20.0,
+            'humidity' => 50.0,
+            'dewpoint' => null,
+            'pressure' => 29.92,
+            'wind_speed' => null,
+            'wind_direction' => null,
+            'visibility' => 10,
+            'ceiling' => null,
+            'cloud_cover' => null,
+            'gust_speed' => null,
+            'last_updated' => time(),
+            'last_updated_iso' => date('c'),
+        ];
+        $out = addCalculatedFields($data, $airport);
+        $expectedTd = calculateDewpoint(20.0, 50.0);
+        $this->assertNotNull($expectedTd, 'Fixture inputs must be valid for calculateDewpoint()');
+        $this->assertNotNull($out['dewpoint'], 'addCalculatedFields should set dewpoint from humidity');
+        $this->assertEqualsWithDelta($expectedTd, (float) $out['dewpoint'], 0.001);
+    }
 }
 
