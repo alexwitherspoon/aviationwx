@@ -865,8 +865,9 @@ function ensureCacheDir(string $path): bool {
  * Ensure all required cache directories exist.
  * Call this during application bootstrap or deployment.
  *
- * Paths under CACHE_BASE_DIR should stay aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs)
- * and `.github/workflows/deploy-docker.yml`. The entrypoint skips `/var/sftp` in that cache subtree loop
+ * Paths under CACHE_BASE_DIR should stay aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs),
+ * `scripts/set-cache-permissions.sh` (ownership and modes, including webcams setgid), and
+ * `.github/workflows/deploy-docker.yml`. The entrypoint skips `/var/sftp` in that cache subtree loop
  * (SFTP uses a separate chroot block under `/var/sftp`). This function still lists CACHE_SFTP_DIR so
  * bootstrap can ensure the path when permissions allow; production entrypoint creates it with correct
  * ownership for sshd chroot.
