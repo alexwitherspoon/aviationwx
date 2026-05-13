@@ -5,7 +5,8 @@
 #
 # Throttle: STATE is updated only when update-pasv-address.sh exits 0 or 2 so exit 1
 # (transient DNS or vsftpd errors) can retry on the next minute instead of waiting the full interval.
-# File lives under /var/lib/aviationwx (root-only, created in the image) instead of /tmp to avoid symlink races.
+# State and wrapper log live under /var/lib/aviationwx (root-only, mode 700 in the image), not /tmp or
+# /var/log/aviationwx, so www-data cannot swap the path for a symlink before root appends.
 #
 # Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Runs as root so vsftpd.conf
 # edits and vsftpd restart succeed.
@@ -44,7 +45,7 @@ if [ "${ELAPSED}" -lt "${INTERVAL}" ]; then
     exit 0
 fi
 
-LOG=/var/log/aviationwx/dynamic-dns-pasv.log
+LOG=/var/lib/aviationwx/dynamic-dns-pasv.log
 mkdir -p "$(dirname "${LOG}")" 2>/dev/null || true
 
 set +e
