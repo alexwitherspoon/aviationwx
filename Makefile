@@ -232,11 +232,13 @@ test-integration: ## Run integration tests only
 	@echo "Running integration tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox
 
-# Live HTTPS to RainViewer, aviationweather.gov, OWM (if API key in CONFIG_PATH). Not part of test-ci.
+# Live HTTPS to RainViewer, aviationweather.gov, OWM (if API key in the chosen config). Not part of test-ci.
+# Honors CONFIG_PATH from the environment or `make CONFIG_PATH=/path/to/airports.json`; defaults to config/airports.json.example.
 # Single attempt by default; CI sets UPSTREAM_PROBE_MAX_ATTEMPTS and backoff via the retry script.
 test-external-apis: ## Run upstream API probe tests (network; uses phpunit.external-apis.xml)
 	@echo "Running upstream API probe tests (live HTTPS)..."
-	@bash scripts/run-upstream-api-probes-with-retries.sh "$(CURDIR)/config/airports.json.example"
+	@export CONFIG_PATH="$${CONFIG_PATH:-$(CURDIR)/config/airports.json.example}"; \
+	bash scripts/run-upstream-api-probes-with-retries.sh "$$CONFIG_PATH"
 
 test-browser: test-up ## Run Playwright browser tests (uses isolated test container)
 	@echo "Running browser tests against isolated test environment (port 9080)..."
