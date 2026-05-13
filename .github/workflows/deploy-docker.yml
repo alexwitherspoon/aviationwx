@@ -460,6 +460,8 @@ jobs:
             "scripts/unified-webcam-worker.php"
             "scripts/create-sftp-user.sh"
             "scripts/set-cache-permissions.sh"
+            "scripts/maybe-run-update-pasv-address.sh"
+            "scripts/update-pasv-address.sh"
             "scripts/service-watchdog.sh"
             "lib/push-webcam-validator.php"
             "lib/webcam-worker.php"
@@ -1152,7 +1154,7 @@ jobs:
           fi
           sudo chmod 2775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 2775 /tmp/aviationwx-cache/webcams || true
           sudo chmod g+s /tmp/aviationwx-cache/webcams 2>/dev/null || chmod g+s /tmp/aviationwx-cache/webcams || true
-          # In-container alignment: scripts/set-cache-permissions.sh (entrypoint + nightly root cron).
+          # In-container alignment: libexec set-cache-permissions (entrypoint + nightly root cron).
           
           # Verify directory was created and is writable
           if [ ! -d /tmp/aviationwx-cache/webcams ] || [ ! -d /tmp/aviationwx-cache/sftp ] \
@@ -1446,6 +1448,8 @@ jobs:
             "docker/sshd_config"
             "docker/docker-entrypoint.sh"
             "scripts/set-cache-permissions.sh"
+            "scripts/maybe-run-update-pasv-address.sh"
+            "scripts/update-pasv-address.sh"
             "docker/pam-vsftpd"
             "docker/logrotate-vsftpd"
             "docker/logrotate-sshd"
@@ -1561,6 +1565,9 @@ jobs:
               "docker/vsftpd.conf"
               "docker/sshd_config"
               "docker/docker-entrypoint.sh"
+              "scripts/set-cache-permissions.sh"
+              "scripts/maybe-run-update-pasv-address.sh"
+              "scripts/update-pasv-address.sh"
               "docker/pam-vsftpd"
               "docker/logrotate-vsftpd"
               "docker/logrotate-sshd"
