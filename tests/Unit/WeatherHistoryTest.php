@@ -321,6 +321,8 @@ class WeatherHistoryTest extends TestCase
         $this->assertEquals(8, $obs['wind_speed']);
         $this->assertEquals(270, $obs['wind_direction']);
         $this->assertEquals('VFR', $obs['flight_category']);
+        $this->assertSame(1234, $obs['density_altitude']);
+        $this->assertSame(100, $obs['pressure_altitude']);
     }
     
     /**

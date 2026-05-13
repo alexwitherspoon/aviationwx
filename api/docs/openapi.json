@@ -1220,6 +1220,16 @@
             "enum": ["VFR", "MVFR", "IFR", "LIFR"],
             "nullable": true
           },
+          "density_altitude": {
+            "type": "integer",
+            "description": "Density altitude in feet (null when not computed or unavailable)",
+            "nullable": true
+          },
+          "pressure_altitude": {
+            "type": "integer",
+            "description": "Pressure altitude in feet (null when not computed or unavailable)",
+            "nullable": true
+          },
           "field_sources": {
             "type": "object",
             "description": "Source attribution for each field",

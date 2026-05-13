@@ -18,7 +18,6 @@ require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/public-api/config.php';
 require_once __DIR__ . '/../../lib/public-api/weather-format.php';
 require_once __DIR__ . '/../../lib/weather/history.php';
-require_once __DIR__ . '/../../lib/heading-conversion.php';
 require_once __DIR__ . '/../../lib/config.php';
 
 /**
@@ -76,49 +75,12 @@ function handleGetWeatherHistory(array $params, array $context): void
     // Get weather history
     $history = getWeatherHistory($airportId, $startTime, $endTime, $resolution);
     
-    // Format observations for response (wind_direction object)
+    // Format observations for response (wind_direction object, DA/PA when stored)
     $decl = getMagneticDeclination($airport);
-    $observations = array_map(function ($obs) use ($decl) {
-        $wdRaw = $obs['wind_direction'] ?? null;
-        $isVRB = (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
-        $trueNorth = $isVRB ? null : toApiHeading($wdRaw);
-        $magneticNorth = null;
-        if ($trueNorth !== null) {
-            $magVal = (int) round(convertTrueToMagnetic((float) $trueNorth, $decl));
-            $magneticNorth = toApiHeading($magVal);
-        }
-
-        $formatted = [
-            'obs_time' => $obs['obs_time'] ?? null,
-            'obs_time_iso' => $obs['obs_time_iso'] ?? null,
-            'temperature' => $obs['temperature'] ?? null,
-            'temperature_f' => $obs['temperature_f'] ?? null,
-            'dewpoint' => $obs['dewpoint'] ?? null,
-            'humidity' => $obs['humidity'] ?? null,
-            'wind_speed' => toApiInteger($obs['wind_speed'] ?? null),
-            'wind_direction' => [
-                'true_north' => $isVRB ? null : $trueNorth,
-                'magnetic_north' => $isVRB ? null : $magneticNorth,
-                'variable' => $isVRB,
-            ],
-            'gust_speed' => toApiInteger($obs['gust_speed'] ?? null),
-            'pressure' => $obs['pressure'] ?? null,
-            'visibility' => $obs['visibility'] ?? null,
-            'ceiling' => toApiInteger($obs['ceiling'] ?? null),
-            'cloud_cover' => $obs['cloud_cover'] ?? null,
-            'flight_category' => $obs['flight_category'] ?? null,
-        ];
-
-        // Add source attribution if available
-        if (isset($obs['field_sources']) && is_array($obs['field_sources'])) {
-            $formatted['field_sources'] = $obs['field_sources'];
-        }
-        if (isset($obs['sources']) && is_array($obs['sources'])) {
-            $formatted['sources'] = $obs['sources'];
-        }
-
-        return $formatted;
-    }, $history['observations']);
+    $observations = array_map(
+        static fn (array $obs): array => formatWeatherHistoryObservationForApi($obs, $decl),
+        $history['observations']
+    );
     
     // Build metadata
     $meta = [
