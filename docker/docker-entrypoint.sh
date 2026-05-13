@@ -186,12 +186,6 @@ else
     echo "⚠️  Warning: Cron daemon may not have started properly"
 fi
 
-# Start scheduler daemon
-echo "Starting scheduler daemon..."
-nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &
-SCHEDULER_PID=$!
-echo "✓ Scheduler started (PID: $SCHEDULER_PID)"
-
 # Initialize cache directory with correct permissions
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions
@@ -265,6 +259,11 @@ if [ -d "${CACHE_DIR}" ]; then
     chmod 755 "${CACHE_DIR}" 2>/dev/null || true
     if [ -d "${WEBCAM_CACHE_DIR}" ]; then
         chmod 775 "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
+        # Setgid + root:www-data on webcams only: new date/hour dirs keep group www-data so
+        # Apache can write FAA variants even if a process briefly creates dirs as root.
+        chown root:www-data "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
+        chmod 2775 "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
+        chmod g+s "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
     fi
     if [ -d "${WEATHER_CACHE_DIR}" ]; then
         chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
@@ -303,6 +302,18 @@ if [ -d "${CACHE_DIR}" ]; then
     fi
 else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
+fi
+
+# Scheduler runs as www-data so cache and worker subprocesses match Apache (see ProcessPool).
+# Must start after cache permissions (including webcams setgid) are applied.
+echo "Starting scheduler daemon..."
+if command -v runuser >/dev/null 2>&1; then
+    runuser -u www-data -- /bin/bash -c 'cd /var/www/html && nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &'
+    echo "✓ Scheduler started as www-data"
+else
+    echo "⚠️  runuser not found; starting scheduler as current user (not recommended)"
+    nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &
+    echo "✓ Scheduler started (PID: $!)"
 fi
 
 # Initialize log directory with correct permissions

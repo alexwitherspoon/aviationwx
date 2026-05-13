@@ -2,7 +2,7 @@
 #
 # update-pasv-address.sh - Check and update vsftpd pasv_address for dynamic DNS
 #
-# This script is called by the scheduler when dynamic_dns_refresh_seconds is enabled.
+# Invoked by maybe-run-update-pasv-address.sh (root cron) when dynamic_dns_refresh_seconds is enabled.
 # It resolves the upload hostname, compares with current pasv_address, and restarts
 # vsftpd if the IP has changed.
 #

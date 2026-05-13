@@ -13,8 +13,9 @@
  * 
  * URL Formats:
  * - OpenWeatherMap: /api/map-tiles.php?layer=clouds_new&z=5&x=10&y=12
- * - RainViewer: /api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&timestamp=1234567890
- * 
+ * - RainViewer: /api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&radar={frameId}
+ *   Frame id: 12 hex chars, basename of radar.past[].path from /api/rainviewer-weather-maps.json (not Unix time).
+ *
  * Rate Limiting:
  * - Our proxy: 300 requests/minute per client IP (prevents abuse)
  * - OpenWeatherMap free tier: 60 calls/min, 1M/month
@@ -25,6 +26,9 @@
  * - Rate limit reduced to 100 requests/IP/minute
  * - Server-side caching (15min TTL) makes this limit manageable
  * - At zoom 7, there are ~16,384 possible tiles globally, so cache hits are high
+ *
+ * May 2026: RainViewer tile URLs use a hex frame id in the path (from weather-maps radar.past[].path),
+ * not Unix seconds; numeric segment returns 410 Gone from tilecache.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -32,6 +36,24 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/metrics.php';
+
+/**
+ * Resolve RainViewer radar frame id for tilecache (12 hex chars).
+ *
+ * weather-maps.json uses path "/v2/radar/{id}"; tile URLs must use that id. Unix seconds in the path return 410 Gone.
+ *
+ * @param string $radarParam Value of query parameter radar
+ * @param string $legacyTsParam Value of query parameter timestamp (deprecated; only if 12 hex chars)
+ * @return string|null Lowercase frame id or null
+ */
+function map_tiles_rainviewer_frame_id(string $radarParam, string $legacyTsParam): ?string {
+    foreach ([$radarParam, $legacyTsParam] as $c) {
+        if ($c !== '' && preg_match('/^[0-9a-f]{12}$/i', $c)) {
+            return strtolower($c);
+        }
+    }
+    return null;
+}
 
 // ============================================================================
 // RATE LIMITING - Permissive (prevents abuse, not normal usage)
@@ -79,7 +101,8 @@ $layer = $_GET['layer'] ?? '';
 $z = isset($_GET['z']) ? (int)$_GET['z'] : null;
 $x = isset($_GET['x']) ? (int)$_GET['x'] : null;
 $y = isset($_GET['y']) ? (int)$_GET['y'] : null;
-$timestamp = isset($_GET['timestamp']) ? (int)$_GET['timestamp'] : null; // For RainViewer
+$radarParam = isset($_GET['radar']) ? trim((string) $_GET['radar']) : '';
+$legacyTsParam = isset($_GET['timestamp']) ? trim((string) $_GET['timestamp']) : '';
 
 // Validate required parameters
 if (empty($layer) || $z === null || $x === null || $y === null) {
@@ -93,6 +116,21 @@ if (empty($layer) || $z === null || $x === null || $y === null) {
 $isRainViewer = ($layer === 'rainviewer');
 $isOpenWeatherMap = !$isRainViewer;
 
+$rainFrameId = null;
+if ($isRainViewer) {
+    $rainFrameId = map_tiles_rainviewer_frame_id($radarParam, $legacyTsParam);
+    if ($rainFrameId === null) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'error' => 'RainViewer requires query parameter radar: a 12-character hex frame id, '
+                . 'the basename of radar.past[].path from /api/rainviewer-weather-maps.php. '
+                . 'Unix-only timestamp tile URLs are not supported upstream.',
+        ]);
+        exit;
+    }
+}
+
 // Validate layer name
 $allowedOWMLayers = [
     'clouds_new',        // Cloud cover
@@ -102,15 +140,7 @@ $allowedOWMLayers = [
     'pressure_new',     // Atmospheric pressure
 ];
 
-if ($isRainViewer) {
-    // RainViewer requires timestamp parameter
-    if ($timestamp === null) {
-        http_response_code(400);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'RainViewer layer requires timestamp parameter']);
-        exit;
-    }
-} elseif (!in_array($layer, $allowedOWMLayers)) {
+if (!$isRainViewer && !in_array($layer, $allowedOWMLayers)) {
     http_response_code(400);
     header('Content-Type: application/json');
     echo json_encode([
@@ -158,8 +188,8 @@ if ($isOpenWeatherMap) {
 }
 
 // Get cache path for this tile
-// For RainViewer, include timestamp in layer name for cache isolation
-$cacheLayer = $isRainViewer ? "rainviewer_{$timestamp}" : $layer;
+// For RainViewer, include frame id in cache path segment for isolation
+$cacheLayer = $isRainViewer ? "rainviewer_{$rainFrameId}" : $layer;
 $cachePath = getMapTileCachePath($cacheLayer, $z, $x, $y);
 $cacheDir = dirname($cachePath);
 
@@ -203,8 +233,8 @@ if ($useCachedTile) {
 
 // Tile not cached or stale - fetch from upstream
 if ($isRainViewer) {
-    // RainViewer tile URL format: size/smoothing_quality/color_scheme
-    $tileUrl = "https://tilecache.rainviewer.com/v2/radar/{$timestamp}/256/{$z}/{$x}/{$y}/6/1_1.png";
+    // RainViewer tile URL: frame id from weather-maps path (not Unix time)
+    $tileUrl = "https://tilecache.rainviewer.com/v2/radar/{$rainFrameId}/256/{$z}/{$x}/{$y}/6/1_1.png";
 } else {
     // OpenWeatherMap tile URL
     $tileUrl = "https://tile.openweathermap.org/map/{$layer}/{$z}/{$x}/{$y}.png?appid={$apiKey}";

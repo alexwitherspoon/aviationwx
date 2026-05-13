@@ -97,7 +97,8 @@ COPY --chown=www-data:www-data . /var/www/html/
 
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
-    && chown -R www-data:www-data /var/www/html/cache
+    && chown -R www-data:www-data /var/www/html/cache \
+    && chmod +x /var/www/html/scripts/maybe-run-update-pasv-address.sh
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration

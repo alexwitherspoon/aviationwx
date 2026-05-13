@@ -6,9 +6,9 @@
  *
  * Runs via cron every 60 seconds to ensure scheduler stays running.
  *
- * Note: This script uses /proc filesystem to detect process existence,
- * which works even when running as www-data checking a root-owned process.
- * However, killing/restarting a root-owned scheduler requires root privileges.
+ * Note: This script uses /proc filesystem to detect process existence.
+ * The scheduler runs as www-data (see docker-entrypoint.sh), so this health check
+ * can signal and restart it without crossing a privilege boundary.
  *
  * Usage:
  *   Via cron: * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php 2>&1
@@ -89,12 +89,11 @@ try {
                 posix_kill($schedulerPid, SIGKILL);
             }
         } elseif ($schedulerPid && $schedulerRunning && !$canKill) {
-            // Process is running but we can't kill it (permission denied)
-            // This happens when www-data tries to kill root-owned scheduler
+            // Process is running but we can't kill it (permission denied); unexpected if scheduler is www-data
             aviationwx_log('warning', 'scheduler health check: cannot kill scheduler - permission denied', [
                 'pid' => $schedulerPid,
                 'reason' => $restartReason,
-                'hint' => 'Scheduler is owned by root but health check runs as www-data'
+                'hint' => 'Scheduler process is not owned by www-data; investigate startup user'
             ], 'app');
             $hadFailure = true;
             exit(1);
@@ -104,9 +103,11 @@ try {
         if (!isProcessRunning($schedulerPid ?? 0, 'scheduler')) {
             @unlink($lockFile);
 
-            // Start new scheduler
+            // Start new scheduler (explicit cwd: cron provides it today, but stay correct if invoked elsewhere)
+            $projectRoot = dirname(__DIR__);
             $command = sprintf(
-                'nohup /usr/local/bin/php %s > /dev/null 2>&1 &',
+                'cd %s && nohup /usr/local/bin/php %s > /dev/null 2>&1 &',
+                escapeshellarg($projectRoot),
                 escapeshellarg($schedulerScript)
             );
             exec($command);

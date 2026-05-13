@@ -13,7 +13,7 @@
  * │       └── {airport}.json       # 24-hour weather history
  * ├── webcams/
  * │   └── {airport}/{camIndex}/
- * │       ├── {YYYY-MM-DD}/{HH}/   # Date/hour subdirs (~500 files each)
+ * │       ├── {YYYY-MM-DD}/{HH}/   # Date/hour subdirs (~500 files each); production uses setgid on webcams/
  * │       │   └── {timestamp}_{variant}.{format}
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       ├── pull_metadata.json   # Pull cameras: ETag + checksum for conditional/unchanged skip

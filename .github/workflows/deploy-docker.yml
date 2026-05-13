@@ -1142,6 +1142,15 @@ jobs:
               peak_gusts temp_extremes runways geomag map_tiles; do
               sudo chmod 775 "/tmp/aviationwx-cache/${d}" 2>/dev/null || chmod 775 "/tmp/aviationwx-cache/${d}" || true
             done
+
+          # Webcam cache: root + www-data group, setgid 2775 (matches docker-entrypoint; new dirs stay group-writable).
+          if sudo chown root:${WWW_DATA_GID} /tmp/aviationwx-cache/webcams 2>/dev/null || chown root:${WWW_DATA_GID} /tmp/aviationwx-cache/webcams 2>/dev/null; then
+            echo "✓ webcams cache dir ownership root:${WWW_DATA_GID} (setgid prep)"
+          else
+            echo "⚠️  Could not set webcams dir to root:${WWW_DATA_GID}; entrypoint will try again at container start"
+          fi
+          sudo chmod 2775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 2775 /tmp/aviationwx-cache/webcams || true
+          sudo chmod g+s /tmp/aviationwx-cache/webcams 2>/dev/null || chmod g+s /tmp/aviationwx-cache/webcams || true
           
           # Verify directory was created and is writable
           if [ ! -d /tmp/aviationwx-cache/webcams ] || [ ! -d /tmp/aviationwx-cache/sftp ] \
