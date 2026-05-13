@@ -62,13 +62,12 @@ function getExiftoolVersion(): ?string
     }
 
     $timeoutSec = 2;
-    $cmd = 'exiftool -ver 2>/dev/null';
     $descriptorSpec = [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
     ];
-    $process = @proc_open($cmd, $descriptorSpec, $pipes);
+    $process = @proc_open(['exiftool', '-ver'], $descriptorSpec, $pipes);
 
     if (!is_resource($process)) {
         $cached = null;
@@ -278,14 +277,14 @@ function hasExifTimestamp(string $filePath): bool {
 }
 
 /**
- * Execute exiftool command with timeout and retry
+ * Execute exiftool with timeout and retry
  *
- * Uses proc_open for timeout support. Retries on non-zero exit (transient failures).
+ * Uses proc_open() with an argv array (no shell) for reliable termination and to avoid defunct shells.
  *
- * @param string $cmd Full exiftool command (runs via shell)
- * @return array{success: bool, exit_code: int, output: array}
+ * @param array<int, string> $argv Full argv: exiftool binary name or path, then flags and file paths
+ * @return array{success: bool, exit_code: int, output: array<int, string>}
  */
-function runExiftoolWithRetry(string $cmd): array
+function runExiftoolWithRetry(array $argv): array
 {
     $maxAttempts = defined('EXIFTOOL_MAX_RETRIES') ? EXIFTOOL_MAX_RETRIES : 3;
     $timeoutSec = defined('EXIFTOOL_TIMEOUT_SECONDS') ? EXIFTOOL_TIMEOUT_SECONDS : 10;
@@ -300,7 +299,7 @@ function runExiftoolWithRetry(string $cmd): array
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
-        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+        $process = @proc_open($argv, $descriptorSpec, $pipes);
 
         if (!is_resource($process)) {
             $lastExitCode = -1;
@@ -368,7 +367,7 @@ function runExiftoolWithRetry(string $cmd): array
  * - DateTimeOriginal: Local time at the location (camera's timezone)
  * - GPS fields: UTC (Zulu time)
  *
- * Uses proc_open with timeout and retry for reliability.
+ * Uses runExiftoolWithRetry() (argv, no shell) for timeout and retries.
  *
  * @param string $filePath Path to image file
  * @param int|null $timestamp Unix timestamp to set (default: file mtime)
@@ -430,38 +429,22 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     $gpsDate = gmdate('Y:m:d', $timestamp);
     $gpsTime = gmdate('H:i:s', $timestamp);
     
-    // Build exiftool command with all EXIF fields
-    // -overwrite_original: Don't create backup files
-    // -q: Quiet mode (less output)
-    // -P: Preserve file modification time
-    $cmd = 'exiftool -overwrite_original -q -P';
-    
-    // Add DateTimeOriginal only if not preserving existing
-    // Uses LOCAL time per EXIF standard
+    // argv for exiftool: one argument per element so runExiftoolWithRetry never invokes /bin/sh -c
+    $argv = ['exiftool', '-overwrite_original', '-q', '-P'];
     if (!$preserveOriginalDateTime) {
-        $cmd .= ' ' . escapeshellarg('-DateTimeOriginal=' . $localDateTime);
+        $argv[] = '-DateTimeOriginal=' . $localDateTime;
     }
-    
-    // Always add OffsetTimeOriginal - tells readers what timezone DateTimeOriginal is in
-    // This is needed even when preserving existing DateTimeOriginal
-    $cmd .= ' ' . escapeshellarg('-OffsetTimeOriginal=' . $offsetTime);
-    
-    // Always add GPS fields (UTC per EXIF standard)
-    $cmd .= ' ' . escapeshellarg('-GPSDateStamp=' . $gpsDate);
-    $cmd .= ' ' . escapeshellarg('-GPSTimeStamp=' . $gpsTime);
-    
-    // Always add attribution fields
-    $cmd .= ' ' . escapeshellarg('-Copyright=© AviationWX.org and image contributors');
-    $cmd .= ' ' . escapeshellarg('-Artist=AviationWX.org');
-    $cmd .= ' ' . escapeshellarg('-Rights=© AviationWX.org and image contributors');
-    $cmd .= ' ' . escapeshellarg('-ImageDescription=Aviation weather webcam image processed by AviationWX.org');
-    $cmd .= ' ' . escapeshellarg('-UserComment=Processed by AviationWX.org');
-    
-    // Add file path
-    $cmd .= ' ' . escapeshellarg($filePath);
-    $cmd .= ' 2>&1';
+    $argv[] = '-OffsetTimeOriginal=' . $offsetTime;
+    $argv[] = '-GPSDateStamp=' . $gpsDate;
+    $argv[] = '-GPSTimeStamp=' . $gpsTime;
+    $argv[] = '-Copyright=© AviationWX.org and image contributors';
+    $argv[] = '-Artist=AviationWX.org';
+    $argv[] = '-Rights=© AviationWX.org and image contributors';
+    $argv[] = '-ImageDescription=Aviation weather webcam image processed by AviationWX.org';
+    $argv[] = '-UserComment=Processed by AviationWX.org';
+    $argv[] = $filePath;
 
-    $result = runExiftoolWithRetry($cmd);
+    $result = runExiftoolWithRetry($argv);
 
     if (!$result['success']) {
         $logData = array_merge(
@@ -873,7 +856,7 @@ function addAviationWxMetadata(string $filePath, string $airportId, int $camInde
  *
  * Used when generating WebP from source JPEG.
  * Copies all EXIF/IPTC/XMP metadata to maintain clean dataset.
- * Uses runExiftoolWithRetry for timeout and retry consistency with addExifTimestamp.
+ * Uses runExiftoolWithRetry() (argv, no shell) for timeout and retry consistency with addExifTimestamp.
  *
  * @param string $sourceFile Source image with EXIF
  * @param string $destFile Destination image (must already exist)
@@ -904,18 +887,18 @@ function copyExifMetadata(string $sourceFile, string $destFile): bool {
         return false;
     }
 
-    // Copy all metadata from source to destination
-    // -overwrite_original: Don't create backup files
-    // -q: Quiet mode
-    // -P: Preserve file modification time
-    // -all:all: Copy all metadata groups
-    $cmd = sprintf(
-        'exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s 2>&1',
-        escapeshellarg($sourceFile),
-        escapeshellarg($destFile)
-    );
+    $argv = [
+        'exiftool',
+        '-overwrite_original',
+        '-q',
+        '-P',
+        '-TagsFromFile',
+        $sourceFile,
+        '-all:all',
+        $destFile,
+    ];
 
-    $result = runExiftoolWithRetry($cmd);
+    $result = runExiftoolWithRetry($argv);
 
     if (!$result['success']) {
         $logContext = [
