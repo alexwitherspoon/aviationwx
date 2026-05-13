@@ -1,0 +1,75 @@
+name: Weekly upstream API probes
+run-name: "Upstream API probes (${{ github.event_name }})"
+
+on:
+  schedule:
+    # Tuesday 10:15 UTC (staggered from weekly link check Monday 09:00 UTC)
+    - cron: '15 10 * * 2'
+  workflow_dispatch: {}
+
+concurrency:
+  group: weekly-upstream-api-probes
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-probes:
+    name: Live upstream HTTPS probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v5.0.3
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+
+      - name: Build probe config (optional OpenWeatherMap key)
+        env:
+          OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${OPENWEATHERMAP_API_KEY:-}" ]; then
+            jq --arg k "$OPENWEATHERMAP_API_KEY" \
+              '.config.openweathermap_api_key = $k' \
+              config/airports.json.example > /tmp/upstream-probe-airports.json
+            echo "Probe config includes OpenWeatherMap API key (cloud tile test will run)."
+          else
+            cp config/airports.json.example /tmp/upstream-probe-airports.json
+            echo "::notice::Repository secret OPENWEATHERMAP_API_KEY is unset; OpenWeatherMap tile test will skip."
+          fi
+
+      - name: Run upstream API probes with retries
+        env:
+          UPSTREAM_PROBE_MAX_ATTEMPTS: '5'
+          UPSTREAM_PROBE_INITIAL_BACKOFF_SEC: '30'
+          UPSTREAM_PROBE_MAX_BACKOFF_SEC: '300'
+        run: |
+          set -euo pipefail
+          bash scripts/run-upstream-api-probes-with-retries.sh /tmp/upstream-probe-airports.json
+          {
+            echo "## Upstream API probes"
+            echo ""
+            echo "Completed after retries (see job log for per-attempt detail)."
+            echo "RainViewer and aviationweather.gov always run; OpenWeatherMap runs when \`OPENWEATHERMAP_API_KEY\` is set."
+          } >> "$GITHUB_STEP_SUMMARY"

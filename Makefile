@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet test-up test-down test-shell test-logs test-e2e test-clean smoke-test station-power-fetch check-builtin-aviation-links production-health-check
+.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-external-apis test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet test-up test-down test-shell test-logs test-e2e test-clean smoke-test station-power-fetch check-builtin-aviation-links production-health-check
 
 help: ## Show this help message
 	@echo ''
@@ -19,7 +19,7 @@ help: ## Show this help message
 	@grep -E '^(dev|up|down|down-prod|restart|logs|shell|station-power-fetch):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTesting:\033[0m'
-	@grep -E '^(test|test-ci|test-unit|test-integration|test-e2e|test-browser|test-local|metrics-test|smoke|smoke-test|check-builtin-aviation-links|production-health-check):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(test|test-ci|test-unit|test-integration|test-external-apis|test-e2e|test-browser|test-local|metrics-test|smoke|smoke-test|check-builtin-aviation-links|production-health-check):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTest Environment (Isolated):\033[0m'
 	@grep -E '^(test-up|test-down|test-shell|test-logs|test-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -134,6 +134,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@bash -c 'errors=$$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" | grep -v "Deprecated:" | grep -v "PHP Deprecated:" || true); \
 	if [ ! -z "$$errors" ]; then echo "❌ PHP syntax errors found:"; echo "$$errors"; exit 1; else echo "✓ All PHP files have valid syntax"; fi'
 	@echo ""
+	@echo "1b️⃣  Validating upstream probe retry script..."
+	@bash -n scripts/run-upstream-api-probes-with-retries.sh && echo "✓ Upstream probe retry script syntax OK" || { echo "❌ bash -n failed for scripts/run-upstream-api-probes-with-retries.sh"; exit 1; }
+	@echo ""
 	@echo "2️⃣  Running Unit Tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage; \
 	exit_code=$$?; \
@@ -228,6 +231,12 @@ test-unit: ## Run unit tests only (fast, no Docker needed)
 test-integration: ## Run integration tests only
 	@echo "Running integration tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox
+
+# Live HTTPS to RainViewer, aviationweather.gov, OWM (if API key in CONFIG_PATH). Not part of test-ci.
+# Single attempt by default; CI sets UPSTREAM_PROBE_MAX_ATTEMPTS and backoff via the retry script.
+test-external-apis: ## Run upstream API probe tests (network; uses phpunit.external-apis.xml)
+	@echo "Running upstream API probe tests (live HTTPS)..."
+	@bash scripts/run-upstream-api-probes-with-retries.sh "$(CURDIR)/config/airports.json.example"
 
 test-browser: test-up ## Run Playwright browser tests (uses isolated test container)
 	@echo "Running browser tests against isolated test environment (port 9080)..."
