@@ -3,6 +3,9 @@
 # Gate update-pasv-address.sh on getDynamicDnsRefreshSeconds() (0 = disabled; min 60 when enabled).
 # Run from root cron every minute; runs PASV script only after interval elapsed (state file).
 #
+# Throttle: STATE is updated only when update-pasv-address.sh exits 0 or 2 so exit 1
+# (transient DNS or vsftpd errors) can retry on the next minute instead of waiting the full interval.
+#
 # Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Runs as root so vsftpd.conf
 # edits and vsftpd restart succeed.
 
@@ -55,6 +58,9 @@ set -e
     echo
 } >>"${LOG}" 2>&1 || true
 
-echo "${NOW}" >"${STATE}"
+# Exit 0: ok. Exit 2: vsftpd not running (skip). Exit 1: error; leave STATE unchanged for sooner retry.
+if [ "${RC}" -eq 0 ] || [ "${RC}" -eq 2 ]; then
+    echo "${NOW}" >"${STATE}"
+fi
 
 exit "${RC}"
