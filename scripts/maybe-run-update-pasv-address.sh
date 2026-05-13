@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 cd /var/www/html
 
 export CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
@@ -49,7 +51,7 @@ LOG=/var/lib/aviationwx/dynamic-dns-pasv.log
 mkdir -p "$(dirname "${LOG}")" 2>/dev/null || true
 
 set +e
-OUT="$(/var/www/html/scripts/update-pasv-address.sh 2>&1)"
+OUT="$("${THIS_DIR}/update-pasv-address.sh" 2>&1)"
 RC=$?
 set -e
 

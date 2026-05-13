@@ -188,7 +188,7 @@ fi
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions
 echo "Initializing cache directory..."
-# Subdirectories must match lib/cache-paths.php ensureAllCacheDirs() (except /var/sftp: chroot parent is set in scripts/set-cache-permissions.sh with cache/FTP).
+# Subdirectories must match lib/cache-paths.php ensureAllCacheDirs() (except /var/sftp: chroot parent is set in libexec set-cache-permissions with cache/FTP).
 CACHE_DIR="/var/www/html/cache"
 WEBCAM_CACHE_DIR="${CACHE_DIR}/webcams"
 WEATHER_CACHE_DIR="${CACHE_DIR}/weather"
@@ -220,7 +220,7 @@ fi
 # unprivileged host UID and cannot mkdir inside that tree; www-data can.
 # CI (docker-compose.yml) may bind-mount a host dir root-owned; container root can chown the mount
 # root so www-data can mkdir. If that still fails, fall back to root mkdir once, then
-# set-cache-permissions.sh fixes ownership.
+# libexec set-cache-permissions fixes ownership.
 ensure_cache_subdirs() {
     local dirs=(
         "${CACHE_DIR}"
@@ -250,7 +250,7 @@ ensure_cache_subdirs() {
     if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
         return 0
     fi
-    echo "Warning: www-data could not mkdir cache subdirs (bind mount ownership?). Using root once; set-cache-permissions.sh will align ownership." >&2
+    echo "Warning: www-data could not mkdir cache subdirs (bind mount ownership?). Using root once; libexec set-cache-permissions will align ownership." >&2
     mkdir -p "${dirs[@]}"
 }
 
@@ -258,12 +258,12 @@ echo "Ensuring cache subdirectories exist..."
 ensure_cache_subdirs
 
 # Ownership and modes for cache (including webcams setgid), FTP parent, SFTP chroot parent.
-# Shared with nightly root cron: scripts/set-cache-permissions.sh
-if [ ! -x /var/www/html/scripts/set-cache-permissions.sh ]; then
-    echo "ERROR: /var/www/html/scripts/set-cache-permissions.sh missing or not executable." >&2
+# Shared with nightly root cron: /usr/local/libexec/aviationwx/set-cache-permissions.sh (root-owned libexec).
+if [ ! -x /usr/local/libexec/aviationwx/set-cache-permissions.sh ]; then
+    echo "ERROR: /usr/local/libexec/aviationwx/set-cache-permissions.sh missing or not executable." >&2
     exit 1
 fi
-/var/www/html/scripts/set-cache-permissions.sh
+/usr/local/libexec/aviationwx/set-cache-permissions.sh
 
 if [ -d "${CACHE_DIR}" ]; then
     echo "✓ Cache directory initialized"
@@ -347,7 +347,7 @@ else
     echo "⚠️  Warning: Log directory does not exist and could not be created"
 fi
 
-# FTP/SFTP parent dirs: scripts/set-cache-permissions.sh (called with cache init above)
+# FTP/SFTP parent dirs: libexec set-cache-permissions (called with cache init above)
 
 # Sync vsftpd listen_port and passive range with network_ports (ftp_control, ftp_passive_*)
 VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"

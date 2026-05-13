@@ -92,6 +92,19 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
 
+# Root cron and entrypoint invoke these from a root-owned path. The app tree is www-data-owned,
+# so copies under /var/www/html/scripts must not be the only root execution targets (replace risk).
+RUN mkdir -p /usr/local/libexec/aviationwx \
+    && chown root:root /usr/local/libexec/aviationwx \
+    && chmod 755 /usr/local/libexec/aviationwx
+COPY scripts/maybe-run-update-pasv-address.sh scripts/update-pasv-address.sh scripts/set-cache-permissions.sh /usr/local/libexec/aviationwx/
+RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/set-cache-permissions.sh \
+    && chown root:root /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/set-cache-permissions.sh
+
 # Copy application files LAST (changes most frequently)
 # This ensures code changes don't invalidate earlier layers
 COPY --chown=www-data:www-data . /var/www/html/
@@ -99,15 +112,12 @@ COPY --chown=www-data:www-data . /var/www/html/
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache \
-    && chmod +x /var/www/html/scripts/maybe-run-update-pasv-address.sh \
     && mkdir -p /var/lib/aviationwx \
     && chown root:root /var/lib/aviationwx \
     && chmod 700 /var/lib/aviationwx \
     && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
     && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chown root:root /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh /var/www/html/scripts/set-cache-permissions.sh \
-    && chmod 755 /var/www/html/scripts/maybe-run-update-pasv-address.sh /var/www/html/scripts/update-pasv-address.sh /var/www/html/scripts/set-cache-permissions.sh
+    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration
