@@ -13,7 +13,7 @@ The link check workflow discovers external links on airport dashboards, validate
 
 ### 1. Label
 
-The workflow creates the `link-check` label automatically on first run. If it fails, create it manually:
+The workflow ensures the `link-check` label exists by **GET**ting it first and only **POST**ing when missing, so repeat runs do not log a spurious GitHub "Validation Failed" (label already exists) response. If it still fails, create the label manually:
 
 - **Name:** `link-check`
 - **Color:** `#1d76db`
