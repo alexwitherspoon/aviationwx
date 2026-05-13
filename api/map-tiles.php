@@ -14,7 +14,8 @@
  * URL Formats:
  * - OpenWeatherMap: /api/map-tiles.php?layer=clouds_new&z=5&x=10&y=12
  * - RainViewer: /api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&radar={frameId}
- *   Frame id: 12 hex chars, basename of radar.past[].path from /api/rainviewer-weather-maps.json (not Unix time).
+ *   Frame id: 12 hex chars, basename of radar.past[].path from /api/rainviewer-weather-maps.php
+ *   (same JSON as RainViewer public weather-maps.json; not Unix time).
  *
  * Rate Limiting:
  * - Our proxy: 300 requests/minute per client IP (prevents abuse)
