@@ -1148,7 +1148,7 @@ Both services are proxied through `/api/map-tiles.php` for server-side caching a
 
 **Always available** - No configuration required. Displays real-time precipitation radar overlay.
 
-The browser loads `/api/rainviewer-weather-maps.json` via `/api/rainviewer-weather-maps.php`, then requests tiles with the **12-character hex frame id** from `radar.past[].path` (query parameter `radar` on `/api/map-tiles.php`). Unix timestamps in the tile path are **not** accepted by RainViewer tilecache (410 Gone).
+The browser requests `/api/rainviewer-weather-maps.php` (manifest JSON, same shape as RainViewer upstream `weather-maps.json`), then requests tiles using the **12-character hex frame id** from `radar.past[].path` as query parameter `radar` on `/api/map-tiles.php`. Unix timestamps in the tile path are **not** accepted by RainViewer tilecache (410 Gone).
 
 - **Source**: [RainViewer](https://www.rainviewer.com/)
 - **Data**: Precipitation intensity (rain/snow)
