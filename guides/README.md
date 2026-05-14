@@ -49,6 +49,13 @@ Most installs follow the same "pick a path" sequence:
 
 ---
 
+## Reference (standards context)
+These pages support the numbered install path. They are not required reading before your first cable tie.
+
+- [15 - Weather sensor standards & maintenance (AWOS / ASOS / volunteer stations)](15-weather-sensor-standards-and-maintenance.md)
+
+---
+
 ## What AviationWX is (plain language)
 AviationWX provides a clean, fast dashboard for each airport that focuses on the most practical "right now" information:
 - one or more still-image views (updated every 1-15 minutes)
