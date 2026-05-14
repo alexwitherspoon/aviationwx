@@ -62,6 +62,7 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 @mkdir(CACHE_METRICS_SPILL_DIR, 0755, true);
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/operations-snapshot.php';
 require_once __DIR__ . '/../api/weather.php'; // api/weather.php now has a conditional to prevent endpoint execution
 require_once __DIR__ . '/../lib/seo.php'; // SEO utilities for testing
 
@@ -113,6 +114,7 @@ function cleanTestCache(): void {
         CACHE_PEAK_GUSTS_FILE,
         CACHE_TEMP_EXTREMES_FILE,
         CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE,
+        CACHE_OPERATIONS_SNAPSHOT_FILE,
     ];
     
     // Patterns to clean (weather in CACHE_WEATHER_DIR, outage in CACHE_BASE_DIR)

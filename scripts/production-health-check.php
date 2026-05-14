@@ -255,6 +255,20 @@ $checks = [
         }
         return ['ok' => true, 'detail' => 'HTTP 200'];
     },
+    'api_v1_operations' => static function () use ($api, $timeout) {
+        $r = productionHealthCheckRequest($api . '/v1/operations', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
+        if ($r['code'] !== 200) {
+            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
+        }
+        $json = json_decode($r['body'], true);
+        if (!is_array($json) || empty($json['success']) || !isset($json['operations']['snapshot_meta'])) {
+            return ['ok' => false, 'detail' => 'invalid operations JSON'];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200'];
+    },
     'api_v1_airports' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/v1/airports', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
         if ($r['code'] === 429) {

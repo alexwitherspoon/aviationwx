@@ -57,6 +57,7 @@ $lastCountryResolutionSchedulerCheck = 0;
 $countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
+$lastOperationsSnapshotBuild = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -732,6 +733,16 @@ while ($running) {
             }
             reapZombies();
             $lastStatusPageCachesFetch = $now;
+        }
+
+        // 11. Public API operations snapshot (every OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS, non-blocking)
+        if (($now - $lastOperationsSnapshotBuild) >= OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS) {
+            $opsScript = __DIR__ . '/build-operations-snapshot.php';
+            if (file_exists($opsScript)) {
+                exec('php ' . escapeshellarg($opsScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+            }
+            $lastOperationsSnapshotBuild = $now;
         }
 
         // PASV / DDNS: root cron runs /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh (vsftpd needs root).

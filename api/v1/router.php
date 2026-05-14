@@ -93,6 +93,9 @@ function routePublicApiRequest(string $path, array $context): void
         
         // GET /v1/status
         '#^/status$#' => ['file' => 'status.php', 'handler' => 'handleGetStatus'],
+
+        // GET /v1/operations
+        '#^/operations$#' => ['file' => 'operations.php', 'handler' => 'handleGetOperations'],
     ];
     
     // Try to match the path to a route
