@@ -584,6 +584,16 @@ $attribution = getPublicApiAttributionText();
             </div>
         </div>
         
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method">GET</span>
+                <span class="endpoint-path">/v1/operations</span>
+            </div>
+            <div class="endpoint-body">
+                <p class="endpoint-desc">Get a scheduler-built production operations snapshot (aggregated health caches and scrubbed log summaries).</p>
+            </div>
+        </div>
+        
         <h2>Response Format</h2>
         <p>All endpoints return JSON responses with consistent structure:</p>
         <pre><code>{

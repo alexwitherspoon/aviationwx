@@ -474,6 +474,32 @@
         }
       }
     },
+    "/operations": {
+      "get": {
+        "summary": "Get operations snapshot",
+        "description": "Returns a scheduler-built production health snapshot (aggregated status caches and scrubbed log fingerprints). Verbose detail blocks may be omitted when all subsystems are operational.",
+        "operationId": "getOperations",
+        "tags": ["Status"],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/status": {
       "get": {
         "summary": "Get API status",
@@ -1517,6 +1543,22 @@
                 }
               }
             }
+          }
+        }
+      },
+      "OperationsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "operations": {
+            "type": "object",
+            "description": "Snapshot payload: snapshot_meta, uptime_layer, data_plane, capacity_layer, edge_layer, pipeline_meta, and optional details.",
+            "additionalProperties": true
           }
         }
       },

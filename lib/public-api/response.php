@@ -57,6 +57,8 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
         $response['frames'] = $data['frames'];
     } elseif (isset($data['status'])) {
         $response['status'] = $data['status'];
+    } elseif (isset($data['operations'])) {
+        $response['operations'] = $data['operations'];
     } elseif (isset($data['embed']) || isset($data['diff'])) {
         $response['data'] = $data;
     } else {

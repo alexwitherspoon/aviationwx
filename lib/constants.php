@@ -284,6 +284,14 @@ if (!defined('PERFORMANCE_METRICS_FETCH_INTERVAL')) {
     define('PERFORMANCE_METRICS_FETCH_INTERVAL', STATUS_PAGE_BACKGROUND_FETCH_INTERVAL);
 }
 
+// Public API GET /v1/operations: scheduler-built snapshot; readers serve up to max age if job stalls
+if (!defined('OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS')) {
+    define('OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS', 600); // 10 minutes
+}
+if (!defined('OPERATIONS_SNAPSHOT_MAX_AGE_SECONDS')) {
+    define('OPERATIONS_SNAPSHOT_MAX_AGE_SECONDS', 1800); // 30 minutes
+}
+
 // Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
 if (!defined('RUNWAYS_FETCH_CHECK_INTERVAL')) {
     define('RUNWAYS_FETCH_CHECK_INTERVAL', 604800); // 7 days

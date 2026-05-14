@@ -38,6 +38,7 @@
  * │   └── {prefix}/                # First 2 chars of hash (git-style sharding)
  * │       └── {hash}.json          # Rate limit state files
  * ├── backoff.json                 # Circuit breaker state
+ * ├── operations_snapshot.json   # Public API GET /v1/operations (scheduler)
  * ├── peak_gusts/                  # Per-airport daily peak gust tracking
  * │   └── {airport}.json
  * ├── temp_extremes/               # Per-airport daily temperature extremes
@@ -726,6 +727,10 @@ if (!defined('CACHE_IMAGE_PROCESSING_METRICS_FILE')) {
 }
 if (!defined('CACHE_PAGE_RENDER_METRICS_FILE')) {
     define('CACHE_PAGE_RENDER_METRICS_FILE', CACHE_BASE_DIR . '/status_page_render.json');
+}
+
+if (!defined('CACHE_OPERATIONS_SNAPSHOT_FILE')) {
+    define('CACHE_OPERATIONS_SNAPSHOT_FILE', CACHE_BASE_DIR . '/operations_snapshot.json');
 }
 
 /**

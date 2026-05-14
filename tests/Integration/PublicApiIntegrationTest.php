@@ -166,6 +166,23 @@ class PublicApiIntegrationTest extends TestCase
     }
     
     /**
+     * GET /v1/operations returns operations snapshot envelope
+     */
+    public function testOperationsEndpoint_ReturnsSnapshot(): void
+    {
+        $this->skipIfApiDisabled();
+        
+        $response = $this->apiRequest('/operations');
+        
+        $this->assertEquals(200, $response['code']);
+        $this->assertNotNull($response['json']);
+        $this->assertTrue($response['json']['success']);
+        $this->assertArrayHasKey('operations', $response['json']);
+        $this->assertIsArray($response['json']['operations']);
+        $this->assertArrayHasKey('snapshot_meta', $response['json']['operations']);
+    }
+    
+    /**
      * Invalid airport should return 404
      */
     public function testGetAirport_NotFound(): void
