@@ -530,7 +530,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather/history</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get 24-hour rolling weather history. Supports <code>hours</code>, <code>resolution</code> parameters.</p>
+                <p class="endpoint-desc">Get 24-hour rolling weather history. Supports <code>hours</code>, <code>resolution</code> parameters. Each observation includes <code>density_altitude</code> and <code>pressure_altitude</code> as integers when available, otherwise <code>null</code>.</p>
             </div>
         </div>
         
