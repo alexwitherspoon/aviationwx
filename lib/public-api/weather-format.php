@@ -154,3 +154,60 @@ function formatWeatherResponse(array $weather, array $airport): array
         'metar_ceiling_reported' => $weather['metar_ceiling_reported'] ?? null,
     ];
 }
+
+/**
+ * Format one cached weather history observation for Public API JSON.
+ *
+ * Wind uses true degrees from storage and derives magnetic using declination.
+ * Density and pressure altitude use {@see toApiInteger()}; null when missing
+ * or non-numeric (fail closed per field).
+ *
+ * @param array $observation Raw observation from {@see getWeatherHistory()} / cache file
+ * @param float $declinationDegrees Airport magnetic declination (positive = East)
+ * @return array<string, mixed> API-shaped observation (includes field_sources and sources when present)
+ */
+function formatWeatherHistoryObservationForApi(array $observation, float $declinationDegrees): array
+{
+    require_once __DIR__ . '/../heading-conversion.php';
+
+    $wdRaw = $observation['wind_direction'] ?? null;
+    $isVRB = (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
+    $trueNorth = $isVRB ? null : toApiHeading($wdRaw);
+    $magneticNorth = null;
+    if ($trueNorth !== null) {
+        $magVal = (int) round(convertTrueToMagnetic((float) $trueNorth, $declinationDegrees));
+        $magneticNorth = toApiHeading($magVal);
+    }
+
+    $formatted = [
+        'obs_time' => $observation['obs_time'] ?? null,
+        'obs_time_iso' => $observation['obs_time_iso'] ?? null,
+        'temperature' => $observation['temperature'] ?? null,
+        'temperature_f' => $observation['temperature_f'] ?? null,
+        'dewpoint' => $observation['dewpoint'] ?? null,
+        'humidity' => $observation['humidity'] ?? null,
+        'wind_speed' => toApiInteger($observation['wind_speed'] ?? null),
+        'wind_direction' => [
+            'true_north' => $isVRB ? null : $trueNorth,
+            'magnetic_north' => $isVRB ? null : $magneticNorth,
+            'variable' => $isVRB,
+        ],
+        'gust_speed' => toApiInteger($observation['gust_speed'] ?? null),
+        'pressure' => $observation['pressure'] ?? null,
+        'visibility' => $observation['visibility'] ?? null,
+        'ceiling' => toApiInteger($observation['ceiling'] ?? null),
+        'cloud_cover' => $observation['cloud_cover'] ?? null,
+        'flight_category' => $observation['flight_category'] ?? null,
+        'density_altitude' => toApiInteger($observation['density_altitude'] ?? null),
+        'pressure_altitude' => toApiInteger($observation['pressure_altitude'] ?? null),
+    ];
+
+    if (isset($observation['field_sources']) && is_array($observation['field_sources'])) {
+        $formatted['field_sources'] = $observation['field_sources'];
+    }
+    if (isset($observation['sources']) && is_array($observation['sources'])) {
+        $formatted['sources'] = $observation['sources'];
+    }
+
+    return $formatted;
+}

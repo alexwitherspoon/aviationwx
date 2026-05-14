@@ -318,6 +318,16 @@ class PublicApiIntegrationTest extends TestCase
             $this->assertArrayHasKey('true_north', $wd);
             $this->assertArrayHasKey('magnetic_north', $wd);
             $this->assertArrayHasKey('variable', $wd);
+            $this->assertArrayHasKey('density_altitude', $obs);
+            $this->assertArrayHasKey('pressure_altitude', $obs);
+            $this->assertTrue(
+                $obs['density_altitude'] === null || is_int($obs['density_altitude']),
+                'density_altitude should be int or null'
+            );
+            $this->assertTrue(
+                $obs['pressure_altitude'] === null || is_int($obs['pressure_altitude']),
+                'pressure_altitude should be int or null'
+            );
         }
     }
 }
