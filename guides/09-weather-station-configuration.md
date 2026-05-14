@@ -4,6 +4,8 @@
 Set up a weather station so it provides **useful, trustworthy local observations** that can complement official sources.
 This guide focuses on practical configuration and sanity checks, not vendor marketing.
 
+For how **official** automated weather programs (AWOS / ASOS) compare with common volunteer hardware, standards, and maintenance concepts, see [15 - Weather sensor standards & maintenance](15-weather-sensor-standards-and-maintenance.md).
+
 This guide assumes you have already decided:
 - where the station will be mounted (Guides 02-03)
 - how it will be powered and connected (Guides 05-06)

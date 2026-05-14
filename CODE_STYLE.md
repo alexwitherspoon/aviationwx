@@ -65,6 +65,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
 
 ## Comments and Documentation
 
+### Markdown, guides, and user-visible copy
+
+- Do not use the Unicode em dash (U+2014).
+- In prose, headings, and table cell text, use a **single ASCII hyphen** (`-`) for a break or aside. Avoid a **double hyphen** (`--`) in those places. Keep `--` (and `---`) where Markdown or tooling needs them (horizontal rules, CLI examples in fenced code, HTML comments, and similar).
+
 ### Comment Philosophy
 
 **Keep comments concise and focused on critical logic.**
