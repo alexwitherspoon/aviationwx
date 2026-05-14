@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.0/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         failOnRisky="false"
+         failOnWarning="false"
+         beStrictAboutOutputDuringTests="false"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnPhpunitDeprecations="true"
+         requireCoverageMetadata="false"
+         beStrictAboutCoverageMetadata="false">
+
+    <testsuites>
+        <testsuite name="UpstreamApiProbes">
+            <file>tests/Integration/UpstreamApiProbeTest.php</file>
+        </testsuite>
+    </testsuites>
+
+    <php>
+        <ini name="error_reporting" value="-1"/>
+        <ini name="display_errors" value="1"/>
+        <ini name="display_startup_errors" value="1"/>
+        <!-- Not APP_ENV=testing: these tests call live upstream APIs -->
+        <env name="APP_ENV" value="development" force="true"/>
+        <!-- force=false: CI and scripts export CONFIG_PATH (e.g. temp JSON with OWM key) before invoking PHPUnit -->
+        <env name="CONFIG_PATH" value="config/airports.json.example" force="false"/>
+        <env name="RUN_EXTERNAL_UPSTREAM_TESTS" value="1" force="true"/>
+    </php>
+</phpunit>

@@ -13,7 +13,7 @@
  * │       └── {airport}.json       # 24-hour weather history
  * ├── webcams/
  * │   └── {airport}/{camIndex}/
- * │       ├── {YYYY-MM-DD}/{HH}/   # Date/hour subdirs (~500 files each)
+ * │       ├── {YYYY-MM-DD}/{HH}/   # Date/hour subdirs (~500 files each); production uses setgid on webcams/
  * │       │   └── {timestamp}_{variant}.{format}
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       ├── pull_metadata.json   # Pull cameras: ETag + checksum for conditional/unchanged skip
@@ -865,8 +865,9 @@ function ensureCacheDir(string $path): bool {
  * Ensure all required cache directories exist.
  * Call this during application bootstrap or deployment.
  *
- * Paths under CACHE_BASE_DIR should stay aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs)
- * and `.github/workflows/deploy-docker.yml`. The entrypoint skips `/var/sftp` in that cache subtree loop
+ * Paths under CACHE_BASE_DIR should stay aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs),
+ * `/usr/local/libexec/aviationwx/set-cache-permissions.sh` (same script as `scripts/set-cache-permissions.sh` in the repo; sets ownership, webcams setgid, FTP/SFTP parents; nightly cron logs to `/var/lib/aviationwx/set-cache-permissions.log`), and
+ * `.github/workflows/deploy-docker.yml`. The entrypoint skips `/var/sftp` in that cache subtree loop
  * (SFTP uses a separate chroot block under `/var/sftp`). This function still lists CACHE_SFTP_DIR so
  * bootstrap can ensure the path when permissions allow; production entrypoint creates it with correct
  * ownership for sshd chroot.

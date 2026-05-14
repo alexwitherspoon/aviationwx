@@ -32,6 +32,13 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # (both push and pull) with per-camera refresh_seconds configuration.
 # This cron job has been removed as part of the unified webcam worker refactor.
 
+# Dynamic DNS / PASV (vsftpd) -- must run as root (edits /etc/vsftpd, restarts vsftpd).
+# Wrapper reads getDynamicDnsRefreshSeconds() (0 = disabled). Cron every minute; wrapper enforces interval.
+* * * * * root cd /var/www/html && /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh >/dev/null 2>&1
+
+# Cache / FTP parent / SFTP chroot permissions (same as docker-entrypoint after mkdir). Root required for webcams root:www-data setgid.
+0 1 * * * root cd /var/www/html && /usr/local/libexec/aviationwx/set-cache-permissions.sh >> /var/lib/aviationwx/set-cache-permissions.log 2>&1
+
 # Push FTP/SFTP upload inbox debris (non-image files older than getCleanupPushUploadDebrisMaxAgeSeconds(); default 3h)
 # Runs hourly; daily cleanup-cache.php also includes this step as a safety net.
 17 * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-push-upload-debris.php >> /var/log/aviationwx/cleanup-push-upload-debris.log 2>&1

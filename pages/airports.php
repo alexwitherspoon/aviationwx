@@ -1531,14 +1531,23 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         // Weather Radar Layer (RainViewer API)
         var radarLayer = null;
-        var radarTimestamp = null;
+        var radarFrameId = null;
         var radarAvailable = true;
         
         // Cloud Cover Layer (OpenWeatherMap)
         var cloudsLayer = null;
         
+        function radarFrameIdFromPastEntry(entry) {
+            if (!entry || typeof entry.path !== 'string' || entry.path.length < 1) {
+                return null;
+            }
+            var parts = entry.path.split('/').filter(function(p) { return p.length > 0; });
+            var last = parts[parts.length - 1];
+            return /^[0-9a-f]{12}$/i.test(last) ? last.toLowerCase() : null;
+        }
+        
         function addRadarLayer() {
-            // Fetch latest radar timestamp from RainViewer
+            // Fetch RainViewer manifest (radar.past[].path) for the current frame id
             fetch('/api/rainviewer-weather-maps.php')
                 .then(function(response) { 
                     if (!response.ok) {
@@ -1548,12 +1557,16 @@ $breadcrumbs = generateBreadcrumbSchema([
                 })
                 .then(function(data) {
                     if (data.radar && data.radar.past && data.radar.past.length > 0) {
-                        // Get most recent radar frame
-                        radarTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                        var lastEntry = data.radar.past[data.radar.past.length - 1];
+                        radarFrameId = radarFrameIdFromPastEntry(lastEntry);
+                        if (!radarFrameId) {
+                            console.warn('RainViewer radar.past entry missing usable path frame id');
+                            disableRadarControls();
+                            return;
+                        }
                         
-                        // RainViewer tile URL through our proxy
-                        // This allows server-side caching and usage metrics
-                        var radarUrl = '/api/map-tiles.php?layer=rainviewer&timestamp=' + radarTimestamp + '&z={z}&x={x}&y={y}';
+                        // RainViewer tile URL through our proxy (frame id from weather-maps path, not Unix time)
+                        var radarUrl = '/api/map-tiles.php?layer=rainviewer&radar=' + encodeURIComponent(radarFrameId) + '&z={z}&x={x}&y={y}';
                         
                         // RainViewer API limits tiles to zoom 7 as of Jan 2026
                         // Use maxNativeZoom to fetch at z7 and scale up for higher zooms
@@ -1571,9 +1584,9 @@ $breadcrumbs = generateBreadcrumbSchema([
                         
                         radarLayer.addTo(map);
                         radarAvailable = true;
-                        console.log('Radar layer added with timestamp:', radarTimestamp);
+                        console.log('Radar layer added with frame id:', radarFrameId);
                         
-                        // Start periodic refresh to prevent stale timestamp 403s
+                        // Start periodic refresh so new radar frames get picked up after RainViewer rotates paths
                         startRadarRefreshInterval();
                         
                         // Log tile errors
@@ -1620,10 +1633,10 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         }
         
-        // Radar timestamp refresh interval (prevents 403s from stale timestamps)
+        // Radar frame refresh interval (pick up new radar.past[].path from manifest)
         var radarRefreshInterval = null;
         
-        function refreshRadarTimestamp() {
+        function refreshRadarFrameId() {
             if (!radarLayer || !radarAvailable) {
                 return;
             }
@@ -1637,20 +1650,24 @@ $breadcrumbs = generateBreadcrumbSchema([
                 })
                 .then(function(data) {
                     if (data.radar && data.radar.past && data.radar.past.length > 0) {
-                        var newTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                        var lastEntry = data.radar.past[data.radar.past.length - 1];
+                        var newFrameId = radarFrameIdFromPastEntry(lastEntry);
+                        if (!newFrameId) {
+                            return;
+                        }
                         
-                        // Avoid unnecessary tile reloads when timestamp unchanged
-                        if (newTimestamp !== radarTimestamp) {
-                            console.log('Radar timestamp updated:', radarTimestamp, '->', newTimestamp);
-                            radarTimestamp = newTimestamp;
+                        // Avoid unnecessary tile reloads when frame id unchanged
+                        if (newFrameId !== radarFrameId) {
+                            console.log('Radar frame id updated:', radarFrameId, '->', newFrameId);
+                            radarFrameId = newFrameId;
                             
-                            var newUrl = '/api/map-tiles.php?layer=rainviewer&timestamp=' + radarTimestamp + '&z={z}&x={x}&y={y}';
+                            var newUrl = '/api/map-tiles.php?layer=rainviewer&radar=' + encodeURIComponent(radarFrameId) + '&z={z}&x={x}&y={y}';
                             radarLayer.setUrl(newUrl);
                         }
                     }
                 })
                 .catch(function(err) {
-                    console.warn('Failed to refresh radar timestamp:', err);
+                    console.warn('Failed to refresh radar frame id:', err);
                 });
         }
         
@@ -1658,7 +1675,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             stopRadarRefreshInterval();
             
             // RainViewer updates every 10 minutes; match that frequency
-            radarRefreshInterval = setInterval(refreshRadarTimestamp, 10 * 60 * 1000);
+            radarRefreshInterval = setInterval(refreshRadarFrameId, 10 * 60 * 1000);
         }
         
         function stopRadarRefreshInterval() {

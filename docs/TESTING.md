@@ -55,6 +55,7 @@ These jobs use the network and are **not** part of `make test-ci` (unit tests st
 | [`.github/workflows/weekly-link-check.yml`](../.github/workflows/weekly-link-check.yml) | Live dashboard URLs (`scripts/link-check.php`), then built-in aviation HTTPS targets (`scripts/check-builtin-aviation-links.php`, URL list from `lib/aviation-region-links.php`). |
 | [`.github/workflows/builtin-aviation-links.yml`](../.github/workflows/builtin-aviation-links.yml) | Same built-in probe on PRs and pushes to `main` when `lib/aviation-region-links.php`, the script, or this workflow file changes. |
 | [`.github/workflows/production-health-check.yml`](../.github/workflows/production-health-check.yml) | Daily HTTPS probes against production (`scripts/production-health-check.php`), then `check-builtin-aviation-links.php`. Requires outbound network; not part of `make test-ci`. |
+| [`.github/workflows/weekly-upstream-api-probes.yml`](../.github/workflows/weekly-upstream-api-probes.yml) | Weekly live probes (RainViewer, aviationweather.gov, optional OpenWeatherMap tiles via [`UpstreamApiProbeTest.php`](../tests/Integration/UpstreamApiProbeTest.php)). Uses [`scripts/run-upstream-api-probes-with-retries.sh`](../scripts/run-upstream-api-probes-with-retries.sh) with exponential backoff (5 attempts). Set repository secret `OPENWEATHERMAP_API_KEY` to exercise the tile request; otherwise that test skips. Not part of `make test-ci`. |
 
 Link-check and built-in URL failures usually mean a third party moved or blocked a URL; confirm in a browser, then update the static `url` in profiles or the probe script (for example user-agent or HEAD vs GET behavior), and re-run the failed workflow or `make check-builtin-aviation-links`.
 
@@ -64,6 +65,20 @@ Local manual runs (need outbound HTTPS):
 make production-health-check
 php scripts/check-builtin-aviation-links.php
 ```
+
+### Upstream API probes (RainViewer, METAR, map tiles)
+
+These live in [`tests/Integration/UpstreamApiProbeTest.php`](../tests/Integration/UpstreamApiProbeTest.php). They are **excluded** from the default Integration suite in `phpunit.xml` so `make test-ci` does not depend on third-party uptime or burn API quota.
+
+To run them locally (outbound HTTPS required):
+
+```bash
+make test-external-apis
+```
+
+That uses [`phpunit.external-apis.xml`](../phpunit.external-apis.xml): `APP_ENV=development`, `RUN_EXTERNAL_UPSTREAM_TESTS=1`, and `CONFIG_PATH` from the environment or `make CONFIG_PATH=/path/to/airports.json test-external-apis` when set; otherwise the Makefile defaults to `config/airports.json.example` before invoking the retry script (PHPUnit reads `CONFIG_PATH`; it is not `force="true"`). The OpenWeatherMap tile test **skips** unless that JSON includes a real `openweathermap_api_key` (for example point at a maintainer secrets file when running manually).
+
+**Scheduled CI:** [`.github/workflows/weekly-upstream-api-probes.yml`](../.github/workflows/weekly-upstream-api-probes.yml) builds `/tmp/upstream-probe-airports.json` from `config/airports.json.example` plus optional repository secret `OPENWEATHERMAP_API_KEY`, then runs `scripts/run-upstream-api-probes-with-retries.sh` with **5 attempts** and exponential backoff (30s, 60s, 120s, 240s, capped at 300s between attempts). Tune with `UPSTREAM_PROBE_MAX_ATTEMPTS`, `UPSTREAM_PROBE_INITIAL_BACKOFF_SEC`, and `UPSTREAM_PROBE_MAX_BACKOFF_SEC` in the workflow file. The probe gate uses `RUN_EXTERNAL_UPSTREAM_TESTS=1` and refuses `CONFIG_PATH` paths containing `airports.json.test` (not `isTestMode()`), so the job still runs when the workspace `config/airports.json` contains test markers.
 
 ## Isolated Test Environment
 

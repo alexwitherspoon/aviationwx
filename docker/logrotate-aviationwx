@@ -35,6 +35,28 @@
     endscript
 }
 
+# Root PASV/DDNS wrapper (/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh); must stay root-owned (not under /var/log/aviationwx glob).
+/var/lib/aviationwx/dynamic-dns-pasv.log {
+    daily
+    rotate 1
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 root root
+}
+
+# Nightly root cron: /usr/local/libexec/aviationwx/set-cache-permissions.sh (root-only dir; not under www-data log tree).
+/var/lib/aviationwx/set-cache-permissions.log {
+    daily
+    rotate 1
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+
 # Service watchdog log
 /var/log/aviationwx/service-watchdog.log {
     daily

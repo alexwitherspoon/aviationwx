@@ -8,6 +8,7 @@ FROM php:8.4-apache
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
+    util-linux \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
@@ -91,13 +92,35 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
 
+# Root cron and entrypoint use copies under /usr/local/libexec/aviationwx (root-owned) before the
+# www-data app tree is copied, so privileged jobs do not execute only paths under /var/www/html/scripts.
+RUN mkdir -p /usr/local/libexec/aviationwx \
+    && chown root:root /usr/local/libexec/aviationwx \
+    && chmod 755 /usr/local/libexec/aviationwx
+COPY scripts/maybe-run-update-pasv-address.sh scripts/update-pasv-address.sh scripts/set-cache-permissions.sh /usr/local/libexec/aviationwx/
+RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/set-cache-permissions.sh \
+    && chown root:root /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/set-cache-permissions.sh
+
 # Copy application files LAST (changes most frequently)
 # This ensures code changes don't invalidate earlier layers
 COPY --chown=www-data:www-data . /var/www/html/
 
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
-    && chown -R www-data:www-data /var/www/html/cache
+    && chown -R www-data:www-data /var/www/html/cache \
+    && mkdir -p /var/lib/aviationwx \
+    && chown root:root /var/lib/aviationwx \
+    && chmod 700 /var/lib/aviationwx \
+    && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && touch /var/lib/aviationwx/set-cache-permissions.log \
+    && chown root:root /var/lib/aviationwx/set-cache-permissions.log \
+    && chmod 600 /var/lib/aviationwx/set-cache-permissions.log
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration

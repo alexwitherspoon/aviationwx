@@ -690,22 +690,38 @@ function getFaaTransformedImagePath(
         ], 'api');
         return null;
     }
-    
+
+    // Web runs as www-data; workers often run as root. Hour dirs created by the worker must stay
+    // writable by the web user or on-demand FAA cache writes fail.
+    if (!ensureCacheDir($framesDir)) {
+        aviationwx_log('error', 'FAA transform cache dir creation failed', [
+            'dir' => $framesDir,
+        ], 'api');
+        return null;
+    }
+    if (!is_writable($framesDir)) {
+        $dirOwner = null;
+        if (function_exists('posix_getpwuid')) {
+            $uid = @fileowner($framesDir);
+            if ($uid !== false) {
+                $pw = @posix_getpwuid((int) $uid);
+                $dirOwner = is_array($pw) && isset($pw['name']) ? $pw['name'] : (string) $uid;
+            }
+        }
+        aviationwx_log('error', 'FAA transform cache dir not writable', [
+            'dir' => $framesDir,
+            'dir_perms' => substr(sprintf('%o', (int) @fileperms($framesDir)), -4),
+            'dir_owner' => $dirOwner,
+            'php_euid' => function_exists('posix_geteuid') ? posix_geteuid() : null,
+        ], 'api');
+        return null;
+    }
+
     // Transform the image
     $imageData = transformImageFaa($sourcePath, $margins);
     
     if ($imageData === null) {
         return null;
-    }
-    
-    // Ensure cache directory exists
-    if (!is_dir($framesDir)) {
-        if (!@mkdir($framesDir, 0755, true)) {
-            aviationwx_log('error', 'FAA transform cache dir creation failed', [
-                'dir' => $framesDir,
-            ], 'api');
-            return null;
-        }
     }
     
     // Write atomically via temp file
@@ -714,8 +730,13 @@ function getFaaTransformedImagePath(
     
     if ($bytesWritten === false || $bytesWritten === 0) {
         @unlink($tempPath);
+        $lastErr = error_get_last();
         aviationwx_log('error', 'FAA transform cache write failed', [
             'path' => $cachePath,
+            'temp_path' => $tempPath,
+            'dir_writable' => is_writable($framesDir),
+            'php_error' => $lastErr['message'] ?? null,
+            'php_euid' => function_exists('posix_geteuid') ? posix_geteuid() : null,
         ], 'api');
         return null;
     }
@@ -723,8 +744,10 @@ function getFaaTransformedImagePath(
     // Atomic rename
     if (!@rename($tempPath, $cachePath)) {
         @unlink($tempPath);
+        $lastErr = error_get_last();
         aviationwx_log('error', 'FAA transform cache rename failed', [
             'path' => $cachePath,
+            'php_error' => $lastErr['message'] ?? null,
         ], 'api');
         return null;
     }

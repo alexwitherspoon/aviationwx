@@ -30,7 +30,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `public_ipv6` | - | Optional: reserved for future IPv6 support |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
 | `network_ports` | - | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
-| `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
+| `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS for DDNS (0=disabled, min 60). When set, root cron runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute (same sources in `scripts/` in the repo); it gates on this interval and invokes `update-pasv-address.sh` from the same directory as that wrapper. |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `cache_file_max_size_mb` | `25` | Max size in MiB for webcam pipeline loads, HTTP/MJPEG pull downloads, partner logo fetches, and **default** push upload acceptance (integer **1--100**). |
 | `push_upload_allowed_extensions` | omit | Optional: extensions **preserved** during FTP/SFTP push inbox debris cleanup; merged with each push camera `push_config.allowed_extensions`. Values must be from **jpg, jpeg, png, webp**. Omit the key for the full default (all four). |
@@ -262,7 +262,7 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | `public_ipv6` | string | Optional: reserved for future IPv6 support |
 | `upload_hostname` | string | Hostname for FTP/SFTP uploads |
 | `network_ports` | object | Optional object defining TCP ports for self-hosted production (all port values must be JSON **numbers**, not strings). `deploy-configure-firewall.sh` applies host UFW/iptables/NAT; the web container entrypoint sets **vsftpd** `listen_port` from **`ftp_control`** only (passive range from the map), **sshd** (SFTP on `sftp`), and **fail2ban** jails. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ftps_explicit_tls`** is used for host firewall/fail2ban when that inbound port differs from `ftp_control`; vsftpd still binds a single control port (`ftp_control`). **`ssh`** opens the host admin SSH port in UFW only. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
-| `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
+| `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled). Enforced by root cron + `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` in the container (sources under `scripts/` in the repo). |
 
 **Network ports (`network_ports`):** When `network_ports` is present, it must be a JSON **object** (not an array), and each set port field must be a JSON **number** (not a quoted string); config validation, `deploy-configure-firewall.sh`, and `docker-entrypoint.sh` enforce this. On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and configures **vsftpd** with a **single** control listener on **`ftp_control`** (plus passive ports), **sshd** (SFTP on `sftp`), and **fail2ban**. Host-facing ports such as **`ftps_explicit_tls`** and **`ftps_alt`** are for UFW/NAT/fail2ban when inbound ports differ from the container bind; they do not add a second vsftpd listener. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
 
@@ -315,7 +315,7 @@ For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use 
 ```
 
 When `dynamic_dns_refresh_seconds` is enabled:
-- The scheduler periodically re-resolves the upload hostname
+- Root cron in the container runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute; it reads `getDynamicDnsRefreshSeconds()` by invoking PHP as `www-data` (`runuser`), then only runs `update-pasv-address.sh` from the same libexec directory when the interval has elapsed (same interval semantics as before; resolution is within one minute because cron is minutely). The throttle timestamp is stored at `/var/lib/aviationwx/pasv-ddns.last` and the wrapper append-only log at `/var/lib/aviationwx/dynamic-dns-pasv.log` (both under the root-only `/var/lib/aviationwx` directory in the image, not world-writable `/tmp` and not under the shared `/var/log/aviationwx` tree).
 - If the IP has changed, vsftpd's `pasv_address` is updated automatically
 - vsftpd is restarted to apply the new IP (brief interruption to active FTP sessions)
 - If `public_ip` is set, dynamic DNS refresh is automatically disabled (not needed)
@@ -1147,6 +1147,8 @@ Both services are proxied through `/api/map-tiles.php` for server-side caching a
 ### RainViewer Precipitation Radar
 
 **Always available** - No configuration required. Displays real-time precipitation radar overlay.
+
+The browser requests `/api/rainviewer-weather-maps.php` (manifest JSON, same shape as RainViewer upstream `weather-maps.json`), then requests tiles using the **12-character hex frame id** from `radar.past[].path` as query parameter `radar` on `/api/map-tiles.php`. Unix timestamps in the tile path are **not** accepted by RainViewer tilecache (410 Gone).
 
 - **Source**: [RainViewer](https://www.rainviewer.com/)
 - **Data**: Precipitation intensity (rain/snow)

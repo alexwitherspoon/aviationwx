@@ -341,9 +341,35 @@ class MapTilesProxyTest extends TestCase
             $this->markTestSkipped('Rate limited from previous tests');
         }
         
-        // RainViewer requires timestamp parameter
-        $timestamp = time();
-        $url = $this->baseUrl . '/api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&timestamp=' . $timestamp;
+        // RainViewer: fetch latest frame id from our weather-maps proxy, then request tile with radar=
+        $wmUrl = $this->baseUrl . '/api/rainviewer-weather-maps.php';
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $wmUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $wmBody = curl_exec($ch);
+        $wmCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($wmCode !== 200) {
+            $this->markTestSkipped('RainViewer weather-maps proxy unavailable');
+        }
+        $wm = json_decode($wmBody, true);
+        $past = $wm['radar']['past'] ?? null;
+        if (!is_array($past) || $past === []) {
+            $this->markTestSkipped('RainViewer weather-maps response missing radar.past');
+        }
+        $last = end($past);
+        $path = is_array($last) ? ($last['path'] ?? '') : '';
+        if (!is_string($path) || $path === '') {
+            $this->markTestSkipped('RainViewer weather-maps response missing radar path');
+        }
+        $parts = array_values(array_filter(explode('/', $path)));
+        $frameId = strtolower(end($parts) ?: '');
+        if (!preg_match('/^[0-9a-f]{12}$/', $frameId)) {
+            $this->markTestSkipped('RainViewer frame id not in expected format');
+        }
+
+        $url = $this->baseUrl . '/api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&radar=' . rawurlencode($frameId);
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -353,22 +379,21 @@ class MapTilesProxyTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        // Proxy passes upstream codes through. RainViewer may return 410 Gone when the radar frame
-        // window does not include this timestamp (behavior varies by CDN / API version).
+        // Proxy passes upstream codes through (410 if frame id is stale on tilecache).
         $this->assertContains($httpCode, [200, 404, 410, 429],
             'RainViewer layer should be accepted (200, 404/410 no tile, or 429 rate limited)');
     }
     
     /**
-     * Test that RainViewer requires timestamp parameter
+     * Test that RainViewer requires radar frame id query parameter
      */
-    public function testMapTilesProxy_RainViewerRequiresTimestamp()
+    public function testMapTilesProxy_RainViewerRequiresRadarFrame()
     {
         if ($this->isRateLimited) {
             $this->markTestSkipped('Rate limited from previous tests');
         }
         
-        // Try RainViewer without timestamp
+        // Try RainViewer without radar (or timestamp hex alias)
         $url = $this->baseUrl . '/api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12';
         
         $ch = curl_init();
@@ -379,11 +404,11 @@ class MapTilesProxyTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
-        $this->assertEquals(400, $httpCode, 'Should return 400 when timestamp missing');
+        $this->assertEquals(400, $httpCode, 'Should return 400 when radar frame id missing');
         
         $data = json_decode($response, true);
         $this->assertArrayHasKey('error', $data);
-        $this->assertStringContainsString('timestamp', strtolower($data['error']));
+        $this->assertStringContainsString('radar', strtolower($data['error']));
     }
     
     /**

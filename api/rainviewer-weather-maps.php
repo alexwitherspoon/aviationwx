@@ -10,8 +10,8 @@
  * - Server-side caching (5 min TTL) reduces external API calls
  * - Graceful degradation if RainViewer unavailable
  *
- * @see pages/airports.php - Radar layer uses this for timestamp lookup
- * @see api/map-tiles.php - Tile proxy uses timestamp for radar tiles
+ * @see pages/airports.php - Radar layer uses this for frame id (path basename)
+ * @see api/map-tiles.php - Tile proxy uses query parameter radar (12 hex frame id)
  */
 
 require_once __DIR__ . '/../lib/config.php';

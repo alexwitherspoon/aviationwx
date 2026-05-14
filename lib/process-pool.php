@@ -17,7 +17,8 @@ require_once __DIR__ . '/logger.php';
  * - Automatic cleanup of finished/timed-out workers
  * - Thread-safe job tracking
  * 
- * Used by fetch-weather.php and fetch-webcam.php for parallel processing.
+ * Used by the scheduler daemon and CLI scripts (for example fetch-weather.php,
+ * unified-webcam-worker.php) for parallel worker execution.
  */
 class ProcessPool {
     private $maxWorkers;
@@ -158,21 +159,14 @@ class ProcessPool {
     }
     
     /**
-     * Spawn worker process
-     * 
-     * Creates a new worker process using proc_open(). The worker runs the script
-     * in --worker mode with the provided arguments.
-     * 
-     * Uses the system `timeout` command as an outer wrapper to guarantee process
-     * termination even if the worker becomes stuck on blocking I/O. The timeout
-     * is set to worker_timeout + 10s to allow the worker's internal self-timeout
-     * mechanisms to fire first (cleaner exit).
-     * 
-     * Falls back to running without timeout wrapper if command is not available.
-     * 
-     * @param array $args Job arguments to pass to worker script
-     * @return array|null Worker data array with keys: 'proc' (resource), 'pipes' (array),
-     *   'started' (int timestamp), 'args' (array), 'pid' (int|null), or null on failure
+     * Spawn a worker subprocess (`php ... --worker ...`) via proc_open() using an argv array.
+     *
+     * argv form avoids `/bin/sh -c`, so long-lived parents (scheduler) do not accumulate defunct shells.
+     * When timeout(1) exists, wraps the worker for pool timeout + 10s with --kill-after=5 so stuck I/O
+     * cannot block shutdown indefinitely; internal worker timeouts can still exit first.
+     *
+     * @param array<int|string> $args Arguments appended after `--worker` on the worker CLI
+     * @return array<string, mixed>|null Worker record (`proc`, `pipes`, `started`, `args`, `pid`) or null on spawn failure
      */
     private function spawnWorker(array $args) {
         $scriptPath = __DIR__ . '/../scripts/' . basename($this->scriptName);
@@ -180,32 +174,28 @@ class ProcessPool {
         // Workers run at nice 5 (lower priority than user requests at 0, higher than scheduler at 10)
         $workerNice = 5;
         
-        $cmdParts = [];
+        $workerArgv = [];
         
-        // Use system `timeout` command as outer wrapper for guaranteed kill (if available)
-        // timeout --kill-after sends SIGKILL after additional grace period if SIGTERM doesn't work
-        // Set timeout slightly longer than ProcessPool's tracking to let internal mechanisms fire first
         if (self::isTimeoutAvailable()) {
             $systemTimeout = $this->timeout + 10;
-            $cmdParts[] = 'timeout';
-            $cmdParts[] = '--kill-after=5';
-            $cmdParts[] = (string)$systemTimeout . 's';
+            $workerArgv[] = 'timeout';
+            $workerArgv[] = '--kill-after=5';
+            $workerArgv[] = (string)$systemTimeout . 's';
         }
         
-        $cmdParts[] = 'nice';
-        $cmdParts[] = '-n';
-        $cmdParts[] = (string)$workerNice;
-        $cmdParts[] = '/usr/local/bin/php';
-        $cmdParts[] = escapeshellarg($scriptPath);
-        $cmdParts[] = '--worker';
+        $workerArgv[] = 'nice';
+        $workerArgv[] = '-n';
+        $workerArgv[] = (string)$workerNice;
+        $workerArgv[] = '/usr/local/bin/php';
+        $workerArgv[] = $scriptPath;
+        $workerArgv[] = '--worker';
         
         foreach ($args as $arg) {
-            $cmdParts[] = escapeshellarg((string)$arg);
+            $workerArgv[] = (string)$arg;
         }
-        $command = implode(' ', $cmdParts) . ' 2>&1';
         
         $pipes = [];
-        $process = @proc_open($command, [
+        $process = @proc_open($workerArgv, [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w']

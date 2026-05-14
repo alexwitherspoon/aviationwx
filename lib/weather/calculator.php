@@ -22,7 +22,7 @@
  *   b = 17.368 (dimensionless)
  *   c = 238.88 (°C)
  * 
- * Valid range: -40°C to +50°C (typical atmospheric conditions)
+ * Valid range: -40°C to +50°C air temperature; relative humidity in (0, 100] percent for this implementation
  * Accuracy: ±0.4°C within valid range
  * 
  * Alternative constants exist for different temperature ranges:
@@ -35,21 +35,47 @@
  *   - Lawrence, M. G. (2005): "The Relationship between Relative Humidity and the
  *     Dewpoint Temperature in Moist Air", Bulletin of the American Meteorological Society
  * 
- * @param float|null $tempC Temperature in Celsius
- * @param float|null $humidity Relative humidity percentage (0-100)
- * @return float|null Dewpoint in Celsius, or null if inputs are invalid
+ * @param float|null $tempC Temperature in Celsius (numeric scalar only; non-numeric strings are rejected)
+ * @param float|null $humidity Relative humidity percentage; must be in (0, 100] or null is returned (numeric scalar only)
+ * @return float|null Dewpoint in Celsius, or null if inputs are invalid or non-finite
  */
 function calculateDewpoint($tempC, $humidity) {
-    if ($tempC === null || $humidity === null) return null;
-    
+    if ($tempC === null || $humidity === null) {
+        return null;
+    }
+
+    // Non-numeric strings cast to 0.0 in PHP; reject before (float) so invalid upstream values never enter Magnus.
+    if (!is_scalar($tempC) || !is_scalar($humidity)) {
+        return null;
+    }
+    if (!is_numeric($tempC) || !is_numeric($humidity)) {
+        return null;
+    }
+
+    $t = (float) $tempC;
+    $rh = (float) $humidity;
+    if (!is_finite($t) || !is_finite($rh)) {
+        return null;
+    }
+    // Magnus uses ln(RH/100); RH outside (0, 100] is non-physical for this path and can yield NaN
+    if ($rh <= 0.0 || $rh > 100.0) {
+        return null;
+    }
+
     // Magnus formula constants (Alduchov and Eskridge, 1996)
-    $a = 6.1121;
     $b = 17.368;
     $c = 238.88;
-    
-    $gamma = log($humidity / 100) + ($b * $tempC) / ($c + $tempC);
-    $dewpoint = ($c * $gamma) / ($b - $gamma);
-    
+
+    $gamma = log($rh / 100.0) + ($b * $t) / ($c + $t);
+    $denom = $b - $gamma;
+    if ($denom == 0.0) {
+        return null;
+    }
+    $dewpoint = ($c * $gamma) / $denom;
+    if (!is_finite($dewpoint)) {
+        return null;
+    }
+
     return $dewpoint;
 }
 

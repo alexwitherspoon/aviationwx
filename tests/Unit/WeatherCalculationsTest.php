@@ -422,6 +422,46 @@ class WeatherCalculationsTest extends TestCase
         $this->assertNull($result);
     }
 
+    /**
+     * Magnus uses log(RH/100); RH at 0% yields non-finite math and must not reach the API payload.
+     */
+    public function testCalculateDewpoint_ZeroHumidity_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint(20.0, 0));
+        $this->assertNull(calculateDewpoint(20.0, 0.0));
+    }
+
+    /**
+     * RH above 100% is invalid for this formula; reject rather than emit bogus dewpoint.
+     */
+    public function testCalculateDewpoint_HumidityAbove100_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint(20.0, 100.1));
+        $this->assertNull(calculateDewpoint(20.0, 150.0));
+    }
+
+    /**
+     * Non-numeric strings must not coerce to 0.0 via (float) cast (safety: bogus dewpoint).
+     */
+    public function testCalculateDewpoint_NonNumericScalars_ReturnsNull(): void
+    {
+        $this->assertNull(calculateDewpoint('not-a-number', 50));
+        $this->assertNull(calculateDewpoint(20, 'not-a-number'));
+        $this->assertNull(calculateDewpoint('not-a-number', '50'));
+    }
+
+    /**
+     * Numeric strings from JSON are still valid inputs.
+     */
+    public function testCalculateDewpoint_NumericStrings_Accepted(): void
+    {
+        $a = calculateDewpoint('20', '50');
+        $b = calculateDewpoint(20.0, 50.0);
+        $this->assertNotNull($a);
+        $this->assertNotNull($b);
+        $this->assertEqualsWithDelta($b, $a, 1e-9);
+    }
+
     public function testCalculateHumidityFromDewpoint_100PercentHumidity()
     {
         $tempC = 20.0;
