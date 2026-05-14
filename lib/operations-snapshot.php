@@ -124,7 +124,7 @@ function operations_snapshot_read_log_tail(string $path, int $maxBytes = 2097152
     if ($fp === false) {
         return '';
     }
-    if ($start > 0 && !@fseek($fp, $start)) {
+    if ($start > 0 && @fseek($fp, $start) !== 0) {
         fclose($fp);
         return '';
     }

@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * @covers operations_snapshot_apply_verbose_gate
  * @covers operations_snapshot_build
  * @covers operations_snapshot_write_envelope
- * @covers operations_snapshot_read_envelope
+ * @covers operations_snapshot_read_log_tail
  * @covers operations_snapshot_get_api_payload
  */
 class OperationsSnapshotTest extends TestCase
@@ -25,6 +25,23 @@ class OperationsSnapshotTest extends TestCase
         $out = operations_snapshot_redact_scalar_string($in);
         $this->assertStringNotContainsString('token=secret', $out);
         $this->assertStringContainsString('[redacted]', $out);
+    }
+
+    /**
+     * Regression: fseek returns 0 on success; a negated check treated success as failure and returned ''.
+     */
+    public function testReadLogTail_returnsTailWhenFileExceedsMaxBytes(): void
+    {
+        $path = sys_get_temp_dir() . '/awx_log_tail_' . bin2hex(random_bytes(4)) . '.log';
+        $suffix = 'TAIL_MARKER_UNIQUE_XYZ';
+        $content = str_repeat('P', 150) . "\n" . $suffix;
+        $this->assertNotFalse(file_put_contents($path, $content));
+        try {
+            $tail = operations_snapshot_read_log_tail($path, 40);
+            $this->assertStringContainsString($suffix, $tail);
+        } finally {
+            @unlink($path);
+        }
     }
 
     public function testScrubContext_redactsSensitiveKeys(): void
