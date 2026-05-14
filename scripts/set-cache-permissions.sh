@@ -3,16 +3,13 @@
 # Apply cache bind-mount ownership and modes, including webcams setgid layout,
 # plus FTP and SFTP parent directories required by vsftpd and sshd chroot.
 #
-# Shared entry points:
-#   - docker/docker-entrypoint.sh (after cache subdirs are created as www-data)
-#   - config/crontab root job (nightly repair)
-#   - Future: deploy hooks may invoke inside the running container to match entrypoint
+# Invoked from docker/docker-entrypoint.sh and from config/crontab (nightly root repair).
 #
 # Must run as root for chown to root:www-data on cache/webcams.
 #
 # Environment overrides:
-#   CACHE_DIR   Cache root (default: /var/www/html/cache when that path exists, else <repo>/cache
-#               from script location; libexec installs use the former so PROJECT_ROOT is not /var/www/html)
+#   CACHE_DIR   Cache root: /var/www/html/cache when that directory exists, otherwise ${PROJECT_ROOT}/cache
+#               (PROJECT_ROOT is the parent of this script's directory).
 #   SFTP_DIR    SFTP chroot parent (default: /var/sftp)
 
 set -uo pipefail
@@ -20,8 +17,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Prefer the real app cache when present (Docker), even when this script lives under
-# /usr/local/libexec/aviationwx (PROJECT_ROOT would otherwise be /usr/local/libexec).
+# Default cache: app tree when present, else cache/ beside the repo root inferred from this path.
 if [ -d "/var/www/html/cache" ]; then
     _default_cache="/var/www/html/cache"
 else

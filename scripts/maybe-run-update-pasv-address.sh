@@ -3,13 +3,11 @@
 # Gate update-pasv-address.sh on getDynamicDnsRefreshSeconds() (0 = disabled; min 60 when enabled).
 # Run from root cron every minute; runs PASV script only after interval elapsed (state file).
 #
-# Throttle: STATE is updated only when update-pasv-address.sh exits 0 or 2 so exit 1
-# (transient DNS or vsftpd errors) can retry on the next minute instead of waiting the full interval.
-# State and wrapper log live under /var/lib/aviationwx (root-only, mode 700 in the image), not /tmp or
-# /var/log/aviationwx, so www-data cannot swap the path for a symlink before root appends.
+# Throttle: STATE is written only after update-pasv-address.sh exits 0 or 2; exit 1 retries on the next minute.
+# STATE and wrapper log: /var/lib/aviationwx (mode 700, root-owned in the image) so unprivileged users cannot pre-create those paths as symlinks.
 #
-# Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Runs as root so vsftpd.conf
-# edits and vsftpd restart succeed. Config interval is read via runuser www-data (not root PHP on the app tree).
+# Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Root edits vsftpd.conf and restarts vsftpd.
+# Interval: PHP CLI as user www-data via runuser(8), reading CONFIG_PATH.
 
 set -euo pipefail
 
@@ -19,7 +17,6 @@ cd /var/www/html
 
 export CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 
-# Read interval as www-data so root never executes PHP from the www-data-owned app tree (Copilot).
 INTERVAL="$(
     runuser -u www-data -- /usr/local/bin/php -r 'require_once "/var/www/html/lib/config.php"; echo (int) getDynamicDnsRefreshSeconds();' 2>/dev/null || echo 0
 )"

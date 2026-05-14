@@ -29,7 +29,7 @@ else
     APP_PHP="${APP_PHP:-php}"
 fi
 
-# Run PHP that loads lib/config.php or lib/logger.php as www-data when invoked as root (Copilot).
+# When EUID is 0 and runuser(8) exists, PHP runs as www-data so app-tree code is not executed as root.
 php_as_www_data() {
     local -a cmd
     if command -v runuser >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
@@ -78,7 +78,7 @@ read_upload_hostname_from_config() {
     php_as_www_data -r 'require_once "/var/www/html/lib/config.php"; echo (string) (getUploadHostname() ?? "");' 2>/dev/null || echo ""
 }
 
-# Structured app log line after a successful PASV IP change (PHP runs as www-data when root invokes this script).
+# aviationwx_log() after a successful PASV IP change (same www-data PHP rule as php_as_www_data).
 log_pasv_address_change_event() {
     local old_ip="$1" new_ip="$2" host="$3"
     local php_code='require_once "/var/www/html/lib/logger.php"; aviationwx_log("info", "Dynamic DNS: PASV address updated", ["old_ip" => (string) (getenv("AVWX_OLD_IP") ?: ""), "new_ip" => (string) (getenv("AVWX_NEW_IP") ?: ""), "hostname" => (string) (getenv("AVWX_HOST") ?: "")], "app");'

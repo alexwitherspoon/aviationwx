@@ -92,8 +92,8 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
 
-# Root cron and entrypoint invoke these from a root-owned path. The app tree is www-data-owned,
-# so copies under /var/www/html/scripts must not be the only root execution targets (replace risk).
+# Root cron and entrypoint use copies under /usr/local/libexec/aviationwx (root-owned) before the
+# www-data app tree is copied, so privileged jobs do not execute only paths under /var/www/html/scripts.
 RUN mkdir -p /usr/local/libexec/aviationwx \
     && chown root:root /usr/local/libexec/aviationwx \
     && chmod 755 /usr/local/libexec/aviationwx

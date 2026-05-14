@@ -250,7 +250,7 @@ ensure_cache_subdirs() {
     if runuser -u www-data -- mkdir -p "${dirs[@]}"; then
         return 0
     fi
-    echo "Warning: www-data could not mkdir cache subdirs (bind mount ownership?). Using root once; libexec set-cache-permissions will align ownership." >&2
+    echo "Warning: www-data could not mkdir cache subdirs (bind mount ownership?). Using root once; set-cache-permissions.sh will align ownership." >&2
     mkdir -p "${dirs[@]}"
 }
 
@@ -258,7 +258,7 @@ echo "Ensuring cache subdirectories exist..."
 ensure_cache_subdirs
 
 # Ownership and modes for cache (including webcams setgid), FTP parent, SFTP chroot parent.
-# Shared with nightly root cron: /usr/local/libexec/aviationwx/set-cache-permissions.sh (root-owned libexec).
+# Uses /usr/local/libexec/aviationwx/set-cache-permissions.sh (same script as 01:00 root cron in config/crontab).
 if [ ! -x /usr/local/libexec/aviationwx/set-cache-permissions.sh ]; then
     echo "ERROR: /usr/local/libexec/aviationwx/set-cache-permissions.sh missing or not executable." >&2
     exit 1

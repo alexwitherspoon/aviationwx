@@ -44,7 +44,7 @@ function calculateDewpoint($tempC, $humidity) {
         return null;
     }
 
-    // Reject non-scalars and non-numeric strings before casting: (float) 'bad' is 0.0 in PHP.
+    // Non-numeric strings cast to 0.0 in PHP; reject before (float) so invalid upstream values never enter Magnus.
     if (!is_scalar($tempC) || !is_scalar($humidity)) {
         return null;
     }
