@@ -117,7 +117,10 @@ RUN mkdir -p /var/www/html/cache/webcams \
     && chmod 700 /var/lib/aviationwx \
     && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
     && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log
+    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && touch /var/lib/aviationwx/set-cache-permissions.log \
+    && chown root:root /var/lib/aviationwx/set-cache-permissions.log \
+    && chmod 600 /var/lib/aviationwx/set-cache-permissions.log
 
 # Create directories for FTP/SFTP uploads
 # Uses cache/uploads/ to match vsftpd local_root configuration

@@ -46,8 +46,8 @@
     create 0600 root root
 }
 
-# Nightly root cron: /usr/local/libexec/aviationwx/set-cache-permissions.sh
-/var/log/aviationwx/set-cache-permissions.log {
+# Nightly root cron: /usr/local/libexec/aviationwx/set-cache-permissions.sh (root-only dir; not under www-data log tree).
+/var/lib/aviationwx/set-cache-permissions.log {
     daily
     rotate 1
     compress

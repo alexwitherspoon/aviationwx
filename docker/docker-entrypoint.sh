@@ -327,7 +327,6 @@ if [ -d "${LOG_DIR}" ]; then
           "${LOG_DIR}/apache-error.log" \
           "${LOG_DIR}/sshd.log" \
           "${LOG_DIR}/service-watchdog.log" \
-          "${LOG_DIR}/set-cache-permissions.log" \
           "${LOG_DIR}/app.log" \
           "${LOG_DIR}/user.log" 2>/dev/null || true
     
@@ -336,9 +335,9 @@ if [ -d "${LOG_DIR}" ]; then
     chmod 775 "${LOG_DIR}" 2>/dev/null || true
     chown www-data:www-data "${LOG_DIR}"/*.log 2>/dev/null || true
     chmod 644 "${LOG_DIR}"/*.log 2>/dev/null || true
-    # System logs owned by root
-    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/set-cache-permissions.log" 2>/dev/null || true
-    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/set-cache-permissions.log" 2>/dev/null || true
+    # System logs owned by root (nightly set-cache-permissions log lives under /var/lib/aviationwx; see config/crontab)
+    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
+    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
     # Ensure heartbeat log is writable by both www-data and root
     chmod 666 "${LOG_DIR}/cron-heartbeat.log" 2>/dev/null || true
     
