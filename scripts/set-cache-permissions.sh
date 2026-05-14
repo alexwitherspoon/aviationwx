@@ -11,7 +11,8 @@
 # Must run as root for chown to root:www-data on cache/webcams.
 #
 # Environment overrides:
-#   CACHE_DIR   Cache root (default: /var/www/html/cache in container, else <repo>/cache)
+#   CACHE_DIR   Cache root (default: /var/www/html/cache when that path exists, else <repo>/cache
+#               from script location; libexec installs use the former so PROJECT_ROOT is not /var/www/html)
 #   SFTP_DIR    SFTP chroot parent (default: /var/sftp)
 
 set -uo pipefail
@@ -19,7 +20,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [ -d "/var/www/html/cache" ] && [ "${PROJECT_ROOT}" = "/var/www/html" ]; then
+# Prefer the real app cache when present (Docker), even when this script lives under
+# /usr/local/libexec/aviationwx (PROJECT_ROOT would otherwise be /usr/local/libexec).
+if [ -d "/var/www/html/cache" ]; then
     _default_cache="/var/www/html/cache"
 else
     _default_cache="${PROJECT_ROOT}/cache"
