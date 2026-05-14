@@ -3,6 +3,8 @@
 # update-pasv-address.sh - Check and update vsftpd pasv_address for dynamic DNS
 #
 # Invoked by maybe-run-update-pasv-address.sh (root cron) when dynamic_dns_refresh_seconds is enabled.
+# Config and structured logging use PHP as www-data (runuser) so root never executes app-tree PHP.
+# Root is used only for vsftpd.conf edits and vsftpd restart.
 # It resolves the upload hostname, compares with current pasv_address, and restarts
 # vsftpd if the IP has changed.
 #
@@ -16,10 +18,27 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
 CONFIG_FILE="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 LOG_PREFIX="[dynamic-dns]"
+
+# Container uses /usr/local/bin/php; local dev may fall back to PATH.
+if [ -x /usr/local/bin/php ]; then
+    APP_PHP=/usr/local/bin/php
+else
+    APP_PHP="${APP_PHP:-php}"
+fi
+
+# Run PHP that loads lib/config.php or lib/logger.php as www-data when invoked as root (Copilot).
+php_as_www_data() {
+    local -a cmd
+    if command -v runuser >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+        cmd=(runuser -u www-data -- env "CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}" "$APP_PHP" "$@")
+    else
+        cmd=(env "CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}" "$APP_PHP" "$@")
+    fi
+    "${cmd[@]}"
+}
 
 # Parse arguments
 FORCE_UPDATE=false
@@ -51,24 +70,44 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     exit 1
 fi
 
-# Get configuration values using PHP
-get_config_value() {
-    local key="$1"
-    php -r "
-        require_once '/var/www/html/lib/config.php';
-        echo $key() ?? '';
-    " 2>/dev/null || echo ""
+read_public_ip_from_config() {
+    php_as_www_data -r 'require_once "/var/www/html/lib/config.php"; echo (string) (getPublicIP() ?? "");' 2>/dev/null || echo ""
+}
+
+read_upload_hostname_from_config() {
+    php_as_www_data -r 'require_once "/var/www/html/lib/config.php"; echo (string) (getUploadHostname() ?? "");' 2>/dev/null || echo ""
+}
+
+# Structured app log line after a successful PASV IP change (PHP runs as www-data when root invokes this script).
+log_pasv_address_change_event() {
+    local old_ip="$1" new_ip="$2" host="$3"
+    local php_code='require_once "/var/www/html/lib/logger.php"; aviationwx_log("info", "Dynamic DNS: PASV address updated", ["old_ip" => (string) (getenv("AVWX_OLD_IP") ?: ""), "new_ip" => (string) (getenv("AVWX_NEW_IP") ?: ""), "hostname" => (string) (getenv("AVWX_HOST") ?: "")], "app");'
+    if command -v runuser >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+        runuser -u www-data -- env \
+            "CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}" \
+            "AVWX_OLD_IP=${old_ip}" \
+            "AVWX_NEW_IP=${new_ip}" \
+            "AVWX_HOST=${host}" \
+            "$APP_PHP" -r "$php_code" 2>/dev/null || true
+    else
+        env \
+            "CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}" \
+            "AVWX_OLD_IP=${old_ip}" \
+            "AVWX_NEW_IP=${new_ip}" \
+            "AVWX_HOST=${host}" \
+            "$APP_PHP" -r "$php_code" 2>/dev/null || true
+    fi
 }
 
 # Check if dynamic DNS is enabled (returns 0 if public_ip is set)
-PUBLIC_IP=$(get_config_value "getPublicIP")
+PUBLIC_IP=$(read_public_ip_from_config)
 if [[ -n "$PUBLIC_IP" ]]; then
     log_info "Static public_ip is configured ($PUBLIC_IP) - dynamic DNS refresh not needed"
     exit 0
 fi
 
 # Get the upload hostname to resolve
-UPLOAD_HOSTNAME=$(get_config_value "getUploadHostname")
+UPLOAD_HOSTNAME=$(read_upload_hostname_from_config)
 if [[ -z "$UPLOAD_HOSTNAME" ]]; then
     log_error "Could not determine upload hostname from config"
     exit 1
@@ -167,14 +206,7 @@ if pgrep -x vsftpd > /dev/null 2>&1; then
     
     # Log the change for monitoring
     if [[ -n "$CURRENT_PASV" ]]; then
-        php -r "
-            require_once '/var/www/html/lib/logger.php';
-            aviationwx_log('info', 'Dynamic DNS: PASV address updated', [
-                'old_ip' => '$CURRENT_PASV',
-                'new_ip' => '$NEW_IP',
-                'hostname' => '$UPLOAD_HOSTNAME'
-            ], 'app');
-        " 2>/dev/null || true
+        log_pasv_address_change_event "$CURRENT_PASV" "$NEW_IP" "$UPLOAD_HOSTNAME"
     fi
     
     exit 0
