@@ -62,6 +62,24 @@ final class ProductionHealthCheckAirportsTest extends TestCase
         }
     }
 
+    public function testNeverSamplesRowsWithoutWeatherWhenPadding(): void
+    {
+        $list = [
+            'success' => true,
+            'airports' => [
+                ['id' => 'nowx', 'has_weather' => false, 'has_webcams' => true],
+                ['id' => 'wx1', 'has_weather' => true, 'has_webcams' => false],
+            ],
+        ];
+        for ($i = 0; $i < 25; $i++) {
+            $out = production_health_check_pick_sample_airports($list, 'kspb', 5);
+            $this->assertCount(5, $out);
+            foreach ($out as $id) {
+                $this->assertSame('wx1', $id);
+            }
+        }
+    }
+
     public function testPadsWithRepeatWhenPoolSmallerThanCount(): void
     {
         $list = [

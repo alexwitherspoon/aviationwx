@@ -11,8 +11,9 @@ declare(strict_types=1);
  * Pick airport ids to sample for Public API weather and webcams probes.
  *
  * Prefers listed airports with both weather and webcams configured: all available both-capable ids
- * are taken first (in random order), then remaining slots use weather-only ids. Pads with repeats
- * when the pool is smaller than $count.
+ * are taken first (in random order), then remaining slots use other weather-capable ids (weather-only
+ * or both). Rows without has_weather are never sampled because /weather probes require weather.
+ * Pads with repeats from already picked weather-capable ids when the pool is smaller than $count.
  *
  * @param array<string, mixed>|null $listJson Decoded JSON from a successful GET /v1/airports response
  * @param string $fallbackId Lowercase airport id when the list is missing or unusable
@@ -52,11 +53,13 @@ function production_health_check_pick_sample_airports(?array $listJson, string $
     }
     $both = array_values(array_unique($both));
     $weatherOnly = array_values(array_unique($weatherOnly));
+    $weatherCapablePool = array_values(array_unique(array_merge($both, $weatherOnly)));
 
     $picked = [];
     if ($both !== []) {
-        shuffle($both);
-        $picked = array_slice($both, 0, min($count, count($both)));
+        $shuffledBoth = $both;
+        shuffle($shuffledBoth);
+        $picked = array_slice($shuffledBoth, 0, min($count, count($shuffledBoth)));
     }
 
     $need = $count - count($picked);
@@ -69,16 +72,10 @@ function production_health_check_pick_sample_airports(?array $listJson, string $
         $need = $count - count($picked);
     }
 
-    if ($need > 0) {
-        $anyIds = [];
-        foreach ($rows as $row) {
-            if (is_array($row) && !empty($row['id']) && is_string($row['id'])) {
-                $anyIds[] = strtolower($row['id']);
-            }
-        }
-        $anyIds = array_values(array_unique(array_diff($anyIds, $picked)));
-        shuffle($anyIds);
-        foreach (array_slice($anyIds, 0, $need) as $id) {
+    if ($need > 0 && $weatherCapablePool !== []) {
+        $fill = array_values(array_diff($weatherCapablePool, $picked));
+        shuffle($fill);
+        foreach (array_slice($fill, 0, $need) as $id) {
             $picked[] = $id;
         }
         $need = $count - count($picked);
