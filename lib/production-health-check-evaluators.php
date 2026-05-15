@@ -13,7 +13,7 @@ declare(strict_types=1);
  * Decode a JSON object body to an associative array for probe scripts.
  *
  * Uses a depth limit to avoid stack exhaustion on hostile payloads. Returns null on empty body,
- * invalid JSON, or non-object top-level values.
+ * invalid JSON, or when the top-level JSON value is not a JSON object (arrays, scalars, null).
  *
  * @param string $body Raw HTTP body
  * @param int $maxDepth Maximum nesting depth for json_decode
@@ -24,14 +24,16 @@ function production_health_check_json_decode_assoc(string $body, int $maxDepth =
     if ($body === '') {
         return null;
     }
-    $decoded = json_decode($body, true, $maxDepth, JSON_BIGINT_AS_STRING);
+    $flags = JSON_BIGINT_AS_STRING;
+    $tree = json_decode($body, false, $maxDepth, $flags);
     if (json_last_error() !== JSON_ERROR_NONE) {
         return null;
     }
-    if (!is_array($decoded)) {
+    if (!$tree instanceof stdClass) {
         return null;
     }
-    if (array_is_list($decoded)) {
+    $decoded = json_decode($body, true, $maxDepth, $flags);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
         return null;
     }
 

@@ -209,6 +209,11 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
         $this->assertNull(production_health_check_json_decode_assoc('[1,2]'));
     }
 
+    public function testJsonDecodeAssocEmptyTopLevelObjectAccepted(): void
+    {
+        $this->assertSame([], production_health_check_json_decode_assoc('{}'));
+    }
+
     public function testJsonDecodeAssocRejectsExcessiveDepth(): void
     {
         $inner = '{}';
