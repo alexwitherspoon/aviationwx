@@ -20,7 +20,7 @@ declare(strict_types=1);
  * @param int $count Number of samples (each later gets weather + webcams requests)
  * @return array<int, string> Lowercase ids, length exactly max(1, $count)
  */
-function production_health_check_pick_sample_airports(?array $listJson, string $fallbackId, int $count): array
+function productionHealthCheckPickSampleAirports(?array $listJson, string $fallbackId, int $count): array
 {
     $fallbackId = strtolower(trim($fallbackId));
     if ($fallbackId === '') {

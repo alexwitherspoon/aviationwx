@@ -19,7 +19,7 @@ declare(strict_types=1);
  * @param int $maxDepth Maximum nesting depth for json_decode
  * @return array<string, mixed>|null
  */
-function production_health_check_json_decode_assoc(string $body, int $maxDepth = 64): ?array
+function productionHealthCheckJsonDecodeAssoc(string $body, int $maxDepth = 64): ?array
 {
     if ($body === '') {
         return null;
@@ -46,7 +46,7 @@ function production_health_check_json_decode_assoc(string $body, int $maxDepth =
  * @param mixed $json Decoded JSON (typically array)
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_status_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1StatusJson(mixed $json): array
 {
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
@@ -71,7 +71,7 @@ function production_health_check_evaluate_api_v1_status_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_version_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1VersionJson(mixed $json): array
 {
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
@@ -94,7 +94,7 @@ function production_health_check_evaluate_api_v1_version_json(mixed $json): arra
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_openapi_json(mixed $json): array
+function productionHealthCheckEvaluateOpenapiJson(mixed $json): array
 {
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
@@ -121,7 +121,7 @@ function production_health_check_evaluate_openapi_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_operations_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1OperationsJson(mixed $json): array
 {
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
@@ -146,7 +146,7 @@ function production_health_check_evaluate_api_v1_operations_json(mixed $json): a
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_health_live_json(mixed $json): array
+function productionHealthCheckEvaluateHealthLiveJson(mixed $json): array
 {
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
@@ -167,7 +167,7 @@ function production_health_check_evaluate_health_live_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_health_ready_json(mixed $json): array
+function productionHealthCheckEvaluateHealthReadyJson(mixed $json): array
 {
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
@@ -188,7 +188,7 @@ function production_health_check_evaluate_health_ready_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_outage_status_json(mixed $json): array
+function productionHealthCheckEvaluateOutageStatusJson(mixed $json): array
 {
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
@@ -217,7 +217,7 @@ function production_health_check_evaluate_outage_status_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_embed_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1EmbedJson(mixed $json): array
 {
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
@@ -242,7 +242,7 @@ function production_health_check_evaluate_api_v1_embed_json(mixed $json): array
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_weather_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1WeatherJson(mixed $json): array
 {
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
@@ -260,7 +260,7 @@ function production_health_check_evaluate_api_v1_weather_json(mixed $json): arra
  * @param mixed $json Decoded JSON
  * @return array{ok: bool, detail: string}
  */
-function production_health_check_evaluate_api_v1_webcams_json(mixed $json): array
+function productionHealthCheckEvaluateApiV1WebcamsJson(mixed $json): array
 {
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];

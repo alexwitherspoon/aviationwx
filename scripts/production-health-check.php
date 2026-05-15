@@ -108,7 +108,7 @@ function productionHealthCheckFetchAirportsList(string $api, int $timeout): arra
     );
     $json = null;
     if ($r['body'] !== '') {
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
     }
 
     return [
@@ -270,7 +270,7 @@ $googleEmbedOrigin = 'https://1912747447-atari-embeds.googleusercontent.com';
 
 $sampleCount = productionHealthCheckReadSampleAirportCount();
 $airportsList = productionHealthCheckFetchAirportsList($api, $timeout);
-$sampleAirports = production_health_check_pick_sample_airports($airportsList['json'], $icao, $sampleCount);
+$sampleAirports = productionHealthCheckPickSampleAirports($airportsList['json'], $icao, $sampleCount);
 
 $sampleChecks = [];
 foreach ($sampleAirports as $sampleIndex => $sampleId) {
@@ -294,11 +294,11 @@ foreach ($sampleAirports as $sampleIndex => $sampleId) {
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_weather_json($json);
+        $ev = productionHealthCheckEvaluateApiV1WeatherJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -317,11 +317,11 @@ foreach ($sampleAirports as $sampleIndex => $sampleId) {
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_webcams_json($json);
+        $ev = productionHealthCheckEvaluateApiV1WebcamsJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -400,11 +400,11 @@ $checksHead = [
         if ($acao === '') {
             return ['ok' => false, 'detail' => 'missing Access-Control-Allow-Origin'];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_embed_json($json);
+        $ev = productionHealthCheckEvaluateApiV1EmbedJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -419,11 +419,11 @@ $checksHead = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_embed_json($json);
+        $ev = productionHealthCheckEvaluateApiV1EmbedJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -434,11 +434,11 @@ $checksHead = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_version_json($json);
+        $ev = productionHealthCheckEvaluateApiV1VersionJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -452,11 +452,11 @@ $checksHead = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_status_json($json);
+        $ev = productionHealthCheckEvaluateApiV1StatusJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -470,11 +470,11 @@ $checksHead = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_api_v1_operations_json($json);
+        $ev = productionHealthCheckEvaluateApiV1OperationsJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -572,11 +572,11 @@ $checksTail = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_outage_status_json($json);
+        $ev = productionHealthCheckEvaluateOutageStatusJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -587,11 +587,11 @@ $checksTail = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_health_live_json($json);
+        $ev = productionHealthCheckEvaluateHealthLiveJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -602,11 +602,11 @@ $checksTail = [
         if (!in_array($r['code'], [200, 503], true)) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_health_ready_json($json);
+        $ev = productionHealthCheckEvaluateHealthReadyJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
@@ -617,11 +617,11 @@ $checksTail = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = production_health_check_json_decode_assoc($r['body']);
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
         if ($json === null) {
             return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        $ev = production_health_check_evaluate_openapi_json($json);
+        $ev = productionHealthCheckEvaluateOpenapiJson($json);
         if (!$ev['ok']) {
             return ['ok' => false, 'detail' => $ev['detail']];
         }
