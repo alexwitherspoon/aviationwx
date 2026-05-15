@@ -40,6 +40,28 @@ final class ProductionHealthCheckAirportsTest extends TestCase
         $this->assertSame(['bbb', 'ccc', 'ddd'], $out);
     }
 
+    public function testTakesAllBothCapableBeforeWeatherOnlyFillers(): void
+    {
+        $list = [
+            'success' => true,
+            'airports' => [
+                ['id' => 'w1', 'has_weather' => true, 'has_webcams' => false],
+                ['id' => 'w2', 'has_weather' => true, 'has_webcams' => false],
+                ['id' => 'w3', 'has_weather' => true, 'has_webcams' => false],
+                ['id' => 'w4', 'has_weather' => true, 'has_webcams' => false],
+                ['id' => 'w5', 'has_weather' => true, 'has_webcams' => false],
+                ['id' => 'b1', 'has_weather' => true, 'has_webcams' => true],
+                ['id' => 'b2', 'has_weather' => true, 'has_webcams' => true],
+            ],
+        ];
+        for ($i = 0; $i < 40; $i++) {
+            $out = production_health_check_pick_sample_airports($list, 'kspb', 3);
+            $this->assertCount(3, $out);
+            $this->assertContains('b1', $out);
+            $this->assertContains('b2', $out);
+        }
+    }
+
     public function testPadsWithRepeatWhenPoolSmallerThanCount(): void
     {
         $list = [

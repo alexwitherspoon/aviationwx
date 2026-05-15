@@ -10,8 +10,9 @@ declare(strict_types=1);
 /**
  * Pick airport ids to sample for Public API weather and webcams probes.
  *
- * Prefers listed airports with both weather and webcams configured. Pads with repeats when the
- * pool is smaller than $count.
+ * Prefers listed airports with both weather and webcams configured: all available both-capable ids
+ * are taken first (in random order), then remaining slots use weather-only ids. Pads with repeats
+ * when the pool is smaller than $count.
  *
  * @param array<string, mixed>|null $listJson Decoded JSON from a successful GET /v1/airports response
  * @param string $fallbackId Lowercase airport id when the list is missing or unusable
@@ -51,22 +52,41 @@ function production_health_check_pick_sample_airports(?array $listJson, string $
     }
     $both = array_values(array_unique($both));
     $weatherOnly = array_values(array_unique($weatherOnly));
-    $pool = count($both) >= $count ? $both : array_merge($both, array_values(array_diff($weatherOnly, $both)));
-    $pool = array_values(array_unique($pool));
-    if ($pool === []) {
-        $ids = [];
+
+    $picked = [];
+    if ($both !== []) {
+        shuffle($both);
+        $picked = array_slice($both, 0, min($count, count($both)));
+    }
+
+    $need = $count - count($picked);
+    if ($need > 0 && $weatherOnly !== []) {
+        $fill = array_values(array_diff($weatherOnly, $picked));
+        shuffle($fill);
+        foreach (array_slice($fill, 0, $need) as $id) {
+            $picked[] = $id;
+        }
+        $need = $count - count($picked);
+    }
+
+    if ($need > 0) {
+        $anyIds = [];
         foreach ($rows as $row) {
             if (is_array($row) && !empty($row['id']) && is_string($row['id'])) {
-                $ids[] = strtolower($row['id']);
+                $anyIds[] = strtolower($row['id']);
             }
         }
-        $pool = array_values(array_unique($ids));
+        $anyIds = array_values(array_unique(array_diff($anyIds, $picked)));
+        shuffle($anyIds);
+        foreach (array_slice($anyIds, 0, $need) as $id) {
+            $picked[] = $id;
+        }
+        $need = $count - count($picked);
     }
-    if ($pool === []) {
+
+    if ($picked === []) {
         return array_fill(0, $count, $fallbackId);
     }
-    shuffle($pool);
-    $picked = array_slice($pool, 0, min($count, count($pool)));
     while (count($picked) < $count) {
         $picked[] = $picked[random_int(0, count($picked) - 1)];
     }
