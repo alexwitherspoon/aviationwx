@@ -488,7 +488,7 @@ $checksHead = [
             return ['ok' => false, 'detail' => 'HTTP ' . $airportsList['code'] . ' ' . $airportsList['error']];
         }
         $j = $airportsList['json'];
-        if (!is_array($j) || ($j['success'] ?? null) !== true || !isset($j['airports']) || !is_array($j['airports'])) {
+        if (!is_array($j) || ($j['success'] ?? null) !== true || !isset($j['airports']) || !is_array($j['airports']) || !array_is_list($j['airports'])) {
             return ['ok' => false, 'detail' => 'invalid airports JSON'];
         }
 

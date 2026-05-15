@@ -265,8 +265,8 @@ function production_health_check_evaluate_api_v1_webcams_json(mixed $json): arra
     if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
     }
-    if (!array_key_exists('webcams', $json) || !is_array($json['webcams'])) {
-        return ['ok' => false, 'detail' => 'missing webcams array'];
+    if (!array_key_exists('webcams', $json) || !is_array($json['webcams']) || !array_is_list($json['webcams'])) {
+        return ['ok' => false, 'detail' => 'missing webcams list'];
     }
 
     return ['ok' => true, 'detail' => 'webcams payload present'];

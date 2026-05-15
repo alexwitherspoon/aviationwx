@@ -188,6 +188,12 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
         $this->assertFalse(production_health_check_evaluate_api_v1_webcams_json($j)['ok']);
     }
 
+    public function testWebcamsV1AssociativePayloadFails(): void
+    {
+        $j = ['success' => true, 'webcams' => ['not' => 'a list']];
+        $this->assertFalse(production_health_check_evaluate_api_v1_webcams_json($j)['ok']);
+    }
+
     public function testJsonDecodeAssocValidObject(): void
     {
         $this->assertSame(['a' => 1], production_health_check_json_decode_assoc('{"a":1}'));
