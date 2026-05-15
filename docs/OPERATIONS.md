@@ -101,7 +101,7 @@ When an airport has no `weather_sources` or a webcam slot has no acquisition set
 
 ### External probes (GitHub Actions)
 
-The **`production-health-check`** workflow runs **`scripts/production-health-check.php`** on a schedule against public HTTPS URLs (main site, Public API, embed host, internal-style routes). **`docs/TESTING.md`** lists the workflow and **`make production-health-check`** for manual runs.
+The **`production-health-check`** workflow runs **`scripts/production-health-check.php`** on a schedule against public HTTPS URLs (main site, Public API, embed host, internal-style routes). The script paces outbound requests (default **1 request per second** between starts via `HEALTH_CHECK_MIN_INTERVAL_SECONDS`), performs **one** `GET /v1/airports` to validate the list, then samples **three random listed airports** per run (`HEALTH_CHECK_SAMPLE_AIRPORTS`) for Public API **weather** and **webcams** only (not every airport). **JSON probes** (status, version, operations, OpenAPI, health live/ready, outage banner, embed payloads) use shared validators in **`lib/production-health-check-evaluators.php`**. **`make production-health-check`** runs the same script locally (requires network).
 
 ### Scheduler Verification
 

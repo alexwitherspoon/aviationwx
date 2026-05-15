@@ -7,16 +7,116 @@
  * Used by .github/workflows/production-health-check.yml (daily schedule).
  *
  * Environment (optional overrides):
- * - HEALTH_CHECK_MAIN     default https://aviationwx.org
- * - HEALTH_CHECK_API      default https://api.aviationwx.org
- * - HEALTH_CHECK_EMBED    default https://embed.aviationwx.org
- * - HEALTH_CHECK_ICAO     default kspb (lowercase, listed airport)
- * - HEALTH_CHECK_TIMEOUT  default 20 (seconds)
+ * - HEALTH_CHECK_MAIN                    default https://aviationwx.org
+ * - HEALTH_CHECK_API                     default https://api.aviationwx.org
+ * - HEALTH_CHECK_EMBED                   default https://embed.aviationwx.org
+ * - HEALTH_CHECK_ICAO                    default kspb (lowercase; embed, dashboard, internal routes)
+ * - HEALTH_CHECK_TIMEOUT                 default 20 (seconds)
+ * - HEALTH_CHECK_MIN_INTERVAL_SECONDS    default 1.0 (minimum time between request starts; reduces burst traffic; non-numeric values fall back to 1.0; 0 disables throttling)
+ * - HEALTH_CHECK_SAMPLE_AIRPORTS         default 3 (random listed airports for Public API weather + webcams only; non-numeric values fall back to 3; 0 clamps to 1)
+ *
+ * Reliable JSON/static probes validate response shape (see lib/production-health-check-evaluators.php).
  *
  * @package AviationWX
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/../lib/production-health-check-airports.php';
+require_once __DIR__ . '/../lib/production-health-check-evaluators.php';
+
+/**
+ * Minimum spacing between outbound HTTP request starts (wall clock).
+ *
+ * @return float Seconds between request starts; non-numeric env values fall back to 1.0; 0 disables throttling (for local runs only)
+ */
+function productionHealthCheckMinIntervalSeconds(): float
+{
+    $raw = getenv('HEALTH_CHECK_MIN_INTERVAL_SECONDS');
+    if ($raw === false || $raw === '') {
+        return 1.0;
+    }
+    $t = trim((string) $raw);
+    if (!is_numeric($t)) {
+        return 1.0;
+    }
+    $v = (float) $t;
+    if ($v <= 0) {
+        return 0.0;
+    }
+
+    return $v;
+}
+
+/**
+ * Read HEALTH_CHECK_SAMPLE_AIRPORTS: default 3, minimum 1 sample; invalid non-numeric uses default.
+ *
+ * @return int Number of random airports to probe for weather and webcams
+ */
+function productionHealthCheckReadSampleAirportCount(): int
+{
+    $raw = getenv('HEALTH_CHECK_SAMPLE_AIRPORTS');
+    if ($raw === false || $raw === '') {
+        return 3;
+    }
+    $t = trim((string) $raw);
+    if (!is_numeric($t)) {
+        return 3;
+    }
+
+    return max(1, (int) $t);
+}
+
+/**
+ * Sleep until at least $interval seconds have passed since the previous request start marker.
+ *
+ * Chunked usleep (max 1s per iteration) avoids a single huge delay on platforms with usec limits.
+ */
+function productionHealthCheckThrottleBeforeRequest(): void
+{
+    static $lastRequestStart = null;
+    $interval = productionHealthCheckMinIntervalSeconds();
+    if ($interval <= 0) {
+        return;
+    }
+    if ($lastRequestStart !== null) {
+        $earliestNext = $lastRequestStart + $interval;
+        $now = microtime(true);
+        while ($now < $earliestNext) {
+            $sleepUsec = (int) round(min($earliestNext - $now, 1.0) * 1_000_000);
+            if ($sleepUsec < 1) {
+                $sleepUsec = 1;
+            }
+            usleep($sleepUsec);
+            $now = microtime(true);
+        }
+    }
+    $lastRequestStart = microtime(true);
+}
+
+/**
+ * Fetch GET /v1/airports once (throttled). Used for list validation and random sampling.
+ *
+ * @return array{code: int, json: array<string, mixed>|null, error: string}
+ */
+function productionHealthCheckFetchAirportsList(string $api, int $timeout): array
+{
+    $r = productionHealthCheckRequest(
+        $api . '/v1/airports',
+        productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
+        $timeout
+    );
+    $json = null;
+    if ($r['body'] !== '') {
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+    }
+
+    return [
+        'code' => $r['code'],
+        'json' => $json,
+        'error' => $r['error'],
+    ];
+}
 
 /**
  * HTTP GET with optional request headers; follows redirects.
@@ -46,6 +146,7 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
             'final_url' => $url,
         ];
     }
+    productionHealthCheckThrottleBeforeRequest();
     $ch = curl_init($url);
     if ($ch === false) {
         return [
@@ -88,7 +189,6 @@ function productionHealthCheckRequest(string $url, array $requestHeaders, int $t
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
     $curlErr = curl_error($ch);
-    curl_close($ch);
 
     if ($body === false) {
         return [
@@ -126,10 +226,12 @@ function productionHealthCheckFormatHeaders(array $headers): array
 }
 
 /**
- * Run a single named check and prefix output with timing.
+ * Run a single named check and record wall-clock duration.
+ *
+ * Elapsed time includes any {@see productionHealthCheckThrottleBeforeRequest} sleep and the HTTP
+ * round trip for this callback (not comparable to server-side latency alone).
  *
  * Callback exceptions are caught and reported as a failed check row.
- *
  * @param string $name Stable check identifier (used in logs and GitHub summary)
  * @param callable(): array{ok: bool, detail?: string} $fn Check body
  * @return array{name: string, ok: bool, detail: string}
@@ -166,7 +268,69 @@ $icao = strtolower(trim((string) (getenv('HEALTH_CHECK_ICAO') ?: 'kspb')));
 $timeout = max(5, (int) (getenv('HEALTH_CHECK_TIMEOUT') ?: '20'));
 $googleEmbedOrigin = 'https://1912747447-atari-embeds.googleusercontent.com';
 
-$checks = [
+$sampleCount = productionHealthCheckReadSampleAirportCount();
+$airportsList = productionHealthCheckFetchAirportsList($api, $timeout);
+$sampleAirports = productionHealthCheckPickSampleAirports($airportsList['json'], $icao, $sampleCount);
+
+$sampleChecks = [];
+foreach ($sampleAirports as $sampleIndex => $sampleId) {
+    $checkSuffix = preg_replace('/[^a-z0-9-]/', '_', $sampleId);
+    if ($checkSuffix === '') {
+        $checkSuffix = 'airport';
+    }
+    $slotKey = (string) $sampleIndex . '_' . $checkSuffix;
+    $sampleChecks['api_v1_weather_' . $slotKey] = static function () use ($api, $sampleId, $timeout) {
+        $r = productionHealthCheckRequest(
+            $api . '/v1/airports/' . rawurlencode($sampleId) . '/weather',
+            productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
+            $timeout
+        );
+        if ($r['code'] === 503) {
+            return ['ok' => true, 'detail' => 'HTTP 503 (upstream)'];
+        }
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
+        if ($r['code'] !== 200) {
+            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
+        }
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateApiV1WeatherJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
+    };
+    $sampleChecks['api_v1_webcams_' . $slotKey] = static function () use ($api, $sampleId, $timeout) {
+        $r = productionHealthCheckRequest(
+            $api . '/v1/airports/' . rawurlencode($sampleId) . '/webcams',
+            productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
+            $timeout
+        );
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
+        if ($r['code'] !== 200) {
+            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
+        }
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateApiV1WebcamsJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
+    };
+}
+
+$checksHead = [
     'embed_widget_js' => static function () use ($embed, $timeout) {
         $r = productionHealthCheckRequest($embed . '/widget.js', [], $timeout);
         if ($r['code'] !== 200) {
@@ -176,6 +340,17 @@ $checks = [
         if (stripos($ct, 'javascript') === false && stripos($ct, 'application/javascript') === false && stripos($ct, 'text/javascript') === false) {
             return ['ok' => false, 'detail' => 'unexpected content-type: ' . $ct];
         }
+        if (strlen($r['body']) < 200) {
+            return ['ok' => false, 'detail' => 'body too small'];
+        }
+        $body = $r['body'];
+        // Public embed contract: custom element tag and registration (not comment text or branding).
+        if (stripos($body, 'aviation-wx') === false) {
+            return ['ok' => false, 'detail' => 'missing custom element tag aviation-wx'];
+        }
+        if (stripos($body, 'customElements.define') === false) {
+            return ['ok' => false, 'detail' => 'missing customElements.define'];
+        }
         return ['ok' => true, 'detail' => 'HTTP 200'];
     },
     'embed_css' => static function () use ($embed, $timeout) {
@@ -183,7 +358,19 @@ $checks = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $ct = $r['headers']['content-type'] ?? '';
+        if (stripos($ct, 'text/css') === false) {
+            return ['ok' => false, 'detail' => 'unexpected content-type: ' . $ct];
+        }
+        if (strlen($r['body']) < 100) {
+            return ['ok' => false, 'detail' => 'CSS body too small'];
+        }
+        $body = $r['body'];
+        // Theme tokens shipped with embed widgets (stable contract; survives :root layout edits).
+        if (stripos($body, '--bg-color') === false || stripos($body, '--card-bg') === false) {
+            return ['ok' => false, 'detail' => 'missing expected theme CSS variables'];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200 + text/css'];
     },
     'embed_api_cors' => static function () use ($embed, $icao, $timeout, $googleEmbedOrigin) {
         $embedHost = parse_url($embed, PHP_URL_HOST);
@@ -213,9 +400,13 @@ $checks = [
         if ($acao === '') {
             return ['ok' => false, 'detail' => 'missing Access-Control-Allow-Origin'];
         }
-        $json = json_decode($r['body'], true);
-        if (!is_array($json) || empty($json['success']) || empty($json['data']['embed'])) {
-            return ['ok' => false, 'detail' => 'invalid embed JSON payload'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateApiV1EmbedJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
         }
         return ['ok' => true, 'detail' => '200 + CORS + embed JSON'];
     },
@@ -228,22 +419,30 @@ $checks = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = json_decode($r['body'], true);
-        if (!is_array($json) || empty($json['success'])) {
-            return ['ok' => false, 'detail' => 'invalid JSON'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $ev = productionHealthCheckEvaluateApiV1EmbedJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
     'api_v1_version' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/v1/version.php', [], $timeout);
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = json_decode($r['body'], true);
-        if (!is_array($json)) {
-            return ['ok' => false, 'detail' => 'not JSON'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $ev = productionHealthCheckEvaluateApiV1VersionJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
     'api_v1_status' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/v1/status', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
@@ -253,7 +452,15 @@ $checks = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateApiV1StatusJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
     'api_v1_operations' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/v1/operations', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
@@ -263,53 +470,33 @@ $checks = [
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        $json = json_decode($r['body'], true);
-        if (!is_array($json) || empty($json['success']) || !isset($json['operations']['snapshot_meta'])) {
-            return ['ok' => false, 'detail' => 'invalid operations JSON'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $ev = productionHealthCheckEvaluateApiV1OperationsJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
-    'api_v1_airports' => static function () use ($api, $timeout) {
-        $r = productionHealthCheckRequest($api . '/v1/airports', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
-        if ($r['code'] === 429) {
+    'api_v1_airports' => static function () use ($airportsList) {
+        if ($airportsList['code'] === 429) {
             return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
         }
-        if ($r['code'] !== 200) {
-            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
+        if ($airportsList['code'] !== 200) {
+            return ['ok' => false, 'detail' => 'HTTP ' . $airportsList['code'] . ' ' . $airportsList['error']];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $j = $airportsList['json'];
+        if (!is_array($j) || ($j['success'] ?? null) !== true || !isset($j['airports']) || !is_array($j['airports']) || !array_is_list($j['airports'])) {
+            return ['ok' => false, 'detail' => 'invalid airports JSON'];
+        }
+
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . count($j['airports']) . ' airports (list used for random samples)'];
     },
-    'api_v1_weather' => static function () use ($api, $icao, $timeout) {
-        $r = productionHealthCheckRequest(
-            $api . '/v1/airports/' . rawurlencode($icao) . '/weather',
-            productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
-            $timeout
-        );
-        if ($r['code'] === 503) {
-            return ['ok' => true, 'detail' => 'HTTP 503 (upstream)'];
-        }
-        if ($r['code'] === 429) {
-            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
-        }
-        if ($r['code'] !== 200) {
-            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
-        }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
-    },
-    'api_v1_webcams' => static function () use ($api, $icao, $timeout) {
-        $r = productionHealthCheckRequest(
-            $api . '/v1/airports/' . rawurlencode($icao) . '/webcams',
-            productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
-            $timeout
-        );
-        if ($r['code'] === 429) {
-            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
-        }
-        if ($r['code'] !== 200) {
-            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
-        }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
-    },
+];
+
+$checksTail = [
     'main_home' => static function () use ($main, $timeout) {
         $r = productionHealthCheckRequest($main . '/', [], $timeout);
         if ($r['code'] !== 200) {
@@ -373,26 +560,72 @@ $checks = [
         }
         return ['ok' => true, 'detail' => 'HTTP 200'];
     },
+    'outage_status_json' => static function () use ($main, $icao, $timeout) {
+        $r = productionHealthCheckRequest(
+            $main . '/api/outage-status.php?airport=' . rawurlencode($icao),
+            productionHealthCheckFormatHeaders(['Accept' => 'application/json']),
+            $timeout
+        );
+        if ($r['code'] === 429) {
+            return ['ok' => true, 'detail' => 'HTTP 429 (rate limit)'];
+        }
+        if ($r['code'] !== 200) {
+            return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
+        }
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateOutageStatusJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
+    },
     'health_live' => static function () use ($main, $timeout) {
         $r = productionHealthCheckRequest($main . '/health/health.php', [], $timeout);
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateHealthLiveJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
     'health_ready' => static function () use ($main, $timeout) {
         $r = productionHealthCheckRequest($main . '/health/ready.php', [], $timeout);
         if (!in_array($r['code'], [200, 503], true)) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        return ['ok' => true, 'detail' => 'HTTP ' . $r['code']];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateHealthReadyJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP ' . $r['code'] . ', ' . $ev['detail']];
     },
     'openapi_json' => static function () use ($api, $timeout) {
         $r = productionHealthCheckRequest($api . '/openapi.json', productionHealthCheckFormatHeaders(['Accept' => 'application/json']), $timeout);
         if ($r['code'] !== 200) {
             return ['ok' => false, 'detail' => 'HTTP ' . $r['code']];
         }
-        return ['ok' => true, 'detail' => 'HTTP 200'];
+        $json = productionHealthCheckJsonDecodeAssoc($r['body']);
+        if ($json === null) {
+            return ['ok' => false, 'detail' => 'invalid JSON body'];
+        }
+        $ev = productionHealthCheckEvaluateOpenapiJson($json);
+        if (!$ev['ok']) {
+            return ['ok' => false, 'detail' => $ev['detail']];
+        }
+        return ['ok' => true, 'detail' => 'HTTP 200, ' . $ev['detail']];
     },
     'map_tiles_proxy' => static function () use ($main, $timeout) {
         $url = $main . '/api/map-tiles.php?layer=clouds_new&z=1&x=0&y=0';
@@ -406,6 +639,17 @@ $checks = [
         return ['ok' => true, 'detail' => 'HTTP ' . $r['code']];
     },
 ];
+
+$checks = array_merge($checksHead, $sampleChecks, $checksTail);
+
+fwrite(
+    STDOUT,
+    '# Airport list: 1 request; sample IDs for Public API weather/webcams: '
+        . implode(', ', $sampleAirports)
+        . '; min interval '
+        . (string) productionHealthCheckMinIntervalSeconds()
+        . "s between request starts\n"
+);
 
 $failed = 0;
 $rows = [];

@@ -39,6 +39,8 @@ jobs:
           HEALTH_CHECK_EMBED: https://embed.aviationwx.org
           HEALTH_CHECK_ICAO: kspb
           HEALTH_CHECK_TIMEOUT: '25'
+          HEALTH_CHECK_MIN_INTERVAL_SECONDS: '1'
+          HEALTH_CHECK_SAMPLE_AIRPORTS: '3'
         run: php scripts/production-health-check.php
 
       - name: Built-in aviation HTTPS URLs
