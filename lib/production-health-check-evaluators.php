@@ -31,6 +31,9 @@ function production_health_check_json_decode_assoc(string $body, int $maxDepth =
     if (!is_array($decoded)) {
         return null;
     }
+    if (array_is_list($decoded)) {
+        return null;
+    }
 
     return $decoded;
 }
@@ -43,7 +46,7 @@ function production_health_check_json_decode_assoc(string $body, int $maxDepth =
  */
 function production_health_check_evaluate_api_v1_status_json(mixed $json): array
 {
-    if (!is_array($json) || empty($json['success'])) {
+    if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
     }
     if (!isset($json['status']) || !is_array($json['status'])) {
@@ -103,6 +106,9 @@ function production_health_check_evaluate_openapi_json(mixed $json): array
     if (!isset($json['info']) || !is_array($json['info'])) {
         return ['ok' => false, 'detail' => 'missing info object'];
     }
+    if (!isset($json['paths']) || !is_array($json['paths'])) {
+        return ['ok' => false, 'detail' => 'missing paths object'];
+    }
 
     return ['ok' => true, 'detail' => 'OpenAPI ' . $json['openapi']];
 }
@@ -115,7 +121,7 @@ function production_health_check_evaluate_openapi_json(mixed $json): array
  */
 function production_health_check_evaluate_api_v1_operations_json(mixed $json): array
 {
-    if (!is_array($json) || empty($json['success'])) {
+    if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
     }
     if (!isset($json['operations']) || !is_array($json['operations'])) {
@@ -124,8 +130,12 @@ function production_health_check_evaluate_api_v1_operations_json(mixed $json): a
     if (!isset($json['operations']['snapshot_meta']) || !is_array($json['operations']['snapshot_meta'])) {
         return ['ok' => false, 'detail' => 'missing operations.snapshot_meta'];
     }
+    $meta = $json['operations']['snapshot_meta'];
+    if (!isset($meta['schema_version']) || !is_numeric($meta['schema_version'])) {
+        return ['ok' => false, 'detail' => 'missing operations.snapshot_meta.schema_version'];
+    }
 
-    return ['ok' => true, 'detail' => 'snapshot_meta present'];
+    return ['ok' => true, 'detail' => 'snapshot_meta ok'];
 }
 
 /**
@@ -181,7 +191,7 @@ function production_health_check_evaluate_outage_status_json(mixed $json): array
     if (!is_array($json)) {
         return ['ok' => false, 'detail' => 'not a JSON object'];
     }
-    if (empty($json['success'])) {
+    if (($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
     }
     foreach (['maintenance', 'in_outage', 'limited_availability'] as $boolKey) {
@@ -207,7 +217,7 @@ function production_health_check_evaluate_outage_status_json(mixed $json): array
  */
 function production_health_check_evaluate_api_v1_embed_json(mixed $json): array
 {
-    if (!is_array($json) || empty($json['success'])) {
+    if (!is_array($json) || ($json['success'] ?? null) !== true) {
         return ['ok' => false, 'detail' => 'missing or false success'];
     }
     if (!isset($json['data']) || !is_array($json['data'])) {
@@ -216,6 +226,46 @@ function production_health_check_evaluate_api_v1_embed_json(mixed $json): array
     if (!isset($json['data']['embed']) || !is_array($json['data']['embed'])) {
         return ['ok' => false, 'detail' => 'missing data.embed object'];
     }
+    $embed = $json['data']['embed'];
+    if ($embed === [] || array_is_list($embed)) {
+        return ['ok' => false, 'detail' => 'data.embed must be a non-empty object'];
+    }
 
     return ['ok' => true, 'detail' => 'embed payload present'];
+}
+
+/**
+ * Evaluate GET /v1/airports/{id}/weather JSON (Public API success envelope).
+ *
+ * @param mixed $json Decoded JSON
+ * @return array{ok: bool, detail: string}
+ */
+function production_health_check_evaluate_api_v1_weather_json(mixed $json): array
+{
+    if (!is_array($json) || ($json['success'] ?? null) !== true) {
+        return ['ok' => false, 'detail' => 'missing or false success'];
+    }
+    if (!isset($json['weather']) || !is_array($json['weather'])) {
+        return ['ok' => false, 'detail' => 'missing weather object'];
+    }
+
+    return ['ok' => true, 'detail' => 'weather payload present'];
+}
+
+/**
+ * Evaluate GET /v1/airports/{id}/webcams JSON (Public API success envelope).
+ *
+ * @param mixed $json Decoded JSON
+ * @return array{ok: bool, detail: string}
+ */
+function production_health_check_evaluate_api_v1_webcams_json(mixed $json): array
+{
+    if (!is_array($json) || ($json['success'] ?? null) !== true) {
+        return ['ok' => false, 'detail' => 'missing or false success'];
+    }
+    if (!array_key_exists('webcams', $json) || !is_array($json['webcams'])) {
+        return ['ok' => false, 'detail' => 'missing webcams array'];
+    }
+
+    return ['ok' => true, 'detail' => 'webcams payload present'];
 }

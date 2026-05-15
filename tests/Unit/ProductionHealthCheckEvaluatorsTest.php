@@ -31,6 +31,18 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
         $this->assertFalse($r['ok']);
     }
 
+    public function testStatusV1StringSuccessFails(): void
+    {
+        $j = [
+            'success' => 'true',
+            'status' => [
+                'status' => 'operational',
+                'checks' => ['configuration' => ['status' => 'operational']],
+            ],
+        ];
+        $this->assertFalse(production_health_check_evaluate_api_v1_status_json($j)['ok']);
+    }
+
     public function testVersionV1Valid(): void
     {
         $j = ['hash' => 'abc', 'timestamp' => 123, 'deploy_date' => '2026-01-01T00:00:00Z'];
@@ -56,8 +68,14 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
 
     public function testOpenapiValid(): void
     {
-        $j = ['openapi' => '3.0.3', 'info' => ['title' => 'T']];
+        $j = ['openapi' => '3.0.3', 'info' => ['title' => 'T'], 'paths' => []];
         $this->assertTrue(production_health_check_evaluate_openapi_json($j)['ok']);
+    }
+
+    public function testOpenapiMissingPathsFails(): void
+    {
+        $j = ['openapi' => '3.0.3', 'info' => ['title' => 'T']];
+        $this->assertFalse(production_health_check_evaluate_openapi_json($j)['ok']);
     }
 
     public function testOpenapiWrongMajor(): void
@@ -70,6 +88,12 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
     {
         $j = ['success' => true, 'operations' => ['snapshot_meta' => ['schema_version' => 1]]];
         $this->assertTrue(production_health_check_evaluate_api_v1_operations_json($j)['ok']);
+    }
+
+    public function testOperationsMissingSchemaVersionFails(): void
+    {
+        $j = ['success' => true, 'operations' => ['snapshot_meta' => []]];
+        $this->assertFalse(production_health_check_evaluate_api_v1_operations_json($j)['ok']);
     }
 
     public function testHealthLiveValid(): void
@@ -128,6 +152,42 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
         $this->assertTrue(production_health_check_evaluate_api_v1_embed_json($j)['ok']);
     }
 
+    public function testEmbedEmptyObjectFails(): void
+    {
+        $j = ['success' => true, 'data' => ['embed' => []]];
+        $this->assertFalse(production_health_check_evaluate_api_v1_embed_json($j)['ok']);
+    }
+
+    public function testEmbedListPayloadFails(): void
+    {
+        $j = ['success' => true, 'data' => ['embed' => [1, 2]]];
+        $this->assertFalse(production_health_check_evaluate_api_v1_embed_json($j)['ok']);
+    }
+
+    public function testWeatherV1Valid(): void
+    {
+        $j = ['success' => true, 'weather' => ['icao' => 'kspb']];
+        $this->assertTrue(production_health_check_evaluate_api_v1_weather_json($j)['ok']);
+    }
+
+    public function testWeatherV1MissingWeatherFails(): void
+    {
+        $j = ['success' => true];
+        $this->assertFalse(production_health_check_evaluate_api_v1_weather_json($j)['ok']);
+    }
+
+    public function testWebcamsV1Valid(): void
+    {
+        $j = ['success' => true, 'webcams' => []];
+        $this->assertTrue(production_health_check_evaluate_api_v1_webcams_json($j)['ok']);
+    }
+
+    public function testWebcamsV1MissingKeyFails(): void
+    {
+        $j = ['success' => true];
+        $this->assertFalse(production_health_check_evaluate_api_v1_webcams_json($j)['ok']);
+    }
+
     public function testJsonDecodeAssocValidObject(): void
     {
         $this->assertSame(['a' => 1], production_health_check_json_decode_assoc('{"a":1}'));
@@ -141,6 +201,12 @@ final class ProductionHealthCheckEvaluatorsTest extends TestCase
     public function testJsonDecodeAssocRejectsNonObjectTopLevel(): void
     {
         $this->assertNull(production_health_check_json_decode_assoc('"x"'));
+    }
+
+    public function testJsonDecodeAssocRejectsTopLevelArray(): void
+    {
+        $this->assertNull(production_health_check_json_decode_assoc('[]'));
+        $this->assertNull(production_health_check_json_decode_assoc('[1,2]'));
     }
 
     public function testJsonDecodeAssocRejectsExcessiveDepth(): void
