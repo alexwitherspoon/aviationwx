@@ -198,7 +198,7 @@ if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
 
 // TFR (Temporary Flight Restriction) filtering constants (nautical miles).
 // Default radius applies when the NOTAM body has no parseable NM radius.
-// Edge buffer applies only to polygon rings in lib/notam/filter.php, not to stated circle radii.
+// Edge buffer applies only to polygon rings in NOTAM TFR filtering, not to stated circle radii.
 
 // Default radius (NM) to assume when TFR radius cannot be parsed from text
 if (!defined('TFR_DEFAULT_RADIUS_NM')) {

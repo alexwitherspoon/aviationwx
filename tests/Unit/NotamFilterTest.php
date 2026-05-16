@@ -779,7 +779,7 @@ class NotamFilterTest extends TestCase {
     /**
      * TFR constants for default legacy disk radius, polygon edge buffer, and parsed-radius bounds.
      */
-    public function testTfrConstantsAreDefined() {
+    public function testTfrConstantsAreDefined(): void {
         $this->assertTrue(defined('TFR_DEFAULT_RADIUS_NM'), 'TFR_DEFAULT_RADIUS_NM should be defined');
         $this->assertTrue(defined('TFR_RELEVANCE_BUFFER_NM'), 'TFR_RELEVANCE_BUFFER_NM should be defined');
         $this->assertTrue(defined('TFR_RADIUS_MIN_NM'), 'TFR_RADIUS_MIN_NM should be defined');

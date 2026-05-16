@@ -433,8 +433,9 @@ function polygonCentroidLatLonFromVertices(array $vertices): ?array {
  * {@see isTfrRelevantToAirport()}; this function returns null for that case.
  * Otherwise: first coordinate with {@see TFR_DEFAULT_RADIUS_NM} (legacy single-point behavior).
  *
- * Disk path in {@see isTfrRelevantToAirport()}: distance to center <= returned radius (NM), with no
- * added {@see TFR_RELEVANCE_BUFFER_NM} (that buffer is for polygon edges only).
+ * For disk geometry returned here, {@see isTfrRelevantToAirport()} requires haversine distance
+ * from the airport to the center to be <= the returned radius (NM), with no added
+ * {@see TFR_RELEVANCE_BUFFER_NM} (that buffer is for polygon edges only).
  *
  * @param string $text NOTAM body
  * @param array<int, array{lat: float, lon: float}>|null $vertices Pre-parsed vertices to avoid a second scan of $text; null parses from $text
@@ -829,7 +830,8 @@ function isTfr(array $notam): bool {
  * 4. The airport is inside a closed polygon TFR (explicit ring closure or POINT OF
  *    ORIGIN), or within {@see TFR_RELEVANCE_BUFFER_NM} of its boundary; otherwise parsed
  *    circle radius or legacy default-radius disk uses haversine distance with no extra
- *    buffer beyond the published NM radius
+ *    buffer beyond the applicable NM radius (parsed circle or {@see TFR_DEFAULT_RADIUS_NM}
+ *    for legacy when no radius is stated)
  * 
  * All distance calculations use nautical miles (standard aviation unit).
  * Conservative approach: excludes TFR when coordinates cannot be parsed.
