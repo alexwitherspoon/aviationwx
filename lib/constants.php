@@ -191,6 +191,10 @@ if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
 if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
     define('NOTAM_RATE_LIMIT_SECONDS', 1); // 1 request per second
 }
+// Banner: include upcoming_future NOTAMs whose first restriction window starts within this horizon
+if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
+    define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
+}
 
 // TFR (Temporary Flight Restriction) filtering constants
 // Used for determining if a TFR is relevant to an airport based on distance

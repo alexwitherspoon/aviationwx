@@ -294,6 +294,45 @@ class NotamFilterTest extends TestCase {
         $this->assertNotNull($radiusNm);
         $this->assertEquals(2.5, $radiusNm);
     }
+
+    public function testParseTfrVerticalLimitsSummary_SfcDashFeet(): void {
+        $text = 'TEMPORARY FLIGHT RESTRICTIONS WI AN AREA DEFINED AS 450000N1220000W TO POINT OF ORIGIN SFC-5000FT';
+        $this->assertSame('SFC - 5000 ft', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_SfcDashFeetWithPeriod(): void {
+        $text = 'TO POINT OF ORIGIN SFC-7500FT.';
+        $this->assertSame('SFC - 7500 ft', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_FromSurfaceMsl(): void {
+        $text = 'PURSUANT TO 14 CFR SECTION 91.137 WI AN AREA DEFINED AS ... FROM THE SURFACE TO 3000 FEET MEAN SEA LEVEL';
+        $this->assertSame('SFC - 3000 ft MSL', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_FromSurfaceAgl(): void {
+        $text = 'FROM THE SURFACE TO 2500 FEET AGL';
+        $this->assertSame('SFC - 2500 ft AGL', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_SfcToFl(): void {
+        $text = 'SFC TO FL180';
+        $this->assertSame('SFC - FL180', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_FlRange(): void {
+        $text = 'RESTRICTION WI FL100 TO FL200';
+        $this->assertSame('FL100 - FL200', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_SfcToFeetWithQualifier(): void {
+        $text = 'AREA ... SFC TO 4000 FEET MSL';
+        $this->assertSame('SFC - 4000 ft MSL', parseTfrVerticalLimitsSummary($text));
+    }
+
+    public function testParseTfrVerticalLimitsSummary_NoMatch(): void {
+        $this->assertNull(parseTfrVerticalLimitsSummary('TEMPORARY FLIGHT RESTRICTIONS WITHIN 5NM'));
+    }
     
     /**
      * Test haversine distance calculation in nautical miles

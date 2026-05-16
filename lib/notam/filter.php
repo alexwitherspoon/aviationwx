@@ -11,6 +11,7 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../airport-identifiers.php';
 require_once __DIR__ . '/../weather/utils.php';
+require_once __DIR__ . '/schedule.php';
 
 /** Epsilon for comparing decoded TFR vertices (degrees) */
 const TFR_VERTEX_EQUAL_EPSILON_DEG = 1.0e-6;
@@ -509,6 +510,107 @@ function parseTfrRadiusNm(string $text): ?float {
 }
 
 /**
+ * Extract a short vertical limit summary from TFR NOTAM body text (visual cue only).
+ *
+ * Matches common FAA phrasing. Output uses pilot-style wording (SFC, FL, ft, AGL, MSL).
+ * Not for navigation; official limits remain on the government NOTAM.
+ *
+ * @param string $text Full NOTAM text
+ * @return string|null Null when no supported altitude pattern is found
+ */
+function parseTfrVerticalLimitsSummary(string $text): ?string {
+    if ($text === '') {
+        return null;
+    }
+    $u = strtoupper($text);
+
+    $feetOk = static function (int $ft): bool {
+        return $ft >= 50 && $ft <= 80000;
+    };
+    $flOk = static function (int $fl): bool {
+        return $fl >= 10 && $fl <= 600;
+    };
+
+    // Prose: FROM THE SURFACE TO ... FEET (MEAN SEA LEVEL / MSL / AGL)
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\s+'
+        . '(?:MEAN\s+SEA\s+LEVEL|MSL)\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft MSL';
+        }
+    }
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\s+'
+        . '(?:ABOVE\s+GROUND\s+LEVEL|AGL)\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft AGL';
+        }
+    }
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft';
+        }
+    }
+
+    // SFC TO FL180 / FROM THE SURFACE TO FL 180
+    if (preg_match(
+        '/\b(?:FROM\s+THE\s+SURFACE|SFC)\s+TO\s+(?:AND\s+INCLUDING\s+)?FL\s*(\d{2,3})\b/',
+        $u,
+        $m
+    )) {
+        $fl = (int)$m[1];
+        if ($flOk($fl)) {
+            return 'SFC - FL' . $fl;
+        }
+    }
+
+    if (preg_match('/\bSFC\s*-\s*FL\s*(\d{2,3})\b/', $u, $m)) {
+        $fl = (int)$m[1];
+        if ($flOk($fl)) {
+            return 'SFC - FL' . $fl;
+        }
+    }
+
+    if (preg_match('/\bFL\s*(\d{2,3})\s+(?:-|TO)\s+FL\s*(\d{2,3})\b/', $u, $m)) {
+        $a = (int)$m[1];
+        $b = (int)$m[2];
+        if ($flOk($a) && $flOk($b)) {
+            return 'FL' . $a . ' - FL' . $b;
+        }
+    }
+
+    // SFC-5000FT / SFC - 5000 FEET (FAA area line; feet assumed unless AGL/MSL present nearby)
+    if (preg_match('/\bSFC\s*-\s*(\d+)\s*(?:FT|FEET)\b/', $u, $m)) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft';
+        }
+    }
+
+    if (preg_match('/\bSFC\s+TO\s+(\d+)\s+FEET\s+(AGL|MSL)\b/', $u, $m)) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft ' . $m[2];
+        }
+    }
+
+    return null;
+}
+
+/**
  * Calculate haversine distance between two points in nautical miles
  * 
  * Uses the standard haversine formula with Earth radius constant from units.php
@@ -806,6 +908,128 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
 }
 
 /**
+ * Classify NOTAM display status using effective time windows when available.
+ *
+ * Uses {@see notamEnsureEffectiveSegments()} so older cache rows still classify correctly.
+ * When {@see parseFaaEffectiveUtcSegmentsFromText()} finds slices, "active" means inside a slice,
+ * not merely inside the wider GML envelope used by NMS for some TFRs.
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row (mutated: segments ensured via {@see notamEnsureEffectiveSegments()})
+ * @param string $timezone IANA timezone for "today" boundaries
+ * @param int $nowUnix Current Unix timestamp (injectable for tests)
+ * @return string active|inactive_scheduled|upcoming_today|upcoming_future|expired|unknown
+ */
+function classifyNotamDisplayStatusAt(array &$notam, string $timezone, int $nowUnix): string {
+    notamEnsureEffectiveSegments($notam);
+    $segments = $notam['effective_segments'] ?? [];
+    if ($segments !== []) {
+        return classifyNotamStatusFromSegmentsAt($notam, $timezone, $nowUnix, $segments);
+    }
+    return classifyNotamEnvelopeOnlyStatusAt($notam, $timezone, $nowUnix);
+}
+
+/**
+ * Segment-based classification (FAA EFFECTIVE windows or envelope-as-single-segment).
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM (used only if segment timestamps are invalid)
+ * @param string $timezone IANA timezone
+ * @param int $nowUnix Current time
+ * @param array<int, array{start_time_utc: string, end_time_utc: string}> $segments Effective windows
+ * @return string Status code
+ */
+function classifyNotamStatusFromSegmentsAt(
+    array $notam,
+    string $timezone,
+    int $nowUnix,
+    array $segments
+): string {
+    $firstStart = PHP_INT_MAX;
+    $lastEnd = 0;
+    foreach ($segments as $seg) {
+        $s = strtotime($seg['start_time_utc'] ?? '');
+        $e = strtotime($seg['end_time_utc'] ?? '');
+        if ($s === false || $e === false || $s <= 0 || $e <= 0) {
+            continue;
+        }
+        $firstStart = min($firstStart, $s);
+        $lastEnd = max($lastEnd, $e);
+    }
+    if ($firstStart === PHP_INT_MAX || $lastEnd <= 0) {
+        return classifyNotamEnvelopeOnlyStatusAt($notam, $timezone, $nowUnix);
+    }
+    if ($nowUnix > $lastEnd) {
+        return 'expired';
+    }
+    foreach ($segments as $seg) {
+        $s = strtotime($seg['start_time_utc'] ?? '');
+        $e = strtotime($seg['end_time_utc'] ?? '');
+        if ($s === false || $e === false || $s <= 0 || $e <= 0) {
+            continue;
+        }
+        if ($nowUnix >= $s && $nowUnix <= $e) {
+            return 'active';
+        }
+    }
+    if ($nowUnix < $firstStart) {
+        return notamUpcomingBucketForStartAt($firstStart, $timezone, $nowUnix);
+    }
+    return 'inactive_scheduled';
+}
+
+/**
+ * Envelope-only classification (legacy NOTAMs, PERM, or prose without EFFECTIVE pairs).
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM (start_time_utc, end_time_utc)
+ * @param string $timezone IANA timezone
+ * @param int $nowUnix Current time
+ * @return string Status code
+ */
+function classifyNotamEnvelopeOnlyStatusAt(array $notam, string $timezone, int $nowUnix): string {
+    $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
+    if ($startTimeRaw === false || $startTimeRaw === 0) {
+        return 'unknown';
+    }
+    $startTime = $startTimeRaw;
+    $endTimeRaw = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : false;
+    $endTime = ($endTimeRaw !== false && $endTimeRaw > 0) ? $endTimeRaw : null;
+    if ($endTime !== null && $nowUnix > $endTime) {
+        return 'expired';
+    }
+    if ($nowUnix >= $startTime) {
+        if ($endTime === null) {
+            return 'active';
+        }
+        return $nowUnix <= $endTime ? 'active' : 'expired';
+    }
+    return notamUpcomingBucketForStartAt($startTime, $timezone, $nowUnix);
+}
+
+/**
+ * Map a future start timestamp to upcoming_today vs upcoming_future using local midnight.
+ *
+ * @param int $startUnix Segment or envelope start (UTC)
+ * @param string $timezone IANA timezone
+ * @param int $nowUnix Current time
+ * @return string upcoming_today|upcoming_future
+ */
+function notamUpcomingBucketForStartAt(int $startUnix, string $timezone, int $nowUnix): string {
+    try {
+        $tz = new DateTimeZone($timezone);
+        $nowDt = new DateTimeImmutable('@' . $nowUnix);
+        $nowDt = $nowDt->setTimezone($tz);
+        $todayStart = (clone $nowDt)->setTime(0, 0, 0)->getTimestamp();
+        $todayEnd = (clone $nowDt)->setTime(23, 59, 59)->getTimestamp();
+    } catch (Exception $e) {
+        $todayStart = strtotime('today', $nowUnix);
+        $todayEnd = strtotime('tomorrow', $nowUnix) - 1;
+    }
+    if ($startUnix >= $todayStart && $startUnix <= $todayEnd) {
+        return 'upcoming_today';
+    }
+    return 'upcoming_future';
+}
+
+/**
  * Re-validate NOTAM status at serve time
  * 
  * NOTAMs may expire between cache time and serve time. This function
@@ -813,121 +1037,51 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
  * are not displayed to pilots. Uses airport local timezone for "today"
  * calculation to maintain consistency with determineNotamStatus().
  * 
- * @param array $notam NOTAM data with 'start_time_utc', 'end_time_utc', and 'status'
+ * @param array<string, mixed> $notam Cached NOTAM row: start_time_utc, optional effective_segments, optional status
  * @param string $timezone Airport timezone (e.g., 'America/Denver'), defaults to UTC
- * @return string Updated status: 'active', 'upcoming_today', 'upcoming_future', 'expired', or original
+ * @return string When start_time_utc is valid: 'active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future', or 'expired'. When start is missing or invalid: cached status or 'unknown'
  */
 function revalidateNotamStatus(array $notam, string $timezone = 'UTC'): string {
     $now = time();
-    
-    // Parse times - strtotime returns false on failure
     $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
-    $endTimeRaw = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : false;
-    
     $startTime = ($startTimeRaw !== false && $startTimeRaw > 0) ? $startTimeRaw : null;
-    $endTime = ($endTimeRaw !== false && $endTimeRaw > 0) ? $endTimeRaw : null;
-    
-    // Check if expired (end time has passed)
-    if ($endTime !== null && $now > $endTime) {
-        return 'expired';
+    if ($startTime === null) {
+        return $notam['status'] ?? 'unknown';
     }
-    
-    // Check if active (started and not expired)
-    if ($startTime !== null && $now >= $startTime) {
-        return 'active';
-    }
-    
-    // Check if upcoming today (starts before end of today in airport's local timezone)
-    if ($startTime !== null) {
-        try {
-            $tz = new DateTimeZone($timezone);
-            $nowLocal = new DateTime('now', $tz);
-            $todayEndLocal = new DateTime('tomorrow', $tz);
-            $todayEndLocal->modify('-1 second');
-            $todayEndTimestamp = $todayEndLocal->getTimestamp();
-            
-            if ($startTime <= $todayEndTimestamp) {
-                return 'upcoming_today';
-            }
-        } catch (Exception $e) {
-            // Invalid timezone - fall back to server time
-            $todayEnd = strtotime('tomorrow') - 1;
-            if ($startTime <= $todayEnd) {
-                return 'upcoming_today';
-            }
-        }
-        return 'upcoming_future';
-    }
-    
-    // Preserve original status if we can't determine
-    return $notam['status'] ?? 'unknown';
+    return classifyNotamDisplayStatusAt($notam, $timezone, $now);
 }
 
 /**
- * Determine NOTAM status (active, upcoming_today, expired, upcoming_future)
- * 
+ * Determine NOTAM status (active, inactive_scheduled, upcoming_today, upcoming_future, expired, unknown)
+ *
  * Uses airport's local timezone to determine "today" for proper classification
  * of upcoming NOTAMs. Without airport context, falls back to UTC.
  * 
- * @param array $notam Parsed NOTAM data with 'start_time_utc' and 'end_time_utc'
- * @param array|null $airport Airport config for timezone (optional, defaults to UTC)
- * @return string One of: 'active', 'upcoming_today', 'upcoming_future', 'expired', 'unknown'
+ * @param array<string, mixed> $notam Parsed NOTAM: start_time_utc, end_time_utc, text; optional effective_segments after enrichment
+ * @param array<string, mixed>|null $airport Airport config for timezone (optional, defaults to UTC)
+ * @return string One of: 'active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future', 'expired', 'unknown'
  */
 function determineNotamStatus(array $notam, ?array $airport = null): string {
-    $now = time();
-    
-    // Parse start time - strtotime returns false on failure
+    $timezone = $airport !== null ? getAirportTimezone($airport) : 'UTC';
     $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
     if ($startTimeRaw === false || $startTimeRaw === 0) {
         return 'unknown';
     }
-    $startTime = $startTimeRaw;
-    
-    // Parse end time (null for permanent NOTAMs)
-    $endTimeRaw = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : false;
-    $endTime = ($endTimeRaw !== false && $endTimeRaw > 0) ? $endTimeRaw : null;
-    
-    // Expired
-    if ($endTime !== null && $now > $endTime) {
-        return 'expired';
-    }
-    
-    // Active
-    if ($now >= $startTime) {
-        return 'active';
-    }
-    
-    // Determine "today" boundaries using airport timezone
-    $timezone = $airport !== null ? getAirportTimezone($airport) : 'UTC';
-    try {
-        $tz = new DateTimeZone($timezone);
-        $nowDt = new DateTime('now', $tz);
-        $todayStart = (clone $nowDt)->setTime(0, 0, 0)->getTimestamp();
-        $todayEnd = (clone $nowDt)->setTime(23, 59, 59)->getTimestamp();
-    } catch (Exception $e) {
-        // Fallback to server time if timezone is invalid
-        $todayStart = strtotime('today');
-        $todayEnd = strtotime('tomorrow') - 1;
-    }
-    
-    // Upcoming today (starts later today in airport's local time)
-    if ($startTime >= $todayStart && $startTime <= $todayEnd) {
-        return 'upcoming_today';
-    }
-    
-    return 'upcoming_future';
+    return classifyNotamDisplayStatusAt($notam, $timezone, time());
 }
 
 /**
  * Filter NOTAMs for relevant closures and TFRs
- * 
+ *
  * Returns only NOTAMs that are:
  * - Relevant to this airport (location match or geographic proximity)
- * - Currently active or starting later today (in airport's local timezone)
- * 
- * @param array $notams Array of parsed NOTAM data
- * @param array $airport Airport configuration with timezone, coordinates, and identifiers
- * @return array Filtered NOTAMs with 'notam_type' and 'status' fields added
+ * - Banner-worthy status: active, inactive_scheduled (gap between EFFECTIVE windows),
+ *   upcoming_today, or upcoming_future within {@see NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS}
+ *   of the first restriction window
+ *
+ * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows from {@see parseNotamXmlArray()}
+ * @param array<string, mixed> $airport Airport configuration with timezone, coordinates, and identifiers
+ * @return array<int, array<string, mixed>> Filtered NOTAMs with 'notam_type' and 'status' fields added
  */
 function filterRelevantNotams(array $notams, array $airport): array {
     $relevant = [];
@@ -938,7 +1092,7 @@ function filterRelevantNotams(array $notams, array $airport): array {
         
         if ($isClosureNotam) {
             $status = determineNotamStatus($notam, $airport);
-            if ($status === 'active' || $status === 'upcoming_today') {
+            if (notamIsBannerRelevantStatus($status, $notam)) {
                 $notam['notam_type'] = 'aerodrome_closure';
                 $notam['status'] = $status;
                 $relevant[] = $notam;
@@ -946,7 +1100,7 @@ function filterRelevantNotams(array $notams, array $airport): array {
         } elseif ($isTfrNotam) {
             if (isTfrRelevantToAirport($notam, $airport)) {
                 $status = determineNotamStatus($notam, $airport);
-                if ($status === 'active' || $status === 'upcoming_today') {
+                if (notamIsBannerRelevantStatus($status, $notam)) {
                     $notam['notam_type'] = 'tfr';
                     $notam['status'] = $status;
                     $relevant[] = $notam;
@@ -956,4 +1110,29 @@ function filterRelevantNotams(array $notams, array $airport): array {
     }
     
     return $relevant;
+}
+
+/**
+ * Whether a NOTAM status should be cached for the airport banner pipeline.
+ *
+ * Includes near-future {@see NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS} upcoming_future rows
+ * so pilots see advance warning before the first restriction window.
+ *
+ * @param string $status Status from {@see determineNotamStatus()}
+ * @param array<string, mixed> $notam Parsed NOTAM; upcoming_future horizon uses {@see notamFirstRestrictionStartUnix()}
+ * @return bool True when the NOTAM should be retained in cache for this airport
+ */
+function notamIsBannerRelevantStatus(string $status, array $notam): bool {
+    $now = time();
+    if (in_array($status, ['active', 'upcoming_today', 'inactive_scheduled'], true)) {
+        return true;
+    }
+    if ($status !== 'upcoming_future') {
+        return false;
+    }
+    $firstStart = notamFirstRestrictionStartUnix($notam);
+    if ($firstStart === null || $firstStart <= $now) {
+        return false;
+    }
+    return ($firstStart - $now) <= NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS;
 }

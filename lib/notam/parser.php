@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../logger.php';
+require_once __DIR__ . '/schedule.php';
 
 /**
  * Parse AIXM 5.1.1 XML NOTAM string
@@ -19,9 +20,10 @@ require_once __DIR__ . '/../logger.php';
  * - Start/end times (UTC)
  * - Airport name
  * - Classification
- * 
+ * - effective_segments and schedule_source from {@see enrichParsedNotamWithSchedule()} (FAA EFFECTIVE windows)
+ *
  * @param string $xmlString AIXM XML string
- * @return array|null Parsed NOTAM data or null on failure
+ * @return array<string, mixed>|null Parsed NOTAM data or null on failure
  */
 function parseNotamXml(string $xmlString): ?array {
     if (empty($xmlString)) {
@@ -87,7 +89,7 @@ function parseNotamXml(string $xmlString): ?array {
     // Extract classification
     $classification = (string)($xml->xpath('//fnse:classification')[0] ?? '');
     
-    return [
+    $result = [
         'id' => $notamId,
         'type' => $type,
         'location' => $finalLocation,
@@ -98,13 +100,15 @@ function parseNotamXml(string $xmlString): ?array {
         'airport_name' => $airportName,
         'classification' => $classification,
     ];
+    enrichParsedNotamWithSchedule($result);
+    return $result;
 }
 
 /**
  * Parse multiple AIXM XML NOTAM strings
  * 
- * @param array $xmlStrings Array of AIXM XML strings
- * @return array Array of parsed NOTAM data (null entries filtered out)
+ * @param array<int, string> $xmlStrings Array of AIXM XML strings
+ * @return array<int, array<string, mixed>> Parsed NOTAM rows (null entries filtered out)
  */
 function parseNotamXmlArray(array $xmlStrings): array {
     $parsed = [];

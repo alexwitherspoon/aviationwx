@@ -224,13 +224,14 @@ check-builtin-aviation-links: ## HEAD-probe built-in aviation HTTPS URLs (networ
 production-health-check: ## HTTPS probes against production (networked; same as daily workflow)
 	@php scripts/production-health-check.php
 
-test-unit: ## Run unit tests only (fast, no Docker needed)
+# Optional: PHPUNIT_ARGS='--filter NotamScheduleTest' (do not use `make test-unit -- --filter ...`; Make treats --filter as a target)
+test-unit: ## Run unit tests only (fast; optional PHPUNIT_ARGS for PHPUnit)
 	@echo "Running unit tests..."
-	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox $(PHPUNIT_ARGS)
 
-test-integration: ## Run integration tests only
+test-integration: ## Run integration tests (optional PHPUNIT_ARGS for PHPUnit)
 	@echo "Running integration tests..."
-	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox $(PHPUNIT_ARGS)
 
 # Live HTTPS to RainViewer, aviationweather.gov, OWM (if API key in the chosen config). Not part of test-ci.
 # Honors CONFIG_PATH from the environment or `make CONFIG_PATH=/path/to/airports.json`; defaults to config/airports.json.example.

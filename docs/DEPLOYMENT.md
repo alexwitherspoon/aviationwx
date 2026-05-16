@@ -155,6 +155,7 @@ If using Cloudflare:
 5. Choose proxy status:
    - **DNS only (gray cloud)**: Direct connection - better for dynamic content
    - **Proxied (orange cloud)**: Cloudflare CDN - adds caching and DDoS protection
+6. **Optional:** For extra edge blocking on the internal TFR map layer, add a **Cloudflare WAF** custom rule: URI Path equals `/api/notam-map.php` and `Sec-Fetch-Site` equals `cross-site` (return 403). Origin PHP already enforces map-only access (`lib/notam/map-api-access.php`); production **nginx** matches the same `Sec-Fetch-Site` check (see `docker/nginx.conf`).
 
 ## SSL Certificates
 

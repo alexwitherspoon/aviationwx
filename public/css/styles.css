@@ -298,6 +298,19 @@ body {
     border-left: 4px solid #ffaa00;
 }
 
+/* Between EFFECTIVE windows (still inside NOTAM envelope) - distinct from active/upcoming */
+.notam-banner-scheduled {
+    background-color: #5c6bc0;
+    color: white;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1000;
+    border-left: 4px solid #3949ab;
+}
+
 /* Individual NOTAM line within banner */
 .notam-line {
     padding: 10px 20px;
@@ -2985,6 +2998,11 @@ body.night-mode .notam-banner-upcoming {
     background-color: #553300 !important;
 }
 
+body.night-mode .notam-banner-scheduled {
+    background-color: #1a237e !important;
+    border-color: #283593 !important;
+}
+
 /* Loading state */
 body.night-mode .loading {
     color: var(--night-text-dim) !important;
@@ -3471,6 +3489,11 @@ body.dark-mode .data-outage-banner-limited-availability {
 
 body.dark-mode .notam-banner-upcoming {
     background-color: #3a4000 !important;
+}
+
+body.dark-mode .notam-banner-scheduled {
+    background-color: #1a237e !important;
+    border-color: #283593 !important;
 }
 
 /* Loading state */

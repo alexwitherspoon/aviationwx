@@ -82,6 +82,7 @@ class AirportsDirectoryTest extends TestCase
         
         $this->assertStringContainsString('id="map"', $output, 'Should have map container');
         $this->assertStringContainsString('leaflet', strtolower($output), 'Should load Leaflet.js');
+        $this->assertStringContainsString('/api/notam-map.php', $output, 'Should load internal TFR map layer API');
     }
     
     /**

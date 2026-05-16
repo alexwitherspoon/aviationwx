@@ -6,6 +6,7 @@
 
 // Note: config.php is already loaded by index.php
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/pwa-help-screenshots.php';
@@ -111,6 +112,9 @@ foreach ($airports as $airportId => $airport) {
 }
 $airportsJson = json_encode($airportsForMap);
 
+// NOTAM TFR map layer refresh (matches per-airport NOTAM cache TTL)
+$notamMapLayerRefreshMs = max(60_000, (int)getNotamCacheTtlSeconds() * 1000);
+
 // Optional screenshots for Add to Home Screen help: public/images/pwa-add-to-home-screen-{android,ios}.{avif,webp,jpg}
 $pwaHelpImageDir = __DIR__ . '/../public/images';
 $pwaHelpScreenshotAndroid = getPwaHelpScreenshotSet($pwaHelpImageDir, 'pwa-add-to-home-screen-android');
@@ -203,6 +207,25 @@ $breadcrumbs = generateBreadcrumbSchema([
             height: calc(85vh - 60px);
             min-height: 500px;
             max-height: 1200px;
+        }
+
+        .leaflet-tooltip.notam-map-hover-tip {
+            background: rgba(255, 255, 255, 0.96);
+            color: #1a1a1a;
+            border: 1px solid rgba(0, 0, 0, 0.35);
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            font-size: 12px;
+            line-height: 1.35;
+            max-width: 260px;
+            padding: 6px 10px;
+        }
+
+        .tfr-map-popup-cta {
+            display: inline-block;
+            margin-top: 0.35rem;
+            font-weight: 600;
+            color: #0066cc;
         }
         
         .map-container {
@@ -1498,6 +1521,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         // Configuration from PHP
         var openWeatherMapApiKey = <?= json_encode($openWeatherMapApiKey) ?>;
         var hasCloudLayer = <?= json_encode($hasCloudLayer) ?>;
+        var notamMapLayerRefreshMs = <?= (int)$notamMapLayerRefreshMs ?>;
         
         // Airport data from PHP
         var airports = <?= $airportsJson ?>;
@@ -1528,6 +1552,176 @@ $breadcrumbs = generateBreadcrumbSchema([
             maxZoom: 19,
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+
+        // TFR polygons (internal NOTAM map layer): bold stroke, very light fill (EFB-style cueing)
+        map.createPane('tfrMapPane');
+        map.getPane('tfrMapPane').style.zIndex = 450;
+        var tfrMapLayer = null;
+        var tfrMapRefreshTimer = null;
+
+        function styleTfrMapFeature(feature) {
+            var props = feature && feature.properties ? feature.properties : {};
+            var active = props.map_layer_style === 'active';
+            return {
+                color: active ? '#c62828' : '#c49000',
+                weight: 3,
+                opacity: 1,
+                fillColor: active ? '#c62828' : '#c49000',
+                fillOpacity: 0.18,
+                lineJoin: 'round',
+                lineCap: 'round'
+            };
+        }
+
+        function notamTfrMapStatusLineForFeature(p) {
+            p = p || {};
+            if (p.status_line) {
+                return String(p.status_line).replace(/</g, '&lt;');
+            }
+            return notamTfrMapStatusCaption(p.status);
+        }
+
+        function notamTfrMapStatusCaption(status) {
+            if (!status) {
+                return '';
+            }
+            switch (String(status)) {
+                case 'active':
+                    return 'Active now';
+                case 'inactive_scheduled':
+                    return 'Between active windows';
+                case 'upcoming_today':
+                    return 'Starting later today';
+                case 'upcoming_future':
+                    return 'Upcoming';
+                default:
+                    return String(status).replace(/_/g, ' ');
+            }
+        }
+
+        function notamTfrMapEscapeTipText(s) {
+            return String(s).replace(/</g, '&lt;');
+        }
+
+        /**
+         * Map-only title: GeoJSON layer includes TFR NOTAMs only.
+         */
+        function notamTfrMapLayerTitleHtml(p) {
+            p = p || {};
+            if (!p.notam_id) {
+                return '';
+            }
+            return '<strong>TFR - ' + notamTfrMapEscapeTipText(p.notam_id) + '</strong>';
+        }
+
+        function bindNotamMapHoverTooltip(feature, layer) {
+            var p = feature.properties || {};
+            var parts = [];
+            var titleHtml = notamTfrMapLayerTitleHtml(p);
+            if (titleHtml) {
+                parts.push(titleHtml);
+            }
+            var cap = notamTfrMapStatusLineForFeature(p);
+            if (cap) {
+                parts.push(cap);
+            }
+            if (p.vertical_limits) {
+                parts.push(notamTfrMapEscapeTipText(p.vertical_limits));
+            }
+            parts.push('<span style="opacity:0.85;font-size:11px;">Tap or click for briefing link</span>');
+            layer.bindTooltip(parts.join('<br>'), {
+                sticky: true,
+                direction: 'auto',
+                className: 'notam-map-hover-tip',
+                interactive: false
+            });
+        }
+
+        function onEachTfrFeature(feature, layer) {
+            var p = feature.properties || {};
+            bindNotamMapHoverTooltip(feature, layer);
+            var lines = [];
+            var titleLine = notamTfrMapLayerTitleHtml(p);
+            if (titleLine) {
+                lines.push('<div>' + titleLine + '</div>');
+            }
+            if (p.status) {
+                lines.push('<div>' + notamTfrMapStatusLineForFeature(p) + '</div>');
+            }
+            if (p.vertical_limits) {
+                lines.push('<div>' + notamTfrMapEscapeTipText(p.vertical_limits) + '</div>');
+            }
+            if (p.official_link) {
+                lines.push(
+                    '<div><a class="tfr-map-popup-cta" href="' + String(p.official_link).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">Details on FAA Notam Search</a></div>'
+                );
+            }
+            if (lines.length) {
+                layer.bindPopup('<div class="tfr-map-popup">' + lines.join('') + '</div>');
+            }
+        }
+
+        function pointToLayerNotamMap(feature, latlng) {
+            var p = feature.properties || {};
+            var gk = p.geometry_kind;
+            var radiusM = typeof p.radius_m === 'number' ? p.radius_m : null;
+            if (gk === 'circle' && radiusM !== null && radiusM > 0) {
+                var s = styleTfrMapFeature(feature);
+                return L.circle(latlng, {
+                    radius: radiusM,
+                    pane: 'tfrMapPane',
+                    color: s.color,
+                    weight: s.weight,
+                    opacity: s.opacity,
+                    fillColor: s.fillColor,
+                    fillOpacity: s.fillOpacity
+                });
+            }
+            return L.circleMarker(latlng, {
+                radius: 0,
+                opacity: 0,
+                fillOpacity: 0,
+                interactive: false,
+                pane: 'tfrMapPane'
+            });
+        }
+
+        function applyTfrMapGeoJson(data) {
+            if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+                return;
+            }
+            if (tfrMapLayer) {
+                map.removeLayer(tfrMapLayer);
+                tfrMapLayer = null;
+            }
+            tfrMapLayer = L.geoJSON(data, {
+                pane: 'tfrMapPane',
+                interactive: true,
+                pointToLayer: pointToLayerNotamMap,
+                style: styleTfrMapFeature,
+                onEachFeature: onEachTfrFeature
+            });
+            tfrMapLayer.addTo(map);
+        }
+
+        function loadTfrMapLayer() {
+            fetch('/api/notam-map.php')
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('NOTAM map layer HTTP ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(applyTfrMapGeoJson)
+                .catch(function(err) {
+                    console.warn('TFR map layer:', err);
+                });
+        }
+
+        loadTfrMapLayer();
+        if (notamMapLayerRefreshMs > 0) {
+            tfrMapRefreshTimer = setInterval(loadTfrMapLayer, notamMapLayerRefreshMs);
+        }
         
         // Weather Radar Layer (RainViewer API)
         var radarLayer = null;
