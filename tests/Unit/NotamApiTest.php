@@ -8,6 +8,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/notam/filter.php';
+require_once __DIR__ . '/../../lib/notam/schedule.php';
 require_once __DIR__ . '/../../lib/constants.php';
 
 class NotamApiTest extends TestCase {
@@ -154,6 +155,30 @@ class NotamApiTest extends TestCase {
         
         $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('upcoming_future', $status);
+    }
+
+    /**
+     * Between EFFECTIVE windows the envelope can still read "active"; segments must win.
+     */
+    public function testRevalidateNotamStatus_InactiveScheduledGap() {
+        $anchor = time();
+        $segA = [
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor - 7200),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor - 3600),
+        ];
+        $segB = [
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor + 3600),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor + 7200),
+        ];
+        $notam = [
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor - 86400),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $anchor + 86400),
+            'effective_segments' => [$segA, $segB],
+            'status' => 'active',
+        ];
+
+        $status = revalidateNotamStatus($notam, 'UTC');
+        $this->assertEquals('inactive_scheduled', $status);
     }
     
     /**
