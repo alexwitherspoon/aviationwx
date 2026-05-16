@@ -445,13 +445,15 @@ class NotamFilterTest extends TestCase {
             'lon' => -116.2228
         ];
         
-        // Ogden is ~180 NM from Boise, well outside the 5 NM TFR radius + 10 NM buffer
+        // Ogden is ~180 NM from Boise, well outside the published 5 NM TFR radius
         $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
     }
-    
-    public function testIsTfrRelevantToAirport_NearbyTfrIsRelevant() {
-        // TFR 8 NM from airport with 5 NM radius - airport is just outside TFR
-        // but within relevance buffer (5 NM radius + 10 NM buffer = 15 NM threshold)
+
+    /**
+     * Parsed circle: airport outside the published NM radius does not match (no outer buffer).
+     */
+    public function testIsTfrRelevantToAirport_CircleOutsidePublishedRadiusNotRelevant(): void {
+        // TFR 8 NM from airport with 5 NM radius - outside the published disk (no outer buffer)
         $tfr = [
             'text' => 'TEMPORARY FLIGHT RESTRICTIONS WITHIN 5NM RADIUS OF 450500N1220000W'
         ];
@@ -463,7 +465,25 @@ class NotamFilterTest extends TestCase {
             'lon' => -122.0
         ];
         
-        $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    /**
+     * Regression: 5 NM aerobatic TFR near KHIO; KSPB is outside the published circle.
+     */
+    public function testIsTfrRelevantToAirport_HillsboroFiveNmCircleKspbExcluded(): void {
+        $tfr = [
+            'text' => 'OR..AIRSPACE HILLSBORO, OR..TEMPORARY FLIGHT RESTRICTIONS. '
+                . 'ACFT OPS ARE PROHIBITED WI AN AREA DEFINED AS 5NM RADIUS OF 453230N1225653W '
+                . '(UBG345011.4) SFC-15000FT MSL DUE TO HIGH SPEED AEROBATIC DEMONSTRATIONS.',
+        ];
+        $airport = [
+            'name' => 'Scappoose Industrial Airpark',
+            'icao' => 'KSPB',
+            'lat' => 45.7710278,
+            'lon' => -122.8618333,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
     }
     
     public function testIsTfrRelevantToAirport_AirportInsideTfr() {
@@ -688,27 +708,78 @@ class NotamFilterTest extends TestCase {
             . '(BOI008032.4) TO 440330N1155500W (BOI004032.6) TO 440400N1155600W (BOI003032.8) TO 440530N1155430W (BOI004034.6) '
             . 'TO 440530N1155100W (BOI007035.6) TO POINT OF ORIGIN SFC-7500FT.';
     }
-    
-    public function testIsTfrRelevantToAirport_LargeTfrRadius() {
+
+    /**
+     * Parsed large circle: distance must not exceed the stated radius (no buffer past 30 NM here).
+     */
+    public function testIsTfrRelevantToAirport_LargeTfrRadius(): void {
         // Large TFR (30 NM radius) - tests that we use parsed radius, not default
         $tfr = [
             'text' => 'TEMPORARY FLIGHT RESTRICTIONS WITHIN 30NM RADIUS OF 450000N1220000W'
         ];
         $airport = [
             'name' => 'Test Airport',
-            // About 35 NM from TFR center - outside 30 NM but within 30+10=40 NM buffer
+            // About 35 NM from TFR center - outside published 30 NM disk (no buffer)
             // 0.583 degrees ≈ 35 NM at this latitude (1 degree = 60 NM)
             'lat' => 45.583,
             'lon' => -122.0
         ];
         
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    /**
+     * Legacy disk (no parsed NM radius, only a coordinate): use default radius with no outer buffer.
+     */
+    public function testIsTfrRelevantToAirport_LegacySinglePointOutsideDefaultRadius(): void {
+        $tfr = [
+            'text' => 'TEMPORARY FLIGHT RESTRICTIONS WI 450000N1220000W SFC-5000FT',
+        ];
+        $airport = [
+            'name' => 'Test Airport',
+            // About 31 NM north of center (outside TFR_DEFAULT_RADIUS_NM)
+            'lat' => 45.5167,
+            'lon' => -122.0,
+        ];
+        $this->assertFalse(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    /**
+     * Legacy disk: airports inside the default-radius circle remain relevant.
+     */
+    public function testIsTfrRelevantToAirport_LegacySinglePointInsideDefaultRadius(): void {
+        $tfr = [
+            'text' => 'TEMPORARY FLIGHT RESTRICTIONS WI 450000N1220000W SFC-5000FT',
+        ];
+        $airport = [
+            'name' => 'Test Airport',
+            // About 25 NM north of center (inside 30 NM default)
+            'lat' => 45.4167,
+            'lon' => -122.0,
+        ];
+        $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
+    }
+
+    /**
+     * Parsed circle: airport inside the published NM radius matches.
+     */
+    public function testIsTfrRelevantToAirport_CircleInsidePublishedRadius(): void {
+        $tfr = [
+            'text' => 'TEMPORARY FLIGHT RESTRICTIONS WITHIN 5NM RADIUS OF 450500N1220000W',
+        ];
+        $airport = [
+            'name' => 'Test Airport',
+            // About 3 NM north of 45d05m N 122d00m W (inside 5 NM)
+            'lat' => 45.1333,
+            'lon' => -122.0,
+        ];
         $this->assertTrue(isTfrRelevantToAirport($tfr, $airport));
     }
     
     /**
-     * Test that constants are properly defined
+     * TFR constants for default legacy disk radius, polygon edge buffer, and parsed-radius bounds.
      */
-    public function testTfrConstantsAreDefined() {
+    public function testTfrConstantsAreDefined(): void {
         $this->assertTrue(defined('TFR_DEFAULT_RADIUS_NM'), 'TFR_DEFAULT_RADIUS_NM should be defined');
         $this->assertTrue(defined('TFR_RELEVANCE_BUFFER_NM'), 'TFR_RELEVANCE_BUFFER_NM should be defined');
         $this->assertTrue(defined('TFR_RADIUS_MIN_NM'), 'TFR_RADIUS_MIN_NM should be defined');

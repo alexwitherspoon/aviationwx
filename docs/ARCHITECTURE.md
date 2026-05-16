@@ -213,9 +213,9 @@ Optional **station power** telemetry on airport pages for `limited_availability`
   - **TFRs**: Text containing "TFR", "TEMPORARY FLIGHT RESTRICTION", or "RESTRICTED AIRSPACE"
 - **Geographic relevance** (TFRs only, when identifier and name rules do not already match):
   - Parses coordinate pairs from NOTAM text (`DDMMSSN/DDDMMSSW`)
-  - **Circle path** (parsed NM radius in text): first pair is center; haversine distance from airport must be ≤ parsed radius + `TFR_RELEVANCE_BUFFER_NM` (10 NM default)
+  - **Circle path** (parsed NM radius in text): first pair is center; haversine distance from airport must be ≤ parsed radius (no additional NM buffer beyond the published circle)
   - **Polygon path** (no parsed radius, ≥3 vertices, closed ring): point-in-polygon in a local NM plane; if outside the ring, distance to nearest edge must be ≤ `TFR_RELEVANCE_BUFFER_NM`; closed ring requires repeated first vertex or **POINT OF ORIGIN** phrase; degenerate area below `TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2` is excluded
-  - **Legacy path** (no parsed radius, fewer than three vertices): first pair as center with `TFR_DEFAULT_RADIUS_NM` (30 NM) + buffer via haversine
+  - **Legacy path** (no parsed radius, fewer than three vertices): first pair as center with `TFR_DEFAULT_RADIUS_NM` (30 NM) via haversine, with no NM buffer beyond that default disk
   - Uses NOTAM `location` and `airport_name` for non-geographic matches when those fields align with the airport
 - **Status Classification**: active, upcoming_today, expired, upcoming_future
 
@@ -514,9 +514,9 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 ### 8. TFR Geographic Relevance Filtering
 
 - **Why**: The NMS API can return TFRs for a wide FIR or ARTCC footprint relative to a single airport. Geographic rules in `lib/notam/filter.php` align banners with published circle or polygon text and with configured airport coordinates.
-- **Circle TFRs**: Parsed NM radius plus `TFR_RELEVANCE_BUFFER_NM` around the first stated coordinate pair (haversine NM).
+- **Circle TFRs**: Haversine distance from airport to the first stated coordinate pair must be ≤ the parsed NM radius (published circle only; no extra NM buffer).
 - **Polygon TFRs**: Closed-ring validation (duplicate first vertex or **POINT OF ORIGIN**), point-in-polygon in a local NM projection, boundary buffer `TFR_RELEVANCE_BUFFER_NM` for airports just outside the edge, and exclusion of degenerate rings via `TFR_POLYGON_MIN_ABS_DOUBLE_AREA_NM2`.
-- **Legacy point**: When fewer than three coordinate pairs exist and no radius is parsed, `TFR_DEFAULT_RADIUS_NM` plus the same buffer around the first pair.
+- **Legacy point**: When fewer than three coordinate pairs exist and no radius is parsed, `TFR_DEFAULT_RADIUS_NM` around the first pair with the same strict disk rule (no buffer beyond that default radius).
 - **Non-geographic matches**: NOTAM `location` / `airport_name` / text still gate relevance when they match airport identifiers or names before geometry runs.
 - **Safety posture**: Unparsed coordinates, unclosed polygon text, degenerate projected area, or missing airport lat/lon skip geographic relevance so the UI does not imply a footprint that cannot be verified from the NOTAM body.
 
