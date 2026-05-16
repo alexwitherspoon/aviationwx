@@ -7412,6 +7412,39 @@ function formatNotamTime(timeUtc, timeLocal) {
 }
 
 /**
+ * Format NOTAM end (or similar) as local time plus calendar date for the airport timezone.
+ * Prefers UTC ISO for correct instant when both API fields are present.
+ *
+ * @param {string} timeUtc ISO 8601 UTC
+ * @param {string} timeLocal Local time string from API (fallback)
+ * @return {string} e.g. "10:00 PM PDT, May 16, 2026"
+ */
+function formatNotamDateTimeForAirport(timeUtc, timeLocal) {
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || DEFAULT_TIMEZONE;
+    const timeFormat = getTimeFormat();
+    if (!timeUtc && !timeLocal) {
+        return '';
+    }
+    const dt = timeUtc ? new Date(timeUtc) : new Date(timeLocal);
+    if (isNaN(dt.getTime())) {
+        return '';
+    }
+    const timePart = dt.toLocaleString('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: timeFormat === '12hr'
+    }) + ' ' + getTimezoneAbbreviation(dt, timezone);
+    const datePart = dt.toLocaleString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    return timePart + ', ' + datePart;
+}
+
+/**
  * Fetch NOTAM data and update banner
  */
 async function fetchAndUpdateNotamBanner() {
@@ -7476,12 +7509,7 @@ function updateNotamBanner(notams) {
 
 /**
  * Format NOTAM time range for display
- * 
- * @param {Object} notam NOTAM object
- * @param {boolean} isActive Whether the NOTAM is currently active
- * @return {string} Formatted time string
- */
-/**
+ *
  * @param {Object} notam NOTAM object from API
  * @param {string} mode 'active' | 'scheduled' | 'upcoming'
  * @return {string} Short human-readable time summary
@@ -7491,40 +7519,41 @@ function formatNotamTimeRange(notam, mode) {
         const curEndUtc = notam.current_restriction_end_time_utc;
         const curEndLoc = notam.current_restriction_end_time_local;
         if (curEndUtc || curEndLoc) {
-            return `restriction until ${formatNotamTime(curEndUtc, curEndLoc)}`;
+            const when = formatNotamDateTimeForAirport(curEndUtc, curEndLoc);
+            return when ? `Active until ${when}` : 'Active until further notice';
         }
-        const endTime = notam.end_time_utc
-            ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
-            : null;
-        return endTime ? `until ${endTime}` : 'until further notice';
+        const whenEnv = notam.end_time_utc
+            ? formatNotamDateTimeForAirport(notam.end_time_utc, notam.end_time_local)
+            : '';
+        return whenEnv ? `Active until ${whenEnv}` : 'Active until further notice';
     }
     if (mode === 'scheduled') {
         const nxtUtc = notam.next_restriction_start_time_utc;
         const nxtLoc = notam.next_restriction_start_time_local;
         if (nxtUtc || nxtLoc) {
-            return `not active now - next window ${formatNotamTime(nxtUtc, nxtLoc)}`;
+            const when = formatNotamDateTimeForAirport(nxtUtc, nxtLoc);
+            return when ? `not active now - next window ${when}` : 'not active now - see NOTAM for schedule';
         }
         return 'not active now - see NOTAM for schedule';
     }
-    const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
-    const endTime = notam.end_time_utc
-        ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
-        : null;
-    if (endTime) {
-        return `effective ${startTime} to ${endTime}`;
+    const startWhen = formatNotamDateTimeForAirport(notam.start_time_utc, notam.start_time_local);
+    const endWhen = notam.end_time_utc
+        ? formatNotamDateTimeForAirport(notam.end_time_utc, notam.end_time_local)
+        : '';
+    if (endWhen) {
+        return startWhen
+            ? `effective ${startWhen} to ${endWhen}`
+            : `effective through ${endWhen}`;
     }
-    return `effective ${startTime} until further notice`;
+    return startWhen
+        ? `effective ${startWhen} until further notice`
+        : 'effective see NOTAM for schedule';
 }
 
 /**
- * Create a single NOTAM line element
- * 
- * @param {Object} notam NOTAM object
- * @param {boolean} isActive Whether the NOTAM is currently active
- * @return {string} HTML string for the NOTAM line
- */
-/**
- * @param {Object} notam NOTAM object
+ * Create a single NOTAM line element.
+ *
+ * @param {Object} notam NOTAM object from API
  * @param {string} mode 'active' | 'scheduled' | 'upcoming'
  * @return {string} HTML fragment
  */
