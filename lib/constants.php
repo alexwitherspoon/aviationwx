@@ -196,17 +196,17 @@ if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
     define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
 }
 
-// TFR (Temporary Flight Restriction) filtering constants
-// Used for determining if a TFR is relevant to an airport based on distance
-// All distances in nautical miles (NM) - standard aviation unit
+// TFR (Temporary Flight Restriction) filtering constants (nautical miles).
+// Default radius applies when the NOTAM body has no parseable NM radius.
+// Edge buffer applies only to polygon rings in lib/notam/filter.php, not to stated circle radii.
 
 // Default radius (NM) to assume when TFR radius cannot be parsed from text
 if (!defined('TFR_DEFAULT_RADIUS_NM')) {
     define('TFR_DEFAULT_RADIUS_NM', 30);
 }
 
-// Buffer distance (NM) added to TFR radius when checking airport relevance
-// Ensures airports just outside TFR boundary are still warned
+// Buffer (NM) for polygon TFRs only: airports outside the ring but within this distance
+// of an edge still match. Parsed circle and legacy point-radius disks do not add this buffer.
 if (!defined('TFR_RELEVANCE_BUFFER_NM')) {
     define('TFR_RELEVANCE_BUFFER_NM', 10);
 }

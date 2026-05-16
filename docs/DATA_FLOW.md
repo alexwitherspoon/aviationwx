@@ -1486,10 +1486,10 @@ Parsed values must lie between `TFR_RADIUS_MIN_NM` and `TFR_RADIUS_MAX_NM` in `l
 For a circle TFR, **haversine** distance in nautical miles is computed between the airport and the circle center. The TFR is relevant when:
 
 ```
-distance NM ≤ (parsed radius NM + TFR_RELEVANCE_BUFFER_NM)
+distance NM ≤ parsed radius NM
 ```
 
-`TFR_RELEVANCE_BUFFER_NM` defaults to **10 NM** so airports immediately outside the published circle still receive a warning.
+Parsed circle geometry follows the published restriction only; `TFR_RELEVANCE_BUFFER_NM` applies to **polygon** edges (see below), not to expanding a stated circle radius.
 
 #### Polygon TFR geometry
 
@@ -1504,7 +1504,7 @@ Inside the polygon, relevance does **not** depend on distance to a single center
 
 #### Legacy point TFR (no radius, fewer than three vertices)
 
-When no radius is parsed and fewer than three vertices are available, the first coordinate is used as a center with **`TFR_DEFAULT_RADIUS_NM`** (30 NM) plus `TFR_RELEVANCE_BUFFER_NM` and haversine distance. This covers sparse coordinate text that is not a closed polygon.
+When no radius is parsed and fewer than three vertices are available, the first coordinate is used as a center with **`TFR_DEFAULT_RADIUS_NM`** (30 NM) and haversine distance with **no** NM buffer beyond that default disk. This covers sparse coordinate text that is not a closed polygon.
 
 #### Conservative filtering (safety-critical)
 

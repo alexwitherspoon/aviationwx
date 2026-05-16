@@ -433,6 +433,9 @@ function polygonCentroidLatLonFromVertices(array $vertices): ?array {
  * {@see isTfrRelevantToAirport()}; this function returns null for that case.
  * Otherwise: first coordinate with {@see TFR_DEFAULT_RADIUS_NM} (legacy single-point behavior).
  *
+ * Disk path in {@see isTfrRelevantToAirport()}: distance to center <= returned radius (NM), with no
+ * added {@see TFR_RELEVANCE_BUFFER_NM} (that buffer is for polygon edges only).
+ *
  * @param string $text NOTAM body
  * @param array<int, array{lat: float, lon: float}>|null $vertices Pre-parsed vertices to avoid a second scan of $text; null parses from $text
  * @param float|null $parsedRadiusNm When set, skips re-parsing radius from $text (must match {@see parseTfrRadiusNm()} for the same body when applicable)
@@ -824,8 +827,9 @@ function isTfr(array $notam): bool {
  * 2. The NOTAM airport_name field matches the airport name (word boundary match)
  * 3. The TFR text explicitly mentions the airport's name or identifier
  * 4. The airport is inside a closed polygon TFR (explicit ring closure or POINT OF
- *    ORIGIN), or within {@see TFR_RELEVANCE_BUFFER_NM} of its boundary; otherwise circle
- *    or legacy point-radius distance rules apply
+ *    ORIGIN), or within {@see TFR_RELEVANCE_BUFFER_NM} of its boundary; otherwise parsed
+ *    circle radius or legacy default-radius disk uses haversine distance with no extra
+ *    buffer beyond the published NM radius
  * 
  * All distance calculations use nautical miles (standard aviation unit).
  * Conservative approach: excludes TFR when coordinates cannot be parsed.
@@ -866,7 +870,8 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
         }
     }
     
-    // Geographic relevance: polygon uses PiP + boundary buffer; circle/legacy use great-circle distance
+    // Geographic relevance: polygon uses PiP + boundary buffer; circle/legacy use great-circle
+    // distance to center with no buffer beyond the stated (or default) radius NM
     if (!isset($airport['lat']) || !isset($airport['lon'])) {
         // No airport coordinates - be conservative and exclude
         return false;
@@ -904,7 +909,7 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
         $geoRef['lon']
     );
 
-    return $distanceNm <= ($geoRef['radius_nm'] + TFR_RELEVANCE_BUFFER_NM);
+    return $distanceNm <= $geoRef['radius_nm'];
 }
 
 /**
