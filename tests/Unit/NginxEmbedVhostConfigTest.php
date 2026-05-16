@@ -41,4 +41,18 @@ class NginxEmbedVhostConfigTest extends TestCase
             $errors !== [] ? implode('; ', $errors) : ''
         );
     }
+
+    /**
+     * Production nginx should block cross-site fetches to the internal map layer before PHP.
+     */
+    public function testMainSiteServerBlockIncludesNotamMapCrossSite403(): void
+    {
+        $path = self::nginxConfPath();
+        $content = file_get_contents($path);
+        $this->assertIsString($content);
+        $this->assertStringContainsString('location = /api/notam-map.php', $content);
+        $this->assertStringContainsString('$http_sec_fetch_site', $content);
+        $this->assertStringContainsString('cross-site', $content);
+        $this->assertStringContainsString('return 403', $content);
+    }
 }
