@@ -5,6 +5,7 @@
  * Serves NOTAM data to frontend with stale-while-revalidate caching.
  * Safety-critical: Re-validates NOTAM expiration at serve time and
  * implements failclosed when cache exceeds staleness threshold.
+ * JSON NOTAM entries may include schedule_source, effective_segments, and current/next restriction window times.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -13,6 +14,7 @@ require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/notam/fetcher.php';
 require_once __DIR__ . '/../lib/notam/filter.php';
+require_once __DIR__ . '/../lib/notam/schedule.php';
 
 // Start output buffering
 ob_start();
@@ -114,11 +116,13 @@ $formattedNotams = [];
 $timezone = getAirportTimezone($airportId, $airport);
 
 foreach ($notams as $notam) {
+    notamEnsureEffectiveSegments($notam);
     // Re-validate status at serve time using airport timezone (safety-critical)
     $currentStatus = revalidateNotamStatus($notam, $timezone);
     
-    // Filter out expired and future NOTAMs - only show active and upcoming_today
-    if ($currentStatus !== 'active' && $currentStatus !== 'upcoming_today') {
+    // Drop expired and unknown; retain active, scheduled gaps, and upcoming windows
+    $allowedStatuses = ['active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future'];
+    if (!in_array($currentStatus, $allowedStatuses, true)) {
         continue;
     }
     
@@ -149,6 +153,62 @@ foreach ($notams as $notam) {
         }
     }
     
+    $effectiveSegmentsOut = [];
+    foreach ($notam['effective_segments'] ?? [] as $seg) {
+        $su = $seg['start_time_utc'] ?? '';
+        $eu = $seg['end_time_utc'] ?? '';
+        $sl = '';
+        $el = '';
+        if ($su !== '') {
+            try {
+                $dt = new DateTime($su, new DateTimeZone('UTC'));
+                $dt->setTimezone(new DateTimeZone($timezone));
+                $sl = $dt->format('Y-m-d H:i:s T');
+            } catch (Exception $e) {
+                $sl = $su;
+            }
+        }
+        if ($eu !== '') {
+            try {
+                $dt = new DateTime($eu, new DateTimeZone('UTC'));
+                $dt->setTimezone(new DateTimeZone($timezone));
+                $el = $dt->format('Y-m-d H:i:s T');
+            } catch (Exception $e) {
+                $el = $eu;
+            }
+        }
+        $effectiveSegmentsOut[] = [
+            'start_time_utc' => $su,
+            'end_time_utc' => $eu,
+            'start_time_local' => $sl,
+            'end_time_local' => $el,
+        ];
+    }
+    
+    $nowUnix = time();
+    $currentWindowEndUtc = notamCurrentRestrictionEndUtc($notam, $nowUnix);
+    $nextWindowStartUtc = notamNextRestrictionStartUtc($notam, $nowUnix);
+    $currentWindowEndLocal = '';
+    $nextWindowStartLocal = '';
+    if ($currentWindowEndUtc !== null && $currentWindowEndUtc !== '') {
+        try {
+            $dt = new DateTime($currentWindowEndUtc, new DateTimeZone('UTC'));
+            $dt->setTimezone(new DateTimeZone($timezone));
+            $currentWindowEndLocal = $dt->format('Y-m-d H:i:s T');
+        } catch (Exception $e) {
+            $currentWindowEndLocal = $currentWindowEndUtc;
+        }
+    }
+    if ($nextWindowStartUtc !== null && $nextWindowStartUtc !== '') {
+        try {
+            $dt = new DateTime($nextWindowStartUtc, new DateTimeZone('UTC'));
+            $dt->setTimezone(new DateTimeZone($timezone));
+            $nextWindowStartLocal = $dt->format('Y-m-d H:i:s T');
+        } catch (Exception $e) {
+            $nextWindowStartLocal = $nextWindowStartUtc;
+        }
+    }
+    
     // Build official NOTAM link
     $officialLink = '';
     $notamId = $notam['id'] ?? '';
@@ -165,7 +225,13 @@ foreach ($notams as $notam) {
         'start_time_local' => $startTimeLocal,
         'end_time_local' => $endTimeLocal,
         'message' => $notam['text'] ?? '',
-        'official_link' => $officialLink
+        'official_link' => $officialLink,
+        'schedule_source' => $notam['schedule_source'] ?? 'none',
+        'effective_segments' => $effectiveSegmentsOut,
+        'current_restriction_end_time_utc' => $currentWindowEndUtc,
+        'current_restriction_end_time_local' => $currentWindowEndLocal,
+        'next_restriction_start_time_utc' => $nextWindowStartUtc,
+        'next_restriction_start_time_local' => $nextWindowStartLocal,
     ];
 }
 
