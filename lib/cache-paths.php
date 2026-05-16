@@ -479,6 +479,15 @@ function getNotamCachePath(string $airportId): string {
 }
 
 /**
+ * Aggregated TFR GeoJSON for the airports directory map (internal use).
+ *
+ * @return string Full path to JSON cache file
+ */
+function getNotamTfrMapLayerCachePath(): string {
+    return CACHE_NOTAM_DIR . '/tfr-map-layer.json';
+}
+
+/**
  * Get path to NOTAM token cache file
  * 
  * @return string Full path to token cache file
