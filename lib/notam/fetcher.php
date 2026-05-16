@@ -11,6 +11,22 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/parser.php';
 require_once __DIR__ . '/filter.php';
+require_once __DIR__ . '/schedule.php';
+
+/**
+ * Decode NMS JSON; strips illegal ASCII control characters some payloads embed in strings.
+ *
+ * @param string $response Raw HTTP body
+ * @return array|null Decoded array or null on failure
+ */
+function notamDecodeNmsJsonResponse(string $response): ?array {
+    $clean = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $response);
+    $data = json_decode($clean, true);
+    if (!is_array($data)) {
+        return null;
+    }
+    return $data;
+}
 
 /**
  * Rate limit wait - ensures we don't exceed 1 request per second
@@ -74,8 +90,8 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime): array
         return [];
     }
     
-    $data = json_decode($response, true);
-    if (!isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $data = notamDecodeNmsJsonResponse($response);
+    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
         return [];
     }
     
@@ -134,8 +150,8 @@ function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius
         return [];
     }
     
-    $data = json_decode($response, true);
-    if (!isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $data = notamDecodeNmsJsonResponse($response);
+    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
         return [];
     }
     
@@ -145,22 +161,28 @@ function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius
 /**
  * Deduplicate NOTAMs by ID
  * 
- * @param array $notams Array of parsed NOTAM data
- * @return array Deduplicated array
+ * Merges duplicate payloads (location + geo queries) so the richest NOTAM text survives
+ * for TFR parsing and EFFECTIVE window extraction.
+ * 
+ * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows (same id may appear from location and geo queries)
+ * @return array<int, array<string, mixed>> Deduplicated rows merged by {@see mergeParsedNotamDuplicates()}
  */
 function deduplicateNotams(array $notams): array {
-    $seen = [];
-    $deduplicated = [];
+    $byId = [];
     
     foreach ($notams as $notam) {
         $id = $notam['id'] ?? '';
-        if (!empty($id) && !isset($seen[$id])) {
-            $seen[$id] = true;
-            $deduplicated[] = $notam;
+        if ($id === '') {
+            continue;
         }
+        if (!isset($byId[$id])) {
+            $byId[$id] = $notam;
+            continue;
+        }
+        $byId[$id] = mergeParsedNotamDuplicates($byId[$id], $notam);
     }
     
-    return $deduplicated;
+    return array_values($byId);
 }
 
 /**
@@ -170,9 +192,9 @@ function deduplicateNotams(array $notams): array {
  * 1. Location-based query (if ICAO/IATA available)
  * 2. Geospatial query (for TFRs and fallback for FAA identifiers)
  * 
- * @param string $airportId Airport ID
- * @param array $airport Airport configuration
- * @return array Filtered NOTAMs with status
+ * @param string $airportId Airport ID (e.g., 'khio')
+ * @param array<string, mixed> $airport Airport configuration
+ * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
 function fetchNotamsForAirport(string $airportId, array $airport): array {
     $lastRequestTime = 0.0;
