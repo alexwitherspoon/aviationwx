@@ -1134,6 +1134,12 @@ Only include preferences you want to change from defaults. Users who have previo
 
 ---
 
+## TFR NOTAM overlay (airport map)
+
+The airport network map loads aggregated TFR GeoJSON from the Internal API route **`GET /api/notam-map.php`** (built from per-airport NOTAM caches). Restrictions are drawn as polygons or true-radius circles. **Detail copy (NOTAM id, schedule line, vertical summary, FAA link) opens in a Leaflet popup on tap or click only** so touch devices do not get a second hover tooltip over the same feature.
+
+---
+
 ## Weather Overlays (Airport Map)
 
 The airport network map at https://airports.aviationwx.org/ can display weather overlays from two sources:

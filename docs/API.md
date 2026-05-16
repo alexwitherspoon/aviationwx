@@ -128,6 +128,26 @@ The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser ca
 
 ---
 
+### NOTAM (airport dashboard)
+
+#### `GET /api/notam.php?airport={airport_id}`
+
+Returns filtered NOTAM rows (closures and relevant TFRs) as JSON for the per-airport dashboard. Responses include schedule fields when parsed from the NOTAM body (`effective_segments`, `schedule_source`, current or next restriction window times). See [`api/notam.php`](../api/notam.php) and [`lib/notam/filter.php`](../lib/notam/filter.php).
+
+---
+
+### TFR map layer (airports directory)
+
+#### `GET /api/notam-map.php`
+
+Returns a GeoJSON `FeatureCollection` of TFR geometries for the **airports directory map** (`pages/airports.php`). Features include properties such as `notam_id`, `status`, `status_line`, `vertical_limits`, `geometry_kind` (`polygon` or `circle`), `official_link`, and style hints. The payload is cached on disk with the same TTL as per-airport NOTAM JSON (`getNotamCacheTtlSeconds()`).
+
+**Access:** In production, callers must satisfy map-only browser rules (`lib/notam/map-api-access.php`); nginx also rejects `Sec-Fetch-Site: cross-site` for this path (`docker/nginx.conf`). Non-production and test mode allow open access for local development and CI.
+
+**UI:** The map shows TFR detail in a **Leaflet popup on tap or click only** (no hover tooltip), so mobile users do not see two stacked overlays for the same restriction.
+
+---
+
 ### Webcam Images
 
 #### `GET /webcam.php?id={airport_id}&cam={camera_index}[&fmt={format}][&size={height}][&v={hash}][&mtime=1]`

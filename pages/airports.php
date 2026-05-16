@@ -209,18 +209,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             max-height: 1200px;
         }
 
-        .leaflet-tooltip.notam-map-hover-tip {
-            background: rgba(255, 255, 255, 0.96);
-            color: #1a1a1a;
-            border: 1px solid rgba(0, 0, 0, 0.35);
-            border-radius: 6px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-            font-size: 12px;
-            line-height: 1.35;
-            max-width: 260px;
-            padding: 6px 10px;
-        }
-
         .tfr-map-popup-cta {
             display: inline-block;
             margin-top: 0.35rem;
@@ -1614,32 +1602,8 @@ $breadcrumbs = generateBreadcrumbSchema([
             return '<strong>TFR - ' + notamTfrMapEscapeTipText(p.notam_id) + '</strong>';
         }
 
-        function bindNotamMapHoverTooltip(feature, layer) {
-            var p = feature.properties || {};
-            var parts = [];
-            var titleHtml = notamTfrMapLayerTitleHtml(p);
-            if (titleHtml) {
-                parts.push(titleHtml);
-            }
-            var cap = notamTfrMapStatusLineForFeature(p);
-            if (cap) {
-                parts.push(cap);
-            }
-            if (p.vertical_limits) {
-                parts.push(notamTfrMapEscapeTipText(p.vertical_limits));
-            }
-            parts.push('<span style="opacity:0.85;font-size:11px;">Tap or click for briefing link</span>');
-            layer.bindTooltip(parts.join('<br>'), {
-                sticky: true,
-                direction: 'auto',
-                className: 'notam-map-hover-tip',
-                interactive: false
-            });
-        }
-
         function onEachTfrFeature(feature, layer) {
             var p = feature.properties || {};
-            bindNotamMapHoverTooltip(feature, layer);
             var lines = [];
             var titleLine = notamTfrMapLayerTitleHtml(p);
             if (titleLine) {

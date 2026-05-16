@@ -185,7 +185,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - Formats times in airport local timezone
 - Includes official FAA NOTAM links
 
-**`api/notam-map.php`**: Internal GeoJSON for the **airports directory map** only (aggregated TFR layer). **Not** a general integration surface: production enforces browser-oriented access (`lib/notam/map-api-access.php`); nginx returns 403 when `Sec-Fetch-Site` is `cross-site` (`docker/nginx.conf`). Non-production and test mode stay open for local and CI.
+**`api/notam-map.php`**: Internal GeoJSON for the **airports directory map** only (aggregated TFR layer). **Not** a general integration surface: production enforces browser-oriented access (`lib/notam/map-api-access.php`); nginx returns 403 when `Sec-Fetch-Site` is `cross-site` (`docker/nginx.conf`). Non-production and test mode stay open for local and CI. The map uses a **tap or click popup** for restriction copy (no hover tooltip) so touch UIs avoid duplicate overlays.
 
 **`lib/notam/`**: NOTAM processing library
 - **`auth.php`**: NMS API OAuth authentication (bearer token with auto-refresh)
