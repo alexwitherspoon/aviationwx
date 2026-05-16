@@ -510,6 +510,107 @@ function parseTfrRadiusNm(string $text): ?float {
 }
 
 /**
+ * Extract a short vertical limit summary from TFR NOTAM body text (visual cue only).
+ *
+ * Matches common FAA phrasing. Output uses pilot-style wording (SFC, FL, ft, AGL, MSL).
+ * Not for navigation; official limits remain on the government NOTAM.
+ *
+ * @param string $text Full NOTAM text
+ * @return string|null Null when no supported altitude pattern is found
+ */
+function parseTfrVerticalLimitsSummary(string $text): ?string {
+    if ($text === '') {
+        return null;
+    }
+    $u = strtoupper($text);
+
+    $feetOk = static function (int $ft): bool {
+        return $ft >= 50 && $ft <= 80000;
+    };
+    $flOk = static function (int $fl): bool {
+        return $fl >= 10 && $fl <= 600;
+    };
+
+    // Prose: FROM THE SURFACE TO ... FEET (MEAN SEA LEVEL / MSL / AGL)
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\s+'
+        . '(?:MEAN\s+SEA\s+LEVEL|MSL)\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft MSL';
+        }
+    }
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\s+'
+        . '(?:ABOVE\s+GROUND\s+LEVEL|AGL)\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft AGL';
+        }
+    }
+    if (preg_match(
+        '/\bFROM\s+THE\s+SURFACE\s+TO\s+(?:AND\s+INCLUDING\s+)?(\d+)\s+FEET\b/',
+        $u,
+        $m
+    )) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft';
+        }
+    }
+
+    // SFC TO FL180 / FROM THE SURFACE TO FL 180
+    if (preg_match(
+        '/\b(?:FROM\s+THE\s+SURFACE|SFC)\s+TO\s+(?:AND\s+INCLUDING\s+)?FL\s*(\d{2,3})\b/',
+        $u,
+        $m
+    )) {
+        $fl = (int)$m[1];
+        if ($flOk($fl)) {
+            return 'SFC - FL' . $fl;
+        }
+    }
+
+    if (preg_match('/\bSFC\s*-\s*FL\s*(\d{2,3})\b/', $u, $m)) {
+        $fl = (int)$m[1];
+        if ($flOk($fl)) {
+            return 'SFC - FL' . $fl;
+        }
+    }
+
+    if (preg_match('/\bFL\s*(\d{2,3})\s+(?:-|TO)\s+FL\s*(\d{2,3})\b/', $u, $m)) {
+        $a = (int)$m[1];
+        $b = (int)$m[2];
+        if ($flOk($a) && $flOk($b)) {
+            return 'FL' . $a . ' - FL' . $b;
+        }
+    }
+
+    // SFC-5000FT / SFC - 5000 FEET (FAA area line; feet assumed unless AGL/MSL present nearby)
+    if (preg_match('/\bSFC\s*-\s*(\d+)\s*(?:FT|FEET)\b/', $u, $m)) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft';
+        }
+    }
+
+    if (preg_match('/\bSFC\s+TO\s+(\d+)\s+FEET\s+(AGL|MSL)\b/', $u, $m)) {
+        $ft = (int)$m[1];
+        if ($feetOk($ft)) {
+            return 'SFC - ' . $ft . ' ft ' . $m[2];
+        }
+    }
+
+    return null;
+}
+
+/**
  * Calculate haversine distance between two points in nautical miles
  * 
  * Uses the standard haversine formula with Earth radius constant from units.php
