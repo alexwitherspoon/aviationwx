@@ -105,6 +105,8 @@ The **`production-health-check`** workflow runs **`scripts/production-health-che
 
 ### Scheduler Verification
 
+**Startup model:** the `web` container **entrypoint** starts one `scripts/scheduler.php` process after cache permissions are ready. **Cron** runs `scripts/scheduler-health-check.php` every minute as a **watchdog**: it checks the lock file and `/proc`, and starts a replacement only when recovery is needed (for example missing PID, lock health not healthy, or stale lock with no live daemon). It is not meant to compete with the entrypoint for a routine second start when one healthy daemon is already running.
+
 ```bash
 # Check scheduler is running
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep scheduler
@@ -115,6 +117,14 @@ docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.loc
 # Force restart scheduler (auto-restarts within 60s)
 docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 ```
+
+**Duplicate daemons:** if `app.log` reports multiple scheduler processes, gather facts before sending signals (killing the wrong PID can leave the lock path pointing at the wrong inode). Read-only summary:
+
+```bash
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/diagnose-scheduler-duplicates.php
+```
+
+After a code fix, prefer a single clean `web` container restart so only the entrypoint-started daemon remains.
 
 ### Metrics System
 
