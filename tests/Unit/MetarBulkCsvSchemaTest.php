@@ -66,5 +66,45 @@ final class MetarBulkCsvSchemaTest extends TestCase
 
         $this->assertSame('bad_csv_header_schema', $stats['error'] ?? null);
         $this->assertSame(0, $stats['written']);
+        $this->assertArrayHasKey('header_mismatch', $stats);
+        $this->assertStringContainsString('column_count', (string) $stats['header_mismatch']);
+    }
+
+    public function testDescribeHeaderMismatch_ReportsFirstColumnDifference(): void
+    {
+        require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
+
+        $header = metar_bulk_csv_expected_header_columns();
+        $header[0] = 'station_id';
+        $summary = metar_bulk_csv_describe_header_mismatch($header);
+        $this->assertStringContainsString('col0:station_id!=raw_text', $summary);
+    }
+
+    public function testIngestGzipWithUtf8BomHeader_StillIngestsGoldenRows(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $goldenPath = __DIR__ . '/../Fixtures/metar-bulk-golden.csv';
+        $csvBody = "\xEF\xBB\xBF" . (string) file_get_contents($goldenPath);
+        $gzPath = sys_get_temp_dir() . '/metar_bulk_bom_' . uniqid('', true) . '.gz';
+        file_put_contents($gzPath, gzencode($csvBody, 9));
+
+        metarBulkEnsureDirectories();
+        $outFile = getMetarBulkStationsDir() . '/KZZZ.json';
+        if (is_file($outFile)) {
+            @unlink($outFile);
+        }
+
+        $stats = metarBulkIngestGzipToStationFiles($gzPath, ['KZZZ' => true]);
+        @unlink($gzPath);
+
+        $this->assertArrayNotHasKey('error', $stats);
+        $this->assertSame(1, $stats['written']);
+        $written = (string) file_get_contents($outFile);
+        $this->assertStringContainsString('"wgst":22', $written);
+        $this->assertStringContainsString('"pcp24hr":0.25', $written);
+        $this->assertStringContainsString('"precip":0.1', $written); // JSON encodes 0.10 as 0.1
+        @unlink($outFile);
     }
 }

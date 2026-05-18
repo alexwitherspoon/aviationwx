@@ -106,6 +106,36 @@ function metar_bulk_csv_header_matches_expected(array $headerRow): bool
 }
 
 /**
+ * Short summary when `metar_bulk_csv_header_matches_expected()` is false (for ops logs).
+ *
+ * @param array<int, string|null> $headerRow
+ */
+function metar_bulk_csv_describe_header_mismatch(array $headerRow): string
+{
+    $headerRow = metar_bulk_csv_normalize_header_row($headerRow);
+    $expected = metar_bulk_csv_expected_header_columns();
+    $gotCount = count($headerRow);
+    $expectedCount = count($expected);
+    if ($gotCount !== $expectedCount) {
+        return sprintf('column_count got=%d expected=%d', $gotCount, $expectedCount);
+    }
+    $parts = [];
+    foreach ($expected as $i => $name) {
+        if (($headerRow[$i] ?? null) !== $name) {
+            $got = $headerRow[$i] ?? '(null)';
+            $parts[] = sprintf('col%d:%s!=%s', $i, $got, $name);
+            if (count($parts) >= 5) {
+                $parts[] = '...';
+
+                break;
+            }
+        }
+    }
+
+    return $parts === [] ? 'unknown_mismatch' : implode('; ', $parts);
+}
+
+/**
  * Map each column name to zero-based indices (handles duplicate header names).
  *
  * @param list<string> $headerColumns

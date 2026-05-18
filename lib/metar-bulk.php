@@ -184,6 +184,14 @@ function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
     if ($wspdCell !== null && $wspdCell !== '' && is_numeric($wspdCell)) {
         $wspd = (int) round((float) $wspdCell);
     }
+    $wgst = null;
+    $gustCell = metarBulkCsvRowCell($fields, $lists, 'wind_gust_kt', 0);
+    if ($gustCell !== null && $gustCell !== '' && is_numeric($gustCell)) {
+        $gustKts = (int) round((float) $gustCell);
+        if ($gustKts >= 0 && $gustKts <= 200) {
+            $wgst = $gustKts;
+        }
+    }
 
     $visCell = trim((string) (metarBulkCsvRowCell($fields, $lists, 'visibility_statute_mi', 0) ?? ''));
     $altimInHg = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'altim_in_hg', 0));
@@ -262,6 +270,10 @@ function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
     }
     if ($precip !== null) {
         $out['precip'] = $precip;
+    }
+    if ($wgst !== null) {
+        // Bulk slices only: AWC CSV `wind_gust_kt` when `rawOb` has no G-group (HTTP JSON has no gust field).
+        $out['wgst'] = $wgst;
     }
 
     return $out;
@@ -409,10 +421,10 @@ function metarBulkWriteStationJsonAtomic(string $icaoUpper, string $jsonEnvelope
  * Stream gzip CSV; for each configured ICAO keep the row with greatest `observation_time` before writing.
  *
  * @param array<string, true> $icaoSet
- * @return array{written: int, scanned: int, stations_in_csv: int, error?: string}
+ * @return array{written: int, scanned: int, stations_in_csv: int, skipped_short_rows: int, error?: string, header_mismatch?: string}
  */
 function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): array {
-    $stats = ['written' => 0, 'scanned' => 0, 'stations_in_csv' => 0];
+    $stats = ['written' => 0, 'scanned' => 0, 'stations_in_csv' => 0, 'skipped_short_rows' => 0];
     if ($icaoSet === []) {
         return $stats;
     }
@@ -430,9 +442,11 @@ function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): 
 
         return $stats;
     }
+    $header = metar_bulk_csv_normalize_header_row($header);
     if (!metar_bulk_csv_header_matches_expected($header)) {
         fclose($h);
         $stats['error'] = 'bad_csv_header_schema';
+        $stats['header_mismatch'] = metar_bulk_csv_describe_header_mismatch($header);
 
         return $stats;
     }
@@ -444,6 +458,8 @@ function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): 
     while (($row = @fgetcsv($h, 0, ',', '"', '\\')) !== false) {
         $stats['scanned']++;
         if (count($row) < $expectedCols) {
+            $stats['skipped_short_rows']++;
+
             continue;
         }
         $row = array_slice(array_pad($row, $expectedCols, ''), 0, $expectedCols);
@@ -568,7 +584,14 @@ function metarBulkRefreshRun(): array {
     if (isset($ingest['error'])) {
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
-        aviationwx_log('warning', 'metar_bulk: ingest failed', ['error' => $ingest['error']], 'app');
+        $logCtx = ['error' => $ingest['error']];
+        if (isset($ingest['header_mismatch'])) {
+            $logCtx['header_mismatch'] = $ingest['header_mismatch'];
+        }
+        if (($ingest['skipped_short_rows'] ?? 0) > 0) {
+            $logCtx['skipped_short_rows'] = (int) $ingest['skipped_short_rows'];
+        }
+        aviationwx_log('warning', 'metar_bulk: ingest failed', $logCtx, 'app');
 
         return $result;
     }
@@ -585,6 +608,7 @@ function metarBulkRefreshRun(): array {
         'written' => $result['written'],
         'scanned' => $result['scanned'],
         'stations_in_csv' => (int) ($ingest['stations_in_csv'] ?? 0),
+        'skipped_short_rows' => (int) ($ingest['skipped_short_rows'] ?? 0),
         'pruned' => $result['pruned'],
     ], 'app');
 
