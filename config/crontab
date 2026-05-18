@@ -15,9 +15,9 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Logs to /var/log/aviationwx/ (logrotate handles rotation: 7 days, 100MB max)
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cron-heartbeat.php >> /var/log/aviationwx/cron-heartbeat.log 2>&1
 
-# Scheduler Health Check - Runs every minute
-# Validates scheduler daemon is running and healthy, restarts if needed.
-# The scheduler daemon handles all weather and webcam updates (replaces cron-based fetching).
+# Scheduler watchdog - Runs every minute (not the initial start; docker-entrypoint starts the daemon).
+# Confirms /tmp/scheduler.lock and live PID; starts a replacement only when recovery is needed
+# (missing process, unhealthy lock, etc.). Scheduler handles weather/webcam/NOTAM refresh cadence.
 # Logs to /var/log/aviationwx/ via aviationwx_log() function.
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php >> /var/log/aviationwx/scheduler-health-check.log 2>&1
 

@@ -289,10 +289,14 @@ else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
 fi
 
+# Scheduler: initial start authority is this entrypoint (one daemon after cache is ready).
+# Cron runs scripts/scheduler-health-check.php every minute as a watchdog only (confirm lock/PID,
+# start a replacement when missing or unhealthy). It must not duplicate a healthy daemon.
 # Scheduler runs as www-data so cache and worker subprocesses match Apache (see ProcessPool).
 # Must start after cache permissions (including webcams setgid) are applied.
+# Use POSIX sh (not bash -c): non-interactive sh exits right after backgrounding; avoids a lingering bash parent.
 echo "Starting scheduler daemon..."
-runuser -u www-data -- /bin/bash -c 'cd /var/www/html && nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &'
+runuser -u www-data -- /bin/sh -c 'cd /var/www/html && nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php >/dev/null 2>&1 &'
 echo "✓ Scheduler started as www-data"
 
 # Initialize log directory with correct permissions
