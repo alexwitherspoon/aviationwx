@@ -34,6 +34,7 @@ require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
+require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
 // Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
 
 // Lock file location
@@ -107,39 +108,31 @@ function scheduler_parse_metrics_aggregator_stdout(array $lines): ?int {
 
 /**
  * Acquire lock file with exclusive lock
- * 
- * Prevents duplicate scheduler instances from running.
- * Cleans up stale locks (uses FILE_LOCK_STALE_SECONDS constant).
- * 
+ *
+ * Prevents duplicate scheduler instances from running. Does not unlink stale paths: that
+ * overlapped with live fds and allowed a second daemon to flock a new inode (see scheduler_lock_acquire_exclusive_nb()).
+ *
  * @param string $lockFile Path to lock file
- * @return resource|false File handle on success, false on failure
+ * @return resource File handle on success (caller must hold until exit)
  */
-function acquireLock($lockFile) {
-    // Clean up stale locks (use constant for threshold)
-    if (file_exists($lockFile)) {
-        $lockAge = time() - filemtime($lockFile);
-        if ($lockAge > FILE_LOCK_STALE_SECONDS) {
-            @unlink($lockFile);
-        }
+function acquireLock(string $lockFile) {
+    $result = scheduler_lock_acquire_exclusive_nb($lockFile);
+    if (($result['ok'] ?? false) === true) {
+        return $result['fp'];
     }
-    
-    $fp = @fopen($lockFile, 'c+');
-    if (!$fp) {
+
+    $reason = $result['reason'] ?? 'unknown';
+    if ($reason === 'fopen') {
         aviationwx_log('error', 'scheduler: cannot create lock file', [
             'lock_file' => $lockFile
         ], 'app', true);
-        exit(1);
-    }
-    
-    if (!@flock($fp, LOCK_EX | LOCK_NB)) {
-        @fclose($fp);
+    } else {
         aviationwx_log('error', 'scheduler: another instance running', [
             'lock_file' => $lockFile
         ], 'app', true);
-        exit(1);
     }
-    
-    return $fp;
+
+    exit(1);
 }
 
 /**
@@ -202,16 +195,27 @@ aviationwx_log('info', 'scheduler: started', [
     'nice' => $schedulerNice
 ], 'app');
 
+// Refresh lock metadata immediately so cron health checks do not treat pre-restart mtime as stale
+// while the first loop (runways fetch, pools, etc.) can exceed the health check lock-age threshold.
+if ($lockFp) {
+    updateLockFile($lockFp, $pid, $startTime, 0, 'healthy', null, null, 0, null);
+}
+
 // Register shutdown function for cleanup
 register_shutdown_function(function() use ($lockFp, $lockFile, &$loopCount, $startTime) {
     if ($lockFp) {
+        $fpStat = @fstat($lockFp);
         @flock($lockFp, LOCK_UN);
         @fclose($lockFp);
+        $pathStat = @stat($lockFile);
+        if (is_array($fpStat) && is_array($pathStat)
+            && ($fpStat['dev'] ?? null) === ($pathStat['dev'] ?? null)
+            && ($fpStat['ino'] ?? null) === ($pathStat['ino'] ?? null)
+        ) {
+            @unlink($lockFile);
+        }
     }
-    if (file_exists($lockFile)) {
-        @unlink($lockFile);
-    }
-    
+
     aviationwx_log('info', 'scheduler: shutdown', [
         'pid' => getmypid(),
         'loop_count' => $loopCount,
