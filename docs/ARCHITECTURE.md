@@ -29,6 +29,7 @@ aviationwx.org/
 │   ├── logger.php            # Logging utilities
 │   ├── seo.php               # SEO utilities (structured data, meta tags)
 │   ├── constants.php         # Application constants
+│   ├── scheduler-daemon-lock.php # Exclusive flock helper for scheduler.php (no path unlink)
 │   ├── circuit-breaker.php   # Circuit breaker for API failures
 │   ├── airport-identifiers.php # Airport code validation
 │   ├── address-formatter.php # Address formatting utilities
@@ -60,8 +61,9 @@ aviationwx.org/
 │       │   └── WindGroup.php       # Grouped wind fields
 │       └── adapter/          # Weather API adapters
 ├── scripts/
-│   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM)
-│   ├── scheduler-health-check.php # Scheduler health check (runs via cron)
+│   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM); entrypoint starts at boot
+│   ├── scheduler-health-check.php # Cron watchdog: recover if daemon missing or unhealthy (not initial start)
+│   ├── diagnose-scheduler-duplicates.php # Read-only CLI: list scheduler PIDs and lock summary
 │   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
 │   └── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
@@ -146,7 +148,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
 **`scripts/scheduler.php`**: Combined scheduler daemon for data refresh
-- Runs continuously as background process (started on container boot)
+- Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
 - Handles weather, webcam, and NOTAM updates with sub-minute granularity
 - Supports configurable refresh intervals (minimum 5 seconds, 1-second granularity)
 - Non-blocking main loop with ProcessPool integration
