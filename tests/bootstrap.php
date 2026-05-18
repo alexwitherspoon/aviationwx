@@ -94,6 +94,7 @@ function isRunningInCI(): bool {
  * - Circuit breaker state (backoff.json)
  * - Weather cache files (weather_*.json)
  * - Webcam images (webcams/*.jpg, *.webp)
+ * - METAR bulk station JSON under cache/metar-bulk/stations/
  * - Partner logo cache files (partners/* under CACHE_PARTNERS_DIR)
  * - Daily tracking files (peak_gusts.json, temp_extremes.json)
  * - Outage detection files (outage_*.json)
@@ -168,6 +169,25 @@ function cleanTestCache(): void {
                 @unlink($file);
             }
         }
+    }
+
+    // METAR bulk slices under cache/metar-bulk/ (tests may create these)
+    $metarBulkPatterns = [
+        CACHE_METAR_BULK_DIR . '/stations/*.json',
+        CACHE_METAR_BULK_DIR . '/tmp/*',
+    ];
+    foreach ($metarBulkPatterns as $pattern) {
+        $files = glob($pattern);
+        if ($files !== false) {
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
+    }
+    if (is_file(CACHE_METAR_BULK_DIR . '/refresh.lock')) {
+        @unlink(CACHE_METAR_BULK_DIR . '/refresh.lock');
     }
 
     // Clean files matching base patterns

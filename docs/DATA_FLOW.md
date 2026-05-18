@@ -156,6 +156,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
+- **Bulk cache (production)**: The scheduler runs `scripts/refresh-metar-bulk.php` on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`). It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Stale or missing slices fall back to the JSON endpoint above so behavior stays safe if the bulk job fails.
 - **Data Provided**:
   - Temperature (Celsius)
   - Dewpoint (Celsius)
@@ -174,9 +175,14 @@ When a primary source is configured, METAR data is fetched to supplement:
 - **Ceiling**: Required for flight category calculation
 - **Cloud Cover**: Additional aviation context
 
-METAR fetching logic:
-1. Attempts primary `metar_station` first
-2. If primary fails and `nearby_metar_stations` are configured, tries each nearby station sequentially
+METAR fetching logic (per station ID):
+1. **Test mode**: `getMockHttpResponse` supplies canned JSON so PHPUnit stays deterministic.
+2. **Bulk slice**: When `cache/metar-bulk/stations/{ICAO}.json` exists and is newer than `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`, read and parse it (same envelope as the JSON API).
+3. **HTTP**: Otherwise GET the per-station JSON endpoint.
+
+Station selection (primary and fallbacks):
+1. Attempts primary `station_id` from the METAR source first
+2. If primary fails and `nearby_stations` are configured, tries each nearby station sequentially
 3. Stops on first successful fetch
 4. If all stations fail, visibility/ceiling remain null
 

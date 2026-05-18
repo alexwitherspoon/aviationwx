@@ -44,6 +44,9 @@
  * ├── temp_extremes/               # Per-airport daily temperature extremes
  * │   └── {airport}.json
  * ├── outage_{airport}.json        # Outage detection state
+ * ├── metar-bulk/                  # AWC METAR CSV.gz slices (scheduler refresh)
+ * │   ├── stations/{ICAO}.json     # One-element JSON array per station (METAR API shape)
+ * │   └── tmp/                     # Download scratch (deleted after ingest)
  * ├── airport_country_resolution.json  # Geometry-derived ISO per airport (scheduler)
  * └── memory_history.json          # Memory usage tracking
  * 
@@ -106,6 +109,34 @@ function getWeatherHistoryCachePath(string $airportId): string {
  */
 function getOutageCachePath(string $airportId): string {
     return CACHE_BASE_DIR . '/outage_' . strtolower($airportId) . '.json';
+}
+
+// =============================================================================
+// METAR BULK CACHE (gzip ingest, per-ICAO JSON under cache/metar-bulk/stations/)
+// =============================================================================
+
+if (!defined('CACHE_METAR_BULK_DIR')) {
+    define('CACHE_METAR_BULK_DIR', CACHE_BASE_DIR . '/metar-bulk');
+}
+
+function getMetarBulkCacheDir(): string {
+    return CACHE_METAR_BULK_DIR;
+}
+
+function getMetarBulkStationsDir(): string {
+    return CACHE_METAR_BULK_DIR . '/stations';
+}
+
+function getMetarBulkTempDir(): string {
+    return CACHE_METAR_BULK_DIR . '/tmp';
+}
+
+function getMetarBulkRefreshLockPath(): string {
+    return CACHE_METAR_BULK_DIR . '/refresh.lock';
+}
+
+function getMetarBulkStationJsonPath(string $icaoUpper): string {
+    return getMetarBulkStationsDir() . '/' . strtoupper($icaoUpper) . '.json';
 }
 
 // =============================================================================

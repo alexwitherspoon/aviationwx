@@ -809,27 +809,38 @@ function parseMETARResponse($response, $airport): ?array {
  * @param array $airport Airport configuration array (for logging context)
  * @return array|null Parsed METAR data array with standard keys, or null on failure
  */
-function fetchMETARFromStation($stationId, $airport): ?array {if (!is_string($stationId) || !is_array($airport)) {
+function fetchMETARFromStation($stationId, $airport): ?array {
+    if (!is_string($stationId) || !is_array($airport)) {
         return null;
     }
     // Fetch METAR from aviationweather.gov (new API format)
-    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";// Check for mock response in test mode
+    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    // Mock first (deterministic tests); else fresh bulk slice; else per-station HTTP.
     $mockResponse = getMockHttpResponse($url);
     if ($mockResponse !== null) {
         $response = $mockResponse;
     } else {
-        // Create context with explicit timeout
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => CURL_TIMEOUT,
-                'ignore_errors' => true,
-            ],
-        ]);
-        
-        $response = @file_get_contents($url, false, $context);if ($response === false) {
-            return null;
+        require_once __DIR__ . '/../../metar-bulk.php';
+        $bulkJson = metarBulkTryReadJsonResponseForStation($stationId);
+        if ($bulkJson !== null) {
+            $response = $bulkJson;
+        } else {
+            // Create context with explicit timeout
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => CURL_TIMEOUT,
+                    'ignore_errors' => true,
+                ],
+            ]);
+
+            $response = @file_get_contents($url, false, $context);
+            if ($response === false) {
+                return null;
+            }
         }
-    }$parsed = parseMETARResponse($response, $airport);// If parsing succeeded, add metadata about which station was used
+    }
+    $parsed = parseMETARResponse($response, $airport);
+    // If parsing succeeded, add metadata about which station was used
     if ($parsed !== null) {
         $parsed['_metar_station_used'] = $stationId;
     }

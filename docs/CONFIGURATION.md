@@ -686,6 +686,8 @@ METAR data from NOAA Aviation Weather provides aviation-specific observations in
 
 `nearby_stations` provides fallback stations if the primary METAR station is unavailable.
 
+The scheduler also refreshes the shared AWC METAR bulk gzip (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. Weather workers read a fresh slice before calling the per-station HTTP API, which reduces duplicate requests to aviationweather.gov.
+
 ### Backup Sources
 
 Mark a source as backup by adding `"backup": true`. Backup sources are only used when primary sources fail or are stale:
