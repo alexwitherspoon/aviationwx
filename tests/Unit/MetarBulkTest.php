@@ -90,6 +90,23 @@ final class MetarBulkTest extends TestCase
         $this->assertSame(PHP_INT_MIN, metarBulkParseObservationTime(''));
     }
 
+    public function testMetarBulkCsvRowToApiRecord_PrecipColumns_MapToDistinctFields(): void
+    {
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $row = array_fill(0, 44, '');
+        $row[0] = 'METAR KZZZ 181500Z AUTO 09007KT 10SM CLR 15/10 A2990';
+        $row[1] = 'KZZZ';
+        $row[2] = '2026-05-18T15:00:00.000Z';
+        $row[36] = '0.10';
+        $row[39] = '0.25';
+
+        $rec = metarBulkCsvRowToApiRecord($row, metarBulkGetDefaultCsvColumnLists());
+        $this->assertIsArray($rec);
+        $this->assertEqualsWithDelta(0.25, (float) $rec['pcp24hr'], 0.001);
+        $this->assertEqualsWithDelta(0.10, (float) $rec['precip'], 0.001);
+    }
+
     public function testCsvRowToJsonEnvelopeParsesThroughParseMetarResponse(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk.php';

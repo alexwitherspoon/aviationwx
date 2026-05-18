@@ -187,7 +187,11 @@ function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
 
     $visCell = trim((string) (metarBulkCsvRowCell($fields, $lists, 'visibility_statute_mi', 0) ?? ''));
     $altimInHg = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'altim_in_hg', 0));
-    $altimHpa = $altimInHg !== null ? $altimInHg * 33.8639 : null;
+    $altimHpa = null;
+    if ($altimInHg !== null) {
+        require_once __DIR__ . '/units.php';
+        $altimHpa = inhgToHpa($altimInHg);
+    }
 
     $clouds = [];
     $covers = $lists['sky_cover'] ?? [];
@@ -219,14 +223,8 @@ function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
         }
     }
 
-    $precip = null;
-    foreach (['pcp24hr_in', 'precip_in'] as $precipCol) {
-        $pc = metarBulkCsvRowCell($fields, $lists, $precipCol, 0);
-        if ($pc !== null && $pc !== '' && is_numeric($pc)) {
-            $precip = (float) $pc;
-            break;
-        }
-    }
+    $pcp24hr = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'pcp24hr_in', 0));
+    $precip = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'precip_in', 0));
 
     $obsTime = null;
     $obsStr = trim((string) (metarBulkCsvRowCell($fields, $lists, 'observation_time', 0) ?? ''));
@@ -259,8 +257,11 @@ function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
     if ($obsTime !== null) {
         $out['obsTime'] = $obsTime;
     }
+    if ($pcp24hr !== null) {
+        $out['pcp24hr'] = $pcp24hr;
+    }
     if ($precip !== null) {
-        $out['pcp24hr'] = $precip;
+        $out['precip'] = $precip;
     }
 
     return $out;
