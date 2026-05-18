@@ -799,12 +799,8 @@ function parseMETARResponse($response, $airport): ?array {
 }
 
 /**
- * Fetch METAR data from a single station ID
- * 
- * Makes HTTP request to aviationweather.gov API to fetch METAR data for a specific station.
- * Parses the response and returns standardized weather data. Used by fetchMETAR() for
- * primary and fallback station fetching.
- * 
+ * Fetch METAR for one station: test mock, optional bulk slice, or per-station HTTP.
+ *
  * @param string $stationId The METAR station ID to fetch (e.g., 'KSPB')
  * @param array $airport Airport configuration array (for logging context)
  * @return array|null Parsed METAR data array with standard keys, or null on failure
@@ -813,7 +809,7 @@ function fetchMETARFromStation($stationId, $airport): ?array {
     if (!is_string($stationId) || !is_array($airport)) {
         return null;
     }
-    // Fetch METAR from aviationweather.gov (new API format)
+    // Fetch METAR from aviationweather.gov (JSON API or bulk slice on disk)
     $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
     // Mock first (deterministic tests); else fresh bulk slice; else per-station HTTP.
     $mockResponse = getMockHttpResponse($url);

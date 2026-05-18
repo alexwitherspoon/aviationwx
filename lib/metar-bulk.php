@@ -5,11 +5,10 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/metar-bulk-csv-schema.php';
 
 // AWC national METAR CSV gzip; prefer scheduler-driven refresh over ad-hoc pulls.
 const METAR_BULK_CACHE_GZ_URL = 'https://aviationweather.gov/data/cache/metars.cache.csv.gz';
-
-const METAR_BULK_CSV_MIN_FIELDS = 12;
 
 /**
  * Uppercase ICAO safe for a filename segment, or null if invalid (path traversal guard).
@@ -30,8 +29,8 @@ function metarBulkSanitizeIcaoForFilename(string $icao): ?string {
  * @return array<string, true>
  */
 function metarBulkCollectConfiguredStationIds(?array $config = null): array {
+    require_once __DIR__ . '/config.php';
     if ($config === null) {
-        require_once __DIR__ . '/config.php';
         $config = loadConfig(false);
     }
     $out = [];
@@ -39,7 +38,7 @@ function metarBulkCollectConfiguredStationIds(?array $config = null): array {
         return $out;
     }
     foreach ($config['airports'] as $airport) {
-        if (!is_array($airport) || empty($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
+        if (!is_array($airport) || !isAirportEnabled($airport) || empty($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
             continue;
         }
         foreach ($airport['weather_sources'] as $source) {
@@ -72,6 +71,38 @@ function metarBulkCollectConfiguredStationIds(?array $config = null): array {
 }
 
 /**
+ * Enabled airports in config (same filter as scheduler weather jobs).
+ *
+ * @param array<string, mixed>|null $config
+ */
+function metarBulkCountEnabledAirports(?array $config = null): int {
+    require_once __DIR__ . '/config.php';
+    if ($config === null) {
+        $config = loadConfig(false);
+    }
+    if (!is_array($config) || !isset($config['airports']) || !is_array($config['airports'])) {
+        return 0;
+    }
+    $n = 0;
+    foreach ($config['airports'] as $airport) {
+        if (is_array($airport) && isAirportEnabled($airport)) {
+            $n++;
+        }
+    }
+
+    return $n;
+}
+
+/**
+ * National gzip ingest helps multi-airport installs; a single enabled airport uses per-station HTTP only.
+ *
+ * @param array<string, mixed>|null $config
+ */
+function metarBulkShouldUseNationalBulk(?array $config = null): bool {
+    return metarBulkCountEnabledAirports($config) > 1;
+}
+
+/**
  * CSV `observation_time` to Unix UTC; unknown parses sort before any real observation.
  */
 function metarBulkParseObservationTime(string $observationTimeCell): int {
@@ -88,60 +119,100 @@ function metarBulkParseObservationTime(string $observationTimeCell): int {
 }
 
 /**
- * Map one AWC CSV row (numeric columns; repeated `sky_cover` headers) to a single METAR API object.
+ * One CSV cell by logical column name (supports duplicate header names via occurrence index).
  *
  * @param array<int, string|null> $fields
- * @return array<string, mixed>|null
+ * @param array<string, list<int>> $lists
  */
-function metarBulkCsvRowToApiRecord(array $fields): ?array {
-    if (count($fields) < METAR_BULK_CSV_MIN_FIELDS) {
+function metarBulkCsvRowCell(array $fields, array $lists, string $column, int $occurrence = 0): mixed
+{
+    if (!isset($lists[$column][$occurrence])) {
         return null;
     }
-    $station = metarBulkSanitizeIcaoForFilename((string) ($fields[1] ?? ''));
+    $i = $lists[$column][$occurrence];
+
+    return $fields[$i] ?? null;
+}
+
+/**
+ * Cached index lists for the canonical header (unit tests and callers that omit `$lists`).
+ *
+ * @return array<string, list<int>>
+ */
+function metarBulkGetDefaultCsvColumnLists(): array
+{
+    static $cached = null;
+    if ($cached === null) {
+        $cached = metar_bulk_csv_build_column_index_lists(metar_bulk_csv_expected_header_columns());
+    }
+
+    return $cached;
+}
+
+/**
+ * Map one AWC CSV row to a single METAR API object. `$lists` must match the validated file header.
+ *
+ * @param array<int, string|null> $fields
+ * @param array<string, list<int>> $lists
+ * @return array<string, mixed>|null
+ */
+function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
+{
+    $need = metar_bulk_csv_expected_column_count();
+    if (count($fields) < $need) {
+        return null;
+    }
+    $station = metarBulkSanitizeIcaoForFilename((string) (metarBulkCsvRowCell($fields, $lists, 'station_id', 0) ?? ''));
     if ($station === null) {
         return null;
     }
-    $rawOb = trim((string) ($fields[0] ?? ''));
+    $rawOb = trim((string) (metarBulkCsvRowCell($fields, $lists, 'raw_text', 0) ?? ''));
     if ($rawOb === '') {
         return null;
     }
 
-    $temp = metarBulkParseOptionalFloat($fields[5] ?? null);
-    $dew = metarBulkParseOptionalFloat($fields[6] ?? null);
+    $temp = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'temp_c', 0));
+    $dew = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'dewpoint_c', 0));
 
     $wdir = null;
-    if (isset($fields[7]) && $fields[7] !== null && $fields[7] !== '' && is_numeric($fields[7])) {
-        $wdir = (int) round((float) $fields[7]);
+    $wdirCell = metarBulkCsvRowCell($fields, $lists, 'wind_dir_degrees', 0);
+    if ($wdirCell !== null && $wdirCell !== '' && is_numeric($wdirCell)) {
+        $wdir = (int) round((float) $wdirCell);
     }
     $wspd = null;
-    if (isset($fields[8]) && $fields[8] !== null && $fields[8] !== '' && is_numeric($fields[8])) {
-        $wspd = (int) round((float) $fields[8]);
+    $wspdCell = metarBulkCsvRowCell($fields, $lists, 'wind_speed_kt', 0);
+    if ($wspdCell !== null && $wspdCell !== '' && is_numeric($wspdCell)) {
+        $wspd = (int) round((float) $wspdCell);
     }
 
-    $visCell = trim((string) ($fields[10] ?? ''));
-    $altimInHg = metarBulkParseOptionalFloat($fields[11] ?? null);
+    $visCell = trim((string) (metarBulkCsvRowCell($fields, $lists, 'visibility_statute_mi', 0) ?? ''));
+    $altimInHg = metarBulkParseOptionalFloat(metarBulkCsvRowCell($fields, $lists, 'altim_in_hg', 0));
     $altimHpa = $altimInHg !== null ? $altimInHg * 33.8639 : null;
 
     $clouds = [];
-    $pairs = [[22, 23], [24, 25], [26, 27], [28, 29]];
-    foreach ($pairs as [$ci, $bi]) {
-        if (!isset($fields[$ci])) {
-            continue;
-        }
-        $cover = strtoupper(trim((string) $fields[$ci]));
+    $covers = $lists['sky_cover'] ?? [];
+    $bases = $lists['cloud_base_ft_agl'] ?? [];
+    $pairCount = min(count($covers), count($bases));
+    for ($p = 0; $p < $pairCount; $p++) {
+        $ci = $covers[$p];
+        $bi = $bases[$p];
+        $coverRaw = $fields[$ci] ?? null;
+        $cover = strtoupper(trim((string) $coverRaw));
         if ($cover === '' || $cover === 'NCD' || $cover === 'NSC') {
             continue;
         }
         $base = null;
-        if (isset($fields[$bi]) && $fields[$bi] !== null && $fields[$bi] !== '' && is_numeric($fields[$bi])) {
-            $base = (int) round((float) $fields[$bi]);
+        $baseRaw = $fields[$bi] ?? null;
+        if ($baseRaw !== null && $baseRaw !== '' && is_numeric($baseRaw)) {
+            $base = (int) round((float) $baseRaw);
         }
         $clouds[] = ['cover' => $cover, 'base' => $base];
     }
 
     $vertVis = null;
-    if (isset($fields[41]) && $fields[41] !== null && $fields[41] !== '' && is_numeric($fields[41])) {
-        $ft = (float) $fields[41];
+    $vvCell = metarBulkCsvRowCell($fields, $lists, 'vert_vis_ft', 0);
+    if ($vvCell !== null && $vvCell !== '' && is_numeric($vvCell)) {
+        $ft = (float) $vvCell;
         if ($ft > 0) {
             // `parseMETARResponse()` expects vertVis in hundreds of feet; CSV gives feet AGL.
             $vertVis = $ft / 100.0;
@@ -149,15 +220,16 @@ function metarBulkCsvRowToApiRecord(array $fields): ?array {
     }
 
     $precip = null;
-    foreach ([39, 36] as $pi) {
-        if (isset($fields[$pi]) && $fields[$pi] !== null && $fields[$pi] !== '' && is_numeric($fields[$pi])) {
-            $precip = (float) $fields[$pi];
+    foreach (['pcp24hr_in', 'precip_in'] as $precipCol) {
+        $pc = metarBulkCsvRowCell($fields, $lists, $precipCol, 0);
+        if ($pc !== null && $pc !== '' && is_numeric($pc)) {
+            $precip = (float) $pc;
             break;
         }
     }
 
     $obsTime = null;
-    $obsStr = trim((string) ($fields[2] ?? ''));
+    $obsStr = trim((string) (metarBulkCsvRowCell($fields, $lists, 'observation_time', 0) ?? ''));
     if ($obsStr !== '') {
         $ts = strtotime($obsStr);
         if ($ts !== false) {
@@ -194,6 +266,9 @@ function metarBulkCsvRowToApiRecord(array $fields): ?array {
     return $out;
 }
 
+/**
+ * @param mixed $cell CSV cell (often string)
+ */
 function metarBulkParseOptionalFloat(mixed $cell): ?float {
     if ($cell === null) {
         return null;
@@ -208,15 +283,18 @@ function metarBulkParseOptionalFloat(mixed $cell): ?float {
 
 /**
  * @param array<int, string|null> $fields
+ * @param array<string, list<int>>|null $lists From validated header; null uses canonical lists
  */
-function metarBulkCsvRowToJsonEnvelope(array $fields): ?string {
-    $rec = metarBulkCsvRowToApiRecord($fields);
+function metarBulkCsvRowToJsonEnvelope(array $fields, ?array $lists = null): ?string
+{
+    $lists ??= metarBulkGetDefaultCsvColumnLists();
+    $rec = metarBulkCsvRowToApiRecord($fields, $lists);
     if ($rec === null) {
         return null;
     }
     try {
         return json_encode([$rec], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-    } catch (JsonException $e) {
+    } catch (JsonException) {
         return null;
     }
 }
@@ -225,6 +303,10 @@ function metarBulkCsvRowToJsonEnvelope(array $fields): ?string {
  * Returns on-disk JSON for one ICAO when file mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`.
  */
 function metarBulkTryReadJsonResponseForStation(string $stationId): ?string {
+    require_once __DIR__ . '/config.php';
+    if (!metarBulkShouldUseNationalBulk()) {
+        return null;
+    }
     $icao = metarBulkSanitizeIcaoForFilename($stationId);
     if ($icao === null) {
         return null;
@@ -341,25 +423,35 @@ function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): 
         return $stats;
     }
     $header = @fgetcsv($h, 0, ',', '"', '\\');
-    if ($header === false || $header === [] || ($header[0] ?? '') !== 'raw_text') {
+    if ($header === false || $header === []) {
         fclose($h);
         $stats['error'] = 'bad_csv_header';
 
         return $stats;
     }
+    if (!metar_bulk_csv_header_matches_expected($header)) {
+        fclose($h);
+        $stats['error'] = 'bad_csv_header_schema';
+
+        return $stats;
+    }
+    $lists = metar_bulk_csv_build_column_index_lists($header);
+    $expectedCols = metar_bulk_csv_expected_column_count();
 
     /** @var array<string, array{0: int, 1: array<int, string|null>}> $best */
     $best = [];
     while (($row = @fgetcsv($h, 0, ',', '"', '\\')) !== false) {
         $stats['scanned']++;
-        if (count($row) < METAR_BULK_CSV_MIN_FIELDS) {
+        if (count($row) < $expectedCols) {
             continue;
         }
-        $sid = metarBulkSanitizeIcaoForFilename((string) ($row[1] ?? ''));
+        $row = array_slice(array_pad($row, $expectedCols, ''), 0, $expectedCols);
+        $sidCell = metarBulkCsvRowCell($row, $lists, 'station_id', 0);
+        $sid = metarBulkSanitizeIcaoForFilename((string) ($sidCell ?? ''));
         if ($sid === null || !isset($icaoSet[$sid])) {
             continue;
         }
-        $obsTs = metarBulkParseObservationTime((string) ($row[2] ?? ''));
+        $obsTs = metarBulkParseObservationTime((string) (metarBulkCsvRowCell($row, $lists, 'observation_time', 0) ?? ''));
         if (!isset($best[$sid]) || $obsTs >= $best[$sid][0]) {
             $best[$sid] = [$obsTs, $row];
         }
@@ -368,7 +460,7 @@ function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): 
     $stats['stations_in_csv'] = count($best);
 
     foreach ($best as $sid => [, $fields]) {
-        $json = metarBulkCsvRowToJsonEnvelope($fields);
+        $json = metarBulkCsvRowToJsonEnvelope($fields, $lists);
         if ($json === null) {
             continue;
         }
@@ -426,6 +518,21 @@ function metarBulkRefreshRun(): array {
         return $result;
     }
 
+    if (!metarBulkShouldUseNationalBulk()) {
+        $result['ok'] = true;
+        $result['note'] = 'skipped_bulk_below_multi_airport_threshold';
+
+        return $result;
+    }
+
+    $icaoSet = metarBulkCollectConfiguredStationIds();
+    if ($icaoSet === []) {
+        $result['ok'] = true;
+        $result['note'] = 'no_metar_stations_configured';
+
+        return $result;
+    }
+
     metarBulkEnsureDirectories();
     $lockPath = getMetarBulkRefreshLockPath();
     $lockFp = @fopen($lockPath, 'cb');
@@ -438,16 +545,6 @@ function metarBulkRefreshRun(): array {
         fclose($lockFp);
         $result['ok'] = true;
         $result['note'] = 'skipped_lock_held';
-
-        return $result;
-    }
-
-    $icaoSet = metarBulkCollectConfiguredStationIds();
-    if ($icaoSet === []) {
-        flock($lockFp, LOCK_UN);
-        fclose($lockFp);
-        $result['ok'] = true;
-        $result['note'] = 'no_metar_stations_configured';
 
         return $result;
     }
