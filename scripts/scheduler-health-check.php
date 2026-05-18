@@ -1,14 +1,15 @@
 <?php
 /**
- * Scheduler Health Check
- * Validates scheduler is running and healthy
- * Restarts if unhealthy or missing
+ * Scheduler watchdog (cron): confirm health and recover only when needed
  *
- * Runs via cron every 60 seconds to ensure scheduler stays running.
+ * Startup model: docker-entrypoint.sh starts one scheduler daemon after cache setup (initial start).
+ * This script runs every minute as www-data. It reads /tmp/scheduler.lock and /proc, then:
+ * - Does nothing when the daemon is healthy and consistent with the lock file.
+ * - Recovers when appropriate: missing process, lock marked unhealthy, stale lock with no live
+ *   daemon to own the path, etc. It is not a second routine starter when a healthy daemon exists.
  *
- * Note: This script uses /proc filesystem to detect process existence.
- * The scheduler runs as www-data (see docker-entrypoint.sh), so this health check
- * can signal and restart it without crossing a privilege boundary.
+ * Uses /proc for PID checks (works across user boundaries). Kills only when the lock reports
+ * unhealthy, not for lock_stale alone against a live PID (see in-script comments).
  *
  * Usage:
  *   Via cron: * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php 2>&1
@@ -24,6 +25,14 @@ try {
     $lockFile = '/tmp/scheduler.lock';
     $schedulerScript = __DIR__ . '/scheduler.php';
     $maxLockAge = 120; // Consider stale if lock >2 minutes old
+
+    $daemonPidsSnapshot = listSchedulerDaemonPids();
+    if (count($daemonPidsSnapshot) > 1) {
+        aviationwx_log('error', 'scheduler health check: multiple scheduler daemons detected', [
+            'daemon_pids' => $daemonPidsSnapshot,
+            'hint' => 'Read-only inspect: php scripts/diagnose-scheduler-duplicates.php; then deploy plus web restart (see docs/OPERATIONS.md)'
+        ], 'app');
+    }
 
     // Check if scheduler is running
     $schedulerRunning = false;
@@ -69,13 +78,14 @@ try {
         $restartReason = 'not_running';
     }
 
-    // Restart if needed
+    // Recovery path: entrypoint already started the daemon at boot; this block only repairs outages.
     if ($needsRestart) {
         // Check if we can signal the process (have permission to kill it)
         $canKill = $schedulerPid && canSignalProcess($schedulerPid);
 
-        // Kill existing process if running but unhealthy (only if we have permission)
-        if ($schedulerPid && $schedulerRunning && $canKill) {
+        // Kill only when the lock reports unhealthy; lock_stale alone must not SIGTERM a live PID
+        // (first scheduler loop can exceed maxLockAge before the first updateLockFile write).
+        if ($schedulerPid && $schedulerRunning && $canKill && $restartReason === 'unhealthy') {
             aviationwx_log('info', 'scheduler health check: killing unhealthy scheduler', [
                 'pid' => $schedulerPid,
                 'reason' => $restartReason
@@ -99,8 +109,20 @@ try {
             exit(1);
         }
 
-        // Clean up lock file (only if process is actually dead or we killed it)
-        if (!isProcessRunning($schedulerPid ?? 0, 'scheduler')) {
+        $daemonPids = listSchedulerDaemonPids();
+
+        // Never unlink or spawn while any scheduler daemon is alive: the lock path can point at a
+        // different inode than the running process holds (unlink + second flock creates duplicates).
+        if ($daemonPids !== []) {
+            $lockMismatch = $schedulerPid === null || !in_array($schedulerPid, $daemonPids, true);
+            if (count($daemonPids) > 1 || $lockMismatch) {
+                aviationwx_log('warning', 'scheduler health check: restart suppressed - scheduler daemon already running', [
+                    'daemon_pids' => $daemonPids,
+                    'restart_reason' => $restartReason,
+                    'lock_pid' => $schedulerPid
+                ], 'app');
+            }
+        } elseif (!isProcessRunning($schedulerPid ?? 0, 'scheduler')) {
             @unlink($lockFile);
 
             // Start new scheduler (explicit cwd: cron provides it today, but stay correct if invoked elsewhere)
