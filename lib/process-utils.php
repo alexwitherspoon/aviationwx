@@ -88,3 +88,66 @@ function canSignalProcess(int $pid): bool {
     return $result === true;
 }
 
+/**
+ * True if /proc cmdline looks like the combined scheduler daemon (not cron health check).
+ *
+ * Matches only the canonical path segment so unrelated CLIs (for example *-scheduler.php) are ignored.
+ *
+ * @param string $cmdline Contents of /proc/{pid}/cmdline (null byte separated argv)
+ * @return bool True when this process should count as a scheduler daemon
+ */
+function scheduler_daemon_matches_proc_cmdline(string $cmdline): bool {
+    if ($cmdline === '') {
+        return false;
+    }
+    if (stripos($cmdline, 'scheduler-health-check') !== false) {
+        return false;
+    }
+
+    return str_contains($cmdline, 'scripts/scheduler.php');
+}
+
+/**
+ * List PIDs of running scheduler daemons (scripts/scheduler.php), excluding this script.
+ *
+ * Used to avoid spawning a second scheduler when the lock file path is stale or out of sync
+ * with the inode the live daemon holds open.
+ *
+ * @return array<int, int> Unique PIDs sorted ascending
+ */
+function listSchedulerDaemonPids(): array {
+    $pids = [];
+    $procDirs = @glob('/proc/[0-9]*', GLOB_ONLYDIR);
+    if (!is_array($procDirs)) {
+        return [];
+    }
+
+    foreach ($procDirs as $dir) {
+        $pid = (int) basename($dir);
+        if ($pid <= 0) {
+            continue;
+        }
+
+        $cmdlineFile = $dir . '/cmdline';
+        if (!is_readable($cmdlineFile)) {
+            continue;
+        }
+
+        $cmdline = @file_get_contents($cmdlineFile);
+        if ($cmdline === false || $cmdline === '') {
+            continue;
+        }
+
+        if (!scheduler_daemon_matches_proc_cmdline($cmdline)) {
+            continue;
+        }
+
+        $pids[] = $pid;
+    }
+
+    $pids = array_values(array_unique($pids));
+    sort($pids, SORT_NUMERIC);
+
+    return $pids;
+}
+
