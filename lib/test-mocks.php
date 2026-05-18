@@ -45,8 +45,12 @@ function getMockHttpResponse(string $url): ?string {
     }
     
     if (strpos($url, 'aviationweather.gov') !== false) {
-        // METAR API
+        // METAR API (PHPUnit may disable via metarBulkTestSetSkipMetarHttpMock to exercise bulk slices)
+        if (metarBulkTestSkipMetarHttpMock()) {
+            return null;
+        }
         require_once __DIR__ . '/../tests/mock-weather-responses.php';
+
         return getMockMETARResponse();
     }
     
@@ -83,5 +87,22 @@ function getMockHttpResponse(string $url): ?string {
     }
     
     return null; // No mock available, proceed with real request
+}
+
+/**
+ * When true, `getMockHttpResponse()` does not return a METAR fixture so bulk/HTTP paths can be tested.
+ * PHPUnit only; always reset in test tearDown.
+ */
+function metarBulkTestSetSkipMetarHttpMock(bool $skip): void
+{
+    $GLOBALS['_metar_bulk_test_skip_metar_http_mock'] = $skip;
+}
+
+/**
+ * @internal Used by `getMockHttpResponse()` only
+ */
+function metarBulkTestSkipMetarHttpMock(): bool
+{
+    return !empty($GLOBALS['_metar_bulk_test_skip_metar_http_mock']);
 }
 
