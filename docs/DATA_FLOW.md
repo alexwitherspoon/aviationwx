@@ -156,7 +156,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
-- **Bulk cache (production)**: The scheduler runs `scripts/refresh-metar-bulk.php` on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`). It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Stale or missing slices fall back to the JSON endpoint above so behavior stays safe if the bulk job fails.
+- **Bulk cache (production, multi-airport only):** When **more than one airport** is enabled in config, the scheduler runs `scripts/refresh-metar-bulk.php` on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`). It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is treated as schema drift so workers fall back to per-station HTTP. With **only one enabled airport**, bulk download and slice reads are skipped so the install uses per-station METAR HTTP only (typical small or OSS single-site configs). Stale or missing slices fall back to the JSON endpoint above so behavior stays safe if the bulk job fails.
 - **Data Provided**:
   - Temperature (Celsius)
   - Dewpoint (Celsius)
@@ -177,7 +177,7 @@ When a primary source is configured, METAR data is fetched to supplement:
 
 METAR fetching logic (per station ID):
 1. **Test mode**: `getMockHttpResponse` supplies canned JSON so PHPUnit stays deterministic.
-2. **Bulk slice**: When `cache/metar-bulk/stations/{ICAO}.json` exists and is newer than `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`, read and parse it (same envelope as the JSON API).
+2. **Bulk slice (multi-airport installs only):** When more than one airport is enabled, if `cache/metar-bulk/stations/{ICAO}.json` exists and is newer than `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`, read and parse it (same envelope as the JSON API). Single-enabled-airport configs skip this step.
 3. **HTTP**: Otherwise GET the per-station JSON endpoint.
 
 Station selection (primary and fallbacks):

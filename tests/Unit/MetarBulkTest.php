@@ -11,79 +11,65 @@ use PHPUnit\Framework\TestCase;
  */
 final class MetarBulkTest extends TestCase
 {
-    /**
-     * @return array<int, string>
-     */
-    private function csvHeaderColumns(): array
-    {
-        return [
-            'raw_text',
-            'station_id',
-            'observation_time',
-            'latitude',
-            'longitude',
-            'temp_c',
-            'dewpoint_c',
-            'wind_dir_degrees',
-            'wind_speed_kt',
-            'wind_gust_kt',
-            'visibility_statute_mi',
-            'altim_in_hg',
-            'sea_level_pressure_mb',
-            'corrected',
-            'auto',
-            'auto_station',
-            'maintenance_indicator_on',
-            'no_signal',
-            'lightning_sensor_off',
-            'freezing_rain_sensor_off',
-            'present_weather_sensor_off',
-            'wx_string',
-            'sky_cover',
-            'cloud_base_ft_agl',
-            'sky_cover',
-            'cloud_base_ft_agl',
-            'sky_cover',
-            'cloud_base_ft_agl',
-            'sky_cover',
-            'cloud_base_ft_agl',
-            'flight_category',
-            'three_hr_pressure_tendency_mb',
-            'maxT_c',
-            'minT_c',
-            'maxT24hr_c',
-            'minT24hr_c',
-            'precip_in',
-            'pcp3hr_in',
-            'pcp6hr_in',
-            'pcp24hr_in',
-            'snow_in',
-            'vert_vis_ft',
-            'metar_type',
-            'elevation_m',
-        ];
-    }
-
-    /**
-     * @param array<int, string> $values
-     */
-    private function csvLineFromValues(array $values): string
-    {
-        $fh = fopen('php://memory', 'r+b');
-        if ($fh === false) {
-            $this->fail('fopen php://memory failed');
-        }
-        fputcsv($fh, $values, ',', '"', '\\');
-        rewind($fh);
-        $s = stream_get_contents($fh);
-        fclose($fh);
-
-        return rtrim((string) $s, "\r\n");
-    }
-
     public function testRefreshMetarBulkScriptExists(): void
     {
         $this->assertFileExists(__DIR__ . '/../../scripts/refresh-metar-bulk.php');
+    }
+
+    public function testMetarBulkShouldUseNationalBulkByEnabledAirportCount(): void
+    {
+        require_once __DIR__ . '/../../lib/config.php';
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $one = [
+            'airports' => [
+                'kaaa' => ['enabled' => true, 'icao' => 'KAAA', 'weather_sources' => [['type' => 'metar', 'station_id' => 'KAAA']]],
+            ],
+        ];
+        $this->assertSame(1, metarBulkCountEnabledAirports($one));
+        $this->assertFalse(metarBulkShouldUseNationalBulk($one));
+
+        $two = [
+            'airports' => [
+                'kaaa' => ['enabled' => true, 'icao' => 'KAAA', 'weather_sources' => [['type' => 'metar', 'station_id' => 'KAAA']]],
+                'kbbb' => ['enabled' => true, 'icao' => 'KBBB', 'weather_sources' => [['type' => 'metar', 'station_id' => 'KBBB']]],
+            ],
+        ];
+        $this->assertSame(2, metarBulkCountEnabledAirports($two));
+        $this->assertTrue(metarBulkShouldUseNationalBulk($two));
+
+        $oneEnabledOneDisabled = [
+            'airports' => [
+                'kaaa' => ['enabled' => true, 'icao' => 'KAAA', 'weather_sources' => [['type' => 'metar', 'station_id' => 'KAAA']]],
+                'kbbb' => ['enabled' => false, 'icao' => 'KBBB', 'weather_sources' => [['type' => 'metar', 'station_id' => 'KBBB']]],
+            ],
+        ];
+        $this->assertSame(1, metarBulkCountEnabledAirports($oneEnabledOneDisabled));
+        $this->assertFalse(metarBulkShouldUseNationalBulk($oneEnabledOneDisabled));
+    }
+
+    public function testMetarBulkCollectConfiguredStationIdsIgnoresDisabledAirports(): void
+    {
+        require_once __DIR__ . '/../../lib/config.php';
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $config = [
+            'airports' => [
+                'off' => [
+                    'enabled' => false,
+                    'icao' => 'KOFF',
+                    'weather_sources' => [['type' => 'metar', 'station_id' => 'KOFF']],
+                ],
+                'on' => [
+                    'enabled' => true,
+                    'icao' => 'KONN',
+                    'weather_sources' => [['type' => 'metar', 'station_id' => 'KONN']],
+                ],
+            ],
+        ];
+        $ids = metarBulkCollectConfiguredStationIds($config);
+        $this->assertArrayHasKey('KONN', $ids);
+        $this->assertArrayNotHasKey('KOFF', $ids);
     }
 
     public function testMetarBulkSanitizeIcaoForFilename(): void
@@ -148,33 +134,9 @@ final class MetarBulkTest extends TestCase
             @unlink($oldFile);
         }
 
-        $header = $this->csvLineFromValues($this->csvHeaderColumns());
-
-        $older = array_fill(0, 44, '');
-        $older[0] = 'METAR KZZZ 181200Z AUTO 09007KT 10SM CLR 05/03 A3000';
-        $older[1] = 'KZZZ';
-        $older[2] = '2026-05-18T12:00:00.000Z';
-        $older[5] = '5';
-        $older[6] = '3';
-        $older[7] = '90';
-        $older[8] = '7';
-        $older[10] = '10';
-        $older[11] = '30.00';
-
-        $newer = array_fill(0, 44, '');
-        $newer[0] = 'METAR KZZZ 181500Z AUTO 18015KT 10SM CLR 15/10 A2990';
-        $newer[1] = 'KZZZ';
-        $newer[2] = '2026-05-18T15:00:00.000Z';
-        $newer[5] = '15';
-        $newer[6] = '10';
-        $newer[7] = '180';
-        $newer[8] = '15';
-        $newer[10] = '10';
-        $newer[11] = '29.90';
-
-        $csvBody = $header . "\n"
-            . $this->csvLineFromValues($older) . "\n"
-            . $this->csvLineFromValues($newer) . "\n";
+        $goldenPath = __DIR__ . '/../Fixtures/metar-bulk-golden.csv';
+        $this->assertFileExists($goldenPath);
+        $csvBody = (string) file_get_contents($goldenPath);
         $gzPath = sys_get_temp_dir() . '/metar_bulk_test_' . uniqid('', true) . '.gz';
         $gzData = gzencode($csvBody, 9);
         $this->assertNotFalse($gzData);
