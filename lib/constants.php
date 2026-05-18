@@ -563,6 +563,17 @@ if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
     define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
 }
 
+// METAR bulk: scheduler refresh cadence, slice max age before HTTP fallback, download timeout
+if (!defined('METAR_BULK_REFRESH_INTERVAL_SECONDS')) {
+    define('METAR_BULK_REFRESH_INTERVAL_SECONDS', 120);
+}
+if (!defined('METAR_BULK_STATION_FILE_MAX_AGE_SECONDS')) {
+    define('METAR_BULK_STATION_FILE_MAX_AGE_SECONDS', 900);
+}
+if (!defined('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS')) {
+    define('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS', 120);
+}
+
 // Push webcam upload file age limits (fail-closed protection)
 // Files in upload directory older than this are considered abandoned/stuck
 if (!defined('UPLOAD_FILE_MAX_AGE_SECONDS')) {

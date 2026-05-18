@@ -8,7 +8,7 @@
  * - ProcessPool integration for workload control
  * - Process lock file with cumulative identity and health
  * - Config reload check (configurable interval, default 60s)
- * - METAR refresh at global 60s interval
+ * - METAR: bulk gzip refresh on `METAR_BULK_REFRESH_INTERVAL_SECONDS`, plus per-airport weather refresh (see `metar_refresh_seconds`)
  * - Only scheduler errors affect health (worker errors separate)
  * - Unified webcam worker handles BOTH push and pull cameras
  * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
@@ -59,6 +59,7 @@ $countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
+$lastMetarBulkRefresh = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -397,6 +398,25 @@ while ($running) {
             ], 'app');
         }
         
+        // Keeps `cache/metar-bulk/stations/` fresh so METAR fetch can skip per-ICAO HTTP when possible.
+        if (($now - $lastMetarBulkRefresh) >= METAR_BULK_REFRESH_INTERVAL_SECONDS) {
+            $metarBulkScript = __DIR__ . '/refresh-metar-bulk.php';
+            if (file_exists($metarBulkScript)) {
+                $mbOutput = [];
+                $mbExit = 0;
+                exec('php ' . escapeshellarg($metarBulkScript) . ' 2>&1', $mbOutput, $mbExit);
+                $lastMetarBulkRefresh = $now;
+                if ($mbExit !== 0) {
+                    aviationwx_log('warning', 'scheduler: metar bulk refresh reported failure', [
+                        'exit_code' => $mbExit,
+                        'output_lines' => array_slice($mbOutput, 0, 20),
+                    ], 'app');
+                }
+            } else {
+                $lastMetarBulkRefresh = $now;
+            }
+        }
+
         // Process weather updates (non-blocking)
         // Note: METAR refresh is handled as part of weather updates via the weather API endpoint
         // The global metar_refresh_seconds config is respected by the weather API internally
