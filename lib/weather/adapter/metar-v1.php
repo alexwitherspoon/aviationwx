@@ -644,7 +644,14 @@ function parseMETARResponse($response, $airport): ?array {
             }
         }
     }
-    
+    // Bulk slice may set `wgst` from AWC CSV `wind_gust_kt` when `rawOb` has no G-group.
+    if ($gustSpeed === null && isset($metarData['wgst']) && is_numeric($metarData['wgst'])) {
+        $gustKts = (int) round((float) $metarData['wgst']);
+        if ($gustKts >= 0 && $gustKts <= 200) {
+            $gustSpeed = $gustKts;
+        }
+    }
+
     // Parse pressure (altimeter setting in inHg)
     // METAR API returns altim in hectopascals (hPa/millibars), convert to inHg
     // Conversion: inHg = hPa / 33.8639

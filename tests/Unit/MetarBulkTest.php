@@ -90,6 +90,26 @@ final class MetarBulkTest extends TestCase
         $this->assertSame(PHP_INT_MIN, metarBulkParseObservationTime(''));
     }
 
+    public function testMetarBulkCsvRowToApiRecord_WindGustKt_MapsToWgstForParseFallback(): void
+    {
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+        require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
+
+        $row = array_fill(0, 44, '');
+        $row[0] = 'METAR KZZZ 181500Z AUTO 18015KT 10SM CLR 15/10 A2990';
+        $row[1] = 'KZZZ';
+        $row[2] = '2026-05-18T15:00:00.000Z';
+        $row[7] = '180';
+        $row[8] = '15';
+        $row[9] = '22';
+
+        $json = metarBulkCsvRowToJsonEnvelope($row);
+        $this->assertNotNull($json);
+        $parsed = parseMETARResponse((string) $json, ['icao' => 'KZZZ']);
+        $this->assertNotNull($parsed);
+        $this->assertSame(22, $parsed['gust_speed']);
+    }
+
     public function testMetarBulkCsvRowToApiRecord_PrecipColumns_MapToDistinctFields(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -170,6 +190,56 @@ final class MetarBulkTest extends TestCase
         $this->assertStringContainsString('181500Z', $written);
         $this->assertStringNotContainsString('181200Z', $written);
         @unlink($oldFile);
+    }
+
+    public function testMetarBulkIngestGzipToStationFiles_ShortRows_IncrementsSkippedCount(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $header = implode(',', metar_bulk_csv_expected_header_columns());
+        $good = array_fill(0, 44, '');
+        $good[0] = 'METAR KZZZ 181500Z AUTO 18015KT 10SM CLR 15/10 A2990';
+        $good[1] = 'KZZZ';
+        $good[2] = '2026-05-18T15:00:00.000Z';
+        $fh = fopen('php://memory', 'r+b');
+        $this->assertNotFalse($fh);
+        fputcsv($fh, $good, ',', '"', '\\');
+        rewind($fh);
+        $goodLine = rtrim((string) stream_get_contents($fh), "\r\n");
+        fclose($fh);
+
+        $csvBody = $header . "\n"
+            . 'too,few,columns' . "\n"
+            . $goodLine . "\n";
+        $gzPath = sys_get_temp_dir() . '/metar_bulk_short_' . uniqid('', true) . '.gz';
+        file_put_contents($gzPath, gzencode($csvBody, 9));
+
+        metarBulkEnsureDirectories();
+        $outFile = getMetarBulkStationsDir() . '/KZZZ.json';
+        if (is_file($outFile)) {
+            @unlink($outFile);
+        }
+
+        $stats = metarBulkIngestGzipToStationFiles($gzPath, ['KZZZ' => true]);
+        @unlink($gzPath);
+        if (is_file($outFile)) {
+            @unlink($outFile);
+        }
+
+        $this->assertArrayNotHasKey('error', $stats);
+        $this->assertSame(1, $stats['skipped_short_rows']);
+        $this->assertSame(1, $stats['written']);
+    }
+
+    public function testMetarBulkRefreshRun_TestMode_SkipsNetwork(): void
+    {
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+
+        $result = metarBulkRefreshRun();
+        $this->assertTrue($result['ok']);
+        $this->assertSame('skipped_mock_or_test_mode', $result['note'] ?? null);
     }
 
     public function testTryReadJsonResponseForStationRejectsStaleFile(): void
