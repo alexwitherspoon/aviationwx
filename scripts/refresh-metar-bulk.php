@@ -9,5 +9,13 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/metar-bulk.php';
 
 $result = metarBulkRefreshRun();
-$code = ($result['ok'] ?? false) ? 0 : 1;
-exit($code);
+$ok = (bool) ($result['ok'] ?? false);
+if (!$ok) {
+    aviationwx_log('warning', 'refresh-metar-bulk: run failed', [
+        'note' => $result['note'] ?? null,
+        'http_ok' => $result['http_ok'] ?? null,
+        'written' => $result['written'] ?? 0,
+        'scanned' => $result['scanned'] ?? 0,
+    ], 'app');
+}
+exit($ok ? 0 : 1);
