@@ -107,6 +107,45 @@ function weather_health_track_fallback(string $airportId): void {
     weather_health_atomic_update($currentHour, $counters, $now);
 }
 
+/**
+ * Track an upstream self-throttle skip (budget exhausted for this cycle).
+ *
+ * @param string $airportId Airport identifier
+ * @param string $sourceType Source type (tempest, metar, etc.)
+ */
+function weather_health_track_upstream_throttle_skip(string $airportId, string $sourceType): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $counters = [
+        'upstream_throttle_skips' => 1,
+        "upstream_throttle_skip_{$sourceType}" => 1,
+        "upstream_throttle_skip_airport_{$airportId}" => 1,
+    ];
+
+    weather_health_atomic_update($currentHour, $counters, $now);
+}
+
+/**
+ * Track fail-open when upstream rate limit state cannot be read or written.
+ *
+ * @param string $reason Short reason code (e.g. state_dir_unavailable)
+ */
+function weather_health_track_upstream_rate_limit_fail_open(string $reason): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $safeReason = preg_replace('/[^a-z0-9_]/', '', strtolower($reason)) ?? 'unknown';
+    $counters = [
+        'upstream_rate_limit_fail_open' => 1,
+        "upstream_rate_limit_fail_open_{$safeReason}" => 1,
+    ];
+
+    weather_health_atomic_update($currentHour, $counters, $now);
+}
+
 // =============================================================================
 // FILE I/O FUNCTIONS
 // =============================================================================
@@ -305,7 +344,9 @@ function weather_health_compute_status(array $data): array {
         'total_successes' => 0,
         'total_failures' => 0,
         'circuit_open_events' => 0,
-        'fallback_activations' => 0
+        'fallback_activations' => 0,
+        'upstream_throttle_skips' => 0,
+        'upstream_rate_limit_fail_open' => 0,
     ];
     
     foreach ($data['hourly_buckets'] ?? [] as $hourKey => $bucket) {
@@ -334,6 +375,15 @@ function weather_health_compute_status(array $data): array {
     } elseif ($totals['circuit_open_events'] > 0) {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d circuit breaker event(s) in last hour', $totals['circuit_open_events']);
+    } elseif ($totals['upstream_rate_limit_fail_open'] > 0) {
+        $health['status'] = 'degraded';
+        $health['message'] = sprintf(
+            '%d upstream rate limit fail-open event(s) in last hour (check cache/upstream-limits/)',
+            $totals['upstream_rate_limit_fail_open']
+        );
+    } elseif ($totals['upstream_throttle_skips'] > 0) {
+        $health['status'] = 'operational';
+        $health['message'] = sprintf('%d upstream throttle skip(s) in last hour', $totals['upstream_throttle_skips']);
     } elseif ($totals['fallback_activations'] > 0) {
         $health['status'] = 'operational';
         $health['message'] = sprintf('Operational with %d fallback(s)', $totals['fallback_activations']);
@@ -345,7 +395,9 @@ function weather_health_compute_status(array $data): array {
         'total_successes_last_hour' => $totals['total_successes'],
         'total_failures_last_hour' => $totals['total_failures'],
         'circuit_open_events_last_hour' => $totals['circuit_open_events'],
-        'fallback_activations_last_hour' => $totals['fallback_activations']
+        'fallback_activations_last_hour' => $totals['fallback_activations'],
+        'upstream_throttle_skips_last_hour' => $totals['upstream_throttle_skips'],
+        'upstream_rate_limit_fail_open_last_hour' => $totals['upstream_rate_limit_fail_open'],
     ];
     
     return $health;

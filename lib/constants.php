@@ -574,6 +574,57 @@ if (!defined('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS')) {
     define('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS', 120);
 }
 
+// Upstream self-throttle (per-credential token bucket under cache/upstream-limits/)
+if (!defined('UPSTREAM_RATE_LIMIT_DEFAULT_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_DEFAULT_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_DEFAULT_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_DEFAULT_BURST', 10);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_TEMPEST_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_TEMPEST_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_TEMPEST_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_TEMPEST_BURST', 10);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_BURST', 10);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_PWSWEATHER_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_PWSWEATHER_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_PWSWEATHER_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_PWSWEATHER_BURST', 10);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_WEATHERLINK_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_WEATHERLINK_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST', 10);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_SYNOPTIC_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_SYNOPTIC_BURST', 10);
+}
+// Shared anonymous bucket for per-station METAR HTTP (bulk path preferred when configured)
+if (!defined('UPSTREAM_RATE_LIMIT_METAR_HTTP_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_METAR_HTTP_RPM', 90);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_METAR_HTTP_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_METAR_HTTP_BURST', 15);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_NWS_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_NWS_RPM', 60);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_NWS_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_NWS_BURST', 10);
+}
+
 // Push webcam upload file age limits (fail-closed protection)
 // Files in upload directory older than this are considered abandoned/stuck
 if (!defined('UPLOAD_FILE_MAX_AGE_SECONDS')) {
