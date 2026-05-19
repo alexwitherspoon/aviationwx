@@ -323,25 +323,61 @@ function recordCircuitBreakerSuccessBase($key, $backoffFile) {
 }
 
 /**
+ * Whether HTTP status should update the shared global breaker for this credential.
+ */
+function weather_global_circuit_breaker_should_coordinate(?int $httpCode): bool
+{
+    return $httpCode === 429 || $httpCode === HTTP_STATUS_SERVICE_UNAVAILABLE;
+}
+
+/**
+ * Backoff key shared by all airports using the same provider credential fingerprint.
+ *
+ * @param array<string, mixed> $sourceConfig weather_sources entry (must include type)
+ */
+function weather_global_circuit_breaker_key(string $provider, array $sourceConfig): string
+{
+    require_once __DIR__ . '/upstream-rate-limit.php';
+
+    return 'global_weather_' . $provider . '_' . upstream_rate_fingerprint($provider, $sourceConfig);
+}
+
+/**
  * Check if weather API should be skipped due to backoff
- * 
+ *
  * @param string $airportId Airport ID (e.g., 'kspb')
- * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @param string $sourceType Weather source type (tempest, metar, etc.)
+ * @param array<string, mixed>|null $sourceConfig When set, also checks global_weather_* for this credential
  * @return array {
- *   'skip' => bool,              // True if should skip (circuit open)
- *   'reason' => string,          // Reason for skip ('circuit_open' or '')
- *   'backoff_remaining' => int,  // Seconds remaining in backoff period
- *   'failures' => int,           // Number of consecutive failures
- *   'last_failure_reason' => string|null  // Reason for last failure (if available)
+ *   'skip' => bool,
+ *   'reason' => string,
+ *   'backoff_remaining' => int,
+ *   'failures' => int,
+ *   'last_failure_reason' => string|null
  * }
  */
-function checkWeatherCircuitBreaker($airportId, $sourceType) {
+function checkWeatherCircuitBreaker($airportId, $sourceType, ?array $sourceConfig = null) {
     if (!ensureCacheDir(CACHE_BASE_DIR)) {
         error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
         return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0, 'last_failure_reason' => null];
     }
     $key = $airportId . '_weather_' . $sourceType;
-    return checkCircuitBreakerBase($key, CACHE_BACKOFF_FILE);
+    $result = checkCircuitBreakerBase($key, CACHE_BACKOFF_FILE);
+    if ($result['skip']) {
+        return $result;
+    }
+
+    if ($sourceConfig === null || ($sourceConfig['type'] ?? '') !== $sourceType) {
+        return $result;
+    }
+
+    $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+    $globalResult = checkCircuitBreakerBase($globalKey, CACHE_BACKOFF_FILE);
+    if ($globalResult['skip']) {
+        $globalResult['reason'] = 'global_circuit_open';
+    }
+
+    return $globalResult;
 }
 
 /**
@@ -352,27 +388,49 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
  * @param string $severity 'transient' or 'permanent' (default: 'transient')
  * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
  * @param string|null $failureReason Human-readable reason for the failure (e.g., 'API rate limit exceeded', 'HTTP 503')
+ * @param array<string, mixed>|null $sourceConfig When set, 429/503 also update global_weather_* for this credential
  * @return void
  */
-function recordWeatherFailure($airportId, $sourceType, $severity = 'transient', $httpCode = null, $failureReason = null) {
+function recordWeatherFailure(
+    $airportId,
+    $sourceType,
+    $severity = 'transient',
+    $httpCode = null,
+    $failureReason = null,
+    ?array $sourceConfig = null
+) {
     if (!ensureCacheDir(CACHE_BASE_DIR)) {
         error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
         return;
     }
     $key = $airportId . '_weather_' . $sourceType;
     recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason);
+
+    if ($sourceConfig !== null
+        && ($sourceConfig['type'] ?? '') === $sourceType
+        && weather_global_circuit_breaker_should_coordinate($httpCode)
+    ) {
+        $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+        recordCircuitBreakerFailureBase($globalKey, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason);
+    }
 }
 
 /**
  * Record a weather API success and reset backoff state
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
- * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @param string $sourceType Weather source type (tempest, metar, etc.)
+ * @param array<string, mixed>|null $sourceConfig When set, also clears global_weather_* for this credential
  * @return void
  */
-function recordWeatherSuccess($airportId, $sourceType) {
+function recordWeatherSuccess($airportId, $sourceType, ?array $sourceConfig = null) {
     $key = $airportId . '_weather_' . $sourceType;
     recordCircuitBreakerSuccessBase($key, CACHE_BACKOFF_FILE);
+
+    if ($sourceConfig !== null && ($sourceConfig['type'] ?? '') === $sourceType) {
+        $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+        recordCircuitBreakerSuccessBase($globalKey, CACHE_BACKOFF_FILE);
+    }
 }
 
 /**
