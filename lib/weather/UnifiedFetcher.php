@@ -40,6 +40,7 @@ require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../circuit-breaker.php';
+require_once __DIR__ . '/../upstream-rate-limit.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../weather-health.php';
 
@@ -164,7 +165,8 @@ function buildSourceList(array $airport): array {
 function fetchAllSources(array $sources, string $airportId): array {
     $mh = curl_multi_init();
     $handles = [];
-    
+    $responses = [];
+
     foreach ($sources as $sourceKey => $source) {
         // Check circuit breaker
         $sourceType = $source['type'];
@@ -174,10 +176,41 @@ function fetchAllSources(array $sources, string $airportId): array {
             weather_health_track_circuit_open($airportId, $sourceType);
             continue;
         }
+
+        // METAR: bulk slice or per-station HTTP via metarResolveStationResponseBody (no curl_multi)
+        if ($sourceType === 'metar') {
+            $stationId = $source['station_id'] ?? '';
+            if (!is_string($stationId) || trim($stationId) === '') {
+                continue;
+            }
+            $body = metarResolveStationResponseBody(strtoupper(trim($stationId)));
+            if ($body !== null) {
+                $responses[$sourceKey] = $body;
+                recordWeatherSuccess($airportId, $sourceType);
+                weather_health_track_fetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+            } else {
+                $responses[$sourceKey] = null;
+                recordWeatherFailure($airportId, $sourceType, 'transient', null);
+                weather_health_track_fetch($airportId, $sourceType, false, null);
+            }
+            continue;
+        }
         
         // Build URL
         $url = buildSourceUrl($source);
         if ($url === null) {
+            continue;
+        }
+
+        // Per-credential budget (file-backed token bucket); skip this cycle when exhausted
+        $rateLimit = upstream_rate_limit_consume_for_source($source);
+        if (!$rateLimit['allowed']) {
+            aviationwx_log('info', 'upstream rate limit skip', [
+                'airport_id' => $airportId,
+                'provider' => $sourceType,
+                'fingerprint_prefix' => $rateLimit['fingerprint_prefix'],
+            ], 'app');
+            weather_health_track_upstream_throttle_skip($airportId, $sourceType);
             continue;
         }
         
@@ -218,8 +251,7 @@ function fetchAllSources(array $sources, string $airportId): array {
         }
     } while ($running > 0);
     
-    // Collect responses
-    $responses = [];
+    // Collect responses from curl_multi (METAR responses already in $responses)
     $swobAuto404Retries = [];
     foreach ($handles as $sourceKey => $ch) {
         $response = curl_multi_getcontent($ch);
@@ -264,6 +296,17 @@ function fetchAllSources(array $sources, string $airportId): array {
         if ($fallbackUrl === null) {
             recordWeatherFailure($airportId, 'swob_auto', 'transient', 404);
             weather_health_track_fetch($airportId, 'swob_auto', false, 404);
+            continue;
+        }
+        $rateLimit = upstream_rate_limit_consume_for_source($source);
+        if (!$rateLimit['allowed']) {
+            aviationwx_log('info', 'upstream rate limit skip', [
+                'airport_id' => $airportId,
+                'provider' => 'swob_auto',
+                'fingerprint_prefix' => $rateLimit['fingerprint_prefix'],
+                'context' => 'swob_auto_standard_fallback',
+            ], 'app');
+            weather_health_track_upstream_throttle_skip($airportId, 'swob_auto');
             continue;
         }
         $ch = curl_init($fallbackUrl);

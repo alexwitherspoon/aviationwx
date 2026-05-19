@@ -37,6 +37,9 @@
  * ├── rate_limits/
  * │   └── {prefix}/                # First 2 chars of hash (git-style sharding)
  * │       └── {hash}.json          # Rate limit state files
+ * ├── upstream-limits/
+ * │   └── {prefix}/                # Per-credential upstream token buckets (flock)
+ * │       └── {fingerprint}.json
  * ├── backoff.json                 # Circuit breaker state
  * ├── operations_snapshot.json   # Public API GET /v1/operations (scheduler)
  * ├── peak_gusts/                  # Per-airport daily peak gust tracking
@@ -589,6 +592,26 @@ function getRateLimitPath(string $identifier): string {
 }
 
 // =============================================================================
+// UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
+// =============================================================================
+
+if (!defined('CACHE_UPSTREAM_LIMITS_DIR')) {
+    define('CACHE_UPSTREAM_LIMITS_DIR', CACHE_BASE_DIR . '/upstream-limits');
+}
+
+/**
+ * Path to flock-backed upstream token bucket state for a credential fingerprint.
+ *
+ * @param string $fingerprint SHA-256 hex from upstream_rate_fingerprint()
+ */
+function getUpstreamRateLimitStatePath(string $fingerprint): string
+{
+    $prefix = strlen($fingerprint) >= 2 ? substr($fingerprint, 0, 2) : $fingerprint;
+
+    return CACHE_UPSTREAM_LIMITS_DIR . '/' . $prefix . '/' . $fingerprint . '.json';
+}
+
+// =============================================================================
 // METRICS CACHE PATHS
 // =============================================================================
 
@@ -935,6 +958,7 @@ function ensureAllCacheDirs(): array {
         CACHE_STATION_POWER_DIR,
         CACHE_PARTNERS_DIR,
         CACHE_RATE_LIMITS_DIR,
+        CACHE_UPSTREAM_LIMITS_DIR,
         CACHE_METRICS_DIR,
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,

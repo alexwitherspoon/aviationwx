@@ -13,6 +13,7 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
+require_once __DIR__ . '/../../upstream-rate-limit.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -187,10 +188,13 @@ class TempestAdapter {
  * @param int|null $requestTimeoutSeconds CURLOPT_TIMEOUT; null uses CURL_TIMEOUT or 30s default
  * @return string|null Response body or null on failure
  */
-function tempestHttpGet(string $url, ?int $requestTimeoutSeconds = null): ?string {
+function tempestHttpGet(string $url, ?int $requestTimeoutSeconds = null, ?array $rateLimitSource = null): ?string {
     $mock = getMockHttpResponse($url);
     if ($mock !== null) {
         return $mock;
+    }
+    if ($rateLimitSource !== null && !upstream_rate_limit_consume_for_source($rateLimitSource)['allowed']) {
+        return null;
     }
     $ch = curl_init($url);
     if ($ch === false) {
@@ -382,7 +386,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     if ($tStations === null) {
         return $stationObservationBody;
     }
-    $stationsBody = tempestHttpGet($metaUrl, $tStations);
+    $stationsBody = tempestHttpGet($metaUrl, $tStations, $source);
     if ($stationsBody === null) {
         return $stationObservationBody;
     }
@@ -395,7 +399,7 @@ function tempestApplyDeviceFallbackIfNeeded(string $stationObservationBody, arra
     if ($tDevice === null) {
         return $stationObservationBody;
     }
-    $deviceBody = tempestHttpGet($deviceUrl, $tDevice);
+    $deviceBody = tempestHttpGet($deviceUrl, $tDevice, $source);
     if ($deviceBody === null) {
         return $stationObservationBody;
     }

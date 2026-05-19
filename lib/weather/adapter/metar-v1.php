@@ -839,6 +839,12 @@ function metarResolveStationResponseBody(string $stationId): ?string
         return $bulkJson;
     }
 
+    require_once __DIR__ . '/../../upstream-rate-limit.php';
+    $stationSource = ['type' => 'metar', 'station_id' => $stationId];
+    if (!upstream_rate_limit_consume_for_source($stationSource)['allowed']) {
+        return null;
+    }
+
     $context = stream_context_create([
         'http' => [
             'timeout' => CURL_TIMEOUT,
