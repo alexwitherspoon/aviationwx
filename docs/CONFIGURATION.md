@@ -696,6 +696,8 @@ When the bucket is empty, that source is skipped for one fetch cycle (weather ma
 
 `metarResolveStationResponse()` in `lib/weather/adapter/metar-v1.php` reports outcomes as `METAR_RESOLVE_*` constants (`ok`, `throttled`, `circuit_open`, `http_failed`, `invalid_station`). Only `http_failed` and `invalid_station` count as fetch failures for the per-airport METAR circuit breaker; `throttled` is a self-throttle skip for one cycle.
 
+On HTTP **429** or **503**, `lib/circuit-breaker.php` also records a shared `global_weather_{provider}_{fingerprint}` backoff key (same fingerprint rules as upstream throttling) so all airports using that credential back off together. A successful fetch clears both per-airport and global keys for that credential.
+
 ### Backup Sources
 
 Mark a source as backup by adding `"backup": true`. Backup sources are only used when primary sources fail or are stale:
