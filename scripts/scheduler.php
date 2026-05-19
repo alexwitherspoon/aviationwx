@@ -398,23 +398,15 @@ while ($running) {
             ], 'app');
         }
         
-        // Keeps `cache/metar-bulk/stations/` fresh so METAR fetch can skip per-ICAO HTTP when possible.
+        // METAR bulk gzip download/ingest runs in a background worker (see refresh-metar-bulk.php).
         if (($now - $lastMetarBulkRefresh) >= METAR_BULK_REFRESH_INTERVAL_SECONDS) {
             $metarBulkScript = __DIR__ . '/refresh-metar-bulk.php';
             if (file_exists($metarBulkScript)) {
-                $mbOutput = [];
-                $mbExit = 0;
-                exec('php ' . escapeshellarg($metarBulkScript) . ' 2>&1', $mbOutput, $mbExit);
-                $lastMetarBulkRefresh = $now;
-                if ($mbExit !== 0) {
-                    aviationwx_log('warning', 'scheduler: metar bulk refresh reported failure', [
-                        'exit_code' => $mbExit,
-                        'output_lines' => array_slice($mbOutput, 0, 20),
-                    ], 'app');
-                }
-            } else {
-                $lastMetarBulkRefresh = $now;
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($metarBulkScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
             }
+            $lastMetarBulkRefresh = $now;
         }
 
         // Process weather updates (non-blocking)
