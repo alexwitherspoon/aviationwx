@@ -12,6 +12,17 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
+
+/** METAR resolve produced a body (mock, bulk slice, or HTTP). */
+const METAR_RESOLVE_OK = 'ok';
+/** HTTP budget exhausted for this cycle; not an upstream failure. */
+const METAR_RESOLVE_THROTTLED = 'throttled';
+/** Per-airport METAR circuit open; HTTP skipped (bulk/mock already attempted). */
+const METAR_RESOLVE_CIRCUIT_OPEN = 'circuit_open';
+/** Per-station HTTP attempt failed after bulk miss. */
+const METAR_RESOLVE_HTTP_FAILED = 'http_failed';
+/** Missing or empty station_id. */
+const METAR_RESOLVE_INVALID_STATION = 'invalid_station';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -814,35 +825,47 @@ function parseMETARResponse($response, $airport): ?array {
 /**
  * Resolve METAR JSON body for one station: test mock, fresh bulk slice, or per-station HTTP.
  *
- * Precedence is fixed: mock (test mode), bulk slice when fresh, then HTTP. Callers parse with
- * `parseMETARResponse()`.
+ * Precedence: mock, bulk slice when fresh, then HTTP (gated by circuit breaker and throttle).
+ * Throttle and circuit-open outcomes are not upstream failures; callers must not record them
+ * as weather fetch failures.
  *
- * @return string|null JSON array envelope body, or null when every source fails
+ * @param string $stationId ICAO station id (e.g. KSPB)
+ * @param string|null $airportId Airport slug for per-airport METAR circuit (null skips HTTP gate)
+ * @return array{body: ?string, outcome: string} One of METAR_RESOLVE_* constants
  */
-function metarResolveStationResponseBody(string $stationId): ?string
+function metarResolveStationResponse(string $stationId, ?string $airportId = null): array
 {
     $stationId = strtoupper(trim($stationId));
     if ($stationId === '') {
-        return null;
+        return ['body' => null, 'outcome' => METAR_RESOLVE_INVALID_STATION];
     }
+
     $url = 'https://aviationweather.gov/api/data/metar?ids=' . rawurlencode($stationId)
         . '&format=json&taf=false&hours=0';
 
     $mockResponse = getMockHttpResponse($url);
     if ($mockResponse !== null) {
-        return $mockResponse;
+        return ['body' => $mockResponse, 'outcome' => METAR_RESOLVE_OK];
     }
 
     require_once __DIR__ . '/../../metar-bulk.php';
     $bulkJson = metarBulkTryReadJsonResponseForStation($stationId);
     if ($bulkJson !== null) {
-        return $bulkJson;
+        return ['body' => $bulkJson, 'outcome' => METAR_RESOLVE_OK];
+    }
+
+    if ($airportId !== null && $airportId !== '') {
+        require_once __DIR__ . '/../../circuit-breaker.php';
+        $breakerResult = checkWeatherCircuitBreaker($airportId, 'metar');
+        if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
+            return ['body' => null, 'outcome' => METAR_RESOLVE_CIRCUIT_OPEN];
+        }
     }
 
     require_once __DIR__ . '/../../upstream-rate-limit.php';
     $stationSource = ['type' => 'metar', 'station_id' => $stationId];
     if (!upstream_rate_limit_consume_for_source($stationSource)['allowed']) {
-        return null;
+        return ['body' => null, 'outcome' => METAR_RESOLVE_THROTTLED];
     }
 
     $context = stream_context_create([
@@ -853,10 +876,10 @@ function metarResolveStationResponseBody(string $stationId): ?string
     ]);
     $response = @file_get_contents($url, false, $context);
     if ($response === false) {
-        return null;
+        return ['body' => null, 'outcome' => METAR_RESOLVE_HTTP_FAILED];
     }
 
-    return $response;
+    return ['body' => $response, 'outcome' => METAR_RESOLVE_OK];
 }
 
 /**
@@ -870,11 +893,12 @@ function fetchMETARFromStation($stationId, $airport): ?array {
     if (!is_string($stationId) || !is_array($airport)) {
         return null;
     }
-    $response = metarResolveStationResponseBody($stationId);
-    if ($response === null) {
+    $airportId = isset($airport['id']) && is_string($airport['id']) ? $airport['id'] : null;
+    $resolved = metarResolveStationResponse($stationId, $airportId);
+    if ($resolved['outcome'] !== METAR_RESOLVE_OK || !is_string($resolved['body'])) {
         return null;
     }
-    $parsed = parseMETARResponse($response, $airport);
+    $parsed = parseMETARResponse($resolved['body'], $airport);
     // If parsing succeeded, add metadata about which station was used
     if ($parsed !== null) {
         $parsed['_metar_station_used'] = $stationId;

@@ -168,34 +168,46 @@ function fetchAllSources(array $sources, string $airportId): array {
     $responses = [];
 
     foreach ($sources as $sourceKey => $source) {
-        // Check circuit breaker
         $sourceType = $source['type'];
-        $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType);
-        if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
-            // Track circuit breaker skip for health metrics
-            weather_health_track_circuit_open($airportId, $sourceType);
-            continue;
-        }
 
-        // METAR: bulk slice or per-station HTTP via metarResolveStationResponseBody (no curl_multi)
+        // METAR: mock/bulk/HTTP via metarResolveStationResponse (no curl_multi; bulk before HTTP circuit)
         if ($sourceType === 'metar') {
             $stationId = $source['station_id'] ?? '';
             if (!is_string($stationId) || trim($stationId) === '') {
                 continue;
             }
-            $body = metarResolveStationResponseBody(strtoupper(trim($stationId)));
-            if ($body !== null) {
-                $responses[$sourceKey] = $body;
-                recordWeatherSuccess($airportId, $sourceType);
-                weather_health_track_fetch($airportId, $sourceType, true, HTTP_STATUS_OK);
-            } else {
-                $responses[$sourceKey] = null;
-                recordWeatherFailure($airportId, $sourceType, 'transient', null);
-                weather_health_track_fetch($airportId, $sourceType, false, null);
+            $resolved = metarResolveStationResponse(strtoupper(trim($stationId)), $airportId);
+            switch ($resolved['outcome']) {
+                case METAR_RESOLVE_OK:
+                    if (is_string($resolved['body'])) {
+                        $responses[$sourceKey] = $resolved['body'];
+                        recordWeatherSuccess($airportId, $sourceType);
+                        weather_health_track_fetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+                    }
+                    break;
+                case METAR_RESOLVE_THROTTLED:
+                    weather_health_track_upstream_throttle_skip($airportId, $sourceType);
+                    break;
+                case METAR_RESOLVE_CIRCUIT_OPEN:
+                    weather_health_track_circuit_open($airportId, $sourceType);
+                    break;
+                case METAR_RESOLVE_HTTP_FAILED:
+                case METAR_RESOLVE_INVALID_STATION:
+                    $responses[$sourceKey] = null;
+                    recordWeatherFailure($airportId, $sourceType, 'transient', null);
+                    weather_health_track_fetch($airportId, $sourceType, false, null);
+                    break;
             }
             continue;
         }
-        
+
+        // Check circuit breaker (non-METAR sources)
+        $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType);
+        if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
+            weather_health_track_circuit_open($airportId, $sourceType);
+            continue;
+        }
+
         // Build URL
         $url = buildSourceUrl($source);
         if ($url === null) {

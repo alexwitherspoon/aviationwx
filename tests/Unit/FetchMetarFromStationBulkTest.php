@@ -7,19 +7,38 @@ namespace AviationWX\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * METAR station response resolution: `metarResolveStationResponseBody()` and `fetchMETARFromStation()`.
+ * METAR station response resolution: `metarResolveStationResponse()` and `fetchMETARFromStation()`.
  */
 final class FetchMetarFromStationBulkTest extends TestCase
 {
+    private ?string $rateLimitRoot = null;
+
     protected function tearDown(): void
     {
         require_once __DIR__ . '/../../lib/test-mocks.php';
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
         metarBulkTestSetSkipMetarHttpMock(false);
+        upstream_rate_limit_test_clear_force_enforcement();
+        unset($GLOBALS['upstream_rate_limit_test_root']);
+        if ($this->rateLimitRoot !== null && is_dir($this->rateLimitRoot)) {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($this->rateLimitRoot, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($files as $file) {
+                if ($file->isDir()) {
+                    rmdir($file->getPathname());
+                } else {
+                    unlink($file->getPathname());
+                }
+            }
+            rmdir($this->rateLimitRoot);
+        }
 
         parent::tearDown();
     }
 
-    public function testMetarResolveStationResponseBody_FreshBulkSlice_SkipHttpMock_ReturnsSliceJson(): void
+    public function testMetarResolveStationResponse_FreshBulkSlice_SkipHttpMock_ReturnsOkWithBody(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/config.php';
@@ -44,14 +63,15 @@ final class FetchMetarFromStationBulkTest extends TestCase
         file_put_contents($path, $json);
         touch($path, time());
 
-        $body = metarResolveStationResponseBody('KZZZ');
+        $resolved = metarResolveStationResponse('KZZZ');
         @unlink($path);
 
-        $this->assertNotNull($body);
-        $this->assertStringContainsString('"temp":42', $body);
+        $this->assertSame(METAR_RESOLVE_OK, $resolved['outcome']);
+        $this->assertIsString($resolved['body']);
+        $this->assertStringContainsString('"temp":42', $resolved['body']);
     }
 
-    public function testMetarResolveStationResponseBody_NoBulkSlice_UsesHttpMock(): void
+    public function testMetarResolveStationResponse_NoBulkSlice_UsesHttpMock_ReturnsOk(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -65,9 +85,40 @@ final class FetchMetarFromStationBulkTest extends TestCase
             @unlink($path);
         }
 
-        $body = metarResolveStationResponseBody('KSPB');
-        $this->assertNotNull($body);
-        $this->assertStringContainsString('KSPB', $body);
+        $resolved = metarResolveStationResponse('KSPB');
+        $this->assertSame(METAR_RESOLVE_OK, $resolved['outcome']);
+        $this->assertStringContainsString('KSPB', (string) $resolved['body']);
+    }
+
+    public function testMetarResolveStationResponse_ThrottleExhausted_ReturnsThrottledNotFailed(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/config.php';
+        require_once __DIR__ . '/../../lib/metar-bulk.php';
+        require_once __DIR__ . '/../../lib/test-mocks.php';
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+        require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
+
+        metarBulkTestSetSkipMetarHttpMock(true);
+        metarBulkEnsureDirectories();
+        $path = getMetarBulkStationJsonPath('KTHR');
+        if (is_file($path)) {
+            @unlink($path);
+        }
+
+        $this->rateLimitRoot = sys_get_temp_dir() . '/metar-throttle-' . bin2hex(random_bytes(4));
+        mkdir($this->rateLimitRoot, 0755, true);
+        $GLOBALS['upstream_rate_limit_test_root'] = $this->rateLimitRoot;
+        upstream_rate_limit_test_force_enforcement();
+
+        $source = ['type' => 'metar', 'station_id' => 'KTHR'];
+        $fingerprint = upstream_rate_fingerprint('metar', $source);
+        $t0 = microtime(true);
+        $this->assertTrue(upstream_rate_try_take($fingerprint, 60, 1, $t0));
+
+        $resolved = metarResolveStationResponse('KTHR', 'kthr');
+        $this->assertSame(METAR_RESOLVE_THROTTLED, $resolved['outcome']);
+        $this->assertNull($resolved['body']);
     }
 
     public function testFetchMETARFromStation_FreshBulkSlice_SkipHttpMock_UsesSliceTemperature(): void
