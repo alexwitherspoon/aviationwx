@@ -840,6 +840,8 @@ function metarResolveStationResponse(string $stationId, ?string $airportId = nul
         return ['body' => null, 'outcome' => METAR_RESOLVE_INVALID_STATION];
     }
 
+    $stationSource = ['type' => 'metar', 'station_id' => $stationId];
+
     $url = 'https://aviationweather.gov/api/data/metar?ids=' . rawurlencode($stationId)
         . '&format=json&taf=false&hours=0';
 
@@ -856,14 +858,13 @@ function metarResolveStationResponse(string $stationId, ?string $airportId = nul
 
     if ($airportId !== null && $airportId !== '') {
         require_once __DIR__ . '/../../circuit-breaker.php';
-        $breakerResult = checkWeatherCircuitBreaker($airportId, 'metar');
+        $breakerResult = checkWeatherCircuitBreaker($airportId, 'metar', $stationSource);
         if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
             return ['body' => null, 'outcome' => METAR_RESOLVE_CIRCUIT_OPEN];
         }
     }
 
     require_once __DIR__ . '/../../upstream-rate-limit.php';
-    $stationSource = ['type' => 'metar', 'station_id' => $stationId];
     if (!upstream_rate_limit_consume_for_source($stationSource)['allowed']) {
         return ['body' => null, 'outcome' => METAR_RESOLVE_THROTTLED];
     }
