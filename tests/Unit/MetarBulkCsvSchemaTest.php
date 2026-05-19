@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class MetarBulkCsvSchemaTest extends TestCase
 {
-    public function testFixtureHeaderLineMatchesPhpCanonical(): void
+    public function testMetarBulkCsvSchema_FixtureHeaderLine_MatchesCanonicalList(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
@@ -25,7 +25,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $this->assertSame($expected, $line);
     }
 
-    public function testGoldenCsvHeaderRowMatchesExpected(): void
+    public function testMetarBulkCsvSchema_GoldenCsvFirstRow_MatchesExpected(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
@@ -39,7 +39,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $this->assertTrue(metar_bulk_csv_header_matches_expected($header));
     }
 
-    public function testHeaderWithUtf8BomStillMatches(): void
+    public function testMetarBulkCsvSchema_HeaderWithUtf8Bom_MatchesExpected(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
@@ -48,7 +48,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $this->assertTrue(metar_bulk_csv_header_matches_expected($header));
     }
 
-    public function testIngestRejectsMismatchedHeaderSchema(): void
+    public function testMetarBulkIngestGzipToStationFiles_WrongHeader_ReturnsBadCsvHeaderSchema(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -70,7 +70,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $this->assertStringContainsString('column_count', (string) $stats['header_mismatch']);
     }
 
-    public function testDescribeHeaderMismatch_ReportsFirstColumnDifference(): void
+    public function testMetarBulkCsvDescribeHeaderMismatch_WrongFirstColumn_ReportsColumnDiff(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
@@ -80,7 +80,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $this->assertStringContainsString('col0:station_id!=raw_text', $summary);
     }
 
-    public function testIngestGzipWithUtf8BomHeader_StillIngestsGoldenRows(): void
+    public function testMetarBulkIngestGzipToStationFiles_Utf8BomHeader_IngestsGoldenRows(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
