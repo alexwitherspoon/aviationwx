@@ -60,6 +60,17 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
         $this->assertSame('global_circuit_open', $result['reason']);
     }
 
+    public function testCheckWeatherCircuitBreaker_GlobalNotOpen_ReturnsPerAirportStats(): void
+    {
+        $source = ['type' => 'tempest', 'api_key' => 'stats-key', 'station_id' => '1'];
+
+        recordWeatherFailure(self::AIRPORT_B, 'tempest', 'transient', HTTP_STATUS_SERVICE_UNAVAILABLE, null, $source);
+
+        $result = checkWeatherCircuitBreaker(self::AIRPORT_B, 'tempest', $source);
+        $this->assertFalse($result['skip']);
+        $this->assertSame(1, $result['failures']);
+    }
+
     public function testRecordWeatherSuccess_GlobalKey_ClearsSharedBackoff(): void
     {
         $source = ['type' => 'tempest', 'api_key' => 'clear-global-key', 'station_id' => '1'];
