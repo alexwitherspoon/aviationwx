@@ -686,7 +686,13 @@ METAR data from NOAA Aviation Weather provides aviation-specific observations in
 
 `nearby_stations` provides fallback stations if the primary METAR station is unavailable.
 
-The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one airport is enabled** (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. Weather workers read a fresh slice before calling the per-station HTTP API in that mode. Bulk ingest requires the gzip CSV header to match the canonical AWC column list in `lib/metar-bulk-csv-schema.php` (tests fail on drift). A **single enabled airport** uses per-station HTTP only (no national gzip download).
+The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one airport is enabled** (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. Weather workers read a fresh slice before calling the per-station HTTP API in that mode (`metarResolveStationResponseBody()` from `UnifiedFetcher` and legacy METAR helpers). Bulk ingest requires the gzip CSV header to match the canonical AWC column list in `lib/metar-bulk-csv-schema.php` (tests fail on drift). A **single enabled airport** uses per-station HTTP only (no national gzip download).
+
+### Upstream rate limiting (weather fetch)
+
+`lib/upstream-rate-limit.php` applies a file-backed token bucket per provider and credential fingerprint before outbound weather API calls (`cache/upstream-limits/`). Limits are defined in `lib/constants.php` (`UPSTREAM_RATE_LIMIT_*` per provider). Shared API keys (for example Tempest `api_key`) share one bucket across all airports using that key. Keyless sources use per-station identity in the fingerprint (`station_id` for AWOSnet, SWOB, NWS, METAR HTTP; `base_url` + `airport_id` for `aviationwx_api`).
+
+When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). PHPUnit and mock mode skip throttling.
 
 ### Backup Sources
 
