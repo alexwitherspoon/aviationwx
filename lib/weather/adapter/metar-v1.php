@@ -469,14 +469,47 @@ function metarExtractUsVisibilityStatuteMilesFromRawOb(string $rawOb): ?float
 // =============================================================================
 
 /**
+ * Gust speed in knots from raw METAR text and/or observation fields.
+ *
+ * Prefers `G` group in `rawOb` (e.g. `06009G19KT`). When absent, uses `wgst` from bulk CSV slices.
+ *
+ * @param string $rawOb Raw METAR observation string
+ * @param array<string, mixed> $metarData First observation object from AWC JSON or bulk envelope
+ * @return int|null Gust in knots, or null when not reported
+ */
+function metarParseGustSpeedKts(string $rawOb, array $metarData): ?int
+{
+    if ($rawOb !== '') {
+        if (preg_match('/\b(?:VRB|\d{3})(\d{2,3})G(\d{2,3})KT\b/', $rawOb, $matches)) {
+            $gustSpeedKts = (int) $matches[2];
+            if ($gustSpeedKts >= 0 && $gustSpeedKts <= 200) {
+                return $gustSpeedKts;
+            }
+        }
+    }
+    if (isset($metarData['wgst']) && is_numeric($metarData['wgst'])) {
+        $gustKts = (int) round((float) $metarData['wgst']);
+        if ($gustKts >= 0 && $gustKts <= 200) {
+            return $gustKts;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Parse METAR response
- * 
+ *
  * Parses JSON response from METAR API and converts to standard format.
  * Handles complex visibility parsing (fractions, mixed numbers), cloud cover,
  * ceiling detection, and variable wind direction (VRB).
  * Attempts to parse observation time from METAR string if not in JSON.
- * 
- * @param string $response JSON response from METAR API
+ *
+ * The first array element may include AWC HTTP fields plus bulk-only keys:
+ * - `wgst` (knots): CSV `wind_gust_kt` when `rawOb` has no `G` group
+ * - `pcp24hr`, `precip` (inches): mapped separately from AWC bulk CSV columns
+ *
+ * @param string $response JSON response from METAR API (array of one observation object)
  * @param array $airport Airport configuration array
  * @return array|null Weather data array with standard keys, or null on parse error
  */
@@ -627,40 +660,13 @@ function parseMETARResponse($response, $airport): ?array {
         $windSpeed = (int)round((float)$metarData['wspd']);
     }
     
-    // Parse gust speed from raw METAR string if present
-    // METAR format: "dddffGggKT" where ddd=direction, ff=speed, Ggg=gust speed, KT=units
-    // Example: "06009G19KT" = 060° at 9 knots, gusts to 19 knots
-    // Also handles variable wind: "VRBffGggKT" (e.g., VRB05G15KT)
-    $gustSpeed = null;
-    if ($rawOb !== '') {
-        // Match wind pattern with gust: dddffGggKT or VRBffGggKT
-        // Pattern matches: direction (3 digits or VRB), wind speed (2-3 digits), G, gust speed (2-3 digits), KT
-        if (preg_match('/\b(?:VRB|\d{3})(\d{2,3})G(\d{2,3})KT\b/', $rawOb, $matches)) {
-            $gustSpeedKts = (int)$matches[2];
-            // Validate gust speed is reasonable (0-200 knots) and logically >= wind speed
-            // Note: Wind speed from JSON may differ slightly from raw string, so we validate range only
-            if ($gustSpeedKts >= 0 && $gustSpeedKts <= 200) {
-                $gustSpeed = $gustSpeedKts;
-            }
-        }
-    }
-    // Bulk slice may set `wgst` from AWC CSV `wind_gust_kt` when `rawOb` has no G-group.
-    if ($gustSpeed === null && isset($metarData['wgst']) && is_numeric($metarData['wgst'])) {
-        $gustKts = (int) round((float) $metarData['wgst']);
-        if ($gustKts >= 0 && $gustKts <= 200) {
-            $gustSpeed = $gustKts;
-        }
-    }
+    $gustSpeed = metarParseGustSpeedKts($rawOb, $metarData);
 
-    // Parse pressure (altimeter setting in inHg)
-    // METAR API returns altim in hectopascals (hPa/millibars), convert to inHg
-    // Conversion: inHg = hPa / 33.8639
-    // Normal range: 28.00-31.00 inHg corresponds to ~948-1050 hPa
+    // Parse pressure (altimeter setting in inHg). METAR API `altim` is hPa/mb.
     $pressure = null;
     if (isset($metarData['altim']) && is_numeric($metarData['altim'])) {
-        $altimHpa = (float)$metarData['altim'];
-        // Convert from hPa to inHg
-        $pressure = $altimHpa / 33.8639;
+        require_once __DIR__ . '/../../units.php';
+        $pressure = hpaToInhg((float) $metarData['altim']);
     }
     
     // Fallback: Parse from raw METAR string if altim field is missing or invalid
@@ -806,6 +812,48 @@ function parseMETARResponse($response, $airport): ?array {
 }
 
 /**
+ * Resolve METAR JSON body for one station: test mock, fresh bulk slice, or per-station HTTP.
+ *
+ * Precedence is fixed: mock (test mode), bulk slice when fresh, then HTTP. Callers parse with
+ * `parseMETARResponse()`.
+ *
+ * @return string|null JSON array envelope body, or null when every source fails
+ */
+function metarResolveStationResponseBody(string $stationId): ?string
+{
+    $stationId = strtoupper(trim($stationId));
+    if ($stationId === '') {
+        return null;
+    }
+    $url = 'https://aviationweather.gov/api/data/metar?ids=' . rawurlencode($stationId)
+        . '&format=json&taf=false&hours=0';
+
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        return $mockResponse;
+    }
+
+    require_once __DIR__ . '/../../metar-bulk.php';
+    $bulkJson = metarBulkTryReadJsonResponseForStation($stationId);
+    if ($bulkJson !== null) {
+        return $bulkJson;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => CURL_TIMEOUT,
+            'ignore_errors' => true,
+        ],
+    ]);
+    $response = @file_get_contents($url, false, $context);
+    if ($response === false) {
+        return null;
+    }
+
+    return $response;
+}
+
+/**
  * Fetch METAR for one station: test mock, optional bulk slice, or per-station HTTP.
  *
  * @param string $stationId The METAR station ID to fetch (e.g., 'KSPB')
@@ -816,31 +864,9 @@ function fetchMETARFromStation($stationId, $airport): ?array {
     if (!is_string($stationId) || !is_array($airport)) {
         return null;
     }
-    // Fetch METAR from aviationweather.gov (JSON API or bulk slice on disk)
-    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
-    // Mock first (deterministic tests); else fresh bulk slice; else per-station HTTP.
-    $mockResponse = getMockHttpResponse($url);
-    if ($mockResponse !== null) {
-        $response = $mockResponse;
-    } else {
-        require_once __DIR__ . '/../../metar-bulk.php';
-        $bulkJson = metarBulkTryReadJsonResponseForStation($stationId);
-        if ($bulkJson !== null) {
-            $response = $bulkJson;
-        } else {
-            // Create context with explicit timeout
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => CURL_TIMEOUT,
-                    'ignore_errors' => true,
-                ],
-            ]);
-
-            $response = @file_get_contents($url, false, $context);
-            if ($response === false) {
-                return null;
-            }
-        }
+    $response = metarResolveStationResponseBody($stationId);
+    if ($response === null) {
+        return null;
     }
     $parsed = parseMETARResponse($response, $airport);
     // If parsing succeeded, add metadata about which station was used
