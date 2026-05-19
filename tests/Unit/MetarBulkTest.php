@@ -11,12 +11,12 @@ use PHPUnit\Framework\TestCase;
  */
 final class MetarBulkTest extends TestCase
 {
-    public function testRefreshMetarBulkScriptExists(): void
+    public function testRefreshMetarBulkScript_OnDisk_FileExists(): void
     {
         $this->assertFileExists(__DIR__ . '/../../scripts/refresh-metar-bulk.php');
     }
 
-    public function testMetarBulkShouldUseNationalBulkByEnabledAirportCount(): void
+    public function testMetarBulkShouldUseNationalBulk_EnabledAirportCount_ReturnsExpectedThreshold(): void
     {
         require_once __DIR__ . '/../../lib/config.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -48,7 +48,7 @@ final class MetarBulkTest extends TestCase
         $this->assertFalse(metarBulkShouldUseNationalBulk($oneEnabledOneDisabled));
     }
 
-    public function testMetarBulkCollectConfiguredStationIdsIgnoresDisabledAirports(): void
+    public function testMetarBulkCollectConfiguredStationIds_DisabledAirport_ExcludedFromSet(): void
     {
         require_once __DIR__ . '/../../lib/config.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -72,7 +72,7 @@ final class MetarBulkTest extends TestCase
         $this->assertArrayNotHasKey('KOFF', $ids);
     }
 
-    public function testMetarBulkSanitizeIcaoForFilename(): void
+    public function testMetarBulkSanitizeIcaoForFilename_ValidAndInvalid_ReturnsExpected(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk.php';
         $this->assertSame('KPDX', metarBulkSanitizeIcaoForFilename('kpdx'));
@@ -80,7 +80,7 @@ final class MetarBulkTest extends TestCase
         $this->assertNull(metarBulkSanitizeIcaoForFilename('AB'));
     }
 
-    public function testMetarBulkParseObservationTime(): void
+    public function testMetarBulkParseObservationTime_ValidIsoAndEmpty_ReturnsUnixOrMin(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk.php';
         $this->assertSame(
@@ -127,7 +127,7 @@ final class MetarBulkTest extends TestCase
         $this->assertEqualsWithDelta(0.10, (float) $rec['precip'], 0.001);
     }
 
-    public function testCsvRowToJsonEnvelopeParsesThroughParseMetarResponse(): void
+    public function testMetarBulkCsvRowToJsonEnvelope_SampleRow_ParseMetarResponseSucceeds(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk.php';
         require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
@@ -159,7 +159,7 @@ final class MetarBulkTest extends TestCase
         $this->assertStringContainsString('KZZZ', (string) $parsed['raw_ob']);
     }
 
-    public function testIngestKeepsLatestObservationPerStation(): void
+    public function testMetarBulkIngestGzipToStationFiles_DuplicateStation_KeepsLatestRow(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
@@ -242,7 +242,7 @@ final class MetarBulkTest extends TestCase
         $this->assertSame('skipped_mock_or_test_mode', $result['note'] ?? null);
     }
 
-    public function testTryReadJsonResponseForStationRejectsStaleFile(): void
+    public function testMetarBulkTryReadJsonResponseForStation_StaleMtime_ReturnsNull(): void
     {
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/constants.php';
