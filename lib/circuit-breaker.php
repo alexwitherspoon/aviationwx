@@ -375,9 +375,11 @@ function checkWeatherCircuitBreaker($airportId, $sourceType, ?array $sourceConfi
     $globalResult = checkCircuitBreakerBase($globalKey, CACHE_BACKOFF_FILE);
     if ($globalResult['skip']) {
         $globalResult['reason'] = 'global_circuit_open';
+
+        return $globalResult;
     }
 
-    return $globalResult;
+    return $result;
 }
 
 /**
