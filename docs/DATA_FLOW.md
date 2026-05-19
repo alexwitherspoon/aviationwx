@@ -34,6 +34,7 @@ The system uses **parallel fetching** for all configured sources:
 - **Unified Fetcher**: Fetches all sources simultaneously using `curl_multi`
 - **Sources Fetched**: All sources configured in the `weather_sources` array
 - **Circuit Breaker**: Each source has independent circuit breaker protection (skips sources in backoff)
+- **Upstream throttle**: Before `curl_multi_add_handle`, `lib/upstream-rate-limit.php` enforces a per-credential token bucket (flock under `cache/upstream-limits/`). When the budget is exhausted, that source is skipped for the current fetch cycle only. Circuit breaker (upstream health) is checked first so sick sources do not consume budget. METAR sources use `metarResolveStationResponseBody()` (bulk slice, then HTTP); bulk hits do not consume HTTP budget. Throttle skips and fail-open I/O are counted in `cache/weather_health.json`.
 - **Parallel Execution**: All sources are fetched concurrently for maximum speed
 - **Freshness Selection**: Handled during aggregation (freshest data wins for each field)
 
