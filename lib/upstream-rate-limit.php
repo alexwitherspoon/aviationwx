@@ -258,9 +258,23 @@ function upstream_rate_try_take(string $fingerprint, int $rpm, int $burst, ?floa
         'tokens' => $result['tokens'],
         'last_refill' => $result['last_refill'],
     ], JSON_UNESCAPED_UNICODE);
-    if ($payload !== false) {
-        fwrite($fp, $payload);
-        fflush($fp);
+    if ($payload === false) {
+        aviationwx_log('warning', 'upstream rate limit state encode failed, allowing request', [
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+        ], 'app');
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return $result['allowed'];
+    }
+
+    $written = @fwrite($fp, $payload);
+    @fflush($fp);
+    if ($written === false) {
+        aviationwx_log('warning', 'upstream rate limit state write failed, allowing request', [
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+            'file' => $stateFile,
+        ], 'app');
     }
 
     flock($fp, LOCK_UN);
@@ -288,6 +302,22 @@ function upstream_rate_limit_record_fail_open(string $reason, string $fingerprin
 }
 
 /**
+ * PHPUnit only: enforce buckets while APP_ENV=testing.
+ */
+function upstream_rate_limit_test_force_enforcement(): void
+{
+    $GLOBALS['upstream_rate_limit_test_force_enforcement'] = true;
+}
+
+/**
+ * PHPUnit only: restore default test-mode bypass for upstream throttling.
+ */
+function upstream_rate_limit_test_clear_force_enforcement(): void
+{
+    unset($GLOBALS['upstream_rate_limit_test_force_enforcement']);
+}
+
+/**
  * Whether UnifiedFetcher should skip this source for the current cycle (budget exhausted).
  *
  * @param array<string, mixed> $source weather_sources entry (must include type)
@@ -303,22 +333,6 @@ function upstream_rate_limit_should_skip_source(array $source): bool
  * @param array<string, mixed> $source weather_sources entry (must include type)
  * @return array{allowed: bool, fingerprint_prefix: string|null}
  */
-/**
- * PHPUnit only: enforce buckets while APP_ENV=testing (see upstream_rate_limit_test_force_enforcement).
- */
-function upstream_rate_limit_test_force_enforcement(): void
-{
-    $GLOBALS['upstream_rate_limit_test_force_enforcement'] = true;
-}
-
-/**
- * PHPUnit only: restore default test-mode bypass for upstream throttling.
- */
-function upstream_rate_limit_test_clear_force_enforcement(): void
-{
-    unset($GLOBALS['upstream_rate_limit_test_force_enforcement']);
-}
-
 function upstream_rate_limit_consume_for_source(array $source): array
 {
     $forceInTests = !empty($GLOBALS['upstream_rate_limit_test_force_enforcement']);
