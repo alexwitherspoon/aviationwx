@@ -12,6 +12,9 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
+require_once __DIR__ . '/../data/WeatherReading.php';
+require_once __DIR__ . '/../data/WindGroup.php';
+require_once __DIR__ . '/../data/WeatherSnapshot.php';
 
 /** METAR resolve produced a body (mock, bulk slice, or HTTP). */
 const METAR_RESOLVE_OK = 'ok';
@@ -23,9 +26,6 @@ const METAR_RESOLVE_CIRCUIT_OPEN = 'circuit_open';
 const METAR_RESOLVE_HTTP_FAILED = 'http_failed';
 /** Missing or empty station_id. */
 const METAR_RESOLVE_INVALID_STATION = 'invalid_station';
-require_once __DIR__ . '/../data/WeatherReading.php';
-require_once __DIR__ . '/../data/WindGroup.php';
-require_once __DIR__ . '/../data/WeatherSnapshot.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WindGroup;
