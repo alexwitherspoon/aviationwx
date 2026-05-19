@@ -694,6 +694,8 @@ The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one
 
 When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). PHPUnit and mock mode skip throttling.
 
+`metarResolveStationResponse()` in `lib/weather/adapter/metar-v1.php` reports outcomes as `METAR_RESOLVE_*` constants (`ok`, `throttled`, `circuit_open`, `http_failed`, `invalid_station`). Only `http_failed` and `invalid_station` count as fetch failures for the per-airport METAR circuit breaker; `throttled` is a self-throttle skip for one cycle.
+
 ### Backup Sources
 
 Mark a source as backup by adding `"backup": true`. Backup sources are only used when primary sources fail or are stale:
