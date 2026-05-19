@@ -611,7 +611,7 @@ if (!defined('UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM')) {
 if (!defined('UPSTREAM_RATE_LIMIT_SYNOPTIC_BURST')) {
     define('UPSTREAM_RATE_LIMIT_SYNOPTIC_BURST', 10);
 }
-// Shared anonymous bucket for per-station METAR HTTP (bulk path preferred when configured)
+// Per-station bucket for METAR HTTP fallback (bulk preferred when configured)
 if (!defined('UPSTREAM_RATE_LIMIT_METAR_HTTP_RPM')) {
     define('UPSTREAM_RATE_LIMIT_METAR_HTTP_RPM', 90);
 }
