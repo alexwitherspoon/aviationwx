@@ -8,6 +8,7 @@
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/weather-backoff-headers.php';
 
 /**
  * Base circuit breaker check
@@ -74,7 +75,8 @@ function checkCircuitBreakerBase($key, $backoffFile) {
  * Records a failure and updates exponential backoff state.
  * Uses file locking to prevent race conditions in concurrent environments.
  * Implements error-type-specific backoff strategies:
- *   - 429 (Rate Limit): Short backoff (2s base), minimal growth
+ *   - 429 (Rate Limit): Short backoff (2s base), minimal growth; Retry-After / X-RateLimit-Reset
+ *     on 429/503 can extend the wait up to BACKOFF_MAX_RETRY_AFTER_SECONDS (15 min)
  *   - Transient errors (5xx, network): Moderate backoff (10s base), exponential growth, capped at 10 min
  *   - Permanent errors (4xx auth/config): Long backoff (2x multiplier), capped at 30 min
  * 
@@ -87,9 +89,17 @@ function checkCircuitBreakerBase($key, $backoffFile) {
  *   - permanent: 2x multiplier (for auth errors, config issues, etc.)
  * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
  * @param string|null $failureReason Human-readable reason for the failure (e.g., 'EXIF validation failed', 'HTTP 503')
+ * @param array<string, string>|null $responseHeaders Lowercase upstream headers (Retry-After, X-RateLimit-*)
  * @return void
  */
-function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transient', $httpCode = null, $failureReason = null) {
+function recordCircuitBreakerFailureBase(
+    $key,
+    $backoffFile,
+    $severity = 'transient',
+    $httpCode = null,
+    $failureReason = null,
+    ?array $responseHeaders = null
+) {
     $cacheDir = dirname($backoffFile);
     if (!file_exists($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
@@ -135,22 +145,14 @@ function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transi
     }
     
     $failures = $state['failures'];
-    
-    // Error-type-specific backoff strategies
-    if ($httpCode === 429) {
-        // Rate limit errors: short backoff, minimal growth
-        $base = BACKOFF_BASE_RATE_LIMIT;
-        $backoffSeconds = min(10, $base + ($failures - 1)); // 2s, 3s, 4s... capped at 10s
-    } elseif ($severity === 'permanent') {
-        // Permanent errors: 2x multiplier, 30 min cap
-        $base = max(BACKOFF_BASE_SECONDS, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_SECONDS);
-        $backoffSeconds = min(BACKOFF_MAX_PERMANENT, (int)round($base * 2.0));
-    } else {
-        // Transient errors: 10s base, exponential growth, 10 min cap
-        $base = max(BACKOFF_BASE_TRANSIENT, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_TRANSIENT);
-        $backoffSeconds = min(BACKOFF_MAX_TRANSIENT, (int)round($base));
-    }
-    
+    $backoffSeconds = circuit_breaker_compute_backoff_seconds(
+        $failures,
+        $severity,
+        $httpCode,
+        $responseHeaders,
+        $now
+    );
+
     $state['backoff_seconds'] = $backoffSeconds;
     $state['next_allowed_time'] = $now + $backoffSeconds;
         
@@ -204,23 +206,15 @@ function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transi
         $state['last_failure_reason'] = 'unknown';
     }
     
-    // Error-type-specific backoff strategies
     $failures = $state['failures'];
-    
-    if ($httpCode === 429) {
-        // Rate limit errors: short backoff, minimal growth
-        $base = BACKOFF_BASE_RATE_LIMIT;
-        $backoffSeconds = min(10, $base + ($failures - 1)); // 2s, 3s, 4s... capped at 10s
-    } elseif ($severity === 'permanent') {
-        // Permanent errors: 2x multiplier, 30 min cap
-        $base = max(BACKOFF_BASE_SECONDS, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_SECONDS);
-        $backoffSeconds = min(BACKOFF_MAX_PERMANENT, (int)round($base * 2.0));
-    } else {
-        // Transient errors: 10s base, exponential growth, 10 min cap
-        $base = max(BACKOFF_BASE_TRANSIENT, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_TRANSIENT);
-        $backoffSeconds = min(BACKOFF_MAX_TRANSIENT, (int)round($base));
-    }
-    
+    $backoffSeconds = circuit_breaker_compute_backoff_seconds(
+        $failures,
+        $severity,
+        $httpCode,
+        $responseHeaders,
+        $now
+    );
+
     $state['backoff_seconds'] = $backoffSeconds;
     $state['next_allowed_time'] = $now + $backoffSeconds;
     
@@ -386,11 +380,12 @@ function checkWeatherCircuitBreaker($airportId, $sourceType, ?array $sourceConfi
  * Record a weather API failure and update backoff state
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
- * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @param string $sourceType Weather source type (tempest, metar, etc.)
  * @param string $severity 'transient' or 'permanent' (default: 'transient')
  * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
  * @param string|null $failureReason Human-readable reason for the failure (e.g., 'API rate limit exceeded', 'HTTP 503')
  * @param array<string, mixed>|null $sourceConfig When set, 429/503 also update global_weather_* for this credential
+ * @param array<string, string>|null $responseHeaders Lowercase upstream headers from the failed response
  * @return void
  */
 function recordWeatherFailure(
@@ -399,21 +394,22 @@ function recordWeatherFailure(
     $severity = 'transient',
     $httpCode = null,
     $failureReason = null,
-    ?array $sourceConfig = null
+    ?array $sourceConfig = null,
+    ?array $responseHeaders = null
 ) {
     if (!ensureCacheDir(CACHE_BASE_DIR)) {
         error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
         return;
     }
     $key = $airportId . '_weather_' . $sourceType;
-    recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason);
+    recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason, $responseHeaders);
 
     if ($sourceConfig !== null
         && ($sourceConfig['type'] ?? '') === $sourceType
         && weather_global_circuit_breaker_should_coordinate($httpCode)
     ) {
         $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
-        recordCircuitBreakerFailureBase($globalKey, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason);
+        recordCircuitBreakerFailureBase($globalKey, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason, $responseHeaders);
     }
 }
 

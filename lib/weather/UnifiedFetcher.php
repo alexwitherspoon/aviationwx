@@ -165,6 +165,7 @@ function buildSourceList(array $airport): array {
 function fetchAllSources(array $sources, string $airportId): array {
     $mh = curl_multi_init();
     $handles = [];
+    $responseHeadersByKey = [];
     $responses = [];
 
     foreach ($sources as $sourceKey => $source) {
@@ -229,6 +230,11 @@ function fetchAllSources(array $sources, string $airportId): array {
         // Get headers for this source
         $headers = buildSourceHeaders($source);
         
+        $responseHeadersByKey[$sourceKey] = [];
+        $headerCollector = function ($ch, string $line) use (&$responseHeadersByKey, $sourceKey): int {
+            return circuit_breaker_collect_curl_header_line($responseHeadersByKey[$sourceKey], $line);
+        };
+
         // Create curl handle
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -240,6 +246,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_HEADERFUNCTION => $headerCollector,
         ]);
         
         curl_multi_add_handle($mh, $ch);
@@ -293,7 +300,15 @@ function fetchAllSources(array $sources, string $airportId): array {
         } else {
             // Failure: HTTP error or network issue - trigger circuit breaker
             $responses[$sourceKey] = null;
-            recordWeatherFailure($airportId, $sourceType, 'transient', $httpCode, null, $sources[$sourceKey]);
+            recordWeatherFailure(
+                $airportId,
+                $sourceType,
+                'transient',
+                $httpCode,
+                null,
+                $sources[$sourceKey],
+                $responseHeadersByKey[$sourceKey] ?? null
+            );
             weather_health_track_fetch($airportId, $sourceType, false, $httpCode);
         }
         
@@ -321,6 +336,10 @@ function fetchAllSources(array $sources, string $airportId): array {
             weather_health_track_upstream_throttle_skip($airportId, 'swob_auto');
             continue;
         }
+        $fallbackHeaders = [];
+        $fallbackHeaderCollector = function ($ch, string $line) use (&$fallbackHeaders): int {
+            return circuit_breaker_collect_curl_header_line($fallbackHeaders, $line);
+        };
         $ch = curl_init($fallbackUrl);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -331,6 +350,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_HTTPHEADER => buildSourceHeaders($source),
+            CURLOPT_HEADERFUNCTION => $fallbackHeaderCollector,
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -340,7 +360,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             recordWeatherSuccess($airportId, 'swob_auto', $source);
             weather_health_track_fetch($airportId, 'swob_auto', true, $httpCode);
         } else {
-            recordWeatherFailure($airportId, 'swob_auto', 'transient', $httpCode, null, $source);
+            recordWeatherFailure($airportId, 'swob_auto', 'transient', $httpCode, null, $source, $fallbackHeaders);
             weather_health_track_fetch($airportId, 'swob_auto', false, $httpCode);
         }
     }
