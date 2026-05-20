@@ -632,6 +632,9 @@ if (!defined('UPSTREAM_RATE_LIMIT_NWS_BURST')) {
 if (!defined('NWS_POINTS_CACHE_TTL_SECONDS')) {
     define('NWS_POINTS_CACHE_TTL_SECONDS', 43200); // 12 hours
 }
+if (!defined('NWS_POINTS_REFRESH_INTERVAL_SECONDS')) {
+    define('NWS_POINTS_REFRESH_INTERVAL_SECONDS', 3600); // scheduler worker cadence (fetch only stale entries)
+}
 
 // Push webcam upload file age limits (fail-closed protection)
 // Files in upload directory older than this are considered abandoned/stuck

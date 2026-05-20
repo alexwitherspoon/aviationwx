@@ -627,7 +627,7 @@ High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requ
 
 The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
 
-Observations use `/stations/{station_id}/observations/latest`. Optional `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`) when code calls `nwsFetchPoints()` with airport coordinates.
+Observations use `/stations/{station_id}/observations/latest`. `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`). The scheduler runs `scripts/refresh-nws-points.php` in the background every `NWS_POINTS_REFRESH_INTERVAL_SECONDS` (default 1 hour) for enabled airports with an NWS source and valid `lat`/`lon`; only stale cache entries are refetched. `nwsFetchPoints()` reads the same cache for on-demand lookups.
 
 ### AWOSnet
 

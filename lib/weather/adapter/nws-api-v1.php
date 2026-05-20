@@ -465,8 +465,7 @@ class NwsApiAdapter {
  * Fetch NWS /points metadata for a coordinate pair (cached).
  *
  * Returns decoded GeoJSON or null on failure. Station observations still use
- * buildUrl(); this helper is for grid/points lookups that should not hit
- * api.weather.gov on every scheduler cycle.
+ * buildUrl(); scheduler warmup uses nwsPointsRefreshRun() (see refresh-nws-points.php).
  *
  * @param float $lat WGS84 latitude
  * @param float $lon WGS84 longitude
