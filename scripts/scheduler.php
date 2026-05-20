@@ -62,6 +62,7 @@ $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
 $lastNwsPointsRefresh = 0;
+$lastNwsPointsMissingLog = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -418,8 +419,13 @@ while ($running) {
                 $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
                 exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nwsPointsScript) . ' > /dev/null 2>&1 &');
                 reapZombies();
+                $lastNwsPointsRefresh = $now;
+            } elseif (($now - $lastNwsPointsMissingLog) >= 300) {
+                aviationwx_log('warning', 'scheduler: refresh-nws-points.php missing', [
+                    'path' => $nwsPointsScript,
+                ], 'app');
+                $lastNwsPointsMissingLog = $now;
             }
-            $lastNwsPointsRefresh = $now;
         }
 
         // Process weather updates (non-blocking)
