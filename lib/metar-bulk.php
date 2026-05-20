@@ -342,8 +342,12 @@ function metarBulkTryReadJsonResponseForStation(string $stationId): ?string {
 
 /**
  * Stream-download gzip to `destAbsolute`; deletes the file unless HTTP 200.
+ *
+ * @param int|null $httpCode Set to the HTTP status when curl completes
  */
-function metarBulkDownloadMetarCacheGz(string $destAbsolute): bool {
+function metarBulkDownloadMetarCacheGz(string $destAbsolute, ?int &$httpCode = null): bool
+{
+    $httpCode = null;
     $ch = curl_init();
     if ($ch === false) {
         return false;
@@ -367,6 +371,7 @@ function metarBulkDownloadMetarCacheGz(string $destAbsolute): bool {
     ]);
     $ok = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $httpCode = $code > 0 ? $code : null;
     curl_close($ch);
     fclose($fp);
     if ($ok === false || $code !== 200) {
@@ -387,6 +392,94 @@ function metarBulkEnsureDirectories(): void {
             @mkdir($dir, 0775, true);
         }
     }
+}
+
+/**
+ * Persist refresh metadata after a successful national bulk ingest.
+ *
+ * @param int $fetchedAt Unix timestamp when ingest completed
+ * @param int $written Station JSON files written
+ * @param int $scanned CSV rows scanned
+ */
+function metarBulkWriteRefreshMeta(int $fetchedAt, int $written, int $scanned): bool
+{
+    metarBulkEnsureDirectories();
+    $path = getMetarBulkMetaPath();
+    $payload = json_encode([
+        'fetched_at' => $fetchedAt,
+        'written' => $written,
+        'scanned' => $scanned,
+    ], JSON_UNESCAPED_SLASHES);
+    if ($payload === false) {
+        return false;
+    }
+
+    $tmp = $path . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, $payload, LOCK_EX) === false) {
+        @unlink($tmp);
+
+        return false;
+    }
+
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Seconds since the last successful METAR bulk refresh, or null when unknown.
+ *
+ * @param int|null $now Injectable reference time for tests
+ */
+function metarBulkSnapshotAgeSeconds(?int $now = null): ?int
+{
+    $path = getMetarBulkMetaPath();
+    if (!is_readable($path)) {
+        return null;
+    }
+
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+
+    $meta = json_decode($raw, true);
+    if (!is_array($meta)) {
+        return null;
+    }
+
+    $fetchedAt = (int) ($meta['fetched_at'] ?? 0);
+    if ($fetchedAt <= 0) {
+        return null;
+    }
+
+    $now = $now ?? time();
+    if ($fetchedAt > $now) {
+        return null;
+    }
+
+    return $now - $fetchedAt;
+}
+
+/**
+ * Log context with last known bulk snapshot age when meta.json is present.
+ *
+ * @param array<string, mixed> $context Base log fields
+ * @param int|null $now Injectable reference time for tests
+ * @return array<string, mixed>
+ */
+function metarBulkObservabilityContext(array $context = [], ?int $now = null): array
+{
+    $age = metarBulkSnapshotAgeSeconds($now);
+    if ($age !== null) {
+        $context['metar_bulk_age_seconds'] = $age;
+    }
+
+    return $context;
 }
 
 /**
@@ -521,9 +614,10 @@ function metarBulkPruneOrphanStationFiles(array $icaoSet): int {
 /**
  * Download, ingest, prune; no network in mock or test mode. Non-blocking lock: exit success if another run holds the lock.
  *
- * @return array{ok: bool, written: int, scanned: int, pruned: int, http_ok?: bool, note?: string}
+ * @return array{ok: bool, written: int, scanned: int, pruned: int, http_ok?: bool, http_code?: int, note?: string, meta_written?: bool}
  */
-function metarBulkRefreshRun(): array {
+function metarBulkRefreshRun(): array
+{
     require_once __DIR__ . '/config.php';
     require_once __DIR__ . '/logger.php';
 
@@ -568,13 +662,27 @@ function metarBulkRefreshRun(): array {
 
     $tmpDir = getMetarBulkTempDir();
     $gzTmp = $tmpDir . '/metars.' . uniqid('', true) . '.gz';
-    $httpOk = metarBulkDownloadMetarCacheGz($gzTmp);
+    $downloadHttpCode = null;
+    $httpOk = metarBulkDownloadMetarCacheGz($gzTmp, $downloadHttpCode);
     $result['http_ok'] = $httpOk;
+    if ($downloadHttpCode !== null) {
+        $result['http_code'] = $downloadHttpCode;
+    }
     if (!$httpOk) {
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         @unlink($gzTmp);
-        aviationwx_log('warning', 'metar_bulk: download failed', ['url' => METAR_BULK_CACHE_GZ_URL], 'app');
+        if (!function_exists('weatherHealthTrackMetarBulkDownloadFailure')) {
+            require_once __DIR__ . '/weather-health.php';
+        }
+        weatherHealthTrackMetarBulkDownloadFailure($downloadHttpCode);
+        $logCtx = metarBulkObservabilityContext([
+            'url' => METAR_BULK_CACHE_GZ_URL,
+        ]);
+        if ($downloadHttpCode !== null) {
+            $logCtx['http_code'] = $downloadHttpCode;
+        }
+        aviationwx_log('warning', 'metar_bulk: download failed', $logCtx, 'app');
 
         return $result;
     }
@@ -591,7 +699,7 @@ function metarBulkRefreshRun(): array {
         if (($ingest['skipped_short_rows'] ?? 0) > 0) {
             $logCtx['skipped_short_rows'] = (int) $ingest['skipped_short_rows'];
         }
-        aviationwx_log('warning', 'metar_bulk: ingest failed', $logCtx, 'app');
+        aviationwx_log('warning', 'metar_bulk: ingest failed', metarBulkObservabilityContext($logCtx), 'app');
 
         return $result;
     }
@@ -599,12 +707,30 @@ function metarBulkRefreshRun(): array {
     $result['written'] = (int) $ingest['written'];
     $result['scanned'] = (int) $ingest['scanned'];
     $result['pruned'] = metarBulkPruneOrphanStationFiles($icaoSet);
-    $result['ok'] = true;
+    $fetchedAt = time();
+    $metaWritten = metarBulkWriteRefreshMeta($fetchedAt, $result['written'], $result['scanned']);
+    $result['meta_written'] = $metaWritten;
 
     flock($lockFp, LOCK_UN);
     fclose($lockFp);
 
+    if (!$metaWritten) {
+        aviationwx_log('warning', 'metar_bulk: meta write failed after ingest', [
+            'fetched_at' => $fetchedAt,
+            'written' => $result['written'],
+            'scanned' => $result['scanned'],
+            'pruned' => $result['pruned'],
+        ], 'app');
+        $result['ok'] = false;
+        $result['note'] = 'meta_write_failed';
+
+        return $result;
+    }
+
+    $result['ok'] = true;
     aviationwx_log('info', 'metar_bulk: refresh complete', [
+        'fetched_at' => $fetchedAt,
+        'metar_bulk_age_seconds' => metarBulkSnapshotAgeSeconds($fetchedAt),
         'written' => $result['written'],
         'scanned' => $result['scanned'],
         'stations_in_csv' => (int) ($ingest['stations_in_csv'] ?? 0),

@@ -296,9 +296,9 @@ function checkSystemHealth(): array {
     $health['components']['variant_generation'] = $variantHealth;
     
     // Uses cached data from weather-health.php
-    $weatherDataHealth = weather_health_get_status();
+    $weatherDataHealth = weatherHealthGetStatus();
     
-    $weatherSources = weather_health_get_sources();
+    $weatherSources = weatherHealthGetSources();
     if (!empty($weatherSources)) {
         $sourceSummary = [];
         foreach ($weatherSources as $type => $sourceData) {

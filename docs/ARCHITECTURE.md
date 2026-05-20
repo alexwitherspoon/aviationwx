@@ -31,6 +31,13 @@ aviationwx.org/
 │   ├── constants.php         # Application constants
 │   ├── scheduler-daemon-lock.php # Exclusive flock helper for scheduler.php (no path unlink)
 │   ├── circuit-breaker.php   # Circuit breaker for API failures
+│   ├── weather-health.php    # Upstream fetch health counters (weather_health.json)
+│   ├── upstream-rate-limit.php # Per-credential upstream token bucket (flock)
+│   ├── metar-bulk.php        # AWC national METAR bulk ingest and per-station slices
+│   ├── nws-points-cache.php  # NWS /points grid lookup TTL cache
+│   ├── nws-points-refresh.php # Scheduler-driven /points cache warmup
+│   ├── weather-backoff-headers.php # Retry-After / rate-limit header parsing for backoff
+│   ├── cache-paths.php       # Shared cache directory path helpers
 │   ├── airport-identifiers.php # Airport code validation
 │   ├── address-formatter.php # Address formatting utilities
 │   ├── partner-logo-cache.php # Partner logo caching
@@ -66,7 +73,9 @@ aviationwx.org/
 │   ├── diagnose-scheduler-duplicates.php # Read-only CLI: list scheduler PIDs and lock summary
 │   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
-│   └── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
+│   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
+│   ├── refresh-metar-bulk.php # AWC national METAR bulk gzip refresh (background)
+│   └── refresh-nws-points.php # NWS /points cache warmup (background)
 ├── admin/
 │   ├── diagnostics.php       # System diagnostics endpoint
 │   ├── cache-clear.php       # Cache clearing endpoint

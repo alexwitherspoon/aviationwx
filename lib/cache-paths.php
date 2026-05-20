@@ -123,24 +123,43 @@ if (!defined('CACHE_METAR_BULK_DIR')) {
     define('CACHE_METAR_BULK_DIR', CACHE_BASE_DIR . '/metar-bulk');
 }
 
-function getMetarBulkCacheDir(): string {
+function getMetarBulkCacheDir(): string
+{
+    if (isset($GLOBALS['metarBulkTestCacheRoot'])
+        && is_string($GLOBALS['metarBulkTestCacheRoot'])
+        && $GLOBALS['metarBulkTestCacheRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['metarBulkTestCacheRoot'], '/');
+    }
+
     return CACHE_METAR_BULK_DIR;
 }
 
-function getMetarBulkStationsDir(): string {
-    return CACHE_METAR_BULK_DIR . '/stations';
+function getMetarBulkStationsDir(): string
+{
+    return getMetarBulkCacheDir() . '/stations';
 }
 
-function getMetarBulkTempDir(): string {
-    return CACHE_METAR_BULK_DIR . '/tmp';
+function getMetarBulkTempDir(): string
+{
+    return getMetarBulkCacheDir() . '/tmp';
 }
 
-function getMetarBulkRefreshLockPath(): string {
-    return CACHE_METAR_BULK_DIR . '/refresh.lock';
+function getMetarBulkRefreshLockPath(): string
+{
+    return getMetarBulkCacheDir() . '/refresh.lock';
 }
 
 function getMetarBulkStationJsonPath(string $icaoUpper): string {
     return getMetarBulkStationsDir() . '/' . strtoupper($icaoUpper) . '.json';
+}
+
+/**
+ * METAR bulk refresh metadata (`fetched_at`, row counts) for ops age metrics.
+ */
+function getMetarBulkMetaPath(): string
+{
+    return getMetarBulkCacheDir() . '/meta.json';
 }
 
 // =============================================================================
@@ -156,6 +175,13 @@ if (!defined('CACHE_NWS_POINTS_DIR')) {
  */
 function getNwsPointsCacheDir(): string
 {
+    if (isset($GLOBALS['nwsPointsCacheTestRoot'])
+        && is_string($GLOBALS['nwsPointsCacheTestRoot'])
+        && $GLOBALS['nwsPointsCacheTestRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['nwsPointsCacheTestRoot'], '/');
+    }
+
     return CACHE_NWS_POINTS_DIR;
 }
 

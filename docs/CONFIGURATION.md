@@ -40,7 +40,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `notam_refresh_seconds` | `600` | NOTAM refresh interval |
 | `minimum_refresh_seconds` | `5` | Minimum allowed refresh interval |
 | `scheduler_config_reload_seconds` | `60` | Config reload check interval |
-| `weather_worker_pool_size` | `5` | Concurrent weather workers |
+| `weather_worker_pool_size` | `5` | Concurrent weather workers. After upstream throttles and METAR bulk are enabled, consider lowering this if you still see upstream 429s or throttle skips in `cache/weather_health.json`; raise only when fetches are consistently fast and under provider limits. |
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
@@ -627,7 +627,7 @@ High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requ
 
 The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
 
-Observations use `/stations/{station_id}/observations/latest`. Optional `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`) when code calls `nwsFetchPoints()` with airport coordinates.
+Observations use `/stations/{station_id}/observations/latest`. `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`). The scheduler runs `scripts/refresh-nws-points.php` in the background every `NWS_POINTS_REFRESH_INTERVAL_SECONDS` (default 1 hour) for enabled airports with an NWS source and valid `lat`/`lon`; only stale cache entries are refetched. `nwsFetchPoints()` reads the same cache for on-demand lookups.
 
 ### AWOSnet
 
@@ -688,13 +688,13 @@ METAR data from NOAA Aviation Weather provides aviation-specific observations in
 
 `nearby_stations` provides fallback stations if the primary METAR station is unavailable.
 
-The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one airport is enabled** (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. Weather workers read a fresh slice before calling the per-station HTTP API in that mode (`metarResolveStationResponse()` from `UnifiedFetcher` and `fetchMETARFromStation()`). Bulk ingest requires the gzip CSV header to match the canonical AWC column list in `lib/metar-bulk-csv-schema.php` (tests fail on drift). A **single enabled airport** uses per-station HTTP only (no national gzip download).
+The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one airport is enabled** (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. A successful refresh also writes `cache/metar-bulk/meta.json` with `fetched_at`, `written`, and `scanned` row counts; logs include `metar_bulk_age_seconds` (seconds since that snapshot). Failed refreshes log the last known age when meta is present. Weather workers read a fresh slice before calling the per-station HTTP API in that mode (`metarResolveStationResponse()` from `UnifiedFetcher` and `fetchMETARFromStation()`). Bulk ingest requires the gzip CSV header to match the canonical AWC column list in `lib/metar-bulk-csv-schema.php` (tests fail on drift). A **single enabled airport** uses per-station HTTP only (no national gzip download).
 
 ### Upstream rate limiting (weather fetch)
 
 `lib/upstream-rate-limit.php` applies a file-backed token bucket per provider and credential fingerprint before outbound weather API calls (`cache/upstream-limits/`). Limits are defined in `lib/constants.php` (`UPSTREAM_RATE_LIMIT_*` per provider). Shared API keys (for example Tempest `api_key`) share one bucket across all airports using that key. Keyless sources use per-station identity in the fingerprint (`station_id` for AWOSnet, SWOB, NWS, METAR HTTP; `base_url` + `airport_id` for `aviationwx_api`).
 
-When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). PHPUnit and mock mode skip throttling.
+When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). HTTP **429** responses from weather upstreams increment `upstream_429` and per-provider `upstream_429_{source}` counters (also exposed per source on the status bundle). PHPUnit and mock mode skip throttling.
 
 `metarResolveStationResponse()` in `lib/weather/adapter/metar-v1.php` reports outcomes as `METAR_RESOLVE_*` constants (`ok`, `throttled`, `circuit_open`, `http_failed`, `invalid_station`). Only `http_failed` and `invalid_station` count as fetch failures for the per-airport METAR circuit breaker; `throttled` is a self-throttle skip for one cycle.
 
