@@ -105,10 +105,10 @@ final class UpstreamObservabilityTest extends TestCase
 
     public function testMetarBulkObservabilityContext_IncludesAgeWhenMetaPresent(): void
     {
-        $now = time();
+        $now = 1_700_000_000;
         $this->assertTrue(metarBulkWriteRefreshMeta($now - 90, 1, 1));
 
-        $context = metarBulkObservabilityContext(['note' => 'test']);
+        $context = metarBulkObservabilityContext(['note' => 'test'], $now);
         $this->assertSame('test', $context['note']);
         $this->assertSame(90, $context['metar_bulk_age_seconds']);
     }

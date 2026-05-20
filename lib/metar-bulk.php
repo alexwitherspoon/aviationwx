@@ -469,11 +469,12 @@ function metarBulkSnapshotAgeSeconds(?int $now = null): ?int
  * Log context with last known bulk snapshot age when meta.json is present.
  *
  * @param array<string, mixed> $context Base log fields
+ * @param int|null $now Injectable reference time for tests
  * @return array<string, mixed>
  */
-function metarBulkObservabilityContext(array $context = []): array
+function metarBulkObservabilityContext(array $context = [], ?int $now = null): array
 {
-    $age = metarBulkSnapshotAgeSeconds();
+    $age = metarBulkSnapshotAgeSeconds($now);
     if ($age !== null) {
         $context['metar_bulk_age_seconds'] = $age;
     }
