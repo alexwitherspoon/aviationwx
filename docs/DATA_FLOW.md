@@ -34,6 +34,7 @@ The system uses **parallel fetching** for all configured sources:
 - **Unified Fetcher**: Fetches all sources simultaneously using `curl_multi`
 - **Sources Fetched**: All sources configured in the `weather_sources` array
 - **Circuit Breaker**: Each source has per-airport circuit breaker protection; HTTP 429/503 also open a shared `global_weather_{provider}_{credential fingerprint}` key so airports sharing one API key back off together. When present, `Retry-After` / `X-RateLimit-Reset` from the failed response extend backoff (up to 15 minutes).
+- **NWS points cache**: `api.weather.gov/points/{lat},{lon}` responses are cached under `cache/nws-points/` (12-hour TTL) via `lib/nws-points-cache.php` to avoid repeat grid lookups. Station observations still use the direct `/stations/{id}/observations/latest` path.
 - **Upstream throttle**: Before `curl_multi_add_handle`, `lib/upstream-rate-limit.php` enforces a per-credential token bucket (flock under `cache/upstream-limits/`). When the budget is exhausted, that source is skipped for the current fetch cycle only. METAR uses `metarResolveStationResponse()` (mock, bulk slice, then HTTP); bulk is tried before the per-airport METAR HTTP circuit gate. Throttle and circuit-open outcomes are not recorded as fetch failures. Throttle skips and fail-open I/O are counted in `cache/weather_health.json`.
 - **Parallel Execution**: All sources are fetched concurrently for maximum speed
 - **Freshness Selection**: Handled during aggregation (freshest data wins for each field)
