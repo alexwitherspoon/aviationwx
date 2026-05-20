@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../lib/nws-points-cache.php';
  * @covers ::nws_points_cache_entry_is_fresh
  * @covers ::nws_points_cache_read
  * @covers ::nws_points_cache_write
+ * @covers ::nws_fetch_points
  */
 final class NwsPointsCacheTest extends TestCase
 {
@@ -80,6 +81,44 @@ final class NwsPointsCacheTest extends TestCase
     {
         $this->assertNull(nws_points_cache_read(100.0, 0.0));
         $this->assertFalse(nws_points_cache_write(100.0, 0.0, '{}'));
+    }
+
+    public function testCacheRead_ReturnsNullWhenEnvelopeCoordinatesMismatch(): void
+    {
+        $now = 1_700_000_000;
+        $path = nws_points_cache_file_path(nws_points_cache_key(45.771, -122.86));
+        if (!is_dir(dirname($path))) {
+            mkdir(dirname($path), 0755, true);
+        }
+        file_put_contents($path, json_encode([
+            'fetched_at' => $now,
+            'lat' => '99.9999',
+            'lon' => '-122.8600',
+            'body' => '{"properties":{"gridId":"BAD"}}',
+        ], JSON_UNESCAPED_SLASHES));
+
+        $this->assertNull(nws_points_cache_read(45.771, -122.86, $now));
+    }
+
+    public function testNwsFetchPoints_RefetchesWhenCacheBodyIsCorrupt(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/nws-api-v1.php';
+
+        $now = time();
+        $path = nws_points_cache_file_path(nws_points_cache_key(45.771, -122.86));
+        if (!is_dir(dirname($path))) {
+            mkdir(dirname($path), 0755, true);
+        }
+        file_put_contents($path, json_encode([
+            'fetched_at' => $now,
+            'lat' => '45.7710',
+            'lon' => '-122.8600',
+            'body' => 'not-json',
+        ], JSON_UNESCAPED_SLASHES));
+
+        $result = nws_fetch_points(45.771, -122.86);
+        $this->assertIsArray($result);
+        $this->assertSame('PQR', $result['properties']['gridId'] ?? null);
     }
 
     public function testNwsFetchPoints_WritesCacheAndReusesOnSecondCall(): void

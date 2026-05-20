@@ -11,6 +11,9 @@ require_once __DIR__ . '/cache-paths.php';
 
 /**
  * True when latitude and longitude are valid for an NWS points request.
+ *
+ * @param float $lat WGS84 latitude (-90 to 90)
+ * @param float $lon WGS84 longitude (-180 to 180)
  */
 function nws_points_coordinates_valid(float $lat, float $lon): bool
 {
@@ -19,6 +22,8 @@ function nws_points_coordinates_valid(float $lat, float $lon): bool
 
 /**
  * Format one coordinate for NWS URL and cache keys (four decimal places).
+ *
+ * @return string Coordinate string for api.weather.gov /points URLs
  */
 function nws_points_normalize_coord(float $coord): string
 {
@@ -27,6 +32,8 @@ function nws_points_normalize_coord(float $coord): string
 
 /**
  * Cache filename stem for a lat/lon pair (no extension).
+ *
+ * @return string e.g. 45.7710,-122.8600
  */
 function nws_points_cache_key(float $lat, float $lon): string
 {
@@ -35,6 +42,8 @@ function nws_points_cache_key(float $lat, float $lon): string
 
 /**
  * Resolve cache file path (supports test override via $GLOBALS['nws_points_cache_test_root']).
+ *
+ * @param string $cacheKey From nws_points_cache_key() (no path separators)
  */
 function nws_points_cache_file_path(string $cacheKey): string
 {
@@ -49,7 +58,8 @@ function nws_points_cache_file_path(string $cacheKey): string
 }
 
 /**
- * @param array{fetched_at?: int|string} $entry
+ * @param array{fetched_at?: int|string} $entry Cache envelope from disk
+ * @param int|null $now Injectable reference time for tests
  */
 function nws_points_cache_entry_is_fresh(array $entry, ?int $now = null): bool
 {
@@ -66,6 +76,9 @@ function nws_points_cache_entry_is_fresh(array $entry, ?int $now = null): bool
 /**
  * Read cached points JSON body when fresh.
  *
+ * @param float $lat WGS84 latitude
+ * @param float $lon WGS84 longitude
+ * @param int|null $now Injectable reference time for tests
  * @return string|null Raw JSON body from a prior successful /points response
  */
 function nws_points_cache_read(float $lat, float $lon, ?int $now = null): ?string
@@ -85,6 +98,12 @@ function nws_points_cache_read(float $lat, float $lon, ?int $now = null): ?strin
         return null;
     }
 
+    $expectedLat = nws_points_normalize_coord($lat);
+    $expectedLon = nws_points_normalize_coord($lon);
+    if (($entry['lat'] ?? '') !== $expectedLat || ($entry['lon'] ?? '') !== $expectedLon) {
+        return null;
+    }
+
     $body = $entry['body'] ?? null;
 
     return is_string($body) && $body !== '' ? $body : null;
@@ -93,6 +112,10 @@ function nws_points_cache_read(float $lat, float $lon, ?int $now = null): ?strin
 /**
  * Persist a successful /points response body (atomic replace).
  *
+ * @param float $lat WGS84 latitude
+ * @param float $lon WGS84 longitude
+ * @param string $body Raw JSON response body from NWS
+ * @param int|null $now Injectable store time for tests
  * @return bool False when coordinates invalid or write fails
  */
 function nws_points_cache_write(float $lat, float $lon, string $body, ?int $now = null): bool
