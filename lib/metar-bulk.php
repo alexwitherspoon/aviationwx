@@ -668,6 +668,10 @@ function metarBulkRefreshRun(): array
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         @unlink($gzTmp);
+        if (!function_exists('weatherHealthTrackMetarBulkDownloadFailure')) {
+            require_once __DIR__ . '/weather-health.php';
+        }
+        weatherHealthTrackMetarBulkDownloadFailure($downloadHttpCode > 0 ? $downloadHttpCode : null);
         aviationwx_log('warning', 'metar_bulk: download failed', metarBulkObservabilityContext([
             'url' => METAR_BULK_CACHE_GZ_URL,
             'http_code' => $downloadHttpCode,

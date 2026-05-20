@@ -183,14 +183,14 @@ function fetchAllSources(array $sources, string $airportId): array {
                     if (is_string($resolved['body'])) {
                         $responses[$sourceKey] = $resolved['body'];
                         recordWeatherSuccess($airportId, $sourceType, $source);
-                        weather_health_track_fetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+                        weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
                     }
                     break;
                 case METAR_RESOLVE_THROTTLED:
                     weatherHealthTrackUpstreamThrottleSkip($airportId, $sourceType);
                     break;
                 case METAR_RESOLVE_CIRCUIT_OPEN:
-                    weather_health_track_circuit_open($airportId, $sourceType);
+                    weatherHealthTrackCircuitOpen($airportId, $sourceType);
                     break;
                 case METAR_RESOLVE_HTTP_FAILED:
                 case METAR_RESOLVE_INVALID_STATION:
@@ -206,7 +206,7 @@ function fetchAllSources(array $sources, string $airportId): array {
                         $source,
                         is_array($metarHeaders) ? $metarHeaders : null
                     );
-                    weather_health_track_fetch($airportId, $sourceType, false, $metarHttpCode);
+                    weatherHealthTrackFetch($airportId, $sourceType, false, $metarHttpCode);
                     break;
             }
             continue;
@@ -215,7 +215,7 @@ function fetchAllSources(array $sources, string $airportId): array {
         // Check circuit breaker (non-METAR sources)
         $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType, $source);
         if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
-            weather_health_track_circuit_open($airportId, $sourceType);
+            weatherHealthTrackCircuitOpen($airportId, $sourceType);
             continue;
         }
 
@@ -306,7 +306,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             }
             $responses[$sourceKey] = $response; // Pass through even if empty - aggregator will handle it
             recordWeatherSuccess($airportId, $sourceType, $sources[$sourceKey]);
-            weather_health_track_fetch($airportId, $sourceType, true, $httpCode);
+            weatherHealthTrackFetch($airportId, $sourceType, true, $httpCode);
         } else {
             // Failure: HTTP error or network issue - trigger circuit breaker
             $responses[$sourceKey] = null;
@@ -319,7 +319,7 @@ function fetchAllSources(array $sources, string $airportId): array {
                 $sources[$sourceKey],
                 $responseHeadersByKey[$sourceKey] ?? null
             );
-            weather_health_track_fetch($airportId, $sourceType, false, $httpCode);
+            weatherHealthTrackFetch($airportId, $sourceType, false, $httpCode);
         }
         
         curl_multi_remove_handle($mh, $ch);
@@ -332,7 +332,7 @@ function fetchAllSources(array $sources, string $airportId): array {
         $fallbackUrl = SwobAutoAdapter::buildStandardUrl($source);
         if ($fallbackUrl === null) {
             recordWeatherFailure($airportId, 'swob_auto', 'transient', 404, null, $source);
-            weather_health_track_fetch($airportId, 'swob_auto', false, 404);
+            weatherHealthTrackFetch($airportId, 'swob_auto', false, 404);
             continue;
         }
         $rateLimit = upstreamRateLimitConsumeForSource($source);
@@ -368,10 +368,10 @@ function fetchAllSources(array $sources, string $airportId): array {
         if ($httpCode >= 200 && $httpCode < 300) {
             $responses[$sourceKey] = $response;
             recordWeatherSuccess($airportId, 'swob_auto', $source);
-            weather_health_track_fetch($airportId, 'swob_auto', true, $httpCode);
+            weatherHealthTrackFetch($airportId, 'swob_auto', true, $httpCode);
         } else {
             recordWeatherFailure($airportId, 'swob_auto', 'transient', $httpCode, null, $source, $fallbackHeaders);
-            weather_health_track_fetch($airportId, 'swob_auto', false, $httpCode);
+            weatherHealthTrackFetch($airportId, 'swob_auto', false, $httpCode);
         }
     }
     
