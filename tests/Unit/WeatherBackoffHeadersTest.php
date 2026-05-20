@@ -9,7 +9,11 @@ require_once __DIR__ . '/../../lib/circuit-breaker.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 
 /**
- * @covers weather-backoff-headers.php
+ * @covers ::circuit_breaker_collect_curl_header_line
+ * @covers ::parse_retry_after_seconds
+ * @covers ::weather_backoff_clamp_seconds
+ * @covers ::weather_backoff_override_seconds
+ * @covers ::circuit_breaker_compute_backoff_seconds
  */
 class WeatherBackoffHeadersTest extends TestCase
 {
@@ -127,7 +131,23 @@ class WeatherBackoffHeadersTest extends TestCase
 
         $result = checkWeatherCircuitBreaker($this->testAirportId, 'tempest');
         $this->assertTrue($result['skip']);
-        $this->assertGreaterThanOrEqual(85, $result['backoff_remaining']);
-        $this->assertLessThanOrEqual(90, $result['backoff_remaining']);
+
+        $key = $this->testAirportId . '_weather_tempest';
+        $data = $this->readBackoffData();
+        $this->assertArrayHasKey($key, $data);
+        $this->assertSame(90, (int) ($data[$key]['backoff_seconds'] ?? 0));
+        $this->assertGreaterThan(time(), (int) ($data[$key]['next_allowed_time'] ?? 0));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readBackoffData(): array
+    {
+        if (!is_file(CACHE_BACKOFF_FILE)) {
+            return [];
+        }
+
+        return json_decode((string) file_get_contents(CACHE_BACKOFF_FILE), true) ?: [];
     }
 }
