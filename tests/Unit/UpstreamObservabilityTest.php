@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
  * @covers ::metarBulkSnapshotAgeSeconds
  * @covers ::metarBulkObservabilityContext
  * @covers ::getWeatherHealthCacheFilePath
+ * @covers ::weatherHealthEnsureCacheDirectory
  * @covers ::weatherHealthTrackFetch
  * @covers ::weatherHealthTrackMetarBulkDownloadFailure
  * @covers ::weatherHealthTrackUpstreamThrottleSkip
@@ -212,6 +213,24 @@ final class UpstreamObservabilityTest extends TestCase
         $decoded = json_decode((string) file_get_contents($this->healthCacheFile), true);
         $this->assertIsArray($decoded);
         $this->assertArrayHasKey('health', $decoded);
+    }
+
+    public function testWeatherHealthFlush_CreatesParentDirectoryWhenMissing(): void
+    {
+        $nestedDir = $this->cacheRoot . '/nested/sub';
+        $nestedFile = $nestedDir . '/weather_health.json';
+        $this->assertDirectoryDoesNotExist($nestedDir);
+
+        $previousPath = $GLOBALS['weatherHealthTestCacheFile'];
+        $GLOBALS['weatherHealthTestCacheFile'] = $nestedFile;
+
+        try {
+            $this->assertTrue(weatherHealthFlush());
+            $this->assertDirectoryExists($nestedDir);
+            $this->assertFileExists($nestedFile);
+        } finally {
+            $GLOBALS['weatherHealthTestCacheFile'] = $previousPath;
+        }
     }
 
     public function testWeatherHealthAtomicUpdate_PrunesBucketsOlderThanTwoHours(): void
