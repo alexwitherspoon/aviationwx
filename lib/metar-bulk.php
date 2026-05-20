@@ -342,8 +342,11 @@ function metarBulkTryReadJsonResponseForStation(string $stationId): ?string {
 
 /**
  * Stream-download gzip to `destAbsolute`; deletes the file unless HTTP 200.
+ *
+ * @param int|null $httpCode Set to the HTTP status when curl completes
  */
-function metarBulkDownloadMetarCacheGz(string $destAbsolute): bool {
+function metarBulkDownloadMetarCacheGz(string $destAbsolute, ?int &$httpCode = null): bool
+{
     $ch = curl_init();
     if ($ch === false) {
         return false;
@@ -367,6 +370,7 @@ function metarBulkDownloadMetarCacheGz(string $destAbsolute): bool {
     ]);
     $ok = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $httpCode = $code;
     curl_close($ch);
     fclose($fp);
     if ($ok === false || $code !== 200) {
@@ -437,7 +441,12 @@ function metarBulkSnapshotAgeSeconds(?int $now = null): ?int
         return null;
     }
 
-    $meta = json_decode((string) @file_get_contents($path), true);
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+
+    $meta = json_decode($raw, true);
     if (!is_array($meta)) {
         return null;
     }
@@ -453,6 +462,22 @@ function metarBulkSnapshotAgeSeconds(?int $now = null): ?int
     }
 
     return $now - $fetchedAt;
+}
+
+/**
+ * Log context with last known bulk snapshot age when meta.json is present.
+ *
+ * @param array<string, mixed> $context Base log fields
+ * @return array<string, mixed>
+ */
+function metarBulkObservabilityContext(array $context = []): array
+{
+    $age = metarBulkSnapshotAgeSeconds();
+    if ($age !== null) {
+        $context['metar_bulk_age_seconds'] = $age;
+    }
+
+    return $context;
 }
 
 /**
