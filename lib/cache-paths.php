@@ -47,6 +47,7 @@
  * ├── temp_extremes/               # Per-airport daily temperature extremes
  * │   └── {airport}.json
  * ├── outage_{airport}.json        # Outage detection state
+ * ├── nws-points/                  # NWS /points/{lat},{lon} metadata (12h TTL)
  * ├── metar-bulk/                  # AWC METAR CSV.gz slices (scheduler refresh)
  * │   ├── stations/{ICAO}.json     # One-element JSON array per station (METAR API shape)
  * │   └── tmp/                     # Download scratch (deleted after ingest)
@@ -140,6 +141,30 @@ function getMetarBulkRefreshLockPath(): string {
 
 function getMetarBulkStationJsonPath(string $icaoUpper): string {
     return getMetarBulkStationsDir() . '/' . strtoupper($icaoUpper) . '.json';
+}
+
+// =============================================================================
+// NWS POINTS CACHE (api.weather.gov /points/{lat},{lon})
+// =============================================================================
+
+if (!defined('CACHE_NWS_POINTS_DIR')) {
+    define('CACHE_NWS_POINTS_DIR', CACHE_BASE_DIR . '/nws-points');
+}
+
+/**
+ * @return string Directory for cached NWS points responses
+ */
+function getNwsPointsCacheDir(): string
+{
+    return CACHE_NWS_POINTS_DIR;
+}
+
+/**
+ * @param string $cacheKey From nws_points_cache_key() (e.g. 45.7710,-122.8600)
+ */
+function getNwsPointsCacheFilePath(string $cacheKey): string
+{
+    return getNwsPointsCacheDir() . '/' . $cacheKey . '.json';
 }
 
 // =============================================================================
