@@ -318,16 +318,6 @@ function upstreamRateLimitTestClearForceEnforcement(): void
 }
 
 /**
- * Whether UnifiedFetcher should skip this source for the current cycle (budget exhausted).
- *
- * @param array<string, mixed> $source weather_sources entry (must include type)
- */
-function upstreamRateLimitShouldSkipSource(array $source): bool
-{
-    return !upstreamRateLimitConsumeForSource($source)['allowed'];
-}
-
-/**
  * Consume one upstream token for this source when throttling applies.
  *
  * @param array<string, mixed> $source weather_sources entry (must include type)
