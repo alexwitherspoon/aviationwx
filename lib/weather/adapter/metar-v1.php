@@ -829,9 +829,52 @@ function parseMETARResponse($response, $airport): ?array {
  * Throttle and circuit-open outcomes are not upstream failures; callers must not record them
  * as weather fetch failures.
  *
+ * @param array<int, string>|null $headerLines Raw lines from http_get_last_response_headers()
+ * @return int|null First HTTP status code in the header block
+ */
+function metarHttpStatusFromResponseHeaders(?array $headerLines): ?int
+{
+    if (!is_array($headerLines)) {
+        return null;
+    }
+
+    foreach ($headerLines as $headerLine) {
+        if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $headerLine, $matches)) {
+            return (int) $matches[1];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * @param array<int, string>|null $headerLines Raw lines from http_get_last_response_headers()
+ * @return array<string, string> Lowercase header name to value (last wins)
+ */
+function metarNormalizeResponseHeaders(?array $headerLines): array
+{
+    $headers = [];
+    if (!is_array($headerLines)) {
+        return $headers;
+    }
+
+    foreach ($headerLines as $headerLine) {
+        $trimmed = rtrim($headerLine, "\r\n");
+        if ($trimmed === '' || strpos($trimmed, ':') === false) {
+            continue;
+        }
+
+        [$name, $value] = explode(':', $trimmed, 2);
+        $headers[strtolower(trim($name))] = trim($value);
+    }
+
+    return $headers;
+}
+
+/**
  * @param string $stationId ICAO station id (e.g. KSPB)
  * @param string|null $airportId Airport slug for per-airport METAR circuit (null skips HTTP gate)
- * @return array{body: ?string, outcome: string} One of METAR_RESOLVE_* constants
+ * @return array{body: ?string, outcome: string, http_code?: int|null, response_headers?: array<string, string>} One of METAR_RESOLVE_* constants
  */
 function metarResolveStationResponse(string $stationId, ?string $airportId = null): array
 {
@@ -876,11 +919,26 @@ function metarResolveStationResponse(string $stationId, ?string $airportId = nul
         ],
     ]);
     $response = @file_get_contents($url, false, $context);
-    if ($response === false) {
-        return ['body' => null, 'outcome' => METAR_RESOLVE_HTTP_FAILED];
+    $rawHeaders = function_exists('http_get_last_response_headers')
+        ? (http_get_last_response_headers() ?? [])
+        : ($http_response_header ?? []);
+    $httpCode = metarHttpStatusFromResponseHeaders(is_array($rawHeaders) ? $rawHeaders : null);
+    $responseHeaders = metarNormalizeResponseHeaders(is_array($rawHeaders) ? $rawHeaders : null);
+
+    if ($response === false || ($httpCode !== null && $httpCode >= 400)) {
+        return [
+            'body' => null,
+            'outcome' => METAR_RESOLVE_HTTP_FAILED,
+            'http_code' => $httpCode,
+            'response_headers' => $responseHeaders,
+        ];
     }
 
-    return ['body' => $response, 'outcome' => METAR_RESOLVE_OK];
+    return [
+        'body' => $response,
+        'outcome' => METAR_RESOLVE_OK,
+        'http_code' => $httpCode,
+    ];
 }
 
 /**

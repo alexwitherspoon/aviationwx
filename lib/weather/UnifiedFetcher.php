@@ -195,8 +195,18 @@ function fetchAllSources(array $sources, string $airportId): array {
                 case METAR_RESOLVE_HTTP_FAILED:
                 case METAR_RESOLVE_INVALID_STATION:
                     $responses[$sourceKey] = null;
-                    recordWeatherFailure($airportId, $sourceType, 'transient', null, null, $source);
-                    weather_health_track_fetch($airportId, $sourceType, false, null);
+                    $metarHttpCode = isset($resolved['http_code']) ? (int) $resolved['http_code'] : null;
+                    $metarHeaders = $resolved['response_headers'] ?? null;
+                    recordWeatherFailure(
+                        $airportId,
+                        $sourceType,
+                        'transient',
+                        $metarHttpCode,
+                        null,
+                        $source,
+                        is_array($metarHeaders) ? $metarHeaders : null
+                    );
+                    weather_health_track_fetch($airportId, $sourceType, false, $metarHttpCode);
                     break;
             }
             continue;
