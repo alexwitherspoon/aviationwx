@@ -48,19 +48,12 @@ function nwsPointsCacheKey(float $lat, float $lon): string
 }
 
 /**
- * Resolve cache file path (supports test override via $GLOBALS['nwsPointsCacheTestRoot']).
+ * Resolve cache file path (test root via getNwsPointsCacheDir()).
  *
  * @param string $cacheKey From nwsPointsCacheKey() (no path separators)
  */
 function nwsPointsCacheFilePath(string $cacheKey): string
 {
-    if (isset($GLOBALS['nwsPointsCacheTestRoot'])
-        && is_string($GLOBALS['nwsPointsCacheTestRoot'])
-        && $GLOBALS['nwsPointsCacheTestRoot'] !== ''
-    ) {
-        return rtrim($GLOBALS['nwsPointsCacheTestRoot'], '/') . '/' . $cacheKey . '.json';
-    }
-
     return getNwsPointsCacheFilePath($cacheKey);
 }
 

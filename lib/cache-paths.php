@@ -175,6 +175,13 @@ if (!defined('CACHE_NWS_POINTS_DIR')) {
  */
 function getNwsPointsCacheDir(): string
 {
+    if (isset($GLOBALS['nwsPointsCacheTestRoot'])
+        && is_string($GLOBALS['nwsPointsCacheTestRoot'])
+        && $GLOBALS['nwsPointsCacheTestRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['nwsPointsCacheTestRoot'], '/');
+    }
+
     return CACHE_NWS_POINTS_DIR;
 }
 

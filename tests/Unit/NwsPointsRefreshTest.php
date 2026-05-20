@@ -160,6 +160,8 @@ final class NwsPointsRefreshTest extends TestCase
         $this->assertSame(1, $result['fetched']);
         $this->assertSame(0, $result['failed']);
         $this->assertFalse(nwsPointsCoordinateNeedsRefresh(45.771, -122.86));
+        $this->assertFileExists(getNwsPointsRefreshLockPath());
+        $this->assertStringStartsWith($this->cacheRoot, getNwsPointsRefreshLockPath());
     }
 
     public function testRefreshRun_SkipsFreshCoordinatesWhenForced(): void
