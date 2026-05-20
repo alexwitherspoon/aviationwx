@@ -65,6 +65,8 @@ function nwsPointsCacheFilePath(string $cacheKey): string
 }
 
 /**
+ * True when the cache envelope is within TTL and fetched_at is plausible.
+ *
  * @param array{fetched_at?: int|string} $entry Cache envelope from disk
  * @param int|null $now Injectable reference time for tests
  */
@@ -76,6 +78,9 @@ function nwsPointsCacheEntryIsFresh(array $entry, ?int $now = null): bool
     }
 
     $now = $now ?? time();
+    if ($fetchedAt > $now) {
+        return false;
+    }
 
     return ($now - $fetchedAt) < NWS_POINTS_CACHE_TTL_SECONDS;
 }
