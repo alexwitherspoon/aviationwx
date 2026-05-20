@@ -123,7 +123,15 @@ if (!defined('CACHE_METAR_BULK_DIR')) {
     define('CACHE_METAR_BULK_DIR', CACHE_BASE_DIR . '/metar-bulk');
 }
 
-function getMetarBulkCacheDir(): string {
+function getMetarBulkCacheDir(): string
+{
+    if (isset($GLOBALS['metarBulkTestCacheRoot'])
+        && is_string($GLOBALS['metarBulkTestCacheRoot'])
+        && $GLOBALS['metarBulkTestCacheRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['metarBulkTestCacheRoot'], '/');
+    }
+
     return CACHE_METAR_BULK_DIR;
 }
 
@@ -141,6 +149,14 @@ function getMetarBulkRefreshLockPath(): string {
 
 function getMetarBulkStationJsonPath(string $icaoUpper): string {
     return getMetarBulkStationsDir() . '/' . strtoupper($icaoUpper) . '.json';
+}
+
+/**
+ * METAR bulk refresh metadata (`fetched_at`, row counts) for ops age metrics.
+ */
+function getMetarBulkMetaPath(): string
+{
+    return getMetarBulkCacheDir() . '/meta.json';
 }
 
 // =============================================================================

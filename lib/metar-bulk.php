@@ -390,6 +390,72 @@ function metarBulkEnsureDirectories(): void {
 }
 
 /**
+ * Persist refresh metadata after a successful national bulk ingest.
+ *
+ * @param int $fetchedAt Unix timestamp when ingest completed
+ * @param int $written Station JSON files written
+ * @param int $scanned CSV rows scanned
+ */
+function metarBulkWriteRefreshMeta(int $fetchedAt, int $written, int $scanned): bool
+{
+    metarBulkEnsureDirectories();
+    $path = getMetarBulkMetaPath();
+    $payload = json_encode([
+        'fetched_at' => $fetchedAt,
+        'written' => $written,
+        'scanned' => $scanned,
+    ], JSON_UNESCAPED_SLASHES);
+    if ($payload === false) {
+        return false;
+    }
+
+    $tmp = $path . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, $payload, LOCK_EX) === false) {
+        @unlink($tmp);
+
+        return false;
+    }
+
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Seconds since the last successful METAR bulk refresh, or null when unknown.
+ *
+ * @param int|null $now Injectable reference time for tests
+ */
+function metarBulkSnapshotAgeSeconds(?int $now = null): ?int
+{
+    $path = getMetarBulkMetaPath();
+    if (!is_readable($path)) {
+        return null;
+    }
+
+    $meta = json_decode((string) @file_get_contents($path), true);
+    if (!is_array($meta)) {
+        return null;
+    }
+
+    $fetchedAt = (int) ($meta['fetched_at'] ?? 0);
+    if ($fetchedAt <= 0) {
+        return null;
+    }
+
+    $now = $now ?? time();
+    if ($fetchedAt > $now) {
+        return null;
+    }
+
+    return $now - $fetchedAt;
+}
+
+/**
  * Write `{ICAO}.json` via hidden temp file then `rename` so readers never see a partial body.
  *
  * @param string $jsonEnvelope JSON string for `file_put_contents`
@@ -600,11 +666,14 @@ function metarBulkRefreshRun(): array {
     $result['scanned'] = (int) $ingest['scanned'];
     $result['pruned'] = metarBulkPruneOrphanStationFiles($icaoSet);
     $result['ok'] = true;
+    $fetchedAt = time();
+    metarBulkWriteRefreshMeta($fetchedAt, $result['written'], $result['scanned']);
 
     flock($lockFp, LOCK_UN);
     fclose($lockFp);
 
     aviationwx_log('info', 'metar_bulk: refresh complete', [
+        'metar_bulk_age_seconds' => 0,
         'written' => $result['written'],
         'scanned' => $result['scanned'],
         'stations_in_csv' => (int) ($ingest['stations_in_csv'] ?? 0),

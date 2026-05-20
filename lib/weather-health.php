@@ -58,7 +58,10 @@ function weather_health_track_fetch(string $airportId, string $sourceType, bool 
         $counters['total_failures'] = 1;
         
         if ($httpCode !== null) {
-            if ($httpCode >= 400 && $httpCode < 500) {
+            if ($httpCode === 429) {
+                $counters['upstream_429'] = 1;
+                $counters["upstream_429_{$sourceType}"] = 1;
+            } elseif ($httpCode >= 400 && $httpCode < 500) {
                 $counters["http_4xx_{$sourceType}"] = 1;
             } elseif ($httpCode >= 500) {
                 $counters["http_5xx_{$sourceType}"] = 1;
@@ -347,6 +350,7 @@ function weather_health_compute_status(array $data): array {
         'fallback_activations' => 0,
         'upstream_throttle_skips' => 0,
         'upstream_rate_limit_fail_open' => 0,
+        'upstream_429' => 0,
     ];
     
     foreach ($data['hourly_buckets'] ?? [] as $hourKey => $bucket) {
@@ -381,6 +385,9 @@ function weather_health_compute_status(array $data): array {
             '%d upstream rate limit fail-open event(s) in last hour (check cache/upstream-limits/)',
             $totals['upstream_rate_limit_fail_open']
         );
+    } elseif ($totals['upstream_429'] > 0) {
+        $health['status'] = 'degraded';
+        $health['message'] = sprintf('%d upstream HTTP 429 response(s) in last hour', $totals['upstream_429']);
     } elseif ($totals['upstream_throttle_skips'] > 0) {
         $health['status'] = 'operational';
         $health['message'] = sprintf('%d upstream throttle skip(s) in last hour', $totals['upstream_throttle_skips']);
@@ -398,6 +405,7 @@ function weather_health_compute_status(array $data): array {
         'fallback_activations_last_hour' => $totals['fallback_activations'],
         'upstream_throttle_skips_last_hour' => $totals['upstream_throttle_skips'],
         'upstream_rate_limit_fail_open_last_hour' => $totals['upstream_rate_limit_fail_open'],
+        'upstream_429_last_hour' => $totals['upstream_429'],
     ];
     
     return $health;
