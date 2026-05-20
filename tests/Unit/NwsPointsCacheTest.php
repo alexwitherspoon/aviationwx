@@ -76,6 +76,23 @@ final class NwsPointsCacheTest extends TestCase
         $this->assertSame($body, nwsPointsCacheRead(45.771, -122.86, $now));
     }
 
+    public function testCacheRead_ReturnsNullWhenFetchedAtIsInFuture(): void
+    {
+        $now = 1_700_000_000;
+        $path = nwsPointsCacheFilePath(nwsPointsCacheKey(45.771, -122.86));
+        if (!is_dir(dirname($path))) {
+            mkdir(dirname($path), 0755, true);
+        }
+        file_put_contents($path, json_encode([
+            'fetched_at' => $now + 86400,
+            'lat' => '45.7710',
+            'lon' => '-122.8600',
+            'body' => '{"properties":{"gridId":"PQR"}}',
+        ], JSON_UNESCAPED_SLASHES));
+
+        $this->assertNull(nwsPointsCacheRead(45.771, -122.86, $now));
+    }
+
     public function testCacheRead_ReturnsNullWhenExpired(): void
     {
         $fetchedAt = 1_700_000_000;
