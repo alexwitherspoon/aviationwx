@@ -58,7 +58,7 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 |      |   On-Site    |      |   Official   |      |  Calculated  |           |
 |      |    Sensor    |      |    METAR     |      |    Values    |           |
 |      |              |      |              |      |              |           |
-|      |   Tempest    |      |  ASOS/AWOS   |      |   Density    |           |
+|      |  TempestOne  |      |  ASOS/AWOS   |      |   Density    |           |
 |      |   Davis      |      |   via FAA    |      |   Altitude   |           |
 |      |   Ambient    |      |              |      |   Crosswind  |           |
 |      +------+-------+      +------+-------+      +------+-------+           |

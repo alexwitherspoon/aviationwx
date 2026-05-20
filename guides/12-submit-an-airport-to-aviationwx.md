@@ -67,14 +67,14 @@ Optional but helpful:
 
 ## Step 2 - Weather data (choose one path)
 
-### Option A - Tempest (recommended default)
+### Option A - TempestOne (recommended default)
 Please send:
-- **Tempest Station ID**
-- **Tempest Access Token** (personal access token is best)
+- **Station ID**
+- **Access token** (personal access token is best)
 
 How to find/create these:
-- Tempest's API uses a URL pattern like: `.../observations/station/[your_station_id]?token=[your_access_token]` (so we need both the station ID and token).  
-- Tempest also supports creating a personal access token in the Tempest settings ("Data Authorizations").
+- WeatherFlow's API uses a URL pattern like: `.../observations/station/[your_station_id]?token=[your_access_token]` (so we need both the station ID and token).  
+- Create a personal access token in account settings ("Data Authorizations").
 - AviationWX may also call WeatherFlow's **`/stations/{id}`** and **`/observations/device/{id}`** automatically when the federated station observation is empty but hardware is still reporting; you still only send **station ID + token** (no device ID required for typical installs). See [DATA_FLOW.md](../docs/DATA_FLOW.md#tempest-weatherflow-api).
 
 References (if you want the official docs):
@@ -217,7 +217,7 @@ Body:
 - Target update cadence:
 
 **Weather source**
-- Type: Tempest / Davis / Ambient / ASOS-AWOS / AWOSnet
+- Type: TempestOne / Davis / Ambient / ASOS-AWOS / AWOSnet
 - Details (token/key/etc):
 
 **Cameras**
