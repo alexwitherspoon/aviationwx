@@ -38,6 +38,25 @@ function getWeatherHealthCacheFilePath(): string
 }
 
 /**
+ * Ensure the weather health cache directory exists.
+ *
+ * @return bool True when the directory exists or was created
+ */
+function weatherHealthEnsureCacheDirectory(): bool
+{
+    $cacheDir = dirname(getWeatherHealthCacheFilePath());
+    if (ensureCacheDir($cacheDir)) {
+        return true;
+    }
+
+    aviationwx_log('warning', 'weather health: failed to create cache directory', [
+        'dir' => $cacheDir,
+    ], 'app');
+
+    return false;
+}
+
+/**
  * Increment upstream HTTP failure counters shared by fetch and bulk download paths.
  *
  * @param array<string, int> $counters Counter map to update in place
@@ -192,15 +211,8 @@ function weatherHealthTrackMetarBulkDownloadFailure(?int $httpCode): void
  */
 function weatherHealthAtomicUpdate(string $currentHour, array $counters, int $now): bool
 {
-    $cacheDir = dirname(getWeatherHealthCacheFilePath());
-    if (!is_dir($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            aviationwx_log('warning', 'weather health: failed to create cache directory', [
-                'dir' => $cacheDir,
-            ], 'app');
-
-            return false;
-        }
+    if (!weatherHealthEnsureCacheDirectory()) {
+        return false;
     }
 
     $fp = @fopen(getWeatherHealthCacheFilePath(), 'c+');
@@ -273,6 +285,10 @@ function weatherHealthAtomicUpdate(string $currentHour, array $counters, int $no
  */
 function weatherHealthFlush(): bool
 {
+    if (!weatherHealthEnsureCacheDirectory()) {
+        return false;
+    }
+
     $now = time();
 
     if (!file_exists(getWeatherHealthCacheFilePath())) {
