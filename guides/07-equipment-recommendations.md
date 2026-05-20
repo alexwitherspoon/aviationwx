@@ -27,8 +27,8 @@ A weather station should be able to provide the basics reliably:
 ## Recommended weather stations (in order)
 These are the recommendations we’ve tested and used as practical defaults.
 
-### 1) TempestOne Weather System (recommended default)
-Order the [TempestOne Weather System](https://shop.tempest.earth/collections/all/products/tempest-for-commercial-use). Email **contact@aviationwx.org** before purchase for AviationWX discount information.
+### 1) Tempest (WeatherFlow) - recommended default
+Order the [TempestOne Weather System](https://shop.tempest.earth/collections/all/products/tempest-for-commercial-use) for commercial volunteer airport installs. Email **contact@aviationwx.org** before purchase for AviationWX discount information.
 
 **Why it’s the default**
 - good data quality for the cost

@@ -5,7 +5,7 @@ Give airport sponsors and maintainers a fact-based picture of how official autom
 
 AviationWX can integrate many kinds of stations and APIs across the whole spectrum, from hobby and prosumer kits through light-industrial or bespoke field installs up to official surface weather products, including METAR-based sources, national automated surface observations where your airport has access (for example ASOS in the United States), and certified AWOS or other approved automated stations where installed and supported in your dashboard configuration.
 
-This guide spends extra space on consumer-grade examples (TempestOne, Davis Vantage Pro2, Ambient WS‑2902 class hardware) because they are common in volunteer airport projects and vendors publish plain-language limits pilots should know. That focus is not a product limit: whatever you connect, siting, exposure, calibration, and transparency still decide whether the numbers are safe to lean on as **supplemental** context.
+This guide spends extra space on consumer-grade examples (Tempest, Davis Vantage Pro2, Ambient WS‑2902 class hardware) because they are common in volunteer airport projects and vendors publish plain-language limits pilots should know. That focus is not a product limit: whatever you connect, siting, exposure, calibration, and transparency still decide whether the numbers are safe to lean on as **supplemental** context.
 
 ### Why so much U.S. detail?
 AviationWX's maintainers can cite FAA and NWS primary sources cleanly for AWOS/ASOS. Treat that material as a worked example of concerns every jurisdiction shares: traceable sensors, representative siting, quality control, maintenance records, and clear separation between approved aviation weather products and supplemental community feeds. Your country wires the same broad ideas into national law, ICAO Annex 3 implementation, and met service provider rules in different ways.
@@ -67,13 +67,13 @@ An NWS climate-focused overview notes that, for primary climate sensors, tempera
 
 ## Consumer-grade examples (common, and especially limitation-heavy)
 
-Official AWOS/ASOS programs combine type-certified sensors, controlled siting, redundancy, and scheduled maintenance. Any field sensor you attach to AviationWX still inherits the same physics and exposure problems: wind shadow, radiation heating, wetting losses in precipitation, drift, and cabling faults. Higher-grade gear may add better shields, faster sampling, serviceable modules, or documented calibration procedures, but it is **never** a substitute for good siting, periodic checks, and honest labeling when a channel is weak. The TempestOne, Davis, and Ambient examples below are common consumer or prosumer paths from this guide series, not an exhaustive list of supported hardware; we spell out vendor limits there most often because pilots can mistake a slick dashboard for AWOS-class data.
+Official AWOS/ASOS programs combine type-certified sensors, controlled siting, redundancy, and scheduled maintenance. Any field sensor you attach to AviationWX still inherits the same physics and exposure problems: wind shadow, radiation heating, wetting losses in precipitation, drift, and cabling faults. Higher-grade gear may add better shields, faster sampling, serviceable modules, or documented calibration procedures, but it is **never** a substitute for good siting, periodic checks, and honest labeling when a channel is weak. The Tempest, Davis, and Ambient examples below are common consumer or prosumer paths from this guide series, not an exhaustive list of supported hardware; we spell out vendor limits there most often because pilots can mistake a slick dashboard for AWOS-class data.
 
 Consumer and compact integrated stations usually optimize for cost, ease of install, and home use, with accuracy statements that assume controlled or ideal conditions and good siting. Expect wider real-world error than a national automated station when mounts are improvised.
 
 Cross-check your exact model and firmware revision in the vendor manual (or OEM spec sheet for industrial sensors) before quoting numbers in airport documents.
 
-### WeatherFlow / TempestOne
+### WeatherFlow / Tempest
 Strengths: integrated design, no moving parts in the wind path, continuous wind sampling, haptic rain with fast rain onset cues, optional lightning, straightforward APIs for sharing.
 
 Limitations (manufacturer): haptic rain does **not** report snow, sleet, graupel, hail, fog, dew, or extremely light rain/mist the same way a weighing or tipping gauge might. Vibration can create false rain; wind accuracy can degrade in cold extremes and with flow obstructions in the sonic path; very high wind may have limited sampling integrity. See the [Tempest spec sheet PDF](https://tempest.earth/wp-content/uploads/2016/05/Tempest_Spec-Sheet_220301-web-view.pdf) and WeatherFlow's notes on calibration, rain, and siting linked from that document.

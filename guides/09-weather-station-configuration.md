@@ -32,10 +32,10 @@ If you can't get good wind exposure, it is usually better to:
 - use an official airport wind source if one exists nearby.
 
 ## Quick pick-your-path
-- If you're installing **[TempestOne](#tempestone-setup-recommended-default)** → go to [TempestOne setup](#tempestone-setup-recommended-default)
-- If you're installing **[Davis Vantage Pro2](#davis-vantage-pro2-setup-professional-grade-alternative)** → go to [Davis setup](#davis-vantage-pro2-setup-professional-grade-alternative)
-- If you're installing **[Ambient WS‑2902](#ambient-ws2902-setup-budget-friendly-option)** → go to [Ambient setup](#ambient-ws2902-setup-budget-friendly-option)
-- If you're [integrating an existing station](#existing-station-integration-checklist) → go to [Existing station integration checklist](#existing-station-integration-checklist)
+- If you're installing **Tempest** → go to **Tempest setup**
+- If you're installing **Davis Vantage Pro2** → go to **Davis setup**
+- If you're installing **Ambient WS‑2902** → go to **Ambient setup**
+- If you're integrating an existing station → go to **Existing station integration checklist**
 
 ---
 
@@ -50,15 +50,15 @@ If you can't get good wind exposure, it is usually better to:
 
 ---
 
-## TempestOne setup (recommended default)
+## Tempest setup (recommended default)
 
 Hardware ordering: [07 - Equipment Recommendations](07-equipment-recommendations.md).
 
-### Why TempestOne works well for this project
+### Why Tempest works well for this project
 - strong "community deployment" fit: relatively simple install and good usefulness for pilots
 - good value per dollar
 
-### Install checklist (TempestOne)
+### Install checklist (Tempest)
 - ☐ Mount with good wind exposure (top of approved pole/building/structure when possible)
 - ☐ Avoid heat-soaked surfaces and sheltered corners
 - ☐ Confirm the hub / gateway location has stable internet (LAN or reliable Wi‑Fi/LTE)
@@ -66,7 +66,7 @@ Hardware ordering: [07 - Equipment Recommendations](07-equipment-recommendations
 - ☐ Record basic metadata (location description, mount height, nearby obstructions)
 
 ### What you need to do
-- **Set up your station** following WeatherFlow's TempestOne instructions
+- **Set up your station** following WeatherFlow's Tempest instructions
 - **Provide AviationWX with API access** (see "Connecting Your Station to AviationWX" below)
 - **That's it** - AviationWX handles polling automatically (every 60 seconds by default)
 
@@ -165,7 +165,7 @@ If your station's data isn't appearing correctly on AviationWX:
 
 ### Step 1: Check the source directly
 First, verify your station is working by checking its native app or website:
-- **TempestOne**: Check the TempestOne app or [tempestwx.com](https://tempestwx.com)
+- **Tempest**: Check the Tempest app or [tempestwx.com](https://tempestwx.com)
 - **Ambient**: Check [ambientweather.net](https://ambientweather.net)
 - **Davis WeatherLink**: Check [weatherlink.com](https://www.weatherlink.com)
 - **PWSWeather**: Check [pwsweather.com](https://www.pwsweather.com)
@@ -212,7 +212,7 @@ AviationWX supports six weather station platforms plus METAR-only configuration:
 
 | Source | Best For | Update Speed | Cost |
 |--------|----------|--------------|------|
-| **TempestOne** | New installs, community deployments | ~1 minute | Free API |
+| **Tempest** | New installs, community deployments | ~1 minute | Free API |
 | **Ambient Weather** | Budget stations, existing installs | ~1 minute | Free API |
 | **Davis WeatherLink** | Professional/long-term installs | 15 min (Basic/free), 5 min (Pro), ~1 min (Pro+) | Free API (Basic); paid for 5 min / 1 min |
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
@@ -225,13 +225,13 @@ Davis WeatherLink intervals depend on subscription; see the [Configuration Guide
 
 ---
 
-## TempestOne (WeatherFlow) - What We Need
+## Tempest (WeatherFlow) - What We Need
 
 ### Required Information
 
 | Field | Description | Where to Find It |
 |-------|-------------|------------------|
-| `station_id` | Your station's numeric ID | TempestOne app or web dashboard |
+| `station_id` | Your station's numeric ID | Tempest app or web dashboard |
 | `api_key` | Personal API token | WeatherFlow developer portal |
 
 ### How to Get Your API Token
@@ -243,7 +243,7 @@ Davis WeatherLink intervals depend on subscription; see the [Configuration Guide
 
 ### How to Find Your Station ID
 
-1. Open the TempestOne app or go to [tempestwx.com](https://tempestwx.com)
+1. Open the Tempest app or go to [tempestwx.com](https://tempestwx.com)
 2. Select your station
 3. The station ID is in the URL: `tempestwx.com/station/XXXXX` - the number is your `station_id`
 
@@ -257,7 +257,7 @@ Davis WeatherLink intervals depend on subscription; see the [Configuration Guide
 }
 ```
 
-### How AviationWX reads TempestOne data
+### How AviationWX reads Tempest data
 
 The integration always calls WeatherFlow's **federated station** observation endpoint first (the same URL pattern documented above). If that response is HTTP success but has **no observation row**, or a row with **no real sensor values** (for example only a timestamp while federation is stuck), AviationWX **automatically** loads station metadata, picks the first **Tempest sensor (`ST`)** device, and reads **`/observations/device/{id}`** so pilots still see current conditions when the sensor is online. You do **not** need a separate device ID in config for a normal hub + one Tempest setup. Details: [DATA_FLOW.md](../docs/DATA_FLOW.md#tempest-weatherflow-api) and [CONFIGURATION.md](../docs/CONFIGURATION.md#tempest-weather).
 
@@ -697,7 +697,7 @@ Once you have gathered all the required information, send it to the AviationWX t
 1. **Email**: [Contact info in Guide 12]
 2. **Include**:
    - Airport identifier (ICAO, FAA, or IATA code)
-   - Weather source type (TempestOne, Ambient, etc.)
+   - Weather source type (Tempest, Ambient, etc.)
    - All required credentials for your source type
    - Station location description and mount details
    - Your contact information for maintenance coordination
@@ -710,7 +710,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 
 | Source | Required Fields |
 |--------|-----------------|
-| **TempestOne** | `station_id`, `api_key` |
+| **Tempest** | `station_id`, `api_key` |
 | **Ambient** | `api_key`, `application_key`,  `mac_address` |
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
