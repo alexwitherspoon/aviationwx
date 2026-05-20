@@ -40,7 +40,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `notam_refresh_seconds` | `600` | NOTAM refresh interval |
 | `minimum_refresh_seconds` | `5` | Minimum allowed refresh interval |
 | `scheduler_config_reload_seconds` | `60` | Config reload check interval |
-| `weather_worker_pool_size` | `5` | Concurrent weather workers |
+| `weather_worker_pool_size` | `5` | Concurrent weather workers. After upstream throttles and METAR bulk are enabled, consider lowering this if you still see upstream 429s or throttle skips in `cache/weather_health.json`; raise only when fetches are consistently fast and under provider limits. |
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
