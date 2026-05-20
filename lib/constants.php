@@ -355,6 +355,9 @@ if (!defined('BACKOFF_MAX_PERMANENT')) {
 if (!defined('BACKOFF_MAX_FAILURES')) {
     define('BACKOFF_MAX_FAILURES', 5);
 }
+if (!defined('BACKOFF_MAX_RETRY_AFTER_SECONDS')) {
+    define('BACKOFF_MAX_RETRY_AFTER_SECONDS', 900); // 15 minutes - max Retry-After / reset hint
+}
 
 // Background refresh
 if (!defined('BACKGROUND_REFRESH_MAX_TIME')) {
