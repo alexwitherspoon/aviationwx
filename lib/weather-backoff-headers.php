@@ -14,7 +14,7 @@ require_once __DIR__ . '/constants.php';
  * @param string $line Raw header line from curl
  * @return int Bytes processed (required by CURLOPT_HEADERFUNCTION)
  */
-function circuit_breaker_collect_curl_header_line(array &$headers, string $line): int
+function circuitBreakerCollectCurlHeaderLine(array &$headers, string $line): int
 {
     $trimmed = rtrim($line, "\r\n");
     if ($trimmed === '' || strpos($trimmed, ':') === false) {
@@ -36,7 +36,7 @@ function circuit_breaker_collect_curl_header_line(array &$headers, string $line)
  * @param int|null $now Reference time for HTTP-date deltas (default: time())
  * @return int|null Positive seconds, or null when absent/invalid/past
  */
-function parse_retry_after_seconds(string $value, ?int $now = null): ?int
+function parseRetryAfterSeconds(string $value, ?int $now = null): ?int
 {
     $value = trim($value);
     if ($value === '') {
@@ -67,7 +67,7 @@ function parse_retry_after_seconds(string $value, ?int $now = null): ?int
  * @param int $seconds Unclamped wait from Retry-After or X-RateLimit-Reset delta
  * @return int Seconds in [1, BACKOFF_MAX_RETRY_AFTER_SECONDS]
  */
-function weather_backoff_clamp_seconds(int $seconds): int
+function weatherBackoffClampSeconds(int $seconds): int
 {
     return max(1, min(BACKOFF_MAX_RETRY_AFTER_SECONDS, $seconds));
 }
@@ -83,7 +83,7 @@ function weather_backoff_clamp_seconds(int $seconds): int
  * @param int|null $now Reference time for reset delta (default: time())
  * @return int|null Clamped seconds, or null when no usable hint
  */
-function weather_backoff_override_seconds(?int $httpCode, array $responseHeaders, ?int $now = null): ?int
+function weatherBackoffOverrideSeconds(?int $httpCode, array $responseHeaders, ?int $now = null): ?int
 {
     if ($httpCode !== 429 && $httpCode !== HTTP_STATUS_SERVICE_UNAVAILABLE) {
         return null;
@@ -97,9 +97,9 @@ function weather_backoff_override_seconds(?int $httpCode, array $responseHeaders
 
     $retryAfter = $responseHeaders['retry-after'] ?? null;
     if (is_string($retryAfter) && $retryAfter !== '') {
-        $parsed = parse_retry_after_seconds($retryAfter, $now);
+        $parsed = parseRetryAfterSeconds($retryAfter, $now);
         if ($parsed !== null) {
-            return weather_backoff_clamp_seconds($parsed);
+            return weatherBackoffClampSeconds($parsed);
         }
     }
 
@@ -107,7 +107,7 @@ function weather_backoff_override_seconds(?int $httpCode, array $responseHeaders
     if (is_string($reset) && ctype_digit(trim($reset))) {
         $resetTs = (int) trim($reset);
         if ($resetTs > $now) {
-            return weather_backoff_clamp_seconds($resetTs - $now);
+            return weatherBackoffClampSeconds($resetTs - $now);
         }
     }
 
@@ -128,7 +128,7 @@ function weather_backoff_override_seconds(?int $httpCode, array $responseHeaders
  * @param int|null $now Reference time for header hints (default: time())
  * @return int Backoff seconds before next_allowed_time
  */
-function circuit_breaker_compute_backoff_seconds(
+function circuitBreakerComputeBackoffSeconds(
     int $failures,
     string $severity,
     ?int $httpCode,
@@ -147,7 +147,7 @@ function circuit_breaker_compute_backoff_seconds(
     }
 
     if ($responseHeaders !== null && $responseHeaders !== []) {
-        $override = weather_backoff_override_seconds($httpCode, $responseHeaders, $now);
+        $override = weatherBackoffOverrideSeconds($httpCode, $responseHeaders, $now);
         if ($override !== null) {
             $backoffSeconds = max($backoffSeconds, $override);
         }

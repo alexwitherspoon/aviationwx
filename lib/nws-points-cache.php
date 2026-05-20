@@ -15,7 +15,7 @@ require_once __DIR__ . '/cache-paths.php';
  * @param float $lat WGS84 latitude (-90 to 90)
  * @param float $lon WGS84 longitude (-180 to 180)
  */
-function nws_points_coordinates_valid(float $lat, float $lon): bool
+function nwsPointsCoordinatesValid(float $lat, float $lon): bool
 {
     return $lat >= -90.0 && $lat <= 90.0 && $lon >= -180.0 && $lon <= 180.0;
 }
@@ -25,7 +25,7 @@ function nws_points_coordinates_valid(float $lat, float $lon): bool
  *
  * @return string Coordinate string for api.weather.gov /points URLs
  */
-function nws_points_normalize_coord(float $coord): string
+function nwsPointsNormalizeCoord(float $coord): string
 {
     return number_format($coord, 4, '.', '');
 }
@@ -35,23 +35,23 @@ function nws_points_normalize_coord(float $coord): string
  *
  * @return string e.g. 45.7710,-122.8600
  */
-function nws_points_cache_key(float $lat, float $lon): string
+function nwsPointsCacheKey(float $lat, float $lon): string
 {
-    return nws_points_normalize_coord($lat) . ',' . nws_points_normalize_coord($lon);
+    return nwsPointsNormalizeCoord($lat) . ',' . nwsPointsNormalizeCoord($lon);
 }
 
 /**
- * Resolve cache file path (supports test override via $GLOBALS['nws_points_cache_test_root']).
+ * Resolve cache file path (supports test override via $GLOBALS['nwsPointsCacheTestRoot']).
  *
- * @param string $cacheKey From nws_points_cache_key() (no path separators)
+ * @param string $cacheKey From nwsPointsCacheKey() (no path separators)
  */
-function nws_points_cache_file_path(string $cacheKey): string
+function nwsPointsCacheFilePath(string $cacheKey): string
 {
-    if (isset($GLOBALS['nws_points_cache_test_root'])
-        && is_string($GLOBALS['nws_points_cache_test_root'])
-        && $GLOBALS['nws_points_cache_test_root'] !== ''
+    if (isset($GLOBALS['nwsPointsCacheTestRoot'])
+        && is_string($GLOBALS['nwsPointsCacheTestRoot'])
+        && $GLOBALS['nwsPointsCacheTestRoot'] !== ''
     ) {
-        return rtrim($GLOBALS['nws_points_cache_test_root'], '/') . '/' . $cacheKey . '.json';
+        return rtrim($GLOBALS['nwsPointsCacheTestRoot'], '/') . '/' . $cacheKey . '.json';
     }
 
     return getNwsPointsCacheFilePath($cacheKey);
@@ -61,7 +61,7 @@ function nws_points_cache_file_path(string $cacheKey): string
  * @param array{fetched_at?: int|string} $entry Cache envelope from disk
  * @param int|null $now Injectable reference time for tests
  */
-function nws_points_cache_entry_is_fresh(array $entry, ?int $now = null): bool
+function nwsPointsCacheEntryIsFresh(array $entry, ?int $now = null): bool
 {
     $fetchedAt = (int) ($entry['fetched_at'] ?? 0);
     if ($fetchedAt <= 0) {
@@ -81,25 +81,25 @@ function nws_points_cache_entry_is_fresh(array $entry, ?int $now = null): bool
  * @param int|null $now Injectable reference time for tests
  * @return string|null Raw JSON body from a prior successful /points response
  */
-function nws_points_cache_read(float $lat, float $lon, ?int $now = null): ?string
+function nwsPointsCacheRead(float $lat, float $lon, ?int $now = null): ?string
 {
-    if (!nws_points_coordinates_valid($lat, $lon)) {
+    if (!nwsPointsCoordinatesValid($lat, $lon)) {
         return null;
     }
 
-    $path = nws_points_cache_file_path(nws_points_cache_key($lat, $lon));
+    $path = nwsPointsCacheFilePath(nwsPointsCacheKey($lat, $lon));
     if (!is_file($path)) {
         return null;
     }
 
     clearstatcache(true, $path);
     $entry = json_decode((string) file_get_contents($path), true);
-    if (!is_array($entry) || !nws_points_cache_entry_is_fresh($entry, $now)) {
+    if (!is_array($entry) || !nwsPointsCacheEntryIsFresh($entry, $now)) {
         return null;
     }
 
-    $expectedLat = nws_points_normalize_coord($lat);
-    $expectedLon = nws_points_normalize_coord($lon);
+    $expectedLat = nwsPointsNormalizeCoord($lat);
+    $expectedLon = nwsPointsNormalizeCoord($lon);
     if (($entry['lat'] ?? '') !== $expectedLat || ($entry['lon'] ?? '') !== $expectedLon) {
         return null;
     }
@@ -118,14 +118,14 @@ function nws_points_cache_read(float $lat, float $lon, ?int $now = null): ?strin
  * @param int|null $now Injectable store time for tests
  * @return bool False when coordinates invalid or write fails
  */
-function nws_points_cache_write(float $lat, float $lon, string $body, ?int $now = null): bool
+function nwsPointsCacheWrite(float $lat, float $lon, string $body, ?int $now = null): bool
 {
-    if (!nws_points_coordinates_valid($lat, $lon) || $body === '') {
+    if (!nwsPointsCoordinatesValid($lat, $lon) || $body === '') {
         return false;
     }
 
-    $cacheKey = nws_points_cache_key($lat, $lon);
-    $path = nws_points_cache_file_path($cacheKey);
+    $cacheKey = nwsPointsCacheKey($lat, $lon);
+    $path = nwsPointsCacheFilePath($cacheKey);
     $dir = dirname($path);
     if (!ensureCacheDir($dir)) {
         return false;
@@ -134,8 +134,8 @@ function nws_points_cache_write(float $lat, float $lon, string $body, ?int $now 
     $now = $now ?? time();
     $payload = json_encode([
         'fetched_at' => $now,
-        'lat' => nws_points_normalize_coord($lat),
-        'lon' => nws_points_normalize_coord($lon),
+        'lat' => nwsPointsNormalizeCoord($lat),
+        'lon' => nwsPointsNormalizeCoord($lon),
         'body' => $body,
     ], JSON_UNESCAPED_SLASHES);
 

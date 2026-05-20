@@ -18,12 +18,12 @@ final class UpstreamRateLimitTest extends TestCase
         parent::setUp();
         $this->testRoot = sys_get_temp_dir() . '/upstream-rate-limit-test-' . bin2hex(random_bytes(4));
         mkdir($this->testRoot, 0755, true);
-        $GLOBALS['upstream_rate_limit_test_root'] = $this->testRoot;
+        $GLOBALS['upstreamRateLimitTestRoot'] = $this->testRoot;
     }
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['upstream_rate_limit_test_root']);
+        unset($GLOBALS['upstreamRateLimitTestRoot']);
         if ($this->testRoot !== null && is_dir($this->testRoot)) {
             $files = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->testRoot, \FilesystemIterator::SKIP_DOTS),
@@ -46,8 +46,8 @@ final class UpstreamRateLimitTest extends TestCase
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
         $source = ['api_key' => 'secret-a', 'station_id' => '12345'];
-        $a = upstream_rate_fingerprint('tempest', $source);
-        $b = upstream_rate_fingerprint('tempest', $source);
+        $a = upstreamRateFingerprint('tempest', $source);
+        $b = upstreamRateFingerprint('tempest', $source);
         $this->assertSame($a, $b);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $a);
     }
@@ -56,8 +56,8 @@ final class UpstreamRateLimitTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $a = upstream_rate_fingerprint('tempest', ['api_key' => 'key-one', 'station_id' => '1']);
-        $b = upstream_rate_fingerprint('tempest', ['api_key' => 'key-two', 'station_id' => '1']);
+        $a = upstreamRateFingerprint('tempest', ['api_key' => 'key-one', 'station_id' => '1']);
+        $b = upstreamRateFingerprint('tempest', ['api_key' => 'key-two', 'station_id' => '1']);
         $this->assertNotSame($a, $b);
     }
 
@@ -65,8 +65,8 @@ final class UpstreamRateLimitTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $a = upstream_rate_fingerprint('tempest', ['api_key' => 'shared', 'station_id' => '111']);
-        $b = upstream_rate_fingerprint('tempest', ['api_key' => 'shared', 'station_id' => '222']);
+        $a = upstreamRateFingerprint('tempest', ['api_key' => 'shared', 'station_id' => '111']);
+        $b = upstreamRateFingerprint('tempest', ['api_key' => 'shared', 'station_id' => '222']);
         $this->assertSame($a, $b);
     }
 
@@ -74,12 +74,12 @@ final class UpstreamRateLimitTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $a = upstream_rate_fingerprint('pwsweather', [
+        $a = upstreamRateFingerprint('pwsweather', [
             'client_id' => 'cid',
             'client_secret' => 'sec',
             'station_id' => 'ST1',
         ]);
-        $b = upstream_rate_fingerprint('pwsweather', [
+        $b = upstreamRateFingerprint('pwsweather', [
             'client_id' => 'cid',
             'client_secret' => 'sec',
             'station_id' => 'ST2',
@@ -96,7 +96,7 @@ final class UpstreamRateLimitTest extends TestCase
         $now = 1000.0;
         $allowed = [];
         for ($i = 0; $i < 5; $i++) {
-            $result = upstream_rate_token_bucket_compute_take($tokens, $last, 60, 3, $now);
+            $result = upstreamRateTokenBucketComputeTake($tokens, $last, 60, 3, $now);
             $allowed[] = $result['allowed'];
             $tokens = $result['tokens'];
             $last = $result['last_refill'];
@@ -109,11 +109,11 @@ final class UpstreamRateLimitTest extends TestCase
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
         $t0 = 1_700_000_000.0;
-        $empty = upstream_rate_token_bucket_compute_take(0.0, $t0, 60, 3, $t0);
+        $empty = upstreamRateTokenBucketComputeTake(0.0, $t0, 60, 3, $t0);
         $this->assertFalse($empty['allowed']);
 
         // 60 rpm => 1 token per second; after 2s we regain 2 tokens (capped at burst 3)
-        $refilled = upstream_rate_token_bucket_compute_take(0.0, $t0, 60, 3, $t0 + 2.0);
+        $refilled = upstreamRateTokenBucketComputeTake(0.0, $t0, 60, 3, $t0 + 2.0);
         $this->assertTrue($refilled['allowed']);
         $this->assertGreaterThanOrEqual(0.9, $refilled['tokens']);
     }
@@ -127,12 +127,12 @@ final class UpstreamRateLimitTest extends TestCase
         $burst = 2;
         $t0 = 1_700_000_000.0;
 
-        $this->assertTrue(upstream_rate_try_take($fingerprint, $rpm, $burst, $t0));
-        $this->assertTrue(upstream_rate_try_take($fingerprint, $rpm, $burst, $t0));
-        $this->assertFalse(upstream_rate_try_take($fingerprint, $rpm, $burst, $t0));
+        $this->assertTrue(upstreamRateTryTake($fingerprint, $rpm, $burst, $t0));
+        $this->assertTrue(upstreamRateTryTake($fingerprint, $rpm, $burst, $t0));
+        $this->assertFalse(upstreamRateTryTake($fingerprint, $rpm, $burst, $t0));
 
         // 2 seconds later at 60 rpm we regain 2 tokens
-        $this->assertTrue(upstream_rate_try_take($fingerprint, $rpm, $burst, $t0 + 2.0));
+        $this->assertTrue(upstreamRateTryTake($fingerprint, $rpm, $burst, $t0 + 2.0));
     }
 
     public function testTryTake_CorruptStateFile_DoesNotGrantFullBurst(): void
@@ -140,7 +140,7 @@ final class UpstreamRateLimitTest extends TestCase
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
         $fingerprint = hash('sha256', 'corrupt-state-test');
-        $stateFile = upstream_rate_limit_state_file_path($fingerprint);
+        $stateFile = upstreamRateLimitStateFilePath($fingerprint);
         $dir = dirname($stateFile);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
@@ -148,15 +148,15 @@ final class UpstreamRateLimitTest extends TestCase
         file_put_contents($stateFile, 'not-json');
 
         $t0 = 1_700_000_000.0;
-        $this->assertFalse(upstream_rate_try_take($fingerprint, 60, 3, $t0));
+        $this->assertFalse(upstreamRateTryTake($fingerprint, 60, 3, $t0));
     }
 
     public function testFingerprint_Metar_DifferentStationIds_ReturnsDifferentHash(): void
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $a = upstream_rate_fingerprint('metar', ['station_id' => 'KAAA']);
-        $b = upstream_rate_fingerprint('metar', ['station_id' => 'KBBB']);
+        $a = upstreamRateFingerprint('metar', ['station_id' => 'KAAA']);
+        $b = upstreamRateFingerprint('metar', ['station_id' => 'KBBB']);
         $this->assertNotSame($a, $b);
     }
 
@@ -164,8 +164,8 @@ final class UpstreamRateLimitTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $a = upstream_rate_fingerprint('awosnet', ['station_id' => 'ks40']);
-        $b = upstream_rate_fingerprint('awosnet', ['station_id' => 'ks41']);
+        $a = upstreamRateFingerprint('awosnet', ['station_id' => 'ks40']);
+        $b = upstreamRateFingerprint('awosnet', ['station_id' => 'ks41']);
         $this->assertNotSame($a, $b);
     }
 
@@ -175,7 +175,7 @@ final class UpstreamRateLimitTest extends TestCase
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
         $source = ['type' => 'tempest', 'api_key' => 'k', 'station_id' => '1'];
-        $result = upstream_rate_limit_consume_for_source($source);
+        $result = upstreamRateLimitConsumeForSource($source);
         $this->assertTrue($result['allowed']);
         $this->assertNull($result['fingerprint_prefix']);
     }
@@ -185,7 +185,7 @@ final class UpstreamRateLimitTest extends TestCase
         require_once __DIR__ . '/../../lib/constants.php';
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
 
-        $policy = upstream_rate_limit_policy_for_provider('tempest');
+        $policy = upstreamRateLimitPolicyForProvider('tempest');
         $this->assertSame(UPSTREAM_RATE_LIMIT_TEMPEST_RPM, $policy['rpm']);
         $this->assertSame(UPSTREAM_RATE_LIMIT_TEMPEST_BURST, $policy['burst']);
     }

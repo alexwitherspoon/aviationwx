@@ -113,7 +113,7 @@ function weather_health_track_fallback(string $airportId): void {
  * @param string $airportId Airport identifier
  * @param string $sourceType Source type (tempest, metar, etc.)
  */
-function weather_health_track_upstream_throttle_skip(string $airportId, string $sourceType): void
+function weatherHealthTrackUpstreamThrottleSkip(string $airportId, string $sourceType): void
 {
     $now = time();
     $currentHour = gmdate('Y-m-d-H', $now);
@@ -132,7 +132,7 @@ function weather_health_track_upstream_throttle_skip(string $airportId, string $
  *
  * @param string $reason Short reason code (e.g. state_dir_unavailable)
  */
-function weather_health_track_upstream_rate_limit_fail_open(string $reason): void
+function weatherHealthTrackUpstreamRateLimitFailOpen(string $reason): void
 {
     $now = time();
     $currentHour = gmdate('Y-m-d-H', $now);

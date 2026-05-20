@@ -21,7 +21,7 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $fixturePath = __DIR__ . '/../Fixtures/metar-bulk-csv-header-line.txt';
         $this->assertFileExists($fixturePath);
         $line = trim((string) file_get_contents($fixturePath));
-        $expected = implode(',', metar_bulk_csv_expected_header_columns());
+        $expected = implode(',', metarBulkCsvExpectedHeaderColumns());
         $this->assertSame($expected, $line);
     }
 
@@ -36,16 +36,16 @@ final class MetarBulkCsvSchemaTest extends TestCase
         $header = fgetcsv($fh, 0, ',', '"', '\\');
         fclose($fh);
         $this->assertIsArray($header);
-        $this->assertTrue(metar_bulk_csv_header_matches_expected($header));
+        $this->assertTrue(metarBulkCsvHeaderMatchesExpected($header));
     }
 
     public function testMetarBulkCsvSchema_HeaderWithUtf8Bom_MatchesExpected(): void
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
-        $header = metar_bulk_csv_expected_header_columns();
+        $header = metarBulkCsvExpectedHeaderColumns();
         $header[0] = "\xEF\xBB\xBF" . $header[0];
-        $this->assertTrue(metar_bulk_csv_header_matches_expected($header));
+        $this->assertTrue(metarBulkCsvHeaderMatchesExpected($header));
     }
 
     public function testMetarBulkIngestGzipToStationFiles_WrongHeader_ReturnsBadCsvHeaderSchema(): void
@@ -74,9 +74,9 @@ final class MetarBulkCsvSchemaTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
 
-        $header = metar_bulk_csv_expected_header_columns();
+        $header = metarBulkCsvExpectedHeaderColumns();
         $header[0] = 'station_id';
-        $summary = metar_bulk_csv_describe_header_mismatch($header);
+        $summary = metarBulkCsvDescribeHeaderMismatch($header);
         $this->assertStringContainsString('col0:station_id!=raw_text', $summary);
     }
 

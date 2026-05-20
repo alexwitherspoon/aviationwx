@@ -9,11 +9,11 @@ require_once __DIR__ . '/../../lib/circuit-breaker.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 
 /**
- * @covers ::circuit_breaker_collect_curl_header_line
- * @covers ::parse_retry_after_seconds
- * @covers ::weather_backoff_clamp_seconds
- * @covers ::weather_backoff_override_seconds
- * @covers ::circuit_breaker_compute_backoff_seconds
+ * @covers ::circuitBreakerCollectCurlHeaderLine
+ * @covers ::parseRetryAfterSeconds
+ * @covers ::weatherBackoffClampSeconds
+ * @covers ::weatherBackoffOverrideSeconds
+ * @covers ::circuitBreakerComputeBackoffSeconds
  */
 class WeatherBackoffHeadersTest extends TestCase
 {
@@ -38,48 +38,48 @@ class WeatherBackoffHeadersTest extends TestCase
 
     public function testParseRetryAfterSeconds_Integer(): void
     {
-        $this->assertSame(60, parse_retry_after_seconds('60'));
-        $this->assertSame(1, parse_retry_after_seconds('1'));
+        $this->assertSame(60, parseRetryAfterSeconds('60'));
+        $this->assertSame(1, parseRetryAfterSeconds('1'));
     }
 
     public function testParseRetryAfterSeconds_HttpDate(): void
     {
         $now = 1_770_000_000;
         $headerValue = gmdate('D, d M Y H:i:s', $now + 120) . ' GMT';
-        $this->assertSame(120, parse_retry_after_seconds($headerValue, $now));
+        $this->assertSame(120, parseRetryAfterSeconds($headerValue, $now));
     }
 
     public function testParseRetryAfterSeconds_PastHttpDate_ReturnsNull(): void
     {
         $now = 1_770_000_300;
         $headerValue = gmdate('D, d M Y H:i:s', $now - 60) . ' GMT';
-        $this->assertNull(parse_retry_after_seconds($headerValue, $now));
+        $this->assertNull(parseRetryAfterSeconds($headerValue, $now));
     }
 
     public function testParseRetryAfterSeconds_Invalid_ReturnsNull(): void
     {
-        $this->assertNull(parse_retry_after_seconds('not-a-date'));
-        $this->assertNull(parse_retry_after_seconds(''));
-        $this->assertNull(parse_retry_after_seconds('0'));
+        $this->assertNull(parseRetryAfterSeconds('not-a-date'));
+        $this->assertNull(parseRetryAfterSeconds(''));
+        $this->assertNull(parseRetryAfterSeconds('0'));
     }
 
     public function testWeatherBackoffOverrideSeconds_RetryAfter_ClampedToMax(): void
     {
         $seconds = BACKOFF_MAX_RETRY_AFTER_SECONDS + 500;
-        $override = weather_backoff_override_seconds(429, ['retry-after' => (string) $seconds]);
+        $override = weatherBackoffOverrideSeconds(429, ['retry-after' => (string) $seconds]);
         $this->assertSame(BACKOFF_MAX_RETRY_AFTER_SECONDS, $override);
     }
 
     public function testWeatherBackoffOverrideSeconds_RetryAfter_429(): void
     {
-        $override = weather_backoff_override_seconds(429, ['retry-after' => '45']);
+        $override = weatherBackoffOverrideSeconds(429, ['retry-after' => '45']);
         $this->assertSame(45, $override);
     }
 
     public function testWeatherBackoffOverrideSeconds_XRateLimitReset_WhenNoRetryAfter(): void
     {
         $now = 1_700_000_000;
-        $override = weather_backoff_override_seconds(
+        $override = weatherBackoffOverrideSeconds(
             429,
             ['x-ratelimit-reset' => (string) ($now + 90)],
             $now
@@ -89,12 +89,12 @@ class WeatherBackoffHeadersTest extends TestCase
 
     public function testWeatherBackoffOverrideSeconds_IgnoredFor404(): void
     {
-        $this->assertNull(weather_backoff_override_seconds(404, ['retry-after' => '120']));
+        $this->assertNull(weatherBackoffOverrideSeconds(404, ['retry-after' => '120']));
     }
 
     public function testWeatherBackoffOverrideSeconds_RetryAfter_503(): void
     {
-        $override = weather_backoff_override_seconds(
+        $override = weatherBackoffOverrideSeconds(
             HTTP_STATUS_SERVICE_UNAVAILABLE,
             ['retry-after' => '30']
         );
@@ -104,20 +104,20 @@ class WeatherBackoffHeadersTest extends TestCase
     public function testWeatherBackoffOverrideSeconds_SmallResetIgnored(): void
     {
         $now = 1_700_000_000;
-        $this->assertNull(weather_backoff_override_seconds(429, ['x-ratelimit-reset' => '90'], $now));
+        $this->assertNull(weatherBackoffOverrideSeconds(429, ['x-ratelimit-reset' => '90'], $now));
     }
 
     public function testCircuitBreakerComputeBackoffSeconds_UsesHeaderWhenLongerThan429Default(): void
     {
-        $seconds = circuit_breaker_compute_backoff_seconds(2, 'transient', 429, ['retry-after' => '120']);
+        $seconds = circuitBreakerComputeBackoffSeconds(2, 'transient', 429, ['retry-after' => '120']);
         $this->assertSame(120, $seconds);
     }
 
     public function testCircuitBreakerCollectCurlHeaderLine_NormalizesKeys(): void
     {
         $headers = [];
-        circuit_breaker_collect_curl_header_line($headers, "Retry-After: 30\r\n");
-        circuit_breaker_collect_curl_header_line($headers, "X-RateLimit-Reset: 999\r\n");
+        circuitBreakerCollectCurlHeaderLine($headers, "Retry-After: 30\r\n");
+        circuitBreakerCollectCurlHeaderLine($headers, "X-RateLimit-Reset: 999\r\n");
         $this->assertSame('30', $headers['retry-after']);
         $this->assertSame('999', $headers['x-ratelimit-reset']);
     }

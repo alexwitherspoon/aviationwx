@@ -198,7 +198,7 @@ final class MetarBulkTest extends TestCase
         require_once __DIR__ . '/../../lib/metar-bulk-csv-schema.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
 
-        $header = implode(',', metar_bulk_csv_expected_header_columns());
+        $header = implode(',', metarBulkCsvExpectedHeaderColumns());
         $good = array_fill(0, 44, '');
         $good[0] = 'METAR KZZZ 181500Z AUTO 18015KT 10SM CLR 15/10 A2990';
         $good[1] = 'KZZZ';

@@ -158,12 +158,12 @@ class NwsApiAdapter {
      */
     public static function buildPointsUrl(float $lat, float $lon): ?string
     {
-        if (!nws_points_coordinates_valid($lat, $lon)) {
+        if (!nwsPointsCoordinatesValid($lat, $lon)) {
             return null;
         }
 
-        $latStr = nws_points_normalize_coord($lat);
-        $lonStr = nws_points_normalize_coord($lon);
+        $latStr = nwsPointsNormalizeCoord($lat);
+        $lonStr = nwsPointsNormalizeCoord($lon);
 
         return self::API_BASE_URL . "/points/{$latStr},{$lonStr}";
     }
@@ -472,13 +472,13 @@ class NwsApiAdapter {
  * @param float $lon WGS84 longitude
  * @return array<string, mixed>|null Decoded JSON array on success
  */
-function nws_fetch_points(float $lat, float $lon): ?array
+function nwsFetchPoints(float $lat, float $lon): ?array
 {
-    if (!nws_points_coordinates_valid($lat, $lon)) {
+    if (!nwsPointsCoordinatesValid($lat, $lon)) {
         return null;
     }
 
-    $cachedBody = nws_points_cache_read($lat, $lon);
+    $cachedBody = nwsPointsCacheRead($lat, $lon);
     if ($cachedBody !== null) {
         $decoded = json_decode($cachedBody, true);
         if (is_array($decoded)) {
@@ -505,8 +505,8 @@ function nws_fetch_points(float $lat, float $lon): ?array
         $response = @file_get_contents($url, false, $context);
         if ($response === false || $response === '') {
             aviationwx_log('warning', 'NWS API: /points fetch failed', [
-                'lat' => nws_points_normalize_coord($lat),
-                'lon' => nws_points_normalize_coord($lon),
+                'lat' => nwsPointsNormalizeCoord($lat),
+                'lon' => nwsPointsNormalizeCoord($lon),
             ], 'app');
 
             return null;
@@ -522,8 +522,8 @@ function nws_fetch_points(float $lat, float $lon): ?array
                     if ($httpCode >= 400) {
                         aviationwx_log('warning', 'NWS API: /points HTTP error', [
                             'http_code' => $httpCode,
-                            'lat' => nws_points_normalize_coord($lat),
-                            'lon' => nws_points_normalize_coord($lon),
+                            'lat' => nwsPointsNormalizeCoord($lat),
+                            'lon' => nwsPointsNormalizeCoord($lon),
                         ], 'app');
 
                         return null;
@@ -550,7 +550,7 @@ function nws_fetch_points(float $lat, float $lon): ?array
         return null;
     }
 
-    nws_points_cache_write($lat, $lon, $response);
+    nwsPointsCacheWrite($lat, $lon, $response);
 
     return $decoded;
 }

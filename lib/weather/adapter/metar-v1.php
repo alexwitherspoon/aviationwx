@@ -865,7 +865,7 @@ function metarResolveStationResponse(string $stationId, ?string $airportId = nul
     }
 
     require_once __DIR__ . '/../../upstream-rate-limit.php';
-    if (!upstream_rate_limit_consume_for_source($stationSource)['allowed']) {
+    if (!upstreamRateLimitConsumeForSource($stationSource)['allowed']) {
         return ['body' => null, 'outcome' => METAR_RESOLVE_THROTTLED];
     }
 

@@ -11,7 +11,7 @@
  *
  * @return list<string>
  */
-function metar_bulk_csv_expected_header_columns(): array
+function metarBulkCsvExpectedHeaderColumns(): array
 {
     return [
         'raw_text',
@@ -64,9 +64,9 @@ function metar_bulk_csv_expected_header_columns(): array
 /**
  * Expected column count for AWC METAR bulk CSV rows (including header row).
  */
-function metar_bulk_csv_expected_column_count(): int
+function metarBulkCsvExpectedColumnCount(): int
 {
-    return count(metar_bulk_csv_expected_header_columns());
+    return count(metarBulkCsvExpectedHeaderColumns());
 }
 
 /**
@@ -75,7 +75,7 @@ function metar_bulk_csv_expected_column_count(): int
  * @param array<int, string|null> $headerRow
  * @return array<int, string|null>
  */
-function metar_bulk_csv_normalize_header_row(array $headerRow): array
+function metarBulkCsvNormalizeHeaderRow(array $headerRow): array
 {
     if (isset($headerRow[0]) && is_string($headerRow[0])) {
         $headerRow[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headerRow[0]) ?? $headerRow[0];
@@ -89,10 +89,10 @@ function metar_bulk_csv_normalize_header_row(array $headerRow): array
  *
  * @param array<int, string|null> $headerRow
  */
-function metar_bulk_csv_header_matches_expected(array $headerRow): bool
+function metarBulkCsvHeaderMatchesExpected(array $headerRow): bool
 {
-    $headerRow = metar_bulk_csv_normalize_header_row($headerRow);
-    $expected = metar_bulk_csv_expected_header_columns();
+    $headerRow = metarBulkCsvNormalizeHeaderRow($headerRow);
+    $expected = metarBulkCsvExpectedHeaderColumns();
     if (count($headerRow) !== count($expected)) {
         return false;
     }
@@ -106,14 +106,14 @@ function metar_bulk_csv_header_matches_expected(array $headerRow): bool
 }
 
 /**
- * Short summary when `metar_bulk_csv_header_matches_expected()` is false (for ops logs).
+ * Short summary when `metarBulkCsvHeaderMatchesExpected()` is false (for ops logs).
  *
  * @param array<int, string|null> $headerRow
  */
-function metar_bulk_csv_describe_header_mismatch(array $headerRow): string
+function metarBulkCsvDescribeHeaderMismatch(array $headerRow): string
 {
-    $headerRow = metar_bulk_csv_normalize_header_row($headerRow);
-    $expected = metar_bulk_csv_expected_header_columns();
+    $headerRow = metarBulkCsvNormalizeHeaderRow($headerRow);
+    $expected = metarBulkCsvExpectedHeaderColumns();
     $gotCount = count($headerRow);
     $expectedCount = count($expected);
     if ($gotCount !== $expectedCount) {
@@ -141,7 +141,7 @@ function metar_bulk_csv_describe_header_mismatch(array $headerRow): string
  * @param list<string> $headerColumns
  * @return array<string, list<int>>
  */
-function metar_bulk_csv_build_column_index_lists(array $headerColumns): array
+function metarBulkCsvBuildColumnIndexLists(array $headerColumns): array
 {
     $lists = [];
     foreach ($headerColumns as $i => $name) {

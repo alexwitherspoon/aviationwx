@@ -160,7 +160,7 @@ function getNwsPointsCacheDir(): string
 }
 
 /**
- * @param string $cacheKey From nws_points_cache_key() (e.g. 45.7710,-122.8600)
+ * @param string $cacheKey From nwsPointsCacheKey() (e.g. 45.7710,-122.8600)
  */
 function getNwsPointsCacheFilePath(string $cacheKey): string
 {
@@ -627,7 +627,7 @@ if (!defined('CACHE_UPSTREAM_LIMITS_DIR')) {
 /**
  * Path to flock-backed upstream token bucket state for a credential fingerprint.
  *
- * @param string $fingerprint SHA-256 hex from upstream_rate_fingerprint()
+ * @param string $fingerprint SHA-256 hex from upstreamRateFingerprint()
  */
 function getUpstreamRateLimitStatePath(string $fingerprint): string
 {

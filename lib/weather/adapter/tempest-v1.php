@@ -193,7 +193,7 @@ function tempestHttpGet(string $url, ?int $requestTimeoutSeconds = null, ?array 
     if ($mock !== null) {
         return $mock;
     }
-    if ($rateLimitSource !== null && !upstream_rate_limit_consume_for_source($rateLimitSource)['allowed']) {
+    if ($rateLimitSource !== null && !upstreamRateLimitConsumeForSource($rateLimitSource)['allowed']) {
         return null;
     }
     $ch = curl_init($url);

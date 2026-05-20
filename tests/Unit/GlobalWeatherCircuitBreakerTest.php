@@ -42,8 +42,8 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
         $sourceB = ['type' => 'tempest', 'api_key' => 'shared-key', 'station_id' => '2'];
 
         $this->assertSame(
-            weather_global_circuit_breaker_key('tempest', $sourceA),
-            weather_global_circuit_breaker_key('tempest', $sourceB)
+            weatherGlobalCircuitBreakerKey('tempest', $sourceA),
+            weatherGlobalCircuitBreakerKey('tempest', $sourceB)
         );
     }
 
@@ -96,7 +96,7 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
             recordWeatherFailure(self::AIRPORT_A, 'tempest', 'transient', 404, null, $source);
         }
 
-        $globalKey = weather_global_circuit_breaker_key('tempest', $source);
+        $globalKey = weatherGlobalCircuitBreakerKey('tempest', $source);
         $data = $this->readBackoffData();
         $this->assertArrayNotHasKey($globalKey, $data);
 
@@ -110,7 +110,7 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
 
         recordWeatherFailure(self::AIRPORT_A, 'tempest', 'transient', HTTP_STATUS_SERVICE_UNAVAILABLE, null, $source);
 
-        $globalKey = weather_global_circuit_breaker_key('tempest', $source);
+        $globalKey = weatherGlobalCircuitBreakerKey('tempest', $source);
         $data = $this->readBackoffData();
         $this->assertArrayHasKey($globalKey, $data);
     }
