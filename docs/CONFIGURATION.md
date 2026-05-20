@@ -698,6 +698,8 @@ When the bucket is empty, that source is skipped for one fetch cycle (weather ma
 
 On HTTP **429** or **503**, `lib/circuit-breaker.php` also records a shared `global_weather_{provider}_{fingerprint}` backoff key (same fingerprint rules as upstream throttling) so all airports using that credential back off together. A successful fetch clears both per-airport and global keys for that credential.
 
+When the upstream response includes **`Retry-After`** or **`X-RateLimit-Reset`** (Aeris-style), `UnifiedFetcher` passes those headers into the circuit breaker. Backoff uses the longer of the default strategy and the header hint, clamped to 15 minutes (`BACKOFF_MAX_RETRY_AFTER_SECONDS` in `lib/constants.php`).
+
 ### Backup Sources
 
 Mark a source as backup by adding `"backup": true`. Backup sources are only used when primary sources fail or are stale:
