@@ -347,6 +347,7 @@ function metarBulkTryReadJsonResponseForStation(string $stationId): ?string {
  */
 function metarBulkDownloadMetarCacheGz(string $destAbsolute, ?int &$httpCode = null): bool
 {
+    $httpCode = null;
     $ch = curl_init();
     if ($ch === false) {
         return false;
@@ -370,7 +371,7 @@ function metarBulkDownloadMetarCacheGz(string $destAbsolute, ?int &$httpCode = n
     ]);
     $ok = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $httpCode = $code;
+    $httpCode = $code > 0 ? $code : null;
     curl_close($ch);
     fclose($fp);
     if ($ok === false || $code !== 200) {
@@ -660,10 +661,12 @@ function metarBulkRefreshRun(): array
 
     $tmpDir = getMetarBulkTempDir();
     $gzTmp = $tmpDir . '/metars.' . uniqid('', true) . '.gz';
-    $downloadHttpCode = 0;
+    $downloadHttpCode = null;
     $httpOk = metarBulkDownloadMetarCacheGz($gzTmp, $downloadHttpCode);
     $result['http_ok'] = $httpOk;
-    $result['http_code'] = $downloadHttpCode;
+    if ($downloadHttpCode !== null) {
+        $result['http_code'] = $downloadHttpCode;
+    }
     if (!$httpOk) {
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
@@ -671,11 +674,14 @@ function metarBulkRefreshRun(): array
         if (!function_exists('weatherHealthTrackMetarBulkDownloadFailure')) {
             require_once __DIR__ . '/weather-health.php';
         }
-        weatherHealthTrackMetarBulkDownloadFailure($downloadHttpCode > 0 ? $downloadHttpCode : null);
-        aviationwx_log('warning', 'metar_bulk: download failed', metarBulkObservabilityContext([
+        weatherHealthTrackMetarBulkDownloadFailure($downloadHttpCode);
+        $logCtx = metarBulkObservabilityContext([
             'url' => METAR_BULK_CACHE_GZ_URL,
-            'http_code' => $downloadHttpCode,
-        ]), 'app');
+        ]);
+        if ($downloadHttpCode !== null) {
+            $logCtx['http_code'] = $downloadHttpCode;
+        }
+        aviationwx_log('warning', 'metar_bulk: download failed', $logCtx, 'app');
 
         return $result;
     }
