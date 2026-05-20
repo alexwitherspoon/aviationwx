@@ -7,13 +7,18 @@ namespace AviationWX\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Phase 6-7 observability: METAR bulk snapshot age and upstream 429 health counters.
+ * METAR bulk snapshot age helpers and upstream HTTP 429 health counters.
+ *
+ * @covers ::metarBulkWriteRefreshMeta
+ * @covers ::metarBulkSnapshotAgeSeconds
+ * @covers ::metarBulkObservabilityContext
+ * @covers ::getWeatherHealthCacheFilePath
  */
 final class UpstreamObservabilityTest extends TestCase
 {
     private ?string $cacheRoot = null;
 
-    private ?string $healthBackup = null;
+    private ?string $healthCacheFile = null;
 
     protected function setUp(): void
     {
@@ -22,25 +27,17 @@ final class UpstreamObservabilityTest extends TestCase
         mkdir($this->cacheRoot, 0755, true);
         $GLOBALS['metarBulkTestCacheRoot'] = $this->cacheRoot;
 
+        $this->healthCacheFile = $this->cacheRoot . '/weather_health.json';
+        $GLOBALS['weatherHealthTestCacheFile'] = $this->healthCacheFile;
+
         require_once __DIR__ . '/../../lib/cache-paths.php';
         require_once __DIR__ . '/../../lib/metar-bulk.php';
         require_once __DIR__ . '/../../lib/weather-health.php';
-
-        if (is_file(WEATHER_HEALTH_CACHE_FILE)) {
-            $this->healthBackup = (string) file_get_contents(WEATHER_HEALTH_CACHE_FILE);
-            @unlink(WEATHER_HEALTH_CACHE_FILE);
-        }
     }
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['metarBulkTestCacheRoot']);
-
-        if ($this->healthBackup !== null) {
-            file_put_contents(WEATHER_HEALTH_CACHE_FILE, $this->healthBackup);
-        } elseif (is_file(WEATHER_HEALTH_CACHE_FILE)) {
-            @unlink(WEATHER_HEALTH_CACHE_FILE);
-        }
+        unset($GLOBALS['metarBulkTestCacheRoot'], $GLOBALS['weatherHealthTestCacheFile']);
 
         if ($this->cacheRoot !== null && is_dir($this->cacheRoot)) {
             $files = new \RecursiveIteratorIterator(
@@ -65,6 +62,13 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertNull(metarBulkSnapshotAgeSeconds());
     }
 
+    public function testMetarBulkSnapshotAgeSeconds_ReturnsNullWhenMetaFileEmpty(): void
+    {
+        file_put_contents(getMetarBulkMetaPath(), '');
+
+        $this->assertNull(metarBulkSnapshotAgeSeconds());
+    }
+
     public function testMetarBulkSnapshotAgeSeconds_ReturnsAgeFromMeta(): void
     {
         $fetchedAt = 1_700_000_000;
@@ -84,6 +88,24 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertNull(metarBulkSnapshotAgeSeconds($now));
     }
 
+    public function testMetarBulkWriteRefreshMeta_ReturnsFalseWhenPathIsDirectory(): void
+    {
+        $metaPath = getMetarBulkMetaPath();
+        mkdir($metaPath, 0755, true);
+
+        $this->assertFalse(metarBulkWriteRefreshMeta(time(), 1, 1));
+    }
+
+    public function testMetarBulkObservabilityContext_IncludesAgeWhenMetaPresent(): void
+    {
+        $now = time();
+        $this->assertTrue(metarBulkWriteRefreshMeta($now - 90, 1, 1));
+
+        $context = metarBulkObservabilityContext(['note' => 'test']);
+        $this->assertSame('test', $context['note']);
+        $this->assertSame(90, $context['metar_bulk_age_seconds']);
+    }
+
     public function testWeatherHealthTrackFetch_429IncrementsUpstreamCounter(): void
     {
         weather_health_track_fetch('kspb', 'tempest', false, 429);
@@ -92,5 +114,15 @@ final class UpstreamObservabilityTest extends TestCase
         $status = weather_health_get_status();
         $metrics = $status['metrics'] ?? [];
         $this->assertSame(1, $metrics['upstream_429_last_hour'] ?? null);
+    }
+
+    public function testWeatherHealthTrackFetch_429DoesNotIncrementHttp4xxBucket(): void
+    {
+        weather_health_track_fetch('kspb', 'tempest', false, 429);
+        weather_health_flush();
+
+        $sources = weather_health_get_sources();
+        $this->assertSame(0, $sources['tempest']['metrics']['http_4xx'] ?? -1);
+        $this->assertSame(1, $sources['tempest']['metrics']['upstream_429'] ?? null);
     }
 }
