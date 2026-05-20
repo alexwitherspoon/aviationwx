@@ -395,12 +395,12 @@ function weatherHealthComputeStatus(array $data): array
     } elseif ($totals['upstream_429'] > 0) {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d upstream HTTP 429 response(s) in last hour', $totals['upstream_429']);
-    } elseif ($noFetchActivity) {
-        $health['status'] = 'degraded';
-        $health['message'] = 'No recent weather fetch activity';
     } elseif ($totals['upstream_throttle_skips'] > 0) {
         $health['status'] = 'operational';
         $health['message'] = sprintf('%d upstream throttle skip(s) in last hour', $totals['upstream_throttle_skips']);
+    } elseif ($noFetchActivity) {
+        $health['status'] = 'degraded';
+        $health['message'] = 'No recent weather fetch activity';
     }
 
     $health['metrics'] = [

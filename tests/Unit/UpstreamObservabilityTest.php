@@ -181,6 +181,17 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertSame(1, $status['metrics']['upstream_throttle_skips_last_hour'] ?? null);
     }
 
+    public function testWeatherHealthTrackUpstreamThrottleSkip_OnlySkipsShowsOperationalMessage(): void
+    {
+        weatherHealthTrackUpstreamThrottleSkip('kspb', 'tempest');
+        weatherHealthFlush();
+
+        $status = weatherHealthGetStatus();
+        $this->assertSame('operational', $status['status'] ?? null);
+        $this->assertStringContainsString('throttle skip', (string) ($status['message'] ?? ''));
+        $this->assertSame(0, $status['metrics']['total_attempts_last_hour'] ?? -1);
+    }
+
     public function testWeatherHealthTrackUpstreamRateLimitFailOpen_DegradesWhenNoFetches(): void
     {
         weatherHealthTrackUpstreamRateLimitFailOpen('state_dir_unavailable');
@@ -205,7 +216,7 @@ final class UpstreamObservabilityTest extends TestCase
 
     public function testWeatherHealthAtomicUpdate_PrunesBucketsOlderThanTwoHours(): void
     {
-        $oldHour = gmdate('Y-m-d-H', time() - 9000);
+        $oldHour = gmdate('Y-m-d-H', time() - 10800);
         $data = [
             'hourly_buckets' => [
                 $oldHour => ['total_attempts' => 99],
