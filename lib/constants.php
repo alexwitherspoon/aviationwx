@@ -628,6 +628,11 @@ if (!defined('UPSTREAM_RATE_LIMIT_NWS_BURST')) {
     define('UPSTREAM_RATE_LIMIT_NWS_BURST', 10);
 }
 
+// NWS /points/{lat},{lon} metadata cache (stable grid mapping; reduces repeat calls)
+if (!defined('NWS_POINTS_CACHE_TTL_SECONDS')) {
+    define('NWS_POINTS_CACHE_TTL_SECONDS', 43200); // 12 hours
+}
+
 // Push webcam upload file age limits (fail-closed protection)
 // Files in upload directory older than this are considered abandoned/stuck
 if (!defined('UPLOAD_FILE_MAX_AGE_SECONDS')) {
