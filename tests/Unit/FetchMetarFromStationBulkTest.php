@@ -215,4 +215,23 @@ final class FetchMetarFromStationBulkTest extends TestCase
 
         $this->assertNull($parsed);
     }
+
+    public function testMetarHttpStatusFromResponseHeaders_ParsesStatusLine(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
+
+        $this->assertSame(429, metarHttpStatusFromResponseHeaders(['HTTP/1.1 429 Too Many Requests']));
+        $this->assertNull(metarHttpStatusFromResponseHeaders(null));
+    }
+
+    public function testMetarNormalizeResponseHeaders_ParsesRetryAfter(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
+
+        $headers = metarNormalizeResponseHeaders([
+            'HTTP/1.1 429 Too Many Requests',
+            'Retry-After: 120',
+        ]);
+        $this->assertSame('120', $headers['retry-after'] ?? null);
+    }
 }
