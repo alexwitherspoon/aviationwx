@@ -187,7 +187,7 @@ function fetchAllSources(array $sources, string $airportId): array {
                     }
                     break;
                 case METAR_RESOLVE_THROTTLED:
-                    weather_health_track_upstream_throttle_skip($airportId, $sourceType);
+                    weatherHealthTrackUpstreamThrottleSkip($airportId, $sourceType);
                     break;
                 case METAR_RESOLVE_CIRCUIT_OPEN:
                     weather_health_track_circuit_open($airportId, $sourceType);
@@ -216,14 +216,14 @@ function fetchAllSources(array $sources, string $airportId): array {
         }
 
         // Per-credential budget (file-backed token bucket); skip this cycle when exhausted
-        $rateLimit = upstream_rate_limit_consume_for_source($source);
+        $rateLimit = upstreamRateLimitConsumeForSource($source);
         if (!$rateLimit['allowed']) {
             aviationwx_log('info', 'upstream rate limit skip', [
                 'airport_id' => $airportId,
                 'provider' => $sourceType,
                 'fingerprint_prefix' => $rateLimit['fingerprint_prefix'],
             ], 'app');
-            weather_health_track_upstream_throttle_skip($airportId, $sourceType);
+            weatherHealthTrackUpstreamThrottleSkip($airportId, $sourceType);
             continue;
         }
         
@@ -232,7 +232,7 @@ function fetchAllSources(array $sources, string $airportId): array {
         
         $responseHeadersByKey[$sourceKey] = [];
         $headerCollector = function ($ch, string $line) use (&$responseHeadersByKey, $sourceKey): int {
-            return circuit_breaker_collect_curl_header_line($responseHeadersByKey[$sourceKey], $line);
+            return circuitBreakerCollectCurlHeaderLine($responseHeadersByKey[$sourceKey], $line);
         };
 
         // Create curl handle
@@ -325,7 +325,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             weather_health_track_fetch($airportId, 'swob_auto', false, 404);
             continue;
         }
-        $rateLimit = upstream_rate_limit_consume_for_source($source);
+        $rateLimit = upstreamRateLimitConsumeForSource($source);
         if (!$rateLimit['allowed']) {
             aviationwx_log('info', 'upstream rate limit skip', [
                 'airport_id' => $airportId,
@@ -333,12 +333,12 @@ function fetchAllSources(array $sources, string $airportId): array {
                 'fingerprint_prefix' => $rateLimit['fingerprint_prefix'],
                 'context' => 'swob_auto_standard_fallback',
             ], 'app');
-            weather_health_track_upstream_throttle_skip($airportId, 'swob_auto');
+            weatherHealthTrackUpstreamThrottleSkip($airportId, 'swob_auto');
             continue;
         }
         $fallbackHeaders = [];
         $fallbackHeaderCollector = function ($ch, string $line) use (&$fallbackHeaders): int {
-            return circuit_breaker_collect_curl_header_line($fallbackHeaders, $line);
+            return circuitBreakerCollectCurlHeaderLine($fallbackHeaders, $line);
         };
         $ch = curl_init($fallbackUrl);
         curl_setopt_array($ch, [

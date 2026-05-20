@@ -143,7 +143,7 @@ function metarBulkGetDefaultCsvColumnLists(): array
 {
     static $cached = null;
     if ($cached === null) {
-        $cached = metar_bulk_csv_build_column_index_lists(metar_bulk_csv_expected_header_columns());
+        $cached = metarBulkCsvBuildColumnIndexLists(metarBulkCsvExpectedHeaderColumns());
     }
 
     return $cached;
@@ -158,7 +158,7 @@ function metarBulkGetDefaultCsvColumnLists(): array
  */
 function metarBulkCsvRowToApiRecord(array $fields, array $lists): ?array
 {
-    $need = metar_bulk_csv_expected_column_count();
+    $need = metarBulkCsvExpectedColumnCount();
     if (count($fields) < $need) {
         return null;
     }
@@ -442,16 +442,16 @@ function metarBulkIngestGzipToStationFiles(string $gzAbsolute, array $icaoSet): 
 
         return $stats;
     }
-    $header = metar_bulk_csv_normalize_header_row($header);
-    if (!metar_bulk_csv_header_matches_expected($header)) {
+    $header = metarBulkCsvNormalizeHeaderRow($header);
+    if (!metarBulkCsvHeaderMatchesExpected($header)) {
         fclose($h);
         $stats['error'] = 'bad_csv_header_schema';
-        $stats['header_mismatch'] = metar_bulk_csv_describe_header_mismatch($header);
+        $stats['header_mismatch'] = metarBulkCsvDescribeHeaderMismatch($header);
 
         return $stats;
     }
-    $lists = metar_bulk_csv_build_column_index_lists($header);
-    $expectedCols = metar_bulk_csv_expected_column_count();
+    $lists = metarBulkCsvBuildColumnIndexLists($header);
+    $expectedCols = metarBulkCsvExpectedColumnCount();
 
     /** @var array<string, array{0: int, 1: array<int, string|null>}> $best */
     $best = [];

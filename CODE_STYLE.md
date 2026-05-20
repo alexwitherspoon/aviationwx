@@ -393,9 +393,10 @@ function publicFunction(): void { }
 
 - **Files**: lowercase with hyphens (e.g., `circuit-breaker.php`)
 - **Classes**: PascalCase (e.g., `CircuitBreaker`)
-- **Functions**: camelCase (e.g., `getWeatherData()`)
+- **Functions**: camelCase (e.g., `getWeatherData()`, `upstreamRateFingerprint()`). Applies to procedural `lib/` helpers as well as class methods.
 - **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_STALE_HOURS`)
 - **Variables**: camelCase (e.g., `$stationId`)
+- **Persisted JSON keys** (metrics, health counters): keep existing snake_case field names when changing them would break on-disk history; use camelCase only for new PHP symbols.
 
 ---
 

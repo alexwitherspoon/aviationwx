@@ -627,7 +627,7 @@ High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requ
 
 The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
 
-Observations use `/stations/{station_id}/observations/latest`. Optional `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`) when code calls `nws_fetch_points()` with airport coordinates.
+Observations use `/stations/{station_id}/observations/latest`. Optional `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`) when code calls `nwsFetchPoints()` with airport coordinates.
 
 ### AWOSnet
 

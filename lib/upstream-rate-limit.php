@@ -17,7 +17,7 @@ require_once __DIR__ . '/cache-paths.php';
  * @param string $provider Weather source type (e.g. tempest, pwsweather)
  * @return list<string>
  */
-function upstream_rate_limit_credential_field_names(string $provider): array
+function upstreamRateLimitCredentialFieldNames(string $provider): array
 {
     return match ($provider) {
         'tempest' => ['api_key'],
@@ -37,7 +37,7 @@ function upstream_rate_limit_credential_field_names(string $provider): array
  * @param string $provider Weather source type
  * @return list<string>
  */
-function upstream_rate_limit_identity_field_names(string $provider): array
+function upstreamRateLimitIdentityFieldNames(string $provider): array
 {
     return match ($provider) {
         'metar', 'awosnet', 'swob_auto', 'swob_man', 'nws' => ['station_id'],
@@ -51,11 +51,11 @@ function upstream_rate_limit_identity_field_names(string $provider): array
  *
  * @return list<string>
  */
-function upstream_rate_limit_fingerprint_field_names(string $provider): array
+function upstreamRateLimitFingerprintFieldNames(string $provider): array
 {
     return array_values(array_unique(array_merge(
-        upstream_rate_limit_credential_field_names($provider),
-        upstream_rate_limit_identity_field_names($provider)
+        upstreamRateLimitCredentialFieldNames($provider),
+        upstreamRateLimitIdentityFieldNames($provider)
     )));
 }
 
@@ -66,10 +66,10 @@ function upstream_rate_limit_fingerprint_field_names(string $provider): array
  * @param array<string, mixed> $sourceConfig Source block from weather_sources
  * @return string 64-char hex digest
  */
-function upstream_rate_fingerprint(string $provider, array $sourceConfig): string
+function upstreamRateFingerprint(string $provider, array $sourceConfig): string
 {
     $material = [];
-    foreach (upstream_rate_limit_fingerprint_field_names($provider) as $field) {
+    foreach (upstreamRateLimitFingerprintFieldNames($provider) as $field) {
         if (!isset($sourceConfig[$field]) || !is_string($sourceConfig[$field])) {
             continue;
         }
@@ -91,7 +91,7 @@ function upstream_rate_fingerprint(string $provider, array $sourceConfig): strin
  * @param string $provider Weather source type
  * @return array{rpm: int, burst: int}
  */
-function upstream_rate_limit_policy_for_provider(string $provider): array
+function upstreamRateLimitPolicyForProvider(string $provider): array
 {
     return match ($provider) {
         'tempest' => [
@@ -139,7 +139,7 @@ function upstream_rate_limit_policy_for_provider(string $provider): array
  * @param float $now Current Unix timestamp
  * @return array{allowed: bool, tokens: float, last_refill: float}
  */
-function upstream_rate_token_bucket_compute_take(
+function upstreamRateTokenBucketComputeTake(
     float $tokens,
     float $lastRefill,
     int $rpm,
@@ -176,13 +176,13 @@ function upstream_rate_token_bucket_compute_take(
 /**
  * Resolve on-disk state path for a fingerprint (test hook via $GLOBALS).
  */
-function upstream_rate_limit_state_file_path(string $fingerprint): string
+function upstreamRateLimitStateFilePath(string $fingerprint): string
 {
-    if (isset($GLOBALS['upstream_rate_limit_test_root'])
-        && is_string($GLOBALS['upstream_rate_limit_test_root'])
-        && $GLOBALS['upstream_rate_limit_test_root'] !== ''
+    if (isset($GLOBALS['upstreamRateLimitTestRoot'])
+        && is_string($GLOBALS['upstreamRateLimitTestRoot'])
+        && $GLOBALS['upstreamRateLimitTestRoot'] !== ''
     ) {
-        $root = rtrim($GLOBALS['upstream_rate_limit_test_root'], '/');
+        $root = rtrim($GLOBALS['upstreamRateLimitTestRoot'], '/');
         $prefix = strlen($fingerprint) >= 2 ? substr($fingerprint, 0, 2) : $fingerprint;
 
         return $root . '/' . $prefix . '/' . $fingerprint . '.json';
@@ -196,33 +196,33 @@ function upstream_rate_limit_state_file_path(string $fingerprint): string
  *
  * Fails open (allows request) when the state file cannot be read or written.
  *
- * @param string $fingerprint From upstream_rate_fingerprint()
+ * @param string $fingerprint From upstreamRateFingerprint()
  * @param int $rpm Sustained requests per minute
  * @param int $burst Maximum burst size
  * @param float|null $now Injectable Unix timestamp for tests
  * @return bool True when a token was consumed; false when budget exhausted
  */
-function upstream_rate_try_take(string $fingerprint, int $rpm, int $burst, ?float $now = null): bool
+function upstreamRateTryTake(string $fingerprint, int $rpm, int $burst, ?float $now = null): bool
 {
     $now = $now ?? microtime(true);
-    $stateFile = upstream_rate_limit_state_file_path($fingerprint);
+    $stateFile = upstreamRateLimitStateFilePath($fingerprint);
     $stateDir = dirname($stateFile);
     if (!is_dir($stateDir) && !@mkdir($stateDir, 0755, true) && !is_dir($stateDir)) {
-        upstream_rate_limit_record_fail_open('state_dir_unavailable', $fingerprint, ['dir' => $stateDir]);
+        upstreamRateLimitRecordFailOpen('state_dir_unavailable', $fingerprint, ['dir' => $stateDir]);
 
         return true;
     }
 
     $fp = @fopen($stateFile, 'c+');
     if ($fp === false) {
-        upstream_rate_limit_record_fail_open('state_file_open_failed', $fingerprint, ['file' => $stateFile]);
+        upstreamRateLimitRecordFailOpen('state_file_open_failed', $fingerprint, ['file' => $stateFile]);
 
         return true;
     }
 
     if (!@flock($fp, LOCK_EX)) {
         @fclose($fp);
-        upstream_rate_limit_record_fail_open('flock_failed', $fingerprint, ['file' => $stateFile]);
+        upstreamRateLimitRecordFailOpen('flock_failed', $fingerprint, ['file' => $stateFile]);
 
         return true;
     }
@@ -250,7 +250,7 @@ function upstream_rate_try_take(string $fingerprint, int $rpm, int $burst, ?floa
         }
     }
 
-    $result = upstream_rate_token_bucket_compute_take($tokens, $lastRefill, $rpm, $burst, $now);
+    $result = upstreamRateTokenBucketComputeTake($tokens, $lastRefill, $rpm, $burst, $now);
 
     rewind($fp);
     ftruncate($fp, 0);
@@ -288,33 +288,33 @@ function upstream_rate_try_take(string $fingerprint, int $rpm, int $burst, ?floa
  *
  * @param array<string, mixed> $context Additional log context (no secrets)
  */
-function upstream_rate_limit_record_fail_open(string $reason, string $fingerprint, array $context = []): void
+function upstreamRateLimitRecordFailOpen(string $reason, string $fingerprint, array $context = []): void
 {
     aviationwx_log('warning', 'upstream rate limit state unavailable, allowing request', array_merge($context, [
         'reason' => $reason,
         'fingerprint_prefix' => substr($fingerprint, 0, 8),
     ]), 'app');
 
-    if (!function_exists('weather_health_track_upstream_rate_limit_fail_open')) {
+    if (!function_exists('weatherHealthTrackUpstreamRateLimitFailOpen')) {
         require_once __DIR__ . '/weather-health.php';
     }
-    weather_health_track_upstream_rate_limit_fail_open($reason);
+    weatherHealthTrackUpstreamRateLimitFailOpen($reason);
 }
 
 /**
  * PHPUnit only: enforce buckets while APP_ENV=testing.
  */
-function upstream_rate_limit_test_force_enforcement(): void
+function upstreamRateLimitTestForceEnforcement(): void
 {
-    $GLOBALS['upstream_rate_limit_test_force_enforcement'] = true;
+    $GLOBALS['upstreamRateLimitTestForceEnforcement'] = true;
 }
 
 /**
  * PHPUnit only: restore default test-mode bypass for upstream throttling.
  */
-function upstream_rate_limit_test_clear_force_enforcement(): void
+function upstreamRateLimitTestClearForceEnforcement(): void
 {
-    unset($GLOBALS['upstream_rate_limit_test_force_enforcement']);
+    unset($GLOBALS['upstreamRateLimitTestForceEnforcement']);
 }
 
 /**
@@ -322,9 +322,9 @@ function upstream_rate_limit_test_clear_force_enforcement(): void
  *
  * @param array<string, mixed> $source weather_sources entry (must include type)
  */
-function upstream_rate_limit_should_skip_source(array $source): bool
+function upstreamRateLimitShouldSkipSource(array $source): bool
 {
-    return !upstream_rate_limit_consume_for_source($source)['allowed'];
+    return !upstreamRateLimitConsumeForSource($source)['allowed'];
 }
 
 /**
@@ -333,9 +333,9 @@ function upstream_rate_limit_should_skip_source(array $source): bool
  * @param array<string, mixed> $source weather_sources entry (must include type)
  * @return array{allowed: bool, fingerprint_prefix: string|null}
  */
-function upstream_rate_limit_consume_for_source(array $source): array
+function upstreamRateLimitConsumeForSource(array $source): array
 {
-    $forceInTests = !empty($GLOBALS['upstream_rate_limit_test_force_enforcement']);
+    $forceInTests = !empty($GLOBALS['upstreamRateLimitTestForceEnforcement']);
     if (!$forceInTests && (isTestMode() || shouldMockExternalServices())) {
         return ['allowed' => true, 'fingerprint_prefix' => null];
     }
@@ -345,14 +345,14 @@ function upstream_rate_limit_consume_for_source(array $source): array
         return ['allowed' => true, 'fingerprint_prefix' => null];
     }
 
-    $policy = upstream_rate_limit_policy_for_provider($provider);
+    $policy = upstreamRateLimitPolicyForProvider($provider);
     if ($policy['rpm'] <= 0 || $policy['burst'] <= 0) {
         return ['allowed' => true, 'fingerprint_prefix' => null];
     }
 
-    $fingerprint = upstream_rate_fingerprint($provider, $source);
+    $fingerprint = upstreamRateFingerprint($provider, $source);
     $prefix = substr($fingerprint, 0, 8);
-    $allowed = upstream_rate_try_take($fingerprint, $policy['rpm'], $policy['burst']);
+    $allowed = upstreamRateTryTake($fingerprint, $policy['rpm'], $policy['burst']);
 
     return ['allowed' => $allowed, 'fingerprint_prefix' => $prefix];
 }

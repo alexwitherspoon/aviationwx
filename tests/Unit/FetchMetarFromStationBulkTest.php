@@ -18,8 +18,8 @@ final class FetchMetarFromStationBulkTest extends TestCase
         require_once __DIR__ . '/../../lib/test-mocks.php';
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
         metarBulkTestSetSkipMetarHttpMock(false);
-        upstream_rate_limit_test_clear_force_enforcement();
-        unset($GLOBALS['upstream_rate_limit_test_root']);
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestRoot']);
         if ($this->rateLimitRoot !== null && is_dir($this->rateLimitRoot)) {
             $files = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->rateLimitRoot, \FilesystemIterator::SKIP_DOTS),
@@ -108,13 +108,13 @@ final class FetchMetarFromStationBulkTest extends TestCase
 
         $this->rateLimitRoot = sys_get_temp_dir() . '/metar-throttle-' . bin2hex(random_bytes(4));
         mkdir($this->rateLimitRoot, 0755, true);
-        $GLOBALS['upstream_rate_limit_test_root'] = $this->rateLimitRoot;
-        upstream_rate_limit_test_force_enforcement();
+        $GLOBALS['upstreamRateLimitTestRoot'] = $this->rateLimitRoot;
+        upstreamRateLimitTestForceEnforcement();
 
         $source = ['type' => 'metar', 'station_id' => 'KTHR'];
-        $fingerprint = upstream_rate_fingerprint('metar', $source);
+        $fingerprint = upstreamRateFingerprint('metar', $source);
         $t0 = microtime(true);
-        $this->assertTrue(upstream_rate_try_take($fingerprint, 60, 1, $t0));
+        $this->assertTrue(upstreamRateTryTake($fingerprint, 60, 1, $t0));
 
         $resolved = metarResolveStationResponse('KTHR', 'kthr');
         $this->assertSame(METAR_RESOLVE_THROTTLED, $resolved['outcome']);

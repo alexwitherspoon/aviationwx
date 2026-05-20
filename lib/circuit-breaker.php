@@ -145,7 +145,7 @@ function recordCircuitBreakerFailureBase(
     }
     
     $failures = $state['failures'];
-    $backoffSeconds = circuit_breaker_compute_backoff_seconds(
+    $backoffSeconds = circuitBreakerComputeBackoffSeconds(
         $failures,
         $severity,
         $httpCode,
@@ -207,7 +207,7 @@ function recordCircuitBreakerFailureBase(
     }
     
     $failures = $state['failures'];
-    $backoffSeconds = circuit_breaker_compute_backoff_seconds(
+    $backoffSeconds = circuitBreakerComputeBackoffSeconds(
         $failures,
         $severity,
         $httpCode,
@@ -319,7 +319,7 @@ function recordCircuitBreakerSuccessBase($key, $backoffFile) {
 /**
  * Whether HTTP status should update the shared global breaker for this credential.
  */
-function weather_global_circuit_breaker_should_coordinate(?int $httpCode): bool
+function weatherGlobalCircuitBreakerShouldCoordinate(?int $httpCode): bool
 {
     return $httpCode === 429 || $httpCode === HTTP_STATUS_SERVICE_UNAVAILABLE;
 }
@@ -329,11 +329,11 @@ function weather_global_circuit_breaker_should_coordinate(?int $httpCode): bool
  *
  * @param array<string, mixed> $sourceConfig weather_sources entry (must include type)
  */
-function weather_global_circuit_breaker_key(string $provider, array $sourceConfig): string
+function weatherGlobalCircuitBreakerKey(string $provider, array $sourceConfig): string
 {
     require_once __DIR__ . '/upstream-rate-limit.php';
 
-    return 'global_weather_' . $provider . '_' . upstream_rate_fingerprint($provider, $sourceConfig);
+    return 'global_weather_' . $provider . '_' . upstreamRateFingerprint($provider, $sourceConfig);
 }
 
 /**
@@ -365,7 +365,7 @@ function checkWeatherCircuitBreaker($airportId, $sourceType, ?array $sourceConfi
         return $result;
     }
 
-    $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+    $globalKey = weatherGlobalCircuitBreakerKey($sourceType, $sourceConfig);
     $globalResult = checkCircuitBreakerBase($globalKey, CACHE_BACKOFF_FILE);
     if ($globalResult['skip']) {
         $globalResult['reason'] = 'global_circuit_open';
@@ -406,9 +406,9 @@ function recordWeatherFailure(
 
     if ($sourceConfig !== null
         && ($sourceConfig['type'] ?? '') === $sourceType
-        && weather_global_circuit_breaker_should_coordinate($httpCode)
+        && weatherGlobalCircuitBreakerShouldCoordinate($httpCode)
     ) {
-        $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+        $globalKey = weatherGlobalCircuitBreakerKey($sourceType, $sourceConfig);
         recordCircuitBreakerFailureBase($globalKey, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason, $responseHeaders);
     }
 }
@@ -426,7 +426,7 @@ function recordWeatherSuccess($airportId, $sourceType, ?array $sourceConfig = nu
     recordCircuitBreakerSuccessBase($key, CACHE_BACKOFF_FILE);
 
     if ($sourceConfig !== null && ($sourceConfig['type'] ?? '') === $sourceType) {
-        $globalKey = weather_global_circuit_breaker_key($sourceType, $sourceConfig);
+        $globalKey = weatherGlobalCircuitBreakerKey($sourceType, $sourceConfig);
         recordCircuitBreakerSuccessBase($globalKey, CACHE_BACKOFF_FILE);
     }
 }
