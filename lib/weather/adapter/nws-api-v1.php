@@ -151,6 +151,10 @@ class NwsApiAdapter {
 
     /**
      * Build the NWS /points URL for a latitude and longitude (four decimal places).
+     *
+     * @param float $lat WGS84 latitude
+     * @param float $lon WGS84 longitude
+     * @return string|null URL or null when coordinates are out of range
      */
     public static function buildPointsUrl(float $lat, float $lon): ?string
     {
@@ -460,10 +464,12 @@ class NwsApiAdapter {
 /**
  * Fetch NWS /points metadata for a coordinate pair (cached).
  *
- * Returns decoded GeoJSON properties or null on failure. Station observations
- * still use buildUrl(); this helper is for grid/points lookups that should not
- * hit api.weather.gov on every scheduler cycle.
+ * Returns decoded GeoJSON or null on failure. Station observations still use
+ * buildUrl(); this helper is for grid/points lookups that should not hit
+ * api.weather.gov on every scheduler cycle.
  *
+ * @param float $lat WGS84 latitude
+ * @param float $lon WGS84 longitude
  * @return array<string, mixed>|null Decoded JSON array on success
  */
 function nws_fetch_points(float $lat, float $lon): ?array
@@ -475,8 +481,9 @@ function nws_fetch_points(float $lat, float $lon): ?array
     $cachedBody = nws_points_cache_read($lat, $lon);
     if ($cachedBody !== null) {
         $decoded = json_decode($cachedBody, true);
-
-        return is_array($decoded) ? $decoded : null;
+        if (is_array($decoded)) {
+            return $decoded;
+        }
     }
 
     $url = NwsApiAdapter::buildPointsUrl($lat, $lon);
@@ -503,6 +510,27 @@ function nws_fetch_points(float $lat, float $lon): ?array
             ], 'app');
 
             return null;
+        }
+
+        $responseHeaders = function_exists('http_get_last_response_headers')
+            ? (http_get_last_response_headers() ?? [])
+            : ($http_response_header ?? []);
+        if (is_array($responseHeaders)) {
+            foreach ($responseHeaders as $headerLine) {
+                if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $headerLine, $matches)) {
+                    $httpCode = (int) $matches[1];
+                    if ($httpCode >= 400) {
+                        aviationwx_log('warning', 'NWS API: /points HTTP error', [
+                            'http_code' => $httpCode,
+                            'lat' => nws_points_normalize_coord($lat),
+                            'lon' => nws_points_normalize_coord($lon),
+                        ], 'app');
+
+                        return null;
+                    }
+                    break;
+                }
+            }
         }
     }
 
