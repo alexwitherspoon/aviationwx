@@ -135,16 +135,19 @@ function getMetarBulkCacheDir(): string
     return CACHE_METAR_BULK_DIR;
 }
 
-function getMetarBulkStationsDir(): string {
-    return CACHE_METAR_BULK_DIR . '/stations';
+function getMetarBulkStationsDir(): string
+{
+    return getMetarBulkCacheDir() . '/stations';
 }
 
-function getMetarBulkTempDir(): string {
-    return CACHE_METAR_BULK_DIR . '/tmp';
+function getMetarBulkTempDir(): string
+{
+    return getMetarBulkCacheDir() . '/tmp';
 }
 
-function getMetarBulkRefreshLockPath(): string {
-    return CACHE_METAR_BULK_DIR . '/refresh.lock';
+function getMetarBulkRefreshLockPath(): string
+{
+    return getMetarBulkCacheDir() . '/refresh.lock';
 }
 
 function getMetarBulkStationJsonPath(string $icaoUpper): string {
