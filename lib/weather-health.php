@@ -22,6 +22,21 @@ if (!defined('WEATHER_HEALTH_CACHE_FILE')) {
     define('WEATHER_HEALTH_CACHE_FILE', CACHE_BASE_DIR . '/weather_health.json');
 }
 
+/**
+ * Path to weather health JSON (supports PHPUnit via $GLOBALS['weatherHealthTestCacheFile']).
+ */
+function getWeatherHealthCacheFilePath(): string
+{
+    if (isset($GLOBALS['weatherHealthTestCacheFile'])
+        && is_string($GLOBALS['weatherHealthTestCacheFile'])
+        && $GLOBALS['weatherHealthTestCacheFile'] !== ''
+    ) {
+        return $GLOBALS['weatherHealthTestCacheFile'];
+    }
+
+    return WEATHER_HEALTH_CACHE_FILE;
+}
+
 // =============================================================================
 // TRACKING FUNCTIONS (called by UnifiedFetcher.php)
 // =============================================================================
@@ -167,7 +182,7 @@ function weatherHealthTrackUpstreamRateLimitFailOpen(string $reason): void
  */
 function weather_health_atomic_update(string $currentHour, array $counters, int $now): bool {
     // Ensure cache directory exists
-    $cacheDir = dirname(WEATHER_HEALTH_CACHE_FILE);
+    $cacheDir = dirname(getWeatherHealthCacheFilePath());
     if (!is_dir($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
             aviationwx_log('warning', 'weather_health: failed to create cache directory', [
@@ -178,10 +193,10 @@ function weather_health_atomic_update(string $currentHour, array $counters, int 
     }
     
     // Open file for read/write (create if doesn't exist)
-    $fp = @fopen(WEATHER_HEALTH_CACHE_FILE, 'c+');
+    $fp = @fopen(getWeatherHealthCacheFilePath(), 'c+');
     if ($fp === false) {
         aviationwx_log('warning', 'weather_health: failed to open cache file', [
-            'file' => WEATHER_HEALTH_CACHE_FILE
+            'file' => getWeatherHealthCacheFilePath()
         ], 'app');
         return false;
     }
@@ -242,7 +257,7 @@ function weather_health_atomic_update(string $currentHour, array $counters, int 
     
     if ($written === false) {
         aviationwx_log('warning', 'weather_health: failed to write cache file', [
-            'file' => WEATHER_HEALTH_CACHE_FILE
+            'file' => getWeatherHealthCacheFilePath()
         ], 'app');
         return false;
     }
@@ -261,7 +276,7 @@ function weather_health_atomic_update(string $currentHour, array $counters, int 
 function weather_health_flush(): bool {
     $now = time();
     
-    if (!file_exists(WEATHER_HEALTH_CACHE_FILE)) {
+    if (!file_exists(getWeatherHealthCacheFilePath())) {
         // Create initial structure
         $data = [
             'hourly_buckets' => [],
@@ -271,11 +286,11 @@ function weather_health_flush(): bool {
             'sources' => []
         ];
         
-        return @file_put_contents(WEATHER_HEALTH_CACHE_FILE, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX) !== false;
+        return @file_put_contents(getWeatherHealthCacheFilePath(), json_encode($data, JSON_PRETTY_PRINT), LOCK_EX) !== false;
     }
     
     // Open and lock file
-    $fp = @fopen(WEATHER_HEALTH_CACHE_FILE, 'c+');
+    $fp = @fopen(getWeatherHealthCacheFilePath(), 'c+');
     if ($fp === false) {
         return false;
     }
@@ -380,6 +395,7 @@ function weather_health_compute_status(array $data): array {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d circuit breaker event(s) in last hour', $totals['circuit_open_events']);
     } elseif ($totals['upstream_rate_limit_fail_open'] > 0) {
+        // Fail-open I/O takes precedence over upstream_429 in the top-level message when both occur.
         $health['status'] = 'degraded';
         $health['message'] = sprintf(
             '%d upstream rate limit fail-open event(s) in last hour (check cache/upstream-limits/)',
@@ -430,7 +446,8 @@ function weather_health_compute_source_status(array $data): array {
         $failures = 0;
         $http4xx = 0;
         $http5xx = 0;
-        
+        $upstream429 = 0;
+
         foreach ($data['hourly_buckets'] ?? [] as $hourKey => $bucket) {
             if ($hourKey >= $oneHourAgo) {
                 $attempts += $bucket["attempts_{$sourceType}"] ?? 0;
@@ -438,6 +455,7 @@ function weather_health_compute_source_status(array $data): array {
                 $failures += $bucket["failures_{$sourceType}"] ?? 0;
                 $http4xx += $bucket["http_4xx_{$sourceType}"] ?? 0;
                 $http5xx += $bucket["http_5xx_{$sourceType}"] ?? 0;
+                $upstream429 += $bucket["upstream_429_{$sourceType}"] ?? 0;
             }
         }
         
@@ -460,8 +478,11 @@ function weather_health_compute_source_status(array $data): array {
         } elseif ($http5xx > 0) {
             $status = 'degraded';
             $message = sprintf('%d server errors', $http5xx);
+        } elseif ($upstream429 > 0) {
+            $status = 'degraded';
+            $message = sprintf('%d HTTP 429 response(s)', $upstream429);
         }
-        
+
         $sources[$sourceType] = [
             'status' => $status,
             'message' => $message,
@@ -471,7 +492,8 @@ function weather_health_compute_source_status(array $data): array {
                 'successes' => $successes,
                 'failures' => $failures,
                 'http_4xx' => $http4xx,
-                'http_5xx' => $http5xx
+                'http_5xx' => $http5xx,
+                'upstream_429' => $upstream429,
             ]
         ];
     }
@@ -495,11 +517,11 @@ function weather_health_get_status(): array {
         'metrics' => []
     ];
     
-    if (!file_exists(WEATHER_HEALTH_CACHE_FILE)) {
+    if (!file_exists(getWeatherHealthCacheFilePath())) {
         return $default;
     }
     
-    $content = @file_get_contents(WEATHER_HEALTH_CACHE_FILE);
+    $content = @file_get_contents(getWeatherHealthCacheFilePath());
     if ($content === false) {
         return $default;
     }
@@ -518,11 +540,11 @@ function weather_health_get_status(): array {
  * @return array Source health array keyed by source type
  */
 function weather_health_get_sources(): array {
-    if (!file_exists(WEATHER_HEALTH_CACHE_FILE)) {
+    if (!file_exists(getWeatherHealthCacheFilePath())) {
         return [];
     }
     
-    $content = @file_get_contents(WEATHER_HEALTH_CACHE_FILE);
+    $content = @file_get_contents(getWeatherHealthCacheFilePath());
     if ($content === false) {
         return [];
     }
