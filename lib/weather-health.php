@@ -389,12 +389,12 @@ function weatherHealthComputeStatus(array $data): array
             '%d upstream rate limit fail-open event(s) in last hour (check cache/upstream-limits/)',
             $totals['upstream_rate_limit_fail_open']
         );
-    } elseif ($totals['upstream_429'] > 0) {
-        $health['status'] = 'degraded';
-        $health['message'] = sprintf('%d upstream HTTP 429 response(s) in last hour', $totals['upstream_429']);
     } elseif ($totals['metar_bulk_download_failures'] > 0) {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d METAR bulk download failure(s) in last hour', $totals['metar_bulk_download_failures']);
+    } elseif ($totals['upstream_429'] > 0) {
+        $health['status'] = 'degraded';
+        $health['message'] = sprintf('%d upstream HTTP 429 response(s) in last hour', $totals['upstream_429']);
     } elseif ($noFetchActivity) {
         $health['status'] = 'degraded';
         $health['message'] = 'No recent weather fetch activity';
