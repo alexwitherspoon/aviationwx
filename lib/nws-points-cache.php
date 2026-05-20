@@ -27,7 +27,12 @@ function nwsPointsCoordinatesValid(float $lat, float $lon): bool
  */
 function nwsPointsNormalizeCoord(float $coord): string
 {
-    return number_format($coord, 4, '.', '');
+    $formatted = number_format($coord, 4, '.', '');
+    if ($formatted === '-0.0000') {
+        return '0.0000';
+    }
+
+    return $formatted;
 }
 
 /**

@@ -52,6 +52,15 @@ final class NwsPointsCacheTest extends TestCase
         $this->assertSame('45.7710,-122.8600', nwsPointsCacheKey(45.7710278, -122.8600123));
     }
 
+    public function testNormalizeCoord_NegativeZeroMatchesPositiveZero(): void
+    {
+        $this->assertSame('0.0000', nwsPointsNormalizeCoord(-0.0));
+        $this->assertSame(
+            nwsPointsCacheKey(0.0, -122.86),
+            nwsPointsCacheKey(-0.0, -122.86)
+        );
+    }
+
     public function testCoordinatesValid_RejectsOutOfRange(): void
     {
         $this->assertFalse(nwsPointsCoordinatesValid(91.0, 0.0));
