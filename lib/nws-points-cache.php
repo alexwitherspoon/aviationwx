@@ -23,6 +23,8 @@ function nwsPointsCoordinatesValid(float $lat, float $lon): bool
 /**
  * Format one coordinate for NWS URL and cache keys (four decimal places).
  *
+ * Rounded negative zero (-0.0000) is normalized to 0.0000 so cache keys stay stable.
+ *
  * @return string Coordinate string for api.weather.gov /points URLs
  */
 function nwsPointsNormalizeCoord(float $coord): string
@@ -93,12 +95,17 @@ function nwsPointsCacheRead(float $lat, float $lon, ?int $now = null): ?string
     }
 
     $path = nwsPointsCacheFilePath(nwsPointsCacheKey($lat, $lon));
-    if (!is_file($path)) {
+    clearstatcache(true, $path);
+    if (!is_readable($path)) {
         return null;
     }
 
-    clearstatcache(true, $path);
-    $entry = json_decode((string) file_get_contents($path), true);
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+
+    $entry = json_decode($raw, true);
     if (!is_array($entry) || !nwsPointsCacheEntryIsFresh($entry, $now)) {
         return null;
     }

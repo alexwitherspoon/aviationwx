@@ -92,6 +92,20 @@ final class NwsPointsCacheTest extends TestCase
         $this->assertFalse(nwsPointsCacheWrite(100.0, 0.0, '{}'));
     }
 
+    public function testCacheRead_ReturnsNullWhenFileNotReadable(): void
+    {
+        $now = 1_700_000_000;
+        $body = '{"properties":{}}';
+        $this->assertTrue(nwsPointsCacheWrite(45.771, -122.86, $body, $now));
+        $path = nwsPointsCacheFilePath(nwsPointsCacheKey(45.771, -122.86));
+        chmod($path, 0000);
+        try {
+            $this->assertNull(nwsPointsCacheRead(45.771, -122.86, $now));
+        } finally {
+            chmod($path, 0644);
+        }
+    }
+
     public function testCacheRead_ReturnsNullWhenEnvelopeCoordinatesMismatch(): void
     {
         $now = 1_700_000_000;
