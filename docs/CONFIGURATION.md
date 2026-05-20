@@ -627,6 +627,8 @@ High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requ
 
 The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
 
+Observations use `/stations/{station_id}/observations/latest`. Optional `/points/{lat},{lon}` metadata (grid mapping) is cached under `cache/nws-points/` for 12 hours (`NWS_POINTS_CACHE_TTL_SECONDS`) when code calls `nws_fetch_points()` with airport coordinates.
+
 ### AWOSnet
 
 Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses JavaScript to load data; we fetch the PHP endpoint directly with a Referer header. Structured XML fields are treated as the primary/authoritative data source, and the embedded METAR string is used to fill gaps or augment fields when available. When the page shows "///" (data not available), values are normalized to null.
