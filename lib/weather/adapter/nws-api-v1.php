@@ -536,7 +536,10 @@ function nwsFetchPoints(float $lat, float $lon): ?array
 
     $decoded = json_decode($response, true);
     if (!is_array($decoded)) {
-        aviationwx_log('warning', 'NWS API: /points JSON parse failed', [], 'app');
+        aviationwx_log('warning', 'NWS API: /points JSON parse failed', [
+            'lat' => nwsPointsNormalizeCoord($lat),
+            'lon' => nwsPointsNormalizeCoord($lon),
+        ], 'app');
 
         return null;
     }
