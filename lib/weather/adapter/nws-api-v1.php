@@ -34,6 +34,7 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../nws-points-cache.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -146,6 +147,21 @@ class NwsApiAdapter {
         }
         
         return self::API_BASE_URL . "/stations/{$stationId}/observations/latest";
+    }
+
+    /**
+     * Build the NWS /points URL for a latitude and longitude (four decimal places).
+     */
+    public static function buildPointsUrl(float $lat, float $lon): ?string
+    {
+        if (!nws_points_coordinates_valid($lat, $lon)) {
+            return null;
+        }
+
+        $latStr = nws_points_normalize_coord($lat);
+        $lonStr = nws_points_normalize_coord($lon);
+
+        return self::API_BASE_URL . "/points/{$latStr},{$lonStr}";
     }
     
     /**
@@ -440,6 +456,76 @@ class NwsApiAdapter {
 // =============================================================================
 // STANDALONE FETCH FUNCTION (for testing/fallback)
 // =============================================================================
+
+/**
+ * Fetch NWS /points metadata for a coordinate pair (cached).
+ *
+ * Returns decoded GeoJSON properties or null on failure. Station observations
+ * still use buildUrl(); this helper is for grid/points lookups that should not
+ * hit api.weather.gov on every scheduler cycle.
+ *
+ * @return array<string, mixed>|null Decoded JSON array on success
+ */
+function nws_fetch_points(float $lat, float $lon): ?array
+{
+    if (!nws_points_coordinates_valid($lat, $lon)) {
+        return null;
+    }
+
+    $cachedBody = nws_points_cache_read($lat, $lon);
+    if ($cachedBody !== null) {
+        $decoded = json_decode($cachedBody, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    $url = NwsApiAdapter::buildPointsUrl($lat, $lon);
+    if ($url === null) {
+        return null;
+    }
+
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        $response = $mockResponse;
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => CURL_TIMEOUT,
+                'ignore_errors' => true,
+                'header' => implode("\r\n", NwsApiAdapter::getHeaders()),
+            ],
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false || $response === '') {
+            aviationwx_log('warning', 'NWS API: /points fetch failed', [
+                'lat' => nws_points_normalize_coord($lat),
+                'lon' => nws_points_normalize_coord($lon),
+            ], 'app');
+
+            return null;
+        }
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        aviationwx_log('warning', 'NWS API: /points JSON parse failed', [], 'app');
+
+        return null;
+    }
+
+    if (isset($decoded['status']) && (int) $decoded['status'] >= 400) {
+        aviationwx_log('warning', 'NWS API: /points error response', [
+            'status' => $decoded['status'],
+            'detail' => $decoded['detail'] ?? 'Unknown error',
+        ], 'app');
+
+        return null;
+    }
+
+    nws_points_cache_write($lat, $lon, $response);
+
+    return $decoded;
+}
 
 /**
  * Fetch weather from NWS API (synchronous, for testing)

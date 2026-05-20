@@ -60,6 +60,12 @@ function getMockHttpResponse(string $url): ?string {
         return getMockPWSWeatherResponse();
     }
     
+    if (strpos($url, 'api.weather.gov') !== false && strpos($url, '/points/') !== false) {
+        require_once __DIR__ . '/../tests/mock-weather-responses.php';
+
+        return getMockNwsPointsResponse();
+    }
+
     if (strpos($url, 'api.weather.gov') !== false && strpos($url, '/stations/') !== false) {
         // NWS API (api.weather.gov)
         require_once __DIR__ . '/../tests/mock-weather-responses.php';

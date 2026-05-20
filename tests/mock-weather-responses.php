@@ -375,6 +375,28 @@ function getMockNwsApiResponse() {
 }
 
 /**
+ * Mock NWS /points/{lat},{lon} metadata (grid mapping).
+ */
+function getMockNwsPointsResponse()
+{
+    return json_encode([
+        'type' => 'Feature',
+        'geometry' => [
+            'type' => 'Point',
+            'coordinates' => [-122.86, 45.77],
+        ],
+        'properties' => [
+            'gridId' => 'PQR',
+            'gridX' => 88,
+            'gridY' => 105,
+            'forecast' => 'https://api.weather.gov/gridpoints/PQR/88,105/forecast',
+            'forecastHourly' => 'https://api.weather.gov/gridpoints/PQR/88,105/forecast/hourly',
+            'observationStations' => 'https://api.weather.gov/gridpoints/PQR/88,105/stations',
+        ],
+    ]);
+}
+
+/**
  * Get a mock SynopticData API response
  * Based on actual API structure from documentation and sample responses
  * SynopticData uses: { "SUMMARY": { "RESPONSE_CODE": 1 }, "STATION": [ { "OBSERVATIONS": { "field_value_1": { "value": ..., "date_time": ... } } } ] }
