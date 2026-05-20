@@ -9,6 +9,7 @@
  * - Process lock file with cumulative identity and health
  * - Config reload check (configurable interval, default 60s)
  * - METAR: bulk gzip refresh on `METAR_BULK_REFRESH_INTERVAL_SECONDS`, plus per-airport weather refresh (see `metar_refresh_seconds`)
+ * - NWS: /points cache warmup on `NWS_POINTS_REFRESH_INTERVAL_SECONDS` for airports with an NWS source (see `refresh-nws-points.php`)
  * - Only scheduler errors affect health (worker errors separate)
  * - Unified webcam worker handles BOTH push and pull cameras
  * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
@@ -60,6 +61,7 @@ $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
+$lastNwsPointsRefresh = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -409,6 +411,17 @@ while ($running) {
             $lastMetarBulkRefresh = $now;
         }
 
+        // NWS /points metadata cache warmup (stale entries only; see refresh-nws-points.php).
+        if (($now - $lastNwsPointsRefresh) >= NWS_POINTS_REFRESH_INTERVAL_SECONDS) {
+            $nwsPointsScript = __DIR__ . '/refresh-nws-points.php';
+            if (file_exists($nwsPointsScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nwsPointsScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+            }
+            $lastNwsPointsRefresh = $now;
+        }
+
         // Process weather updates (non-blocking)
         // Note: METAR refresh is handled as part of weather updates via the weather API endpoint
         // The global metar_refresh_seconds config is respected by the weather API internally
@@ -636,7 +649,7 @@ while ($running) {
         // Variant health APCu flush runs via variant_health_flush_via_http() on METRICS_FLUSH_INTERVAL_SECONDS above.
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
-            if (weather_health_flush()) {
+            if (weatherHealthFlush()) {
                 $lastWeatherHealthUpdate = $now;
             }
         }
