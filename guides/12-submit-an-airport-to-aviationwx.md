@@ -67,7 +67,7 @@ Optional but helpful:
 
 ## Step 2 - Weather data (choose one path)
 
-### Option A - TempestOne (recommended default)
+### Option A - Tempest (recommended default)
 Please send:
 - **Station ID**
 - **Access token** (personal access token is best)
@@ -217,7 +217,7 @@ Body:
 - Target update cadence:
 
 **Weather source**
-- Type: TempestOne / Davis / Ambient / ASOS-AWOS / AWOSnet
+- Type: Tempest / Davis / Ambient / ASOS-AWOS / AWOSnet
 - Details (token/key/etc):
 
 **Cameras**
