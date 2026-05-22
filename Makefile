@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-external-apis test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet test-up test-down test-shell test-logs test-e2e test-clean smoke-test station-power-fetch check-builtin-aviation-links production-health-check
+.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-external-apis test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet test-up test-down test-shell test-logs test-e2e test-clean smoke-test station-power-fetch check-builtin-aviation-links
 
 help: ## Show this help message
 	@echo ''
@@ -19,7 +19,7 @@ help: ## Show this help message
 	@grep -E '^(dev|up|down|down-prod|restart|logs|shell|station-power-fetch):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTesting:\033[0m'
-	@grep -E '^(test|test-ci|test-unit|test-integration|test-external-apis|test-e2e|test-browser|test-local|metrics-test|smoke|smoke-test|check-builtin-aviation-links|production-health-check):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(test|test-ci|test-unit|test-integration|test-external-apis|test-e2e|test-browser|test-local|metrics-test|smoke|smoke-test|check-builtin-aviation-links):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTest Environment (Isolated):\033[0m'
 	@grep -E '^(test-up|test-down|test-shell|test-logs|test-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -221,9 +221,6 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 
 check-builtin-aviation-links: ## HEAD-probe built-in aviation HTTPS URLs (networked; same as scheduled CI)
 	@php scripts/check-builtin-aviation-links.php
-
-production-health-check: ## HTTPS probes against production (networked; same as daily workflow)
-	@php scripts/production-health-check.php
 
 # Optional: PHPUNIT_ARGS='--filter NotamScheduleTest' (do not use `make test-unit -- --filter ...`; Make treats --filter as a target)
 test-unit: ## Run unit tests only (fast; optional PHPUNIT_ARGS for PHPUnit)
