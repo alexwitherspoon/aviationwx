@@ -1052,6 +1052,7 @@ The webcam processing pipeline uses three main components:
   - SFTP: Upload to `/files/` (chrooted, must use subdirectory)
 - **Processing**: Webcam processor checks both FTP and SFTP directories for each camera
 - **Note**: SFTP uses `/var/sftp/` (outside cache) because SSH chroot requires ALL parent directories to be root-owned
+- **Chroot repair**: `repair-sftp-chroot-permissions.sh` runs from `sync-push-config.php`, `set-cache-permissions.sh`, and `create-sftp-user.sh` so `{username}/` stays `root:root` and `files/` stays `ftp:www-data` (see [OPERATIONS.md](OPERATIONS.md#bridge--sftp-uploads-fail-chroot-permissions))
 - **Upload Sources**:
   - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
   - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment

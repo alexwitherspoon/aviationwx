@@ -42,6 +42,12 @@ All logs are in `/var/log/aviationwx/` inside the container (mounted from `/var/
 | `cleanup-cache.log` | Daily full cache cleanup (stdout) |
 | `scheduler-health-check.log` | Scheduler health checks |
 
+Root-only cron logs under `/var/lib/aviationwx/` (not in the table above):
+
+| File | Description |
+|------|-------------|
+| `set-cache-permissions.log` | Nightly cache/FTP/SFTP chroot permission repair (`set-cache-permissions.sh`, 01:00 UTC) |
+
 **Log rotation**: 1 rotated file, 100MB max per file.
 
 ### Viewing Logs
@@ -405,6 +411,33 @@ If a legitimate camera is banned:
    ```
 
 **Note:** With forgiving policies (10 failures/hour = 1 hour ban), most configuration issues self-heal quickly.
+
+### Bridge / SFTP uploads fail (chroot permissions)
+
+Symptoms on the AviationWX Bridge: `ssh: unexpected packet in response to channel open` after password auth. On the server, `/var/log/aviationwx/sshd.log` shows `Accepted password` followed by:
+
+```text
+fatal: bad ownership or modes for chroot directory "/var/sftp/{username}"
+```
+
+**Cause:** Each SFTP chroot directory (`/var/sftp/{username}/`) must be `root:root` mode `755`. Uploads go to `files/` (`ftp:www-data` `2775`). A recursive `chown` on the host cache tree (for example `chown -R www-data /tmp/aviationwx-cache`) also changes `sftp/{user}/` and breaks sshd chroot.
+
+**Verify:**
+
+```bash
+docker exec aviationwx-web bash -lc 'namei -l /var/sftp/kspbcam1 /var/sftp/kspbcam1/files'
+docker exec aviationwx-web bash -lc 'grep -i "bad ownership\|kspbcam" /var/log/aviationwx/sshd.log | tail -20'
+```
+
+**Repair (run as root in the web container):**
+
+```bash
+docker exec -u root aviationwx-web /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh
+# or full push sync (also repairs chroots, then syncs users if config changed):
+docker exec -u root aviationwx-web php /var/www/html/scripts/sync-push-config.php
+```
+
+**Prevention:** Deploy applies `www-data` ownership only to cache data directories, not `sftp/{user}/`. Nightly `set-cache-permissions.sh` and every `sync-push-config.php` run call the repair script; both exit non-zero if repair fails (check `set-cache-permissions.log` or deploy sync output). Do not run `chown -R www-data` on `/tmp/aviationwx-cache` on the host without re-running repair afterward.
 
 ---
 

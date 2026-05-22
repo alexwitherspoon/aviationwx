@@ -25,7 +25,7 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 
 This deployment requires **minimal host customization**:
 - ✅ **No log directory setup** - CD creates `/var/aviationwx/logs` on host; logs persist across reboots
-- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` subdirectories matching `ensureAllCacheDirs()` in `lib/cache-paths.php` (e.g. `weather/history`, `webcams`, `ftp`, `notam`, `partners`, `rate_limits`, `metrics/*`, `peak_gusts`, `temp_extremes`, `runways`, `geomag`, `map_tiles`) plus `sftp` for the `/var/sftp` bind mount; all are `www-data`-writable after `chown` except container startup may set `cache/ftp` root-owned for vsftpd
+- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` subdirectories matching `ensureAllCacheDirs()` in `lib/cache-paths.php` (e.g. `weather/history`, `webcams`, `ftp`, `notam`, `partners`, `rate_limits`, `metrics/*`, `peak_gusts`, `temp_extremes`, `runways`, `geomag`, `map_tiles`) plus `sftp` for the `/var/sftp` bind mount. Deploy chown applies to cache data dirs only (not `sftp/{user}/` chroots); `sync-push-config.php` and nightly `set-cache-permissions.sh` repair SFTP chroot ownership (`root:root` on `{user}/`, `ftp:www-data` on `files/`)
 - ✅ **Partner logos directory** - CD creates `/home/aviationwx/partner-logos`; logo files come from the secrets repo deploy
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
@@ -660,6 +660,14 @@ docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-w
 # Check webcam images exist
 # Cache structure: webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/*.jpg
 ls -lh /tmp/aviationwx-cache/webcams/*/*/
+```
+
+### Bridge / SFTP uploads stopped after deploy
+
+If push cameras or AviationWX Bridge devices fail SFTP after deployment but passwords are correct, see [Bridge / SFTP uploads fail (chroot permissions)](OPERATIONS.md#bridge--sftp-uploads-fail-chroot-permissions). Quick repair:
+
+```bash
+docker exec -u root aviationwx-web /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh
 ```
 
 ### View Logs

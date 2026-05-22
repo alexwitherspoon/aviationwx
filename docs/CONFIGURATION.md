@@ -875,6 +875,8 @@ Directory structure (separate hierarchies for FTP and SFTP):
 Note: SFTP uses `/var/sftp/` (outside cache) because SSH chroot requires
 ALL parent directories to be root-owned. `/var/www/html/cache/` is www-data owned.
 
+**Permission maintenance:** `scripts/repair-sftp-chroot-permissions.sh` (installed as `/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh`) restores chroot ownership. It runs from `sync-push-config.php` on every invocation, from `set-cache-permissions.sh` at container start and nightly (01:00 UTC cron), and from `create-sftp-user.sh` when a user is created. On the production host, `/tmp/aviationwx-cache/sftp` is bind-mounted to `/var/sftp`; avoid recursive `chown` on the whole cache tree that includes `sftp/{username}/`. See [Bridge / SFTP uploads fail (chroot permissions)](OPERATIONS.md#bridge--sftp-uploads-fail-chroot-permissions).
+
 The processor checks both FTP and SFTP directories automatically.
 
 **Subfolder support:** Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported. The system recursively searches up to 10 levels deep and automatically cleans up empty folders after processing.
