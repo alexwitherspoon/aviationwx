@@ -134,8 +134,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@bash -c 'errors=$$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" | grep -v "Deprecated:" | grep -v "PHP Deprecated:" || true); \
 	if [ ! -z "$$errors" ]; then echo "❌ PHP syntax errors found:"; echo "$$errors"; exit 1; else echo "✓ All PHP files have valid syntax"; fi'
 	@echo ""
-	@echo "1b️⃣  Validating upstream probe retry script..."
+	@echo "1b️⃣  Validating shell scripts (upstream probes, SFTP chroot repair)..."
 	@bash -n scripts/run-upstream-api-probes-with-retries.sh && echo "✓ Upstream probe retry script syntax OK" || { echo "❌ bash -n failed for scripts/run-upstream-api-probes-with-retries.sh"; exit 1; }
+	@bash -n scripts/repair-sftp-chroot-permissions.sh && bash -n scripts/set-cache-permissions.sh && echo "✓ SFTP/cache permission scripts syntax OK" || { echo "❌ bash -n failed for permission scripts"; exit 1; }
 	@echo ""
 	@echo "2️⃣  Running Unit Tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage; \
@@ -197,7 +198,7 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	fi
 	@echo ""
 	@echo "6️⃣  Checking for required files..."
-	@bash -c 'required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php" "lib/constants.php" "lib/circuit-breaker.php" "scripts/unified-webcam-worker.php" "lib/push-webcam-validator.php" "pages/config-generator.php" "pages/status.php"); \
+	@bash -c 'required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php" "lib/constants.php" "lib/circuit-breaker.php" "scripts/unified-webcam-worker.php" "lib/push-webcam-validator.php" "scripts/sync-push-config.php" "scripts/repair-sftp-chroot-permissions.sh" "scripts/set-cache-permissions.sh" "pages/config-generator.php" "pages/status.php"); \
 	for file in "$${required_files[@]}"; do if [ ! -f "$$file" ]; then echo "❌ Required file missing: $$file"; exit 1; fi; done; \
 	echo "✓ All required files present"'
 	@echo ""

@@ -238,6 +238,8 @@ jobs:
             "lib/constants.php"
             "lib/circuit-breaker.php"
             "scripts/sync-push-config.php"
+            "scripts/repair-sftp-chroot-permissions.sh"
+            "scripts/set-cache-permissions.sh"
             "scripts/unified-webcam-worker.php"
             "lib/push-webcam-validator.php"
             "lib/webcam-worker.php"
