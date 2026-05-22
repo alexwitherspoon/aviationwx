@@ -3,7 +3,8 @@
 # Apply cache bind-mount ownership and modes, including webcams setgid layout,
 # plus FTP and SFTP parent directories required by vsftpd and sshd chroot.
 #
-# Invoked from docker/docker-entrypoint.sh and from config/crontab (nightly root repair).
+# Invoked from docker/docker-entrypoint.sh and config/crontab (daily 01:00 UTC).
+# Ends with repair-sftp-chroot-permissions.sh for per-user /var/sftp chroots.
 #
 # Must run as root for chown to root:www-data on cache/webcams.
 #
@@ -47,6 +48,7 @@ MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
 echo "set-cache-permissions: CACHE_DIR=${CACHE_DIR} SFTP_DIR=${SFTP_DIR}"
 
 if [ -d "${CACHE_DIR}" ]; then
+    # Safe in production: /var/sftp is a separate bind mount, not under CACHE_DIR in the container.
     chown -R www-data:www-data "${CACHE_DIR}" 2>/dev/null || {
         echo "set-cache-permissions: warning: could not chown -R cache (may lack privileges or already correct)"
     }
@@ -102,4 +104,23 @@ chown root:root "${SFTP_DIR}" 2>/dev/null || true
 chmod 755 "${SFTP_DIR}" 2>/dev/null || true
 echo "set-cache-permissions: SFTP parent ${SFTP_DIR}"
 
+# Per-user SFTP chroots (host bind mount under /tmp/aviationwx-cache/sftp on production).
+REPAIR_SFTP_SCRIPT="/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh"
+if [ ! -x "${REPAIR_SFTP_SCRIPT}" ]; then
+    REPAIR_SFTP_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repair-sftp-chroot-permissions.sh"
+fi
+REPAIR_EXIT=0
+if [ -x "${REPAIR_SFTP_SCRIPT}" ]; then
+    if SFTP_DIR="${SFTP_DIR}" "${REPAIR_SFTP_SCRIPT}"; then
+        echo "set-cache-permissions: SFTP chroot directories repaired"
+    else
+        echo "set-cache-permissions: error: SFTP chroot repair failed" >&2
+        REPAIR_EXIT=1
+    fi
+else
+    echo "set-cache-permissions: error: repair-sftp-chroot-permissions.sh not found" >&2
+    REPAIR_EXIT=1
+fi
+
 echo "set-cache-permissions: done"
+exit "${REPAIR_EXIT}"

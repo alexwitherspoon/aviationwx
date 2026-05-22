@@ -257,13 +257,15 @@ ensure_cache_subdirs() {
 echo "Ensuring cache subdirectories exist..."
 ensure_cache_subdirs
 
-# Ownership and modes for cache (including webcams setgid), FTP parent, SFTP chroot parent.
-# Uses /usr/local/libexec/aviationwx/set-cache-permissions.sh (same script as 01:00 root cron in config/crontab).
+# Cache/webcams/FTP ownership plus SFTP chroot repair (set-cache-permissions.sh; same as 01:00 root cron).
 if [ ! -x /usr/local/libexec/aviationwx/set-cache-permissions.sh ]; then
     echo "ERROR: /usr/local/libexec/aviationwx/set-cache-permissions.sh missing or not executable." >&2
     exit 1
 fi
-/usr/local/libexec/aviationwx/set-cache-permissions.sh
+if ! /usr/local/libexec/aviationwx/set-cache-permissions.sh; then
+    echo "ERROR: set-cache-permissions.sh failed (SFTP chroot repair or cache ownership)." >&2
+    exit 1
+fi
 
 if [ -d "${CACHE_DIR}" ]; then
     echo "✓ Cache directory initialized"

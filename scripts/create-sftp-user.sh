@@ -100,13 +100,21 @@ else
     echo "Created user: $USERNAME (groups: webcam_users, www-data)"
 fi
 
-# Ensure permissions are correct after any modifications
-chown root:root "$SFTP_BASE_DIR"
-chmod 755 "$SFTP_BASE_DIR"
-chown root:root "$CHROOT_DIR"
-chmod 755 "$CHROOT_DIR"
-chown "$FTP_UID":"$WWW_DATA_GID" "$FILES_DIR"
-chmod 2775 "$FILES_DIR"
+# Chroot layout enforced by repair-sftp-chroot-permissions.sh (fallback inline if missing)
+REPAIR_SCRIPT="/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh"
+if [ ! -x "$REPAIR_SCRIPT" ]; then
+    REPAIR_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repair-sftp-chroot-permissions.sh"
+fi
+if [ -x "$REPAIR_SCRIPT" ]; then
+    SFTP_DIR="$SFTP_BASE_DIR" "$REPAIR_SCRIPT" "$USERNAME" || exit 1
+else
+    chown root:root "$SFTP_BASE_DIR"
+    chmod 755 "$SFTP_BASE_DIR"
+    chown root:root "$CHROOT_DIR"
+    chmod 755 "$CHROOT_DIR"
+    chown "$FTP_UID":"$WWW_DATA_GID" "$FILES_DIR"
+    chmod 2775 "$FILES_DIR"
+fi
 
 echo "SFTP user setup complete: $USERNAME"
 echo "  Chroot: $CHROOT_DIR (root:root 755)"

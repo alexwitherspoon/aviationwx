@@ -1,14 +1,12 @@
 <?php
 /**
  * Push Webcam Configuration Synchronizer
- * Watches airports.json for changes and syncs directories/users
- * 
- * Runs:
- * - On container startup via docker-entrypoint.sh
- * - During deployment via GitHub Actions workflow
- * 
- * This is more durable than cron and ensures immediate sync after deployments.
- * The script is idempotent and checks for config changes before syncing.
+ *
+ * Watches airports.json for changes and syncs FTP/SFTP users and upload directories.
+ *
+ * Runs on container startup (docker-entrypoint.sh) and during deployment (GitHub Actions).
+ * Always repairs SFTP chroot ownership first (sshd requires root:root on /var/sftp/{user}/).
+ * Full user/directory sync is skipped when config is unchanged unless vsftpd DB is missing.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -47,6 +45,58 @@ function checkRootPermissions() {
         return false;
     }
     
+    return true;
+}
+
+/**
+ * Repair SFTP chroot ownership for all upload users (sshd internal-sftp).
+ *
+ * Runs before the config-unchanged early return so mistaken host chown on
+ * /tmp/aviationwx-cache/sftp cannot block bridge uploads until airports.json changes.
+ *
+ * @return bool True when repair succeeded; false when the script is missing (production) or repair errors
+ */
+function repairAllSftpChrootPermissions(): bool {
+    $candidates = [
+        '/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh',
+        __DIR__ . '/repair-sftp-chroot-permissions.sh',
+    ];
+
+    $script = null;
+    foreach ($candidates as $path) {
+        if (is_file($path) && is_executable($path)) {
+            $script = $path;
+            break;
+        }
+    }
+
+    if ($script === null) {
+        aviationwx_log(
+            isProduction() ? 'error' : 'warning',
+            'sync-push-config: SFTP chroot repair script not found',
+            ['candidates' => $candidates],
+            'app'
+        );
+        return !isProduction();
+    }
+
+    $output = [];
+    $code = 0;
+    exec(escapeshellarg($script) . ' 2>&1', $output, $code);
+
+    if ($code !== 0) {
+        aviationwx_log('error', 'sync-push-config: SFTP chroot repair failed', [
+            'script' => $script,
+            'exit_code' => $code,
+            'output' => implode("\n", $output),
+        ], 'app');
+        return false;
+    }
+
+    aviationwx_log('debug', 'sync-push-config: SFTP chroot permissions repaired', [
+        'script' => $script,
+    ], 'app');
+
     return true;
 }
 
@@ -631,7 +681,7 @@ function removeCameraDirectory($airportId, $camIndex, $username = null) {
     
     // Clean up empty airport directory if it exists
     if ($username) {
-        $airportDir = $baseDir . $airportId;
+        $airportDir = $uploadsBaseDir . $airportId;
         if (is_dir($airportDir)) {
             $remaining = glob($airportDir . '/*');
             if (empty($remaining)) {
@@ -1475,6 +1525,11 @@ function syncAllPushCameras($config) {
 function syncPushConfig() {
     if (!checkRootPermissions()) {
         aviationwx_log('error', 'sync-push-config: exiting due to insufficient permissions', [], 'app');
+        exit(1);
+    }
+
+    if (!repairAllSftpChrootPermissions()) {
+        aviationwx_log('error', 'sync-push-config: exiting because SFTP chroot repair failed', [], 'app');
         exit(1);
     }
     

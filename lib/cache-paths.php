@@ -985,8 +985,8 @@ function ensureCacheDir(string $path): bool {
  * Call this during application bootstrap or deployment.
  *
  * Paths under CACHE_BASE_DIR should stay aligned with `docker/docker-entrypoint.sh` (ensure_cache_subdirs),
- * `/usr/local/libexec/aviationwx/set-cache-permissions.sh` (same script as `scripts/set-cache-permissions.sh` in the repo; sets ownership, webcams setgid, FTP/SFTP parents; nightly cron logs to `/var/lib/aviationwx/set-cache-permissions.log`), and
- * `.github/workflows/deploy-docker.yml`. The entrypoint skips `/var/sftp` in that cache subtree loop
+ * `/usr/local/libexec/aviationwx/set-cache-permissions.sh` (cache + FTP parent + nightly SFTP chroot repair via `repair-sftp-chroot-permissions.sh`), and
+ * `.github/workflows/deploy-docker.yml` (host cache chown excludes `sftp/{user}/` chroots). The entrypoint skips `/var/sftp` in the cache subtree loop
  * (SFTP uses a separate chroot block under `/var/sftp`). This function still lists CACHE_SFTP_DIR so
  * bootstrap can ensure the path when permissions allow; production entrypoint creates it with correct
  * ownership for sshd chroot.
