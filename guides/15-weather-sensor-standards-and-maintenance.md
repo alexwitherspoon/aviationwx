@@ -29,7 +29,7 @@ ICAO Annex 3 sets international standards and recommended practices for meteorol
 
 ## What a U.S. non-Federal AWOS program covers (high level)
 
-Non-Federal AWOS guidance in AC 150/5220-16E spans the full lifecycle: design, manufacture, procurement, installation, activation, use, and maintenance, including site criteria, commissioning, annual inspection, and ongoing validation so the system continues as an approved source. The AC explicitly states it is **not a regulation by itself**, but it is an acceptable means of compliance for certain grant- and PFC-funded projects and for parties seeking an FAA-approved AWOS. Maintenance concepts include operating within approved tolerances, retaining technical performance records, and removing or NOTAMing sensors that are out of tolerance. For Chapter 1 and maintenance chapters, use the AC PDF linked under [AWOS (Automated Weather Observing System)](#awos-automated-weather-observing-system) in Terms.
+Non-Federal AWOS guidance in AC 150/5220-16E spans the full lifecycle: design, manufacture, procurement, installation, activation, use, and maintenance, including site criteria, commissioning, annual inspection, and ongoing validation so the system continues as an approved source. The AC explicitly states it is **not a regulation by itself**, but it is an acceptable means of compliance for certain grant- and PFC-funded projects and for parties seeking an FAA-approved AWOS. Maintenance concepts include operating within approved tolerances, retaining technical performance records, and removing or NOTAMing sensors that are out of tolerance. For Chapter 1 and maintenance chapters, use the AC PDF linked under AWOS (Automated Weather Observing System) in Terms.
 
 ### FAA siting and agency maintenance orders (where to look)
 - JO 6560.20C (*Siting Criteria for Automated Weather Observing Systems (AWOS)*): index [Order JO 6560.20C](https://www.faa.gov/regulations_policies/orders_notices/index.cfm/go/document.current/documentNumber/6560.20). Implements NOAA FCM-S4-1994 for baseline siting, plus additional aviation-specific siting for FAA applications. Full order text may be restricted to the FAA network; sponsors in formal AWOS programs should obtain current directives through FAA channels.
@@ -157,6 +157,6 @@ If your country is not listed, a practical search pattern is: `"(your CAA name)"
 | Tempest engineering specs | [Tempest spec sheet PDF](https://tempest.earth/wp-content/uploads/2016/05/Tempest_Spec-Sheet_220301-web-view.pdf) |
 | WMO instruments guide (global) | [WMO-No. 8 hub](https://community.wmo.int/guide-instruments-and-methods-of-observation-wmo-no-8) |
 
-For EASA, UK CAA, and Canada starting points, see the [international table](#outside-the-united-states-where-to-look-next) above.
+For EASA, UK CAA, and Canada starting points, see the international table above.
 
 If you find a broken link or a revised edition, open an issue or PR so this guide stays current.

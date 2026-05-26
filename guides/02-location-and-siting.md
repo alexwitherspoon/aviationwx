@@ -22,7 +22,7 @@ If you can’t do those three things, **don’t install**.
 
 ## Site survey checklist
 Use the checklist at the bottom of this page to evaluate **2-5 candidate locations** before you mount anything.
-Jump here: [Site survey checklist](#site-survey-checklist-1)
+Jump here: Site survey checklist (full template below).
 
 **Note:** the scoring is intentionally **weighted toward view usefulness**-the view is the main reason the camera exists. Everything else supports whether that view is safe and sustainable.
 

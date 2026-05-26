@@ -14,15 +14,11 @@ Empty sections below mean not documented yet, not disallowed.
 
 | Path | Use when |
 |------|----------|
-| [A - PoE pole (building-fed)](#reference-a-poe-pole-building-fed) | Building has LAN + PoE++; one outdoor Ethernet homerun powers the pole |
-| [B - AC pole + building Wi-Fi](#reference-b-ac-pole-building-wi-fi) | Building has 120 V AC and reliable Wi-Fi at the pole; no Ethernet homerun |
-| [C - Remote pole + 120 V + PTP](#reference-c-remote-pole-120v-ptp) | Pole is far from the building; 120 V at pole; internet via wireless point-to-point |
-| [D - Local 120 V, no internet](#reference-d-local-120v-no-internet) | 120 V at pole; no usable WAN on site |
-| [E - Off-grid](#reference-e-off-grid-solar-battery-internet) | No building power or LAN; solar, battery, and on-pole internet |
-
-Path A: one outdoor Cat5e+ with PoE++. Path B: outdoor outlet plus strong building Wi-Fi. Paths C-E: coming soon.
-
-Wiring diagrams render on the guides site ([Mermaid](https://mermaid.js.org/)).
+| A - PoE pole (building-fed) | Building has LAN + PoE++; one outdoor Ethernet homerun powers the pole |
+| B - AC pole + building Wi-Fi | Building has 120 V AC and reliable Wi-Fi at the pole; no Ethernet homerun |
+| C - Remote pole + 120 V + PTP | Pole is far from the building; 120 V at pole; internet via wireless point-to-point |
+| D - Local 120 V, no internet | 120 V at pole; no usable WAN on site |
+| E - Off-grid | No building power or LAN; solar, battery, and on-pole internet |
 
 ---
 
@@ -30,7 +26,7 @@ Wiring diagrams render on the guides site ([Mermaid](https://mermaid.js.org/)).
 
 One outdoor Cat5e+ homerun carries Ethernet and PoE++ to a weatherproof enclosure. A pole-mounted PoE switch powers two Reolink Duo 3 PoE cameras (180° dual-lens each) and a gigabit PoE splitter for the Tempest One hub (USB-C power, RJ45 data). No AC at the pole and no Wi-Fi bridge for backhaul.
 
-Mount two Duo 3 units on opposite sides of the pole when you need two approach views. One [pole mount print](#reolink-duo-3-pole-clamp) and one PoE cable per camera.
+Mount two Duo 3 units on opposite sides of the pole when you need two approach views. One `pole-mount-reolink-duo-3.stl` print per camera (see [3D prints](#3d-prints)).
 
 ### Wiring
 
@@ -102,8 +98,8 @@ Photos show a consumer Tempest hub for layout only. Use [Tempest One](https://sh
 | 1 | NUBASA 5-port PoE switch | 1× PoE++ in, 4× 802.3at out | [B0G38WMW8Y](https://www.amazon.com/dp/B0G38WMW8Y) |
 | 1 | NUBASA 90 W PoE++ injector | At building if uplink port is not PoE++ | [B0FH26T8DB](https://www.amazon.com/dp/B0FH26T8DB) |
 | 2 | Reolink Duo 3 PoE | 180° dual-lens; one mount + one cable each | [B0CM39K7CB](https://www.amazon.com/dp/B0CM39K7CB) |
-| 2 | 3D-printed Duo 3 pole mount | See [3D prints](#3d-prints) | [Notes](#reolink-duo-3-pole-clamp) |
-| 2 | Stainless worm band clamp | One per mount; sizes in [Notes](#reolink-duo-3-pole-clamp) | Local |
+| 2 | 3D-printed Duo 3 pole mount | `pole-mount-reolink-duo-3.stl`; see [3D prints](#3d-prints) | [3D prints](#3d-prints) |
+| 2 | Stainless worm band clamp | One per mount; worm clamp sizes with `pole-mount-reolink-duo-3.stl` in [3D prints](#3d-prints) | Local |
 | 1 | Tempest sensor + hub | Tempest One per [Guide 07](07-equipment-recommendations.md) | Tempest shop |
 | 1 | Gigabit PoE splitter | USB-C + RJ45 passthrough (TYPEC0503G) | [B09GM8FB3X](https://www.amazon.com/dp/B09GM8FB3X) |
 | 1 | Ethernet bulkhead (bottom) | Building homerun | [B0BWXBL16Q](https://www.amazon.com/dp/B0BWXBL16Q) |
@@ -114,7 +110,7 @@ Photos show a consumer Tempest hub for layout only. Use [Tempest One](https://sh
 ### Install checklist (Path A)
 
 1. Mount pole, enclosure, and bulkheads; pull homerun to bottom bulkhead.
-2. Mount both Duo 3 prints; run PoE through side bulkheads; aim lenses.
+2. Mount both `pole-mount-reolink-duo-3.stl` clamps; run PoE through side bulkheads; aim lenses.
 3. Mount Tempest sensor clear of camera view.
 4. Terminate homerun at switch PoE++ IN; patch cameras; splitter on one PoE port; USB-C and RJ45 to hub.
 5. Configure per Guides 08/09; commission per Guide 11.
@@ -125,7 +121,7 @@ Photos show a consumer Tempest hub for layout only. Use [Tempest One](https://sh
 
 120 V from the building feeds a pole-mounted NEMA box. A GFCI breaker and four-channel distribution board power the OEM AC/DC adapters for two Reolink Wi-Fi cameras and the Tempest hub. Data uses building Wi-Fi (no Ethernet homerun).
 
-Same pole layout idea as Path A: Tempest on top, two 180° cameras on the strut, enclosure on the pole. Use the [Duo 3 pole clamp](#reolink-duo-3-pole-clamp) when the Wi-Fi camera body fits that print.
+Same pole layout idea as Path A: Tempest on top, two 180° cameras on the strut, enclosure on the pole. Use `pole-mount-reolink-duo-3.stl` when the Wi-Fi camera body fits that print (see [3D prints](#3d-prints)).
 
 ### Wiring
 
@@ -207,9 +203,9 @@ If the run is long, have an electrician add an outlet closer to the pole instead
 | 1 | Cord grip (bottom) | Strain relief for building feed | [B0BWXBL16Q](https://www.amazon.com/dp/B0BWXBL16Q) |
 | 1 | Weatherproof enclosure | GFCI, distribution, adapters, hub on lid | Local |
 | 1 | Tempest sensor + hub | Per [Guide 07](07-equipment-recommendations.md) | Tempest shop |
-| 1 | 3D-printed power brick holder | One print, three brick bays (2 cameras + hub) | [Notes](#power-brick-holder) |
-| 2 | 3D-printed Reolink pole mount | If Duo 3 clamp fits camera body | [Notes](#reolink-duo-3-pole-clamp) |
-| 2 | Stainless worm band clamp | One per camera; sizes in [Notes](#reolink-duo-3-pole-clamp) | Local |
+| 1 | 3D-printed power brick holder | `power-brick-holder-bracket.stl`; one print, three bays; see [3D prints](#3d-prints) | [3D prints](#3d-prints) |
+| 2 | 3D-printed Reolink pole mount | `pole-mount-reolink-duo-3.stl` if body fits; see [3D prints](#3d-prints) | [3D prints](#3d-prints) |
+| 2 | Stainless worm band clamp | One per camera; sizes with `pole-mount-reolink-duo-3.stl` in [3D prints](#3d-prints) | Local |
 | 1 | Steel pole + wall brackets | As Path A | Local |
 | As needed | Screws or VHB tape | Hold DIN gear and prints in box | Local |
 
@@ -218,13 +214,13 @@ Label distribution outputs (cam 1, cam 2, hub). Drop one silica packet in the bo
 ### Assembly notes
 
 - Mount GFCI and distribution on DIN rail or screws.
-- Seat all three OEM AC/DC adapters in the [power brick holder](#power-brick-holder) (one print); dress DC leads to the pole.
+- Seat all three OEM AC/DC adapters in `power-brick-holder-bracket.stl` (one print; see [3D prints](#3d-prints)); dress DC leads to the pole.
 - Mount hub on the lid with service loop slack.
 - No PoE, no Ethernet homerun, no extra Wi-Fi bridge when building Wi-Fi is solid.
 
 ### Install checklist (Path B)
 
-1. Confirm outlet, cord length, and strong Wi-Fi at the box; set up dedicated SSID and document credentials.
+1. Confirm outlet, cord length, and strong Wi-Fi at the box; set up a stable SSID and document credentials.
 2. Mount pole, enclosure, Tempest, and camera mounts.
 3. Wire building feed to GFCI; distribution to adapters; DC to cameras and hub.
 4. Join gear to Wi-Fi; verify in vendor apps; reboot test.
@@ -268,10 +264,10 @@ Planned content: BOM, solar sizing notes, enclosure layout, and data path. See [
 
 All printed parts for these reference builds are listed here. Path BOMs call out quantities only; download, slice, and print from this section.
 
-| Part | Use | Link |
+| File | Use | Link |
 |------|-----|------|
-| Reolink Duo 3 pole clamp | Four pole ODs in one STL; one print per camera | [STL](/public/guides/installer-resources/stl/pole-mount-reolink-duo-3.stl) · [TinkerCAD](https://www.tinkercad.com/things/0Hqfp1RWudF-pole-mount-reolink-duo-3?sharecode=OOd-vosqik8LMmsCVFXHJEy74SCSeqBrpWg8Lp-3Wps) |
-| Power brick holder | One print, three bays (Path B: 2 camera adapters + hub) | [STL](/public/guides/installer-resources/stl/power-brick-holder-bracket.stl) · [TinkerCAD](https://www.tinkercad.com/things/lUeq2FKBTpQ-power-brick-holder-bracket?sharecode=3Uei1E7HqngmkSWHAlFnIBShqNpHcL3AQ5ZuA-ayi6A) |
+| `pole-mount-reolink-duo-3.stl` | Reolink Duo 3 pole clamp; four pole ODs in one file; one print per camera | [STL](/public/guides/installer-resources/stl/pole-mount-reolink-duo-3.stl) · [TinkerCAD](https://www.tinkercad.com/things/0Hqfp1RWudF-pole-mount-reolink-duo-3?sharecode=OOd-vosqik8LMmsCVFXHJEy74SCSeqBrpWg8Lp-3Wps) |
+| `power-brick-holder-bracket.stl` | Power brick holder; one print, three bays (Path B) | [STL](/public/guides/installer-resources/stl/power-brick-holder-bracket.stl) · [TinkerCAD](https://www.tinkercad.com/things/lUeq2FKBTpQ-power-brick-holder-bracket?sharecode=3Uei1E7HqngmkSWHAlFnIBShqNpHcL3AQ5ZuA-ayi6A) |
 
 ### Notes
 
@@ -279,7 +275,7 @@ All parts: Use outdoor UV-stable filament (ASA or UV-stabilized PETG are common 
 
 <h4 id="reolink-duo-3-pole-clamp">Reolink Duo 3 pole clamp</h4>
 
-One STL includes four clamp bodies. In your slicer, print only the size that matches your pole OD.
+`pole-mount-reolink-duo-3.stl` includes four clamp bodies. In your slicer, print only the size that matches your pole OD.
 
 | Pole OD | Notes |
 |---------|--------|
@@ -299,7 +295,7 @@ Secure each mount with a stainless worm band clamp (not zip ties on the pole). A
 
 <h4 id="power-brick-holder">Power brick holder</h4>
 
-Print once for Path B. Seat each OEM AC/DC adapter in its bay on the bracket, then secure the bracket in the NEMA box with screws or VHB tape.
+`power-brick-holder-bracket.stl`: print once for Path B. Seat each OEM AC/DC adapter in its bay on the bracket, then secure the bracket in the NEMA box with screws or VHB tape.
 
 ### Revision log
 
