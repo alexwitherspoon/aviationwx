@@ -881,7 +881,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         </footer>
     </div>
     </main>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js" integrity="sha384-Wm9qzEgq4j1jEnuFK2FxKTlwuhbV2QqtGhcchvjDoKxeJ7WWAW7fysBq+1s6myfX" crossorigin="anonymous"></script>
+    <script src="/public/js/mermaid.min.js"></script>
     <script>
     (function() {
         var blocks = document.querySelectorAll('.guides-content pre code.language-mermaid, .guides-index pre code.language-mermaid');
