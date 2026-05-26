@@ -85,8 +85,6 @@ Hub wiring uses one switch PoE port into the [TYPEC0503G splitter](https://www.a
 
 ![Interior: PoE switch and cabling](/public/guides/installer-resources/reference-a-pole-poe/enclosure-interior.png)
 
-Photos show a consumer Tempest hub for layout only. Use [Tempest One](https://shop.tempest.earth/collections/all/products/tempest-for-commercial-use) with the splitter wiring above.
-
 ### Parts list
 
 | Qty | Item | Notes | Link |
