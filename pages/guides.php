@@ -386,6 +386,17 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             margin-bottom: 0.5rem;
         }
         
+        .guides-content .mermaid {
+            margin: 1.25rem 0 1.75rem;
+            overflow-x: auto;
+            text-align: center;
+        }
+
+        .guides-content .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
         .guides-content p {
             line-height: 1.8;
             margin-bottom: 1rem;
@@ -870,6 +881,33 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         </footer>
     </div>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js" integrity="sha384-Wm9qzEgq4j1jEnuFK2FxKTlwuhbV2QqtGhcchvjDoKxeJ7WWAW7fysBq+1s6myfX" crossorigin="anonymous"></script>
+    <script>
+    (function() {
+        var blocks = document.querySelectorAll('.guides-content pre code.language-mermaid, .guides-index pre code.language-mermaid');
+        if (!blocks.length || typeof mermaid === 'undefined') {
+            return;
+        }
+        var isDark = document.body.classList.contains('dark-mode');
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: isDark ? 'dark' : 'default',
+            securityLevel: 'strict',
+            flowchart: { htmlLabels: true, curve: 'basis' }
+        });
+        blocks.forEach(function(code) {
+            var pre = code.parentElement;
+            if (!pre || pre.tagName !== 'PRE') {
+                return;
+            }
+            var diagram = document.createElement('div');
+            diagram.className = 'mermaid';
+            diagram.textContent = code.textContent;
+            pre.replaceWith(diagram);
+        });
+        mermaid.run({ querySelector: '.mermaid' });
+    })();
+    </script>
 </body>
 </html>
 

@@ -53,6 +53,7 @@ Most installs follow the same "pick a path" sequence:
 These pages support the numbered install path. They are not required reading before your first cable tie.
 
 - [15 - Weather sensor standards & maintenance (AWOS / ASOS / volunteer stations)](15-weather-sensor-standards-and-maintenance.md)
+- [16 - Installer resources (parts lists, 3D prints, reference builds)](16-installer-resources.md)
 
 ---
 
