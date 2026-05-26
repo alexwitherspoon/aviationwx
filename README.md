@@ -195,6 +195,7 @@ AviationWX supports multiple weather data sources. See the [Configuration Guide]
 | [Parsedown](https://github.com/erusev/parsedown) (erusev/parsedown) | Markdown parsing for guides | MIT |
 | [Leaflet](https://leafletjs.com) | Interactive maps | BSD-2-Clause |
 | [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) | Map marker clustering (airports directory) | MIT |
+| [Mermaid](https://mermaid.js.org) 11.4.0 (`public/js/mermaid.min.js`) | Wiring diagrams on guides pages | MIT |
 
 ### System / Runtime (Docker image)
 

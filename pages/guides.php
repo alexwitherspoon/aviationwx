@@ -144,6 +144,9 @@ header('ETag: "' . md5($markdownFile . $fileMtime) . '"');
 $baseUrl = getBaseUrl();
 $canonicalUrl = getCanonicalUrl();
 
+$mermaidJsPath = __DIR__ . '/../public/js/mermaid.min.js';
+$mermaidJsVersion = is_readable($mermaidJsPath) ? (string) filemtime($mermaidJsPath) : '';
+
 // SEO variables
 $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
 ?>
@@ -881,7 +884,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         </footer>
     </div>
     </main>
-    <script src="/public/js/mermaid.min.js"></script>
+    <script src="/public/js/mermaid.min.js?v=<?= htmlspecialchars($mermaidJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
     <script>
     (function() {
         var blocks = document.querySelectorAll('.guides-content pre code.language-mermaid, .guides-index pre code.language-mermaid');
