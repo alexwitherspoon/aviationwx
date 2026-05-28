@@ -291,7 +291,7 @@ Credential shape matches push cameras: `username` is alphanumeric, max 14 charac
 **Requirements:**
 
 - Use a **dedicated** probe account synced via `sync-push-config.php`. Usernames must **not** match any push camera `push_config.username` (config validation enforces this).
-- Do not use a live camera account: probe files are `aviationwx-probe-*.txt` and must not enter the webcam pipeline.
+- Do not use a live camera account: probe uploads use a fixed remote name (`aviationwx-probe-healthcheck.txt`) and must not enter the webcam pipeline.
 - Apache container health does not reflect upload health; use heartbeat and logs under [Operations](OPERATIONS.md#upload-health-probe-and-service-watchdog).
 - Heartbeat `ftps.duration_sec` / `sftp.duration_sec` report probe wall time in seconds (not milliseconds).
 
