@@ -445,6 +445,40 @@ docker exec -u root aviationwx-web php /var/www/html/scripts/sync-push-config.ph
 
 **Prevention:** Deploy applies `www-data` ownership only to cache data directories, not `sftp/{user}/`. Nightly `set-cache-permissions.sh` and every `sync-push-config.php` run call the repair script; both exit non-zero if repair fails (check `set-cache-permissions.log` or deploy sync output). Do not run `chown -R www-data` on `/tmp/aviationwx-cache` on the host without re-running repair afterward.
 
+### Upload health probe and service watchdog
+
+Production can run functional FTPS/SFTP upload probes and restart wedged daemons automatically.
+
+| Component | Interval | Role |
+|-----------|----------|------|
+| `upload-probe-runner.sh` | `config.upload_health_probe.interval_sec` (default 30s) | Passive upload test, writes heartbeat |
+| `service-watchdog.sh` | 50s loop | Reads heartbeat, restarts vsftpd or container sshd when unhealthy |
+
+**Enable:** Set `config.upload_health_probe.enabled` to `true` in production `airports.json` with a **dedicated** probe user (must not match any `push_config.username`). See [Configuration](CONFIGURATION.md#upload-health-probe).
+
+**State and logs:**
+
+| Path | Purpose |
+|------|---------|
+| `/var/lib/aviationwx/upload-probe.json` | Last probe heartbeat (mode 600) |
+| `/var/log/aviationwx/upload-probe.log` | Probe runner output |
+| `/var/log/aviationwx/service-watchdog.log` | Watchdog and restart actions |
+| `app.log` | Structured `upload health` events (failures, restarts, throttling) |
+
+**Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one daemon restart per 30 minutes (shared throttle). Process death uses the same throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
+
+**Hairpin NAT:** If probes fail while cameras upload, set `config.upload_health_probe.probe_connect_host` (for example `127.0.0.1`) so the probe connects without looping through the public IP.
+
+```bash
+# Heartbeat and recent probe log
+docker exec aviationwx-web cat /var/lib/aviationwx/upload-probe.json | jq .
+docker exec aviationwx-web tail -50 /var/log/aviationwx/upload-probe.log
+
+# Watchdog / restarts
+docker exec aviationwx-web tail -50 /var/log/aviationwx/service-watchdog.log
+sudo grep -i 'upload health\|upload probe' /var/aviationwx/logs/app.log | tail -20
+```
+
 ---
 
 ## Related Documentation
