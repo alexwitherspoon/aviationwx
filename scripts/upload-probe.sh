@@ -86,8 +86,8 @@ run_ftps_probe() {
     base_url="ftps://${host}:${port}/"
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
-    trap probe_netrc_cleanup RETURN
     probe_setup_netrc "$host" "$user" "$pass"
+    trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
         --connect-timeout 10 --max-time 45 \
@@ -119,8 +119,8 @@ run_sftp_probe() {
     base_url="sftp://${host}:${port}/"
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
-    trap probe_netrc_cleanup RETURN
     probe_setup_netrc "$host" "$user" "$pass"
+    trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
         --connect-timeout 10 --max-time 45 \
