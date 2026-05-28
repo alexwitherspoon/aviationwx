@@ -469,6 +469,8 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 
 **Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach vsftpd and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`.
 
+**Probe files:** Each run overwrites `aviationwx-probe-healthcheck.txt` on the probe account (no per-run timestamp filenames).
+
 ```bash
 # Heartbeat and recent probe log
 docker exec aviationwx-web cat /var/lib/aviationwx/upload-probe.json | jq .

@@ -15,6 +15,8 @@ source "$COMMON_SH"
 PROBE_LOG="${PROBE_LOG:-/var/log/aviationwx/upload-probe.log}"
 PROBE_TMP_DIR="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
 PROBE_FILE_PREFIX="${UPLOAD_HEALTH_PROBE_FILE_PREFIX:-aviationwx-probe-}"
+PROBE_REMOTE_FILENAME="${PROBE_FILE_PREFIX}healthcheck.txt"
+PROBE_NETRC_FILE=""
 
 log_probe() {
     local level="$1"
@@ -56,27 +58,50 @@ write_disabled_heartbeat() {
     write_heartbeat "$heartbeat"
 }
 
+probe_netrc_cleanup() {
+    if [ -n "$PROBE_NETRC_FILE" ] && [ -f "$PROBE_NETRC_FILE" ]; then
+        rm -f "$PROBE_NETRC_FILE"
+    fi
+    PROBE_NETRC_FILE=""
+}
+
+probe_setup_netrc() {
+    local host="$1" user="$2" pass="$3"
+    probe_netrc_cleanup
+    mkdir -p "$PROBE_TMP_DIR"
+    PROBE_NETRC_FILE="$(mktemp "${PROBE_TMP_DIR}/curl-netrc.XXXXXX")"
+    chmod 600 "$PROBE_NETRC_FILE"
+    {
+        printf 'machine %s\n' "$host"
+        printf 'login %s\n' "$user"
+        printf 'password %s\n' "$pass"
+    } >"$PROBE_NETRC_FILE"
+}
+
 run_ftps_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local ts file_name base_url start_sec end_sec elapsed
-    ts="$(date +%s)"
-    file_name="${PROBE_FILE_PREFIX}${ts}.txt"
-    mkdir -p "$PROBE_TMP_DIR"
-    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"${PROBE_TMP_DIR}/${file_name}"
-
+    local file_name base_url local_file start_sec end_sec elapsed
+    file_name="$PROBE_REMOTE_FILENAME"
+    local_file="${PROBE_TMP_DIR}/${file_name}"
     base_url="ftps://${host}:${port}/"
+    mkdir -p "$PROBE_TMP_DIR"
+    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
+    trap probe_netrc_cleanup RETURN
+    probe_setup_netrc "$host" "$user" "$pass"
     start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS --ftp-ssl-reqd --ftp-pasv -u "${user}:${pass}" --connect-timeout 10 --max-time 45 \
-        --upload-file "${PROBE_TMP_DIR}/${file_name}" "${base_url}${file_name}" >/dev/null 2>&1; then
-        rm -f "${PROBE_TMP_DIR}/${file_name}"
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+        --connect-timeout 10 --max-time 45 \
+        --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>&1; then
+        rm -f "$local_file"
         echo "false|0|ftps upload failed"
         return 1
     fi
-    if ! curl -sS --ftp-ssl-reqd --ftp-pasv -u "${user}:${pass}" --connect-timeout 10 --max-time 30 \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+        --connect-timeout 10 --max-time 30 \
         --fail -X "DELE ${file_name}" "$base_url" >/dev/null 2>&1; then
         log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
     fi
-    rm -f "${PROBE_TMP_DIR}/${file_name}"
+    rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
@@ -87,26 +112,29 @@ run_ftps_probe() {
 
 run_sftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local ts file_name remote_path base_url start_sec end_sec elapsed
-    ts="$(date +%s)"
-    file_name="${PROBE_FILE_PREFIX}${ts}.txt"
+    local file_name remote_path base_url local_file start_sec end_sec elapsed
+    file_name="$PROBE_REMOTE_FILENAME"
     remote_path="files/${file_name}"
-    mkdir -p "$PROBE_TMP_DIR"
-    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"${PROBE_TMP_DIR}/${file_name}"
-
+    local_file="${PROBE_TMP_DIR}/${file_name}"
     base_url="sftp://${host}:${port}/"
+    mkdir -p "$PROBE_TMP_DIR"
+    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
+    trap probe_netrc_cleanup RETURN
+    probe_setup_netrc "$host" "$user" "$pass"
     start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS -u "${user}:${pass}" --connect-timeout 10 --max-time 45 \
-        --upload-file "${PROBE_TMP_DIR}/${file_name}" "${base_url}${remote_path}" >/dev/null 2>&1; then
-        rm -f "${PROBE_TMP_DIR}/${file_name}"
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
+        --connect-timeout 10 --max-time 45 \
+        --upload-file "$local_file" "${base_url}${remote_path}" >/dev/null 2>&1; then
+        rm -f "$local_file"
         echo "false|0|sftp upload failed"
         return 1
     fi
-    if ! curl -sS -u "${user}:${pass}" --connect-timeout 10 --max-time 20 \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
+        --connect-timeout 10 --max-time 20 \
         --fail -X "DELE ${remote_path}" "$base_url" >/dev/null 2>&1; then
         log_probe "WARN" "SFTP upload ok but delete failed for ${remote_path}"
     fi
-    rm -f "${PROBE_TMP_DIR}/${file_name}"
+    rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
