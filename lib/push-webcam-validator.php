@@ -90,19 +90,23 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
     $credentialContext = "Airport '{$airportId}' webcam index {$camIndex}";
     if (!isset($pushConfig['username'])) {
         $errors[] = "{$credentialContext}: username is required";
+    } elseif (!is_string($pushConfig['username'])) {
+        $errors[] = "{$credentialContext}: username must be a string";
     } else {
         $errors = array_merge(
             $errors,
-            validatePushUploadUsername((string) $pushConfig['username'], $credentialContext)
+            validatePushUploadUsername($pushConfig['username'], $credentialContext)
         );
     }
 
     if (!isset($pushConfig['password'])) {
         $errors[] = "{$credentialContext}: password is required";
+    } elseif (!is_string($pushConfig['password'])) {
+        $errors[] = "{$credentialContext}: password must be a string";
     } else {
         $errors = array_merge(
             $errors,
-            validatePushUploadPassword((string) $pushConfig['password'], $credentialContext)
+            validatePushUploadPassword($pushConfig['password'], $credentialContext)
         );
     }
     
