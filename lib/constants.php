@@ -1088,3 +1088,37 @@ function push_upload_master_image_extensions(): array
     return ['jpg', 'jpeg', 'png', 'webp'];
 }
 
+// Upload health probe (production FTPS/SFTP watchdog)
+if (!defined('UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC', 15);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC', 300);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_INTERVAL_DEFAULT_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_INTERVAL_DEFAULT_SEC', 30);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_STALE_GRACE_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_STALE_GRACE_SEC', 15);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_FAIL_STREAK_THRESHOLD')) {
+    define('UPLOAD_HEALTH_PROBE_FAIL_STREAK_THRESHOLD', 2);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_RESTART_MIN_INTERVAL_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_RESTART_MIN_INTERVAL_SEC', 1800);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_WATCHDOG_LOOP_SEC')) {
+    define('UPLOAD_HEALTH_PROBE_WATCHDOG_LOOP_SEC', 50);
+}
+if (!defined('UPLOAD_HEALTH_PROBE_FILE_PREFIX')) {
+    define('UPLOAD_HEALTH_PROBE_FILE_PREFIX', 'aviationwx-probe-');
+}
+
+// Push FTP/SFTP credentials (push_config and upload_health_probe)
+if (!defined('PUSH_UPLOAD_USERNAME_MAX_LENGTH')) {
+    define('PUSH_UPLOAD_USERNAME_MAX_LENGTH', 14);
+}
+if (!defined('PUSH_UPLOAD_PASSWORD_LENGTH')) {
+    define('PUSH_UPLOAD_PASSWORD_LENGTH', 14);
+}
+
