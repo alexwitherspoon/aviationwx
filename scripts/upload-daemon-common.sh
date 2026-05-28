@@ -173,7 +173,7 @@ restart_vsftpd_daemon() {
         return 1
     fi
     watchdog_log "INFO" "vsftpd restarted ($reason)"
-    log_upload_health_app "warning" "vsftpd restarted by upload health watchdog" "{\"reason\":\"${reason}\"}"
+    log_upload_health_app "warning" "vsftpd restarted" "{\"reason\":\"${reason}\"}"
     return 0
 }
 
