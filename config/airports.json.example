@@ -23,7 +23,7 @@
     },
     "dynamic_dns_refresh_seconds": 0,
 
-    "_comment_upload_health_probe": "Production only. Probe every interval_sec (default 30); service-watchdog runs every 50s. Dedicated probe user must not match any push camera username. probe_connect_host optional (e.g. 127.0.0.1) when public upload hostname fails hairpin NAT from the container.",
+    "_comment_upload_health_probe": "Production only. Probe every interval_sec (default 30); service-watchdog runs every 50s. Dedicated probe user must not match any push camera username. Production Docker (host networking): set probe_connect_host to 127.0.0.1.",
     "upload_health_probe": {
       "enabled": false,
       "interval_sec": 30,
