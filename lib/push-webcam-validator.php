@@ -8,6 +8,55 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 
 /**
+ * Validate a push FTP/SFTP username (same rules as push_config.username).
+ *
+ * @return array<int, string> Error messages (empty when valid)
+ */
+function validatePushUploadUsername(string $username, string $contextLabel): array
+{
+    $errors = [];
+    if ($username === '') {
+        $errors[] = "{$contextLabel}: username is required";
+
+        return $errors;
+    }
+    if (strlen($username) > PUSH_UPLOAD_USERNAME_MAX_LENGTH) {
+        $errors[] = "{$contextLabel}: username must be " . PUSH_UPLOAD_USERNAME_MAX_LENGTH . ' characters or less';
+    }
+    if (preg_match('/\s/', $username)) {
+        $errors[] = "{$contextLabel}: username must not contain spaces";
+    }
+    if (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
+        $errors[] = "{$contextLabel}: username must be alphanumeric";
+    }
+
+    return $errors;
+}
+
+/**
+ * Validate a push FTP/SFTP password (same rules as push_config.password).
+ *
+ * @return array<int, string> Error messages (empty when valid)
+ */
+function validatePushUploadPassword(string $password, string $contextLabel): array
+{
+    $errors = [];
+    if ($password === '') {
+        $errors[] = "{$contextLabel}: password is required";
+
+        return $errors;
+    }
+    if (strlen($password) !== PUSH_UPLOAD_PASSWORD_LENGTH) {
+        $errors[] = "{$contextLabel}: password must be exactly " . PUSH_UPLOAD_PASSWORD_LENGTH . ' characters';
+    }
+    if (!preg_match('/^[a-zA-Z0-9]{' . PUSH_UPLOAD_PASSWORD_LENGTH . '}$/', $password)) {
+        $errors[] = "{$contextLabel}: password must be alphanumeric (" . PUSH_UPLOAD_PASSWORD_LENGTH . ' characters)';
+    }
+
+    return $errors;
+}
+
+/**
  * Validate push webcam configuration
  *
  * @param array $cam Camera configuration
@@ -38,35 +87,23 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
         }
     }
     
-    // Validate username
-    if (!isset($pushConfig['username']) || empty($pushConfig['username'])) {
-        $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username is required";
+    $credentialContext = "Airport '{$airportId}' webcam index {$camIndex}";
+    if (!isset($pushConfig['username'])) {
+        $errors[] = "{$credentialContext}: username is required";
     } else {
-        $username = $pushConfig['username'];
-        // Username should be 14 characters or less, contain no spaces, and be alphanumeric (mixed case allowed)
-        if (strlen($username) > 14) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be 14 characters or less";
-        }
-        if (preg_match('/\s/', $username)) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must not contain spaces";
-        }
-        if (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be alphanumeric";
-        }
+        $errors = array_merge(
+            $errors,
+            validatePushUploadUsername((string) $pushConfig['username'], $credentialContext)
+        );
     }
-    
-    // Validate password
-    if (!isset($pushConfig['password']) || empty($pushConfig['password'])) {
-        $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: password is required";
+
+    if (!isset($pushConfig['password'])) {
+        $errors[] = "{$credentialContext}: password is required";
     } else {
-        $password = $pushConfig['password'];
-        // Password should be 14 characters, alphanumeric (mixed case allowed)
-        if (strlen($password) !== 14) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: password must be exactly 14 characters";
-        }
-        if (!preg_match('/^[a-zA-Z0-9]{14}$/', $password)) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: password must be alphanumeric (14 characters)";
-        }
+        $errors = array_merge(
+            $errors,
+            validatePushUploadPassword((string) $pushConfig['password'], $credentialContext)
+        );
     }
     
     // Port is informational only - not enforced by the server (listeners are config.network_ports / defaults).
