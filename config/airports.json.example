@@ -22,6 +22,15 @@
       "ftps_alt": null
     },
     "dynamic_dns_refresh_seconds": 0,
+
+    "_comment_upload_health_probe": "Production only. Probe every interval_sec (default 30); service-watchdog runs every 50s. Dedicated probe user must not match any push camera username. probe_connect_host optional (e.g. 127.0.0.1) when public upload hostname fails hairpin NAT from the container.",
+    "upload_health_probe": {
+      "enabled": false,
+      "interval_sec": 30,
+      "probe_connect_host": "",
+      "ftps": { "username": "", "password": "" },
+      "sftp": { "username": "", "password": "" }
+    },
     
     "_comment_version": "Client version management. dead_man_switch_days=0 disables. force_cleanup triggers immediate cleanup for all clients.",
     "dead_man_switch_days": 7,

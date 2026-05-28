@@ -29,6 +29,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `public_ip` | - | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
 | `public_ipv6` | - | Optional: reserved for future IPv6 support |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
+| `upload_health_probe` | disabled | Production: functional FTPS/SFTP probes and automatic daemon recovery; see [Upload health probe](#upload-health-probe) |
 | `network_ports` | - | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
 | `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS for DDNS (0=disabled, min 60). When set, root cron runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute (same sources in `scripts/` in the repo); it gates on this interval and invokes `update-pasv-address.sh` from the same directory as that wrapper. |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
@@ -272,6 +273,26 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 2. **`upload_hostname`** - If `public_ip` not set, resolve via DNS (recommended; survives IP changes)
 3. **`upload.{base_domain}`** - Default fallback if `upload_hostname` not set
 4. **`upload.aviationwx.org`** - Final fallback
+
+### Upload health probe
+
+Production-only functional checks for FTPS and SFTP upload paths. When enabled, `upload-probe-runner.sh` uploads a small test file every `interval_sec` (default 30). `service-watchdog.sh` evaluates the heartbeat every 50 seconds and may restart **vsftpd** or the container **sshd** after consecutive failures (at most once per 30 minutes per daemon).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Must be `true` to activate (not `1` or `"true"`) |
+| `interval_sec` | integer | Probe period in seconds (15-300, default 30) |
+| `probe_connect_host` | string | Optional connect host when `upload_hostname` fails hairpin NAT from the container (for example `127.0.0.1`) |
+| `ftps` | object | `username` and `password` for FTPS probe (passive TLS upload) |
+| `sftp` | object | `username` and `password` for SFTP probe (upload under `files/`) |
+
+Credential shape matches push cameras: `username` is alphanumeric, max 14 characters; `password` is exactly 14 alphanumeric characters. Config validation (`validate-airports-json.php` / `validateRuntimeConfigSchema`) enforces these rules.
+
+**Requirements:**
+
+- Use a **dedicated** probe account synced via `sync-push-config.php`. Usernames must **not** match any push camera `push_config.username` (config validation enforces this).
+- Do not use a live camera account: probe files are `aviationwx-probe-*.txt` and must not enter the webcam pipeline.
+- Apache container health does not reflect upload health; use heartbeat and logs under [Operations](OPERATIONS.md#upload-health-probe-and-service-watchdog).
 
 **Recommended: Hostname (default)**
 
