@@ -465,7 +465,7 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 | `/var/log/aviationwx/service-watchdog.log` | Watchdog and restart actions |
 | `app.log` | Structured `upload health` events (failures, restarts, throttling) |
 
-**Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one daemon restart per 30 minutes (shared throttle). Process death uses the same throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
+**Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one restart per 30 minutes per daemon (vsftpd and container sshd throttled separately). Process death uses the same per-daemon throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
 
 **Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach vsftpd and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`.
 
