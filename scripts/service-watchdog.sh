@@ -117,7 +117,7 @@ evaluate_probe_protocol() {
         return 1
     fi
 
-    skipped="$(jq -r ".${protocol}.skipped // false" "$UPLOAD_PROBE_STATE_FILE" 2>/dev/null || echo true)"
+    skipped="$(jq -r ".${protocol}.skipped // false" "$UPLOAD_PROBE_STATE_FILE" 2>/dev/null || echo false)"
     if [ "$skipped" = "true" ]; then
         reset_streak "$streak_file"
         return 0
