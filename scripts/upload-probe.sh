@@ -52,20 +52,20 @@ write_disabled_heartbeat() {
         --argjson epoch "$now_epoch" \
         --argjson interval "$interval" \
         --argjson stale_sec "$stale_sec" \
-        '{ts: $ts, epoch: $epoch, interval_sec: $interval, stale_sec: $stale_sec, ftps: {ok: true, skipped: true, ms: 0, detail: "disabled"}, sftp: {ok: true, skipped: true, ms: 0, detail: "disabled"}}')"
+        '{ts: $ts, epoch: $epoch, interval_sec: $interval, stale_sec: $stale_sec, ftps: {ok: true, skipped: true, duration_sec: 0, detail: "disabled"}, sftp: {ok: true, skipped: true, duration_sec: 0, detail: "disabled"}}')"
     write_heartbeat "$heartbeat"
 }
 
 run_ftps_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local ts file_name base_url start_ms end_ms elapsed
+    local ts file_name base_url start_sec end_sec elapsed
     ts="$(date +%s)"
     file_name="${PROBE_FILE_PREFIX}${ts}.txt"
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"${PROBE_TMP_DIR}/${file_name}"
 
     base_url="ftps://${host}:${port}/"
-    start_ms="$(date +%s 2>/dev/null || echo 0)"
+    start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --ftp-ssl-reqd --ftp-pasv -u "${user}:${pass}" --connect-timeout 10 --max-time 45 \
         --upload-file "${PROBE_TMP_DIR}/${file_name}" "${base_url}${file_name}" >/dev/null 2>&1; then
         rm -f "${PROBE_TMP_DIR}/${file_name}"
@@ -77,8 +77,8 @@ run_ftps_probe() {
         log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
     fi
     rm -f "${PROBE_TMP_DIR}/${file_name}"
-    end_ms="$(date +%s 2>/dev/null || echo 0)"
-    elapsed=$((end_ms - start_ms))
+    end_sec="$(date +%s 2>/dev/null || echo 0)"
+    elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
         elapsed=0
     fi
@@ -87,7 +87,7 @@ run_ftps_probe() {
 
 run_sftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local ts file_name remote_path base_url start_ms end_ms elapsed
+    local ts file_name remote_path base_url start_sec end_sec elapsed
     ts="$(date +%s)"
     file_name="${PROBE_FILE_PREFIX}${ts}.txt"
     remote_path="files/${file_name}"
@@ -95,7 +95,7 @@ run_sftp_probe() {
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"${PROBE_TMP_DIR}/${file_name}"
 
     base_url="sftp://${host}:${port}/"
-    start_ms="$(date +%s 2>/dev/null || echo 0)"
+    start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS -u "${user}:${pass}" --connect-timeout 10 --max-time 45 \
         --upload-file "${PROBE_TMP_DIR}/${file_name}" "${base_url}${remote_path}" >/dev/null 2>&1; then
         rm -f "${PROBE_TMP_DIR}/${file_name}"
@@ -107,8 +107,8 @@ run_sftp_probe() {
         log_probe "WARN" "SFTP upload ok but delete failed for ${remote_path}"
     fi
     rm -f "${PROBE_TMP_DIR}/${file_name}"
-    end_ms="$(date +%s 2>/dev/null || echo 0)"
-    elapsed=$((end_ms - start_ms))
+    end_sec="$(date +%s 2>/dev/null || echo 0)"
+    elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
         elapsed=0
     fi
@@ -118,7 +118,7 @@ run_sftp_probe() {
 main() {
     local config enabled connect_host ftp_port sftp_port interval stale_sec
     local ftps_user ftps_pass sftp_user sftp_pass
-    local ftps_ok ftps_ms ftps_detail sftp_ok sftp_ms sftp_detail
+    local ftps_ok ftps_duration_sec ftps_detail sftp_ok sftp_duration_sec sftp_detail
     local now_iso now_epoch heartbeat ftps_skipped sftp_skipped
 
     if ! command -v jq >/dev/null 2>&1; then
@@ -156,17 +156,17 @@ main() {
     sftp_pass="$(echo "$config" | jq -r '.sftp.password // empty')"
 
     ftps_ok="true"
-    ftps_ms=0
+    ftps_duration_sec=0
     ftps_detail="skipped"
     sftp_ok="true"
-    sftp_ms=0
+    sftp_duration_sec=0
     sftp_detail="skipped"
     ftps_skipped="false"
     sftp_skipped="false"
 
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
-        IFS='|' read -r ftps_ok ftps_ms ftps_detail < <(run_ftps_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
-        log_probe "INFO" "FTPS probe ok=${ftps_ok} ms=${ftps_ms} detail=${ftps_detail} host=${connect_host}"
+        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftps_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
+        log_probe "INFO" "FTPS probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
         if [ "$ftps_ok" != "true" ]; then
             log_upload_health_app "error" "FTPS upload health probe failed" \
                 "$(jq -n --arg detail "$ftps_detail" --arg host "$connect_host" '{detail: $detail, connect_host: $host}')"
@@ -177,8 +177,8 @@ main() {
     fi
 
     if [ -n "$sftp_user" ] && [ -n "$sftp_pass" ]; then
-        IFS='|' read -r sftp_ok sftp_ms sftp_detail < <(run_sftp_probe "$connect_host" "$sftp_port" "$sftp_user" "$sftp_pass" || echo "false|0|sftp failed")
-        log_probe "INFO" "SFTP probe ok=${sftp_ok} ms=${sftp_ms} detail=${sftp_detail} host=${connect_host}"
+        IFS='|' read -r sftp_ok sftp_duration_sec sftp_detail < <(run_sftp_probe "$connect_host" "$sftp_port" "$sftp_user" "$sftp_pass" || echo "false|0|sftp failed")
+        log_probe "INFO" "SFTP probe ok=${sftp_ok} duration_sec=${sftp_duration_sec} detail=${sftp_detail} host=${connect_host}"
         if [ "$sftp_ok" != "true" ]; then
             log_upload_health_app "error" "SFTP upload health probe failed" \
                 "$(jq -n --arg detail "$sftp_detail" --arg host "$connect_host" '{detail: $detail, connect_host: $host}')"
@@ -195,13 +195,13 @@ main() {
         --argjson stale_sec "$stale_sec" \
         --argjson ftps_ok "$( [ "$ftps_ok" = "true" ] && echo true || echo false )" \
         --argjson ftps_skipped "$( [ "$ftps_skipped" = "true" ] && echo true || echo false )" \
-        --argjson ftps_ms "${ftps_ms:-0}" \
+        --argjson ftps_duration_sec "${ftps_duration_sec:-0}" \
         --arg ftps_detail "$ftps_detail" \
         --argjson sftp_ok "$( [ "$sftp_ok" = "true" ] && echo true || echo false )" \
         --argjson sftp_skipped "$( [ "$sftp_skipped" = "true" ] && echo true || echo false )" \
-        --argjson sftp_ms "${sftp_ms:-0}" \
+        --argjson sftp_duration_sec "${sftp_duration_sec:-0}" \
         --arg sftp_detail "$sftp_detail" \
-        '{ts: $ts, epoch: $epoch, interval_sec: $interval, stale_sec: $stale_sec, ftps: {ok: $ftps_ok, skipped: $ftps_skipped, ms: $ftps_ms, detail: $ftps_detail}, sftp: {ok: $sftp_ok, skipped: $sftp_skipped, ms: $sftp_ms, detail: $sftp_detail}}')"
+        '{ts: $ts, epoch: $epoch, interval_sec: $interval, stale_sec: $stale_sec, ftps: {ok: $ftps_ok, skipped: $ftps_skipped, duration_sec: $ftps_duration_sec, detail: $ftps_detail}, sftp: {ok: $sftp_ok, skipped: $sftp_skipped, duration_sec: $sftp_duration_sec, detail: $sftp_detail}}')"
 
     write_heartbeat "$heartbeat"
 
