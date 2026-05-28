@@ -597,6 +597,288 @@ function isDynamicDnsEnabled(): bool {
 }
 
 /**
+ * Stale threshold for upload probe heartbeat (watchdog): 2x interval plus grace.
+ */
+function getUploadHealthProbeStaleSeconds(?int $intervalSec = null): int
+{
+    $interval = $intervalSec ?? UPLOAD_HEALTH_PROBE_INTERVAL_DEFAULT_SEC;
+    $interval = max(
+        UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC,
+        min(UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC, $interval)
+    );
+
+    return ($interval * 2) + UPLOAD_HEALTH_PROBE_STALE_GRACE_SEC;
+}
+
+/**
+ * Host used for FTPS/SFTP probe connections (may differ from upload_hostname for NAT/hairpin).
+ */
+function getUploadHealthProbeConnectHost(): string
+{
+    $raw = getGlobalConfig('upload_health_probe');
+    if (is_array($raw) && isset($raw['probe_connect_host'])) {
+        $host = $raw['probe_connect_host'];
+        if (is_string($host) && $host !== '') {
+            return $host;
+        }
+    }
+
+    return getUploadHostname();
+}
+
+/**
+ * Collect usernames from all push webcam push_config entries (lowercase keys).
+ *
+ * @return array<string, true>
+ */
+function getPushWebcamUsernameIndex(?array $config = null): array
+{
+    $config = $config ?? loadConfig();
+    $index = [];
+    foreach ($config['airports'] ?? [] as $airport) {
+        if (!isset($airport['webcams']) || !is_array($airport['webcams'])) {
+            continue;
+        }
+        foreach ($airport['webcams'] as $cam) {
+            if (!is_array($cam)) {
+                continue;
+            }
+            $isPush = (isset($cam['type']) && $cam['type'] === 'push')
+                || isset($cam['push_config']);
+            if (!$isPush || !isset($cam['push_config']['username'])) {
+                continue;
+            }
+            $user = $cam['push_config']['username'];
+            if (is_string($user) && $user !== '') {
+                $index[strtolower($user)] = true;
+            }
+        }
+    }
+
+    return $index;
+}
+
+/**
+ * Upload health probe settings for FTPS/SFTP functional checks (production watchdog).
+ *
+ * When disabled or not production, probe writes a skipped heartbeat and watchdog does not
+ * restart daemons based on probe results. Credentials live in config.upload_health_probe only.
+ *
+ * @return array{
+ *   enabled: bool,
+ *   interval_sec: int,
+ *   stale_sec: int,
+ *   connect_host: string,
+ *   upload_hostname: string,
+ *   ftp_port: int,
+ *   sftp_port: int,
+ *   ftps: ?array{username: string, password: string},
+ *   sftp: ?array{username: string, password: string}
+ * }
+ */
+function getUploadHealthProbeSettings(): array {
+    $networkPorts = getGlobalConfig('network_ports');
+    $ftpPort = 2121;
+    $sftpPort = 2222;
+    if (is_array($networkPorts)) {
+        if (isset($networkPorts['ftp_control']) && is_int($networkPorts['ftp_control'])) {
+            $ftpPort = $networkPorts['ftp_control'];
+        }
+        if (isset($networkPorts['sftp']) && is_int($networkPorts['sftp'])) {
+            $sftpPort = $networkPorts['sftp'];
+        }
+    }
+
+    $interval = UPLOAD_HEALTH_PROBE_INTERVAL_DEFAULT_SEC;
+    $defaults = [
+        'enabled' => false,
+        'interval_sec' => $interval,
+        'stale_sec' => getUploadHealthProbeStaleSeconds($interval),
+        'connect_host' => getUploadHostname(),
+        'upload_hostname' => getUploadHostname(),
+        'ftp_port' => $ftpPort,
+        'sftp_port' => $sftpPort,
+        'ftps' => null,
+        'sftp' => null,
+    ];
+
+    if (!isProduction()) {
+        return $defaults;
+    }
+
+    $raw = getGlobalConfig('upload_health_probe');
+    if (!is_array($raw) || ($raw['enabled'] ?? false) !== true) {
+        return $defaults;
+    }
+
+    $interval = isset($raw['interval_sec']) && is_int($raw['interval_sec'])
+        ? max(UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC, min(UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC, $raw['interval_sec']))
+        : UPLOAD_HEALTH_PROBE_INTERVAL_DEFAULT_SEC;
+
+    $ftps = null;
+    if (isset($raw['ftps']) && is_array($raw['ftps'])) {
+        $user = $raw['ftps']['username'] ?? null;
+        $pass = $raw['ftps']['password'] ?? null;
+        if (is_string($user) && $user !== '' && is_string($pass) && $pass !== '') {
+            $ftps = ['username' => $user, 'password' => $pass];
+        }
+    }
+
+    $sftp = null;
+    if (isset($raw['sftp']) && is_array($raw['sftp'])) {
+        $user = $raw['sftp']['username'] ?? null;
+        $pass = $raw['sftp']['password'] ?? null;
+        if (is_string($user) && $user !== '' && is_string($pass) && $pass !== '') {
+            $sftp = ['username' => $user, 'password' => $pass];
+        }
+    }
+
+    if ($ftps === null && $sftp === null) {
+        return $defaults;
+    }
+
+    return [
+        'enabled' => true,
+        'interval_sec' => $interval,
+        'stale_sec' => getUploadHealthProbeStaleSeconds($interval),
+        'connect_host' => getUploadHealthProbeConnectHost(),
+        'upload_hostname' => getUploadHostname(),
+        'ftp_port' => $ftpPort,
+        'sftp_port' => $sftpPort,
+        'ftps' => $ftps,
+        'sftp' => $sftp,
+    ];
+}
+
+/**
+ * Validate config.upload_health_probe structure (global section).
+ *
+ * @return array<int, string>
+ */
+function validateUploadHealthProbeConfig(array $config): array
+{
+    require_once __DIR__ . '/push-webcam-validator.php';
+
+    $errors = [];
+    $cfg = $config['config'] ?? null;
+    if (!is_array($cfg) || !isset($cfg['upload_health_probe'])) {
+        return $errors;
+    }
+
+    $probe = $cfg['upload_health_probe'];
+    if (!is_array($probe)) {
+        $errors[] = 'config.upload_health_probe must be an object';
+
+        return $errors;
+    }
+
+    $allowedProbeKeys = ['enabled', 'interval_sec', 'probe_connect_host', 'ftps', 'sftp'];
+    foreach ($probe as $key => $value) {
+        if (!in_array($key, $allowedProbeKeys, true)) {
+            $errors[] = "config.upload_health_probe has unknown field '{$key}'. Allowed fields: "
+                . implode(', ', $allowedProbeKeys);
+        }
+    }
+
+    if (isset($probe['enabled']) && !is_bool($probe['enabled'])) {
+        $errors[] = 'config.upload_health_probe.enabled must be a boolean';
+    }
+
+    if (isset($probe['interval_sec'])) {
+        if (!is_int($probe['interval_sec'])) {
+            $errors[] = 'config.upload_health_probe.interval_sec must be an integer';
+        } elseif ($probe['interval_sec'] < UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC
+            || $probe['interval_sec'] > UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC) {
+            $errors[] = 'config.upload_health_probe.interval_sec must be between '
+                . UPLOAD_HEALTH_PROBE_INTERVAL_MIN_SEC . ' and ' . UPLOAD_HEALTH_PROBE_INTERVAL_MAX_SEC;
+        }
+    }
+
+    if (isset($probe['probe_connect_host'])) {
+        if (!is_string($probe['probe_connect_host'])) {
+            $errors[] = 'config.upload_health_probe.probe_connect_host must be a string';
+        } elseif ($probe['probe_connect_host'] !== ''
+            && !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$/', $probe['probe_connect_host'])
+            && !filter_var($probe['probe_connect_host'], FILTER_VALIDATE_IP)) {
+            $errors[] = 'config.upload_health_probe.probe_connect_host must be a valid hostname or IP (or empty to use upload_hostname)';
+        }
+    }
+
+    $enabled = ($probe['enabled'] ?? false) === true;
+    $hasFtps = false;
+    $hasSftp = false;
+
+    foreach (['ftps', 'sftp'] as $protocol) {
+        if (!isset($probe[$protocol])) {
+            continue;
+        }
+        if (!is_array($probe[$protocol])) {
+            $errors[] = "config.upload_health_probe.{$protocol} must be an object";
+            continue;
+        }
+
+        $block = $probe[$protocol];
+        $allowedCredentialKeys = ['username', 'password'];
+        foreach ($block as $key => $value) {
+            if (!in_array($key, $allowedCredentialKeys, true)) {
+                $errors[] = "config.upload_health_probe.{$protocol} has unknown field '{$key}'. Allowed fields: "
+                    . implode(', ', $allowedCredentialKeys);
+            }
+        }
+
+        $contextLabel = "config.upload_health_probe.{$protocol}";
+        $username = isset($block['username']) && is_string($block['username']) ? $block['username'] : '';
+        $password = isset($block['password']) && is_string($block['password']) ? $block['password'] : '';
+
+        $hasUsername = $username !== '';
+        $hasPassword = $password !== '';
+
+        if ($hasUsername xor $hasPassword) {
+            $errors[] = "{$contextLabel}: username and password must both be set";
+        }
+
+        if ($hasUsername) {
+            $errors = array_merge($errors, validatePushUploadUsername($username, $contextLabel));
+        } elseif ($enabled) {
+            $errors[] = "{$contextLabel}: username is required when upload_health_probe.enabled is true";
+        }
+
+        if ($hasPassword) {
+            $errors = array_merge($errors, validatePushUploadPassword($password, $contextLabel));
+        } elseif ($enabled && $hasUsername) {
+            $errors[] = "{$contextLabel}: password is required when upload_health_probe.enabled is true";
+        }
+
+        if ($hasUsername && $hasPassword) {
+            if ($protocol === 'ftps') {
+                $hasFtps = true;
+            } else {
+                $hasSftp = true;
+            }
+        }
+    }
+
+    if ($enabled && !$hasFtps && !$hasSftp) {
+        $errors[] = 'config.upload_health_probe: when enabled is true, set valid ftps and/or sftp credentials';
+    }
+
+    if ($hasFtps || $hasSftp) {
+        $pushUsernames = getPushWebcamUsernameIndex($config);
+        foreach (['ftps', 'sftp'] as $protocol) {
+            if (!isset($probe[$protocol]['username']) || !is_string($probe[$protocol]['username'])) {
+                continue;
+            }
+            $user = $probe[$protocol]['username'];
+            if ($user !== '' && isset($pushUsernames[strtolower($user)])) {
+                $errors[] = "config.upload_health_probe.{$protocol}.username must not match a push camera username ('{$user}')";
+            }
+        }
+    }
+
+    return $errors;
+}
+
+/**
  * Max mtime age in seconds before non-allowlisted push FTP/SFTP inbox files are deleted.
  *
  * Uses `config.cleanup_push_upload_debris_max_age_seconds` when it is an integer
@@ -1988,6 +2270,12 @@ function validateRuntimeConfigSchema(array $config): array {
         if (!$usernameValidation['valid']) {
             $errors = array_merge($errors, $usernameValidation['errors']);
         }
+
+    }
+
+    $probeErrors = validateUploadHealthProbeConfig($config);
+    if ($probeErrors !== []) {
+        $errors = array_merge($errors, $probeErrors);
     }
 
     return [
@@ -3825,6 +4113,11 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['public_api'])) {
                 $apiErrors = validatePublicApiConfig($cfg['public_api']);
                 $errors = array_merge($errors, $apiErrors);
+            }
+
+            $probeErrors = validateUploadHealthProbeConfig($config);
+            if ($probeErrors !== []) {
+                $errors = array_merge($errors, $probeErrors);
             }
         }
     }
