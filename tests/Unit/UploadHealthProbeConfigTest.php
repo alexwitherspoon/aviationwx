@@ -194,6 +194,26 @@ class UploadHealthProbeConfigTest extends TestCase
         $this->assertStringContainsString('unknown field', implode(' ', $errors));
     }
 
+    public function testValidateUploadHealthProbeConfig_RejectsNonStringCredentials(): void
+    {
+        $config = [
+            'config' => [
+                'upload_health_probe' => [
+                    'enabled' => true,
+                    'ftps' => ['username' => ['bad'], 'password' => 'abcdefghijklmn'],
+                    'sftp' => ['username' => 'probesftp12', 'password' => 12345678901234],
+                ],
+            ],
+            'airports' => [],
+        ];
+
+        $errors = validateUploadHealthProbeConfig($config);
+        $this->assertNotEmpty($errors);
+        $joined = implode(' ', $errors);
+        $this->assertStringContainsString('config.upload_health_probe.ftps: username must be a string', $joined);
+        $this->assertStringContainsString('config.upload_health_probe.sftp: password must be a string', $joined);
+    }
+
     public function testValidateUploadHealthProbeConfig_AllowsEmptyProbeConnectHost(): void
     {
         $config = [

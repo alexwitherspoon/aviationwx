@@ -827,8 +827,22 @@ function validateUploadHealthProbeConfig(array $config): array
         }
 
         $contextLabel = "config.upload_health_probe.{$protocol}";
-        $username = isset($block['username']) && is_string($block['username']) ? $block['username'] : '';
-        $password = isset($block['password']) && is_string($block['password']) ? $block['password'] : '';
+        $username = '';
+        $password = '';
+        if (isset($block['username'])) {
+            if (!is_string($block['username'])) {
+                $errors[] = "{$contextLabel}: username must be a string";
+            } else {
+                $username = $block['username'];
+            }
+        }
+        if (isset($block['password'])) {
+            if (!is_string($block['password'])) {
+                $errors[] = "{$contextLabel}: password must be a string";
+            } else {
+                $password = $block['password'];
+            }
+        }
 
         $hasUsername = $username !== '';
         $hasPassword = $password !== '';
