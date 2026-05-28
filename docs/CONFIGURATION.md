@@ -282,7 +282,7 @@ Production-only functional checks for FTPS and SFTP upload paths. When enabled, 
 |-------|------|-------------|
 | `enabled` | boolean | Must be `true` to activate (not `1` or `"true"`) |
 | `interval_sec` | integer | Probe period in seconds (15-300, default 30) |
-| `probe_connect_host` | string | Optional connect host when `upload_hostname` fails hairpin NAT from the container (for example `127.0.0.1`) |
+| `probe_connect_host` | string | Connect host for on-box probes. Empty uses `upload_hostname`. Production Docker (`network_mode: host`) should use `127.0.0.1` so probes hit local vsftpd/sshd without hairpin NAT through the public IP |
 | `ftps` | object | `username` and `password` for FTPS probe (passive TLS upload) |
 | `sftp` | object | `username` and `password` for SFTP probe (upload under `files/`) |
 
@@ -293,6 +293,9 @@ Credential shape matches push cameras: `username` is alphanumeric, max 14 charac
 - Use a **dedicated** probe account synced via `sync-push-config.php`. Usernames must **not** match any push camera `push_config.username` (config validation enforces this).
 - Do not use a live camera account: probe files are `aviationwx-probe-*.txt` and must not enter the webcam pipeline.
 - Apache container health does not reflect upload health; use heartbeat and logs under [Operations](OPERATIONS.md#upload-health-probe-and-service-watchdog).
+- Heartbeat `ftps.duration_sec` / `sftp.duration_sec` report probe wall time in seconds (not milliseconds).
+
+**Production Docker:** The web container uses host networking. Set `probe_connect_host` to `127.0.0.1` so functional probes connect to local listeners on `network_ports.ftp_control` and `network_ports.sftp`. Cameras still use `upload_hostname` as usual.
 
 **Recommended: Hostname (default)**
 
