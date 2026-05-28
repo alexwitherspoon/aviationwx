@@ -174,43 +174,22 @@ log_info "Updated vsftpd.conf with new pasv_address: $NEW_IP"
 # vsftpd doesn't support config reload via SIGHUP, so we need to restart
 log_info "Restarting vsftpd to apply new pasv_address..."
 
-# Get vsftpd PID and restart it
-VSFTPD_PID=$(pgrep -x vsftpd || echo "")
-if [[ -n "$VSFTPD_PID" ]]; then
-    # Kill existing vsftpd
-    kill "$VSFTPD_PID" 2>/dev/null || true
-    sleep 1
-    
-    # Wait for it to stop (max 5 seconds)
-    for i in {1..5}; do
-        if ! pgrep -x vsftpd > /dev/null 2>&1; then
-            break
+COMMON_SH="/usr/local/libexec/aviationwx/upload-daemon-common.sh"
+if [[ -f "$COMMON_SH" ]]; then
+    # shellcheck source=/dev/null
+    source "$COMMON_SH"
+    # Log PASV-driven restarts to the DDNS log, not service-watchdog.log.
+    WATCHDOG_LOG_FILE="/var/lib/aviationwx/dynamic-dns-pasv.log"
+    if restart_vsftpd_daemon "pasv_address update"; then
+        log_info "vsftpd restarted successfully with new pasv_address: $NEW_IP"
+        if [[ -n "$CURRENT_PASV" ]]; then
+            log_pasv_address_change_event "$CURRENT_PASV" "$NEW_IP" "$UPLOAD_HOSTNAME"
         fi
-        sleep 1
-    done
-    
-    # Force kill if still running
-    if pgrep -x vsftpd > /dev/null 2>&1; then
-        pkill -9 -x vsftpd 2>/dev/null || true
-        sleep 1
+        exit 0
     fi
-fi
-
-# Start vsftpd
-/usr/sbin/vsftpd /etc/vsftpd/vsftpd.conf &
-sleep 2
-
-# Verify vsftpd is running
-if pgrep -x vsftpd > /dev/null 2>&1; then
-    log_info "vsftpd restarted successfully with new pasv_address: $NEW_IP"
-    
-    # Log the change for monitoring
-    if [[ -n "$CURRENT_PASV" ]]; then
-        log_pasv_address_change_event "$CURRENT_PASV" "$NEW_IP" "$UPLOAD_HOSTNAME"
-    fi
-    
-    exit 0
-else
     log_error "Failed to restart vsftpd after PASV address update"
     exit 1
 fi
+
+log_error "upload-daemon-common.sh not found; cannot restart vsftpd safely"
+exit 1
