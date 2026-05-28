@@ -76,6 +76,40 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('password must be exactly 14 characters', $result['errors'][0]);
     }
+
+    public function testNonStringUsernameRejected(): void
+    {
+        $cam = [
+            'name' => 'Test Camera',
+            'type' => 'push',
+            'push_config' => [
+                'username' => ['not', 'a', 'string'],
+                'password' => 'mK8pL3nQ6rT9vW',
+            ],
+        ];
+
+        $result = validatePushWebcamConfig($cam, 'kspb', 0);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('username must be a string', implode(' ', $result['errors']));
+    }
+
+    public function testNonStringPasswordRejected(): void
+    {
+        $cam = [
+            'name' => 'Test Camera',
+            'type' => 'push',
+            'push_config' => [
+                'username' => 'aB3xK9mP2qR7vN',
+                'password' => 12345678901234,
+            ],
+        ];
+
+        $result = validatePushWebcamConfig($cam, 'kspb', 0);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('password must be a string', implode(' ', $result['errors']));
+    }
     
     public function testProtocolFieldNotAllowed()
     {
