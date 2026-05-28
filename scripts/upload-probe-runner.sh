@@ -28,7 +28,7 @@ while true; do
     if ! [[ "$interval" =~ ^[0-9]+$ ]] || [ "$interval" -lt 1 ]; then
         interval="$UPLOAD_PROBE_INTERVAL_SEC"
     fi
-    UPLOAD_PROBE_INTERVAL_SEC="$interval"
+    export UPLOAD_PROBE_INTERVAL_SEC="$interval"
 
     if [ -x "$PROBE_SCRIPT" ]; then
         "$PROBE_SCRIPT" || true

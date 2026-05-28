@@ -174,7 +174,11 @@ log_info "Updated vsftpd.conf with new pasv_address: $NEW_IP"
 # vsftpd doesn't support config reload via SIGHUP, so we need to restart
 log_info "Restarting vsftpd to apply new pasv_address..."
 
-COMMON_SH="/usr/local/libexec/aviationwx/upload-daemon-common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON_SH="${SCRIPT_DIR}/upload-daemon-common.sh"
+if [ ! -f "$COMMON_SH" ]; then
+    COMMON_SH="/usr/local/libexec/aviationwx/upload-daemon-common.sh"
+fi
 if [[ -f "$COMMON_SH" ]]; then
     # shellcheck source=/dev/null
     source "$COMMON_SH"
