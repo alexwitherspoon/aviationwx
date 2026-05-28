@@ -62,6 +62,12 @@ read_probe_interval_from_config() {
         | tr -d '[:space:]' || echo "$UPLOAD_PROBE_INTERVAL_SEC"
 }
 
+# Returns 0 when epoch is a positive integer suitable for heartbeat age math.
+probe_heartbeat_epoch_is_valid() {
+    local epoch="$1"
+    [[ "$epoch" =~ ^[0-9]+$ ]] && [ "$epoch" -gt 0 ]
+}
+
 read_probe_stale_sec_from_heartbeat() {
     if [ -f "$UPLOAD_PROBE_STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
         local from_file
