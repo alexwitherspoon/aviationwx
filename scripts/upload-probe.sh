@@ -129,11 +129,7 @@ run_sftp_probe() {
         echo "false|0|sftp upload failed"
         return 1
     fi
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
-        --connect-timeout 10 --max-time 20 \
-        --fail -X "DELE ${remote_path}" "$base_url" >/dev/null 2>&1; then
-        log_probe "WARN" "SFTP upload ok but delete failed for ${remote_path}"
-    fi
+    # SFTP: curl -X DELE is FTP-only; stable PROBE_REMOTE_FILENAME is overwritten each run.
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
