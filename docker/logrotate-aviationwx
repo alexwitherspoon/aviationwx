@@ -68,6 +68,17 @@
     create 0644 root root
 }
 
+# Upload health probe log
+/var/log/aviationwx/upload-probe.log {
+    daily
+    rotate 1
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+
 # PHP application logs
 /var/log/aviationwx/app.log
 /var/log/aviationwx/user.log

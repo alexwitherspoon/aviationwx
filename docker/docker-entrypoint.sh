@@ -333,6 +333,7 @@ if [ -d "${LOG_DIR}" ]; then
           "${LOG_DIR}/apache-error.log" \
           "${LOG_DIR}/sshd.log" \
           "${LOG_DIR}/service-watchdog.log" \
+          "${LOG_DIR}/upload-probe.log" \
           "${LOG_DIR}/app.log" \
           "${LOG_DIR}/user.log" 2>/dev/null || true
     
@@ -342,8 +343,8 @@ if [ -d "${LOG_DIR}" ]; then
     chown www-data:www-data "${LOG_DIR}"/*.log 2>/dev/null || true
     chmod 644 "${LOG_DIR}"/*.log 2>/dev/null || true
     # System logs owned by root (nightly set-cache-permissions log lives under /var/lib/aviationwx; see config/crontab)
-    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
-    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
+    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/upload-probe.log" 2>/dev/null || true
+    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" "${LOG_DIR}/upload-probe.log" 2>/dev/null || true
     # Ensure heartbeat log is writable by both www-data and root
     chmod 666 "${LOG_DIR}/cron-heartbeat.log" 2>/dev/null || true
     
@@ -767,13 +768,17 @@ fi
 
 echo "All services started successfully"
 
-# Start service watchdog in background
+# Start upload probe runner (30s) and service watchdog (50s loop) in background
+echo "Starting upload health probe runner..."
+/usr/local/libexec/aviationwx/upload-probe-runner.sh &
+PROBE_RUNNER_PID=$!
+
 echo "Starting service watchdog..."
 /usr/local/bin/service-watchdog.sh &
 WATCHDOG_PID=$!
 
-# Trap signals to clean up watchdog on exit
-trap "kill $WATCHDOG_PID 2>/dev/null || true" EXIT
+# Trap signals to clean up background monitors on exit
+trap "kill $PROBE_RUNNER_PID $WATCHDOG_PID 2>/dev/null || true" EXIT
 
 # Write fail2ban jail and sshd-sftp filter for the configured FTP/SFTP ports
 echo "Configuring fail2ban ports..."
