@@ -31,9 +31,17 @@ watchdog_log() {
     local level="$1"
     shift
     local msg="$*"
-    local ts
+    local ts log_file
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
-    echo "[$ts] [$level] $msg" >> "${WATCHDOG_LOG_FILE:-/var/log/aviationwx/service-watchdog.log}"
+    log_file="${WATCHDOG_LOG_FILE:-/var/log/aviationwx/service-watchdog.log}"
+    mkdir -p "$(dirname "$log_file")" 2>/dev/null || true
+    echo "[$ts] [$level] $msg" >>"$log_file"
+}
+
+ensure_aviationwx_state_dir() {
+    mkdir -p "$(dirname "$UPLOAD_PROBE_STATE_FILE")" 2>/dev/null || true
+    mkdir -p "$(dirname "$VSFTPD_RESTART_LOCK")" 2>/dev/null || true
+    mkdir -p "$(dirname "$SSHD_RESTART_LOCK")" 2>/dev/null || true
 }
 
 # Structured app.log entry for upload daemon diagnostics (no credentials in context).
@@ -134,6 +142,7 @@ record_daemon_restart() {
 
 restart_vsftpd_daemon() {
     local reason="${1:-unspecified}"
+    ensure_aviationwx_state_dir
     if ! command -v flock >/dev/null 2>&1; then
         watchdog_log "ERROR" "flock not available; skipping vsftpd restart ($reason)"
         log_upload_health_app "error" "vsftpd restart skipped: flock unavailable" "{\"reason\":\"${reason}\"}"
@@ -170,6 +179,7 @@ restart_vsftpd_daemon() {
 
 restart_container_sshd() {
     local reason="${1:-unspecified}"
+    ensure_aviationwx_state_dir
     if ! command -v flock >/dev/null 2>&1; then
         watchdog_log "ERROR" "flock not available; skipping sshd restart ($reason)"
         log_upload_health_app "error" "container sshd restart skipped: flock unavailable" "{\"reason\":\"${reason}\"}"
