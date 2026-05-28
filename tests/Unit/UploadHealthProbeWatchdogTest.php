@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 class UploadHealthProbeWatchdogTest extends TestCase
 {
     #[\PHPUnit\Framework\Attributes\DataProvider('probeHeartbeatEpochProvider')]
-    public function testProbeHeartbeatEpochIsValid(string $epoch, int $expectedExitCode): void
+    public function testProbeHeartbeatEpochIsValid_VariousEpochs_MatchesExitCode(string $epoch, int $expectedExitCode): void
     {
         $common = dirname(__DIR__, 2) . '/scripts/upload-daemon-common.sh';
         $cmd = sprintf(

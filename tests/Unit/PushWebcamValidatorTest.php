@@ -77,7 +77,7 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertStringContainsString('password must be exactly 14 characters', $result['errors'][0]);
     }
 
-    public function testNonStringUsernameRejected(): void
+    public function testValidatePushWebcamConfig_NonStringUsername_ReturnsTypeError(): void
     {
         $cam = [
             'name' => 'Test Camera',
@@ -94,7 +94,7 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertStringContainsString('username must be a string', implode(' ', $result['errors']));
     }
 
-    public function testNonStringPasswordRejected(): void
+    public function testValidatePushWebcamConfig_NonStringPassword_ReturnsTypeError(): void
     {
         $cam = [
             'name' => 'Test Camera',
