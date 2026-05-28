@@ -124,26 +124,35 @@ evaluate_probe_protocol() {
     fi
 
     ok="$(jq -r ".${protocol}.ok // false" "$UPLOAD_PROBE_STATE_FILE")"
-    epoch="$(jq -r '.epoch // 0' "$UPLOAD_PROBE_STATE_FILE")"
+    epoch="$(jq -r '.epoch // empty' "$UPLOAD_PROBE_STATE_FILE")"
     now="$(date +%s)"
-    age=$((now - epoch))
 
-    if [ "$epoch" -eq 0 ] || [ "$age" -gt "$stale_sec" ]; then
+    if ! probe_heartbeat_epoch_is_valid "$epoch"; then
         streak="$(increment_streak "$streak_file")"
-        watchdog_log "WARN" "${protocol} probe stale (age=${age}s stale_sec=${stale_sec} streak=${streak})"
-        log_upload_health_app "error" "upload probe heartbeat stale" \
-            "{\"protocol\":\"${protocol}\",\"age_sec\":${age},\"stale_sec\":${stale_sec},\"streak\":${streak}}"
+        watchdog_log "WARN" "${protocol} probe heartbeat invalid epoch (value=${epoch:-missing} streak=${streak})"
+        log_upload_health_app "error" "upload probe heartbeat invalid epoch" \
+            "$(jq -n --arg protocol "$protocol" --arg epoch "${epoch:-}" --argjson streak "$streak" \
+                '{protocol: $protocol, epoch: $epoch, streak: $streak}')"
         ok="false"
-    elif [ "$ok" = "true" ]; then
-        reset_streak "$streak_file"
-        return 0
     else
-        streak="$(increment_streak "$streak_file")"
-        detail="$(jq -r ".${protocol}.detail // \"\"" "$UPLOAD_PROBE_STATE_FILE")"
-        watchdog_log "WARN" "${protocol} probe failed (streak=${streak} detail=${detail})"
-        log_upload_health_app "error" "upload probe check failed" \
-            "$(jq -n --arg protocol "$protocol" --argjson streak "$streak" --arg detail "$detail" \
-                '{protocol: $protocol, streak: $streak, detail: $detail}')"
+        age=$((now - epoch))
+        if [ "$age" -gt "$stale_sec" ]; then
+            streak="$(increment_streak "$streak_file")"
+            watchdog_log "WARN" "${protocol} probe stale (age=${age}s stale_sec=${stale_sec} streak=${streak})"
+            log_upload_health_app "error" "upload probe heartbeat stale" \
+                "{\"protocol\":\"${protocol}\",\"age_sec\":${age},\"stale_sec\":${stale_sec},\"streak\":${streak}}"
+            ok="false"
+        elif [ "$ok" = "true" ]; then
+            reset_streak "$streak_file"
+            return 0
+        else
+            streak="$(increment_streak "$streak_file")"
+            detail="$(jq -r ".${protocol}.detail // \"\"" "$UPLOAD_PROBE_STATE_FILE")"
+            watchdog_log "WARN" "${protocol} probe failed (streak=${streak} detail=${detail})"
+            log_upload_health_app "error" "upload probe check failed" \
+                "$(jq -n --arg protocol "$protocol" --argjson streak "$streak" --arg detail "$detail" \
+                    '{protocol: $protocol, streak: $streak, detail: $detail}')"
+        fi
     fi
 
     if [ "$ok" != "true" ]; then
