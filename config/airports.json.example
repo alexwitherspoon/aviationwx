@@ -91,6 +91,14 @@
     
     "_comment_geomag": "NOAA NCEI geomagnetic API key for automatic magnetic declination lookup. Register at https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml. When set, declination is fetched for airports without magnetic_declination override.",
     "geomag_api_key": "",
+
+    "_comment_contributions": "Master gate for Stripe sponsorship/contribute UX. Default false for OSS forks. Production secrets enable when ops console is live.",
+    "contributions": {
+      "enabled": false,
+      "platform_annual_goal_usd": 5000,
+      "goal_history": [],
+      "airport_goals": {}
+    },
     
     "default_preferences": {
       "time_format": "12hr",

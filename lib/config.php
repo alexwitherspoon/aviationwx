@@ -193,6 +193,30 @@ function isProduction(): bool {
 }
 
 /**
+ * Whether Stripe-backed contributions / sponsorship UX is enabled for this deployment.
+ *
+ * Master gate for all sponsor OSS code paths. Default false when key absent (fork-safe).
+ *
+ * @param array<string, mixed>|null $config Loaded config from loadConfig(); loaded when null
+ * @return bool True when config.contributions.enabled is true
+ */
+function isContributionsEnabled(?array $config = null): bool
+{
+    if ($config === null) {
+        $config = loadConfig();
+    }
+    if ($config === null || !isset($config['config']['contributions'])) {
+        return false;
+    }
+    $block = $config['config']['contributions'];
+    if (!is_array($block)) {
+        return false;
+    }
+
+    return !empty($block['enabled']);
+}
+
+/**
  * Returns whether the HTTP host is the main site (apex or www), not a feature or airport subdomain.
  *
  * Compares case-insensitively against getBaseDomain() so config casing does not affect routing.
