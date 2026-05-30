@@ -11,12 +11,12 @@ require_once __DIR__ . '/../../lib/config.php';
  */
 class ContributionsConfigTest extends TestCase
 {
-    public function testDisabledWhenKeyAbsent(): void
+    public function testIsContributionsEnabled_KeyAbsent_ReturnsFalse(): void
     {
         self::assertFalse(isContributionsEnabled(['config' => []]));
     }
 
-    public function testDisabledWhenEnabledFalse(): void
+    public function testIsContributionsEnabled_EnabledFalse_ReturnsFalse(): void
     {
         self::assertFalse(isContributionsEnabled([
             'config' => [
@@ -27,7 +27,7 @@ class ContributionsConfigTest extends TestCase
         ]));
     }
 
-    public function testEnabledWhenEnabledTrue(): void
+    public function testIsContributionsEnabled_EnabledTrue_ReturnsTrue(): void
     {
         self::assertTrue(isContributionsEnabled([
             'config' => [
@@ -38,7 +38,7 @@ class ContributionsConfigTest extends TestCase
         ]));
     }
 
-    public function testNullConfigReturnsFalse(): void
+    public function testIsContributionsEnabled_NullParam_UsesLoadConfigWhenUnset(): void
     {
         self::assertFalse(isContributionsEnabled(null));
     }
