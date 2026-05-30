@@ -76,4 +76,44 @@ class EmbedLinkHelpersTest extends TestCase
         $this->assertStringContainsString('&quot;', $attrs, 'Quotes should be HTML-escaped');
         $this->assertStringNotContainsString('" onclick="', $attrs, 'Unescaped quotes would allow attribute injection');
     }
+
+    /**
+     * buildEmbedWebcamPicture escapes alt text before inserting into HTML attributes.
+     */
+    public function testBuildEmbedWebcamPicture_AltTextWithSpecialChars_EscapesForAttribute(): void
+    {
+        $alt = 'Smith & Jones "North" Field Webcam';
+        $html = buildEmbedWebcamPicture(
+            'https://example.aviationwx.org',
+            'no-manifest-test-airport',
+            0,
+            1.777,
+            $alt,
+            'webcam-image'
+        );
+
+        $this->assertStringContainsString(
+            'alt="Smith &amp; Jones &quot;North&quot; Field Webcam"',
+            $html
+        );
+        $this->assertStringNotContainsString('alt="Smith & Jones', $html);
+    }
+
+    /**
+     * embedWebcamAltLabel with custom-only airport name is escaped when rendered to HTML.
+     */
+    public function testEmbedWebcamAltLabel_CustomAirportName_EscapedInWebcamPicture(): void
+    {
+        $alt = embedWebcamAltLabel(null, 'Ola & Sons Airstrip');
+        $html = buildEmbedWebcamPicture(
+            'https://example.aviationwx.org',
+            'no-manifest-test-airport',
+            0,
+            1.777,
+            $alt,
+            'webcam-image'
+        );
+
+        $this->assertStringContainsString('alt="Ola &amp; Sons Airstrip Webcam"', $html);
+    }
 }

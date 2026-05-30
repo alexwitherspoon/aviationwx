@@ -343,7 +343,7 @@ function buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex) {
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param float $aspectRatio Aspect ratio for CSS (default: 1.777 for 16:9)
- * @param string $altText Alt text for image
+ * @param string $altText Plain-text alt label (escaped for HTML attributes internally)
  * @param string $cssClass CSS class for image element
  * @return string HTML for picture element with sources and img fallback
  */
@@ -351,6 +351,9 @@ function buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIndex, $aspectRa
     require_once __DIR__ . '/../webcam-variant-manifest.php';
     require_once __DIR__ . '/../webcam-metadata.php';
     require_once __DIR__ . '/../config.php';
+
+    $altText = htmlspecialchars($altText, ENT_QUOTES, 'UTF-8');
+    $cssClass = htmlspecialchars($cssClass, ENT_QUOTES, 'UTF-8');
     
     // Get latest manifest
     $manifest = getLatestVariantManifest($airportId, $camIndex);
