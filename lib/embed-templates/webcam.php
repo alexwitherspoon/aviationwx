@@ -151,7 +151,6 @@ function processWebcamWidgetData($data, $options) {
     return [
         'airportName' => $airportName,
         'formalIdentifier' => $formalIdentifier,
-        'airportName' => $airportName,
         'webcamCount' => $webcamCount,
         'webcamIndex' => $webcamIndex,
         'hasMetarData' => $hasMetarData,
