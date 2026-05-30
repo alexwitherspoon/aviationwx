@@ -7,9 +7,6 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
 
-/**
- * Tests for contributions feature gate (isContributionsEnabled).
- */
 class ContributionsConfigTest extends TestCase
 {
     public function testIsContributionsEnabled_KeyAbsent_ReturnsFalse(): void

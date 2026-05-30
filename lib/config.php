@@ -196,9 +196,10 @@ function isProduction(): bool {
  * Whether Stripe-backed contributions / sponsorship UX is enabled for this deployment.
  *
  * Master gate for all sponsor OSS code paths. Default false when key absent (fork-safe).
+ * Strict boolean check on enabled prevents accidental activation via truthy JSON values.
  *
  * @param array<string, mixed>|null $config Loaded config from loadConfig(); loaded when null
- * @return bool True when config.contributions.enabled is true
+ * @return bool True only when config.contributions.enabled is explicitly true
  */
 function isContributionsEnabled(?array $config = null): bool
 {
