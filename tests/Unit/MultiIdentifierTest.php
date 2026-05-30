@@ -338,13 +338,18 @@ class MultiIdentifierTest extends TestCase
     }
 
     /**
-     * Test buildAirportPageKeywords - custom-only airport omits slug keywords
+     * Test buildAirportPageKeywords - custom-only airport omits slug pseudo-identifier
      */
-    public function testBuildAirportPageKeywords_CustomOnly()
+    public function testBuildAirportPageKeywords_CustomOnly_OmitsSlugPseudoIdentifier()
     {
+        $airportId = 'river-ranch';
         $airport = ['name' => 'River Ranch Airstrip'];
+        $slugFallback = getPrimaryIdentifier($airportId, $airport);
+        $this->assertEquals('river-ranch', $slugFallback, 'Slug is the routing fallback when no formal code exists');
+
         $keywords = buildAirportPageKeywords($airport);
-        $this->assertStringNotContainsString('river-ranch', strtolower($keywords));
+        $this->assertStringNotContainsString($slugFallback, strtolower($keywords));
+        $this->assertStringNotContainsString($slugFallback . ' weather', strtolower($keywords));
         $this->assertStringContainsString('River Ranch Airstrip', $keywords);
     }
 
