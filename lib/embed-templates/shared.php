@@ -355,7 +355,6 @@ function buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex) {
 function buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIndex, $aspectRatio = 1.777, $altText = '', $cssClass = 'webcam-image') {
     require_once __DIR__ . '/../webcam-variant-manifest.php';
     require_once __DIR__ . '/../webcam-metadata.php';
-    require_once __DIR__ . '/../config.php';
 
     $altText = htmlspecialchars($altText, ENT_QUOTES, 'UTF-8');
     $cssClass = htmlspecialchars($cssClass, ENT_QUOTES, 'UTF-8');
