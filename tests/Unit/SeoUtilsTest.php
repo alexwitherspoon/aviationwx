@@ -190,6 +190,26 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
+     * Custom-only airports omit schema identifier and AirNav sameAs links.
+     */
+    public function testGenerateAirportSchema_CustomOnly_OmitsIdentifierAndSameAs()
+    {
+        $airport = [
+            'name' => 'River Ranch Airstrip',
+            'address' => 'Test City, State',
+            'lat' => 45.0,
+            'lon' => -122.0,
+        ];
+
+        $schema = generateAirportSchema($airport, 'river-ranch');
+
+        $this->assertArrayNotHasKey('identifier', $schema);
+        $this->assertArrayNotHasKey('sameAs', $schema);
+        $this->assertStringNotContainsString('(river-ranch)', $schema['description']);
+        $this->assertStringContainsString('River Ranch Airstrip', $schema['description']);
+    }
+
+    /**
      * Test generateAirportSchema() - With Webcams
      */
     public function testGenerateAirportSchema_WithWebcams()

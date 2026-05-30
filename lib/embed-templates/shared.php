@@ -5,9 +5,65 @@
  * Common functions used across all widget styles.
  */
 
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../runways.php';
+
+/**
+ * Resolve formal identifier for embed headers (ICAO/IATA/FAA only).
+ *
+ * @param array $options Embed render options
+ * @param array $airport Airport configuration array
+ * @return string|null
+ */
+function resolveEmbedFormalIdentifier(array $options, array $airport): ?string
+{
+    if (array_key_exists('primaryIdentifier', $options)) {
+        $identifier = $options['primaryIdentifier'];
+        if ($identifier === null || $identifier === '') {
+            return null;
+        }
+
+        return (string) $identifier;
+    }
+
+    return getFormalIdentifierForDisplay($airport);
+}
+
+/**
+ * Append airport title markup for embed headers (identifier line omitted when none).
+ *
+ * @param string $html HTML buffer (appended in place)
+ * @param string|null $formalIdentifier ICAO/IATA/FAA, or null
+ * @param string $airportName Airport display name (not yet escaped)
+ */
+function appendEmbedAirportTitleMarkup(string &$html, ?string $formalIdentifier, string $airportName): void
+{
+    $html .= '<div class="airport-title">';
+    if ($formalIdentifier !== null && $formalIdentifier !== '') {
+        $html .= '<span class="identifier">' . htmlspecialchars($formalIdentifier) . '</span>';
+    }
+    $html .= '<span class="name">' . htmlspecialchars($airportName) . '</span>';
+    $html .= '</div>';
+}
+
+/**
+ * Accessible label for embed webcam images.
+ *
+ * @param string|null $formalIdentifier ICAO/IATA/FAA, or null
+ * @param string $airportName Airport display name
+ * @param string $suffix Label suffix (e.g. "Webcam", "Webcam 2")
+ * @return string
+ */
+function embedWebcamAltLabel(?string $formalIdentifier, string $airportName, string $suffix = 'Webcam'): string
+{
+    $label = ($formalIdentifier !== null && $formalIdentifier !== '')
+        ? $formalIdentifier
+        : $airportName;
+
+    return $label . ' ' . $suffix;
+}
 
 /**
  * Get theme CSS class

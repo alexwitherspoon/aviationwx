@@ -141,8 +141,8 @@ function generateWebSiteSchema() {
 function generateAirportSchema($airport, $airportId) {
     $airportUrl = 'https://' . $airportId . '.aviationwx.org';
     
-    // Get primary identifier for display (handles null ICAO)
-    $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+    $formalIdentifier = getFormalIdentifierForDisplay($airport);
+    $descriptionIdentifierSuffix = $formalIdentifier !== null ? ' (' . $formalIdentifier . ')' : '';
     
     // Build alternate names from all available identifiers
     $alternateNames = [$airport['name']];
@@ -162,10 +162,13 @@ function generateAirportSchema($airport, $airportId) {
         '@type' => 'Airport',
         'name' => $airport['name'],
         'alternateName' => $alternateNames,
-        'identifier' => $primaryIdentifier,
-        'description' => 'Live webcams and real-time weather conditions for ' . $airport['name'] . ' (' . $primaryIdentifier . ')',
+        'description' => 'Live webcams and real-time weather conditions for ' . $airport['name'] . $descriptionIdentifierSuffix,
         'url' => $airportUrl
     ];
+    
+    if ($formalIdentifier !== null) {
+        $schema['identifier'] = $formalIdentifier;
+    }
     
     // Add ICAO code if available
     if (!empty($airport['icao'])) {
@@ -177,10 +180,9 @@ function generateAirportSchema($airport, $airportId) {
         $schema['iataCode'] = $airport['iata'];
     }
     
-    // sameAs: AirNav (works with ICAO, FAA LID, or other primary identifier)
-    $sameAs = [];
-    $sameAs[] = 'https://www.airnav.com/airport/' . $primaryIdentifier;
-    $schema['sameAs'] = $sameAs;
+    if ($formalIdentifier !== null) {
+        $schema['sameAs'] = ['https://www.airnav.com/airport/' . $formalIdentifier];
+    }
     
     $addr = isset($airport['address']) ? trim((string) $airport['address']) : '';
     if ($addr !== '' && !addressLooksLikeGpsCoordinates($addr)) {
@@ -212,7 +214,7 @@ function generateAirportSchema($airport, $airportId) {
         }
         // Update description to emphasize live webcams
         $webcamCount = count($airport['webcams']);
-        $schema['description'] = 'Live webcams (' . $webcamCount . ' camera' . ($webcamCount > 1 ? 's' : '') . ') and real-time runway conditions for ' . $airport['name'] . ' (' . $primaryIdentifier . ')';
+        $schema['description'] = 'Live webcams (' . $webcamCount . ' camera' . ($webcamCount > 1 ? 's' : '') . ') and real-time runway conditions for ' . $airport['name'] . $descriptionIdentifierSuffix;
     }
     
     // Add service description emphasizing live webcams and runway conditions
@@ -272,13 +274,17 @@ function generateBreadcrumbSchema($items) {
  * Creates a simple two-level breadcrumb: Home > Airport Name
  * 
  * @param array $airport Airport configuration array
- * @param string $primaryIdentifier Primary airport identifier (ICAO/IATA/FAA)
  * @return array Schema.org BreadcrumbList JSON-LD structure
  */
-function generateAirportBreadcrumbs($airport, $primaryIdentifier) {
+function generateAirportBreadcrumbs(array $airport) {
+    $formalIdentifier = getFormalIdentifierForDisplay($airport);
+    $crumbLabel = $formalIdentifier !== null
+        ? $formalIdentifier . ' - ' . $airport['name']
+        : $airport['name'];
+
     return generateBreadcrumbSchema([
         ['name' => 'AviationWX', 'url' => 'https://aviationwx.org'],
-        ['name' => $primaryIdentifier . ' - ' . $airport['name']]
+        ['name' => $crumbLabel]
     ]);
 }
 

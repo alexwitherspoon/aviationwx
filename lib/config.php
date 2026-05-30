@@ -2687,6 +2687,60 @@ function getBestIdentifierForLinks(array $airport): ?string {
 }
 
 /**
+ * Formal ICAO/IATA/FAA for user-facing labels, or null for custom-only airports.
+ *
+ * @param array $airport Airport configuration array
+ * @return string|null Uppercase identifier, or null when only a site slug exists
+ */
+function getFormalIdentifierForDisplay(array $airport): ?string
+{
+    return getBestIdentifierForLinks($airport);
+}
+
+/**
+ * Airport name with optional (IDENT) when a formal identifier is configured.
+ *
+ * @param string $name Display name from config
+ * @param array $airport Airport configuration array
+ * @return string e.g. "Portland International (KPDX)" or "Ola Airstrip"
+ */
+function formatAirportNameWithIdentifier(string $name, array $airport): string
+{
+    $identifier = getFormalIdentifierForDisplay($airport);
+    if ($identifier === null) {
+        return $name;
+    }
+
+    return $name . ' (' . $identifier . ')';
+}
+
+/**
+ * Meta keywords for airport dashboard pages (comma-separated, not HTML-escaped).
+ *
+ * @param array $airport Airport configuration array
+ * @return string
+ */
+function buildAirportPageKeywords(array $airport): string
+{
+    $identifier = getFormalIdentifierForDisplay($airport);
+    $parts = [];
+    if ($identifier !== null) {
+        $parts[] = $identifier;
+    }
+    $parts[] = $airport['name'];
+    $parts[] = 'live airport webcam';
+    $parts[] = 'runway conditions';
+    if ($identifier !== null) {
+        $parts[] = $identifier . ' weather';
+    }
+    $parts[] = 'airport webcam';
+    $parts[] = 'pilot weather';
+    $parts[] = 'aviation weather';
+
+    return implode(', ', $parts);
+}
+
+/**
  * Infer ISO 3166-1 alpha-2 from ICAO letter scheme only (K, C, Y, and US Pacific prefixes).
  *
  * Used only inside {@see getEffectiveIso3166Alpha2ForAirport()} when `iso_country` is missing or invalid.
