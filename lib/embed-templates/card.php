@@ -230,7 +230,6 @@ function renderCardWidget($data, $options) {
     $processed = processCardWidgetData($data, $options);
     
     // Extract processed values
-    $airportName = htmlspecialchars($processed['airportName']);
     $formalIdentifier = $processed['formalIdentifier'];
     $hasMetarData = $processed['hasMetarData'];
     $flightCategory = $processed['flightCategory'];
