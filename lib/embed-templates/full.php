@@ -226,8 +226,8 @@ function renderFullSingleWidget($data, $options) {
     $theme = $options['theme'];
     $webcamIndex = $options['webcamIndex'] ?? 0;
     
-    $airportName = htmlspecialchars($airport['name'] ?? 'Unknown Airport');
-    $primaryIdentifier = htmlspecialchars($options['primaryIdentifier'] ?? strtoupper($airportId));
+    $airportNameRaw = $airport['name'] ?? 'Unknown Airport';
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
     
     $hasMetarData = isset($weather['flight_category']) && $weather['flight_category'] !== null;
@@ -309,10 +309,7 @@ function renderFullSingleWidget($data, $options) {
     $html = '<div class="style-full">';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="full-header">';
-    $html .= '<div class="airport-title">';
-    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
-    $html .= '<span class="name">' . $airportName . '</span>';
-    $html .= '</div>';
+    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $airportNameRaw);
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
@@ -333,7 +330,7 @@ function renderFullSingleWidget($data, $options) {
     $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link"' . $linkAttrs . '>';
     $html .= '<div class="webcam-section">';
     if ($webcamUrl) {
-        $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatio, "{$primaryIdentifier} Webcam", 'webcam-image');
+        $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatio, embedWebcamAltLabel($formalIdentifier, $airportNameRaw), 'webcam-image');
     } else {
         $html .= "\n            <div class=\"no-webcam-placeholder\" style=\"height: 100%;\">No webcam available</div>";
     }
@@ -457,8 +454,8 @@ function renderFullDualWidget($data, $options) {
     $theme = $options['theme'];
     $cams = $options['cams'] ?? [0, 1];
     
-    $airportName = htmlspecialchars($airport['name'] ?? 'Unknown Airport');
-    $primaryIdentifier = htmlspecialchars($options['primaryIdentifier'] ?? strtoupper($airportId));
+    $airportNameRaw = $airport['name'] ?? 'Unknown Airport';
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
     
     $hasMetarData = isset($weather['flight_category']) && $weather['flight_category'] !== null;
@@ -522,10 +519,7 @@ function renderFullDualWidget($data, $options) {
     $html = '<div class="style-full">';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="full-header">';
-    $html .= '<div class="airport-title">';
-    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
-    $html .= '<span class="name">' . $airportName . '</span>';
-    $html .= '</div>';
+    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $airportNameRaw);
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
@@ -566,17 +560,18 @@ function renderFullDualWidget($data, $options) {
             ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
 
-        $camName = 'Camera ' . ($camIdx + 1);
+        $camNameRaw = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
-            $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
+            $camNameRaw = (string) $airport['webcams'][$camIdx]['name'];
         }
+        $camNameEscaped = htmlspecialchars($camNameRaw, ENT_QUOTES, 'UTF-8');
 
         $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
-            $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camNameRaw, 'webcam-image');
+            $html .= "\n                    <span class=\"cam-label\">{$camNameEscaped}</span>";
         }
         $html .= '</a>';
     }
@@ -701,8 +696,8 @@ function renderFullMultiWidget($data, $options) {
     $theme = $options['theme'];
     $cams = $options['cams'] ?? [0, 1, 2, 3];
     
-    $airportName = htmlspecialchars($airport['name'] ?? 'Unknown Airport');
-    $primaryIdentifier = htmlspecialchars($options['primaryIdentifier'] ?? strtoupper($airportId));
+    $airportNameRaw = $airport['name'] ?? 'Unknown Airport';
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
     
     $hasMetarData = isset($weather['flight_category']) && $weather['flight_category'] !== null;
@@ -766,10 +761,7 @@ function renderFullMultiWidget($data, $options) {
     $html = '<div class="style-full">';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="full-header">';
-    $html .= '<div class="airport-title">';
-    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
-    $html .= '<span class="name">' . $airportName . '</span>';
-    $html .= '</div>';
+    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $airportNameRaw);
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
@@ -812,17 +804,18 @@ function renderFullMultiWidget($data, $options) {
             ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
 
-        $camName = 'Camera ' . ($camIdx + 1);
+        $camNameRaw = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
-            $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
+            $camNameRaw = (string) $airport['webcams'][$camIdx]['name'];
         }
+        $camNameEscaped = htmlspecialchars($camNameRaw, ENT_QUOTES, 'UTF-8');
 
         $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
-            $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camNameRaw, 'webcam-image');
+            $html .= "\n                    <span class=\"cam-label\">{$camNameEscaped}</span>";
         }
         $html .= '</a>';
     }

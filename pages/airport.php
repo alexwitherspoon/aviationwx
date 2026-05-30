@@ -229,14 +229,15 @@ function getImageCaptureTimeForPage($filePath) {
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
 $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') : '';
-// Get primary identifier (ICAO > IATA > FAA > Airport ID) for display
+// Primary identifier for routing/search; formal identifier for user-facing title/meta
 $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
-$pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ') - Live Webcams & Runway Conditions';
+$displayName = formatAirportNameWithIdentifier($airport['name'], $airport);
+$pageTitle = $displayName . ' - Live Webcams & Runway Conditions';
 // Optimized meta description - action-oriented, under 160 chars
-$pageDescription = 'Check current conditions at ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ')' . 
+$pageDescription = 'Check current conditions at ' . $displayName .
     ($webcamText ? ' - ' . $webcamText . ', real-time wind & weather.' : ' - real-time wind, visibility & weather.') . 
     ' Updated every minute. Free.';
-$pageKeywords = htmlspecialchars($primaryIdentifier) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($primaryIdentifier) . ' weather, airport webcam, pilot weather, aviation weather';
+$pageKeywords = buildAirportPageKeywords($airport);
 // Get base domain from global config (config.php already loaded at top of file)
 $baseDomain = getBaseDomain();
 $airportUrl = 'https://' . $airportId . '.' . $baseDomain;
@@ -615,7 +616,7 @@ if ($themeCookie === 'dark') {
             applyAutoTheme();
         })();
     </script>
-    <title><?= $pageTitle ?></title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php
     // Favicon and icon tags
@@ -692,7 +693,7 @@ if ($themeCookie === 'dark') {
     echo "\n    ";
     
     // Breadcrumb structured data
-    echo generateStructuredDataScript(generateAirportBreadcrumbs($airport, $primaryIdentifier));
+    echo generateStructuredDataScript(generateAirportBreadcrumbs($airport));
     ?>
     
     <?php
@@ -1218,7 +1219,7 @@ if ($themeCookie === 'dark') {
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($primaryIdentifier) ?>)</h1>
+            <h1><?= htmlspecialchars($displayName) ?></h1>
         </header>
         
         <?php

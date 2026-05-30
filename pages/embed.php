@@ -119,7 +119,7 @@ $data = [
 $options = [
     'dashboardUrl' => $dashboardUrl,
     'target' => $target,
-    'primaryIdentifier' => strtoupper($airportId),
+    'primaryIdentifier' => getFormalIdentifierForDisplay($airport),
     'tempUnit' => $tempUnit,
     'distUnit' => $distUnit,
     'windUnit' => $windUnit,
@@ -128,6 +128,9 @@ $options = [
     'webcamIndex' => $webcamIndex,
     'cams' => $cams
 ];
+
+$embedPageTitle = formatAirportNameWithIdentifier($airport['name'] ?? 'Unknown Airport', $airport)
+    . ' Weather Widget';
 
 // Determine theme class
 // For auto mode, we'll let JavaScript handle it, but set initial class
@@ -178,7 +181,7 @@ switch ($style) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= htmlspecialchars(strtoupper($airportId)) ?> Weather Widget</title>
+    <title><?= htmlspecialchars($embedPageTitle) ?></title>
     <link rel="stylesheet" href="/public/css/embed-widgets.css">
     <script src="/public/js/runway-label-layout.js"></script>
     <script src="/public/js/embed-wind-compass.js"></script>

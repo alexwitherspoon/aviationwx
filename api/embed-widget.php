@@ -108,7 +108,7 @@ if (!isProduction()) {
 $options = [
     'dashboardUrl' => $dashboardUrl,
     'target' => $target,
-    'primaryIdentifier' => strtoupper($airportId),
+    'primaryIdentifier' => getFormalIdentifierForDisplay($airport),
     'tempUnit' => $tempUnit,
     'distUnit' => $distUnit,
     'windUnit' => $windUnit,

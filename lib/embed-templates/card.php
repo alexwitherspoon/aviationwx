@@ -35,7 +35,7 @@ function processCardWidgetData($data, $options) {
         // Fallback: try to get from identifier if name is missing
         $airportName = 'Unknown Airport';
     }
-    $primaryIdentifier = $options['primaryIdentifier'] ?? strtoupper($airportId);
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     
     // Check for METAR data (has visibility or ceiling)
     $hasMetarData = ($weather['visibility'] !== null) || ($weather['ceiling'] !== null);
@@ -180,7 +180,7 @@ function processCardWidgetData($data, $options) {
     
     return [
         'airportName' => $airportName,
-        'primaryIdentifier' => $primaryIdentifier,
+        'formalIdentifier' => $formalIdentifier,
         'hasMetarData' => $hasMetarData,
         'flightCategory' => $flightCategory,
         'flightCategoryData' => $flightCategoryData,
@@ -230,8 +230,7 @@ function renderCardWidget($data, $options) {
     $processed = processCardWidgetData($data, $options);
     
     // Extract processed values
-    $airportName = htmlspecialchars($processed['airportName']);
-    $primaryIdentifier = htmlspecialchars($processed['primaryIdentifier']);
+    $formalIdentifier = $processed['formalIdentifier'];
     $hasMetarData = $processed['hasMetarData'];
     $flightCategory = $processed['flightCategory'];
     $flightCategoryData = $processed['flightCategoryData'];
@@ -268,14 +267,8 @@ function renderCardWidget($data, $options) {
 
     // Build HTML - wrap entire card in link to dashboard
     $html = '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
-    $html .= <<<HTML
-<div class="style-card">
-    <div class="card-header-v2">
-        <div class="airport-title">
-            <span class="identifier">{$primaryIdentifier}</span>
-            <span class="name">{$airportName}</span>
-        </div>
-HTML;
+    $html .= '<div class="style-card"><div class="card-header-v2">';
+    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $processed['airportName']);
     
     // Flight category badge with emojis (using processed data)
     // Always show badge if we have METAR data or emojis

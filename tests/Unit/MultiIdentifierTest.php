@@ -314,6 +314,56 @@ class MultiIdentifierTest extends TestCase
     }
     
     /**
+     * Test formatAirportNameWithIdentifier - formal identifier present
+     */
+    public function testFormatAirportNameWithIdentifier_WithIcao_AppendsParentheticalCode()
+    {
+        $airport = ['icao' => 'KSPB', 'name' => 'Scappoose Airport'];
+        $this->assertEquals(
+            'Scappoose Airport (KSPB)',
+            formatAirportNameWithIdentifier('Scappoose Airport', $airport)
+        );
+    }
+
+    /**
+     * Test formatAirportNameWithIdentifier - custom-only airport omits parentheses
+     */
+    public function testFormatAirportNameWithIdentifier_NoFormalCode_ReturnsNameOnly()
+    {
+        $airport = ['name' => 'Ola Airstrip'];
+        $this->assertEquals(
+            'Ola Airstrip',
+            formatAirportNameWithIdentifier('Ola Airstrip', $airport)
+        );
+    }
+
+    /**
+     * Test buildAirportPageKeywords - custom-only airport omits slug pseudo-identifier
+     */
+    public function testBuildAirportPageKeywords_CustomOnly_OmitsSlugPseudoIdentifier()
+    {
+        $airportId = 'river-ranch';
+        $airport = ['name' => 'River Ranch Airstrip'];
+        $slugFallback = getPrimaryIdentifier($airportId, $airport);
+        $this->assertEquals('river-ranch', $slugFallback, 'Slug is the routing fallback when no formal code exists');
+
+        $keywords = buildAirportPageKeywords($airport);
+        $this->assertStringNotContainsString($slugFallback, strtolower($keywords));
+        $this->assertStringNotContainsString($slugFallback . ' weather', strtolower($keywords));
+        $this->assertStringContainsString('River Ranch Airstrip', $keywords);
+    }
+
+    /**
+     * Test buildAirportPageKeywords - formal identifier included in keywords
+     */
+    public function testBuildAirportPageKeywords_WithIcao_IncludesIdentifierTokens()
+    {
+        $keywords = buildAirportPageKeywords(['name' => 'Scappoose', 'icao' => 'KSPB']);
+        $this->assertStringContainsString('KSPB', $keywords);
+        $this->assertStringContainsString('KSPB weather', $keywords);
+    }
+
+    /**
      * Test uniqueness validation - Duplicate names
      */
     public function testValidateAirportsJsonStructure_DuplicateNames()

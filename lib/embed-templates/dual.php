@@ -35,7 +35,7 @@ function processDualWidgetData($data, $options) {
     if (empty($airportName)) {
         $airportName = 'Unknown Airport';
     }
-    $primaryIdentifier = $options['primaryIdentifier'] ?? strtoupper($airportId);
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
     
     // Check for METAR data (has visibility or ceiling)
@@ -156,7 +156,7 @@ function processDualWidgetData($data, $options) {
     
     return [
         'airportName' => $airportName,
-        'primaryIdentifier' => $primaryIdentifier,
+        'formalIdentifier' => $formalIdentifier,
         'webcamCount' => $webcamCount,
         'hasMetarData' => $hasMetarData,
         'flightCategory' => $flightCategory,
@@ -183,7 +183,8 @@ function processDualWidgetData($data, $options) {
  */
 function renderDualOnlyWidget($data, $options) {
     $processed = processDualWidgetData($data, $options);
-    $primaryIdentifier = htmlspecialchars($processed['primaryIdentifier']);
+    $formalIdentifier = $processed['formalIdentifier'];
+    $airportName = $processed['airportName'];
     $lastUpdated = $processed['lastUpdated'];
     $timezone = $processed['timezone'];
     $dataSource = $processed['dataSource'];
@@ -211,7 +212,7 @@ function renderDualOnlyWidget($data, $options) {
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link dual-webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatioCss, "{$primaryIdentifier} Webcam {$camIdx}", 'webcam-image');
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatioCss, embedWebcamAltLabel($formalIdentifier, $airportName, (string) $webcam['name']), 'webcam-image');
         } else {
             $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
         }
