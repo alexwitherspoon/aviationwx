@@ -213,7 +213,7 @@ function isContributionsEnabled(?array $config = null): bool
         return false;
     }
 
-    return !empty($block['enabled']);
+    return isset($block['enabled']) && $block['enabled'] === true;
 }
 
 /**
