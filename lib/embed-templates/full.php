@@ -560,17 +560,18 @@ function renderFullDualWidget($data, $options) {
             ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
 
-        $camName = 'Camera ' . ($camIdx + 1);
+        $camNameRaw = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
-            $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
+            $camNameRaw = (string) $airport['webcams'][$camIdx]['name'];
         }
+        $camNameEscaped = htmlspecialchars($camNameRaw, ENT_QUOTES, 'UTF-8');
 
         $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
-            $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camNameRaw, 'webcam-image');
+            $html .= "\n                    <span class=\"cam-label\">{$camNameEscaped}</span>";
         }
         $html .= '</a>';
     }
@@ -803,17 +804,18 @@ function renderFullMultiWidget($data, $options) {
             ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
 
-        $camName = 'Camera ' . ($camIdx + 1);
+        $camNameRaw = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
-            $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
+            $camNameRaw = (string) $airport['webcams'][$camIdx]['name'];
         }
+        $camNameEscaped = htmlspecialchars($camNameRaw, ENT_QUOTES, 'UTF-8');
 
         $aspectRatio = $aspectRatios[$i];
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
-            $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camNameRaw, 'webcam-image');
+            $html .= "\n                    <span class=\"cam-label\">{$camNameEscaped}</span>";
         }
         $html .= '</a>';
     }
