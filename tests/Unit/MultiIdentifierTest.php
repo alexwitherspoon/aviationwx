@@ -316,7 +316,7 @@ class MultiIdentifierTest extends TestCase
     /**
      * Test formatAirportNameWithIdentifier - formal identifier present
      */
-    public function testFormatAirportNameWithIdentifier_WithFormalId()
+    public function testFormatAirportNameWithIdentifier_WithIcao_AppendsParentheticalCode()
     {
         $airport = ['icao' => 'KSPB', 'name' => 'Scappoose Airport'];
         $this->assertEquals(
@@ -328,7 +328,7 @@ class MultiIdentifierTest extends TestCase
     /**
      * Test formatAirportNameWithIdentifier - custom-only airport omits parentheses
      */
-    public function testFormatAirportNameWithIdentifier_CustomOnly()
+    public function testFormatAirportNameWithIdentifier_NoFormalCode_ReturnsNameOnly()
     {
         $airport = ['name' => 'Ola Airstrip'];
         $this->assertEquals(
@@ -356,7 +356,7 @@ class MultiIdentifierTest extends TestCase
     /**
      * Test buildAirportPageKeywords - formal identifier included in keywords
      */
-    public function testBuildAirportPageKeywords_WithFormalId()
+    public function testBuildAirportPageKeywords_WithIcao_IncludesIdentifierTokens()
     {
         $keywords = buildAirportPageKeywords(['name' => 'Scappoose', 'icao' => 'KSPB']);
         $this->assertStringContainsString('KSPB', $keywords);
