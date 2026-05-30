@@ -212,7 +212,7 @@ function renderDualOnlyWidget($data, $options) {
         $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
         $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link dual-webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatioCss, embedWebcamAltLabel($formalIdentifier, $airportName, 'Webcam ' . $camIdx), 'webcam-image');
+            $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatioCss, embedWebcamAltLabel($formalIdentifier, $airportName, (string) $webcam['name']), 'webcam-image');
         } else {
             $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
         }
