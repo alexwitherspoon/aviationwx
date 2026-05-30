@@ -21,11 +21,16 @@ function resolveEmbedFormalIdentifier(array $options, array $airport): ?string
 {
     if (array_key_exists('primaryIdentifier', $options)) {
         $identifier = $options['primaryIdentifier'];
-        if ($identifier === null || $identifier === '') {
+        if ($identifier === null) {
             return null;
         }
 
-        return (string) $identifier;
+        $normalized = strtoupper(trim((string) $identifier));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return $normalized;
     }
 
     return getFormalIdentifierForDisplay($airport);
