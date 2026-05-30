@@ -54,7 +54,7 @@ function appendEmbedAirportTitleMarkup(string &$html, ?string $formalIdentifier,
  * @param string|null $formalIdentifier ICAO/IATA/FAA, or null
  * @param string $airportName Airport display name
  * @param string $suffix Label suffix (e.g. "Webcam", "Webcam 2")
- * @return string
+ * @return string Plain-text label; escaped by buildEmbedWebcamPicture() at output
  */
 function embedWebcamAltLabel(?string $formalIdentifier, string $airportName, string $suffix = 'Webcam'): string
 {
