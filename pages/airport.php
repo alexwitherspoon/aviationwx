@@ -232,12 +232,12 @@ $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount >
 // Primary identifier for routing/search; formal identifier for user-facing title/meta
 $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
 $displayName = formatAirportNameWithIdentifier($airport['name'], $airport);
-$pageTitle = htmlspecialchars($displayName) . ' - Live Webcams & Runway Conditions';
+$pageTitle = $displayName . ' - Live Webcams & Runway Conditions';
 // Optimized meta description - action-oriented, under 160 chars
-$pageDescription = 'Check current conditions at ' . htmlspecialchars($displayName) .
+$pageDescription = 'Check current conditions at ' . $displayName .
     ($webcamText ? ' - ' . $webcamText . ', real-time wind & weather.' : ' - real-time wind, visibility & weather.') . 
     ' Updated every minute. Free.';
-$pageKeywords = htmlspecialchars(buildAirportPageKeywords($airport), ENT_QUOTES, 'UTF-8');
+$pageKeywords = buildAirportPageKeywords($airport);
 // Get base domain from global config (config.php already loaded at top of file)
 $baseDomain = getBaseDomain();
 $airportUrl = 'https://' . $airportId . '.' . $baseDomain;
@@ -616,7 +616,7 @@ if ($themeCookie === 'dark') {
             applyAutoTheme();
         })();
     </script>
-    <title><?= $pageTitle ?></title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php
     // Favicon and icon tags
