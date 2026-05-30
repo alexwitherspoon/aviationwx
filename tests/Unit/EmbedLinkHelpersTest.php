@@ -116,4 +116,39 @@ class EmbedLinkHelpersTest extends TestCase
 
         $this->assertStringContainsString('alt="Ola &amp; Sons Airstrip Webcam"', $html);
     }
+
+    /**
+     * resolveEmbedFormalIdentifier normalizes caller-provided primaryIdentifier values.
+     */
+    public function testResolveEmbedFormalIdentifier_LowercaseOption_ReturnsUppercase(): void
+    {
+        $airport = ['name' => 'Test'];
+        $this->assertSame(
+            'KPDX',
+            resolveEmbedFormalIdentifier(['primaryIdentifier' => 'kpdx'], $airport)
+        );
+    }
+
+    /**
+     * Whitespace-only primaryIdentifier is treated as absent.
+     */
+    public function testResolveEmbedFormalIdentifier_WhitespaceOnly_ReturnsNull(): void
+    {
+        $airport = ['icao' => 'KPDX', 'name' => 'Test'];
+        $this->assertNull(
+            resolveEmbedFormalIdentifier(['primaryIdentifier' => '   '], $airport)
+        );
+    }
+
+    /**
+     * Padded primaryIdentifier is trimmed before display.
+     */
+    public function testResolveEmbedFormalIdentifier_PaddedOption_ReturnsTrimmedUppercase(): void
+    {
+        $airport = ['name' => 'Test'];
+        $this->assertSame(
+            'KPDX',
+            resolveEmbedFormalIdentifier(['primaryIdentifier' => '  kpdx  '], $airport)
+        );
+    }
 }
