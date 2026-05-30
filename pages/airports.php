@@ -101,7 +101,7 @@ foreach ($airports as $airportId => $airport) {
         
         $airportsForMap[] = [
             'id' => $airportId,
-            'identifier' => getPrimaryIdentifier($airportId, $airport),
+            'identifier' => getFormalIdentifierForDisplay($airport) ?? '',
             'name' => $airport['name'],
             'lat' => $airport['lat'],
             'lon' => $airport['lon'],
@@ -1318,7 +1318,10 @@ $breadcrumbs = generateBreadcrumbSchema([
                 ?>
                 <div class="airport-card">
                     <a href="<?= htmlspecialchars($url) ?>">
-                        <div class="airport-code"><?= htmlspecialchars(getPrimaryIdentifier($airportId, $airport)) ?></div>
+                        <?php $formalIdentifier = getFormalIdentifierForDisplay($airport); ?>
+                        <?php if ($formalIdentifier !== null): ?>
+                        <div class="airport-code"><?= htmlspecialchars($formalIdentifier) ?></div>
+                        <?php endif; ?>
                         <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
                         <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                         
@@ -1954,7 +1957,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             
             var marker = L.marker([airport.lat, airport.lon], { icon: icon })
                 .bindPopup(
-                    '<div class="popup-airport-code">' + airport.identifier + '</div>' +
+                    (airport.identifier ? '<div class="popup-airport-code">' + airport.identifier + '</div>' : '') +
                     '<div class="popup-airport-name">' + airport.name + '</div>' +
                     (airport.flightCategory ? '<div style="margin: 0.5rem 0; padding: 0.25rem 0.5rem; background: ' + getFlightCategoryBgColor(airport.flightCategory) + '; color: ' + getFlightCategoryTextColor(airport.flightCategory) + '; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: center; text-transform: uppercase;">' + airport.flightCategory + '</div>' : '') +
                     '<a href="' + airport.url + '" class="popup-link">View Dashboard →</a>'

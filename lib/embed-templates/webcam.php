@@ -64,7 +64,7 @@ function processWebcamWidgetData($data, $options) {
     if (empty($airportName)) {
         $airportName = 'Unknown Airport';
     }
-    $primaryIdentifier = $options['primaryIdentifier'] ?? strtoupper($airportId);
+    $formalIdentifier = resolveEmbedFormalIdentifier($options, $airport);
     $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
     
     // Check for METAR data (has visibility or ceiling)
@@ -150,7 +150,8 @@ function processWebcamWidgetData($data, $options) {
     
     return [
         'airportName' => $airportName,
-        'primaryIdentifier' => $primaryIdentifier,
+        'formalIdentifier' => $formalIdentifier,
+        'airportName' => $airportName,
         'webcamCount' => $webcamCount,
         'webcamIndex' => $webcamIndex,
         'hasMetarData' => $hasMetarData,
@@ -188,7 +189,8 @@ function processWebcamWidgetData($data, $options) {
  */
 function renderWebcamOnlyWidget($data, $options) {
     $processed = processWebcamWidgetData($data, $options);
-    $primaryIdentifier = htmlspecialchars($processed['primaryIdentifier']);
+    $formalIdentifier = $processed['formalIdentifier'];
+    $airportName = $processed['airportName'];
     $webcamCount = $processed['webcamCount'];
     $webcamIndex = $processed['webcamIndex'];
     $lastUpdated = $processed['lastUpdated'];
@@ -209,7 +211,7 @@ function renderWebcamOnlyWidget($data, $options) {
     $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link"' . $linkAttrs . '>';
     $html .= '<div class="webcam-container">';
     if ($webcamUrl) {
-        $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatioCss, "{$primaryIdentifier} Webcam", 'webcam-image');
+        $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatioCss, embedWebcamAltLabel($formalIdentifier, $airportName), 'webcam-image');
     } else {
         $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
     }
