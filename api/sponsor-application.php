@@ -27,34 +27,34 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/exchange-spool.php';
 
 if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
-    sponsor_application_header('Content-Type: application/json; charset=utf-8');
-    sponsor_application_header('Cache-Control: no-store');
-
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-        http_response_code(405);
-        sponsor_application_header('Allow: POST');
-        echo json_encode(['ok' => false, 'error' => 'Method not allowed'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
-    }
+    sponsorApplicationHeader('Content-Type: application/json; charset=utf-8');
+    sponsorApplicationHeader('Cache-Control: no-store');
 
     if (!isContributionsEnabled()) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'Not found'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
+    }
+
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        http_response_code(405);
+        sponsorApplicationHeader('Allow: POST');
+        echo json_encode(['ok' => false, 'error' => 'Method not allowed'], JSON_THROW_ON_ERROR);
+        sponsorApplicationFinish();
     }
 
     if (!checkRateLimit('sponsor_application', 3, SPONSOR_APPLICATION_RATE_LIMIT_WINDOW)) {
         http_response_code(429);
-        sponsor_application_header('Retry-After: ' . SPONSOR_APPLICATION_RATE_LIMIT_WINDOW);
+        sponsorApplicationHeader('Retry-After: ' . SPONSOR_APPLICATION_RATE_LIMIT_WINDOW);
         echo json_encode(['ok' => false, 'error' => 'Too many requests'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
     if ($contentLength > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
         http_response_code(413);
         echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     if (defined('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE')) {
@@ -63,7 +63,7 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
         if (strlen($raw) > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
             http_response_code(413);
             echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
-            sponsor_application_finish();
+            sponsorApplicationFinish();
         }
     } else {
         $raw = file_get_contents('php://input');
@@ -71,14 +71,14 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
         if (strlen($raw) > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
             http_response_code(413);
             echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
-            sponsor_application_finish();
+            sponsorApplicationFinish();
         }
     }
 
     if (trim($raw) === '') {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid JSON body'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     try {
@@ -86,26 +86,26 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
     } catch (JsonException) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid JSON body'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     if (!is_array($body)) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid JSON body'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     if (!empty($body['website'])) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid request'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     $errors = validateSponsorApplicationBody($body);
     if ($errors !== []) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Validation failed', 'fields' => $errors], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     $applicationId = generateSponsorApplicationUuid();
@@ -129,7 +129,7 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
 
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'Unable to submit application'], JSON_THROW_ON_ERROR);
-        sponsor_application_finish();
+        sponsorApplicationFinish();
     }
 
     aviationwx_log('info', 'sponsor application spool written', [
@@ -143,7 +143,7 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
         'application_id' => $applicationId,
         'message' => 'Application received. We will review it and follow up by email.',
     ], JSON_THROW_ON_ERROR);
-    sponsor_application_finish();
+    sponsorApplicationFinish();
 }
 
 /**
@@ -213,7 +213,7 @@ function generateSponsorApplicationUuid(): string
     return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
 }
 
-function sponsor_application_header(string $headerLine): void
+function sponsorApplicationHeader(string $headerLine): void
 {
     header($headerLine);
     if (defined('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE')) {
@@ -224,7 +224,7 @@ function sponsor_application_header(string $headerLine): void
     }
 }
 
-function sponsor_application_finish(): never
+function sponsorApplicationFinish(): never
 {
     if (defined('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE')) {
         throw new SponsorApplicationHandlerStopped();
