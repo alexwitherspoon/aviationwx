@@ -8,6 +8,12 @@
 
 declare(strict_types=1);
 
+/** Maximum JSON request body size for sponsor application submissions (bytes). */
+const SPONSOR_APPLICATION_MAX_BODY_BYTES = 16384;
+
+/** Rate limit window for sponsor application POSTs (seconds); matches checkRateLimit() call. */
+const SPONSOR_APPLICATION_RATE_LIMIT_WINDOW = 3600;
+
 /**
  * Thrown when the sponsor application handler finishes in test mode (instead of exit).
  */
@@ -21,12 +27,12 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/exchange-spool.php';
 
 if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
+    sponsor_application_header('Content-Type: application/json; charset=utf-8');
+    sponsor_application_header('Cache-Control: no-store');
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         http_response_code(405);
-        header('Allow: POST');
+        sponsor_application_header('Allow: POST');
         echo json_encode(['ok' => false, 'error' => 'Method not allowed'], JSON_THROW_ON_ERROR);
         sponsor_application_finish();
     }
@@ -37,18 +43,36 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
         sponsor_application_finish();
     }
 
-    if (!checkRateLimit('sponsor_application', 3, 3600)) {
+    if (!checkRateLimit('sponsor_application', 3, SPONSOR_APPLICATION_RATE_LIMIT_WINDOW)) {
         http_response_code(429);
+        sponsor_application_header('Retry-After: ' . SPONSOR_APPLICATION_RATE_LIMIT_WINDOW);
         echo json_encode(['ok' => false, 'error' => 'Too many requests'], JSON_THROW_ON_ERROR);
+        sponsor_application_finish();
+    }
+
+    $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($contentLength > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
+        http_response_code(413);
+        echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
         sponsor_application_finish();
     }
 
     if (defined('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE')) {
         $raw = getenv('SPONSOR_APPLICATION_TEST_INPUT');
         $raw = is_string($raw) ? $raw : '';
+        if (strlen($raw) > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
+            http_response_code(413);
+            echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
+            sponsor_application_finish();
+        }
     } else {
         $raw = file_get_contents('php://input');
         $raw = is_string($raw) ? $raw : '';
+        if (strlen($raw) > SPONSOR_APPLICATION_MAX_BODY_BYTES) {
+            http_response_code(413);
+            echo json_encode(['ok' => false, 'error' => 'Request body too large'], JSON_THROW_ON_ERROR);
+            sponsor_application_finish();
+        }
     }
 
     if (trim($raw) === '') {
@@ -187,6 +211,17 @@ function generateSponsorApplicationUuid(): string
     $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
 
     return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
+}
+
+function sponsor_application_header(string $headerLine): void
+{
+    header($headerLine);
+    if (defined('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE')) {
+        $parts = explode(':', $headerLine, 2);
+        if (count($parts) === 2) {
+            $GLOBALS['AVIATIONWX_SPONSOR_APPLICATION_CAPTURED_HEADERS'][strtolower(trim($parts[0]))] = trim($parts[1]);
+        }
+    }
 }
 
 function sponsor_application_finish(): never
