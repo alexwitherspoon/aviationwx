@@ -43,6 +43,21 @@ PHP, $configPath);
         self::assertStringNotContainsString('secret-key', $lines[0]);
     }
 
+    public function testScrubExchangeLogContext_RedactsUpstreamCredentialKeys(): void
+    {
+        putenv('APP_ENV=testing');
+        putenv('CONFIG_PATH=' . dirname(__DIR__, 2) . '/tests/Fixtures/airports.json.test');
+        require_once dirname(__DIR__, 2) . '/lib/logger.php';
+
+        $scrubbed = aviationwx_scrub_exchange_log_context([
+            'application_key' => 'secret-app-key',
+            'client_secret' => 'secret-client',
+        ]);
+
+        self::assertSame('[redacted]', $scrubbed['application_key']);
+        self::assertSame('[redacted]', $scrubbed['client_secret']);
+    }
+
     public function testScrubExchangeLogContext_RedactsQueryParameterInUrl(): void
     {
         putenv('APP_ENV=testing');

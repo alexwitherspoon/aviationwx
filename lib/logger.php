@@ -189,6 +189,12 @@ function aviationwx_scrub_exchange_log_context(array $context): array
     $sensitiveKeys = [
         'api_key',
         'apikey',
+        'application_key',
+        'api_secret',
+        'client_secret',
+        'client_id',
+        'api_token',
+        'access_token',
         'password',
         'passwd',
         'secret',
@@ -227,7 +233,7 @@ if (!function_exists('aviationwx_redact_sensitive_query_params')) {
 function aviationwx_redact_sensitive_query_params(string $value): string
 {
     return (string) preg_replace(
-        '/([?&])(api_key|apikey|token|password|secret|access_token)=([^&]*)/i',
+        '/([?&])(api_key|apikey|application_key|api_secret|client_secret|client_id|api_token|access_token|token|password|secret)=([^&]*)/i',
         '$1$2=[redacted]',
         $value,
     );
