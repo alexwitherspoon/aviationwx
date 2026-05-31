@@ -55,12 +55,13 @@ final class SponsorApplicationApiTest extends TestCase
             CURLOPT_TIMEOUT => 10,
         ]);
         $raw = curl_exec($ch);
-        if ($raw === false) {
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        if ($raw === false || $status === 0) {
             self::markTestSkipped('Sponsor application endpoint not reachable');
         }
 
+        self::assertSame(405, $status);
         self::assertIsString($raw);
-        self::assertStringContainsString('HTTP/1.1 405', $raw);
         self::assertMatchesRegularExpression('/\r\nAllow:\s*POST\r\n/i', $raw);
     }
 
@@ -94,6 +95,7 @@ final class SponsorApplicationApiTest extends TestCase
         $result = $this->runEndpoint([
             'REQUEST_METHOD' => 'POST',
             'body' => $this->validBody(),
+            'remote_addr' => $this->uniqueTestIp(),
         ], $this->contributionsConfigPath());
 
         self::assertSame(202, $result['status']);
@@ -101,14 +103,48 @@ final class SponsorApplicationApiTest extends TestCase
         self::assertNotEmpty(glob($this->exchangeRoot . '/in/sponsor-applications/*.json'));
     }
 
+    public function testEndpoint_FourthPostFromSameIpReturns429WithRetryAfter(): void
+    {
+        $ip = $this->uniqueTestIp();
+        $config = $this->contributionsConfigPath();
+
+        for ($attempt = 0; $attempt < 3; ++$attempt) {
+            $body = $this->validBody();
+            $body['contact_email'] = 'sponsor' . $attempt . '@example.com';
+            $result = $this->runEndpoint([
+                'REQUEST_METHOD' => 'POST',
+                'body' => $body,
+                'remote_addr' => $ip,
+            ], $config);
+            self::assertSame(202, $result['status'], 'attempt ' . ($attempt + 1));
+        }
+
+        $body = $this->validBody();
+        $body['contact_email'] = 'sponsor4@example.com';
+        $result = $this->runEndpoint([
+            'REQUEST_METHOD' => 'POST',
+            'body' => $body,
+            'remote_addr' => $ip,
+        ], $config);
+
+        self::assertSame(429, $result['status']);
+        self::assertStringContainsString('Too many requests', $result['body']);
+        self::assertSame('3600', $result['headers']['retry-after'] ?? '');
+    }
+
     /**
-     * @param array{REQUEST_METHOD?: string, body?: array<string, mixed>} $options
+     * @param array{REQUEST_METHOD?: string, body?: array<string, mixed>, remote_addr?: string} $options
      *
      * @return array{status: int, body: string, headers: array<string, string>}
      */
     private function runEndpoint(array $options, string $configPath): array
     {
         return $this->runEndpointViaStdin($options, $configPath, dirname(__DIR__, 2));
+    }
+
+    private function uniqueTestIp(): string
+    {
+        return '203.0.113.' . random_int(1, 254);
     }
 
     /**
@@ -134,23 +170,22 @@ if (!defined('AVIATIONWX_LOG_DIR')) {
 @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
 @touch(AVIATIONWX_LOG_DIR . '/app.log');
 define('AVIATIONWX_SPONSOR_APPLICATION_TEST_MODE', true);
+$GLOBALS['AVIATIONWX_SPONSOR_APPLICATION_CAPTURED_HEADERS'] = [];
 $_SERVER['REQUEST_METHOD'] = getenv('SPONSOR_API_METHOD');
+$remoteAddr = getenv('SPONSOR_API_REMOTE_ADDR');
+if (is_string($remoteAddr) && $remoteAddr !== '') {
+    $_SERVER['REMOTE_ADDR'] = $remoteAddr;
+}
 ob_start();
 try {
     require getenv('SPONSOR_API_ROOT') . '/api/sponsor-application.php';
 } catch (SponsorApplicationHandlerStopped) {
 }
 $out = ob_get_clean();
-$headers = [];
-foreach (headers_list() as $header) {
-    $parts = explode(':', $header, 2);
-    if (count($parts) === 2) {
-        $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
-    }
-}
+$captured = $GLOBALS['AVIATIONWX_SPONSOR_APPLICATION_CAPTURED_HEADERS'] ?? [];
 echo json_encode([
     'status' => http_response_code(),
-    'headers' => $headers,
+    'headers' => is_array($captured) ? $captured : [],
     'body' => $out,
 ], JSON_THROW_ON_ERROR);
 
@@ -163,6 +198,7 @@ PHP;
             'SPONSOR_API_EXCHANGE_PATH' => $this->exchangeRoot,
             'SPONSOR_API_METHOD' => $method,
             'SPONSOR_APPLICATION_TEST_INPUT' => $payload,
+            'SPONSOR_API_REMOTE_ADDR' => $options['remote_addr'] ?? $this->uniqueTestIp(),
         ];
         $descriptor = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $proc = proc_open([PHP_BINARY, $tmp], $descriptor, $pipes, null, $env);
