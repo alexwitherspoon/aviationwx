@@ -28,6 +28,12 @@ if (strpos($requestPath, 'api/v1/') === 0 || strpos($requestPath, 'api/v1') === 
     exit;
 }
 
+// Internal API: airport sponsor application (exchange spool; contributions gate inside handler)
+if ($requestPath === 'api/sponsor-application.php' || $requestPath === 'api/sponsor-application') {
+    include 'api/sponsor-application.php';
+    exit;
+}
+
 // Route API docs requests
 if ($requestPath === 'api/docs' || strpos($requestPath, 'api/docs/') === 0) {
     if ($requestPath === 'api/docs' || $requestPath === 'api/docs/') {

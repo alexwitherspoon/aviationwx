@@ -172,6 +172,46 @@ function aviationwx_log(string $level, string $message, array $context = [], str
     $logFile = aviationwx_get_log_file_path($logType);
     aviationwx_rotate_log_if_needed($logFile);
     @file_put_contents($logFile, $jsonLine, FILE_APPEND | LOCK_EX);
+    aviationwx_forward_log_to_exchange_spool($entry['level'], $message, $context, $entry['request_id'] ?? null);
+}
+}
+
+if (!function_exists('aviationwx_forward_log_to_exchange_spool')) {
+/**
+ * Mirror structured log lines to the ops exchange volume when contributions are enabled.
+ *
+ * @param array<string, mixed> $context
+ */
+function aviationwx_forward_log_to_exchange_spool(
+    string $level,
+    string $message,
+    array $context,
+    ?string $requestId,
+): void {
+    static $forwarding = false;
+    static $contributionsEnabled = null;
+
+    if ($forwarding) {
+        return;
+    }
+
+    if ($contributionsEnabled === null) {
+        $forwarding = true;
+        $contributionsEnabled = function_exists('isContributionsEnabled') && isContributionsEnabled();
+        $forwarding = false;
+    }
+
+    if (!$contributionsEnabled) {
+        return;
+    }
+
+    require_once __DIR__ . '/exchange-spool.php';
+
+    try {
+        aviationwx_exchange_append_structured_log($level, $message, $context, $requestId);
+    } catch (Throwable) {
+        // Exchange forwarding must not break primary logging.
+    }
 }
 }
 

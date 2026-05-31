@@ -39,6 +39,9 @@
           "enabled": true
         }
       }
+    },
+    "contributions": {
+      "enabled": true
     }
   },
   "airports": {
