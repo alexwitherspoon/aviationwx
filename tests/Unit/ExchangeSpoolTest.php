@@ -48,12 +48,8 @@ final class ExchangeSpoolTest extends TestCase
         self::assertSame('test@example.com', $payload['contact_email']);
     }
 
-    public function testAppendStructuredLog_WritesJsonlWhenContributionsEnabled(): void
+    public function testAppendStructuredLog_WritesJsonl(): void
     {
-        if (!isContributionsEnabled(loadConfig())) {
-            self::markTestSkipped('Test fixture does not enable contributions');
-        }
-
         aviationwx_exchange_append_structured_log('info', 'exchange test', ['source' => 'test']);
 
         $day = gmdate('Y-m-d');

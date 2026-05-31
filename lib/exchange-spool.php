@@ -58,10 +58,6 @@ function aviationwx_exchange_append_structured_log(
     array $context = [],
     ?string $requestId = null,
 ): void {
-    if (!isContributionsEnabled()) {
-        return;
-    }
-
     $line = [
         'schema_version' => '1.0.0',
         'logged_at' => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
