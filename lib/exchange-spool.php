@@ -113,11 +113,19 @@ function aviationwx_exchange_write_sponsor_application(array $application): stri
         'org_type' => $application['org_type'],
     ];
 
-    if (!empty($application['logo_url'])) {
-        $payload['logo_url'] = trim((string) $application['logo_url']);
+    if (
+        isset($application['logo_url'])
+        && is_string($application['logo_url'])
+        && trim($application['logo_url']) !== ''
+    ) {
+        $payload['logo_url'] = trim($application['logo_url']);
     }
-    if (!empty($application['message'])) {
-        $payload['message'] = trim((string) $application['message']);
+    if (
+        isset($application['message'])
+        && is_string($application['message'])
+        && trim($application['message']) !== ''
+    ) {
+        $payload['message'] = trim($application['message']);
     }
 
     $path = aviationwx_exchange_root() . '/in/sponsor-applications/' . $applicationId . '.json';

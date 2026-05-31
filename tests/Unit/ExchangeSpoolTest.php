@@ -48,6 +48,23 @@ final class ExchangeSpoolTest extends TestCase
         self::assertSame('test@example.com', $payload['contact_email']);
     }
 
+    public function testWriteSponsorApplication_PreservesMessageZero(): void
+    {
+        $applicationId = '880e8400-e29b-41d4-a716-446655440003';
+        $path = aviationwx_exchange_write_sponsor_application([
+            'application_id' => $applicationId,
+            'airport_id' => 'kspb',
+            'org_name' => 'Test FBO',
+            'contact_name' => 'Jane',
+            'contact_email' => 'zero@example.com',
+            'org_type' => 'on_airport_business',
+            'message' => '0',
+        ]);
+
+        $payload = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('0', $payload['message']);
+    }
+
     public function testAppendStructuredLog_WritesJsonl(): void
     {
         aviationwx_exchange_append_structured_log('info', 'exchange test', ['source' => 'test']);
