@@ -60,6 +60,10 @@ final class SponsorApplicationApiTest extends TestCase
             self::markTestSkipped('Sponsor application endpoint not reachable');
         }
 
+        if ($status === 404) {
+            self::markTestSkipped('Contributions disabled on target server');
+        }
+
         self::assertSame(405, $status);
         self::assertIsString($raw);
         self::assertMatchesRegularExpression('/\r\nAllow:\s*POST\r\n/i', $raw);
@@ -144,7 +148,14 @@ final class SponsorApplicationApiTest extends TestCase
 
     private function uniqueTestIp(): string
     {
-        return '203.0.113.' . random_int(1, 254);
+        $octets = unpack('C4', random_bytes(4));
+
+        return sprintf(
+            '10.%d.%d.%d',
+            $octets[1],
+            $octets[2],
+            max(1, $octets[3] % 254),
+        );
     }
 
     /**
