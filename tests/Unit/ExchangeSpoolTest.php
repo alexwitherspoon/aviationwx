@@ -46,6 +46,7 @@ final class ExchangeSpoolTest extends TestCase
         self::assertSame('1.0.0', $payload['schema_version']);
         self::assertSame($applicationId, $payload['application_id']);
         self::assertSame('test@example.com', $payload['contact_email']);
+        self::assertSame(0640, fileperms($path) & 0777);
     }
 
     public function testWriteSponsorApplication_PreservesMessageZero(): void
@@ -78,6 +79,7 @@ final class ExchangeSpoolTest extends TestCase
         $line = json_decode($lines[count($lines) - 1], true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('1.0.0', $line['schema_version']);
         self::assertSame('exchange test', $line['message']);
+        self::assertSame(0640, fileperms($path) & 0777);
     }
 
     private function removeTree(string $dir): void

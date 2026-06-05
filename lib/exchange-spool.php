@@ -10,6 +10,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
+/** Restrictive mode for exchange spool files (owner/group read, not world-readable). */
+const AVIATIONWX_EXCHANGE_FILE_MODE = 0640;
+
 /**
  * Root path for the shared exchange volume.
  */
@@ -46,6 +49,18 @@ function aviationwx_exchange_write_json(string $targetPath, array $payload): voi
     if (!rename($tmp, $targetPath)) {
         @unlink($tmp);
         throw new RuntimeException('Failed to publish exchange file');
+    }
+
+    aviationwx_exchange_restrict_file_permissions($targetPath);
+}
+
+/**
+ * @internal
+ */
+function aviationwx_exchange_restrict_file_permissions(string $path): void
+{
+    if (!chmod($path, AVIATIONWX_EXCHANGE_FILE_MODE)) {
+        throw new RuntimeException('Failed to set exchange file permissions');
     }
 }
 
@@ -86,6 +101,8 @@ function aviationwx_exchange_append_structured_log(
     if (file_put_contents($path, $encoded, FILE_APPEND | LOCK_EX) === false) {
         throw new RuntimeException('Failed to append structured log line');
     }
+
+    aviationwx_exchange_restrict_file_permissions($path);
 }
 
 /**
