@@ -155,11 +155,14 @@ function validateSponsorApplicationBody(array $body): array
 {
     $errors = [];
 
-    $airportId = is_string($body['airport_id'] ?? null) ? strtolower(trim($body['airport_id'])) : '';
-    if ($airportId === '' || preg_match('/^[a-z0-9-]+$/', $airportId) !== 1) {
+    $airportRaw = $body['airport_id'] ?? null;
+    if (!is_string($airportRaw) || !validateAirportId($airportRaw)) {
         $errors['airport_id'] = 'Invalid airport_id';
-    } elseif (!aviationwx_airport_exists_in_config($airportId)) {
-        $errors['airport_id'] = 'Unknown airport';
+    } else {
+        $airportId = strtolower(trim($airportRaw));
+        if (!aviationwx_airport_exists_in_config($airportId)) {
+            $errors['airport_id'] = 'Unknown airport';
+        }
     }
 
     foreach (['org_name', 'contact_name'] as $field) {
