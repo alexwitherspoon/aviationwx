@@ -249,7 +249,7 @@ PHP;
         $fixture = dirname(__DIR__, 2) . '/tests/Fixtures/airports.json.test';
         $config = json_decode((string) file_get_contents($fixture), true, 512, JSON_THROW_ON_ERROR);
         $config['config']['contributions'] = ['enabled' => true];
-        $path = sys_get_temp_dir() . '/aviationwx_sponsor_cfg_' . bin2hex(random_bytes(4)) . '.json';
+        $path = $this->exchangeRoot . '/contrib-config.json';
         file_put_contents($path, json_encode($config, JSON_THROW_ON_ERROR));
 
         return $path;

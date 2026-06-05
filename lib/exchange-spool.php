@@ -60,9 +60,10 @@ function aviationwx_exchange_append_structured_log(
     array $context = [],
     ?string $requestId = null,
 ): void {
+    $now = new DateTime('now', new DateTimeZone('UTC'));
     $line = [
         'schema_version' => '1.0.0',
-        'logged_at' => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
+        'logged_at' => $now->format('c'),
         'level' => strtolower($level),
         'message' => $message,
         'context' => $context,
@@ -73,7 +74,7 @@ function aviationwx_exchange_append_structured_log(
         $line['request_id'] = $requestId;
     }
 
-    $day = (new DateTime('now', new DateTimeZone('UTC')))->format('Y-m-d');
+    $day = $now->format('Y-m-d');
     $path = aviationwx_exchange_root() . '/in/structured-logs/' . $day . '.jsonl';
     $encoded = json_encode($line, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
 
