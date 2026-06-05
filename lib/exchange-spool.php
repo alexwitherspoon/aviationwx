@@ -36,8 +36,10 @@ function aviationwx_exchange_write_json(string $targetPath, array $payload): voi
     }
 
     $json = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-    $tmp = $targetPath . '.tmp';
-    if (file_put_contents($tmp, $json) === false) {
+    $tmp = $targetPath . '.' . bin2hex(random_bytes(8)) . '.tmp';
+    $written = file_put_contents($tmp, $json);
+    if ($written === false || $written !== strlen($json)) {
+        @unlink($tmp);
         throw new RuntimeException('Failed to write exchange temp file');
     }
 
