@@ -324,8 +324,7 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
         $allNotams = array_merge($allNotams, $locationNotams);
     }
     
-    // 2. Try geospatial query (if coordinates available)
-    // Always do this for TFRs, and as fallback for FAA identifiers
+    // 2. Geospatial query for TFRs (if coordinates available)
     if (isset($airport['lat']) && isset($airport['lon'])) {
         $geoOk = false;
         $radius = NOTAM_GEO_RADIUS_DEFAULT;
