@@ -6,7 +6,6 @@
  */
 
 require_once __DIR__ . '/../logger.php';
-require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/schedule.php';
 
 /**
