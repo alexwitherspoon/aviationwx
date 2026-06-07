@@ -70,6 +70,14 @@ final class NotamFetcherDedupTest extends TestCase
         self::assertFalse($summary['fetchSucceeded']);
     }
 
+    public function testSummarizeFetchQueryOutcomes_SucceedsWhenOnlyGeoQuerySucceeds(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([false, true]);
+
+        self::assertTrue($summary['attempted']);
+        self::assertTrue($summary['fetchSucceeded']);
+    }
+
     public function testNotamCanonicalDedupKey_StableForIdenticalRows(): void
     {
         $a = [

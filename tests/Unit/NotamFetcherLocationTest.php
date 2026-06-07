@@ -40,4 +40,33 @@ final class NotamFetcherLocationTest extends TestCase
             'faa' => null,
         ]));
     }
+
+    public function testResolveLocationQueryCode_UsesIataWhenIcaoAbsent(): void
+    {
+        $code = notamResolveLocationQueryCode([
+            'icao' => null,
+            'iata' => 'PDX',
+            'faa' => '03S',
+        ]);
+
+        self::assertSame('PDX', $code);
+    }
+
+    public function testResolveLocationQueryCode_TrimsWhitespace(): void
+    {
+        $code = notamResolveLocationQueryCode([
+            'icao' => '  KPDX  ',
+        ]);
+
+        self::assertSame('KPDX', $code);
+    }
+
+    public function testResolveLocationQueryCode_IgnoresEmptyString(): void
+    {
+        self::assertSame('03S', notamResolveLocationQueryCode([
+            'icao' => '',
+            'iata' => '',
+            'faa' => '03S',
+        ]));
+    }
 }

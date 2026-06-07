@@ -88,8 +88,12 @@ function notamResolveLocationQueryCode(array $airport): ?string
 {
     foreach (['icao', 'iata', 'faa'] as $key) {
         $value = $airport[$key] ?? null;
-        if (is_string($value) && trim($value) !== '') {
-            return trim($value);
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $code = trim((string) $value);
+        if ($code !== '') {
+            return $code;
         }
     }
 
@@ -337,7 +341,14 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
         );
         $queryOutcomes[] = $geoOk;
         // Geo payload is TFR-only after pre-filter; aerodrome closures come from the location query above.
-        $allNotams = array_merge($allNotams, notamFilterGeoXmlForTfrParsing($geoNotams));
+        $filteredGeo = notamFilterGeoXmlForTfrParsing($geoNotams);
+        if (count($geoNotams) > 0 && count($filteredGeo) === 0) {
+            aviationwx_log('info', 'notam fetcher: geo prefilter dropped all AIXM rows', [
+                'airport' => $airportId,
+                'raw_count' => count($geoNotams),
+            ], 'app');
+        }
+        $allNotams = array_merge($allNotams, $filteredGeo);
     }
 
     $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
