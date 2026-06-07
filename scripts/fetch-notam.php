@@ -5,8 +5,8 @@
  * Supports process pool for parallel execution
  * 
  * Usage:
- *   Normal mode: php fetch-notam.php
- *   Worker mode:  php fetch-notam.php --worker <airport_id>
+ *   Worker mode (scheduler): php fetch-notam.php --worker <airport_id>
+ *   Direct CLI without --worker: logs and exits (no fetch); use worker mode for real work
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -157,9 +157,10 @@ if ($isWorkerMode) {
 }
 
 if (!defined('AVIATIONWX_FETCH_NOTAM_LOAD_ONLY')) {
-    // Normal mode: use process pool (called by scheduler)
+    // Non-worker CLI is a no-op; scheduler enqueues --worker jobs via ProcessPool.
+    // AVIATIONWX_FETCH_NOTAM_LOAD_ONLY lets tests include this file without exit().
     aviationwx_log('info', 'notam fetch: script called without --worker flag', [
-        'note' => 'This script is typically called by scheduler.php with --worker flag'
+        'note' => 'Invoke with --worker <airport_id> to refresh cache (scheduler does this via ProcessPool)',
     ], 'app');
 
     exit(0);
