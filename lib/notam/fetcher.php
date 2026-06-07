@@ -12,6 +12,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/parser.php';
 require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/geo-prefilter.php';
 
 /**
  * Decode NMS JSON; strips illegal ASCII control characters some payloads embed in strings.
@@ -183,11 +184,9 @@ function queryNotamsByCoordinates(
     }
     
     $baseUrl = getNotamApiBaseUrl();
-    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query([
-        'latitude' => $latitude,
-        'longitude' => $longitude,
-        'radius' => $radius
-    ]);
+    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query(
+        notamBuildGeoQueryParams($latitude, $longitude, $radius),
+    );
     
     rateLimitWait($lastRequestTime);
     
@@ -328,7 +327,7 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
             $geoOk,
         );
         $queryOutcomes[] = $geoOk;
-        $allNotams = array_merge($allNotams, $geoNotams);
+        $allNotams = array_merge($allNotams, notamFilterGeoXmlForTfrParsing($geoNotams));
     }
 
     $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
