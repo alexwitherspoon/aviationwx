@@ -47,6 +47,7 @@ class ConstantsTest extends TestCase
             'DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS',
             'STALE_WHILE_REVALIDATE_SECONDS',
             'NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS',
+            'NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE',
         ];
         
         foreach ($requiredConstants as $const) {

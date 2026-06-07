@@ -47,20 +47,41 @@ function rateLimitWait(float &$lastRequestTime): void {
 }
 
 /**
+ * Stable deduplication key for parsed NOTAM rows.
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @return string Dedup key (public id or location/start/text fingerprint)
+ */
+function notamCanonicalDedupKey(array $notam): string {
+    $id = trim((string) ($notam['id'] ?? ''));
+    if ($id !== '') {
+        return 'id:' . $id;
+    }
+
+    $location = strtoupper(trim((string) ($notam['location'] ?? '')));
+    $start = trim((string) ($notam['start_time_utc'] ?? ''));
+    $text = trim((string) ($notam['text'] ?? ''));
+
+    return 'fp:' . $location . '|' . $start . '|' . substr(sha1($text), 0, 16);
+}
+
+/**
  * Query NOTAMs by location (ICAO code)
- * 
+ *
  * @param string $location ICAO code
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @return array Array of AIXM XML strings
+ * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
+ * @return array<int, string> Array of AIXM XML strings
  */
-function queryNotamsByLocation(string $location, float &$lastRequestTime): array {
+function queryNotamsByLocation(string $location, float &$lastRequestTime, array $queryParams = []): array {
     $token = getNotamBearerToken();
     if ($token === null) {
         return [];
     }
-    
+
     $baseUrl = getNotamApiBaseUrl();
-    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?location=' . urlencode($location);
+    $params = array_merge(['location' => $location], $queryParams);
+    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query($params);
     
     rateLimitWait($lastRequestTime);
     
@@ -168,21 +189,18 @@ function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius
  * @return array<int, array<string, mixed>> Deduplicated rows merged by {@see mergeParsedNotamDuplicates()}
  */
 function deduplicateNotams(array $notams): array {
-    $byId = [];
-    
+    $byKey = [];
+
     foreach ($notams as $notam) {
-        $id = $notam['id'] ?? '';
-        if ($id === '') {
+        $key = notamCanonicalDedupKey($notam);
+        if (!isset($byKey[$key])) {
+            $byKey[$key] = $notam;
             continue;
         }
-        if (!isset($byId[$id])) {
-            $byId[$id] = $notam;
-            continue;
-        }
-        $byId[$id] = mergeParsedNotamDuplicates($byId[$id], $notam);
+        $byKey[$key] = mergeParsedNotamDuplicates($byKey[$key], $notam);
     }
-    
-    return array_values($byId);
+
+    return array_values($byKey);
 }
 
 /**
