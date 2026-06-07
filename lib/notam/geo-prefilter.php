@@ -43,8 +43,8 @@ function notamAixmXmlMayBeTfr(string $xml): bool
 /**
  * Keep only geo-query XML payloads that may contain TFRs before parsing.
  *
- * @param array<int, string> $xmlStrings Raw AIXM XML strings from a geospatial NMS query
- * @return array<int, string> Subset that passed {@see notamAixmXmlMayBeTfr()}
+ * @param array<int, mixed> $xmlStrings NMS `data.aixm` rows; non-string and empty entries are skipped
+ * @return array<int, string> XML strings that passed {@see notamAixmXmlMayBeTfr()}
  */
 function notamFilterGeoXmlForTfrParsing(array $xmlStrings): array
 {
