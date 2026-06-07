@@ -481,10 +481,10 @@ while ($running) {
         // Process NOTAM updates (non-blocking)
         if ($notamPool !== null && isset($config['airports'])) {
             foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !isAirportEnabled($airport)) {
+                if (!is_array($airport) || !isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
                     continue;
                 }
-                
+
                 // Get refresh interval
                 $refreshInterval = getNotamRefreshSeconds();
                 
