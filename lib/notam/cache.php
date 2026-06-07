@@ -44,7 +44,7 @@ function notamRecordFetchAttempt(string $airportId): void
 {
     $path = notamFetchAttemptFilePath($airportId);
     $dir = dirname($path);
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         aviationwx_log('warning', 'notam cache: cannot create directory for fetch attempt', [
             'cache_dir' => $dir,
             'airport' => $airportId,
@@ -105,9 +105,10 @@ function notamShouldEnqueueRefresh(string $airportId, int $refreshInterval, ?int
 function notamWriteCacheFile(string $cacheFile, array $cacheData): bool
 {
     $dir = dirname($cacheFile);
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         aviationwx_log('error', 'notam cache: cannot create directory', [
             'cache_dir' => $dir,
+            'error' => error_get_last()['message'] ?? 'unknown',
         ], 'app');
 
         return false;
