@@ -11,7 +11,10 @@ require_once __DIR__ . '/../constants.php';
 /**
  * NMS query parameters for the geospatial NOTAM fetch (TFR-focused).
  *
- * @return array<string, float|int|string>
+ * @param float $latitude Airport latitude in decimal degrees
+ * @param float $longitude Airport longitude in decimal degrees
+ * @param int $radius Search radius in nautical miles
+ * @return array<string, float|int|string> Query string parameters for the NMS geo endpoint
  */
 function notamBuildGeoQueryParams(float $latitude, float $longitude, int $radius): array
 {
@@ -27,6 +30,9 @@ function notamBuildGeoQueryParams(float $latitude, float $longitude, int $radius
  * Cheap scan before XML parse: geospatial results with feature=AIRSPACE should be TFR-like.
  *
  * Location queries still supply aerodrome/runway closures; geo parse is TFR-only.
+ *
+ * @param string $xml Raw AIXM XML from an NMS geospatial query
+ * @return bool True when the payload looks TFR-related
  */
 function notamAixmXmlMayBeTfr(string $xml): bool
 {
@@ -41,9 +47,10 @@ function notamAixmXmlMayBeTfr(string $xml): bool
 }
 
 /**
- * @param array<int, string> $xmlStrings
+ * Keep only geo-query XML payloads that may contain TFRs before parsing.
  *
- * @return array<int, string>
+ * @param array<int, string> $xmlStrings Raw AIXM XML strings from a geospatial NMS query
+ * @return array<int, string> Subset that passed {@see notamAixmXmlMayBeTfr()}
  */
 function notamFilterGeoXmlForTfrParsing(array $xmlStrings): array
 {
