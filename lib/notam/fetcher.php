@@ -68,8 +68,8 @@ function notamCanonicalDedupKey(array $notam): string {
 /**
  * Build NMS location-query parameters; caller location always wins over extras.
  *
+ * @param string $location NMS location query code (merged last so it cannot be overridden)
  * @param array<string, string> $queryParams Optional NMS query parameters
- *
  * @return array<string, string>
  */
 function notamBuildLocationQueryParams(string $location, array $queryParams = []): array
