@@ -97,9 +97,9 @@ function notamResolveLocationQueryCode(array $airport): ?string
 }
 
 /**
- * Query NOTAMs by location (ICAO code)
+ * Query NOTAMs by NMS location code (ICAO, IATA, or FAA identifier).
  *
- * @param string $location ICAO code
+ * @param string $location NMS location query code from {@see notamResolveLocationQueryCode()}
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
  * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
