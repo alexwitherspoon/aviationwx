@@ -37,6 +37,21 @@ final class NotamFetchReliabilityTest extends TestCase
         self::assertSame([], $notams);
     }
 
+    public function testFetchNotamsForAirport_SetsFetchSucceededWhenOutParamStartsNull(): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/notam/fetcher.php';
+
+        $config = loadConfig();
+        self::assertIsArray($config);
+        $airport = $config['airports']['kspb'] ?? null;
+        self::assertIsArray($airport);
+
+        $fetchSucceeded = null;
+        fetchNotamsForAirport('kspb', $airport, $fetchSucceeded);
+
+        self::assertFalse($fetchSucceeded);
+    }
+
     public function testProcessAirportNotam_PreservesExistingCacheWhenFetchFails(): void
     {
         $cacheFile = $this->cacheDir . '/kspb.json';

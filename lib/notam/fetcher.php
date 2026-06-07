@@ -51,13 +51,15 @@ function rateLimitWait(float &$lastRequestTime): void {
  * 
  * @param string $location ICAO code
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded Set false when the NMS request fails; true on HTTP 200 with valid payload
+ * @param bool|null $querySucceeded When the caller passes this argument, set false on NMS failure or true on HTTP 200 with valid payload
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool &$querySucceeded = null): array {
+    $reportQueryOutcome = func_num_args() >= 3;
+
     $token = getNotamBearerToken();
     if ($token === null) {
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
@@ -92,7 +94,7 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool 
             'http_code' => $httpCode,
             'error' => $error
         ], 'app');
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
@@ -101,14 +103,14 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool 
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
         return [];
     }
 
-    if ($querySucceeded !== null) {
+    if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
     
@@ -122,7 +124,7 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool 
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded Set false when the NMS request fails; true on HTTP 200 with valid payload
+ * @param bool|null $querySucceeded When the caller passes this argument, set false on NMS failure or true on HTTP 200 with valid payload
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByCoordinates(
@@ -132,9 +134,11 @@ function queryNotamsByCoordinates(
     float &$lastRequestTime,
     ?bool &$querySucceeded = null,
 ): array {
+    $reportQueryOutcome = func_num_args() >= 5;
+
     $token = getNotamBearerToken();
     if ($token === null) {
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
@@ -175,7 +179,7 @@ function queryNotamsByCoordinates(
             'http_code' => $httpCode,
             'error' => $error
         ], 'app');
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
@@ -184,14 +188,14 @@ function queryNotamsByCoordinates(
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
-        if ($querySucceeded !== null) {
+        if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
         return [];
     }
 
-    if ($querySucceeded !== null) {
+    if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
     
@@ -234,10 +238,11 @@ function deduplicateNotams(array $notams): array {
  * 
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
- * @param bool|null $fetchSucceeded Set false when every attempted NMS query fails
+ * @param bool|null $fetchSucceeded When the caller passes this argument, set false when every attempted NMS query fails
  * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
 function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchSucceeded = null): array {
+    $reportFetchOutcome = func_num_args() >= 3;
     $lastRequestTime = 0.0;
     $allNotams = [];
     $attempted = false;
@@ -279,7 +284,7 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
         $allNotams = array_merge($allNotams, $geoNotams);
     }
 
-    if ($fetchSucceeded !== null) {
+    if ($reportFetchOutcome) {
         $fetchSucceeded = $attempted && $anySucceeded;
     }
     
