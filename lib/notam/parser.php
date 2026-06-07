@@ -43,10 +43,6 @@ function notamResolvePublicIdFromAixmFields(
     }
 
     if ($number !== '' && $year !== '') {
-        if (str_contains($number, '/')) {
-            return $number . '/' . $year;
-        }
-
         return $number . '/' . $year;
     }
 
