@@ -12,6 +12,7 @@ require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../airport-identifiers.php';
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/tfr-indicators.php';
 
 /** Epsilon for comparing decoded TFR vertices (degrees) */
 const TFR_VERTEX_EQUAL_EPSILON_DEG = 1.0e-6;
@@ -854,22 +855,7 @@ function isTfr(array $notam): bool {
         return false;
     }
     
-    $text = strtoupper($notam['text'] ?? '');
-    
-    // Primary indicators (text already uppercase, use strpos for efficiency)
-    if (strpos($text, 'TFR') !== false) {
-        return true;
-    }
-    if (strpos($text, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
-        return true;
-    }
-    
-    // Secondary indicators - both must be present
-    if (strpos($text, 'RESTRICTED') !== false && strpos($text, 'AIRSPACE') !== false) {
-        return true;
-    }
-    
-    return false;
+    return notamTextMayIndicateTfr((string) ($notam['text'] ?? ''));
 }
 
 /**

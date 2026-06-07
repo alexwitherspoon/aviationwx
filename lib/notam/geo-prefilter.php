@@ -7,6 +7,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/tfr-indicators.php';
 
 /**
  * NMS query parameters for the geospatial NOTAM fetch (TFR-focused).
@@ -36,14 +37,7 @@ function notamBuildGeoQueryParams(float $latitude, float $longitude, int $radius
  */
 function notamAixmXmlMayBeTfr(string $xml): bool
 {
-    if (stripos($xml, 'TFR') !== false) {
-        return true;
-    }
-    if (stripos($xml, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
-        return true;
-    }
-
-    return stripos($xml, 'RESTRICTED') !== false && stripos($xml, 'AIRSPACE') !== false;
+    return notamTextMayIndicateTfr($xml);
 }
 
 /**
@@ -56,7 +50,10 @@ function notamFilterGeoXmlForTfrParsing(array $xmlStrings): array
 {
     $kept = [];
     foreach ($xmlStrings as $xml) {
-        if ($xml !== '' && notamAixmXmlMayBeTfr($xml)) {
+        if (!is_string($xml) || $xml === '') {
+            continue;
+        }
+        if (notamAixmXmlMayBeTfr($xml)) {
             $kept[] = $xml;
         }
     }
