@@ -15,6 +15,7 @@ require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/notam/fetcher.php';
 require_once __DIR__ . '/../lib/notam/filter.php';
 require_once __DIR__ . '/../lib/notam/schedule.php';
+require_once __DIR__ . '/../lib/notam/cache.php';
 
 // Start output buffering
 ob_start();
@@ -50,7 +51,7 @@ if ($config === null || !isset($config['airports'][$airportId])) {
 $airport = $config['airports'][$airportId];
 
 // Check cache
-$cacheFile = __DIR__ . '/../cache/notam/' . $airportId . '.json';
+$cacheFile = notamCacheFilePath($airportId);
 $cacheExists = file_exists($cacheFile);
 $cacheAge = $cacheExists ? (time() - filemtime($cacheFile)) : PHP_INT_MAX;
 $cacheTtl = getNotamCacheTtlSeconds();
@@ -123,6 +124,11 @@ foreach ($notams as $notam) {
     // Drop expired and unknown; retain active, scheduled gaps, and upcoming windows
     $allowedStatuses = ['active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future'];
     if (!in_array($currentStatus, $allowedStatuses, true)) {
+        continue;
+    }
+
+    // Re-apply banner horizon at serve time (cache may retain rows until next fetch)
+    if (!notamIsBannerRelevantStatus($currentStatus, $notam)) {
         continue;
     }
     

@@ -1528,14 +1528,16 @@ Each NOTAM is classified by temporal status:
 - **upcoming_future**: Starts after today
 - **expired**: End time has passed
 
-Only **active** and **upcoming_today** NOTAMs are displayed on the dashboard.
+Banner-eligible statuses: **active**, **inactive_scheduled**, **upcoming_today**, and **upcoming_future** within 48 hours of the first restriction window.
 
 ### Caching
 
 Filtered NOTAMs are cached per airport:
-- **Location**: `cache/notam/{airport_id}.json`
+- **Location**: `cache/notam/{airport_id}.json` (via `notamCacheFilePath()`)
 - **Content**: Array of filtered NOTAMs with status
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
+- **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
+- **Fetch failure**: When every attempted NMS query fails, `scripts/fetch-notam.php` preserves the existing cache file instead of overwriting it with an empty result
 
 ### Serve-Time Status Re-validation
 
@@ -1543,10 +1545,10 @@ Filtered NOTAMs are cached per airport:
 
 1. **Expiration check**: If `end_time_utc` has passed, NOTAM is filtered out
 2. **Status update**: If a NOTAM has become active since caching, status is updated
-3. **Filter expired**: Only `active` and `upcoming_today` NOTAMs are returned
+3. **Banner horizon**: Re-applies `notamIsBannerRelevantStatus()` so `upcoming_future` rows beyond 48 hours are dropped at serve time
 4. **Timezone alignment**: Uses airport's local timezone to determine "today" boundary
 
-This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
+This ensures pilots never see expired NOTAMs, even if the cache has not refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
 
 ### Failclosed Behavior
 

@@ -14,6 +14,7 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/notam/fetcher.php';
 require_once __DIR__ . '/../lib/notam/filter.php';
+require_once __DIR__ . '/../lib/notam/cache.php';
 
 // Check for worker mode
 $isWorkerMode = false;
@@ -61,8 +62,29 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
     }
     
     try {
-        // Fetch and filter NOTAMs
-        $notams = fetchNotamsForAirport($airportId, $airport);
+        $fetchSucceeded = false;
+        $notams = fetchNotamsForAirport($airportId, $airport, $fetchSucceeded);
+
+        $cacheFile = notamCacheFilePath($airportId);
+        if (!$fetchSucceeded) {
+            if (is_file($cacheFile)) {
+                aviationwx_log('warning', 'notam fetch: NMS queries failed, preserving cache', [
+                    'invocation_id' => $invocationId,
+                    'airport' => $airportId,
+                    'cache_file' => $cacheFile,
+                ], 'app');
+
+                return false;
+            }
+
+            $logLevel = $expectFailures ? 'info' : 'error';
+            aviationwx_log($logLevel, 'notam fetch: NMS queries failed with no cache', [
+                'invocation_id' => $invocationId,
+                'airport' => $airportId,
+            ], 'app');
+
+            return false;
+        }
         
         // Build cache data
         $cacheData = [
@@ -72,16 +94,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
             'status' => 'success'
         ];
         
-        // Save to cache
-        $cacheDir = __DIR__ . '/../cache/notam';
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
-        
-        $cacheFile = $cacheDir . '/' . $airportId . '.json';
-        $json = json_encode($cacheData, JSON_PRETTY_PRINT);
-        
-        if (@file_put_contents($cacheFile, $json) === false) {
+        if (!notamWriteCacheFile($cacheFile, $cacheData)) {
             $logLevel = $expectFailures ? 'info' : 'error';
             aviationwx_log($logLevel, 'notam fetch: failed to write cache', [
                 'invocation_id' => $invocationId,
@@ -139,15 +152,14 @@ if ($isWorkerMode) {
     exit($success ? 0 : ($expectFailures ? 2 : 1));
 }
 
-// Normal mode: use process pool (called by scheduler)
-// This script is primarily used by scheduler.php, which handles the process pool
-// For standalone execution, we could add pool logic here, but scheduler handles it
+if (!defined('AVIATIONWX_FETCH_NOTAM_LOAD_ONLY')) {
+    // Normal mode: use process pool (called by scheduler)
+    aviationwx_log('info', 'notam fetch: script called without --worker flag', [
+        'note' => 'This script is typically called by scheduler.php with --worker flag'
+    ], 'app');
 
-aviationwx_log('info', 'notam fetch: script called without --worker flag', [
-    'note' => 'This script is typically called by scheduler.php with --worker flag'
-], 'app');
-
-exit(0);
+    exit(0);
+}
 
 
 
