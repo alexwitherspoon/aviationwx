@@ -1375,8 +1375,8 @@ NOTAM (Notice to Air Missions) data is fetched from the FAA's NMS (NOTAM Managem
 
 The system uses a **dual query strategy** to capture both airport-specific NOTAMs and nearby TFRs:
 
-1. **Location Query** (if ICAO/IATA available): Fetches NOTAMs issued for the specific airport identifier
-2. **Geospatial Query** (if coordinates available): Fetches NOTAMs within a radius of the airport to capture nearby TFRs
+1. **Location Query** (when an identifier is configured): Fetches NOTAMs for the airport via `notamResolveLocationQueryCode()` (ICAO, then IATA, then FAA)
+2. **Geospatial Query** (if coordinates available): Fetches TFR-focused airspace NOTAMs with `feature=AIRSPACE`, then applies a cheap XML pre-filter before parse (closures still come from the location query)
 
 Both queries are executed sequentially with rate limiting (1 request per second) to comply with API limits.
 
@@ -1391,10 +1391,11 @@ The system uses OAuth bearer token authentication:
 
 **Purpose**: Fetches NOTAMs specifically issued for an airport.
 
-**Endpoint**: `{base_url}/nmsapi/v1/notams?location={icao_code}`
+**Endpoint**: `{base_url}/nmsapi/v1/notams?location={code}`
 
 **Behavior**:
-- Uses ICAO code if available, otherwise IATA code
+- Uses the first configured identifier from `notamResolveLocationQueryCode()`: ICAO, then IATA, then FAA (covers FAA-only fields such as `03S`)
+- Does **not** query `formerly` codes; those are used only when matching NOTAM `location` fields during filtering
 - Returns NOTAMs with the airport as the affected location
 - Effective for aerodrome closures and airport-specific restrictions
 
@@ -1402,12 +1403,14 @@ The system uses OAuth bearer token authentication:
 
 **Purpose**: Fetches NOTAMs affecting airspace near the airport, particularly TFRs.
 
-**Endpoint**: `{base_url}/nmsapi/v1/notams?latitude={lat}&longitude={lon}&radius={nm}`
+**Endpoint**: `{base_url}/nmsapi/v1/notams?latitude={lat}&longitude={lon}&radius={nm}&feature=AIRSPACE`
 
 **Behavior**:
 - Uses airport coordinates from configuration
 - Default radius: 10 NM (`NOTAM_GEO_RADIUS_DEFAULT`)
-- Returns all NOTAMs with geographic boundaries intersecting the search area
+- NMS `feature` filter: `NOTAM_GEO_QUERY_FEATURE` (default `AIRSPACE`) to reduce non-TFR payload size
+- Raw AIXM rows are pre-filtered with `notamFilterGeoXmlForTfrParsing()` (same TFR keywords as `isTfr()`) before XML parse; runway/obstacle rows from geo are skipped intentionally
+- When NMS returns geo rows but the pre-filter drops all of them, the fetch still counts as a successful geo query (HTTP 200) and logs `notam fetcher: geo prefilter dropped all AIXM rows` for ops visibility
 - **Important**: The API returns NOTAMs by ARTCC (Air Route Traffic Control Center), not strict geographic proximity. A TFR in the same ARTCC may be returned even if outside the specified radius.
 
 ### Response Format
