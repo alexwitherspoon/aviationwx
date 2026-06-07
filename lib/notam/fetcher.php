@@ -192,12 +192,12 @@ function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius
 }
 
 /**
- * Deduplicate NOTAMs by ID
- * 
+ * Deduplicate NOTAMs by canonical key ({@see notamCanonicalDedupKey()}).
+ *
  * Merges duplicate payloads (location + geo queries) so the richest NOTAM text survives
  * for TFR parsing and EFFECTIVE window extraction.
- * 
- * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows (same id may appear from location and geo queries)
+ *
+ * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows (duplicates may share a public id or fingerprint)
  * @return array<int, array<string, mixed>> Deduplicated rows merged by {@see mergeParsedNotamDuplicates()}
  */
 function deduplicateNotams(array $notams): array {
