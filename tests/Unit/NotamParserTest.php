@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../lib/notam/parser.php';
 
 final class NotamParserTest extends TestCase
 {
-    public function testParseNotamXml_KspbScenario86RunwayClosure(): void
+    public function testParseNotamXml_KspbScenario86_ParsesRunwayClosureFields(): void
     {
         $xml = (string) file_get_contents(__DIR__ . '/../Fixtures/notam/kspb-runway-closure-scenario86.xml');
         $notam = parseNotamXml($xml);
@@ -22,7 +22,7 @@ final class NotamParserTest extends TestCase
         self::assertSame('2026-06-08T14:00:00.000Z', $notam['start_time_utc']);
     }
 
-    public function testNotamResolvePublicIdFromAixmFields_DomSimpleTextFallback(): void
+    public function testNotamResolvePublicIdFromAixmFields_DomSimpleText_ReturnsDomId(): void
     {
         self::assertSame(
             '06/001/2026',
@@ -30,7 +30,7 @@ final class NotamParserTest extends TestCase
         );
     }
 
-    public function testNotamResolvePublicIdFromAixmFields_IcaoSeriesFormat(): void
+    public function testNotamResolvePublicIdFromAixmFields_IcaoSeries_ReturnsIcaoId(): void
     {
         self::assertSame(
             'A1234/2026',
