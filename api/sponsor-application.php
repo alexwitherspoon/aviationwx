@@ -95,7 +95,7 @@ if (!defined('AVIATIONWX_SPONSOR_APPLICATION_LOAD_ONLY')) {
         sponsorApplicationFinish();
     }
 
-    if (!empty($body['website'])) {
+    if (isset($body['website']) && $body['website'] !== '') {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Invalid request'], JSON_THROW_ON_ERROR);
         sponsorApplicationFinish();

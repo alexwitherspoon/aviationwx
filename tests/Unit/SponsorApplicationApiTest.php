@@ -69,6 +69,18 @@ final class SponsorApplicationApiTest extends TestCase
         self::assertMatchesRegularExpression('/\r\nAllow:\s*POST\r\n/i', $raw);
     }
 
+    public function testEndpoint_HoneypotRejectsZeroString(): void
+    {
+        $body = $this->validBody();
+        $body['website'] = '0';
+        $result = $this->runEndpoint([
+            'REQUEST_METHOD' => 'POST',
+            'body' => $body,
+        ], $this->contributionsConfigPath());
+
+        self::assertSame(400, $result['status']);
+    }
+
     public function testEndpoint_HoneypotReturns400(): void
     {
         $body = $this->validBody();
