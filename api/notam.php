@@ -121,13 +121,7 @@ foreach ($notams as $notam) {
     // Re-validate status at serve time using airport timezone (safety-critical)
     $currentStatus = revalidateNotamStatus($notam, $timezone);
     
-    // Drop expired and unknown; retain active, scheduled gaps, and upcoming windows
-    $allowedStatuses = ['active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future'];
-    if (!in_array($currentStatus, $allowedStatuses, true)) {
-        continue;
-    }
-
-    // Re-apply banner horizon at serve time (cache may retain rows until next fetch)
+    // Banner eligibility (status + 48h horizon) at serve time; cache may retain rows until next fetch
     if (!notamIsBannerRelevantStatus($currentStatus, $notam)) {
         continue;
     }

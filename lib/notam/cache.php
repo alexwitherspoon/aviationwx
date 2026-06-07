@@ -11,6 +11,8 @@ require_once __DIR__ . '/../constants.php';
 
 /**
  * Directory for per-airport NOTAM JSON cache files.
+ *
+ * @return string Absolute path without trailing slash
  */
 function notamCacheDirectory(): string
 {
@@ -23,6 +25,9 @@ function notamCacheDirectory(): string
 
 /**
  * Resolve cache file path for an airport id.
+ *
+ * @param string $airportId Airport config key (normalized to lowercase)
+ * @return string Absolute path to `{airport_id}.json`
  */
 function notamCacheFilePath(string $airportId): string
 {
@@ -30,7 +35,10 @@ function notamCacheFilePath(string $airportId): string
 }
 
 /**
- * Sidecar path recording the last failed NMS fetch attempt (preserved-cache path).
+ * Sidecar path recording the last failed refresh attempt (scheduler backoff).
+ *
+ * @param string $airportId Airport config key (normalized to lowercase)
+ * @return string Absolute path to `{airport_id}.fetch-attempt`
  */
 function notamFetchAttemptFilePath(string $airportId): string
 {
@@ -38,7 +46,43 @@ function notamFetchAttemptFilePath(string $airportId): string
 }
 
 /**
- * Record a failed fetch attempt without mutating the NOTAM cache payload or mtime.
+ * Read decoded NOTAM cache payload from disk.
+ *
+ * @param string $cacheFile Absolute path to cache JSON
+ * @return array<string, mixed>|null Decoded cache or null when missing/invalid
+ */
+function notamReadCachePayload(string $cacheFile): ?array
+{
+    if (!is_file($cacheFile)) {
+        return null;
+    }
+
+    $raw = file_get_contents($cacheFile);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+
+    try {
+        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        aviationwx_log('warning', 'notam cache: invalid cache JSON', [
+            'cache_file' => $cacheFile,
+            'error' => $e->getMessage(),
+        ], 'app');
+
+        return null;
+    }
+
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Record a failed refresh attempt without mutating the NOTAM cache payload or mtime.
+ *
+ * Used for NMS failures, worker exceptions, and cache write failures so the scheduler
+ * backs off via {@see notamShouldEnqueueRefresh()}.
+ *
+ * @param string $airportId Airport config key
  */
 function notamRecordFetchAttempt(string $airportId): void
 {
@@ -65,6 +109,8 @@ function notamRecordFetchAttempt(string $airportId): void
 
 /**
  * Clear fetch-attempt sidecar after a successful refresh.
+ *
+ * @param string $airportId Airport config key
  */
 function notamClearFetchAttempt(string $airportId): void
 {
@@ -76,6 +122,11 @@ function notamClearFetchAttempt(string $airportId): void
 
 /**
  * Whether the scheduler should enqueue a NOTAM refresh for this airport.
+ *
+ * @param string $airportId Airport config key
+ * @param int $refreshInterval Configured refresh interval in seconds
+ * @param int|null $now Optional Unix timestamp for tests
+ * @return bool True when a worker refresh should be enqueued
  */
 function notamShouldEnqueueRefresh(string $airportId, int $refreshInterval, ?int $now = null): bool
 {
@@ -100,10 +151,16 @@ function notamShouldEnqueueRefresh(string $airportId, int $refreshInterval, ?int
 /**
  * Atomically write NOTAM cache JSON (temp file + rename).
  *
- * @param array<string, mixed> $cacheData
+ * @param string $cacheFile Absolute destination path
+ * @param array<string, mixed> $cacheData Cache envelope (`fetched_at`, `airport`, `notams`, `status`)
+ * @return bool True when the file was written and renamed into place
  */
 function notamWriteCacheFile(string $cacheFile, array $cacheData): bool
 {
+    if (defined('AVIATIONWX_NOTAM_TEST_FORCE_WRITE_FAIL') && AVIATIONWX_NOTAM_TEST_FORCE_WRITE_FAIL) {
+        return false;
+    }
+
     $dir = dirname($cacheFile);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         aviationwx_log('error', 'notam cache: cannot create directory', [

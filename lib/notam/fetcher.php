@@ -264,6 +264,23 @@ function deduplicateNotams(array $notams): array {
 }
 
 /**
+ * Aggregate per-query NMS outcomes for dual location + geo fetches.
+ *
+ * @param list<bool> $queryOutcomes Success flag for each attempted query (in order)
+ * @return array{attempted: bool, fetchSucceeded: bool}
+ */
+function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
+{
+    $attempted = $queryOutcomes !== [];
+    $anySucceeded = in_array(true, $queryOutcomes, true);
+
+    return [
+        'attempted' => $attempted,
+        'fetchSucceeded' => $attempted && $anySucceeded,
+    ];
+}
+
+/**
  * Fetch and filter NOTAMs for an airport
  * 
  * Uses dual query strategy:
@@ -279,32 +296,28 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $reportFetchOutcome = func_num_args() >= 3;
     $lastRequestTime = 0.0;
     $allNotams = [];
-    $attempted = false;
-    $anySucceeded = false;
+    $queryOutcomes = [];
     
     // 1. Try location-based query (if ICAO/IATA available)
     $icao = $airport['icao'] ?? null;
     $iata = $airport['iata'] ?? null;
     
     if (!empty($icao)) {
-        $attempted = true;
         $locationOk = false;
         $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, [], $locationOk);
-        $anySucceeded = $anySucceeded || $locationOk;
+        $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     } elseif (!empty($iata)) {
         // IATA codes are auto-resolved to ICAO by API
-        $attempted = true;
         $locationOk = false;
         $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, [], $locationOk);
-        $anySucceeded = $anySucceeded || $locationOk;
+        $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     }
     
     // 2. Try geospatial query (if coordinates available)
     // Always do this for TFRs, and as fallback for FAA identifiers
     if (isset($airport['lat']) && isset($airport['lon'])) {
-        $attempted = true;
         $geoOk = false;
         $radius = NOTAM_GEO_RADIUS_DEFAULT;
         $geoNotams = queryNotamsByCoordinates(
@@ -314,12 +327,13 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
             $lastRequestTime,
             $geoOk,
         );
-        $anySucceeded = $anySucceeded || $geoOk;
+        $queryOutcomes[] = $geoOk;
         $allNotams = array_merge($allNotams, $geoNotams);
     }
 
+    $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
     if ($reportFetchOutcome) {
-        $fetchSucceeded = $attempted && $anySucceeded;
+        $fetchSucceeded = $fetchSummary['fetchSucceeded'];
     }
     
     // 3. Parse XML to structured data

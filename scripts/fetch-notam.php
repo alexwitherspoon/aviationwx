@@ -61,11 +61,22 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
         return true; // Not an error, just skip
     }
     
+    $cacheFile = notamCacheFilePath($airportId);
+
     try {
         $fetchSucceeded = false;
-        $notams = fetchNotamsForAirport($airportId, $airport, $fetchSucceeded);
+        if (defined('AVIATIONWX_NOTAM_TEST_FETCH_THROW') && AVIATIONWX_NOTAM_TEST_FETCH_THROW !== '') {
+            throw new RuntimeException((string) AVIATIONWX_NOTAM_TEST_FETCH_THROW);
+        }
+        if (defined('AVIATIONWX_NOTAM_TEST_FETCH_SUCCEEDED')) {
+            $fetchSucceeded = (bool) AVIATIONWX_NOTAM_TEST_FETCH_SUCCEEDED;
+            $notams = defined('AVIATIONWX_NOTAM_TEST_FETCH_NOTAMS')
+                ? (array) AVIATIONWX_NOTAM_TEST_FETCH_NOTAMS
+                : [];
+        } else {
+            $notams = fetchNotamsForAirport($airportId, $airport, $fetchSucceeded);
+        }
 
-        $cacheFile = notamCacheFilePath($airportId);
         if (!$fetchSucceeded) {
             notamRecordFetchAttempt($airportId);
 
@@ -97,6 +108,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
         ];
         
         if (!notamWriteCacheFile($cacheFile, $cacheData)) {
+            notamRecordFetchAttempt($airportId);
             $logLevel = $expectFailures ? 'info' : 'error';
             aviationwx_log($logLevel, 'notam fetch: failed to write cache', [
                 'invocation_id' => $invocationId,
@@ -116,7 +128,8 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
         
         return true;
         
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
+        notamRecordFetchAttempt($airportId);
         $logLevel = $expectFailures ? 'info' : 'error';
         aviationwx_log($logLevel, 'notam fetch: exception', [
             'invocation_id' => $invocationId,

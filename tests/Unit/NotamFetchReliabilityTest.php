@@ -84,10 +84,52 @@ final class NotamFetchReliabilityTest extends TestCase
         self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
     }
 
+    public function testProcessAirportNotam_RecordsFetchAttemptOnWriteFailure(): void
+    {
+        $cacheFile = $this->cacheDir . '/kspb.json';
+        $original = [
+            'fetched_at' => 1700000000,
+            'airport' => 'kspb',
+            'notams' => [['id' => 'keep-me', 'text' => 'RWY CLSD']],
+            'status' => 'success',
+        ];
+        file_put_contents($cacheFile, json_encode($original, JSON_THROW_ON_ERROR));
+
+        $result = $this->runProcessAirportNotamSubprocess($cacheFile, [
+            'fetch_succeeded' => true,
+            'force_write_fail' => true,
+        ]);
+
+        self::assertFalse($result['success']);
+        $after = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('keep-me', $after['notams'][0]['id']);
+        self::assertSame(1700000000, $after['fetched_at']);
+        self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
+    }
+
+    public function testProcessAirportNotam_RecordsFetchAttemptOnException(): void
+    {
+        $cacheFile = $this->cacheDir . '/kspb.json';
+        file_put_contents($cacheFile, json_encode([
+            'fetched_at' => 1700000000,
+            'airport' => 'kspb',
+            'notams' => [['id' => 'keep-me']],
+            'status' => 'success',
+        ], JSON_THROW_ON_ERROR));
+
+        $result = $this->runProcessAirportNotamSubprocess($cacheFile, [
+            'fetch_throw' => 'simulated worker failure',
+        ]);
+
+        self::assertFalse($result['success']);
+        self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
+    }
+
     /**
+     * @param array{fetch_succeeded?: bool, force_write_fail?: bool, fetch_throw?: string} $options
      * @return array{success: bool, output: string}
      */
-    private function runProcessAirportNotamSubprocess(string $cacheFile): array
+    private function runProcessAirportNotamSubprocess(string $cacheFile, array $options = []): array
     {
         $root = dirname(__DIR__, 2);
         $tmp = sys_get_temp_dir() . '/aviationwx_notam_proc_' . bin2hex(random_bytes(8)) . '.php';
@@ -104,6 +146,16 @@ if (!defined('AVIATIONWX_LOG_DIR')) {
 @touch(AVIATIONWX_LOG_DIR . '/app.log');
 define('AVIATIONWX_NOTAM_CACHE_DIR', getenv('NOTAM_TEST_CACHE_DIR'));
 define('AVIATIONWX_FETCH_NOTAM_LOAD_ONLY', true);
+if (($throw = getenv('NOTAM_TEST_FETCH_THROW')) !== false && $throw !== '') {
+    define('AVIATIONWX_NOTAM_TEST_FETCH_THROW', $throw);
+}
+if (($succeeded = getenv('NOTAM_TEST_FETCH_SUCCEEDED')) !== false && $succeeded !== '') {
+    define('AVIATIONWX_NOTAM_TEST_FETCH_SUCCEEDED', $succeeded === '1');
+    define('AVIATIONWX_NOTAM_TEST_FETCH_NOTAMS', [['id' => 'test-write', 'text' => 'RWY CLSD']]);
+}
+if (getenv('NOTAM_TEST_FORCE_WRITE_FAIL') === '1') {
+    define('AVIATIONWX_NOTAM_TEST_FORCE_WRITE_FAIL', true);
+}
 require getenv('NOTAM_TEST_ROOT') . '/scripts/fetch-notam.php';
 $ok = processAirportNotam('kspb', 'test-invocation', false);
 echo json_encode(['success' => $ok], JSON_THROW_ON_ERROR);
@@ -116,6 +168,15 @@ PHP;
             'NOTAM_TEST_CONFIG_PATH' => $root . '/tests/Fixtures/airports.json.test',
             'NOTAM_TEST_CACHE_DIR' => dirname($cacheFile),
         ];
+        if (isset($options['fetch_throw'])) {
+            $env['NOTAM_TEST_FETCH_THROW'] = (string) $options['fetch_throw'];
+        }
+        if (array_key_exists('fetch_succeeded', $options)) {
+            $env['NOTAM_TEST_FETCH_SUCCEEDED'] = $options['fetch_succeeded'] ? '1' : '0';
+        }
+        if (!empty($options['force_write_fail'])) {
+            $env['NOTAM_TEST_FORCE_WRITE_FAIL'] = '1';
+        }
         $proc = proc_open([PHP_BINARY, $tmp], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
         self::assertIsResource($proc);
         $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);

@@ -107,6 +107,32 @@ final class NotamCacheTest extends TestCase
         self::assertTrue(notamShouldEnqueueRefresh('kspb', 600, $now));
     }
 
+    public function testReadCachePayload_ReturnsDecodedEnvelope(): void
+    {
+        $path = self::$cacheDir . '/kspb.json';
+        $payload = [
+            'fetched_at' => 1700000000,
+            'airport' => 'kspb',
+            'notams' => [['id' => 'n1']],
+            'status' => 'success',
+        ];
+        file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
+
+        $decoded = notamReadCachePayload($path);
+
+        self::assertIsArray($decoded);
+        self::assertSame('kspb', $decoded['airport']);
+        self::assertCount(1, $decoded['notams']);
+    }
+
+    public function testReadCachePayload_ReturnsNullForInvalidJson(): void
+    {
+        $path = self::$cacheDir . '/kspb.json';
+        file_put_contents($path, '{not-json');
+
+        self::assertNull(notamReadCachePayload($path));
+    }
+
     private static function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {
