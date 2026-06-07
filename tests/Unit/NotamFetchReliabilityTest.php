@@ -52,6 +52,18 @@ final class NotamFetchReliabilityTest extends TestCase
         self::assertFalse($fetchSucceeded);
     }
 
+    public function testProcessAirportNotam_RecordsFetchAttemptWhenFetchFailsWithNoCache(): void
+    {
+        $cacheFile = $this->cacheDir . '/kspb.json';
+        self::assertFileDoesNotExist($cacheFile);
+
+        $result = $this->runProcessAirportNotamSubprocess($cacheFile);
+
+        self::assertFalse($result['success']);
+        self::assertFileDoesNotExist($cacheFile);
+        self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
+    }
+
     public function testProcessAirportNotam_PreservesExistingCacheWhenFetchFails(): void
     {
         $cacheFile = $this->cacheDir . '/kspb.json';
