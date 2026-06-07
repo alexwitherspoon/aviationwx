@@ -729,7 +729,7 @@ function isNotamCancellation(array $notam): bool {
  * Whether NOTAM prose indicates a runway or aerodrome closure when Q-code is absent.
  *
  * @param string $text NOTAM body (any case)
- * @return bool True for RWY/AD AP/ARPT closure phrases; false for taxiway-only closures
+ * @return bool True for RWY/AD AP/ARPT closure or hazard phrases; false for taxiway-only closures
  */
 function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
     $upper = strtoupper($text);
@@ -743,13 +743,13 @@ function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
         return false;
     }
 
-    if (preg_match('/\bRWY\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
+    if (preg_match('/\bRWY\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
         return true;
     }
-    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
+    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
         return true;
     }
-    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
+    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
         return true;
     }
 

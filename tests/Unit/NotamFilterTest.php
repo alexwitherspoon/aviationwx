@@ -150,6 +150,18 @@ class NotamFilterTest extends TestCase {
         $this->assertTrue(isAerodromeClosure($notam, $airport));
     }
 
+    public function testIsAerodromeClosure_TextFallbackRwyUnsafeWithoutQCode(): void
+    {
+        $airport = ['icao' => 'KPDX', 'name' => 'Portland International'];
+        $notam = [
+            'code' => '',
+            'text' => 'RWY 12/30 UNSAFE',
+            'location' => 'KPDX',
+        ];
+
+        $this->assertTrue(isAerodromeClosure($notam, $airport));
+    }
+
     public function testIsAerodromeClosure_RejectsTaxiwayClsdWithoutQCode(): void
     {
         $airport = ['icao' => 'KPDX', 'name' => 'Portland International'];
