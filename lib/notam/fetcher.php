@@ -51,7 +51,7 @@ function rateLimitWait(float &$lastRequestTime): void {
  * 
  * @param string $location ICAO code
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded When the caller passes this argument, set false on NMS failure or true on HTTP 200 with valid payload
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool &$querySucceeded = null): array {
@@ -124,7 +124,7 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool 
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded When the caller passes this argument, set false on NMS failure or true on HTTP 200 with valid payload
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByCoordinates(
@@ -238,7 +238,7 @@ function deduplicateNotams(array $notams): array {
  * 
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
- * @param bool|null $fetchSucceeded When the caller passes this argument, set false when every attempted NMS query fails
+ * @param bool|null $fetchSucceeded When passed, true when at least one NMS query succeeds; false when no query runs or every attempted query fails
  * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
 function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchSucceeded = null): array {
