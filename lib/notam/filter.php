@@ -751,14 +751,6 @@ function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
         return true;
     }
 
-    if (
-        preg_match('/\bTWY\b/', $upper) === 1
-        || preg_match('/\bAPRON\b/', $upper) === 1
-        || preg_match('/\bRAMP\b/', $upper) === 1
-    ) {
-        return false;
-    }
-
     return false;
 }
 
