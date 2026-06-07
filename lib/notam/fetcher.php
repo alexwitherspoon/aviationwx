@@ -337,6 +337,7 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
             $geoOk,
         );
         $queryOutcomes[] = $geoOk;
+        // Geo payload is TFR-only after pre-filter; aerodrome closures come from the location query above.
         $allNotams = array_merge($allNotams, notamFilterGeoXmlForTfrParsing($geoNotams));
     }
 
