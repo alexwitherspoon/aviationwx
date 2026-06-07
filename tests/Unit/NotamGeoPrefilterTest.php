@@ -8,8 +8,6 @@ final class NotamGeoPrefilterTest extends TestCase
 {
     protected function setUp(): void
     {
-        putenv('APP_ENV=testing');
-        putenv('CONFIG_PATH=' . dirname(__DIR__, 2) . '/tests/Fixtures/airports.json.test');
         require_once dirname(__DIR__, 2) . '/lib/notam/geo-prefilter.php';
     }
 
