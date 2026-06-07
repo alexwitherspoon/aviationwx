@@ -48,6 +48,7 @@ function notamRecordFetchAttempt(string $airportId): void
         aviationwx_log('warning', 'notam cache: cannot create directory for fetch attempt', [
             'cache_dir' => $dir,
             'airport' => $airportId,
+            'error' => error_get_last()['message'] ?? 'unknown',
         ], 'app');
 
         return;
@@ -57,6 +58,7 @@ function notamRecordFetchAttempt(string $airportId): void
         aviationwx_log('warning', 'notam cache: failed to record fetch attempt', [
             'airport' => $airportId,
             'path' => $path,
+            'error' => error_get_last()['message'] ?? 'unknown',
         ], 'app');
     }
 }
