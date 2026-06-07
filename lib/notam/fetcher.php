@@ -66,6 +66,18 @@ function notamCanonicalDedupKey(array $notam): string {
 }
 
 /**
+ * Build NMS location-query parameters; caller location always wins over extras.
+ *
+ * @param array<string, string> $queryParams Optional NMS query parameters
+ *
+ * @return array<string, string>
+ */
+function notamBuildLocationQueryParams(string $location, array $queryParams = []): array
+{
+    return array_merge($queryParams, ['location' => $location]);
+}
+
+/**
  * Query NOTAMs by location (ICAO code)
  *
  * @param string $location ICAO code
@@ -80,7 +92,7 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, array 
     }
 
     $baseUrl = getNotamApiBaseUrl();
-    $params = array_merge(['location' => $location], $queryParams);
+    $params = notamBuildLocationQueryParams($location, $queryParams);
     $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query($params);
     
     rateLimitWait($lastRequestTime);
