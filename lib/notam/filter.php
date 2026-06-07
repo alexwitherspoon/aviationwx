@@ -729,7 +729,7 @@ function isNotamCancellation(array $notam): bool {
  * Whether NOTAM prose indicates a runway or aerodrome closure when Q-code is absent.
  *
  * @param string $text NOTAM body (any case)
- * @return bool True for RWY/AD AP/ARPT closure or hazard phrases; false for taxiway-only closures
+ * @return bool True for RWY/AD AP/ARPT closure phrases; false for taxiway-only or hazard-only text
  */
 function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
     $upper = strtoupper($text);
@@ -737,19 +737,17 @@ function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
         return false;
     }
 
-    $hasClosure = str_contains($upper, 'CLSD') || str_contains($upper, 'CLOSED');
-    $hasHazard = str_contains($upper, 'HAZARD') || str_contains($upper, 'UNSAFE');
-    if (!$hasClosure && !$hasHazard) {
+    if (!str_contains($upper, 'CLSD') && !str_contains($upper, 'CLOSED')) {
         return false;
     }
 
-    if (preg_match('/\bRWY\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
+    if (preg_match('/\bRWY\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
         return true;
     }
-    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
+    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
         return true;
     }
-    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED|UNSAFE|HAZARD)\b/', $upper) === 1) {
+    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
         return true;
     }
 
@@ -797,13 +795,13 @@ function notamRestrictionScopeIsRunwayOrAerodrome(array $notam): bool {
 }
 
 /**
- * Check if NOTAM is a runway or aerodrome closure/hazard
+ * Check if NOTAM is a runway or aerodrome closure.
  *
- * Only matches runway-level and above issues (not taxiway/apron closures):
- * - QMR* = Runway (closed, hazardous, etc.)
- * - QFA* = Aerodrome/airport (closed, services unavailable, etc.)
+ * Only matches runway-level and above closures (not taxiway/apron, not hazard-only text):
+ * - QMR* = Runway closed
+ * - QFA* = Aerodrome/airport closed
  * - FAA scenario 86 / AIXM runway events (DOM format without Q-code)
- * - Text fallback when Q-code is empty (RWY/AD AP/ARPT closure phrases)
+ * - Text fallback when Q-code is empty (RWY/AD AP/ARPT CLSD/CLOSED phrases)
  *
  * Excludes:
  * - QMX* = Taxiway closures (less critical)
@@ -813,7 +811,7 @@ function notamRestrictionScopeIsRunwayOrAerodrome(array $notam): bool {
  *
  * @param array<string, mixed> $notam Parsed NOTAM data
  * @param array<string, mixed> $airport Airport configuration
- * @return bool True if runway/aerodrome closure or hazard (and not a cancellation)
+ * @return bool True if runway/aerodrome closure (and not a cancellation)
  */
 function isAerodromeClosure(array $notam, array $airport): bool {
     if (isNotamCancellation($notam)) {
@@ -825,9 +823,7 @@ function isAerodromeClosure(array $notam, array $airport): bool {
     }
 
     $text = strtoupper((string) ($notam['text'] ?? ''));
-    $hasClosure = str_contains($text, 'CLSD') || str_contains($text, 'CLOSED');
-    $hasHazard = str_contains($text, 'HAZARD') || str_contains($text, 'UNSAFE');
-    if (!$hasClosure && !$hasHazard) {
+    if (!str_contains($text, 'CLSD') && !str_contains($text, 'CLOSED')) {
         return false;
     }
 

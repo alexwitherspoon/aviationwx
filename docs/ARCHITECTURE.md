@@ -220,7 +220,7 @@ Optional **station power** telemetry on airport pages for `limited_availability`
   - **Excludes** type='C' (Cancel), NOTAMC, and "CANCELED/CANCELLED" NOTAMs
   - These indicate restrictions are **lifted** (good news, not warnings)
 - **Filtering Logic**:
-  - **Aerodrome Closures**: QMR*/QFA* Q-codes, FAA scenario 86 / AIXM runway events, or text fallback for DOM closures; plus CLSD/CLOSED/HAZARD text and location match (see [DATA_FLOW.md](DATA_FLOW.md#notam-data-processing))
+  - **Aerodrome Closures**: QMR*/QFA* Q-codes, FAA scenario 86 / AIXM runway events, or text fallback for DOM closures; plus CLSD/CLOSED text and location match (hazard-only NOTAMs excluded; see [DATA_FLOW.md](DATA_FLOW.md#notam-data-processing))
   - **TFRs**: Text containing "TFR", "TEMPORARY FLIGHT RESTRICTION", or "RESTRICTED AIRSPACE"
 - **Geographic relevance** (TFRs only, when identifier and name rules do not already match):
   - Parses coordinate pairs from NOTAM text (`DDMMSSN/DDDMMSSW`)

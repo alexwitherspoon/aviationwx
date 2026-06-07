@@ -1368,7 +1368,7 @@ Otherwise → Output 640x480 (FAA minimum)
 ### Overview
 
 NOTAM (Notice to Air Missions) data is fetched from the FAA's NMS (NOTAM Management System) API to provide pilots with critical airspace information including:
-- **Aerodrome Closures**: Runway and airport closures or hazards
+- **Aerodrome Closures**: Runway and airport closures (CLSD/CLOSED; hazard-only text excluded)
 - **TFRs**: Temporary Flight Restrictions affecting the airport's airspace
 
 ### Fetching Strategy
@@ -1458,7 +1458,7 @@ A NOTAM is classified as an aerodrome closure if (and not a cancellation). Scope
 - **Text fallback** (only when `code` is empty): Phrases such as `RWY ... CLSD`, `AD AP CLSD`, or `ARPT/AIRPORT ... CLSD`. Taxiway-only closures (`TWY`, `APRON`, `RAMP`) are excluded. Explicit `QMX`/`QMA`/`QMP` Q-codes are always excluded.
 
 Additionally:
-- **Text indicates closure or hazard**: Contains `CLSD`, `CLOSED`, `HAZARD`, or `UNSAFE`
+- **Text indicates closure**: Contains `CLSD` or `CLOSED` (not hazard-only phrases such as `UNSAFE` or `HAZARD`)
 - **Location matches**: The NOTAM location matches the airport's ICAO, IATA, FAA code, or historical identifiers (or airport name fallback for geo query rows)
 
 #### TFR Detection
@@ -1694,7 +1694,7 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 - **Location**: `#notam-banner-container` below status banners on the airport page
 - **Visibility**: Shown when `api/notam.php` returns `active`, `inactive_scheduled`, `upcoming_today`, or `upcoming_future` rows
 - **Types Displayed**:
-  - **Aerodrome Closures**: Runway or airport closures/hazards
+  - **Aerodrome Closures**: Runway or airport closures
   - **TFRs**: Temporary flight restrictions that pass relevance rules (including circle, polygon, or legacy geometry in [TFR Geographic Relevance](#tfr-geographic-relevance))
 - **Refresh**: Client polls `/api/notam.php` every 180 seconds
 
