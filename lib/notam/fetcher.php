@@ -12,6 +12,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/parser.php';
 require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/geo-prefilter.php';
 
 /**
  * Decode NMS JSON; strips illegal ASCII control characters some payloads embed in strings.
@@ -78,9 +79,31 @@ function notamBuildLocationQueryParams(string $location, array $queryParams = []
 }
 
 /**
- * Query NOTAMs by location (ICAO code)
+ * Resolve NMS location-query code from airport config (ICAO, IATA, then FAA).
  *
- * @param string $location ICAO code
+ * @param array<string, mixed> $airport Airport configuration
+ * @return string|null NMS location code or null when no identifier is configured
+ */
+function notamResolveLocationQueryCode(array $airport): ?string
+{
+    foreach (['icao', 'iata', 'faa'] as $key) {
+        $value = $airport[$key] ?? null;
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $code = trim((string) $value);
+        if ($code !== '') {
+            return $code;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Query NOTAMs by NMS location code (ICAO, IATA, or FAA identifier).
+ *
+ * @param string $location NMS location query code from {@see notamResolveLocationQueryCode()}
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
  * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
@@ -183,11 +206,9 @@ function queryNotamsByCoordinates(
     }
     
     $baseUrl = getNotamApiBaseUrl();
-    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query([
-        'latitude' => $latitude,
-        'longitude' => $longitude,
-        'radius' => $radius
-    ]);
+    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query(
+        notamBuildGeoQueryParams($latitude, $longitude, $radius),
+    );
     
     rateLimitWait($lastRequestTime);
     
@@ -284,8 +305,8 @@ function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
  * Fetch and filter NOTAMs for an airport
  * 
  * Uses dual query strategy:
- * 1. Location-based query (if ICAO/IATA available)
- * 2. Geospatial query (for TFRs and fallback for FAA identifiers)
+ * 1. Location-based query (ICAO, IATA, or FAA identifier)
+ * 2. Geospatial query for TFRs (AIRSPACE feature; XML pre-filtered before parse)
  * 
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
@@ -298,25 +319,16 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $allNotams = [];
     $queryOutcomes = [];
     
-    // 1. Try location-based query (if ICAO/IATA available)
-    $icao = $airport['icao'] ?? null;
-    $iata = $airport['iata'] ?? null;
-    
-    if (!empty($icao)) {
+    // 1. Location query via first configured identifier (ICAO, then IATA, then FAA)
+    $locationCode = notamResolveLocationQueryCode($airport);
+    if ($locationCode !== null) {
         $locationOk = false;
-        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, [], $locationOk);
-        $queryOutcomes[] = $locationOk;
-        $allNotams = array_merge($allNotams, $locationNotams);
-    } elseif (!empty($iata)) {
-        // IATA codes are auto-resolved to ICAO by API
-        $locationOk = false;
-        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, [], $locationOk);
+        $locationNotams = queryNotamsByLocation($locationCode, $lastRequestTime, [], $locationOk);
         $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     }
     
-    // 2. Try geospatial query (if coordinates available)
-    // Always do this for TFRs, and as fallback for FAA identifiers
+    // 2. Geospatial query for TFRs (if coordinates available)
     if (isset($airport['lat']) && isset($airport['lon'])) {
         $geoOk = false;
         $radius = NOTAM_GEO_RADIUS_DEFAULT;
@@ -328,7 +340,15 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
             $geoOk,
         );
         $queryOutcomes[] = $geoOk;
-        $allNotams = array_merge($allNotams, $geoNotams);
+        // Geo payload is TFR-only after pre-filter; aerodrome closures come from the location query above.
+        $filteredGeo = notamFilterGeoXmlForTfrParsing($geoNotams);
+        if (count($geoNotams) > 0 && count($filteredGeo) === 0) {
+            aviationwx_log('info', 'notam fetcher: geo prefilter dropped all AIXM rows', [
+                'airport' => $airportId,
+                'raw_count' => count($geoNotams),
+            ], 'app');
+        }
+        $allNotams = array_merge($allNotams, $filteredGeo);
     }
 
     $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);

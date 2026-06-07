@@ -49,6 +49,8 @@ class ConstantsTest extends TestCase
             'NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS',
             'NOTAM_FETCH_FAILURE_BACKOFF_SECONDS',
             'NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE',
+            'NOTAM_GEO_QUERY_FEATURE',
+            'NOTAM_GEO_RADIUS_DEFAULT',
         ];
         
         foreach ($requiredConstants as $const) {

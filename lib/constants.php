@@ -185,6 +185,10 @@ if (!defined('DEFAULT_NOTAM_STALE_ERROR_SECONDS')) {
 if (!defined('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS')) {
     define('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS', 3600); // 1 hour
 }
+if (!defined('NOTAM_GEO_QUERY_FEATURE')) {
+    define('NOTAM_GEO_QUERY_FEATURE', 'AIRSPACE'); // NMS feature filter for geo TFR queries
+}
+
 if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
     define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius for API query
 }

@@ -214,8 +214,8 @@ Optional **station power** telemetry on airport pages for `limited_availability`
 
 **Key Features**:
 - **Dual Query Strategy**: 
-  - Location query by ICAO code (for airport-specific NOTAMs)
-  - Geospatial query by coordinates (for TFRs affecting nearby airspace)
+  - Location query by ICAO, IATA, or FAA identifier (for airport-specific NOTAMs, including FAA-only fields)
+  - Geospatial query by coordinates with NMS `feature=AIRSPACE` (TFR-focused); XML pre-filter in `geo-prefilter.php` skips non-TFR payloads before parse (aerodrome closures still come from the location query)
 - **Cancellation Filtering**:
   - **Excludes** type='C' (Cancel), NOTAMC, and "CANCELED/CANCELLED" NOTAMs
   - These indicate restrictions are **lifted** (good news, not warnings)
