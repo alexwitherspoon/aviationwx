@@ -70,7 +70,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
             notamRecordFetchAttempt($airportId);
 
             if (is_file($cacheFile)) {
-                aviationwx_log('warning', 'notam fetch: NMS queries failed, preserving cache', [
+                aviationwx_log('warning', 'notam fetch: no successful NOTAM query, preserving cache', [
                     'invocation_id' => $invocationId,
                     'airport' => $airportId,
                     'cache_file' => $cacheFile,
@@ -80,7 +80,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
             }
 
             $logLevel = $expectFailures ? 'info' : 'error';
-            aviationwx_log($logLevel, 'notam fetch: NMS queries failed with no cache', [
+            aviationwx_log($logLevel, 'notam fetch: no successful NOTAM query with no cache', [
                 'invocation_id' => $invocationId,
                 'airport' => $airportId,
             ], 'app');
