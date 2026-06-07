@@ -83,11 +83,22 @@ function notamBuildLocationQueryParams(string $location, array $queryParams = []
  * @param string $location ICAO code
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
  * @return array<int, string> Array of AIXM XML strings
  */
-function queryNotamsByLocation(string $location, float &$lastRequestTime, array $queryParams = []): array {
+function queryNotamsByLocation(
+    string $location,
+    float &$lastRequestTime,
+    array $queryParams = [],
+    ?bool &$querySucceeded = null,
+): array {
+    $reportQueryOutcome = func_num_args() >= 4;
     $token = getNotamBearerToken();
     if ($token === null) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
     }
 
@@ -120,12 +131,24 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, array 
             'http_code' => $httpCode,
             'error' => $error
         ], 'app');
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
     }
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
+    }
+
+    if ($reportQueryOutcome) {
+        $querySucceeded = true;
     }
     
     return $data['data']['aixm'];
@@ -138,11 +161,24 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, array 
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
  * @return array Array of AIXM XML strings
  */
-function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius, float &$lastRequestTime): array {
+function queryNotamsByCoordinates(
+    float $latitude,
+    float $longitude,
+    int $radius,
+    float &$lastRequestTime,
+    ?bool &$querySucceeded = null,
+): array {
+    $reportQueryOutcome = func_num_args() >= 5;
+
     $token = getNotamBearerToken();
     if ($token === null) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
     }
     
@@ -180,12 +216,24 @@ function queryNotamsByCoordinates(float $latitude, float $longitude, int $radius
             'http_code' => $httpCode,
             'error' => $error
         ], 'app');
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
     }
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
         return [];
+    }
+
+    if ($reportQueryOutcome) {
+        $querySucceeded = true;
     }
     
     return $data['data']['aixm'];
@@ -216,6 +264,23 @@ function deduplicateNotams(array $notams): array {
 }
 
 /**
+ * Aggregate per-query NMS outcomes for dual location + geo fetches.
+ *
+ * @param list<bool> $queryOutcomes Success flag for each attempted query (in order)
+ * @return array{attempted: bool, fetchSucceeded: bool}
+ */
+function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
+{
+    $attempted = $queryOutcomes !== [];
+    $anySucceeded = in_array(true, $queryOutcomes, true);
+
+    return [
+        'attempted' => $attempted,
+        'fetchSucceeded' => $attempted && $anySucceeded,
+    ];
+}
+
+/**
  * Fetch and filter NOTAMs for an airport
  * 
  * Uses dual query strategy:
@@ -224,36 +289,51 @@ function deduplicateNotams(array $notams): array {
  * 
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
+ * @param bool|null $fetchSucceeded When passed, true when at least one NMS query succeeds; false when no query runs or every attempted query fails
  * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
-function fetchNotamsForAirport(string $airportId, array $airport): array {
+function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchSucceeded = null): array {
+    $reportFetchOutcome = func_num_args() >= 3;
     $lastRequestTime = 0.0;
     $allNotams = [];
+    $queryOutcomes = [];
     
     // 1. Try location-based query (if ICAO/IATA available)
     $icao = $airport['icao'] ?? null;
     $iata = $airport['iata'] ?? null;
     
     if (!empty($icao)) {
-        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime);
+        $locationOk = false;
+        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, [], $locationOk);
+        $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     } elseif (!empty($iata)) {
         // IATA codes are auto-resolved to ICAO by API
-        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime);
+        $locationOk = false;
+        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, [], $locationOk);
+        $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     }
     
     // 2. Try geospatial query (if coordinates available)
     // Always do this for TFRs, and as fallback for FAA identifiers
     if (isset($airport['lat']) && isset($airport['lon'])) {
+        $geoOk = false;
         $radius = NOTAM_GEO_RADIUS_DEFAULT;
         $geoNotams = queryNotamsByCoordinates(
             (float)$airport['lat'],
             (float)$airport['lon'],
             $radius,
-            $lastRequestTime
+            $lastRequestTime,
+            $geoOk,
         );
+        $queryOutcomes[] = $geoOk;
         $allNotams = array_merge($allNotams, $geoNotams);
+    }
+
+    $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
+    if ($reportFetchOutcome) {
+        $fetchSucceeded = $fetchSummary['fetchSucceeded'];
     }
     
     // 3. Parse XML to structured data

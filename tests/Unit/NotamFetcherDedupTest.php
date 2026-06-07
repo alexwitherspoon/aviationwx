@@ -46,6 +46,30 @@ final class NotamFetcherDedupTest extends TestCase
         self::assertSame('RWY 15/33 CLSD', $result[0]['text']);
     }
 
+    public function testSummarizeFetchQueryOutcomes_PartialSuccessWhenLocationOkGeoFails(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([true, false]);
+
+        self::assertTrue($summary['attempted']);
+        self::assertTrue($summary['fetchSucceeded']);
+    }
+
+    public function testSummarizeFetchQueryOutcomes_FailsWhenEveryQueryFails(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([false, false]);
+
+        self::assertTrue($summary['attempted']);
+        self::assertFalse($summary['fetchSucceeded']);
+    }
+
+    public function testSummarizeFetchQueryOutcomes_FailsWhenNoQueryAttempted(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([]);
+
+        self::assertFalse($summary['attempted']);
+        self::assertFalse($summary['fetchSucceeded']);
+    }
+
     public function testNotamCanonicalDedupKey_StableForIdenticalRows(): void
     {
         $a = [

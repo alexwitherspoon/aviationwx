@@ -158,6 +158,38 @@ class NotamApiTest extends TestCase {
     }
 
     /**
+     * Serve-time banner filter must drop upcoming_future beyond the 48h horizon.
+     */
+    public function testServeTimeBannerFilter_DropsUpcomingFutureBeyondHorizon(): void
+    {
+        $notam = [
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS + 7200),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS + 14400),
+            'status' => 'upcoming_future',
+        ];
+
+        $status = revalidateNotamStatus($notam, 'UTC');
+        $this->assertSame('upcoming_future', $status);
+        $this->assertFalse(notamIsBannerRelevantStatus($status, $notam));
+    }
+
+    /**
+     * Serve-time banner filter retains upcoming_future within the 48h horizon.
+     */
+    public function testServeTimeBannerFilter_KeepsUpcomingFutureWithinHorizon(): void
+    {
+        $notam = [
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + (int) (NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS / 2)),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS + 3600),
+            'status' => 'upcoming_future',
+        ];
+
+        $status = revalidateNotamStatus($notam, 'UTC');
+        $this->assertSame('upcoming_future', $status);
+        $this->assertTrue(notamIsBannerRelevantStatus($status, $notam));
+    }
+
+    /**
      * Between EFFECTIVE windows the envelope can still read "active"; segments must win.
      */
     public function testRevalidateNotamStatus_InactiveScheduledGap() {

@@ -605,10 +605,65 @@ jobs:
       
       # docker-container is required for GHA cache (cache-to), docker tarball export (outputs type=docker), and
       # matches the pre-change workflow. The docker driver cannot do those (see Docker build exporters docs).
+      - name: Pre-pull BuildKit image
+        run: |
+          image="moby/buildkit:buildx-stable-1"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "$image"; then
+              echo "✓ Pre-pulled $image"
+              exit 0
+            fi
+            wait=$((attempt * 15))
+            echo "⚠ BuildKit pull attempt ${attempt} failed; retrying in ${wait}s..."
+            sleep "$wait"
+          done
+          echo "❌ Failed to pre-pull $image after 5 attempts"
+          exit 1
+
       - name: Set up Docker Buildx
+        id: setup-buildx
+        continue-on-error: true
         uses: docker/setup-buildx-action@v4
         with:
           driver: docker-container
+          driver-opts: image=moby/buildkit:buildx-stable-1
+
+      - name: Clean up failed Buildx builder
+        if: steps.setup-buildx.outcome == 'failure'
+        run: |
+          docker buildx ls -q 2>/dev/null | while read -r builder; do
+            docker buildx rm -f "$builder" 2>/dev/null || true
+          done
+          image="moby/buildkit:buildx-stable-1"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "$image"; then
+              exit 0
+            fi
+            sleep $((attempt * 15))
+          done
+          echo "❌ Failed to re-pull $image before Buildx retry"
+          exit 1
+
+      - name: Set up Docker Buildx (retry)
+        id: setup-buildx-retry
+        if: steps.setup-buildx.outcome == 'failure'
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          driver-opts: image=moby/buildkit:buildx-stable-1
+
+      - name: Verify Docker Buildx is ready
+        run: |
+          if [ "${{ steps.setup-buildx.outcome }}" = "success" ]; then
+            echo "✓ Buildx ready (first attempt)"
+          elif [ "${{ steps.setup-buildx-retry.outcome }}" = "success" ]; then
+            echo "✓ Buildx ready (retry)"
+          else
+            echo "❌ Docker Buildx setup failed after retry"
+            exit 1
+          fi
+          docker buildx version
+          docker buildx ls
       
       - name: Build Docker image with cache
         uses: docker/build-push-action@v7

@@ -1546,19 +1546,25 @@ Each NOTAM is classified by temporal status (`classifyNotamDisplayStatusAt()` in
 ### Caching
 
 Filtered NOTAMs are cached per airport:
-- **Location**: `cache/notam/{airport_id}.json`
+- **Location**: `cache/notam/{airport_id}.json` (via `notamCacheFilePath()`)
 - **Content**: Array of filtered NOTAMs with status
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
+- **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
+- **Refresh failure backoff**: `scripts/fetch-notam.php` records `cache/notam/{airport_id}.fetch-attempt` (without changing cache payload or `mtime`) when a worker refresh fails so `notamShouldEnqueueRefresh()` backs off for `NOTAM_FETCH_FAILURE_BACKOFF_SECONDS` before re-enqueueing. This applies to:
+  - **Hard NMS failure**: every attempted query fails (missing credentials, HTTP error, invalid JSON) - existing cache is preserved instead of overwriting with an empty result
+  - **Worker exception**: uncaught error during fetch/parse/filter
+  - **Cache write failure**: NMS succeeded but `notamWriteCacheFile()` could not persist (existing cache file, if any, is left unchanged)
+- **HTTP 200 with empty `aixm`**: treated as a successful fetch; cache is updated (including to an empty `notams` list). This differs from hard failure above: an empty payload is a valid "no NOTAMs" response, not a transport error. When NMS returns rows that filter to zero (for example cancellations), the cache is also updated to empty because raw AIXM was present.
 
 ### Serve-Time Status Re-validation
 
 **Safety-critical**: NOTAMs may expire between cache time and serve time. The API re-validates each NOTAM's status at serve time:
 
 1. **Status recompute**: `revalidateNotamStatus()` runs segment-aware classification at request time
-2. **Filter non-banner statuses**: Drops `expired` and `unknown`
+2. **Banner filter**: `notamIsBannerRelevantStatus()` drops `expired` and `unknown`, and re-applies the 48-hour `upcoming_future` horizon at serve time
 3. **Timezone alignment**: Uses airport local timezone for today vs future buckets
 
-This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
+This ensures pilots never see expired NOTAMs, even if the cache has not refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
 
 ### Failclosed Behavior
 
