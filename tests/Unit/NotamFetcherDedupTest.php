@@ -8,6 +8,14 @@ require_once __DIR__ . '/../../lib/notam/fetcher.php';
 
 final class NotamFetcherDedupTest extends TestCase
 {
+    public function testBuildLocationQueryParams_CallerLocationOverridesExtras(): void
+    {
+        $params = notamBuildLocationQueryParams('KSPB', ['location' => 'KPDX', 'feature' => 'RWY']);
+
+        self::assertSame('KSPB', $params['location']);
+        self::assertSame('RWY', $params['feature']);
+    }
+
     public function testDeduplicateNotams_RetainsRowsWithDomStyleId(): void
     {
         $notam = [
