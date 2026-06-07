@@ -480,11 +480,13 @@ while ($running) {
         
         // Process NOTAM updates (non-blocking)
         if ($notamPool !== null && isset($config['airports'])) {
+            require_once __DIR__ . '/../lib/notam/cache.php';
+
             foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !isAirportEnabled($airport)) {
+                if (!is_array($airport) || !isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
                     continue;
                 }
-                
+
                 // Get refresh interval
                 $refreshInterval = getNotamRefreshSeconds();
                 
@@ -492,12 +494,7 @@ while ($running) {
                 $minRefresh = getMinimumRefreshInterval();
                 $refreshInterval = max($minRefresh, $refreshInterval);
                 
-                // Check cache age (stateless - use filemtime)
-                $cacheFile = __DIR__ . "/../cache/notam/{$airportId}.json";
-                $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
-                
-                // Check if update needed
-                if ($cacheAge >= $refreshInterval) {
+                if (notamShouldEnqueueRefresh($airportId, $refreshInterval, $now)) {
                     // Non-blocking: add to pool (ProcessPool handles duplicates)
                     $notamPool->addJob([$airportId]);
                 }

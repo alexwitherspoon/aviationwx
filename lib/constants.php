@@ -185,6 +185,10 @@ if (!defined('DEFAULT_NOTAM_STALE_ERROR_SECONDS')) {
 if (!defined('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS')) {
     define('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS', 3600); // 1 hour
 }
+if (!defined('NOTAM_GEO_QUERY_FEATURE')) {
+    define('NOTAM_GEO_QUERY_FEATURE', 'AIRSPACE'); // NMS feature filter for geo TFR queries
+}
+
 if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
     define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius for API query
 }
@@ -194,6 +198,14 @@ if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
 // Banner: include upcoming_future NOTAMs whose first restriction window starts within this horizon
 if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
     define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
+}
+// FAA NMS AIXM scenario for DOM runway closure events (no Q-code in payload)
+if (!defined('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE')) {
+    define('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE', '86');
+}
+
+if (!defined('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS')) {
+    define('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS', 300); // 5 minutes between retries after NMS failure
 }
 
 // TFR (Temporary Flight Restriction) filtering constants (nautical miles).

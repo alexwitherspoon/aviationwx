@@ -115,6 +115,97 @@ class NotamFilterTest extends TestCase {
         
         $this->assertFalse(isAerodromeClosure($notam, $airport));
     }
+
+    public function testIsAerodromeClosure_AcceptsScenario86WithoutQCode(): void
+    {
+        $airport = [
+            'icao' => 'KSPB',
+            'iata' => 'SPB',
+            'faa' => 'SPB',
+            'name' => 'Scappoose Industrial Airpark',
+        ];
+        $notam = [
+            'type' => 'N',
+            'code' => '',
+            'text' => 'RWY 15/33 CLSD',
+            'location' => 'KSPB',
+            'scenario' => '86',
+            'aixm_runway_event' => true,
+            'start_time_utc' => '2026-06-08T14:00:00.000Z',
+            'end_time_utc' => '2026-09-06T14:00:00.000Z',
+        ];
+
+        $this->assertTrue(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsAerodromeClosure_TextFallbackRwyClsdWithoutQCode(): void
+    {
+        $airport = ['icao' => 'KSPB', 'faa' => 'SPB', 'name' => 'Scappoose Industrial Airpark'];
+        $notam = [
+            'code' => '',
+            'text' => 'RWY 15/33 CLSD',
+            'location' => 'KSPB',
+        ];
+
+        $this->assertTrue(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsAerodromeClosure_RejectsRwyUnsafeWithoutClosureText(): void
+    {
+        $airport = ['icao' => 'KPDX', 'name' => 'Portland International'];
+        $notam = [
+            'code' => 'QMRLC',
+            'text' => 'RWY 12/30 UNSAFE',
+            'location' => 'KPDX',
+        ];
+
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsAerodromeClosure_RejectsTaxiwayClsdWithoutQCode(): void
+    {
+        $airport = ['icao' => 'KPDX', 'name' => 'Portland International'];
+        $notam = [
+            'code' => '',
+            'text' => 'TWY K BTN GATE D5 AND GATE E3 CLSD TO ACFT WINGSPAN MORE THAN 118FT',
+            'location' => 'KPDX',
+        ];
+
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsAerodromeClosure_ExplicitQmxCode_RejectsTaxiwayClosure(): void
+    {
+        $airport = ['icao' => 'KPDX', 'name' => 'Portland International'];
+        $notam = [
+            'code' => 'QMXLC',
+            'text' => 'TWY A CLSD',
+            'location' => 'KPDX',
+        ];
+
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testFilterRelevantNotams_IncludesKspbScenario86Fixture(): void
+    {
+        require_once __DIR__ . '/../../lib/notam/parser.php';
+
+        $xml = (string) file_get_contents(__DIR__ . '/../Fixtures/notam/kspb-runway-closure-scenario86.xml');
+        $parsed = parseNotamXmlArray([$xml]);
+        $airport = [
+            'icao' => 'KSPB',
+            'iata' => 'SPB',
+            'faa' => 'SPB',
+            'name' => 'Scappoose Industrial Airpark',
+            'timezone' => 'America/Los_Angeles',
+        ];
+
+        $relevant = filterRelevantNotams($parsed, $airport);
+
+        $this->assertCount(1, $relevant);
+        $this->assertSame('aerodrome_closure', $relevant[0]['notam_type']);
+        $this->assertSame('RWY 15/33 CLSD', $relevant[0]['text']);
+    }
     
     public function testIsTfr_ExcludesCancellation() {
         $notam = [

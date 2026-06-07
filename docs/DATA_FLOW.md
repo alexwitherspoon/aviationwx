@@ -1368,15 +1368,15 @@ Otherwise → Output 640x480 (FAA minimum)
 ### Overview
 
 NOTAM (Notice to Air Missions) data is fetched from the FAA's NMS (NOTAM Management System) API to provide pilots with critical airspace information including:
-- **Aerodrome Closures**: Runway and airport closures or hazards
+- **Aerodrome Closures**: Runway and airport closures (CLSD/CLOSED; hazard-only text excluded)
 - **TFRs**: Temporary Flight Restrictions affecting the airport's airspace
 
 ### Fetching Strategy
 
 The system uses a **dual query strategy** to capture both airport-specific NOTAMs and nearby TFRs:
 
-1. **Location Query** (if ICAO/IATA available): Fetches NOTAMs issued for the specific airport identifier
-2. **Geospatial Query** (if coordinates available): Fetches NOTAMs within a radius of the airport to capture nearby TFRs
+1. **Location Query** (when an identifier is configured): Fetches NOTAMs for the airport via `notamResolveLocationQueryCode()` (ICAO, then IATA, then FAA)
+2. **Geospatial Query** (if coordinates available): Fetches TFR-focused airspace NOTAMs with `feature=AIRSPACE`, then applies a cheap XML pre-filter before parse (closures still come from the location query)
 
 Both queries are executed sequentially with rate limiting (1 request per second) to comply with API limits.
 
@@ -1391,10 +1391,11 @@ The system uses OAuth bearer token authentication:
 
 **Purpose**: Fetches NOTAMs specifically issued for an airport.
 
-**Endpoint**: `{base_url}/nmsapi/v1/notams?location={icao_code}`
+**Endpoint**: `{base_url}/nmsapi/v1/notams?location={code}`
 
 **Behavior**:
-- Uses ICAO code if available, otherwise IATA code
+- Uses the first configured identifier from `notamResolveLocationQueryCode()`: ICAO, then IATA, then FAA (covers FAA-only fields such as `03S`)
+- Does **not** query `formerly` codes; those are used only when matching NOTAM `location` fields during filtering
 - Returns NOTAMs with the airport as the affected location
 - Effective for aerodrome closures and airport-specific restrictions
 
@@ -1402,12 +1403,14 @@ The system uses OAuth bearer token authentication:
 
 **Purpose**: Fetches NOTAMs affecting airspace near the airport, particularly TFRs.
 
-**Endpoint**: `{base_url}/nmsapi/v1/notams?latitude={lat}&longitude={lon}&radius={nm}`
+**Endpoint**: `{base_url}/nmsapi/v1/notams?latitude={lat}&longitude={lon}&radius={nm}&feature=AIRSPACE`
 
 **Behavior**:
 - Uses airport coordinates from configuration
 - Default radius: 10 NM (`NOTAM_GEO_RADIUS_DEFAULT`)
-- Returns all NOTAMs with geographic boundaries intersecting the search area
+- NMS `feature` filter: `NOTAM_GEO_QUERY_FEATURE` (default `AIRSPACE`) to reduce non-TFR payload size
+- Raw AIXM rows are pre-filtered with `notamFilterGeoXmlForTfrParsing()` (same TFR keywords as `isTfr()`) before XML parse; runway/obstacle rows from geo are skipped intentionally
+- When NMS returns geo rows but the pre-filter drops all of them, the fetch still counts as a successful geo query (HTTP 200) and logs `notam fetcher: geo prefilter dropped all AIXM rows` for ops visibility
 - **Important**: The API returns NOTAMs by ARTCC (Air Route Traffic Control Center), not strict geographic proximity. A TFR in the same ARTCC may be returned even if outside the specified radius.
 
 ### Response Format
@@ -1424,15 +1427,17 @@ The NMS API returns NOTAMs in AIXM 5.1.1 XML format embedded within a JSON wrapp
 
 1. **XML Parsing**: Each AIXM XML string is parsed using SimpleXML
 2. **Field Extraction**: Key fields are extracted from the XML structure:
-   - `id`: NOTAM identifier (series + number + year, e.g., "A1234/2026")
+   - `id`: Public NOTAM identifier. ICAO format uses series + number + year (e.g., `A1234/2026`). DOM/local NOTAMs without a series use `event:simpleText` (e.g., `06/001/2026` from `!SPB 06/001 ...`).
    - `type`: N (New), R (Replace), or C (Cancel)
    - `location`: ICAO location code (may be FIR/ARTCC code for TFRs)
-   - `code`: Q-code (e.g., QMRLC for runway closure)
+   - `code`: Q-code / selection code when present (often empty on FAA scenario 86 runway closures)
+   - `scenario`: FAA NMS scenario (runway closure is `86`, see `NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE`)
+   - `aixm_runway_event`: True when the AIXM payload includes a runway member
    - `text`: Full NOTAM text
    - `start_time_utc`: Effective start time
    - `end_time_utc`: Effective end time (null for permanent NOTAMs)
    - `airport_name`: Airport name from FAA extension fields
-3. **Deduplication**: NOTAMs are deduplicated by ID to remove duplicates from overlapping queries
+3. **Deduplication**: NOTAMs are deduplicated by public `id`, or by a location/start/text fingerprint when `id` is empty (DOM format)
 
 ### Relevance Filtering
 
@@ -1449,10 +1454,15 @@ Example: `A0261/26 NOTAMC A0248/26 ... RWY 10R/28L CLSD CANCELED` means the runw
 
 #### Aerodrome Closures
 
-A NOTAM is classified as an aerodrome closure if (and not a cancellation):
-- **Q-code matches**: Code starts with `QMR` (runway) or `QFA` (aerodrome)
-- **Text indicates closure**: Contains "CLSD", "CLOSED", "HAZARD", or "UNSAFE"
-- **Location matches**: The NOTAM location matches the airport's ICAO, IATA, FAA code, or historical identifiers
+A NOTAM is classified as an aerodrome closure if (and not a cancellation). Scope must be runway or aerodrome level (`notamRestrictionScopeIsRunwayOrAerodrome()` in `lib/notam/filter.php`):
+
+- **Q-code path**: Code starts with `QMR` (runway) or `QFA` (aerodrome)
+- **FAA AIXM path**: `scenario` is `86` (`NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE`) and/or `aixm_runway_event` is true (DOM runway closures often omit Q-code)
+- **Text fallback** (only when `code` is empty): Phrases such as `RWY ... CLSD`, `AD AP CLSD`, or `ARPT/AIRPORT ... CLSD`. Taxiway-only closures (`TWY`, `APRON`, `RAMP`) are excluded. Explicit `QMX`/`QMA`/`QMP` Q-codes are always excluded.
+
+Additionally:
+- **Text indicates closure**: Contains `CLSD` or `CLOSED` (not hazard-only phrases such as `UNSAFE` or `HAZARD`)
+- **Location matches**: The NOTAM location matches the airport's ICAO, IATA, FAA code, or historical identifiers (or airport name fallback for geo query rows)
 
 #### TFR Detection
 
@@ -1522,40 +1532,53 @@ Geographic relevance is **withheld** when coordinate geometry cannot be establis
 
 ### Status Classification
 
-Each NOTAM is classified by temporal status:
-- **active**: Currently in effect (now ≥ start time AND now < end time)
-- **upcoming_today**: Starts later today (start time is today but in the future)
-- **upcoming_future**: Starts after today
-- **expired**: End time has passed
+Each NOTAM is classified by temporal status (`classifyNotamDisplayStatusAt()` in `lib/notam/filter.php`):
+- **active**: Inside an effective window (or envelope when no segments)
+- **inactive_scheduled**: Inside the NOTAM envelope but between EFFECTIVE windows
+- **upcoming_today**: First window starts later today (airport local midnight boundaries)
+- **upcoming_future**: First window starts after today
+- **expired**: Past the last effective end
+- **unknown**: Missing or invalid start time
 
-Only **active** and **upcoming_today** NOTAMs are displayed on the dashboard.
+**Cache filter** (`notamIsBannerRelevantStatus()`): retains `active`, `inactive_scheduled`, `upcoming_today`, and `upcoming_future` rows whose first window is within `NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS` (48 hours).
+
+**Serve filter** (`api/notam.php`): drops `expired` and `unknown`; returns the same banner-eligible statuses as the cache (re-validated at request time).
+
+**Dashboard banners** (`pages/airport.php`): red **ACTIVE**, purple **SCHEDULED BREAK**, orange **UPCOMING** for `upcoming_today` and `upcoming_future`.
 
 ### Caching
 
 Filtered NOTAMs are cached per airport:
-- **Location**: `cache/notam/{airport_id}.json`
+- **Location**: `cache/notam/{airport_id}.json` (via `notamCacheFilePath()`)
 - **Content**: Array of filtered NOTAMs with status
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
+- **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
+- **Refresh failure backoff**: `scripts/fetch-notam.php` records `cache/notam/{airport_id}.fetch-attempt` (without changing cache payload or `mtime`) when a worker refresh fails so `notamShouldEnqueueRefresh()` backs off for `NOTAM_FETCH_FAILURE_BACKOFF_SECONDS` before re-enqueueing. This applies to:
+  - **Hard NMS failure**: every attempted query fails (missing credentials, HTTP error, invalid JSON) - existing cache is preserved instead of overwriting with an empty result
+  - **Worker exception**: uncaught error during fetch/parse/filter
+  - **Cache write failure**: NMS succeeded but `notamWriteCacheFile()` could not persist (existing cache file, if any, is left unchanged)
+- **HTTP 200 with empty `aixm`**: treated as a successful fetch; cache is updated (including to an empty `notams` list). This differs from hard failure above: an empty payload is a valid "no NOTAMs" response, not a transport error. When NMS returns rows that filter to zero (for example cancellations), the cache is also updated to empty because raw AIXM was present.
 
 ### Serve-Time Status Re-validation
 
 **Safety-critical**: NOTAMs may expire between cache time and serve time. The API re-validates each NOTAM's status at serve time:
 
-1. **Expiration check**: If `end_time_utc` has passed, NOTAM is filtered out
-2. **Status update**: If a NOTAM has become active since caching, status is updated
-3. **Filter expired**: Only `active` and `upcoming_today` NOTAMs are returned
-4. **Timezone alignment**: Uses airport's local timezone to determine "today" boundary
+1. **Status recompute**: `revalidateNotamStatus()` runs segment-aware classification at request time
+2. **Banner filter**: `notamIsBannerRelevantStatus()` drops `expired` and `unknown`, and re-applies the 48-hour `upcoming_future` horizon at serve time
+3. **Timezone alignment**: Uses airport local timezone for today vs future buckets
 
-This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
+This ensures pilots never see expired NOTAMs, even if the cache has not refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
 
 ### Failclosed Behavior
 
 **Safety-critical**: If the NOTAM cache is too old, the system fails closed (returns empty rather than stale data).
 
-**3-Tier Staleness Model**:
-- **Warning** (15 minutes): Triggers background refresh, data still served
-- **Error** (30 minutes): Data served with warning, refresh urgently needed
-- **Failclosed** (1 hour): Returns empty NOTAM array, logs warning
+**3-Tier Staleness Model** (defaults in `lib/constants.php`; override with `notam_stale_*_seconds` in config):
+- **Warning** (default 900s / 15 min): Logs stale cache; scheduler refresh on next cycle
+- **Error** (default 1800s / 30 min): Same serve behavior; stronger operational signal in logs
+- **Failclosed** (default 3600s / 1 hr): Returns empty NOTAM array, logs warning
+
+Note: `api/notam.php` sets `refreshing: true` when cache exceeds TTL; actual NMS refresh is performed by `scripts/fetch-notam.php` via the scheduler, not inline on the HTTP request.
 
 When failclosed:
 - Response includes `failclosed: true` flag
@@ -1677,22 +1700,22 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 ### NOTAM Display
 
 #### Banner Display
-- **Location**: Top of weather section, below any maintenance banners
-- **Visibility**: Only shown when active or upcoming_today NOTAMs exist
+- **Location**: `#notam-banner-container` below status banners on the airport page
+- **Visibility**: Shown when `api/notam.php` returns `active`, `inactive_scheduled`, `upcoming_today`, or `upcoming_future` rows
 - **Types Displayed**:
-  - **Aerodrome Closures**: Runway or airport closures/hazards
+  - **Aerodrome Closures**: Runway or airport closures
   - **TFRs**: Temporary flight restrictions that pass relevance rules (including circle, polygon, or legacy geometry in [TFR Geographic Relevance](#tfr-geographic-relevance))
+- **Refresh**: Client polls `/api/notam.php` every 180 seconds
 
 #### NOTAM Content
-- **ID**: NOTAM identifier with link to official FAA source
-- **Status**: Active (currently in effect) or Upcoming (starts later today)
-- **Message**: Full NOTAM text
-- **Effective Times**: Start and end times in airport local timezone
+- **ID**: NOTAM identifier with link to official FAA source when `id` is present
+- **Status labels**: ACTIVE NOTAM, SCHEDULED BREAK, or UPCOMING NOTAM
+- **Message**: Full NOTAM text (all matching rows shown; no collapse)
+- **Effective Times**: Envelope or segment window times in airport local timezone
 
 #### Visual Indicators
-- **Warning Icon**: ⚠️ emoji for visibility
-- **Color Coding**: Yellow/amber background for warnings
-- **Collapsible**: Long NOTAM text may be truncated with expand option
+- **Icons**: 🚨 active, ⏸️ scheduled gap, ⚠️ upcoming
+- **Color Coding**: Red active, purple scheduled, orange upcoming (see `.notam-banner-*` in `public/css/styles.css`)
 
 ### Data Refresh Behavior
 
