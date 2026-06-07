@@ -79,6 +79,24 @@ function notamBuildLocationQueryParams(string $location, array $queryParams = []
 }
 
 /**
+ * Resolve NMS location-query code from airport config (ICAO, IATA, then FAA).
+ *
+ * @param array<string, mixed> $airport Airport configuration
+ * @return string|null NMS location code or null when no identifier is configured
+ */
+function notamResolveLocationQueryCode(array $airport): ?string
+{
+    foreach (['icao', 'iata', 'faa'] as $key) {
+        $value = $airport[$key] ?? null;
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
+        }
+    }
+
+    return null;
+}
+
+/**
  * Query NOTAMs by location (ICAO code)
  *
  * @param string $location ICAO code
@@ -283,8 +301,8 @@ function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
  * Fetch and filter NOTAMs for an airport
  * 
  * Uses dual query strategy:
- * 1. Location-based query (if ICAO/IATA available)
- * 2. Geospatial query (for TFRs and fallback for FAA identifiers)
+ * 1. Location-based query (ICAO, IATA, or FAA identifier)
+ * 2. Geospatial query for TFRs (AIRSPACE feature; XML pre-filtered before parse)
  * 
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
@@ -297,19 +315,11 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $allNotams = [];
     $queryOutcomes = [];
     
-    // 1. Try location-based query (if ICAO/IATA available)
-    $icao = $airport['icao'] ?? null;
-    $iata = $airport['iata'] ?? null;
-    
-    if (!empty($icao)) {
+    // 1. Location query (ICAO, IATA, or FAA identifier for airports without ICAO)
+    $locationCode = notamResolveLocationQueryCode($airport);
+    if ($locationCode !== null) {
         $locationOk = false;
-        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, [], $locationOk);
-        $queryOutcomes[] = $locationOk;
-        $allNotams = array_merge($allNotams, $locationNotams);
-    } elseif (!empty($iata)) {
-        // IATA codes are auto-resolved to ICAO by API
-        $locationOk = false;
-        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, [], $locationOk);
+        $locationNotams = queryNotamsByLocation($locationCode, $lastRequestTime, [], $locationOk);
         $queryOutcomes[] = $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     }
