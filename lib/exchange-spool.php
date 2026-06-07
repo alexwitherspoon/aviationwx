@@ -121,7 +121,7 @@ function aviationwx_exchange_append_structured_log(
  */
 function aviationwx_exchange_write_sponsor_application(array $application): string
 {
-    $applicationId = strtolower($application['application_id']);
+    $applicationId = aviationwx_exchange_normalize_application_id($application['application_id']);
     $payload = [
         'schema_version' => '1.0.0',
         'application_id' => $applicationId,
@@ -152,6 +152,28 @@ function aviationwx_exchange_write_sponsor_application(array $application): stri
     aviationwx_exchange_write_json($path, $payload);
 
     return $path;
+}
+
+/**
+ * Normalize and validate a sponsor application UUID for spool filenames.
+ */
+function aviationwx_exchange_normalize_application_id(mixed $applicationId): string
+{
+    if (!is_string($applicationId)) {
+        throw new InvalidArgumentException('Invalid application_id');
+    }
+
+    $normalized = strtolower(trim($applicationId));
+    if (
+        preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',
+            $normalized,
+        ) !== 1
+    ) {
+        throw new InvalidArgumentException('Invalid application_id');
+    }
+
+    return $normalized;
 }
 
 /**

@@ -49,6 +49,19 @@ final class ExchangeSpoolTest extends TestCase
         self::assertSame(0640, fileperms($path) & 0777);
     }
 
+    public function testWriteSponsorApplication_RejectsInvalidApplicationId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        aviationwx_exchange_write_sponsor_application([
+            'application_id' => '../evil',
+            'airport_id' => 'kspb',
+            'org_name' => 'Test FBO',
+            'contact_name' => 'Jane',
+            'contact_email' => 'test@example.com',
+            'org_type' => 'on_airport_business',
+        ]);
+    }
+
     public function testWriteSponsorApplication_PreservesMessageZero(): void
     {
         $applicationId = '880e8400-e29b-41d4-a716-446655440003';
