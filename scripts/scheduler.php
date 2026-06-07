@@ -492,12 +492,11 @@ while ($running) {
                 $minRefresh = getMinimumRefreshInterval();
                 $refreshInterval = max($minRefresh, $refreshInterval);
                 
-                // Check cache age (stateless - use filemtime)
-                $cacheFile = __DIR__ . "/../cache/notam/{$airportId}.json";
-                $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
-                
-                // Check if update needed
-                if ($cacheAge >= $refreshInterval) {
+                if (!function_exists('notamShouldEnqueueRefresh')) {
+                    require_once __DIR__ . '/../lib/notam/cache.php';
+                }
+
+                if (notamShouldEnqueueRefresh($airportId, $refreshInterval, $now)) {
                     // Non-blocking: add to pool (ProcessPool handles duplicates)
                     $notamPool->addJob([$airportId]);
                 }

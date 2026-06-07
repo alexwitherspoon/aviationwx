@@ -54,6 +54,7 @@ final class NotamFetchReliabilityTest extends TestCase
         $after = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('keep-me', $after['notams'][0]['id']);
         self::assertSame(1700000000, $after['fetched_at']);
+        self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
     }
 
     /**

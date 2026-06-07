@@ -6,25 +6,49 @@ use PHPUnit\Framework\TestCase;
 
 final class NotamCacheTest extends TestCase
 {
-    private string $cacheDir;
+    private static string $cacheDir;
 
-    protected function setUp(): void
+    public static function setUpBeforeClass(): void
     {
-        $this->cacheDir = sys_get_temp_dir() . '/aviationwx-notam-cache-' . bin2hex(random_bytes(4));
-        mkdir($this->cacheDir, 0755, true);
-        putenv('APP_ENV=testing');
-        putenv('CONFIG_PATH=' . dirname(__DIR__, 2) . '/tests/Fixtures/airports.json.test');
+        self::$cacheDir = sys_get_temp_dir() . '/aviationwx-notam-cache-' . bin2hex(random_bytes(4));
+        mkdir(self::$cacheDir, 0755, true);
+        if (!defined('AVIATIONWX_NOTAM_CACHE_DIR')) {
+            define('AVIATIONWX_NOTAM_CACHE_DIR', self::$cacheDir);
+        }
+        require_once dirname(__DIR__, 2) . '/lib/constants.php';
         require_once dirname(__DIR__, 2) . '/lib/notam/cache.php';
     }
 
-    protected function tearDown(): void
+    public static function tearDownAfterClass(): void
     {
-        $this->removeTree($this->cacheDir);
+        if (!isset(self::$cacheDir) || !is_dir(self::$cacheDir)) {
+            return;
+        }
+
+        foreach (scandir(self::$cacheDir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = self::$cacheDir . '/' . $item;
+            is_dir($path) ? self::removeTree($path) : @unlink($path);
+        }
+        @rmdir(self::$cacheDir);
+    }
+
+    protected function setUp(): void
+    {
+        foreach (scandir(self::$cacheDir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = self::$cacheDir . '/' . $item;
+            is_dir($path) ? self::removeTree($path) : @unlink($path);
+        }
     }
 
     public function testWriteCacheFile_WritesValidJsonAtomically(): void
     {
-        $path = $this->cacheDir . '/kspb.json';
+        $path = self::$cacheDir . '/kspb.json';
         $payload = [
             'fetched_at' => 1700000000,
             'airport' => 'kspb',
@@ -44,7 +68,7 @@ final class NotamCacheTest extends TestCase
 
     public function testWriteCacheFile_ReplacesExistingFile(): void
     {
-        $path = $this->cacheDir . '/kspb.json';
+        $path = self::$cacheDir . '/kspb.json';
         file_put_contents($path, '{"airport":"old"}');
 
         $payload = [
@@ -62,14 +86,28 @@ final class NotamCacheTest extends TestCase
 
     public function testCacheDirectory_UsesOverrideConstant(): void
     {
-        if (!defined('AVIATIONWX_NOTAM_CACHE_DIR')) {
-            define('AVIATIONWX_NOTAM_CACHE_DIR', $this->cacheDir);
-        }
-
-        self::assertSame($this->cacheDir, notamCacheDirectory());
+        self::assertSame(rtrim(self::$cacheDir, '/'), notamCacheDirectory());
     }
 
-    private function removeTree(string $dir): void
+    public function testShouldEnqueueRefresh_SkipsDuringFetchFailureBackoff(): void
+    {
+        $now = 1_700_000_000;
+        touch(notamCacheFilePath('kspb'), $now - 900);
+        touch(notamFetchAttemptFilePath('kspb'), $now - 60);
+
+        self::assertFalse(notamShouldEnqueueRefresh('kspb', 600, $now));
+    }
+
+    public function testShouldEnqueueRefresh_AllowsAfterBackoffExpires(): void
+    {
+        $now = 1_700_000_000;
+        touch(notamCacheFilePath('kspb'), $now - 900);
+        touch(notamFetchAttemptFilePath('kspb'), $now - NOTAM_FETCH_FAILURE_BACKOFF_SECONDS - 10);
+
+        self::assertTrue(notamShouldEnqueueRefresh('kspb', 600, $now));
+    }
+
+    private static function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {
             return;
@@ -80,7 +118,7 @@ final class NotamCacheTest extends TestCase
                 continue;
             }
             $path = $dir . '/' . $item;
-            is_dir($path) ? $this->removeTree($path) : @unlink($path);
+            is_dir($path) ? self::removeTree($path) : @unlink($path);
         }
         @rmdir($dir);
     }

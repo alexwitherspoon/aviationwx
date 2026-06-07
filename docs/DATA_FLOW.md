@@ -1537,7 +1537,7 @@ Filtered NOTAMs are cached per airport:
 - **Content**: Array of filtered NOTAMs with status
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
 - **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
-- **Fetch failure**: When every attempted NMS query fails, `scripts/fetch-notam.php` preserves the existing cache file instead of overwriting it with an empty result
+- **Fetch failure**: When every attempted NMS query fails, `scripts/fetch-notam.php` preserves the existing cache file instead of overwriting it with an empty result and records `cache/notam/{airport_id}.fetch-attempt` so the scheduler backs off for `NOTAM_FETCH_FAILURE_BACKOFF_SECONDS` before re-enqueueing
 
 ### Serve-Time Status Re-validation
 

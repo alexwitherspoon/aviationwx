@@ -68,6 +68,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
         $cacheFile = notamCacheFilePath($airportId);
         if (!$fetchSucceeded) {
             if (is_file($cacheFile)) {
+                notamRecordFetchAttempt($airportId);
                 aviationwx_log('warning', 'notam fetch: NMS queries failed, preserving cache', [
                     'invocation_id' => $invocationId,
                     'airport' => $airportId,
@@ -103,6 +104,8 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
             ], 'app');
             return false;
         }
+
+        notamClearFetchAttempt($airportId);
         
         aviationwx_log('info', 'notam fetch: success', [
             'invocation_id' => $invocationId,

@@ -196,6 +196,10 @@ if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
     define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
 }
 
+if (!defined('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS')) {
+    define('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS', 300); // 5 minutes between retries after NMS failure
+}
+
 // TFR (Temporary Flight Restriction) filtering constants (nautical miles).
 // Default radius applies when the NOTAM body has no parseable NM radius.
 // Edge buffer applies only to polygon rings in NOTAM TFR filtering, not to stated circle radii.
