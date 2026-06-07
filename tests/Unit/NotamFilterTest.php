@@ -189,7 +189,6 @@ class NotamFilterTest extends TestCase {
     public function testFilterRelevantNotams_IncludesKspbScenario86Fixture(): void
     {
         require_once __DIR__ . '/../../lib/notam/parser.php';
-        require_once __DIR__ . '/../../lib/notam/fetcher.php';
 
         $xml = (string) file_get_contents(__DIR__ . '/../Fixtures/notam/kspb-runway-closure-scenario86.xml');
         $parsed = parseNotamXmlArray([$xml]);
