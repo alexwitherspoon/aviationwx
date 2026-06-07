@@ -47,16 +47,52 @@ function rateLimitWait(float &$lastRequestTime): void {
 }
 
 /**
+ * Stable deduplication key for parsed NOTAM rows.
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @return string Dedup key (public id or location/start/text fingerprint)
+ */
+function notamCanonicalDedupKey(array $notam): string {
+    $id = trim((string) ($notam['id'] ?? ''));
+    if ($id !== '') {
+        return 'id:' . $id;
+    }
+
+    $location = strtoupper(trim((string) ($notam['location'] ?? '')));
+    $start = trim((string) ($notam['start_time_utc'] ?? ''));
+    $text = trim((string) ($notam['text'] ?? ''));
+
+    return 'fp:' . $location . '|' . $start . '|' . substr(sha1($text), 0, 16);
+}
+
+/**
+ * Build NMS location-query parameters; caller location always wins over extras.
+ *
+ * @param string $location NMS location query code (merged last so it cannot be overridden)
+ * @param array<string, string> $queryParams Optional NMS query parameters
+ * @return array<string, string>
+ */
+function notamBuildLocationQueryParams(string $location, array $queryParams = []): array
+{
+    return array_merge($queryParams, ['location' => $location]);
+}
+
+/**
  * Query NOTAMs by location (ICAO code)
- * 
+ *
  * @param string $location ICAO code
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
+ * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
  * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
- * @return array Array of AIXM XML strings
+ * @return array<int, string> Array of AIXM XML strings
  */
-function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool &$querySucceeded = null): array {
-    $reportQueryOutcome = func_num_args() >= 3;
-
+function queryNotamsByLocation(
+    string $location,
+    float &$lastRequestTime,
+    array $queryParams = [],
+    ?bool &$querySucceeded = null,
+): array {
+    $reportQueryOutcome = func_num_args() >= 4;
     $token = getNotamBearerToken();
     if ($token === null) {
         if ($reportQueryOutcome) {
@@ -65,9 +101,10 @@ function queryNotamsByLocation(string $location, float &$lastRequestTime, ?bool 
 
         return [];
     }
-    
+
     $baseUrl = getNotamApiBaseUrl();
-    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?location=' . urlencode($location);
+    $params = notamBuildLocationQueryParams($location, $queryParams);
+    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query($params);
     
     rateLimitWait($lastRequestTime);
     
@@ -203,30 +240,27 @@ function queryNotamsByCoordinates(
 }
 
 /**
- * Deduplicate NOTAMs by ID
- * 
+ * Deduplicate NOTAMs by canonical key ({@see notamCanonicalDedupKey()}).
+ *
  * Merges duplicate payloads (location + geo queries) so the richest NOTAM text survives
  * for TFR parsing and EFFECTIVE window extraction.
- * 
- * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows (same id may appear from location and geo queries)
+ *
+ * @param array<int, array<string, mixed>> $notams Parsed NOTAM rows (duplicates may share a public id or fingerprint)
  * @return array<int, array<string, mixed>> Deduplicated rows merged by {@see mergeParsedNotamDuplicates()}
  */
 function deduplicateNotams(array $notams): array {
-    $byId = [];
-    
+    $byKey = [];
+
     foreach ($notams as $notam) {
-        $id = $notam['id'] ?? '';
-        if ($id === '') {
+        $key = notamCanonicalDedupKey($notam);
+        if (!isset($byKey[$key])) {
+            $byKey[$key] = $notam;
             continue;
         }
-        if (!isset($byId[$id])) {
-            $byId[$id] = $notam;
-            continue;
-        }
-        $byId[$id] = mergeParsedNotamDuplicates($byId[$id], $notam);
+        $byKey[$key] = mergeParsedNotamDuplicates($byKey[$key], $notam);
     }
-    
-    return array_values($byId);
+
+    return array_values($byKey);
 }
 
 /**
@@ -255,14 +289,14 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     if (!empty($icao)) {
         $attempted = true;
         $locationOk = false;
-        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, $locationOk);
+        $locationNotams = queryNotamsByLocation($icao, $lastRequestTime, [], $locationOk);
         $anySucceeded = $anySucceeded || $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     } elseif (!empty($iata)) {
         // IATA codes are auto-resolved to ICAO by API
         $attempted = true;
         $locationOk = false;
-        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, $locationOk);
+        $locationNotams = queryNotamsByLocation($iata, $lastRequestTime, [], $locationOk);
         $anySucceeded = $anySucceeded || $locationOk;
         $allNotams = array_merge($allNotams, $locationNotams);
     }
