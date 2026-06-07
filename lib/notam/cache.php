@@ -122,14 +122,24 @@ function notamWriteCacheFile(string $cacheFile, array $cacheData): bool
     }
 
     $tmp = $cacheFile . '.' . bin2hex(random_bytes(8)) . '.tmp';
-    $written = file_put_contents($tmp, $json);
+    $written = @file_put_contents($tmp, $json, LOCK_EX);
     if ($written === false || $written !== strlen($json)) {
+        aviationwx_log('error', 'notam cache: temp write failed', [
+            'cache_file' => $cacheFile,
+            'tmp_file' => $tmp,
+            'error' => error_get_last()['message'] ?? 'unknown',
+        ], 'app');
         @unlink($tmp);
 
         return false;
     }
 
-    if (!rename($tmp, $cacheFile)) {
+    if (!@rename($tmp, $cacheFile)) {
+        aviationwx_log('error', 'notam cache: rename failed', [
+            'cache_file' => $cacheFile,
+            'tmp_file' => $tmp,
+            'error' => error_get_last()['message'] ?? 'unknown',
+        ], 'app');
         @unlink($tmp);
 
         return false;
