@@ -30,19 +30,14 @@ function notamBuildGeoQueryParams(float $latitude, float $longitude, int $radius
  */
 function notamAixmXmlMayBeTfr(string $xml): bool
 {
-    $upper = strtoupper($xml);
-
-    if (strpos($upper, 'TFR') !== false) {
+    if (stripos($xml, 'TFR') !== false) {
         return true;
     }
-    if (strpos($upper, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
-        return true;
-    }
-    if (strpos($upper, 'RESTRICTED') !== false && strpos($upper, 'AIRSPACE') !== false) {
+    if (stripos($xml, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
         return true;
     }
 
-    return false;
+    return stripos($xml, 'RESTRICTED') !== false && stripos($xml, 'AIRSPACE') !== false;
 }
 
 /**
@@ -54,7 +49,7 @@ function notamFilterGeoXmlForTfrParsing(array $xmlStrings): array
 {
     $kept = [];
     foreach ($xmlStrings as $xml) {
-        if (is_string($xml) && $xml !== '' && notamAixmXmlMayBeTfr($xml)) {
+        if ($xml !== '' && notamAixmXmlMayBeTfr($xml)) {
             $kept[] = $xml;
         }
     }
