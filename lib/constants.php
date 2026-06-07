@@ -195,6 +195,10 @@ if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
 if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
     define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
 }
+// FAA NMS AIXM scenario for DOM runway closure events (no Q-code in payload)
+if (!defined('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE')) {
+    define('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE', '86');
+}
 
 // TFR (Temporary Flight Restriction) filtering constants (nautical miles).
 // Default radius applies when the NOTAM body has no parseable NM radius.
