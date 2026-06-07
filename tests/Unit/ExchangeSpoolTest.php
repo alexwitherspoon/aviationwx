@@ -27,6 +27,13 @@ final class ExchangeSpoolTest extends TestCase
         $this->removeTree($this->exchangeRoot);
     }
 
+    public function testExchangeRoot_PreservesSingleSlashMount(): void
+    {
+        putenv('EXCHANGE_PATH=/');
+        self::assertSame('/', aviationwx_exchange_root());
+        putenv('EXCHANGE_PATH=' . $this->exchangeRoot);
+    }
+
     public function testWriteSponsorApplication_CreatesAtomicJsonFile(): void
     {
         $applicationId = '770e8400-e29b-41d4-a716-446655440002';

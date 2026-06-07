@@ -23,7 +23,11 @@ function aviationwx_exchange_root(): string
         $root = '/exchange';
     }
 
-    return rtrim($root, '/');
+    if (strlen($root) > 1) {
+        $root = rtrim($root, '/');
+    }
+
+    return $root;
 }
 
 /**
