@@ -315,7 +315,7 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $allNotams = [];
     $queryOutcomes = [];
     
-    // 1. Location query (ICAO, IATA, or FAA identifier for airports without ICAO)
+    // 1. Location query via first configured identifier (ICAO, then IATA, then FAA)
     $locationCode = notamResolveLocationQueryCode($airport);
     if ($locationCode !== null) {
         $locationOk = false;
