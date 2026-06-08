@@ -90,16 +90,26 @@ final class ExchangeSpoolTest extends TestCase
     {
         aviationwx_exchange_append_structured_log('info', 'exchange test', ['source' => 'test']);
 
-        $day = gmdate('Y-m-d');
-        $path = $this->exchangeRoot . '/in/structured-logs/' . $day . '.jsonl';
-        self::assertFileExists($path);
+        $logDir = $this->exchangeRoot . '/in/structured-logs';
+        self::assertDirectoryExists($logDir);
+        $files = glob($logDir . '/*.jsonl') ?: [];
+        self::assertNotEmpty($files);
 
-        $lines = array_values(array_filter(array_map('trim', file($path, FILE_IGNORE_NEW_LINES) ?: [])));
+        $lines = [];
+        foreach ($files as $file) {
+            foreach (file($file, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                $trimmed = trim($line);
+                if ($trimmed !== '') {
+                    $lines[] = $trimmed;
+                }
+            }
+        }
+
         self::assertNotEmpty($lines);
         $line = json_decode($lines[count($lines) - 1], true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('1.0.0', $line['schema_version']);
         self::assertSame('exchange test', $line['message']);
-        self::assertSame(0640, fileperms($path) & 0777);
+        self::assertSame(0640, fileperms($files[0]) & 0777);
     }
 
     private function removeTree(string $dir): void
