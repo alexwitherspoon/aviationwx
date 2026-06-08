@@ -98,7 +98,7 @@ PHP;
             'LOGGER_TEST_CONFIG_PATH' => $configPath,
             'LOGGER_TEST_EXCHANGE_PATH' => $this->exchangeRoot,
         ];
-        $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($tmp) . ' 2>&1';
+        $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($tmp);
         $proc = proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
         self::assertIsResource($proc);
         fclose($pipes[0]);
