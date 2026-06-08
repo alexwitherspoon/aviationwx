@@ -50,6 +50,8 @@ function aviationwx_exchange_write_json(string $targetPath, array $payload): voi
         throw new RuntimeException('Failed to write exchange temp file');
     }
 
+    aviationwx_exchange_restrict_file_permissions($tmp);
+
     if (!rename($tmp, $targetPath)) {
         @unlink($tmp);
         throw new RuntimeException('Failed to publish exchange file');
