@@ -172,6 +172,119 @@ function aviationwx_log(string $level, string $message, array $context = [], str
     $logFile = aviationwx_get_log_file_path($logType);
     aviationwx_rotate_log_if_needed($logFile);
     @file_put_contents($logFile, $jsonLine, FILE_APPEND | LOCK_EX);
+    aviationwx_forward_log_to_exchange_spool($entry['level'], $message, $context, $entry['request_id'] ?? null);
+}
+}
+
+if (!function_exists('aviationwx_scrub_exchange_log_context')) {
+/**
+ * Remove credentials and sensitive query parameters before exchange spool forwarding.
+ *
+ * @param array<string, mixed> $context
+ *
+ * @return array<string, mixed>
+ */
+function aviationwx_scrub_exchange_log_context(array $context): array
+{
+    $sensitiveKeys = [
+        'api_key',
+        'apikey',
+        'application_key',
+        'api_secret',
+        'client_secret',
+        'client_id',
+        'api_token',
+        'access_token',
+        'password',
+        'passwd',
+        'secret',
+        'token',
+        'authorization',
+        'auth',
+        'cookie',
+        'set-cookie',
+    ];
+
+    $scrubbed = [];
+    foreach ($context as $key => $value) {
+        if (is_string($key) && in_array(strtolower($key), $sensitiveKeys, true)) {
+            $scrubbed[$key] = '[redacted]';
+            continue;
+        }
+
+        if (is_string($value)) {
+            $scrubbed[$key] = aviationwx_redact_sensitive_query_params($value);
+            continue;
+        }
+
+        if (is_array($value)) {
+            $scrubbed[$key] = aviationwx_scrub_exchange_log_context($value);
+            continue;
+        }
+
+        $scrubbed[$key] = $value;
+    }
+
+    return $scrubbed;
+}
+}
+
+if (!function_exists('aviationwx_redact_sensitive_query_params')) {
+function aviationwx_redact_sensitive_query_params(string $value): string
+{
+    return (string) preg_replace(
+        '/([?&])(api_key|apikey|application_key|api_secret|client_secret|client_id|api_token|access_token|token|password|secret)=([^&]*)/i',
+        '$1$2=[redacted]',
+        $value,
+    );
+}
+}
+
+if (!function_exists('aviationwx_forward_log_to_exchange_spool')) {
+/**
+ * Mirror structured log lines to the ops exchange volume when contributions are enabled.
+ *
+ * @param array<string, mixed> $context
+ */
+function aviationwx_forward_log_to_exchange_spool(
+    string $level,
+    string $message,
+    array $context,
+    ?string $requestId,
+): void {
+    static $forwarding = false;
+    static $contributionsEnabled = null;
+
+    if ($forwarding) {
+        return;
+    }
+
+    if ($contributionsEnabled === null) {
+        if (!function_exists('isContributionsEnabled')) {
+            return;
+        }
+
+        $forwarding = true;
+        $contributionsEnabled = isContributionsEnabled();
+        $forwarding = false;
+    }
+
+    if (!$contributionsEnabled) {
+        return;
+    }
+
+    require_once __DIR__ . '/exchange-spool.php';
+
+    try {
+        aviationwx_exchange_append_structured_log(
+            $level,
+            $message,
+            aviationwx_scrub_exchange_log_context($context),
+            $requestId,
+        );
+    } catch (Throwable) {
+        // Exchange forwarding must not break primary logging.
+    }
 }
 }
 
