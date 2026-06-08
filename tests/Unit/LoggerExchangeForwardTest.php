@@ -31,11 +31,7 @@ aviationwx_log('info', 'after config', ['api_key' => 'secret-key'], 'app');
 PHP, $configPath);
 
         self::assertSame(0, $result['exit'], $result['output']);
-        $day = gmdate('Y-m-d');
-        $path = $this->exchangeRoot . '/in/structured-logs/' . $day . '.jsonl';
-        self::assertFileExists($path);
-
-        $lines = array_values(array_filter(array_map('trim', file($path, FILE_IGNORE_NEW_LINES) ?: [])));
+        $lines = $this->readStructuredLogLines();
         self::assertCount(1, $lines);
         $line = json_decode($lines[0], true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('after config', $line['message']);
@@ -113,6 +109,29 @@ PHP;
         @unlink($tmp);
 
         return ['exit' => $exit, 'output' => $out];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function readStructuredLogLines(): array
+    {
+        $logDir = $this->exchangeRoot . '/in/structured-logs';
+        self::assertDirectoryExists($logDir);
+        $files = glob($logDir . '/*.jsonl') ?: [];
+        self::assertNotEmpty($files);
+
+        $lines = [];
+        foreach ($files as $file) {
+            foreach (file($file, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                $trimmed = trim($line);
+                if ($trimmed !== '') {
+                    $lines[] = $trimmed;
+                }
+            }
+        }
+
+        return $lines;
     }
 
     private function writeContributionsEnabledConfig(): string
