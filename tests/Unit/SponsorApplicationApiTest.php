@@ -171,7 +171,7 @@ final class SponsorApplicationApiTest extends TestCase
     }
 
     /**
-     * @param array{REQUEST_METHOD?: string, body?: array<string, mixed>} $options
+     * @param array{REQUEST_METHOD?: string, body?: array<string, mixed>, remote_addr?: string} $options
      *
      * @return array{status: int, body: string, headers: array<string, string>}
      */
