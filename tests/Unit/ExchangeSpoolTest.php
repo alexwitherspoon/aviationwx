@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-namespace AviationWX\Tests\Unit;
-
 use PHPUnit\Framework\TestCase;
 
 final class ExchangeSpoolTest extends TestCase
