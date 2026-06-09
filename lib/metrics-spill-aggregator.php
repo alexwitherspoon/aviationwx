@@ -291,7 +291,7 @@ function metrics_spill_aggregator_merge_journal(
 }
 
 /**
- * Remove stale spill journals and abandoned claim files (crash / stuck worker).
+ * Remove stale spill journals, abandoned claim files, and legacy pre-JSONL .json shards.
  *
  * @param array<string, mixed> $stats Stats array updated with orphans_pruned count
  * @param int|float $t0Ns Start time from hrtime(true); skips work when runtime budget exceeded
@@ -326,7 +326,8 @@ function metrics_spill_aggregator_prune_orphan_spills(array &$stats, $t0Ns): voi
             if (strpos($name, '.tmp.') !== false) {
                 continue;
             }
-            $isSpillArtifact = str_ends_with($name, '.jsonl')
+            $isSpillArtifact = str_ends_with($name, '.json')
+                || str_ends_with($name, '.jsonl')
                 || strpos($name, '.merging.') !== false;
             if (!$isSpillArtifact) {
                 continue;

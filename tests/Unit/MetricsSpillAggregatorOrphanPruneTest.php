@@ -58,4 +58,27 @@ class MetricsSpillAggregatorOrphanPruneTest extends TestCase
         @unlink(getMetricsAggregatorLastRunPath());
         @unlink(getMetricsAggregatorLockPath());
     }
+
+    public function testPrune_RemovesVeryOldLegacyJsonShard(): void
+    {
+        $oldHour = '2019-12-31-21';
+        $dir = getMetricsSpillHourDir($oldHour);
+        if (!@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            $this->fail('Could not create spill hour directory');
+        }
+
+        $stalePath = $dir . '/90000_abc123.json';
+        $this->assertNotFalse(file_put_contents($stalePath, json_encode(['legacy' => true])));
+        $staleMtime = time() - METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS - 120;
+        $this->assertTrue(touch($stalePath, $staleMtime));
+
+        $stats = metrics_run_spill_aggregator_once();
+        $this->assertFalse($stats['lock_contended']);
+        $this->assertGreaterThanOrEqual(1, (int) $stats['orphans_pruned']);
+        $this->assertFileDoesNotExist($stalePath);
+
+        @rmdir($dir);
+        @unlink(getMetricsAggregatorLastRunPath());
+        @unlink(getMetricsAggregatorLockPath());
+    }
 }
