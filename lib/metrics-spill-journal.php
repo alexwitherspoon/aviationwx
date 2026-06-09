@@ -93,7 +93,18 @@ function metrics_spill_journal_claim_for_merge(string $journalPath): ?string
         return null;
     }
 
-    $claimPath = $journalPath . '.merging.' . getmypid() . '.' . bin2hex(random_bytes(4));
+    try {
+        $suffix = bin2hex(random_bytes(4));
+    } catch (Throwable $e) {
+        aviationwx_log('warning', 'metrics spill: journal claim suffix generation failed', [
+            'path' => $journalPath,
+            'error' => $e->getMessage(),
+        ], 'app');
+
+        return null;
+    }
+
+    $claimPath = $journalPath . '.merging.' . getmypid() . '.' . $suffix;
     if (@rename($journalPath, $claimPath)) {
         return $claimPath;
     }
