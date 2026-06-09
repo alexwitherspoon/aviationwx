@@ -114,8 +114,16 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
     }
 
     $merged = 0;
+    $locked = false;
 
     try {
+        // Wait for any in-flight append on the renamed inode (worker may still hold LOCK_EX).
+        if (!flock($fp, LOCK_SH)) {
+            return 0;
+        }
+
+        $locked = true;
+
         while (($rawLine = fgets($fp)) !== false) {
             $line = trim($rawLine);
             if ($line === '') {
@@ -136,6 +144,9 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
             $merged++;
         }
     } finally {
+        if ($locked) {
+            flock($fp, LOCK_UN);
+        }
         fclose($fp);
         @unlink($claimedPath);
     }
