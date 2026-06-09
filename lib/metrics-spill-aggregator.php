@@ -118,11 +118,14 @@ function metrics_run_spill_aggregator_once(): array
                 }
 
                 $consumedPath = null;
+                $journalFullyConsumed = true;
                 $mergedUnits = metrics_spill_aggregator_merge_journal(
                     $journalPath,
                     $hourId,
                     $hourData,
-                    $consumedPath
+                    $consumedPath,
+                    $t0Ns,
+                    $journalFullyConsumed
                 );
                 if ($mergedUnits === null) {
                     continue;
@@ -133,10 +136,10 @@ function metrics_run_spill_aggregator_once(): array
                 if ($mergedUnits >= 1) {
                     $hourHadMerges = true;
                     $stats['spills_merged'] += $mergedUnits;
-                    if ($consumedPath !== null) {
+                    if ($consumedPath !== null && $journalFullyConsumed) {
                         $pendingDeletes[] = $consumedPath;
                     }
-                } elseif ($consumedPath !== null) {
+                } elseif ($mergedUnits === 0 && $consumedPath !== null && $journalFullyConsumed) {
                     if (@unlink($consumedPath)) {
                         $stats['spills_deleted']++;
                     }
@@ -258,19 +261,26 @@ function metrics_spill_aggregator_list_journal_paths_for_hour(string $hourDir): 
 /**
  * Claim and merge one worker JSONL journal (live or previously claimed) into hour bucket data.
  *
- * @param string               $journalPath  Absolute spill journal path
- * @param string               $hourId       UTC hour bucket id
- * @param array<string, mixed> $hourData     Hourly bucket (mutated in place)
- * @param string|null          $consumedPath Set when a journal was claimed or read; caller deletes
+ * @param string               $journalPath          Absolute spill journal path
+ * @param string               $hourId               UTC hour bucket id
+ * @param array<string, mixed> $hourData             Hourly bucket (mutated in place)
+ * @param string|null          $consumedPath         Set when a journal was claimed or read; caller deletes
+ * @param int|float|null       $t0Ns                 Aggregator runtime anchor for per-line budget checks
+ * @param bool|null            $journalFullyConsumed False when a JSONL claim still has unread lines
  * @return int|null Lines merged (0 when claimed but no valid lines), or null when claim/path failed
  */
 function metrics_spill_aggregator_merge_journal(
     string $journalPath,
     string $hourId,
     array &$hourData,
-    ?string &$consumedPath = null
+    ?string &$consumedPath = null,
+    $t0Ns = null,
+    ?bool &$journalFullyConsumed = null
 ): ?int {
     $consumedPath = null;
+    if ($journalFullyConsumed !== null) {
+        $journalFullyConsumed = true;
+    }
 
     if (metrics_spill_path_is_worker_journal($journalPath)) {
         $claimed = metrics_spill_journal_claim_for_merge($journalPath);
@@ -280,13 +290,29 @@ function metrics_spill_aggregator_merge_journal(
 
         $consumedPath = $claimed;
 
-        return metrics_spill_journal_merge_claimed_into_hour_data($claimed, $hourId, $hourData);
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $claimed,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
+
+        return $lines > 0 ? $lines : 0;
     }
 
     if (metrics_spill_path_is_claimed_journal($journalPath)) {
         $consumedPath = $journalPath;
 
-        return metrics_spill_journal_merge_claimed_into_hour_data($journalPath, $hourId, $hourData);
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $journalPath,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
+
+        return $lines > 0 ? $lines : 0;
     }
 
     return null;

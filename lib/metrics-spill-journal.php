@@ -107,13 +107,21 @@ function metrics_spill_journal_claim_for_merge(string $journalPath): ?string
  * @param string               $claimedPath Renamed journal from metrics_spill_journal_claim_for_merge()
  * @param string               $hourId      UTC hour bucket id
  * @param array<string, mixed> $hourData    Hourly bucket (mutated in place)
+ * @param int|float|null       $t0Ns                 Optional hrtime(true) anchor for runtime budget checks
+ * @param bool|null            $journalFullyConsumed Set true when every line in the claim was processed
  * @return int Number of lines merged (0 when none applied). Caller deletes $claimedPath after hourly write.
  */
 function metrics_spill_journal_merge_claimed_into_hour_data(
     string $claimedPath,
     string $hourId,
-    array &$hourData
+    array &$hourData,
+    $t0Ns = null,
+    ?bool &$journalFullyConsumed = null
 ): int {
+    if ($journalFullyConsumed !== null) {
+        $journalFullyConsumed = false;
+    }
+
     $fp = @fopen($claimedPath, 'rb');
     if ($fp === false) {
         return 0;
@@ -121,6 +129,7 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
 
     $merged = 0;
     $locked = false;
+    $budgetExhausted = false;
 
     try {
         // Wait for any in-flight append on the renamed inode (worker may still hold LOCK_EX).
@@ -131,6 +140,16 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
         $locked = true;
 
         while (($rawLine = fgets($fp)) !== false) {
+            if ($t0Ns !== null
+                && (hrtime(true) - $t0Ns) / 1e6 >= METRICS_SPILL_MERGE_MAX_RUNTIME_MS
+            ) {
+                $budgetExhausted = true;
+                if ($merged > 0) {
+                    metrics_spill_journal_rewrite_claimed_tail($fp, $claimedPath);
+                }
+                break;
+            }
+
             $line = trim($rawLine);
             if ($line === '') {
                 continue;
@@ -149,6 +168,10 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
             metrics_apply_flat_counters_to_hour_data($hourData, $parsed['counters'], true);
             $merged++;
         }
+
+        if (!$budgetExhausted && $journalFullyConsumed !== null) {
+            $journalFullyConsumed = true;
+        }
     } finally {
         if ($locked) {
             flock($fp, LOCK_UN);
@@ -157,6 +180,32 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
     }
 
     return $merged;
+}
+
+/**
+ * Persist unread journal lines after a partial merge under the runtime budget.
+ *
+ * @param resource $fp          Open read handle positioned after the last merged line
+ * @param string   $claimedPath Claimed journal path to rewrite or delete when empty
+ * @return void
+ */
+function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath): void
+{
+    $remainder = stream_get_contents($fp);
+    if ($remainder === false || $remainder === '') {
+        @unlink($claimedPath);
+
+        return;
+    }
+
+    $tmp = $claimedPath . '.tmp.tail.' . getmypid();
+    if (@file_put_contents($tmp, $remainder, LOCK_EX) === false) {
+        @unlink($tmp);
+
+        return;
+    }
+
+    @rename($tmp, $claimedPath);
 }
 
 /**
