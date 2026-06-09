@@ -66,7 +66,7 @@ class MetricsSpillAggregatorTest extends TestCase
         @unlink(getMetricsAggregatorLockPath());
     }
 
-    public function testMerge_SingleJournalLineIntoHourlyFile(): void
+    public function testRunSpillAggregatorOnce_SingleJournalLine_WritesHourlyFile(): void
     {
         $hourId = metrics_get_hour_id();
         $journal = $this->seedJournal($hourId, 424242, ['global_page_views' => 7]);
@@ -85,7 +85,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_MultipleLinesInOneWorkerJournal(): void
+    public function testRunSpillAggregatorOnce_MultipleLinesOneJournal_SumsCounters(): void
     {
         $hourId = '2099-03-10-08';
         $journal = $this->seedMultiLineJournal($hourId, 88001, [
@@ -106,7 +106,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_MultipleWorkerJournalsSameHour(): void
+    public function testRunSpillAggregatorOnce_MultipleWorkerJournals_SumsCounters(): void
     {
         $hourId = '2099-03-10-09';
         $this->seedJournal($hourId, 88002, ['global_page_views' => 4]);
@@ -123,7 +123,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_PreviouslyClaimedJournalIsMergedOnRetry(): void
+    public function testRunSpillAggregatorOnce_ClaimedJournalRetry_MergesIntoHourly(): void
     {
         $hourId = '2099-03-10-11';
         $hourDir = getMetricsSpillHourDir($hourId);
@@ -147,7 +147,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_MixedValidAndInvalidLinesSkipsInvalid(): void
+    public function testRunSpillAggregatorOnce_MixedValidInvalidLines_SkipsInvalid(): void
     {
         $hourId = '2099-03-10-12';
         $hourDir = getMetricsSpillHourDir($hourId);
@@ -178,7 +178,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_InvalidOnlyJournal_CountsFileBudgetAndDeletesClaim(): void
+    public function testRunSpillAggregatorOnce_InvalidOnlyJournal_CountsBudgetAndDeletesClaim(): void
     {
         $hourId = metrics_get_hour_id();
         $journal = getMetricsSpillWorkerJournalPath($hourId, 88010);
@@ -208,7 +208,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_ClaimedJournalRemainsWhenHourlyWriteFails(): void
+    public function testRunSpillAggregatorOnce_HourlyWriteFails_RetainsClaimedJournal(): void
     {
         $hourId = '2099-03-10-13';
         $this->seedJournal($hourId, 88011, ['global_page_views' => 3]);

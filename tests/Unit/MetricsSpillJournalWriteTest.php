@@ -21,7 +21,7 @@ class MetricsSpillJournalWriteTest extends TestCase
         }
     }
 
-    public function testWriteSpill_AppendsJournalLineAndResetsApcu(): void
+    public function testWriteSpillJournalAndResetCounters_SingleFlush_AppendsLineAndResetsApcu(): void
     {
         if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
             $this->markTestSkipped('APCu not available or disabled');
@@ -32,7 +32,7 @@ class MetricsSpillJournalWriteTest extends TestCase
         $this->assertSame(2, metrics_get('global_page_views'));
 
         $pid = getmypid();
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
 
         $this->assertSame(0, metrics_get('global_page_views'));
 
@@ -56,7 +56,7 @@ class MetricsSpillJournalWriteTest extends TestCase
         @rmdir(dirname($path));
     }
 
-    public function testWriteSpill_MultipleFlushesAppendLinesToSameJournal(): void
+    public function testWriteSpillJournalAndResetCounters_MultipleFlushes_AppendsLinesToSameJournal(): void
     {
         if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
             $this->markTestSkipped('APCu not available or disabled');
@@ -64,10 +64,10 @@ class MetricsSpillJournalWriteTest extends TestCase
 
         $pid = getmypid();
         metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
         metrics_increment('global_page_views');
         metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
 
         $pattern = getMetricsSpillRootDir() . '/*/' . $pid . '.jsonl';
         $files = glob($pattern) ?: [];
