@@ -1,6 +1,6 @@
 <?php
 /**
- * Orphan spill files older than METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS are pruned.
+ * Orphan spill journals and abandoned claim files older than METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS are pruned.
  */
 
 declare(strict_types=1);

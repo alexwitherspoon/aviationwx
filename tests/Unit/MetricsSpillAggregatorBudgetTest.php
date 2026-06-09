@@ -2,7 +2,7 @@
 /**
  * Spill aggregator must persist partial hour progress when per-run file/runtime budget is hit.
  *
- * Regression: break 2 discarded merged counters and left spills undeleted when one hour exceeded
+ * Regression: break 2 discarded merged counters and left journals undeleted when one hour exceeded
  * METRICS_SPILL_MERGE_MAX_FILES_PER_RUN (production: status page hourly metrics stuck at zero).
  */
 
@@ -68,7 +68,7 @@ PHP;
     }
 
     /**
-     * Production regression: first pass must write hourly file and delete consumed spills.
+     * Production regression: first pass must write hourly file and delete consumed journals.
      */
     public function testPartialFlush_WritesHourlyAndDeletesConsumedSpillsWhenBudgetHit(): void
     {
