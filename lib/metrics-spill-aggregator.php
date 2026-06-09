@@ -118,17 +118,20 @@ function metrics_run_spill_aggregator_once(): array
                 }
 
                 $consumedPath = null;
+                $journalFullyConsumed = true;
                 $mergedUnits = metrics_spill_aggregator_merge_spill_path(
                     $spillPath,
                     $hourId,
                     $hourData,
-                    $consumedPath
+                    $consumedPath,
+                    $t0Ns,
+                    $journalFullyConsumed
                 );
                 if ($mergedUnits === null || $mergedUnits < 1) {
                     continue;
                 }
 
-                if ($consumedPath !== null) {
+                if ($consumedPath !== null && $journalFullyConsumed) {
                     $pendingDeletes[] = $consumedPath;
                 }
                 $hourHadMerges = true;
@@ -260,16 +263,23 @@ function metrics_spill_aggregator_list_spill_paths_for_hour(string $hourDir): ar
  * @param string               $spillPath     Absolute spill file path
  * @param string               $hourId        UTC hour bucket id
  * @param array<string, mixed> $hourData      Hourly bucket (mutated in place)
- * @param string|null          $consumedPath  Set when merge succeeded; delete after hourly write
+ * @param string|null          $consumedPath         Set when merge succeeded; delete after hourly write
+ * @param int|float|null       $t0Ns                 Aggregator runtime anchor for per-line budget checks
+ * @param bool|null            $journalFullyConsumed False when a JSONL claim still has unread lines
  * @return int|null Delta records merged (lines for JSONL, 1 for legacy shard), or null
  */
 function metrics_spill_aggregator_merge_spill_path(
     string $spillPath,
     string $hourId,
     array &$hourData,
-    ?string &$consumedPath = null
+    ?string &$consumedPath = null,
+    $t0Ns = null,
+    ?bool &$journalFullyConsumed = null
 ): ?int {
     $consumedPath = null;
+    if ($journalFullyConsumed !== null) {
+        $journalFullyConsumed = true;
+    }
 
     if (metrics_spill_path_is_worker_journal($spillPath)) {
         $claimed = metrics_spill_journal_claim_for_merge($spillPath);
@@ -277,19 +287,27 @@ function metrics_spill_aggregator_merge_spill_path(
             return null;
         }
 
-        $lines = metrics_spill_journal_merge_claimed_into_hour_data($claimed, $hourId, $hourData);
-        if ($lines > 0) {
-            $consumedPath = $claimed;
-        }
+        $consumedPath = $claimed;
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $claimed,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
 
         return $lines > 0 ? $lines : null;
     }
 
     if (metrics_spill_path_is_claimed_journal($spillPath)) {
-        $lines = metrics_spill_journal_merge_claimed_into_hour_data($spillPath, $hourId, $hourData);
-        if ($lines > 0) {
-            $consumedPath = $spillPath;
-        }
+        $consumedPath = $spillPath;
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $spillPath,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
 
         return $lines > 0 ? $lines : null;
     }
