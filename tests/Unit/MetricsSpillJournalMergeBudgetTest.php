@@ -91,8 +91,8 @@ $merged = metrics_spill_journal_merge_claimed_into_hour_data(
     $fullyConsumed
 );
 
-if ($merged < 1) {
-    fwrite(STDERR, "expected partial merge, got {$merged}\n");
+if ($merged === null || $merged < 1) {
+    fwrite(STDERR, "expected partial merge, got " . var_export($merged, true) . "\n");
     exit(1);
 }
 if ($fullyConsumed) {

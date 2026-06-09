@@ -297,6 +297,9 @@ function metrics_spill_aggregator_merge_journal(
             $t0Ns,
             $journalFullyConsumed
         );
+        if ($lines === null) {
+            return null;
+        }
 
         return $lines > 0 ? $lines : 0;
     }
@@ -311,6 +314,9 @@ function metrics_spill_aggregator_merge_journal(
             $t0Ns,
             $journalFullyConsumed
         );
+        if ($lines === null) {
+            return null;
+        }
 
         return $lines > 0 ? $lines : 0;
     }
