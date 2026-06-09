@@ -101,7 +101,7 @@ function metrics_spill_journal_claim_for_merge(string $journalPath): ?string
  * @param string               $claimedPath Renamed journal from metrics_spill_journal_claim_for_merge()
  * @param string               $hourId      UTC hour bucket id
  * @param array<string, mixed> $hourData    Hourly bucket (mutated in place)
- * @return int Number of lines merged (0 when none applied)
+ * @return int Number of lines merged (0 when none applied). Caller deletes $claimedPath after hourly write.
  */
 function metrics_spill_journal_merge_claimed_into_hour_data(
     string $claimedPath,
@@ -148,14 +148,13 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
             flock($fp, LOCK_UN);
         }
         fclose($fp);
-        @unlink($claimedPath);
     }
 
     return $merged;
 }
 
 /**
- * Whether a spill path is a per-worker JSONL journal (not a legacy .json shard).
+ * Whether a spill path is a per-worker JSONL journal (not a claim or temp file).
  *
  * @param string $path Absolute spill file path
  * @return bool
@@ -167,4 +166,15 @@ function metrics_spill_path_is_worker_journal(string $path): bool
     return str_ends_with($base, '.jsonl')
         && strpos($base, '.merging.') === false
         && strpos($base, '.tmp.') === false;
+}
+
+/**
+ * Whether a spill path is a claimed journal awaiting merge (rename from live {pid}.jsonl).
+ *
+ * @param string $path Absolute spill file path
+ * @return bool
+ */
+function metrics_spill_path_is_claimed_journal(string $path): bool
+{
+    return strpos(basename($path), '.jsonl.merging.') !== false;
 }
