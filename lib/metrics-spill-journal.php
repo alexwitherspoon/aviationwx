@@ -145,7 +145,7 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
             ) {
                 $budgetExhausted = true;
                 if ($merged > 0) {
-                    metrics_spill_journal_rewrite_claimed_tail($fp, $claimedPath);
+                    metrics_spill_journal_rewrite_claimed_tail($fp, $claimedPath, $rawLine);
                 }
                 break;
             }
@@ -185,14 +185,19 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
 /**
  * Persist unread journal lines after a partial merge under the runtime budget.
  *
- * @param resource $fp          Open read handle positioned after the last merged line
- * @param string   $claimedPath Claimed journal path to rewrite or delete when empty
+ * @param resource $fp               Open read handle positioned after $unmergedLine
+ * @param string   $claimedPath      Claimed journal path to rewrite or delete when empty
+ * @param string   $unmergedLine     Line read when the runtime budget was exhausted (not yet merged)
  * @return void
  */
-function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath): void
+function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath, string $unmergedLine = ''): void
 {
-    $remainder = stream_get_contents($fp);
-    if ($remainder === false || $remainder === '') {
+    $tail = stream_get_contents($fp);
+    if ($tail === false) {
+        $tail = '';
+    }
+    $remainder = $unmergedLine . $tail;
+    if ($remainder === '') {
         @unlink($claimedPath);
 
         return;
