@@ -62,21 +62,45 @@ class MetricsSpillSnapshotTest extends TestCase
             $this->markTestSkipped('APCu not available or disabled');
         }
 
+        $hourId = metrics_get_hour_id();
         $pid = getmypid();
-        metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
-        metrics_increment('global_page_views');
-        metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
 
-        $pattern = getMetricsSpillRootDir() . '/*/' . $pid . '.jsonl';
-        $files = glob($pattern) ?: [];
-        $this->assertCount(1, $files);
-        $raw = file_get_contents($files[0]);
+        metrics_increment('global_page_views');
+        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        if (metrics_get_hour_id() !== $hourId) {
+            $this->cleanupPidSpillJournals($pid);
+            $this->markTestSkipped('UTC hour boundary crossed between spill writes');
+        }
+
+        metrics_increment('global_page_views');
+        metrics_increment('global_page_views');
+        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        if (metrics_get_hour_id() !== $hourId) {
+            $this->cleanupPidSpillJournals($pid);
+            $this->markTestSkipped('UTC hour boundary crossed between spill writes');
+        }
+
+        $journal = getMetricsSpillWorkerJournalPath($hourId, $pid);
+        $this->assertFileExists($journal);
+        $raw = file_get_contents($journal);
         $this->assertNotFalse($raw);
         $this->assertSame(2, substr_count($raw, "\n"));
 
-        @unlink($files[0]);
-        @rmdir(dirname($files[0]));
+        @unlink($journal);
+        @rmdir(getMetricsSpillHourDir($hourId));
+    }
+
+    /**
+     * Remove any spill journals created for a worker PID (used when skipping at hour boundaries).
+     *
+     * @param int $pid PHP worker PID
+     * @return void
+     */
+    private function cleanupPidSpillJournals(int $pid): void
+    {
+        foreach (glob(getMetricsSpillRootDir() . '/*/' . $pid . '.jsonl') ?: [] as $path) {
+            @unlink($path);
+            @rmdir(dirname($path));
+        }
     }
 }
