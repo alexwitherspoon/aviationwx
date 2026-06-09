@@ -74,6 +74,7 @@ PHP;
     {
         $body = <<<'PHP'
 require $root . '/lib/cache-paths.php';
+require $root . '/lib/metrics-spill-journal.php';
 require $root . '/lib/metrics-spill-aggregator.php';
 
 $hourId = '2099-06-01-13';
@@ -81,14 +82,10 @@ $hourDir = getMetricsSpillHourDir($hourId);
 @mkdir($hourDir, 0755, true);
 
 for ($i = 1; $i <= 5; $i++) {
-    $payload = [
-        'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-        'generated_at' => time(),
-        'hour_id' => $hourId,
-        'pid' => 60000 + $i,
-        'counters' => ['global_page_views' => 1],
-    ];
-    file_put_contents($hourDir . '/shard_' . $i . '.json', json_encode($payload));
+    $pid = 60000 + $i;
+    $journal = getMetricsSpillWorkerJournalPath($hourId, $pid);
+    $payload = metrics_spill_build_payload($hourId, $pid, ['global_page_views' => 1]);
+    file_put_contents($journal, json_encode($payload) . "\n");
 }
 
 $first = metrics_run_spill_aggregator_once();
@@ -116,9 +113,9 @@ if (!is_array($hourJson) || (int) ($hourJson['global']['page_views'] ?? 0) !== 3
     exit(1);
 }
 
-$remaining = glob($hourDir . '/*.json') ?: [];
+$remaining = glob($hourDir . '/*.jsonl') ?: [];
 if (count($remaining) !== 2) {
-    fwrite(STDERR, 'expected 2 remaining spill files, got ' . count($remaining) . PHP_EOL);
+    fwrite(STDERR, 'expected 2 remaining spill journals, got ' . count($remaining) . PHP_EOL);
     exit(1);
 }
 if (!is_dir($hourDir)) {
@@ -154,27 +151,23 @@ PHP;
     {
         $body = <<<'PHP'
 require $root . '/lib/cache-paths.php';
+require $root . '/lib/metrics-spill-journal.php';
 require $root . '/lib/metrics-spill-aggregator.php';
 
-function write_spill(string $hourId, string $name, int $views): void {
+function write_journal(string $hourId, int $pid, int $views): void {
     $dir = getMetricsSpillHourDir($hourId);
     @mkdir($dir, 0755, true);
-    $payload = [
-        'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-        'generated_at' => time(),
-        'hour_id' => $hourId,
-        'pid' => 70001,
-        'counters' => ['global_page_views' => $views],
-    ];
-    file_put_contents($dir . '/' . $name . '.json', json_encode($payload));
+    $journal = getMetricsSpillWorkerJournalPath($hourId, $pid);
+    $payload = metrics_spill_build_payload($hourId, $pid, ['global_page_views' => $views]);
+    file_put_contents($journal, json_encode($payload) . "\n");
 }
 
 $hourA = '2099-06-01-10';
 $hourB = '2099-06-01-11';
-write_spill($hourA, 'a1', 4);
-write_spill($hourA, 'a2', 6);
-write_spill($hourB, 'b1', 2);
-write_spill($hourB, 'b2', 3);
+write_journal($hourA, 70001, 4);
+write_journal($hourA, 70002, 6);
+write_journal($hourB, 70003, 2);
+write_journal($hourB, 70004, 3);
 
 $stats = metrics_run_spill_aggregator_once();
 if ((int) ($stats['hours_touched'] ?? 0) < 1) {
@@ -190,9 +183,9 @@ if ((int) ($jsonA['global']['page_views'] ?? 0) !== 10) {
 }
 
 $dirB = getMetricsSpillHourDir($hourB);
-$remainingB = glob($dirB . '/*.json') ?: [];
+$remainingB = glob($dirB . '/*.jsonl') ?: [];
 if (count($remainingB) !== 1) {
-    fwrite(STDERR, 'hour B should have one spill remaining, got ' . count($remainingB) . PHP_EOL);
+    fwrite(STDERR, 'hour B should have one journal remaining, got ' . count($remainingB) . PHP_EOL);
     exit(1);
 }
 $pathB = getMetricsHourlyPath($hourB);

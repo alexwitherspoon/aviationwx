@@ -51,7 +51,7 @@ class MetricsSpillAggregatorJsonlTest extends TestCase
         @unlink(getMetricsAggregatorLockPath());
     }
 
-    public function testAggregator_MergesLegacyJsonAndWorkerJournalTogether(): void
+    public function testAggregator_MergesMultipleWorkerJournalsTogether(): void
     {
         $hourId = '2099-03-10-09';
         $hourDir = getMetricsSpillHourDir($hourId);
@@ -59,19 +59,17 @@ class MetricsSpillAggregatorJsonlTest extends TestCase
             $this->fail('Could not create spill hour directory');
         }
 
-        $legacy = $hourDir . '/legacy_shard.json';
-        $legacyPayload = [
-            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-            'generated_at' => time(),
-            'hour_id' => $hourId,
-            'pid' => 88002,
-            'counters' => ['global_page_views' => 4],
-        ];
-        $this->assertNotFalse(file_put_contents($legacy, json_encode($legacyPayload)));
+        $journalA = getMetricsSpillWorkerJournalPath($hourId, 88002);
+        $this->assertNotFalse(file_put_contents(
+            $journalA,
+            json_encode(metrics_spill_build_payload($hourId, 88002, ['global_page_views' => 4])) . "\n"
+        ));
 
-        $journal = getMetricsSpillWorkerJournalPath($hourId, 88003);
-        $journalLine = metrics_spill_build_payload($hourId, 88003, ['global_page_views' => 6]);
-        $this->assertNotFalse(file_put_contents($journal, json_encode($journalLine) . "\n"));
+        $journalB = getMetricsSpillWorkerJournalPath($hourId, 88003);
+        $this->assertNotFalse(file_put_contents(
+            $journalB,
+            json_encode(metrics_spill_build_payload($hourId, 88003, ['global_page_views' => 6])) . "\n"
+        ));
 
         $stats = metrics_run_spill_aggregator_once();
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * CLI entry: merge metrics spill shards into hourly/*.json (singleton flock).
+ * CLI entry: merge metrics spill journals into hourly/*.json (singleton flock).
  *
  * Invoked by the scheduler on METRICS_SPILL_MERGE_INTERVAL_SECONDS.
  */

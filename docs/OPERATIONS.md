@@ -140,7 +140,7 @@ After a code fix, prefer a single clean `web` container restart so only the entr
 
 ### Metrics System
 
-Live counters live in APCu (per PHP-FPM worker). Each worker appends one JSON line per request shutdown to a per-worker journal (`cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}.jsonl`). The aggregator claims each journal via rename, merges lines into canonical hourly files, and deletes the claimed copy. Legacy per-request `{pid}_{hex}.json` shards are still merged if present from older releases.
+Live counters live in APCu (per PHP-FPM worker). Each worker appends one JSON line per request shutdown to a per-worker journal (`cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}.jsonl`). The aggregator claims each journal via rename, merges lines into canonical hourly files, and deletes the claimed copy.
 
 - **Hourly**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
 - **Daily**: `cache/metrics/daily/YYYY-MM-DD.json`
@@ -198,7 +198,7 @@ Expect `"success":true`. Same `WEATHER_REFRESH_URL` / Apache requirement as othe
 
 1. **Permissions on the cache bind mount** (host): `cache/metrics`, `cache/metrics/spill`, and `cache/metrics/hourly` must be writable by `www-data`. Quick check inside the container: `ls -la /var/www/html/cache/metrics`.
 2. **Internal URL (variant health and status bundle mirror refresh)**: `WEATHER_REFRESH_URL` must point at Apache in the same container (same as weather refresh). Wrong port or host means `variant_health_flush_via_http()` and `metrics_status_bundle_mirror_refresh_via_http()` never reach PHP-FPM.
-3. **Aggregator lock**: only one merge process should hold `cache/metrics/aggregator.lock`. If merges stall, inspect `aggregator_last_run.json` and spill shard ages under `cache/metrics/spill/`.
+3. **Aggregator lock**: only one merge process should hold `cache/metrics/aggregator.lock`. If merges stall, inspect `aggregator_last_run.json` and spill journal ages under `cache/metrics/spill/`.
 4. **Application log**: `grep -E 'metrics|variant health|aggregator|status bundle mirror' /var/log/aviationwx/app.log` (paths may vary; see logging section above).
 
 ---

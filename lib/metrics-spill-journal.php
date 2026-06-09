@@ -10,7 +10,7 @@ require_once __DIR__ . '/metrics-apply-counters.php';
 require_once __DIR__ . '/metrics-spill-payload.php';
 
 /**
- * Build a spill payload object (same schema as legacy per-request JSON shards).
+ * Build a spill payload object for one JSONL journal line.
  *
  * @param string               $hourId   UTC metrics hour id
  * @param int                  $pid      PHP-FPM worker PID
@@ -154,7 +154,7 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
 }
 
 /**
- * Whether a spill path is a per-worker JSONL journal (not a claim or temp file).
+ * Whether a spill path is a live per-worker JSONL journal (not a claim or temp file).
  *
  * @param string $path Absolute spill file path
  * @return bool

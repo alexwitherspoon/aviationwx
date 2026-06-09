@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../lib/metrics-spill-aggregator.php';
 
 class MetricsSpillAggregatorOrphanPruneTest extends TestCase
 {
-    public function testPrune_RemovesVeryOldSpillJson(): void
+    public function testPrune_RemovesVeryOldSpillJournal(): void
     {
         $oldHour = '2019-12-31-23';
         $dir = getMetricsSpillHourDir($oldHour);
@@ -21,8 +21,8 @@ class MetricsSpillAggregatorOrphanPruneTest extends TestCase
             $this->fail('Could not create spill hour directory');
         }
 
-        $stalePath = $dir . '/1.json';
-        $this->assertNotFalse(file_put_contents($stalePath, json_encode(['orphan' => true])));
+        $stalePath = getMetricsSpillWorkerJournalPath($oldHour, 1);
+        $this->assertNotFalse(file_put_contents($stalePath, "{\"orphan\":true}\n"));
         $staleMtime = time() - METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS - 120;
         $this->assertTrue(touch($stalePath, $staleMtime));
 

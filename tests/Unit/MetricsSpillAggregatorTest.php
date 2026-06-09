@@ -1,6 +1,6 @@
 <?php
 /**
- * Spill aggregator merges shard JSON into hourly metrics files.
+ * Spill aggregator merges worker JSONL journals into hourly metrics files.
  */
 
 declare(strict_types=1);
@@ -9,11 +9,12 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/metrics-spill-journal.php';
 require_once __DIR__ . '/../../lib/metrics-spill-aggregator.php';
 
 class MetricsSpillAggregatorTest extends TestCase
 {
-    public function testAggregator_MergesSpillIntoHourlyFile(): void
+    public function testAggregator_MergesJournalIntoHourlyFile(): void
     {
         $hourId = metrics_get_hour_id();
         $hourDir = getMetricsSpillHourDir($hourId);
@@ -21,24 +22,15 @@ class MetricsSpillAggregatorTest extends TestCase
             $this->fail('Could not create spill hour directory');
         }
 
-        $payload = [
-            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-            'generated_at' => time(),
-            'hour_id' => $hourId,
-            'pid' => 424242,
-            'counters' => [
-                'global_page_views' => 7,
-            ],
-        ];
-
-        $spillPath = $hourDir . '/424242.json';
-        $this->assertNotFalse(file_put_contents($spillPath, json_encode($payload)));
+        $journalPath = getMetricsSpillWorkerJournalPath($hourId, 424242);
+        $payload = metrics_spill_build_payload($hourId, 424242, ['global_page_views' => 7]);
+        $this->assertNotFalse(file_put_contents($journalPath, json_encode($payload) . "\n"));
 
         $stats = metrics_run_spill_aggregator_once();
 
         $this->assertFalse($stats['lock_contended']);
         $this->assertGreaterThanOrEqual(1, (int) $stats['spills_merged']);
-        $this->assertFileDoesNotExist($spillPath);
+        $this->assertFileDoesNotExist($journalPath);
 
         $hourPath = getMetricsHourlyPath($hourId);
         $this->assertFileExists($hourPath);
