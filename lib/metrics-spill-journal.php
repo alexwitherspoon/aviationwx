@@ -217,11 +217,26 @@ function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath, st
     $tmp = $claimedPath . '.tmp.tail.' . getmypid();
     if (@file_put_contents($tmp, $remainder, LOCK_EX) === false) {
         @unlink($tmp);
+        aviationwx_log('warning', 'metrics spill: journal tail temp write failed', [
+            'path' => $claimedPath,
+        ], 'app');
 
         return;
     }
 
-    @rename($tmp, $claimedPath);
+    if (@rename($tmp, $claimedPath)) {
+        return;
+    }
+
+    @unlink($tmp);
+    aviationwx_log('warning', 'metrics spill: journal tail rename failed; overwriting claim', [
+        'path' => $claimedPath,
+    ], 'app');
+    if (@file_put_contents($claimedPath, $remainder, LOCK_EX) === false) {
+        aviationwx_log('warning', 'metrics spill: journal tail overwrite failed', [
+            'path' => $claimedPath,
+        ], 'app');
+    }
 }
 
 /**
