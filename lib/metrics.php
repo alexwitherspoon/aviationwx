@@ -16,7 +16,7 @@
  * 
  * Storage:
  * - APCu for real-time counters (microsecond increment)
- * - Per-worker spill JSON under cache/metrics/spill/ (shutdown on PHP-FPM workers)
+ * - Per-worker JSONL spill journals under cache/metrics/spill/ (one append per request shutdown)
  * - Scheduler merges spills into hourly/*.json via CLI (singleton lock; soft caps)
  * - Hourly, daily, weekly aggregation buckets
  * - 14-day retention with automatic cleanup
@@ -2092,16 +2092,15 @@ function metrics_prometheus_export(): array {
 // =============================================================================
 
 /**
- * Persist pending APCu counters to a spill file and reset counters on success.
+ * Persist pending APCu counters to the worker JSONL journal and reset counters on success.
  *
- * Uses a unique filename per call so successive request shutdowns do not overwrite unconsumed shards.
- * Each file holds counters accumulated since the last successful spill for this worker (delta shard).
+ * Appends one JSON line per request shutdown to CACHE_METRICS_SPILL_DIR/{hourId}/{pid}.jsonl.
+ * Each line is a delta since the previous spill on this worker. The aggregator claims the
+ * journal via rename and merges all lines into the canonical hourly file.
  *
- * Spill path: CACHE_METRICS_SPILL_DIR/{hourId}/{pid}_{uniq}.json (see cache-paths.php).
+ * Never throws: shutdown hooks must stay safe.
  *
- * Never throws: path generation uses CSPRNG (may throw under extreme failure); shutdown hooks must stay safe.
- *
- * @return bool True if nothing to write, or spill written and APCu reset
+ * @return bool True if nothing to write, or journal line appended and APCu reset
  */
 function metrics_write_spill_snapshot_and_reset_counters(): bool {
     if (!metrics_is_apcu_available()) {
@@ -2114,40 +2113,20 @@ function metrics_write_spill_snapshot_and_reset_counters(): bool {
     }
 
     try {
+        require_once __DIR__ . '/metrics-spill-journal.php';
+
         $hourId = metrics_get_hour_id();
         $pid = getmypid();
-        $target = getMetricsSpillSnapshotPath($hourId, $pid);
-        $dir = dirname($target);
+        $journalPath = getMetricsSpillWorkerJournalPath($hourId, $pid);
+        $dir = dirname($journalPath);
         if (!ensureCacheDir($dir)) {
             aviationwx_log('warning', 'metrics spill: could not create spill directory', ['dir' => $dir], 'app');
             return false;
         }
 
-        $payload = [
-            'schema_version' => METRICS_SPILL_FILE_SCHEMA_VERSION,
-            'generated_at' => time(),
-            'hour_id' => $hourId,
-            'pid' => $pid,
-            'counters' => $counters,
-        ];
-
-        $json = json_encode($payload);
-        if ($json === false) {
-            aviationwx_log('warning', 'metrics spill: json_encode failed', ['error' => json_last_error_msg()], 'app');
-            return false;
-        }
-
-        $tmpFile = $target . '.tmp.' . $pid;
-        $written = @file_put_contents($tmpFile, $json, LOCK_EX);
-        if ($written === false) {
-            @unlink($tmpFile);
-            aviationwx_log('warning', 'metrics spill: temp write failed', ['path' => $tmpFile], 'app');
-            return false;
-        }
-
-        if (!@rename($tmpFile, $target)) {
-            @unlink($tmpFile);
-            aviationwx_log('warning', 'metrics spill: rename failed', ['path' => $target], 'app');
+        $payload = metrics_spill_build_payload($hourId, $pid, $counters);
+        if (!metrics_spill_journal_append_locked($journalPath, $payload)) {
+            aviationwx_log('warning', 'metrics spill: journal append failed', ['path' => $journalPath], 'app');
             return false;
         }
 

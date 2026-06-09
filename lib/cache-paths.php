@@ -706,15 +706,30 @@ function getMetricsSpillHourDir(string $hourId): string {
 }
 
 /**
- * Unique JSON path for one spill snapshot (tmp+rename from PHP worker).
+ * Per-worker JSONL journal for request-shutdown spill deltas (append one line per shutdown).
  *
- * Multiple snapshots per worker per hour are expected (request shutdown); the aggregator merges and deletes each file.
+ * One file per FPM worker per UTC hour; the aggregator claims and merges the whole journal.
+ *
+ * @param string $hourId Hour identifier (metrics_get_hour_id format)
+ * @param int    $pid    Process ID (FPM worker)
+ * @return string Absolute path to {pid}.jsonl under the hour spill directory
+ */
+function getMetricsSpillWorkerJournalPath(string $hourId, int $pid): string
+{
+    return getMetricsSpillHourDir($hourId) . '/' . $pid . '.jsonl';
+}
+
+/**
+ * Legacy per-request spill shard path (pre-JSONL). Retained for orphan cleanup and tests only.
+ *
+ * @deprecated New spills use {@see getMetricsSpillWorkerJournalPath()}.
  *
  * @param string $hourId Hour identifier (metrics_get_hour_id)
- * @param int $pid Process ID (FPM worker)
+ * @param int    $pid    Process ID (FPM worker)
  * @return string Absolute path to JSON spill file
  */
-function getMetricsSpillSnapshotPath(string $hourId, int $pid): string {
+function getMetricsSpillSnapshotPath(string $hourId, int $pid): string
+{
     $uniq = bin2hex(random_bytes(8));
 
     return getMetricsSpillHourDir($hourId) . '/' . $pid . '_' . $uniq . '.json';
