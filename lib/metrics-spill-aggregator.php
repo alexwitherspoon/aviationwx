@@ -151,9 +151,8 @@ function metrics_run_spill_aggregator_once(): array
                 }
             }
 
-            if (count(glob($hourDir . '/*.json') ?: []) === 0) {
-                @rmdir($hourDir);
-            }
+            // rmdir succeeds only when the hour dir is empty; no glob scan (large backlogs are costly).
+            @rmdir($hourDir);
 
             // Persist partial hour progress before stopping; next pass continues the same bucket.
             if ($hourBudgetExhausted) {
