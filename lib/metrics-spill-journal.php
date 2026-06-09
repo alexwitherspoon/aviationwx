@@ -93,7 +93,7 @@ function metrics_spill_journal_claim_for_merge(string $journalPath): ?string
         return null;
     }
 
-    $claimPath = $journalPath . '.merging.' . getmypid();
+    $claimPath = $journalPath . '.merging.' . getmypid() . '.' . bin2hex(random_bytes(4));
     if (@rename($journalPath, $claimPath)) {
         return $claimPath;
     }
