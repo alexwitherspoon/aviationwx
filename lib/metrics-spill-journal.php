@@ -6,6 +6,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/metrics-apply-counters.php';
 require_once __DIR__ . '/metrics-spill-payload.php';
 
@@ -39,6 +40,11 @@ function metrics_spill_journal_append_locked(string $journalPath, array $payload
 {
     $line = json_encode($payload);
     if ($line === false) {
+        aviationwx_log('warning', 'metrics spill: journal line json_encode failed', [
+            'path' => $journalPath,
+            'error' => json_last_error_msg(),
+        ], 'app');
+
         return false;
     }
     $line .= "\n";
