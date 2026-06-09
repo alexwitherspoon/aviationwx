@@ -178,7 +178,7 @@ class MetricsSpillAggregatorTest extends TestCase
         $this->cleanupAggregatorRun($hourId);
     }
 
-    public function testMerge_InvalidOnlyJournalLeavesClaimedArtifact(): void
+    public function testMerge_InvalidOnlyJournal_CountsFileBudgetAndDeletesClaim(): void
     {
         $hourId = metrics_get_hour_id();
         $journal = getMetricsSpillWorkerJournalPath($hourId, 88010);
@@ -200,13 +200,11 @@ class MetricsSpillAggregatorTest extends TestCase
 
         $this->assertFalse($stats['lock_contended']);
         $this->assertSame(0, (int) $stats['spills_merged']);
-        $this->assertSame(0, (int) $stats['spills_deleted']);
+        $this->assertSame(1, (int) $stats['spills_deleted']);
         $this->assertFileDoesNotExist($journal);
+        $this->assertSame([], glob($hourDir . '/88010.jsonl.merging.*') ?: []);
+        $this->assertDirectoryDoesNotExist($hourDir);
 
-        $claimed = glob($hourDir . '/88010.jsonl.merging.*') ?: [];
-        $this->assertCount(1, $claimed);
-
-        @unlink($claimed[0]);
         $this->cleanupAggregatorRun($hourId);
     }
 

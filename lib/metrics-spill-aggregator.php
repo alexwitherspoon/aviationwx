@@ -124,19 +124,27 @@ function metrics_run_spill_aggregator_once(): array
                     $hourData,
                     $consumedPath
                 );
-                if ($mergedUnits === null || $mergedUnits < 1) {
+                if ($mergedUnits === null) {
                     continue;
                 }
 
-                if ($consumedPath !== null) {
-                    $pendingDeletes[] = $consumedPath;
-                }
-                $hourHadMerges = true;
                 $filesMergedThisRun++;
-                $stats['spills_merged'] += $mergedUnits;
+
+                if ($mergedUnits >= 1) {
+                    $hourHadMerges = true;
+                    $stats['spills_merged'] += $mergedUnits;
+                    if ($consumedPath !== null) {
+                        $pendingDeletes[] = $consumedPath;
+                    }
+                } elseif ($consumedPath !== null) {
+                    if (@unlink($consumedPath)) {
+                        $stats['spills_deleted']++;
+                    }
+                }
             }
 
             if (!$hourHadMerges) {
+                @rmdir($hourDir);
                 continue;
             }
 
@@ -253,8 +261,8 @@ function metrics_spill_aggregator_list_journal_paths_for_hour(string $hourDir): 
  * @param string               $journalPath  Absolute spill journal path
  * @param string               $hourId       UTC hour bucket id
  * @param array<string, mixed> $hourData     Hourly bucket (mutated in place)
- * @param string|null          $consumedPath Set when merge succeeded; delete after hourly write
- * @return int|null Number of journal lines merged, or null when claim/merge produced nothing
+ * @param string|null          $consumedPath Set when a journal was claimed or read; caller deletes
+ * @return int|null Lines merged (0 when claimed but no valid lines), or null when claim/path failed
  */
 function metrics_spill_aggregator_merge_journal(
     string $journalPath,
@@ -270,21 +278,15 @@ function metrics_spill_aggregator_merge_journal(
             return null;
         }
 
-        $lines = metrics_spill_journal_merge_claimed_into_hour_data($claimed, $hourId, $hourData);
-        if ($lines > 0) {
-            $consumedPath = $claimed;
-        }
+        $consumedPath = $claimed;
 
-        return $lines > 0 ? $lines : null;
+        return metrics_spill_journal_merge_claimed_into_hour_data($claimed, $hourId, $hourData);
     }
 
     if (metrics_spill_path_is_claimed_journal($journalPath)) {
-        $lines = metrics_spill_journal_merge_claimed_into_hour_data($journalPath, $hourId, $hourData);
-        if ($lines > 0) {
-            $consumedPath = $journalPath;
-        }
+        $consumedPath = $journalPath;
 
-        return $lines > 0 ? $lines : null;
+        return metrics_spill_journal_merge_claimed_into_hour_data($journalPath, $hourId, $hourData);
     }
 
     return null;
