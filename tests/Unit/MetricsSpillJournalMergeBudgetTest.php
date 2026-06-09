@@ -72,14 +72,14 @@ $claimed = getMetricsSpillHourDir($hourId) . '/77.jsonl.merging.1';
 @mkdir(dirname($claimed), 0755, true);
 
 $lines = '';
-for ($i = 1; $i <= 200; $i++) {
+for ($i = 1; $i <= 5000; $i++) {
     $payload = metrics_spill_build_payload($hourId, 77, ['global_page_views' => 1]);
     $lines .= json_encode($payload) . "\n";
 }
 file_put_contents($claimed, $lines);
 
-$hourData = metrics_new_empty_hour_bucket($hourId);
 require $root . '/lib/metrics.php';
+$hourData = metrics_new_empty_hour_bucket($hourId);
 
 $t0Ns = hrtime(true);
 $fullyConsumed = false;
@@ -104,7 +104,7 @@ if (!is_file($claimed)) {
     exit(1);
 }
 $remaining = count(file($claimed, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []);
-if ($remaining < 1 || $remaining >= 200) {
+if ($remaining < 1 || $remaining >= 5000) {
     fwrite(STDERR, "expected unread tail, got {$remaining} lines\n");
     exit(1);
 }
