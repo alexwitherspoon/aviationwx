@@ -15,6 +15,8 @@ require_once __DIR__ . '/metrics.php';
  * Run one spill merge pass under a non-blocking singleton lock.
  *
  * Respects METRICS_SPILL_MERGE_MAX_FILES_PER_RUN and METRICS_SPILL_MERGE_MAX_RUNTIME_MS.
+ * When the budget is hit mid-hour, merged counters are written to the hourly file and consumed
+ * spill shards are deleted so the next pass can continue the same UTC bucket (avoids stuck backlogs).
  *
  * @return array<string, mixed> Telemetry keys: lock_contended (bool), hours_touched (int),
  *         hourly_writes (int), spills_merged (int), spills_deleted (int), orphans_pruned (int),
@@ -109,13 +111,16 @@ function metrics_run_spill_aggregator_once(): array
             metrics_normalize_hour_bucket_for_merge($hourData, $hourId);
 
             $pendingDeletes = [];
+            $hourBudgetExhausted = false;
 
             foreach ($spillFiles as $spillPath) {
                 if ($filesMergedThisRun >= METRICS_SPILL_MERGE_MAX_FILES_PER_RUN) {
-                    break 2;
+                    $hourBudgetExhausted = true;
+                    break;
                 }
                 if (metrics_spill_aggregator_runtime_ms($t0Ns) >= METRICS_SPILL_MERGE_MAX_RUNTIME_MS) {
-                    break 2;
+                    $hourBudgetExhausted = true;
+                    break;
                 }
 
                 $parsed = metrics_spill_aggregator_parse_spill_file($spillPath, $hourId);
@@ -133,28 +138,7 @@ function metrics_run_spill_aggregator_once(): array
                 continue;
             }
 
-            $hourData['last_flush'] = time();
-
-            $jsonPayload = json_encode($hourData, JSON_PRETTY_PRINT);
-            if ($jsonPayload === false) {
-                $stats['errors'][] = 'json_encode_failed:' . $hourId;
-
-                continue;
-            }
-
-            $tmpFile = $hourFile . '.tmp.aggr.' . getmypid();
-            $written = @file_put_contents($tmpFile, $jsonPayload, LOCK_EX);
-            if ($written === false) {
-                @unlink($tmpFile);
-                $stats['errors'][] = 'hourly_tmp_write_failed:' . $hourId;
-
-                continue;
-            }
-
-            if (!@rename($tmpFile, $hourFile)) {
-                @unlink($tmpFile);
-                $stats['errors'][] = 'hourly_rename_failed:' . $hourId;
-
+            if (!metrics_spill_aggregator_write_hour_bucket($hourData, $hourFile, $hourId, $stats)) {
                 continue;
             }
 
@@ -167,7 +151,13 @@ function metrics_run_spill_aggregator_once(): array
                 }
             }
 
+            // rmdir succeeds only when the hour dir is empty; no glob scan (large backlogs are costly).
             @rmdir($hourDir);
+
+            // Persist partial hour progress before stopping; next pass continues the same bucket.
+            if ($hourBudgetExhausted) {
+                break;
+            }
         }
 
         metrics_spill_aggregator_prune_orphan_spills($stats, $t0Ns);
@@ -189,6 +179,49 @@ function metrics_run_spill_aggregator_once(): array
 function metrics_spill_aggregator_runtime_ms($t0Ns): float
 {
     return (hrtime(true) - $t0Ns) / 1e6;
+}
+
+/**
+ * Atomically write merged hour bucket JSON to the canonical hourly metrics path.
+ *
+ * @param array<string, mixed> $hourData Merged bucket (last_flush set here)
+ * @param string               $hourFile Target hourly JSON path
+ * @param string               $hourId   UTC hour id for error telemetry
+ * @param array<string, mixed> $stats    Stats array; errors[] appended on failure
+ * @return bool True when the hourly file was written
+ */
+function metrics_spill_aggregator_write_hour_bucket(
+    array $hourData,
+    string $hourFile,
+    string $hourId,
+    array &$stats
+): bool {
+    $hourData['last_flush'] = time();
+
+    $jsonPayload = json_encode($hourData, JSON_PRETTY_PRINT);
+    if ($jsonPayload === false) {
+        $stats['errors'][] = 'json_encode_failed:' . $hourId;
+
+        return false;
+    }
+
+    $tmpFile = $hourFile . '.tmp.aggr.' . getmypid();
+    $written = @file_put_contents($tmpFile, $jsonPayload, LOCK_EX);
+    if ($written === false) {
+        @unlink($tmpFile);
+        $stats['errors'][] = 'hourly_tmp_write_failed:' . $hourId;
+
+        return false;
+    }
+
+    if (!@rename($tmpFile, $hourFile)) {
+        @unlink($tmpFile);
+        $stats['errors'][] = 'hourly_rename_failed:' . $hourId;
+
+        return false;
+    }
+
+    return true;
 }
 
 /**
