@@ -1,6 +1,6 @@
 <?php
 /**
- * Merge per-worker spill JSON snapshots into canonical hourly metrics files.
+ * Merge per-worker spill journals (JSONL) and legacy JSON shards into hourly metrics files.
  */
 
 declare(strict_types=1);
@@ -308,7 +308,7 @@ function metrics_spill_aggregator_parse_spill_file(string $path, string $expecte
 }
 
 /**
- * Remove stale spill shards that were never merged (crash / stuck worker).
+ * Remove stale spill artifacts that were never merged (legacy shards, journals, abandoned claims).
  *
  * @param array<string, mixed> $stats Stats array updated with orphans_pruned count
  * @param int|float $t0Ns Start time from hrtime(true); skips work when runtime budget exceeded
@@ -343,10 +343,10 @@ function metrics_spill_aggregator_prune_orphan_spills(array &$stats, $t0Ns): voi
             if (strpos($name, '.tmp.') !== false) {
                 continue;
             }
-            if (!str_ends_with($name, '.json') && !str_ends_with($name, '.jsonl')) {
-                continue;
-            }
-            if (strpos($name, '.merging.') !== false) {
+            $isSpillArtifact = str_ends_with($name, '.json')
+                || str_ends_with($name, '.jsonl')
+                || strpos($name, '.merging.') !== false;
+            if (!$isSpillArtifact) {
                 continue;
             }
 

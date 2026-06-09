@@ -714,8 +714,7 @@ function getMetricsSpillHourDir(string $hourId): string {
  * @param int    $pid    Process ID (FPM worker)
  * @return string Absolute path to {pid}.jsonl under the hour spill directory
  */
-function getMetricsSpillWorkerJournalPath(string $hourId, int $pid): string
-{
+function getMetricsSpillWorkerJournalPath(string $hourId, int $pid): string {
     return getMetricsSpillHourDir($hourId) . '/' . $pid . '.jsonl';
 }
 
@@ -728,8 +727,7 @@ function getMetricsSpillWorkerJournalPath(string $hourId, int $pid): string
  * @param int    $pid    Process ID (FPM worker)
  * @return string Absolute path to JSON spill file
  */
-function getMetricsSpillSnapshotPath(string $hourId, int $pid): string
-{
+function getMetricsSpillSnapshotPath(string $hourId, int $pid): string {
     $uniq = bin2hex(random_bytes(8));
 
     return getMetricsSpillHourDir($hourId) . '/' . $pid . '_' . $uniq . '.json';

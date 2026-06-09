@@ -48,10 +48,14 @@ function metrics_spill_journal_append_locked(string $journalPath, array $payload
         return false;
     }
 
+    $locked = false;
+
     try {
         if (!flock($fp, LOCK_EX)) {
             return false;
         }
+
+        $locked = true;
 
         $written = fwrite($fp, $line);
         if ($written !== strlen($line)) {
@@ -62,7 +66,9 @@ function metrics_spill_journal_append_locked(string $journalPath, array $payload
 
         return true;
     } finally {
-        flock($fp, LOCK_UN);
+        if ($locked) {
+            flock($fp, LOCK_UN);
+        }
         fclose($fp);
     }
 }
