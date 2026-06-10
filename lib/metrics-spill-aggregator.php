@@ -1,6 +1,6 @@
 <?php
 /**
- * Merge per-worker spill JSON snapshots into canonical hourly metrics files.
+ * Merge per-worker spill journals (JSONL) and legacy JSON shards into hourly metrics files.
  */
 
 declare(strict_types=1);
@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/metrics-spill-journal.php';
 require_once __DIR__ . '/metrics-spill-payload.php';
 require_once __DIR__ . '/metrics.php';
 
@@ -81,18 +82,10 @@ function metrics_run_spill_aggregator_once(): array
                 continue;
             }
 
-            $spillFiles = glob($hourDir . '/*.json') ?: [];
-            $spillFiles = array_values(array_filter($spillFiles, static function (string $p): bool {
-                $base = basename($p);
-
-                return strpos($base, '.tmp.') === false;
-            }));
-
+            $spillFiles = metrics_spill_aggregator_list_spill_paths_for_hour($hourDir);
             if ($spillFiles === []) {
                 continue;
             }
-
-            sort($spillFiles);
 
             $hourFile = getMetricsHourlyPath($hourId);
             $hourData = [];
@@ -111,6 +104,7 @@ function metrics_run_spill_aggregator_once(): array
             metrics_normalize_hour_bucket_for_merge($hourData, $hourId);
 
             $pendingDeletes = [];
+            $hourHadMerges = false;
             $hourBudgetExhausted = false;
 
             foreach ($spillFiles as $spillPath) {
@@ -123,18 +117,29 @@ function metrics_run_spill_aggregator_once(): array
                     break;
                 }
 
-                $parsed = metrics_spill_aggregator_parse_spill_file($spillPath, $hourId);
-                if ($parsed === null) {
+                $consumedPath = null;
+                $journalFullyConsumed = true;
+                $mergedUnits = metrics_spill_aggregator_merge_spill_path(
+                    $spillPath,
+                    $hourId,
+                    $hourData,
+                    $consumedPath,
+                    $t0Ns,
+                    $journalFullyConsumed
+                );
+                if ($mergedUnits === null || $mergedUnits < 1) {
                     continue;
                 }
 
-                metrics_apply_flat_counters_to_hour_data($hourData, $parsed['counters'], true);
-                $pendingDeletes[] = $spillPath;
+                if ($consumedPath !== null && $journalFullyConsumed) {
+                    $pendingDeletes[] = $consumedPath;
+                }
+                $hourHadMerges = true;
                 $filesMergedThisRun++;
-                $stats['spills_merged']++;
+                $stats['spills_merged'] += $mergedUnits;
             }
 
-            if ($pendingDeletes === []) {
+            if (!$hourHadMerges) {
                 continue;
             }
 
@@ -225,6 +230,103 @@ function metrics_spill_aggregator_write_hour_bucket(
 }
 
 /**
+ * List legacy .json shards, live .jsonl journals, and claimed .jsonl.merging.* files for one hour dir.
+ *
+ * @param string $hourDir Absolute path to spill/{hourId}
+ * @return list<string> Sorted spill paths
+ */
+function metrics_spill_aggregator_list_spill_paths_for_hour(string $hourDir): array
+{
+    $legacy = glob($hourDir . '/*.json') ?: [];
+    $legacy = array_values(array_filter($legacy, static function (string $p): bool {
+        $base = basename($p);
+
+        return strpos($base, '.tmp.') === false;
+    }));
+
+    $journals = glob($hourDir . '/*.jsonl') ?: [];
+    $journals = array_values(array_filter($journals, static function (string $p): bool {
+        return metrics_spill_path_is_worker_journal($p);
+    }));
+
+    $claimed = glob($hourDir . '/*.jsonl.merging.*') ?: [];
+    $claimed = array_values(array_filter($claimed, static function (string $p): bool {
+        return strpos(basename($p), '.tmp.') === false;
+    }));
+
+    $paths = array_merge($legacy, $journals, $claimed);
+    sort($paths);
+
+    return $paths;
+}
+
+/**
+ * Merge one spill path (legacy JSON shard or worker JSONL journal) into hour bucket data.
+ *
+ * @param string               $spillPath     Absolute spill file path
+ * @param string               $hourId        UTC hour bucket id
+ * @param array<string, mixed> $hourData      Hourly bucket (mutated in place)
+ * @param string|null          $consumedPath         Set when merge succeeded; delete after hourly write
+ * @param int|float|null       $t0Ns                 Aggregator runtime anchor for per-line budget checks
+ * @param bool|null            $journalFullyConsumed False when a JSONL claim still has unread lines
+ * @return int|null Delta records merged (lines for JSONL, 1 for legacy shard), or null
+ */
+function metrics_spill_aggregator_merge_spill_path(
+    string $spillPath,
+    string $hourId,
+    array &$hourData,
+    ?string &$consumedPath = null,
+    $t0Ns = null,
+    ?bool &$journalFullyConsumed = null
+): ?int {
+    $consumedPath = null;
+    if ($journalFullyConsumed !== null) {
+        $journalFullyConsumed = true;
+    }
+
+    if (metrics_spill_path_is_worker_journal($spillPath)) {
+        $claimed = metrics_spill_journal_claim_for_merge($spillPath);
+        if ($claimed === null) {
+            return null;
+        }
+
+        $consumedPath = $claimed;
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $claimed,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
+
+        return $lines > 0 ? $lines : null;
+    }
+
+    if (metrics_spill_path_is_claimed_journal($spillPath)) {
+        $consumedPath = $spillPath;
+        $lines = metrics_spill_journal_merge_claimed_into_hour_data(
+            $spillPath,
+            $hourId,
+            $hourData,
+            $t0Ns,
+            $journalFullyConsumed
+        );
+
+        return $lines > 0 ? $lines : null;
+    }
+
+    $parsed = metrics_spill_aggregator_parse_spill_file($spillPath, $hourId);
+    if ($parsed === null) {
+        return null;
+    }
+
+    metrics_apply_flat_counters_to_hour_data($hourData, $parsed['counters'], true);
+    $consumedPath = $spillPath;
+
+    return 1;
+}
+
+/**
  * Read a spill shard file and return normalized counters, or null if the file is unusable.
  *
  * @param string $path Absolute path to spill JSON
@@ -247,7 +349,7 @@ function metrics_spill_aggregator_parse_spill_file(string $path, string $expecte
 }
 
 /**
- * Remove stale spill shards that were never merged (crash / stuck worker).
+ * Remove stale spill artifacts that were never merged (legacy shards, journals, abandoned claims).
  *
  * @param array<string, mixed> $stats Stats array updated with orphans_pruned count
  * @param int|float $t0Ns Start time from hrtime(true); skips work when runtime budget exceeded
@@ -282,7 +384,10 @@ function metrics_spill_aggregator_prune_orphan_spills(array &$stats, $t0Ns): voi
             if (strpos($name, '.tmp.') !== false) {
                 continue;
             }
-            if (!str_ends_with($name, '.json')) {
+            $isSpillArtifact = str_ends_with($name, '.json')
+                || str_ends_with($name, '.jsonl')
+                || strpos($name, '.merging.') !== false;
+            if (!$isSpillArtifact) {
                 continue;
             }
 

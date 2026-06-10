@@ -1,6 +1,6 @@
 <?php
 /**
- * Per-worker spill snapshot writes JSON and resets APCu counters (direct call; web uses shutdown hook).
+ * Per-worker spill journal writes JSONL lines and resets APCu counters (direct call; web uses shutdown hook).
  */
 
 declare(strict_types=1);
@@ -21,7 +21,7 @@ class MetricsSpillSnapshotTest extends TestCase
         }
     }
 
-    public function testWriteSpillSnapshot_PersistsCountersAndResetsApcu(): void
+    public function testWriteSpillSnapshot_AppendsJournalLineAndResetsApcu(): void
     {
         if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
             $this->markTestSkipped('APCu not available or disabled');
@@ -36,16 +36,16 @@ class MetricsSpillSnapshotTest extends TestCase
 
         $this->assertSame(0, metrics_get('global_page_views'));
 
-        // Resolve shard without assuming hour dir matches a second metrics_get_hour_id() call (hour-boundary flake).
-        $pattern = getMetricsSpillRootDir() . '/*/' . $pid . '_*.json';
+        $pattern = getMetricsSpillRootDir() . '/*/' . $pid . '.jsonl';
         $files = glob($pattern) ?: [];
-        $this->assertCount(1, $files, 'Expected exactly one spill shard for this PID');
+        $this->assertCount(1, $files, 'Expected exactly one worker journal for this PID');
         $path = $files[0];
         $this->assertFileExists($path);
 
         $raw = file_get_contents($path);
         $this->assertNotFalse($raw);
-        $data = json_decode($raw, true);
+        $line = trim(explode("\n", $raw)[0]);
+        $data = json_decode($line, true);
         $this->assertIsArray($data);
         $this->assertSame(METRICS_SPILL_FILE_SCHEMA_VERSION, $data['schema_version']);
         $this->assertIsString($data['hour_id'] ?? null);
@@ -54,5 +54,53 @@ class MetricsSpillSnapshotTest extends TestCase
 
         @unlink($path);
         @rmdir(dirname($path));
+    }
+
+    public function testWriteSpillSnapshot_MultipleCallsAppendMultipleLines(): void
+    {
+        if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
+            $this->markTestSkipped('APCu not available or disabled');
+        }
+
+        $hourId = metrics_get_hour_id();
+        $pid = getmypid();
+
+        metrics_increment('global_page_views');
+        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        if (metrics_get_hour_id() !== $hourId) {
+            $this->cleanupPidSpillJournals($pid);
+            $this->markTestSkipped('UTC hour boundary crossed between spill writes');
+        }
+
+        metrics_increment('global_page_views');
+        metrics_increment('global_page_views');
+        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        if (metrics_get_hour_id() !== $hourId) {
+            $this->cleanupPidSpillJournals($pid);
+            $this->markTestSkipped('UTC hour boundary crossed between spill writes');
+        }
+
+        $journal = getMetricsSpillWorkerJournalPath($hourId, $pid);
+        $this->assertFileExists($journal);
+        $raw = file_get_contents($journal);
+        $this->assertNotFalse($raw);
+        $this->assertSame(2, substr_count($raw, "\n"));
+
+        @unlink($journal);
+        @rmdir(getMetricsSpillHourDir($hourId));
+    }
+
+    /**
+     * Remove any spill journals created for a worker PID (used when skipping at hour boundaries).
+     *
+     * @param int $pid PHP worker PID
+     * @return void
+     */
+    private function cleanupPidSpillJournals(int $pid): void
+    {
+        foreach (glob(getMetricsSpillRootDir() . '/*/' . $pid . '.jsonl') ?: [] as $path) {
+            @unlink($path);
+            @rmdir(dirname($path));
+        }
     }
 }

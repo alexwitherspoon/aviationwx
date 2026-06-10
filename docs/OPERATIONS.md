@@ -140,7 +140,7 @@ After a code fix, prefer a single clean `web` container restart so only the entr
 
 ### Metrics System
 
-Live counters live in APCu (per PHP-FPM worker). Each worker writes spill snapshots after requests (unique filenames under `cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}_{hex}.json`) so unconsumed shards are not overwritten. The scheduler merges those shards into canonical hourly files:
+Live counters live in APCu (per PHP-FPM worker). Each worker appends one JSON line per request shutdown to a per-worker journal (`cache/metrics/spill/{YYYY-MM-DD-HH}/{pid}.jsonl`). The aggregator claims each journal via rename, merges lines into canonical hourly files, and deletes the claimed copy. Legacy per-request `{pid}_{hex}.json` shards are still merged if present from older releases.
 
 - **Hourly**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
 - **Daily**: `cache/metrics/daily/YYYY-MM-DD.json`

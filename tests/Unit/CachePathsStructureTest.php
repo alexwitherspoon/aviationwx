@@ -106,18 +106,18 @@ class CachePathsStructureTest extends TestCase
     }
 
     /**
-     * Metrics spill snapshots use unique filenames under spill/{hourId}/ so workers do not overwrite pending shards
+     * Per-worker JSONL journals use a stable {pid}.jsonl path under spill/{hourId}/
      */
-    public function testMetricsSpillSnapshotPath_IsUniquePerCall(): void
+    public function testMetricsSpillWorkerJournalPath_IsStablePerWorker(): void
     {
         $hourId = '2026-05-09-14';
         $dir = getMetricsSpillHourDir($hourId);
         $this->assertStringContainsString('spill', $dir);
         $this->assertStringContainsString($hourId, $dir);
-        $p1 = getMetricsSpillSnapshotPath($hourId, 4242);
-        $p2 = getMetricsSpillSnapshotPath($hourId, 4242);
-        $this->assertNotSame($p1, $p2);
-        $this->assertMatchesRegularExpression('#/4242_[a-f0-9]{16}\.json$#', $p1);
+        $p1 = getMetricsSpillWorkerJournalPath($hourId, 4242);
+        $p2 = getMetricsSpillWorkerJournalPath($hourId, 4242);
+        $this->assertSame($p1, $p2);
+        $this->assertMatchesRegularExpression('#/4242\.jsonl$#', $p1);
         $this->assertSame(getMetricsSpillRootDir() . '/' . $hourId, $dir);
     }
 
