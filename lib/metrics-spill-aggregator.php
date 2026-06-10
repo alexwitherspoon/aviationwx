@@ -250,6 +250,9 @@ function metrics_spill_aggregator_list_spill_paths_for_hour(string $hourDir): ar
     }));
 
     $claimed = glob($hourDir . '/*.jsonl.merging.*') ?: [];
+    $claimed = array_values(array_filter($claimed, static function (string $p): bool {
+        return strpos(basename($p), '.tmp.') === false;
+    }));
 
     $paths = array_merge($legacy, $journals, $claimed);
     sort($paths);
