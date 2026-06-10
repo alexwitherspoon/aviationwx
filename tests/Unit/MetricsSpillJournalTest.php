@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../lib/metrics-spill-journal.php';
 
 class MetricsSpillJournalTest extends TestCase
 {
-    public function testBuildPayload_IncludesSchemaHourIdAndCounters(): void
+    public function testMetricsSpillBuildPayload_IncludesSchemaHourIdAndCounters(): void
     {
         $hourId = '2099-04-01-12';
         $payload = metrics_spill_build_payload($hourId, 88020, ['global_page_views' => 9]);
@@ -25,7 +25,7 @@ class MetricsSpillJournalTest extends TestCase
         $this->assertIsInt($payload['generated_at']);
     }
 
-    public function testAppendLocked_AppendsNewlineTerminatedLines(): void
+    public function testMetricsSpillJournalAppendLocked_AppendsNewlineTerminatedLines(): void
     {
         $hourId = '2099-04-01-13';
         $journal = getMetricsSpillWorkerJournalPath($hourId, 88021);
@@ -51,7 +51,7 @@ class MetricsSpillJournalTest extends TestCase
         @rmdir($dir);
     }
 
-    public function testClaimForMerge_RenamesLiveJournalAwayFromAppendPath(): void
+    public function testMetricsSpillJournalClaimForMerge_RenamesLiveJournalAwayFromAppendPath(): void
     {
         $hourId = '2099-04-01-14';
         $live = getMetricsSpillWorkerJournalPath($hourId, 88022);
@@ -76,7 +76,7 @@ class MetricsSpillJournalTest extends TestCase
         @rmdir($dir);
     }
 
-    public function testPathClassification_DistinguishesLiveClaimedAndTmp(): void
+    public function testMetricsSpillPathIsWorkerJournal_MetricsSpillPathIsClaimedJournal_DistinguishesLiveClaimedAndTmp(): void
     {
         $this->assertTrue(metrics_spill_path_is_worker_journal('/cache/spill/2099-01-01-01/42.jsonl'));
         $this->assertFalse(metrics_spill_path_is_worker_journal('/cache/spill/2099-01-01-01/42.jsonl.merging.9'));
@@ -86,7 +86,7 @@ class MetricsSpillJournalTest extends TestCase
         $this->assertFalse(metrics_spill_path_is_claimed_journal('/cache/spill/2099-01-01-01/42.jsonl'));
     }
 
-    public function testListJournalPathsForHour_IncludesAbandonedClaimFiles(): void
+    public function testMetricsSpillAggregatorListJournalPathsForHour_IncludesAbandonedClaimFiles(): void
     {
         require_once __DIR__ . '/../../lib/metrics-spill-aggregator.php';
 
