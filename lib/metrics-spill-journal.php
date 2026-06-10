@@ -226,11 +226,15 @@ function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath, st
         return;
     }
 
+    $remainderLen = strlen($remainder);
     $tmp = $claimedPath . '.tmp.tail.' . getmypid();
-    if (@file_put_contents($tmp, $remainder, LOCK_EX) === false) {
+    $tmpWritten = @file_put_contents($tmp, $remainder, LOCK_EX);
+    if ($tmpWritten === false || $tmpWritten !== $remainderLen) {
         @unlink($tmp);
         aviationwx_log('warning', 'metrics spill: journal tail temp write failed', [
             'path' => $claimedPath,
+            'expected_bytes' => $remainderLen,
+            'written_bytes' => $tmpWritten === false ? null : $tmpWritten,
         ], 'app');
 
         return;
@@ -244,9 +248,12 @@ function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath, st
     aviationwx_log('warning', 'metrics spill: journal tail rename failed; overwriting claim', [
         'path' => $claimedPath,
     ], 'app');
-    if (@file_put_contents($claimedPath, $remainder, LOCK_EX) === false) {
+    $overwriteWritten = @file_put_contents($claimedPath, $remainder, LOCK_EX);
+    if ($overwriteWritten === false || $overwriteWritten !== $remainderLen) {
         aviationwx_log('warning', 'metrics spill: journal tail overwrite failed', [
             'path' => $claimedPath,
+            'expected_bytes' => $remainderLen,
+            'written_bytes' => $overwriteWritten === false ? null : $overwriteWritten,
         ], 'app');
     }
 }
