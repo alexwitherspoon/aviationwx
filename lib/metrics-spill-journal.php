@@ -63,9 +63,21 @@ function metrics_spill_journal_append_locked(string $journalPath, array $payload
 
         $locked = true;
 
-        $written = fwrite($fp, $line);
-        if ($written !== strlen($line)) {
+        $offset = ftell($fp);
+        if ($offset === false) {
             return false;
+        }
+
+        $lineLen = strlen($line);
+        $writtenTotal = 0;
+        while ($writtenTotal < $lineLen) {
+            $chunk = fwrite($fp, substr($line, $writtenTotal));
+            if ($chunk === false || $chunk < 1) {
+                @ftruncate($fp, $offset);
+
+                return false;
+            }
+            $writtenTotal += $chunk;
         }
 
         fflush($fp);
