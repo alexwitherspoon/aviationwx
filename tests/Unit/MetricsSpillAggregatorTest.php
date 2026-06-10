@@ -219,7 +219,9 @@ class MetricsSpillAggregatorTest extends TestCase
             $this->markTestSkipped('Could not read hourly metrics directory permissions');
         }
 
-        @chmod($hourlyDir, 0555);
+        if (!@chmod($hourlyDir, 0555)) {
+            $this->markTestSkipped('Could not make hourly metrics directory read-only');
+        }
 
         try {
             $stats = metrics_run_spill_aggregator_once();
