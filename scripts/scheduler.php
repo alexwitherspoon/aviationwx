@@ -542,7 +542,7 @@ while ($running) {
         reapZombies();
         
         // Process metrics tasks (non-blocking)
-        // 1. Merge PHP-FPM spill shards into hourly/*.json (APCu is per-worker; spills capture counters at shutdown)
+        // 1. Merge PHP-FPM spill journals into hourly/*.json (APCu is per-worker; spills capture counters at shutdown)
         if (($now - $lastMetricsSpillMerge) >= METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
             $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
             if (file_exists($aggScript)) {

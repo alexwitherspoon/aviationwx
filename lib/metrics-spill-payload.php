@@ -11,10 +11,11 @@ require_once __DIR__ . '/metrics-apply-counters.php';
 /**
  * Validate decoded spill JSON and return normalized counter keys for hourly merge.
  *
- * Used by the spill aggregator after reading a shard file; rejects schema mismatch, hour mismatch,
+ * Used by the spill aggregator after decoding a journal line; rejects schema mismatch, hour mismatch,
  * non-numeric counter values, empty counter maps, unreadable keys, or any counter name not recognized
- * by {@see metrics_flat_counter_key_is_recognized()} so corrupt or forward-incompatible shards are not merged
- * and are left on disk for inspection.
+ * by {@see metrics_flat_counter_key_is_recognized()} so corrupt or forward-incompatible lines are
+ * skipped and not applied to hourly totals. When a journal also contains valid lines, the consumed
+ * claim is deleted after merge and invalid lines are not preserved for inspection.
  *
  * @param array<string, mixed> $data Decoded spill JSON object
  * @param string $expectedHourId UTC hour bucket id (must match directory and payload hour_id)

@@ -719,21 +719,6 @@ function getMetricsSpillWorkerJournalPath(string $hourId, int $pid): string {
 }
 
 /**
- * Legacy per-request spill shard path (pre-JSONL). Retained for orphan cleanup and tests only.
- *
- * @deprecated New spills use {@see getMetricsSpillWorkerJournalPath()}.
- *
- * @param string $hourId Hour identifier (metrics_get_hour_id)
- * @param int    $pid    Process ID (FPM worker)
- * @return string Absolute path to JSON spill file
- */
-function getMetricsSpillSnapshotPath(string $hourId, int $pid): string {
-    $uniq = bin2hex(random_bytes(8));
-
-    return getMetricsSpillHourDir($hourId) . '/' . $pid . '_' . $uniq . '.json';
-}
-
-/**
  * Exclusive singleton lock for metrics spill aggregator CLI (non-blocking flock).
  *
  * @return string Absolute path

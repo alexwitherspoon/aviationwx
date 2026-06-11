@@ -1,6 +1,6 @@
 <?php
 /**
- * Per-worker spill journal writes JSONL lines and resets APCu counters (direct call; web uses shutdown hook).
+ * APCu spill write path: one JSONL line per shutdown flush, counters reset after append.
  */
 
 declare(strict_types=1);
@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/metrics.php';
 
-class MetricsSpillSnapshotTest extends TestCase
+class MetricsSpillJournalWriteTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -21,7 +21,7 @@ class MetricsSpillSnapshotTest extends TestCase
         }
     }
 
-    public function testWriteSpillSnapshot_AppendsJournalLineAndResetsApcu(): void
+    public function testWriteSpillJournalAndResetCounters_SingleFlush_AppendsLineAndResetsApcu(): void
     {
         if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
             $this->markTestSkipped('APCu not available or disabled');
@@ -32,7 +32,7 @@ class MetricsSpillSnapshotTest extends TestCase
         $this->assertSame(2, metrics_get('global_page_views'));
 
         $pid = getmypid();
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
 
         $this->assertSame(0, metrics_get('global_page_views'));
 
@@ -56,7 +56,7 @@ class MetricsSpillSnapshotTest extends TestCase
         @rmdir(dirname($path));
     }
 
-    public function testWriteSpillSnapshot_MultipleCallsAppendMultipleLines(): void
+    public function testWriteSpillJournalAndResetCounters_MultipleFlushes_AppendsLinesToSameJournal(): void
     {
         if (!function_exists('apcu_store') || !function_exists('apcu_enabled') || !@apcu_enabled()) {
             $this->markTestSkipped('APCu not available or disabled');
@@ -66,7 +66,7 @@ class MetricsSpillSnapshotTest extends TestCase
         $pid = getmypid();
 
         metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
         if (metrics_get_hour_id() !== $hourId) {
             $this->cleanupPidSpillJournals($pid);
             $this->markTestSkipped('UTC hour boundary crossed between spill writes');
@@ -74,7 +74,7 @@ class MetricsSpillSnapshotTest extends TestCase
 
         metrics_increment('global_page_views');
         metrics_increment('global_page_views');
-        $this->assertTrue(metrics_write_spill_snapshot_and_reset_counters());
+        $this->assertTrue(metrics_write_spill_journal_and_reset_counters());
         if (metrics_get_hour_id() !== $hourId) {
             $this->cleanupPidSpillJournals($pid);
             $this->markTestSkipped('UTC hour boundary crossed between spill writes');

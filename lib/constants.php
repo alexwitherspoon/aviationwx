@@ -427,12 +427,12 @@ if (!defined('METRICS_SPILL_MERGE_INTERVAL_SECONDS')) {
     define('METRICS_SPILL_MERGE_INTERVAL_SECONDS', 90);
 }
 
-/** Delete spill shard files older than this age if never consumed by aggregator (seconds). */
+/** Delete spill journal files older than this age if never consumed by aggregator (seconds). */
 if (!defined('METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS')) {
     define('METRICS_SPILL_ORPHAN_MAX_AGE_SECONDS', 3 * 3600);
 }
 
-/** Max spill JSON files processed per aggregator run (soft cap; logged if hit). */
+/** Max spill journal files processed per aggregator run (soft cap; logged if hit). */
 if (!defined('METRICS_SPILL_MERGE_MAX_FILES_PER_RUN')) {
     define('METRICS_SPILL_MERGE_MAX_FILES_PER_RUN', 2000);
 }

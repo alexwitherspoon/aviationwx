@@ -2088,7 +2088,7 @@ function metrics_prometheus_export(): array {
 }
 
 // =============================================================================
-// METRICS SPILL (per-worker snapshot for aggregator merge)
+// METRICS SPILL (per-worker JSONL journal for aggregator merge)
 // =============================================================================
 
 /**
@@ -2102,7 +2102,7 @@ function metrics_prometheus_export(): array {
  *
  * @return bool True if nothing to write, or journal line appended and APCu reset
  */
-function metrics_write_spill_snapshot_and_reset_counters(): bool {
+function metrics_write_spill_journal_and_reset_counters(): bool {
     if (!metrics_is_apcu_available()) {
         return true;
     }
@@ -2149,7 +2149,7 @@ function metrics_write_spill_snapshot_and_reset_counters(): bool {
  * @return void
  */
 function metrics_shutdown_spill_if_needed(): void {
-    metrics_write_spill_snapshot_and_reset_counters();
+    metrics_write_spill_journal_and_reset_counters();
 }
 
 if (PHP_SAPI !== 'cli') {

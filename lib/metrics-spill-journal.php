@@ -11,7 +11,7 @@ require_once __DIR__ . '/metrics-apply-counters.php';
 require_once __DIR__ . '/metrics-spill-payload.php';
 
 /**
- * Build a spill payload object (same schema as legacy per-request JSON shards).
+ * Build a spill payload object for one JSONL journal line.
  *
  * @param string               $hourId   UTC metrics hour id
  * @param int                  $pid      PHP-FPM worker PID
@@ -132,7 +132,7 @@ function metrics_spill_journal_claim_for_merge(string $journalPath): ?string
  * @param array<string, mixed> $hourData    Hourly bucket (mutated in place)
  * @param int|float|null       $t0Ns                 Optional hrtime(true) anchor for runtime budget checks
  * @param bool|null            $journalFullyConsumed Set true when every line in the claim was processed
- * @return int Number of lines merged (0 when none applied). Caller deletes $claimedPath after hourly write.
+ * @return int|null Lines merged (0 when read succeeded but none applied), or null on open/lock failure
  */
 function metrics_spill_journal_merge_claimed_into_hour_data(
     string $claimedPath,
@@ -140,14 +140,14 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
     array &$hourData,
     $t0Ns = null,
     ?bool &$journalFullyConsumed = null
-): int {
+): ?int {
     if ($journalFullyConsumed !== null) {
         $journalFullyConsumed = false;
     }
 
     $fp = @fopen($claimedPath, 'rb');
     if ($fp === false) {
-        return 0;
+        return null;
     }
 
     $merged = 0;
@@ -157,7 +157,7 @@ function metrics_spill_journal_merge_claimed_into_hour_data(
     try {
         // Wait for any in-flight append on the renamed inode (worker may still hold LOCK_EX).
         if (!flock($fp, LOCK_SH)) {
-            return 0;
+            return null;
         }
 
         $locked = true;
@@ -259,7 +259,7 @@ function metrics_spill_journal_rewrite_claimed_tail($fp, string $claimedPath, st
 }
 
 /**
- * Whether a spill path is a per-worker JSONL journal (not a claim or temp file).
+ * Whether a spill path is a live per-worker JSONL journal (not a claim or temp file).
  *
  * @param string $path Absolute spill file path
  * @return bool
