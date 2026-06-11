@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/scheduling.php';
 
 /**
  * Directory for per-airport NOTAM JSON cache files.
@@ -16,6 +17,13 @@ require_once __DIR__ . '/../constants.php';
  */
 function notamCacheDirectory(): string
 {
+    if (isset($GLOBALS['notamCacheTestDirectory'])
+        && is_string($GLOBALS['notamCacheTestDirectory'])
+        && $GLOBALS['notamCacheTestDirectory'] !== ''
+    ) {
+        return rtrim($GLOBALS['notamCacheTestDirectory'], '/');
+    }
+
     if (defined('AVIATIONWX_NOTAM_CACHE_DIR')) {
         return rtrim((string) AVIATIONWX_NOTAM_CACHE_DIR, '/');
     }
@@ -133,7 +141,7 @@ function notamShouldEnqueueRefresh(string $airportId, int $refreshInterval, ?int
     $now = $now ?? time();
     $cacheFile = notamCacheFilePath($airportId);
     $cacheAge = is_file($cacheFile) ? ($now - (int) filemtime($cacheFile)) : PHP_INT_MAX;
-    if ($cacheAge < $refreshInterval) {
+    if ($cacheAge < notamRequiredCacheAgeSeconds($airportId, $refreshInterval)) {
         return false;
     }
 

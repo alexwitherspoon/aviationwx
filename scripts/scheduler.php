@@ -30,6 +30,7 @@ require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/weather-health.php';
+require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/runways.php';
@@ -478,26 +479,30 @@ while ($running) {
             }
         }
         
-        // Process NOTAM updates (non-blocking)
+        // Process NOTAM updates (non-blocking, spread across time - lower urgency than weather/webcams)
         if ($notamPool !== null && isset($config['airports'])) {
-            require_once __DIR__ . '/../lib/notam/cache.php';
+            require_once __DIR__ . '/../lib/notam/scheduler-queue.php';
 
+            $refreshInterval = getNotamRefreshSeconds();
+            $minRefresh = getMinimumRefreshInterval();
+            $refreshInterval = max($minRefresh, $refreshInterval);
+
+            $notamCandidateIds = [];
             foreach ($config['airports'] as $airportId => $airport) {
                 if (!is_array($airport) || !isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
                     continue;
                 }
+                $notamCandidateIds[] = (string) $airportId;
+            }
 
-                // Get refresh interval
-                $refreshInterval = getNotamRefreshSeconds();
-                
-                // Enforce minimum (configurable)
-                $minRefresh = getMinimumRefreshInterval();
-                $refreshInterval = max($minRefresh, $refreshInterval);
-                
-                if (notamShouldEnqueueRefresh($airportId, $refreshInterval, $now)) {
-                    // Non-blocking: add to pool (ProcessPool handles duplicates)
-                    $notamPool->addJob([$airportId]);
-                }
+            $notamToEnqueue = notamSelectAirportsToEnqueue(
+                $notamCandidateIds,
+                $refreshInterval,
+                notamSchedulerMaxEnqueuePerLoop(),
+                $now
+            );
+            foreach ($notamToEnqueue as $notamAirportId) {
+                $notamPool->addJob([$notamAirportId]);
             }
         }
 
@@ -652,7 +657,9 @@ while ($running) {
         // Variant health APCu flush runs via variant_health_flush_via_http() on METRICS_FLUSH_INTERVAL_SECONDS above.
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
-            if (weatherHealthFlush()) {
+            $weatherFlushed = weatherHealthFlush();
+            $notamFlushed = notamHealthFlush();
+            if ($weatherFlushed || $notamFlushed) {
                 $lastWeatherHealthUpdate = $now;
             }
         }

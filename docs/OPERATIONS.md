@@ -89,7 +89,8 @@ Shows:
 
 **Interpreting signals**
 
-- **Weather Data Fetching** (system row): aggregate **HTTP fetch success** for weather sources over the last hour. It is **not** a guarantee that every airport has fresh observations.
+- **Weather Data Fetching** (system row): aggregate **HTTP fetch success** for weather sources over the last hour. It is **not** a guarantee that every airport has fresh observations. Expand the row (▶) to see per-provider **HTTP 429** counts for the last hour (`cache/weather_health.json`).
+- **NOTAM Data Fetching** (system row): aggregate NMS API success over the last hour. Expand the row to see per-endpoint 429 counts (location query, geo query, auth token) from `cache/notam_health.json`.
 - **Per-airport weather**: based on observation timestamps in the weather cache (same family of values as the public API).
 - **Per-airport webcams**: freshness uses **last completed frame** time on disk (aligned with the image pipeline and API), not the `current.jpg` symlink mtime alone.
 

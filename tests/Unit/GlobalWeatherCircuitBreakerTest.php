@@ -47,6 +47,32 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
         );
     }
 
+    public function testGlobalKey_SameAmbientApplicationKeyDifferentUserApiKeys_ReturnsSameKey(): void
+    {
+        $sharedApp = 'shared-developer-app';
+        $sourceA = ['type' => 'ambient', 'api_key' => 'user-a', 'application_key' => $sharedApp];
+        $sourceB = ['type' => 'ambient', 'api_key' => 'user-b', 'application_key' => $sharedApp];
+
+        $this->assertSame(
+            weatherGlobalCircuitBreakerKey('ambient', $sourceA),
+            weatherGlobalCircuitBreakerKey('ambient', $sourceB)
+        );
+    }
+
+    public function testCheckWeatherCircuitBreaker_AmbientGlobalOpenDifferentAirport_Skips(): void
+    {
+        $sourceA = ['type' => 'ambient', 'api_key' => 'user-a', 'application_key' => 'shared-app'];
+        $sourceB = ['type' => 'ambient', 'api_key' => 'user-b', 'application_key' => 'shared-app'];
+
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure(self::AIRPORT_A, 'ambient', 'transient', 429, null, $sourceA);
+        }
+
+        $result = checkWeatherCircuitBreaker(self::AIRPORT_B, 'ambient', $sourceB);
+        $this->assertTrue($result['skip']);
+        $this->assertSame('global_circuit_open', $result['reason']);
+    }
+
     public function testCheckWeatherCircuitBreaker_GlobalOpenDifferentAirport_Skips(): void
     {
         $source = ['type' => 'tempest', 'api_key' => 'global-test-key', 'station_id' => '99'];
@@ -135,6 +161,7 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
             self::AIRPORT_A . '_weather_',
             self::AIRPORT_B . '_weather_',
             'global_weather_tempest_',
+            'global_weather_ambient_',
         ];
         $changed = false;
         foreach (array_keys($data) as $key) {

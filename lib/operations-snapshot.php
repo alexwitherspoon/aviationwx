@@ -340,6 +340,10 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     if (is_array($var) && (($var['status'] ?? '') !== 'operational')) {
         return true;
     }
+    $notam = $dp['notam'] ?? null;
+    if (is_array($notam) && (($notam['status'] ?? '') !== 'operational')) {
+        return true;
+    }
     $summary = isset($dp['airport_summary']) && is_array($dp['airport_summary']) ? $dp['airport_summary'] : [];
     $counts = isset($summary['counts']) && is_array($summary['counts']) ? $summary['counts'] : [];
     $bad = (int) ($counts['degraded'] ?? 0) + (int) ($counts['down'] ?? 0);
@@ -353,6 +357,10 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     }
     $m = is_array($wx) && isset($wx['metrics']) && is_array($wx['metrics']) ? $wx['metrics'] : [];
     if ((int) ($m['circuit_open_events_last_hour'] ?? 0) > 0) {
+        return true;
+    }
+    $nm = is_array($notam) && isset($notam['metrics']) && is_array($notam['metrics']) ? $notam['metrics'] : [];
+    if ((int) ($nm['upstream_429_last_hour'] ?? 0) > 0) {
         return true;
     }
     return false;
@@ -511,6 +519,25 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
 
     $circuitBySource = is_array($weatherFull) ? operations_snapshot_weather_circuit_by_source($weatherFull) : [];
 
+    $notamPath = $cacheBaseDir . '/notam_health.json';
+    $notamHealth = [
+        'name' => 'NOTAM Data Fetching',
+        'status' => 'operational',
+        'message' => 'No data available',
+        'lastChanged' => 0,
+        'metrics' => [],
+    ];
+    $notamFull = [];
+    if (is_readable($notamPath)) {
+        $n = @file_get_contents($notamPath);
+        if ($n !== false) {
+            $notamFull = json_decode($n, true);
+            if (is_array($notamFull) && isset($notamFull['health']) && is_array($notamFull['health'])) {
+                $notamHealth = $notamFull['health'];
+            }
+        }
+    }
+
     return [
         'snapshot_meta' => [
             'schema_version' => OPERATIONS_SNAPSHOT_SCHEMA_VERSION,
@@ -527,6 +554,7 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
                 'counts' => $airSummary['counts'],
             ],
             'weather' => $weatherHealth,
+            'notam' => $notamHealth,
             'variant' => $variantHealth,
         ],
         'capacity_layer' => [

@@ -128,6 +128,39 @@ class OperationsSnapshotTest extends TestCase
         $this->assertTrue(operations_snapshot_verbose_detail_warranted($data));
     }
 
+    public function testVerboseDetailWarranted_whenNotamDegraded(): void
+    {
+        $data = [
+            'uptime_layer' => ['system' => ['status' => 'operational'], 'public_api' => ['status' => 'operational']],
+            'data_plane' => [
+                'airport_summary' => ['counts' => ['degraded' => 0, 'down' => 0]],
+                'weather' => ['status' => 'operational', 'metrics' => []],
+                'notam' => ['status' => 'degraded', 'message' => 'NMS HTTP 429', 'metrics' => []],
+                'variant' => ['status' => 'operational'],
+            ],
+            'details' => ['log_fingerprints' => []],
+        ];
+        $this->assertTrue(operations_snapshot_verbose_detail_warranted($data));
+    }
+
+    public function testVerboseDetailWarranted_whenNotamUpstream429Metrics(): void
+    {
+        $data = [
+            'uptime_layer' => ['system' => ['status' => 'operational'], 'public_api' => ['status' => 'operational']],
+            'data_plane' => [
+                'airport_summary' => ['counts' => ['degraded' => 0, 'down' => 0]],
+                'weather' => ['status' => 'operational', 'metrics' => []],
+                'notam' => [
+                    'status' => 'operational',
+                    'metrics' => ['upstream_429_last_hour' => 2],
+                ],
+                'variant' => ['status' => 'operational'],
+            ],
+            'details' => ['log_fingerprints' => []],
+        ];
+        $this->assertTrue(operations_snapshot_verbose_detail_warranted($data));
+    }
+
     public function testVerboseDetailWarranted_falseWhenAllOperational(): void
     {
         $data = [

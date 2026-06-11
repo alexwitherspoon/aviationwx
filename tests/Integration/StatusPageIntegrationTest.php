@@ -146,6 +146,37 @@ class StatusPageIntegrationTest extends TestCase
             "Status page should contain at least one system component"
         );
     }
+
+    /**
+     * Upstream health rows and expandable provider breakdown markup.
+     */
+    public function testStatusPage_ContainsUpstreamHealthComponents()
+    {
+        $response = $this->makeRequest('?status=1');
+
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped('Endpoint not available');
+            return;
+        }
+
+        $body = $response['body'];
+
+        $this->assertStringContainsString(
+            'Weather Data Fetching',
+            $body,
+            'Status page should list Weather Data Fetching system component'
+        );
+        $this->assertStringContainsString(
+            'NOTAM Data Fetching',
+            $body,
+            'Status page should list NOTAM Data Fetching system component'
+        );
+        $this->assertStringContainsString(
+            'data-component-toggle',
+            $body,
+            'Status page should ship expandable provider breakdown script hooks'
+        );
+    }
     
     /**
      * Test status page via routing (status subdomain or query parameter)

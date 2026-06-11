@@ -1252,7 +1252,7 @@ function getWorkerTimeout(): int {
  * @return int Refresh interval in seconds (default: 600 = 10 minutes)
  */
 function getNotamRefreshSeconds(): int {
-    return (int)getGlobalConfig('notam_refresh_seconds', 600);
+    return (int)getGlobalConfig('notam_refresh_seconds', NOTAM_REFRESH_DEFAULT);
 }
 
 /**
@@ -4160,6 +4160,11 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['notam_worker_pool_size'])) {
                 if (!is_int($cfg['notam_worker_pool_size']) || $cfg['notam_worker_pool_size'] < 1) {
                     $errors[] = "config.notam_worker_pool_size must be a positive integer";
+                } elseif ($cfg['notam_worker_pool_size'] > 1) {
+                    $warnings[] = 'config.notam_worker_pool_size > 1 rarely improves NOTAM refresh: NMS allows 1 req/s, '
+                        . 'and the scheduler enqueues at most NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP (1) new worker '
+                        . 'per tick. Extra pool slots only overlap parse/cache work with in-flight workers. '
+                        . 'Keep at 1 unless profiling shows a benefit.';
                 }
             }
 

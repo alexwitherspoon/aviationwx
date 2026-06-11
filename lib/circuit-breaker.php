@@ -333,7 +333,7 @@ function weatherGlobalCircuitBreakerKey(string $provider, array $sourceConfig): 
 {
     require_once __DIR__ . '/upstream-rate-limit.php';
 
-    return 'global_weather_' . $provider . '_' . upstreamRateFingerprint($provider, $sourceConfig);
+    return 'global_weather_' . $provider . '_' . upstreamRateGlobalCredentialFingerprint($provider, $sourceConfig);
 }
 
 /**

@@ -35,7 +35,7 @@ The system uses **parallel fetching** for all configured sources:
 - **Sources Fetched**: All sources configured in the `weather_sources` array
 - **Circuit Breaker**: Each source has per-airport circuit breaker protection; HTTP 429/503 also open a shared `global_weather_{provider}_{credential fingerprint}` key so airports sharing one API key back off together. When present, `Retry-After` / `X-RateLimit-Reset` from the failed response extend backoff (up to 15 minutes).
 - **NWS points cache**: `api.weather.gov/points/{lat},{lon}` responses are cached under `cache/nws-points/` (12-hour TTL) via `lib/nws-points-cache.php`. The scheduler starts `scripts/refresh-nws-points.php` on `NWS_POINTS_REFRESH_INTERVAL_SECONDS` to warm stale entries for airports with an NWS `weather_sources` entry and coordinates (`lib/nws-points-refresh.php`). Station observations still use the direct `/stations/{id}/observations/latest` path.
-- **Upstream throttle**: Before `curl_multi_add_handle`, `lib/upstream-rate-limit.php` enforces a per-credential token bucket (flock under `cache/upstream-limits/`). When the budget is exhausted, that source is skipped for the current fetch cycle only. METAR uses `metarResolveStationResponse()` (mock, bulk slice, then HTTP); bulk is tried before the per-airport METAR HTTP circuit gate. Throttle and circuit-open outcomes are not recorded as fetch failures. Throttle skips, upstream HTTP 429 responses (per-station METAR HTTP fallback and AWC national bulk gzip download), fail-open I/O, and METAR bulk download failures are counted in `cache/weather_health.json` via `lib/weather-health.php`. Throttle skip logs include `fingerprint_prefix` only (no raw API keys). METAR bulk refresh writes `cache/metar-bulk/meta.json` and logs `metar_bulk_age_seconds` on successful ingest.
+- **Upstream throttle**: Before `curl_multi_add_handle`, `lib/upstream-rate-limit.php` enforces a per-credential token bucket (flock under `cache/upstream-limits/`). When the budget is exhausted, that source is skipped for the current fetch cycle only. METAR uses `metarResolveStationResponse()` (mock, bulk slice, then HTTP); bulk is tried before the per-airport METAR HTTP circuit gate. Throttle and circuit-open outcomes are not recorded as fetch failures. Throttle skips, upstream HTTP 429 responses (per-station METAR HTTP fallback and AWC national bulk gzip download), fail-open I/O, and METAR bulk download failures are counted in `cache/weather_health.json` via `lib/weather-health.php`. The status page **Weather Data Fetching** row shows aggregate health; expand it for per-provider HTTP 429 counts in the last hour. Throttle skip logs include `fingerprint_prefix` only (no raw API keys). METAR bulk refresh writes `cache/metar-bulk/meta.json` and logs `metar_bulk_age_seconds` on successful ingest.
 - **Parallel Execution**: All sources are fetched concurrently for maximum speed
 - **Freshness Selection**: Handled during aggregation (freshest data wins for each field)
 
@@ -1378,7 +1378,9 @@ The system uses a **dual query strategy** to capture both airport-specific NOTAM
 1. **Location Query** (when an identifier is configured): Fetches NOTAMs for the airport via `notamResolveLocationQueryCode()` (ICAO, then IATA, then FAA)
 2. **Geospatial Query** (if coordinates available): Fetches TFR-focused airspace NOTAMs with `feature=AIRSPACE`, then applies a cheap XML pre-filter before parse (closures still come from the location query)
 
-Both queries are executed sequentially with rate limiting (1 request per second) to comply with API limits.
+Both queries are executed sequentially. NMS rate limiting uses a shared file-backed token bucket (`lib/notam/rate-limit.php`, 1 request per second per `notam_api_client_id` + base URL) so scheduler workers in separate processes do not burst above the API cap when one airport fetch follows another. Workers **wait** for a token (up to `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`, then fail open) rather than skipping the fetch.
+
+**Observability**: NMS request outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). HTTP **429** responses increment `upstream_429` and per-endpoint `upstream_429_{location|geo|auth}` counters. On the status page, expand **NOTAM Data Fetching** to see per-endpoint 429 counts for the last hour.
 
 ### NMS API Authentication
 
@@ -1551,7 +1553,7 @@ Each NOTAM is classified by temporal status (`classifyNotamDisplayStatusAt()` in
 Filtered NOTAMs are cached per airport:
 - **Location**: `cache/notam/{airport_id}.json` (via `notamCacheFilePath()`)
 - **Content**: Array of filtered NOTAMs with status
-- **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
+- **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes). The scheduler staggers per-airport due times across the refresh window and starts at most `NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP` (default 1) new NOTAM worker per scheduler tick so NMS traffic stays near 1 req/s without bursting when many airports become due together.
 - **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
 - **Refresh failure backoff**: `scripts/fetch-notam.php` records `cache/notam/{airport_id}.fetch-attempt` (without changing cache payload or `mtime`) when a worker refresh fails so `notamShouldEnqueueRefresh()` backs off for `NOTAM_FETCH_FAILURE_BACKOFF_SECONDS` before re-enqueueing. This applies to:
   - **Hard NMS failure**: every attempted query fails (missing credentials, HTTP error, invalid JSON) - existing cache is preserved instead of overwriting with an empty result

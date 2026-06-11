@@ -4552,6 +4552,19 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('notam_worker_pool_size', implode(' ', $result['errors']));
     }
 
+    public function testNotamWorkerPoolSize_GreaterThanOne_WarnsButRemainsValid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_worker_pool_size'] = 3;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'notam_worker_pool_size = 3 should remain valid');
+        $this->assertNotEmpty($result['warnings'] ?? []);
+        $this->assertStringContainsString(
+            'notam_worker_pool_size > 1',
+            implode(' ', $result['warnings'])
+        );
+    }
+
     /**
      * Test notam_api_client_id validation
      */

@@ -192,8 +192,26 @@ function weatherHealthTrackMetarBulkDownloadFailure(?int $httpCode): void
 
     $counters = [
         'metar_bulk_download_failures' => 1,
+        'attempts_metar_bulk' => 1,
+        'failures_metar_bulk' => 1,
     ];
     weatherHealthIncrementHttpFailureCounters($counters, $httpCode, 'metar_bulk');
+
+    weatherHealthAtomicUpdate($currentHour, $counters, $now);
+}
+
+/**
+ * Track a successful AWC national METAR bulk gzip refresh (scheduler worker).
+ */
+function weatherHealthTrackMetarBulkDownloadSuccess(): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $counters = [
+        'attempts_metar_bulk' => 1,
+        'successes_metar_bulk' => 1,
+    ];
 
     weatherHealthAtomicUpdate($currentHour, $counters, $now);
 }
@@ -508,11 +526,33 @@ function weatherHealthComputeSourceStatus(array $data): array
 }
 
 /**
+ * Read and decode the weather health cache file.
+ *
+ * @return array<string, mixed>|null Decoded cache or null when missing/unreadable
+ */
+function weatherHealthLoadCache(): ?array
+{
+    if (!file_exists(getWeatherHealthCacheFilePath())) {
+        return null;
+    }
+
+    $content = @file_get_contents(getWeatherHealthCacheFilePath());
+    if ($content === false) {
+        return null;
+    }
+
+    $data = @json_decode($content, true);
+
+    return is_array($data) ? $data : null;
+}
+
+/**
  * Get weather health status (for status page).
  *
+ * @param array<string, mixed>|null $cache Preloaded cache from weatherHealthLoadCache()
  * @return array<string, mixed> Health status
  */
-function weatherHealthGetStatus(): array
+function weatherHealthGetStatus(?array $cache = null): array
 {
     $default = [
         'name' => 'Weather Data Fetching',
@@ -522,17 +562,8 @@ function weatherHealthGetStatus(): array
         'metrics' => [],
     ];
 
-    if (!file_exists(getWeatherHealthCacheFilePath())) {
-        return $default;
-    }
-
-    $content = @file_get_contents(getWeatherHealthCacheFilePath());
-    if ($content === false) {
-        return $default;
-    }
-
-    $data = @json_decode($content, true);
-    if (!is_array($data) || !isset($data['health'])) {
+    $data = $cache ?? weatherHealthLoadCache();
+    if ($data === null || !isset($data['health'])) {
         return $default;
     }
 
@@ -561,4 +592,123 @@ function weatherHealthGetSources(): array
     }
 
     return $data['sources'];
+}
+
+/**
+ * Display name for a weather provider key used in upstream 429 breakdown.
+ *
+ * @param string $provider Provider key from hourly bucket counters
+ * @return string Human-readable label
+ */
+function weatherHealthProviderDisplayName(string $provider): string
+{
+    if ($provider === 'metar_bulk') {
+        return 'METAR bulk (AWC national gzip)';
+    }
+
+    require_once __DIR__ . '/weather/utils.php';
+
+    $info = getWeatherSourceInfo($provider);
+    if ($info !== null) {
+        return $info['name'];
+    }
+
+    return ucfirst(str_replace('_', ' ', $provider));
+}
+
+/**
+ * Build per-provider rows for status page upstream 429 breakdown.
+ *
+ * @param array<string, mixed>|null $cache Preloaded cache from weatherHealthLoadCache()
+ * @return list<array<string, mixed>> Provider rows sorted by upstream 429 count
+ */
+function weatherHealthGetProviderBreakdown(?array $cache = null): array
+{
+    $data = $cache ?? weatherHealthLoadCache();
+    if ($data === null) {
+        return [];
+    }
+
+    $oneHourAgo = gmdate('Y-m-d-H', time() - 3600);
+    $byProvider = [];
+
+    foreach ($data['hourly_buckets'] ?? [] as $hourKey => $bucket) {
+        if ($hourKey < $oneHourAgo) {
+            continue;
+        }
+
+        foreach ($bucket as $key => $value) {
+            if (!is_string($key) || !is_numeric($value)) {
+                continue;
+            }
+
+            if (preg_match('/^attempts_(.+)$/', $key, $matches) === 1) {
+                $provider = $matches[1];
+                if (!isset($byProvider[$provider])) {
+                    $byProvider[$provider] = [
+                        'attempts' => 0,
+                        'successes' => 0,
+                        'upstream_429' => 0,
+                    ];
+                }
+                $byProvider[$provider]['attempts'] += (int) $value;
+                continue;
+            }
+
+            if (preg_match('/^successes_(.+)$/', $key, $matches) === 1) {
+                $provider = $matches[1];
+                if (!isset($byProvider[$provider])) {
+                    $byProvider[$provider] = [
+                        'attempts' => 0,
+                        'successes' => 0,
+                        'upstream_429' => 0,
+                    ];
+                }
+                $byProvider[$provider]['successes'] += (int) $value;
+                continue;
+            }
+
+            if (preg_match('/^upstream_429_(.+)$/', $key, $matches) === 1) {
+                $provider = $matches[1];
+                if (!isset($byProvider[$provider])) {
+                    $byProvider[$provider] = [
+                        'attempts' => 0,
+                        'successes' => 0,
+                        'upstream_429' => 0,
+                    ];
+                }
+                $byProvider[$provider]['upstream_429'] += (int) $value;
+            }
+        }
+    }
+
+    $providers = [];
+    foreach ($byProvider as $providerId => $stats) {
+        if ($stats['attempts'] === 0 && $stats['upstream_429'] === 0) {
+            continue;
+        }
+
+        if ($stats['attempts'] === 0) {
+            $stats['attempts'] = $stats['upstream_429'];
+        }
+
+        $providers[] = [
+            'id' => $providerId,
+            'name' => weatherHealthProviderDisplayName($providerId),
+            'upstream_429' => $stats['upstream_429'],
+            'attempts' => $stats['attempts'],
+            'success_rate' => round(($stats['successes'] / $stats['attempts']) * 100, 1),
+        ];
+    }
+
+    usort($providers, static function (array $a, array $b): int {
+        $cmp = ($b['upstream_429'] ?? 0) <=> ($a['upstream_429'] ?? 0);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+
+        return ($b['attempts'] ?? 0) <=> ($a['attempts'] ?? 0);
+    });
+
+    return $providers;
 }

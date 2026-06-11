@@ -38,12 +38,12 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `cleanup_push_upload_debris_max_age_seconds` | `10800` (3 hours) | Optional: minimum file age (mtime) before a non-allowed extension is deleted from push FTP/SFTP inboxes. Integer **600--604800** (10 minutes to 7 days). Hourly `scripts/cleanup-push-upload-debris.php` and the daily `cleanup-cache.php` step use this value. |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
-| `notam_refresh_seconds` | `600` | NOTAM refresh interval |
+| `notam_refresh_seconds` | `600` | NOTAM refresh interval (10 minutes; lower urgency than weather) |
 | `minimum_refresh_seconds` | `5` | Minimum allowed refresh interval |
 | `scheduler_config_reload_seconds` | `60` | Config reload check interval |
 | `weather_worker_pool_size` | `5` | Concurrent weather workers. After upstream throttles and METAR bulk are enabled, consider lowering this if you still see upstream 429s or throttle skips in `cache/weather_health.json`; raise only when fetches are consistently fast and under provider limits. |
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
-| `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
+| `notam_worker_pool_size` | `1` | Concurrent NOTAM worker processes. **Keep at 1** in most deployments: NMS allows 1 req/s and the scheduler starts at most one new NOTAM job per tick (`NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP`). Values greater than 1 do not increase parallel NMS API calls; they only let additional workers stay in flight while others wait on rate limits or finish parsing. `validateAirportsJsonStructure()` warns when this is set above 1. |
 | `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
 | `station_power_refresh_seconds` | `900` (15 min) | Default dashboard poll interval for `/api/station-power.php` (minimum 60; overridable per airport) |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
@@ -718,11 +718,23 @@ The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one
 
 `lib/upstream-rate-limit.php` applies a file-backed token bucket per provider and credential fingerprint before outbound weather API calls (`cache/upstream-limits/`). Limits are defined in `lib/constants.php` (`UPSTREAM_RATE_LIMIT_*` per provider). Shared API keys (for example Tempest `api_key`) share one bucket across all airports using that key. Keyless sources use per-station identity in the fingerprint (`station_id` for AWOSnet, SWOB, NWS, METAR HTTP; `base_url` + `airport_id` for `aviationwx_api`).
 
-When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). HTTP **429** responses from weather upstreams increment `upstream_429` and per-provider `upstream_429_{source}` counters (also exposed per source on the status bundle). PHPUnit and mock mode skip throttling.
+**Ambient Weather** uses two coordinated buckets per request: `api_key` (1 req/s, burst 1) and `application_key` (3 req/s shared across all stations using that developer key, burst 3). HTTP **429** global backoff for Ambient coordinates on `application_key` so all airports under one developer key back off together. **WeatherLink** burst is capped at 3 (upstream allows 10 req/s per API key). **NWS** burst is capped at 2 because api.weather.gov limits are undisclosed.
+
+When the bucket is empty, that source is skipped for one fetch cycle (weather may be stale until the next refresh). If `cache/upstream-limits/` cannot be written, the limiter **fails open** (requests proceed) and logs `upstream rate limit state unavailable`. Monitor those warnings and `upstream_rate_limit_fail_open` counters in `cache/weather_health.json` (refreshed by the scheduler). HTTP **429** responses from weather upstreams increment `upstream_429` and per-provider `upstream_429_{source}` counters. On the status page, expand **Weather Data Fetching** to see per-provider 429 counts for the last hour. PHPUnit and mock mode skip throttling.
 
 `metarResolveStationResponse()` in `lib/weather/adapter/metar-v1.php` reports outcomes as `METAR_RESOLVE_*` constants (`ok`, `throttled`, `circuit_open`, `http_failed`, `invalid_station`). Only `http_failed` and `invalid_station` count as fetch failures for the per-airport METAR circuit breaker; `throttled` is a self-throttle skip for one cycle.
 
-On HTTP **429** or **503**, `lib/circuit-breaker.php` also records a shared `global_weather_{provider}_{fingerprint}` backoff key (same fingerprint rules as upstream throttling) so all airports using that credential back off together. A successful fetch clears both per-airport and global keys for that credential.
+### NOTAM upstream rate limiting and health
+
+`lib/notam/rate-limit.php` enforces 1 request per second per NMS credential (`notam_api_client_id` + `notam_api_base_url`) using the same flock-backed token buckets as weather (`cache/upstream-limits/`). Workers wait for a token (poll `NOTAM_RATE_LIMIT_POLL_MICROSECONDS`, fail open after `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`) so location and geo queries for one airport still complete.
+
+The scheduler staggers NOTAM enqueue across the refresh window (`notamStaggerOffsetSeconds()` in `lib/notam/scheduling.php`) and starts at most `NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP` (default 1) new NOTAM worker per scheduler tick.
+
+**Worker pool vs enqueue cap:** `notam_worker_pool_size` limits how many NOTAM workers may run at once; the per-tick enqueue cap limits how many *new* jobs the scheduler starts each second. With the default pool size of 1, extra capacity is unused by design. Raising the pool without raising the enqueue cap (or without a higher NMS rate limit) leaves slots idle. Raising both still serializes on the shared 1 req/s NMS token bucket in `lib/notam/rate-limit.php`. Prefer `notam_worker_pool_size: 1` unless profiling shows benefit from workers overlapping non-API work (for example parse/cache while another worker waits on HTTP).
+
+HTTP **429** and other NMS outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). On the status page, expand **NOTAM Data Fetching** for per-endpoint 429 counts (location, geo, auth) in the last hour.
+
+On HTTP **429** or **503**, `lib/circuit-breaker.php` also records a shared `global_weather_{provider}_{fingerprint}` backoff key so all airports using that credential back off together. For Ambient, the global key uses the `application_key` fingerprint only; per-request throttling still checks both `api_key` and `application_key` buckets. A successful fetch clears both per-airport and global keys for that credential.
 
 When the upstream response includes **`Retry-After`** or **`X-RateLimit-Reset`** (Aeris-style), `UnifiedFetcher` passes those headers into the circuit breaker. Backoff uses the longer of the default strategy and the header hint, clamped to 15 minutes (`BACKOFF_MAX_RETRY_AFTER_SECONDS` in `lib/constants.php`).
 

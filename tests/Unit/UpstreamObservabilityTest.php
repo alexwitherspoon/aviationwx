@@ -16,11 +16,14 @@ use PHPUnit\Framework\TestCase;
  * @covers ::weatherHealthEnsureCacheDirectory
  * @covers ::weatherHealthTrackFetch
  * @covers ::weatherHealthTrackMetarBulkDownloadFailure
+ * @covers ::weatherHealthTrackMetarBulkDownloadSuccess
  * @covers ::weatherHealthTrackUpstreamThrottleSkip
  * @covers ::weatherHealthTrackUpstreamRateLimitFailOpen
  * @covers ::weatherHealthFlush
  * @covers ::weatherHealthGetStatus
  * @covers ::weatherHealthGetSources
+ * @covers ::weatherHealthGetProviderBreakdown
+ * @covers ::weatherHealthProviderDisplayName
  */
 final class UpstreamObservabilityTest extends TestCase
 {
@@ -45,7 +48,13 @@ final class UpstreamObservabilityTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['metarBulkTestCacheRoot'], $GLOBALS['weatherHealthTestCacheFile']);
+        unset(
+            $GLOBALS['metarBulkTestCacheRoot'],
+            $GLOBALS['weatherHealthTestCacheFile'],
+            $GLOBALS['upstreamRateLimitTestRoot'],
+            $GLOBALS['upstreamRateLimitTestForcePersistFailure'],
+            $GLOBALS['upstreamRateLimitTestForceEnforcement']
+        );
 
         if ($this->cacheRoot !== null && is_dir($this->cacheRoot)) {
             $files = new \RecursiveIteratorIterator(
@@ -204,6 +213,34 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertSame(1, $status['metrics']['upstream_rate_limit_fail_open_last_hour'] ?? null);
     }
 
+    public function testUpstreamRateTryTake_PersistFailure_RecordsFailOpenCounter(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $GLOBALS['upstreamRateLimitTestForcePersistFailure'] = true;
+
+        $consumed = false;
+        $this->assertTrue(upstreamRateTryTake(
+            hash('sha256', 'persist_fail_obs_' . bin2hex(random_bytes(4))),
+            60,
+            1,
+            1_700_000_000.0,
+            $consumed
+        ));
+        $this->assertFalse($consumed);
+
+        weatherHealthFlush();
+        $status = weatherHealthGetStatus();
+        $this->assertGreaterThanOrEqual(
+            1,
+            $status['metrics']['upstream_rate_limit_fail_open_last_hour'] ?? 0
+        );
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestForcePersistFailure']);
+    }
+
     public function testWeatherHealthFlush_CreatesCacheWhenMissing(): void
     {
         $this->assertFileDoesNotExist($this->healthCacheFile);
@@ -248,5 +285,42 @@ final class UpstreamObservabilityTest extends TestCase
         $decoded = json_decode((string) file_get_contents($this->healthCacheFile), true);
         $this->assertIsArray($decoded);
         $this->assertArrayNotHasKey($oldHour, $decoded['hourly_buckets'] ?? []);
+    }
+
+    public function testWeatherHealthTrackMetarBulkDownloadSuccess_ProviderBreakdownIncludesSuccesses(): void
+    {
+        weatherHealthTrackMetarBulkDownloadSuccess();
+        weatherHealthTrackMetarBulkDownloadFailure(429);
+        weatherHealthFlush();
+
+        $providers = weatherHealthGetProviderBreakdown();
+        $byId = [];
+        foreach ($providers as $row) {
+            $byId[$row['id']] = $row;
+        }
+
+        $this->assertSame(2, $byId['metar_bulk']['attempts'] ?? null);
+        $this->assertSame(50.0, $byId['metar_bulk']['success_rate'] ?? null);
+    }
+
+    public function testWeatherHealthGetProviderBreakdown_SortsByUpstream429(): void
+    {
+        weatherHealthTrackFetch('kspb', 'ambient', false, 429);
+        weatherHealthTrackFetch('kspb', 'ambient', false, 429);
+        weatherHealthTrackFetch('kspb', 'tempest', true, 200);
+        weatherHealthTrackMetarBulkDownloadFailure(429);
+        weatherHealthFlush();
+
+        $providers = weatherHealthGetProviderBreakdown();
+        $this->assertNotEmpty($providers);
+        $this->assertSame('ambient', $providers[0]['id'] ?? null);
+        $this->assertSame(2, $providers[0]['upstream_429'] ?? null);
+
+        $byId = [];
+        foreach ($providers as $row) {
+            $byId[$row['id']] = $row;
+        }
+        $this->assertSame(1, $byId['metar_bulk']['upstream_429'] ?? null);
+        $this->assertSame('METAR bulk (AWC national gzip)', $byId['metar_bulk']['name'] ?? null);
     }
 }

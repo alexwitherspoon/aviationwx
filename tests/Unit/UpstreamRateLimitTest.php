@@ -23,7 +23,10 @@ final class UpstreamRateLimitTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['upstreamRateLimitTestRoot']);
+        unset(
+            $GLOBALS['upstreamRateLimitTestRoot'],
+            $GLOBALS['upstreamRateLimitTestForcePersistFailure']
+        );
         if ($this->testRoot !== null && is_dir($this->testRoot)) {
             $files = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->testRoot, \FilesystemIterator::SKIP_DOTS),
@@ -151,6 +154,24 @@ final class UpstreamRateLimitTest extends TestCase
         $this->assertFalse(upstreamRateTryTake($fingerprint, 60, 3, $t0));
     }
 
+    public function testTryTake_PersistFailure_FailsOpenWithoutConsumedFlag(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $fingerprint = hash('sha256', 'persist-failure-test');
+        $t0 = 1_700_000_100.0;
+        $consumed = false;
+
+        $GLOBALS['upstreamRateLimitTestForcePersistFailure'] = true;
+        $this->assertTrue(upstreamRateTryTake($fingerprint, 60, 1, $t0, $consumed));
+        $this->assertFalse($consumed);
+
+        unset($GLOBALS['upstreamRateLimitTestForcePersistFailure']);
+        $consumed = false;
+        $this->assertTrue(upstreamRateTryTake($fingerprint, 60, 1, $t0, $consumed));
+        $this->assertTrue($consumed);
+    }
+
     public function testFingerprint_Metar_DifferentStationIds_ReturnsDifferentHash(): void
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
@@ -188,5 +209,212 @@ final class UpstreamRateLimitTest extends TestCase
         $policy = upstreamRateLimitPolicyForProvider('tempest');
         $this->assertSame(UPSTREAM_RATE_LIMIT_TEMPEST_RPM, $policy['rpm']);
         $this->assertSame(UPSTREAM_RATE_LIMIT_TEMPEST_BURST, $policy['burst']);
+    }
+
+    public function testFingerprint_Ambient_ApplicationKeyScope_IgnoresApiKey(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $sharedApp = 'app-key-shared';
+        $a = upstreamRateFingerprintForScope('ambient', 'application_key', [
+            'api_key' => 'user-key-a',
+            'application_key' => $sharedApp,
+        ], ['application_key']);
+        $b = upstreamRateFingerprintForScope('ambient', 'application_key', [
+            'api_key' => 'user-key-b',
+            'application_key' => $sharedApp,
+        ], ['application_key']);
+        $this->assertSame($a, $b);
+    }
+
+    public function testFingerprint_Ambient_ApiKeyScope_IgnoresApplicationKey(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $sharedUser = 'user-key-shared';
+        $a = upstreamRateFingerprintForScope('ambient', 'api_key', [
+            'api_key' => $sharedUser,
+            'application_key' => 'app-a',
+        ], ['api_key']);
+        $b = upstreamRateFingerprintForScope('ambient', 'api_key', [
+            'api_key' => $sharedUser,
+            'application_key' => 'app-b',
+        ], ['api_key']);
+        $this->assertSame($a, $b);
+    }
+
+    public function testScopesForSource_Ambient_ReturnsApiKeyAndApplicationKeyBuckets(): void
+    {
+        require_once __DIR__ . '/../../lib/constants.php';
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $scopes = upstreamRateLimitScopesForSource([
+            'type' => 'ambient',
+            'api_key' => 'user-1',
+            'application_key' => 'app-1',
+        ]);
+
+        $this->assertCount(2, $scopes);
+        $this->assertSame('api_key', $scopes[0]['scope']);
+        $this->assertSame(UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM, $scopes[0]['rpm']);
+        $this->assertSame(UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST, $scopes[0]['burst']);
+        $this->assertSame('application_key', $scopes[1]['scope']);
+        $this->assertSame(UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_RPM, $scopes[1]['rpm']);
+        $this->assertSame(UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST, $scopes[1]['burst']);
+    }
+
+    public function testConsumeForSource_Ambient_ApplicationKeyScopeLimitsSharedDeveloperKey(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $t0 = 1_700_000_000.0;
+        $sharedApp = 'shared-developer-key';
+        $stations = [
+            ['type' => 'ambient', 'api_key' => 'user-a', 'application_key' => $sharedApp],
+            ['type' => 'ambient', 'api_key' => 'user-b', 'application_key' => $sharedApp],
+            ['type' => 'ambient', 'api_key' => 'user-c', 'application_key' => $sharedApp],
+        ];
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        foreach ($stations as $source) {
+            $this->assertTrue(upstreamRateLimitConsumeForSource($source)['allowed']);
+        }
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $fourth = upstreamRateLimitConsumeForSource([
+            'type' => 'ambient',
+            'api_key' => 'user-d',
+            'application_key' => $sharedApp,
+        ]);
+        $this->assertFalse($fourth['allowed']);
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestNow']);
+    }
+
+    public function testConsumeForSource_Ambient_PartialDenyRefundsEarlierScopeTokens(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $t0 = 1_700_000_000.0;
+        $sharedApp = 'shared-developer-key';
+        $deniedSource = [
+            'type' => 'ambient',
+            'api_key' => 'user-d',
+            'application_key' => $sharedApp,
+        ];
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        foreach (
+            [
+                ['type' => 'ambient', 'api_key' => 'user-a', 'application_key' => $sharedApp],
+                ['type' => 'ambient', 'api_key' => 'user-b', 'application_key' => $sharedApp],
+                ['type' => 'ambient', 'api_key' => 'user-c', 'application_key' => $sharedApp],
+            ] as $source
+        ) {
+            $this->assertTrue(upstreamRateLimitConsumeForSource($source)['allowed']);
+        }
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertFalse(upstreamRateLimitConsumeForSource($deniedSource)['allowed']);
+
+        $apiFingerprint = upstreamRateFingerprintForScope(
+            'ambient',
+            'api_key',
+            $deniedSource,
+            ['api_key']
+        );
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertTrue(
+            upstreamRateTryTake(
+                $apiFingerprint,
+                UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM,
+                UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST,
+                $t0
+            ),
+            'api_key token should be refunded when application_key scope denies the take'
+        );
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestNow']);
+    }
+
+    public function testTokenBucketComputeRefund_CapsAtBurst(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $result = upstreamRateTokenBucketComputeRefund(2.0, 100.0, 3);
+        $this->assertSame(3.0, $result['tokens']);
+        $this->assertSame(100.0, $result['last_refill']);
+    }
+
+    public function testConsumeForSource_Ambient_ApiKeyScopeAllowsOnePerSecond(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $source = [
+            'type' => 'ambient',
+            'api_key' => 'solo-user',
+            'application_key' => 'solo-app',
+        ];
+        $t0 = 1_700_000_000.0;
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertTrue(upstreamRateLimitConsumeForSource($source)['allowed']);
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertFalse(upstreamRateLimitConsumeForSource($source)['allowed']);
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0 + 1.0;
+        $this->assertTrue(upstreamRateLimitConsumeForSource($source)['allowed']);
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestNow']);
+    }
+
+    public function testGlobalCredentialFingerprint_Ambient_UsesApplicationKeyScope(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $app = 'developer-app-key';
+        $a = upstreamRateGlobalCredentialFingerprint('ambient', [
+            'api_key' => 'user-a',
+            'application_key' => $app,
+        ]);
+        $b = upstreamRateGlobalCredentialFingerprint('ambient', [
+            'api_key' => 'user-b',
+            'application_key' => $app,
+        ]);
+        $this->assertSame($a, $b);
+        $this->assertNotSame(
+            $a,
+            upstreamRateGlobalCredentialFingerprint('ambient', [
+                'api_key' => 'user-a',
+                'application_key' => 'other-app',
+            ])
+        );
+    }
+
+    public function testPolicyForProvider_WeatherLink_BurstMatchesPerSecondUpstreamCap(): void
+    {
+        require_once __DIR__ . '/../../lib/constants.php';
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $policy = upstreamRateLimitPolicyForProvider('weatherlink_v2');
+        $this->assertSame(UPSTREAM_RATE_LIMIT_WEATHERLINK_RPM, $policy['rpm']);
+        $this->assertSame(UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST, $policy['burst']);
+        $this->assertLessThanOrEqual(3, $policy['burst']);
+    }
+
+    public function testPolicyForProvider_Nws_BurstIsConservativeForUndisclosedLimits(): void
+    {
+        require_once __DIR__ . '/../../lib/constants.php';
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $policy = upstreamRateLimitPolicyForProvider('nws');
+        $this->assertLessThanOrEqual(2, $policy['burst']);
     }
 }

@@ -79,6 +79,7 @@
     "image_variants": ["thumb", "small", "medium", "large"],
     "notam_refresh_seconds": 600,
     "notam_cache_ttl_seconds": 3600,
+    "_comment_notam_worker_pool": "notam_worker_pool_size: concurrent NOTAM fetch workers. Keep at 1 unless profiling shows benefit; NMS allows 1 req/s and the scheduler enqueues at most one new NOTAM job per tick (see docs/CONFIGURATION.md).",
     "notam_worker_pool_size": 1,
     "_comment_station_power": "station_power_worker_pool_size: concurrent workers for scripts/fetch-station-power.php (VRM installation stats). Per-airport station_power block requires limited_availability true; see docs/CONFIGURATION.md.",
     "station_power_worker_pool_size": 1,
