@@ -1000,7 +1000,9 @@ if (php_sapi_name() === 'cli') {
                                         class="component-expand-btn"
                                         aria-expanded="false"
                                         aria-controls="component-providers-<?php echo (int) $componentIndex; ?>"
+                                        aria-label="Show per-provider HTTP 429 counts for <?php echo htmlspecialchars($component['name']); ?>"
                                         data-component-toggle="<?php echo (int) $componentIndex; ?>"
+                                        data-component-name="<?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                         title="Show per-provider HTTP 429 counts">
                                     <span class="expand-icon" aria-hidden="true">▶</span>
                                 </button>
@@ -1509,12 +1511,21 @@ if (php_sapi_name() === 'cli') {
                     return;
                 }
                 var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                var componentName = btn.getAttribute('data-component-name') || 'component';
                 if (isExpanded) {
                     btn.setAttribute('aria-expanded', 'false');
+                    btn.setAttribute(
+                        'aria-label',
+                        'Show per-provider HTTP 429 counts for ' + componentName
+                    );
                     panel.classList.remove('expanded');
                     panel.classList.add('collapsed');
                 } else {
                     btn.setAttribute('aria-expanded', 'true');
+                    btn.setAttribute(
+                        'aria-label',
+                        'Hide per-provider HTTP 429 counts for ' + componentName
+                    );
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
