@@ -207,6 +207,12 @@ if (!defined('NOTAM_RATE_LIMIT_POLL_MICROSECONDS')) {
 if (!defined('NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS')) {
     define('NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS', 30); // fail open after this wait
 }
+if (!defined('NOTAM_GLOBAL_BACKOFF_DEFAULT_SECONDS')) {
+    define('NOTAM_GLOBAL_BACKOFF_DEFAULT_SECONDS', 60); // pause all NMS calls after 429 without Retry-After
+}
+if (!defined('NOTAM_429_RETRY_MAX_WAIT_SECONDS')) {
+    define('NOTAM_429_RETRY_MAX_WAIT_SECONDS', 15); // cap in-fetch sleep before one 429 retry
+}
 // Banner: include upcoming_future NOTAMs whose first restriction window starts within this horizon
 if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
     define('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS', 48 * 3600); // 48 hours
