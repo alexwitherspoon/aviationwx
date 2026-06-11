@@ -147,6 +147,7 @@ final class NotamFetchReliabilityTest extends TestCase
 
             self::assertTrue($result['success']);
             self::assertFileDoesNotExist(dirname($cacheFile) . '/kspb.fetch-attempt');
+            self::assertFileExists($backoffRoot . '/backoff.json');
             $after = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
             self::assertSame('keep-me', $after['notams'][0]['id']);
             self::assertSame(1700000000, $after['fetched_at']);
@@ -176,6 +177,9 @@ if (!defined('AVIATIONWX_LOG_DIR')) {
 @touch(AVIATIONWX_LOG_DIR . '/app.log');
 define('AVIATIONWX_NOTAM_CACHE_DIR', getenv('NOTAM_TEST_CACHE_DIR'));
 define('AVIATIONWX_FETCH_NOTAM_LOAD_ONLY', true);
+if (getenv('NOTAM_TEST_GLOBAL_BACKOFF') === '1') {
+    define('CACHE_BASE_DIR', getenv('NOTAM_TEST_BACKOFF_ROOT'));
+}
 if (($throw = getenv('NOTAM_TEST_FETCH_THROW')) !== false && $throw !== '') {
     define('AVIATIONWX_NOTAM_TEST_FETCH_THROW', $throw);
 }
@@ -188,7 +192,6 @@ if (getenv('NOTAM_TEST_FORCE_WRITE_FAIL') === '1') {
 }
 require getenv('NOTAM_TEST_ROOT') . '/scripts/fetch-notam.php';
 if (getenv('NOTAM_TEST_GLOBAL_BACKOFF') === '1') {
-    $GLOBALS['upstreamRateLimitTestRoot'] = getenv('NOTAM_TEST_BACKOFF_ROOT');
     $GLOBALS['notamRateLimitTestClientId'] = 'client-http';
     $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-http';
     $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
