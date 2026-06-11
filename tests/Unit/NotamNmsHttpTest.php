@@ -157,9 +157,16 @@ final class NotamNmsHttpTest extends TestCase
 
     public function testCompute429RetryWaitSeconds_ClampsToConfiguredMax(): void
     {
-        $wait = notamCompute429RetryWaitSeconds(['retry-after' => '120']);
+        $wait = notamCompute429RetryWaitSeconds(429, ['retry-after' => '120']);
 
         $this->assertSame(NOTAM_429_RETRY_MAX_WAIT_SECONDS, $wait);
+    }
+
+    public function testCompute429RetryWaitSeconds_UsesHttpCodeFor503(): void
+    {
+        $wait = notamCompute429RetryWaitSeconds(503, ['retry-after' => '9']);
+
+        $this->assertSame(9, $wait);
     }
 
     public function testQueryNotamsByLocation_UsesEmptyDataObjectAsSuccess(): void

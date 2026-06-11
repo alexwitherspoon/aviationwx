@@ -10,15 +10,17 @@ require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../weather-backoff-headers.php';
 require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/../notam-health.php';
 
 /**
- * Seconds to sleep before one in-fetch 429 retry (capped).
+ * Seconds to sleep before one in-fetch 429/503 retry (capped).
  *
+ * @param int $httpCode Upstream HTTP status (429 or 503)
  * @param array<string, string> $responseHeaders Lowercase upstream headers
  */
-function notamCompute429RetryWaitSeconds(array $responseHeaders): int
+function notamCompute429RetryWaitSeconds(int $httpCode, array $responseHeaders): int
 {
-    $override = weatherBackoffOverrideSeconds(429, $responseHeaders);
+    $override = weatherBackoffOverrideSeconds($httpCode, $responseHeaders);
     $wait = $override ?? BACKOFF_BASE_RATE_LIMIT;
 
     return min(max(1, $wait), NOTAM_429_RETRY_MAX_WAIT_SECONDS);
@@ -149,7 +151,7 @@ function notamExecuteNmsQuery(string $url, string $endpoint, float &$lastRequest
 
         $isRateLimit = notamGlobalBackoffShouldRecord($httpCode);
         if ($isRateLimit && $attempts === 1) {
-            $waitSeconds = notamCompute429RetryWaitSeconds($headers);
+            $waitSeconds = notamCompute429RetryWaitSeconds($httpCode, $headers);
             notamSleepFor429Retry($waitSeconds);
             notamRateLimitAcquire();
             $lastRequestTime = microtime(true);
