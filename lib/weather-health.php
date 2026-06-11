@@ -200,6 +200,22 @@ function weatherHealthTrackMetarBulkDownloadFailure(?int $httpCode): void
     weatherHealthAtomicUpdate($currentHour, $counters, $now);
 }
 
+/**
+ * Track a successful AWC national METAR bulk gzip refresh (scheduler worker).
+ */
+function weatherHealthTrackMetarBulkDownloadSuccess(): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $counters = [
+        'attempts_metar_bulk' => 1,
+        'successes_metar_bulk' => 1,
+    ];
+
+    weatherHealthAtomicUpdate($currentHour, $counters, $now);
+}
+
 // =============================================================================
 // FILE I/O FUNCTIONS
 // =============================================================================

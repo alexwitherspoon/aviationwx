@@ -728,6 +728,10 @@ function metarBulkRefreshRun(): array
     }
 
     $result['ok'] = true;
+    if (!function_exists('weatherHealthTrackMetarBulkDownloadSuccess')) {
+        require_once __DIR__ . '/weather-health.php';
+    }
+    weatherHealthTrackMetarBulkDownloadSuccess();
     aviationwx_log('info', 'metar_bulk: refresh complete', [
         'fetched_at' => $fetchedAt,
         'metar_bulk_age_seconds' => metarBulkSnapshotAgeSeconds($fetchedAt),

@@ -16,6 +16,7 @@ use PHPUnit\Framework\TestCase;
  * @covers ::weatherHealthEnsureCacheDirectory
  * @covers ::weatherHealthTrackFetch
  * @covers ::weatherHealthTrackMetarBulkDownloadFailure
+ * @covers ::weatherHealthTrackMetarBulkDownloadSuccess
  * @covers ::weatherHealthTrackUpstreamThrottleSkip
  * @covers ::weatherHealthTrackUpstreamRateLimitFailOpen
  * @covers ::weatherHealthFlush
@@ -250,6 +251,22 @@ final class UpstreamObservabilityTest extends TestCase
         $decoded = json_decode((string) file_get_contents($this->healthCacheFile), true);
         $this->assertIsArray($decoded);
         $this->assertArrayNotHasKey($oldHour, $decoded['hourly_buckets'] ?? []);
+    }
+
+    public function testWeatherHealthTrackMetarBulkDownloadSuccess_ProviderBreakdownIncludesSuccesses(): void
+    {
+        weatherHealthTrackMetarBulkDownloadSuccess();
+        weatherHealthTrackMetarBulkDownloadFailure(429);
+        weatherHealthFlush();
+
+        $providers = weatherHealthGetProviderBreakdown();
+        $byId = [];
+        foreach ($providers as $row) {
+            $byId[$row['id']] = $row;
+        }
+
+        $this->assertSame(2, $byId['metar_bulk']['attempts'] ?? null);
+        $this->assertSame(50.0, $byId['metar_bulk']['success_rate'] ?? null);
     }
 
     public function testWeatherHealthGetProviderBreakdown_SortsByUpstream429(): void
