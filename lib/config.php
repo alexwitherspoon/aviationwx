@@ -1252,7 +1252,7 @@ function getWorkerTimeout(): int {
  * @return int Refresh interval in seconds (default: 600 = 10 minutes)
  */
 function getNotamRefreshSeconds(): int {
-    return (int)getGlobalConfig('notam_refresh_seconds', 600);
+    return (int)getGlobalConfig('notam_refresh_seconds', NOTAM_REFRESH_DEFAULT);
 }
 
 /**

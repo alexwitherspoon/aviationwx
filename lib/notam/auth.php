@@ -8,6 +8,7 @@
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../notam-health.php';
 
 /**
  * Get OAuth2 bearer token for NMS API
@@ -64,6 +65,7 @@ function getNotamBearerToken(): ?string {
     $error = curl_error($ch);
     
     if ($httpCode !== 200 || $response === false) {
+        notamHealthTrackRequest('auth', false, is_int($httpCode) ? $httpCode : null);
         aviationwx_log('error', 'notam auth: failed to get token', [
             'http_code' => $httpCode,
             'error' => $error
@@ -73,11 +75,14 @@ function getNotamBearerToken(): ?string {
     
     $data = json_decode($response, true);
     if (!isset($data['access_token'])) {
+        notamHealthTrackRequest('auth', false, $httpCode);
         aviationwx_log('error', 'notam auth: invalid token response', [
             'response' => substr($response, 0, 200)
         ], 'app', true);
         return null;
     }
+
+    notamHealthTrackRequest('auth', true, $httpCode);
     
     $token = $data['access_token'];
     $expiresIn = isset($data['expires_in']) ? (int)$data['expires_in'] : 1799; // Default 30 minutes

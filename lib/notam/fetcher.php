@@ -13,6 +13,8 @@ require_once __DIR__ . '/parser.php';
 require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/geo-prefilter.php';
+require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/../notam-health.php';
 
 /**
  * Decode NMS JSON; strips illegal ASCII control characters some payloads embed in strings.
@@ -30,21 +32,16 @@ function notamDecodeNmsJsonResponse(string $response): ?array {
 }
 
 /**
- * Rate limit wait - ensures we don't exceed 1 request per second
- * 
- * @param float &$lastRequestTime Last request timestamp (passed by reference)
- * @return void
+ * Block until the shared NMS credential may issue another NOTAM API request.
+ *
+ * Coordinates across scheduler worker processes (not just this fetch). The
+ * $lastRequestTime parameter is retained for backward compatibility.
+ *
+ * @param float &$lastRequestTime Updated to microtime after a token is acquired
  */
 function rateLimitWait(float &$lastRequestTime): void {
-    $now = microtime(true);
-    $elapsed = $now - $lastRequestTime;
-    if ($elapsed < NOTAM_RATE_LIMIT_SECONDS) {
-        $waitTime = NOTAM_RATE_LIMIT_SECONDS - $elapsed;
-        usleep((int)($waitTime * 1000000));
-        $lastRequestTime = microtime(true);
-    } else {
-        $lastRequestTime = $now;
-    }
+    notamRateLimitAcquire();
+    $lastRequestTime = microtime(true);
 }
 
 /**
@@ -149,6 +146,7 @@ function queryNotamsByLocation(
     $error = curl_error($ch);
     
     if ($httpCode !== 200 || $response === false) {
+        notamHealthTrackRequest('location', false, is_int($httpCode) ? $httpCode : null);
         aviationwx_log('warning', 'notam fetcher: location query failed', [
             'location' => $location,
             'http_code' => $httpCode,
@@ -163,12 +161,15 @@ function queryNotamsByLocation(
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+        notamHealthTrackRequest('location', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
         return [];
     }
+
+    notamHealthTrackRequest('location', true, $httpCode);
 
     if ($reportQueryOutcome) {
         $querySucceeded = true;
@@ -230,6 +231,7 @@ function queryNotamsByCoordinates(
     $error = curl_error($ch);
     
     if ($httpCode !== 200 || $response === false) {
+        notamHealthTrackRequest('geo', false, is_int($httpCode) ? $httpCode : null);
         aviationwx_log('warning', 'notam fetcher: geospatial query failed', [
             'latitude' => $latitude,
             'longitude' => $longitude,
@@ -246,12 +248,15 @@ function queryNotamsByCoordinates(
     
     $data = notamDecodeNmsJsonResponse($response);
     if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+        notamHealthTrackRequest('geo', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
         }
 
         return [];
     }
+
+    notamHealthTrackRequest('geo', true, $httpCode);
 
     if ($reportQueryOutcome) {
         $querySucceeded = true;
