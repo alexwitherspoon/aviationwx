@@ -90,9 +90,9 @@ class NotamBannerStylesTest extends TestCase
         $rule = $this->extractRuleBlock($css, '.notam-time-range');
         $this->assertNotSame('', $rule, 'Expected .notam-time-range rule in styles.css');
 
-        $this->assertStringNotContainsString('white-space: nowrap', $rule);
-        $this->assertStringContainsString('overflow-wrap: break-word', $rule);
-        $this->assertStringContainsString('min-width: 0', $rule);
+        $this->assertDoesNotMatchRegularExpression('/white-space\s*:\s*nowrap\b/', $rule);
+        $this->assertMatchesRegularExpression('/overflow-wrap\s*:\s*break-word/', $rule);
+        $this->assertMatchesRegularExpression('/min-width\s*:\s*0\b/', $rule);
     }
 
     public function testNotamTimeRange_MobileBlockStacksOnOwnRow(): void
