@@ -32,6 +32,7 @@ aviationwx.org/
 │   ├── scheduler-daemon-lock.php # Exclusive flock helper for scheduler.php (no path unlink)
 │   ├── circuit-breaker.php   # Circuit breaker for API failures
 │   ├── weather-health.php    # Upstream fetch health counters (weather_health.json)
+│   ├── notam-health.php      # NMS NOTAM fetch health counters (notam_health.json)
 │   ├── upstream-rate-limit.php # Per-credential upstream token bucket (flock)
 │   ├── metar-bulk.php        # AWC national METAR bulk ingest and per-station slices
 │   ├── nws-points-cache.php  # NWS /points grid lookup TTL cache
@@ -431,7 +432,7 @@ Check cache for requested image
 ### NOTAM Data Flow
 
 ```
-Scheduler Daemon (runs per notam_refresh_seconds, default 600s)
+Scheduler Daemon (runs per notam_refresh_seconds, default 600s; staggered enqueue)
   ↓
 fetch-notam.php --worker {airport}
   ↓
