@@ -1378,7 +1378,9 @@ The system uses a **dual query strategy** to capture both airport-specific NOTAM
 1. **Location Query** (when an identifier is configured): Fetches NOTAMs for the airport via `notamResolveLocationQueryCode()` (ICAO, then IATA, then FAA)
 2. **Geospatial Query** (if coordinates available): Fetches TFR-focused airspace NOTAMs with `feature=AIRSPACE`, then applies a cheap XML pre-filter before parse (closures still come from the location query)
 
-Both queries are executed sequentially. NMS rate limiting uses a shared file-backed token bucket (`lib/notam/rate-limit.php`, 1 request per second per `notam_api_client_id` + base URL) so scheduler workers in separate processes do not burst above the API cap when one airport fetch follows another. Workers **wait** for a token (up to `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`, then fail open) rather than skipping the fetch.
+Both queries are executed sequentially through `lib/notam/http.php`. A shared file-backed token bucket (`lib/notam/rate-limit.php`, `NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE` under the documented 60/min cap) paces outbound calls per `notam_api_client_id` + base URL. Workers wait for a token (up to `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`, then fail open) rather than skipping the fetch.
+
+On HTTP **429** or **503**, `lib/notam/circuit-breaker.php` records a shared `global_notam_{fingerprint}` pause for the credential. While active, location and geo queries defer without calling NMS. One in-fetch retry runs after a capped `Retry-After` wait (`NOTAM_429_RETRY_MAX_WAIT_SECONDS`) before the pause is extended.
 
 **Observability**: NMS request outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). HTTP **429** responses increment `upstream_429` and per-endpoint `upstream_429_{location|geo|auth}` counters. On the status page, expand **NOTAM Data Fetching** to see per-endpoint 429 counts for the last hour.
 

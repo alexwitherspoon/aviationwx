@@ -152,4 +152,12 @@ final class NotamRateLimitTest extends TestCase
         $this->assertSame($t0, (float) $GLOBALS['upstreamRateLimitTestNow']);
         $this->assertSame(0, count(glob($this->testRoot . '/*/*.json') ?: []));
     }
+
+    public function testNotamRateLimitRequestsPerMinute_HasSafetyMarginUnderDocumentedCap(): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/constants.php';
+
+        $this->assertSame(54, NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE);
+        $this->assertLessThan(60, NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE);
+    }
 }

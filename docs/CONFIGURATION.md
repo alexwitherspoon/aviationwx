@@ -726,17 +726,19 @@ When the bucket is empty, that source is skipped for one fetch cycle (weather ma
 
 ### NOTAM upstream rate limiting and health
 
-`lib/notam/rate-limit.php` enforces 1 request per second per NMS credential (`notam_api_client_id` + `notam_api_base_url`) using the same flock-backed token buckets as weather (`cache/upstream-limits/`). Workers wait for a token (poll `NOTAM_RATE_LIMIT_POLL_MICROSECONDS`, fail open after `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`) so location and geo queries for one airport still complete.
+`lib/notam/rate-limit.php` paces NMS traffic with a flock-backed token bucket (`cache/upstream-limits/`) keyed by `notam_api_client_id` + `notam_api_base_url`. The client uses `NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE` (default 54) as a margin under the documented 60/min NMS cap. Workers wait for a token (poll `NOTAM_RATE_LIMIT_POLL_MICROSECONDS`, fail open after `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`) so location and geo queries for one airport still complete.
+
+Location and geo requests run through `lib/notam/http.php`, which captures response headers, retries once on HTTP **429** or **503** after a capped `Retry-After` wait (`NOTAM_429_RETRY_MAX_WAIT_SECONDS`), and coordinates fleet-wide pauses via `lib/notam/circuit-breaker.php` (`global_notam_{fingerprint}` in `cache/backoff.json`). While a pause is active, new NMS calls defer without hitting the network. A successful HTTP **200** clears the pause. Default pause length without `Retry-After` is `NOTAM_GLOBAL_BACKOFF_DEFAULT_SECONDS` (60).
 
 The scheduler staggers NOTAM enqueue across the refresh window (`notamStaggerOffsetSeconds()` in `lib/notam/scheduling.php`) and starts at most `NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP` (default 1) new NOTAM worker per scheduler tick.
 
-**Worker pool vs enqueue cap:** `notam_worker_pool_size` limits how many NOTAM workers may run at once; the per-tick enqueue cap limits how many *new* jobs the scheduler starts each second. With the default pool size of 1, extra capacity is unused by design. Raising the pool without raising the enqueue cap (or without a higher NMS rate limit) leaves slots idle. Raising both still serializes on the shared 1 req/s NMS token bucket in `lib/notam/rate-limit.php`. Prefer `notam_worker_pool_size: 1` unless profiling shows benefit from workers overlapping non-API work (for example parse/cache while another worker waits on HTTP).
+**Worker pool vs enqueue cap:** `notam_worker_pool_size` limits how many NOTAM workers may run at once; the per-tick enqueue cap limits how many *new* jobs the scheduler starts each second. With the default pool size of 1, extra capacity is unused by design. Raising the pool without raising the enqueue cap (or without a higher NMS rate limit) leaves slots idle. Raising both still serializes on the shared NMS token bucket in `lib/notam/rate-limit.php`. Prefer `notam_worker_pool_size: 1` unless profiling shows benefit from workers overlapping non-API work (for example parse/cache while another worker waits on HTTP).
 
 HTTP **429** and other NMS outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). On the status page, expand **NOTAM Data Fetching** for per-endpoint 429 counts (location, geo, auth) in the last hour.
 
-On HTTP **429** or **503**, `lib/circuit-breaker.php` also records a shared `global_weather_{provider}_{fingerprint}` backoff key so all airports using that credential back off together. For Ambient, the global key uses the `application_key` fingerprint only; per-request throttling still checks both `api_key` and `application_key` buckets. A successful fetch clears both per-airport and global keys for that credential.
+On HTTP **429** or **503**, weather upstreams use a shared `global_weather_{provider}_{fingerprint}` backoff key in `lib/circuit-breaker.php` so all airports using that credential back off together. For Ambient, the global key uses the `application_key` fingerprint only; per-request throttling still checks both `api_key` and `application_key` buckets. A successful fetch clears both per-airport and global keys for that credential.
 
-When the upstream response includes **`Retry-After`** or **`X-RateLimit-Reset`** (Aeris-style), `UnifiedFetcher` passes those headers into the circuit breaker. Backoff uses the longer of the default strategy and the header hint, clamped to 15 minutes (`BACKOFF_MAX_RETRY_AFTER_SECONDS` in `lib/constants.php`).
+When the upstream response includes **`Retry-After`** or **`X-RateLimit-Reset`**, weather and NOTAM backoff use the header hint clamped to 15 minutes (`BACKOFF_MAX_RETRY_AFTER_SECONDS` in `lib/constants.php`).
 
 ### Backup Sources
 
