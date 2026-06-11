@@ -82,10 +82,31 @@ class NotamBannerStylesTest extends TestCase
         return '';
     }
 
+    /**
+     * @return string Absolute path to the main stylesheet
+     */
+    private function stylesCssPath(): string
+    {
+        return dirname(__DIR__, 2) . '/public/css/styles.css';
+    }
+
+    /**
+     * @return string styles.css contents
+     */
+    private function loadStylesCss(): string
+    {
+        $path = $this->stylesCssPath();
+        $this->assertFileExists($path);
+
+        $css = file_get_contents($path);
+        $this->assertIsString($css);
+
+        return $css;
+    }
+
     public function testNotamTimeRange_AllowsWrappingForLongEffectiveDates(): void
     {
-        $css = file_get_contents(dirname(__DIR__, 2) . '/public/css/styles.css');
-        $this->assertIsString($css);
+        $css = $this->loadStylesCss();
 
         $rule = $this->extractRuleBlock($css, '.notam-time-range');
         $this->assertNotSame('', $rule, 'Expected .notam-time-range rule in styles.css');
@@ -97,8 +118,7 @@ class NotamBannerStylesTest extends TestCase
 
     public function testNotamTimeRange_MobileBlockStacksOnOwnRow(): void
     {
-        $css = file_get_contents(dirname(__DIR__, 2) . '/public/css/styles.css');
-        $this->assertIsString($css);
+        $css = $this->loadStylesCss();
 
         $media = $this->extractAtRuleBlock(
             $css,
