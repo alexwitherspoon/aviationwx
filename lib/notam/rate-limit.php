@@ -38,6 +38,23 @@ function notamRateLimitFingerprint(): string
 }
 
 /**
+ * Whether NOTAM API credentials are configured (auth would succeed).
+ */
+function notamRateLimitCredentialsConfigured(): bool
+{
+    $clientId = isset($GLOBALS['notamRateLimitTestClientId'])
+        && is_string($GLOBALS['notamRateLimitTestClientId'])
+        ? $GLOBALS['notamRateLimitTestClientId']
+        : getNotamApiClientId();
+    $clientSecret = isset($GLOBALS['notamRateLimitTestClientSecret'])
+        && is_string($GLOBALS['notamRateLimitTestClientSecret'])
+        ? $GLOBALS['notamRateLimitTestClientSecret']
+        : getNotamApiClientSecret();
+
+    return trim($clientId) !== '' && trim($clientSecret) !== '';
+}
+
+/**
  * Poll interval while waiting for a NOTAM API token (microseconds).
  */
 function notamRateLimitPollMicroseconds(): int
@@ -90,11 +107,12 @@ function notamRateLimitAcquire(): void
         return;
     }
 
-    $fingerprint = notamRateLimitFingerprint();
-    if ($fingerprint === hash('sha256', 'notam_nms' . "\n" . json_encode([], JSON_UNESCAPED_UNICODE))) {
-        // No client_id/base_url configured; fetch will fail at auth anyway.
+    if (!notamRateLimitCredentialsConfigured()) {
+        // Missing credentials; fetch will fail at auth anyway.
         return;
     }
+
+    $fingerprint = notamRateLimitFingerprint();
 
     $rpm = (int) (60 / max(NOTAM_RATE_LIMIT_SECONDS, 1));
     $burst = 1;

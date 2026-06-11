@@ -30,6 +30,7 @@ final class NotamRateLimitTest extends TestCase
             $GLOBALS['upstreamRateLimitTestNow'],
             $GLOBALS['notamRateLimitTestPollMicroseconds'],
             $GLOBALS['notamRateLimitTestClientId'],
+            $GLOBALS['notamRateLimitTestClientSecret'],
             $GLOBALS['notamRateLimitTestBaseUrl']
         );
         if ($this->testRoot !== null && is_dir($this->testRoot)) {
@@ -54,6 +55,7 @@ final class NotamRateLimitTest extends TestCase
         require_once dirname(__DIR__, 2) . '/lib/notam/rate-limit.php';
 
         $GLOBALS['notamRateLimitTestClientId'] = 'client-a';
+        $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-a';
         $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
 
         $this->assertSame(
@@ -71,6 +73,7 @@ final class NotamRateLimitTest extends TestCase
         $GLOBALS['notamRateLimitTestSkipSleep'] = true;
         $GLOBALS['notamRateLimitTestPollMicroseconds'] = 50_000;
         $GLOBALS['notamRateLimitTestClientId'] = 'client-a';
+        $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-a';
         $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
 
         $t0 = 1_700_000_000.0;
@@ -91,6 +94,7 @@ final class NotamRateLimitTest extends TestCase
         $GLOBALS['notamRateLimitTestSkipSleep'] = true;
         $GLOBALS['notamRateLimitTestPollMicroseconds'] = 100_000;
         $GLOBALS['notamRateLimitTestClientId'] = 'client-b';
+        $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-b';
         $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
 
         $t0 = 1_700_000_100.0;
@@ -104,11 +108,26 @@ final class NotamRateLimitTest extends TestCase
         $this->assertGreaterThanOrEqual($t0 + 1.0, (float) $GLOBALS['upstreamRateLimitTestNow']);
     }
 
+    public function testNotamRateLimitAcquire_MissingCredentials_SkipsBucket(): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/notam/rate-limit.php';
+
+        notamRateLimitTestForceEnforcement();
+        $GLOBALS['notamRateLimitTestClientId'] = '';
+        $GLOBALS['notamRateLimitTestClientSecret'] = '';
+        $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
+
+        notamRateLimitAcquire();
+
+        $this->assertSame(0, count(glob($this->testRoot . '/*/*.json') ?: []));
+    }
+
     public function testNotamRateLimitAcquire_TestModeBypassWithoutForce(): void
     {
         require_once dirname(__DIR__, 2) . '/lib/notam/rate-limit.php';
 
         $GLOBALS['notamRateLimitTestClientId'] = 'client-c';
+        $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-c';
         $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
 
         $t0 = 1_700_000_200.0;
