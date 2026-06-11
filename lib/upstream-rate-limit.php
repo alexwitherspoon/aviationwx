@@ -82,7 +82,110 @@ function upstreamRateFingerprint(string $provider, array $sourceConfig): string
     ksort($material);
 
     $canonical = $provider . "\n" . json_encode($material, JSON_UNESCAPED_UNICODE);
+
     return hash('sha256', $canonical);
+}
+
+/**
+ * Stable SHA-256 fingerprint for one rate-limit scope (subset of credential fields).
+ *
+ * Scoped fingerprints use a distinct canonical prefix so they do not collide with
+ * upstreamRateFingerprint() bucket paths for the same provider.
+ *
+ * @param string $provider Weather source type
+ * @param string $scope Scope label (e.g. api_key, application_key)
+ * @param array<string, mixed> $sourceConfig Source block from weather_sources
+ * @param list<string> $fieldNames Fields to include in this scope
+ * @return string 64-char hex digest
+ */
+function upstreamRateFingerprintForScope(
+    string $provider,
+    string $scope,
+    array $sourceConfig,
+    array $fieldNames
+): string {
+    $material = [];
+    foreach ($fieldNames as $field) {
+        if (!isset($sourceConfig[$field]) || !is_string($sourceConfig[$field])) {
+            continue;
+        }
+        $value = trim($sourceConfig[$field]);
+        if ($value === '') {
+            continue;
+        }
+        $material[$field] = $value;
+    }
+    ksort($material);
+
+    $canonical = $provider . '/' . $scope . "\n" . json_encode($material, JSON_UNESCAPED_UNICODE);
+
+    return hash('sha256', $canonical);
+}
+
+/**
+ * Fingerprint for global 429/503 circuit-breaker coordination across airports.
+ *
+ * Ambient coordinates on developer application_key because that is the shared upstream cap.
+ *
+ * @param string $provider Weather source type
+ * @param array<string, mixed> $sourceConfig Source block from weather_sources
+ * @return string 64-char hex digest
+ */
+function upstreamRateGlobalCredentialFingerprint(string $provider, array $sourceConfig): string
+{
+    return match ($provider) {
+        'ambient' => upstreamRateFingerprintForScope(
+            'ambient',
+            'application_key',
+            $sourceConfig,
+            ['application_key']
+        ),
+        default => upstreamRateFingerprint($provider, $sourceConfig),
+    };
+}
+
+/**
+ * Token buckets that must all allow a request for this source (AND across scopes).
+ *
+ * @param array<string, mixed> $source weather_sources entry (must include type)
+ * @return list<array{scope: string, fingerprint: string, rpm: int, burst: int}>
+ */
+function upstreamRateLimitScopesForSource(array $source): array
+{
+    $provider = $source['type'] ?? '';
+    if (!is_string($provider) || $provider === '') {
+        return [];
+    }
+
+    return match ($provider) {
+        'ambient' => [
+            [
+                'scope' => 'api_key',
+                'fingerprint' => upstreamRateFingerprintForScope('ambient', 'api_key', $source, ['api_key']),
+                'rpm' => UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM,
+                'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST,
+            ],
+            [
+                'scope' => 'application_key',
+                'fingerprint' => upstreamRateFingerprintForScope('ambient', 'application_key', $source, ['application_key']),
+                'rpm' => UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_RPM,
+                'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST,
+            ],
+        ],
+        default => (static function () use ($provider, $source): array {
+            $policy = upstreamRateLimitPolicyForProvider($provider);
+            if ($policy['rpm'] <= 0 || $policy['burst'] <= 0) {
+                return [];
+            }
+
+            return [[
+                'scope' => 'credential',
+                'fingerprint' => upstreamRateFingerprint($provider, $source),
+                'rpm' => $policy['rpm'],
+                'burst' => $policy['burst'],
+            ]];
+        })(),
+    };
 }
 
 /**
@@ -99,8 +202,8 @@ function upstreamRateLimitPolicyForProvider(string $provider): array
             'burst' => UPSTREAM_RATE_LIMIT_TEMPEST_BURST,
         ],
         'ambient' => [
-            'rpm' => UPSTREAM_RATE_LIMIT_AMBIENT_RPM,
-            'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_BURST,
+            'rpm' => UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM,
+            'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST,
         ],
         'pwsweather' => [
             'rpm' => UPSTREAM_RATE_LIMIT_PWSWEATHER_RPM,
@@ -204,6 +307,9 @@ function upstreamRateLimitStateFilePath(string $fingerprint): string
  */
 function upstreamRateTryTake(string $fingerprint, int $rpm, int $burst, ?float $now = null): bool
 {
+    if ($now === null && isset($GLOBALS['upstreamRateLimitTestNow']) && is_numeric($GLOBALS['upstreamRateLimitTestNow'])) {
+        $now = (float) $GLOBALS['upstreamRateLimitTestNow'];
+    }
     $now = $now ?? microtime(true);
     $stateFile = upstreamRateLimitStateFilePath($fingerprint);
     $stateDir = dirname($stateFile);
@@ -335,14 +441,23 @@ function upstreamRateLimitConsumeForSource(array $source): array
         return ['allowed' => true, 'fingerprint_prefix' => null];
     }
 
-    $policy = upstreamRateLimitPolicyForProvider($provider);
-    if ($policy['rpm'] <= 0 || $policy['burst'] <= 0) {
+    $scopes = upstreamRateLimitScopesForSource($source);
+    if ($scopes === []) {
         return ['allowed' => true, 'fingerprint_prefix' => null];
     }
 
-    $fingerprint = upstreamRateFingerprint($provider, $source);
-    $prefix = substr($fingerprint, 0, 8);
-    $allowed = upstreamRateTryTake($fingerprint, $policy['rpm'], $policy['burst']);
+    $prefix = null;
+    foreach ($scopes as $scope) {
+        if (!upstreamRateTryTake($scope['fingerprint'], $scope['rpm'], $scope['burst'])) {
+            return [
+                'allowed' => false,
+                'fingerprint_prefix' => substr($scope['fingerprint'], 0, 8),
+            ];
+        }
+        if ($prefix === null) {
+            $prefix = substr($scope['fingerprint'], 0, 8);
+        }
+    }
 
-    return ['allowed' => $allowed, 'fingerprint_prefix' => $prefix];
+    return ['allowed' => true, 'fingerprint_prefix' => $prefix];
 }

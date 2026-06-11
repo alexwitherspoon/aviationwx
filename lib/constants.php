@@ -169,6 +169,12 @@ if (!defined('RATE_LIMIT_WEBCAM_WINDOW')) {
 if (!defined('NOTAM_REFRESH_DEFAULT')) {
     define('NOTAM_REFRESH_DEFAULT', 600); // 10 minutes
 }
+if (!defined('NOTAM_SCHEDULER_STAGGER_WINDOW_FRACTION')) {
+    define('NOTAM_SCHEDULER_STAGGER_WINDOW_FRACTION', 10); // spread across interval/10
+}
+if (!defined('NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP')) {
+    define('NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP', 1); // low urgency: one new fetch per scheduler tick
+}
 if (!defined('NOTAM_CACHE_TTL_DEFAULT')) {
     define('NOTAM_CACHE_TTL_DEFAULT', 3600); // 1 hour
 }
@@ -193,7 +199,13 @@ if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
     define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius for API query
 }
 if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
-    define('NOTAM_RATE_LIMIT_SECONDS', 1); // 1 request per second
+    define('NOTAM_RATE_LIMIT_SECONDS', 1); // 1 request per second (NMS API policy)
+}
+if (!defined('NOTAM_RATE_LIMIT_POLL_MICROSECONDS')) {
+    define('NOTAM_RATE_LIMIT_POLL_MICROSECONDS', 100_000); // 100ms while waiting for token
+}
+if (!defined('NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS')) {
+    define('NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS', 30); // fail open after this wait
 }
 // Banner: include upcoming_future NOTAMs whose first restriction window starts within this horizon
 if (!defined('NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS')) {
@@ -602,11 +614,18 @@ if (!defined('UPSTREAM_RATE_LIMIT_TEMPEST_RPM')) {
 if (!defined('UPSTREAM_RATE_LIMIT_TEMPEST_BURST')) {
     define('UPSTREAM_RATE_LIMIT_TEMPEST_BURST', 10);
 }
-if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_RPM')) {
-    define('UPSTREAM_RATE_LIMIT_AMBIENT_RPM', 60);
+// Ambient: 1 req/s per user apiKey, 3 req/s per developer applicationKey (upstream policy)
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM', 60);
 }
-if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_BURST')) {
-    define('UPSTREAM_RATE_LIMIT_AMBIENT_BURST', 10);
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST', 1);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_RPM')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_RPM', 180);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST', 3);
 }
 if (!defined('UPSTREAM_RATE_LIMIT_PWSWEATHER_RPM')) {
     define('UPSTREAM_RATE_LIMIT_PWSWEATHER_RPM', 60);
@@ -618,7 +637,7 @@ if (!defined('UPSTREAM_RATE_LIMIT_WEATHERLINK_RPM')) {
     define('UPSTREAM_RATE_LIMIT_WEATHERLINK_RPM', 60);
 }
 if (!defined('UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST')) {
-    define('UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST', 10);
+    define('UPSTREAM_RATE_LIMIT_WEATHERLINK_BURST', 3);
 }
 if (!defined('UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM')) {
     define('UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM', 60);
@@ -637,7 +656,7 @@ if (!defined('UPSTREAM_RATE_LIMIT_NWS_RPM')) {
     define('UPSTREAM_RATE_LIMIT_NWS_RPM', 60);
 }
 if (!defined('UPSTREAM_RATE_LIMIT_NWS_BURST')) {
-    define('UPSTREAM_RATE_LIMIT_NWS_BURST', 10);
+    define('UPSTREAM_RATE_LIMIT_NWS_BURST', 2);
 }
 
 // NWS /points/{lat},{lon} metadata cache (stable grid mapping; reduces repeat calls)
