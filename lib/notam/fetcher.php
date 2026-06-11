@@ -32,6 +32,36 @@ function notamDecodeNmsJsonResponse(string $response): ?array {
 }
 
 /**
+ * Extract AIXM XML rows from decoded NMS JSON.
+ *
+ * NMS omits `data.aixm` when there are no NOTAMs (`{"status":"Success","data":{}}`).
+ *
+ * @param array<string, mixed>|null $data Decoded NMS JSON body
+ * @return array<int, string>|null Row list; empty when NMS reports no NOTAMs; null when payload is invalid
+ */
+function notamExtractAixmRowsFromNmsResponse(?array $data): ?array
+{
+    if ($data === null || !isset($data['data']) || !is_array($data['data'])) {
+        return null;
+    }
+
+    if (!array_key_exists('aixm', $data['data'])) {
+        return [];
+    }
+
+    $aixm = $data['data']['aixm'];
+    if ($aixm === null) {
+        return [];
+    }
+
+    if (!is_array($aixm)) {
+        return null;
+    }
+
+    return $aixm;
+}
+
+/**
  * Block until the shared NMS credential may issue another NOTAM API request.
  *
  * Coordinates across scheduler worker processes (not just this fetch). The
@@ -103,7 +133,7 @@ function notamResolveLocationQueryCode(array $airport): ?string
  * @param string $location NMS location query code from {@see notamResolveLocationQueryCode()}
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors
  * @return array<int, string> Array of AIXM XML strings
  */
 function queryNotamsByLocation(
@@ -160,7 +190,8 @@ function queryNotamsByLocation(
     }
     
     $data = notamDecodeNmsJsonResponse($response);
-    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
+    if ($aixmRows === null) {
         notamHealthTrackRequest('location', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
@@ -174,8 +205,8 @@ function queryNotamsByLocation(
     if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
-    
-    return $data['data']['aixm'];
+
+    return $aixmRows;
 }
 
 /**
@@ -185,7 +216,7 @@ function queryNotamsByLocation(
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByCoordinates(
@@ -247,7 +278,8 @@ function queryNotamsByCoordinates(
     }
     
     $data = notamDecodeNmsJsonResponse($response);
-    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
+    if ($aixmRows === null) {
         notamHealthTrackRequest('geo', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
@@ -261,8 +293,8 @@ function queryNotamsByCoordinates(
     if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
-    
-    return $data['data']['aixm'];
+
+    return $aixmRows;
 }
 
 /**

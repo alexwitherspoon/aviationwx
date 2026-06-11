@@ -95,4 +95,24 @@ final class NotamObservabilityTest extends TestCase
         $this->assertArrayHasKey('health', $decoded);
         $this->assertArrayHasKey('providers', $decoded);
     }
+
+    public function testNotamHealthTrackRequest_EmptyNmsPayloadCountsAsLocationSuccess(): void
+    {
+        require_once __DIR__ . '/../../lib/notam/fetcher.php';
+
+        $rows = notamExtractAixmRowsFromNmsResponse(['status' => 'Success', 'data' => []]);
+        $this->assertSame([], $rows);
+
+        notamHealthTrackRequest('location', true, 200);
+        notamHealthFlush();
+
+        $providers = notamHealthGetProviders();
+        $byId = [];
+        foreach ($providers as $row) {
+            $byId[$row['id']] = $row;
+        }
+
+        $this->assertSame(100, $byId['location']['success_rate'] ?? null);
+        $this->assertSame(1, $byId['location']['attempts'] ?? null);
+    }
 }
