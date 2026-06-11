@@ -324,8 +324,8 @@ function upstreamRateLimitStateFilePath(string $fingerprint): string
  * @param int $rpm Sustained requests per minute
  * @param int $burst Maximum burst size
  * @param float|null $now Injectable Unix timestamp for tests
- * @param bool|null $consumed When provided, set true only if a token was persisted
- * @return bool True when a token was consumed; false when budget exhausted
+ * @param bool|null $consumed When the 5th argument is passed, set to true only if a token was persisted
+ * @return bool True when the request may proceed (including fail-open without consuming a token); false when budget is exhausted. Use $consumed to tell whether a token was actually persisted.
  */
 function upstreamRateTryTake(
     string $fingerprint,
