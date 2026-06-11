@@ -18,12 +18,12 @@ class NotamBannerStylesTest extends TestCase
      */
     private function extractRuleBlock(string $css, string $selector): string
     {
-        $needle = $selector . ' {';
-        $start = strpos($css, $needle);
-        if ($start === false) {
+        $pattern = '/' . preg_quote($selector, '/') . '\s*\{/';
+        if (!preg_match($pattern, $css, $matches, PREG_OFFSET_CAPTURE)) {
             return '';
         }
 
+        $start = $matches[0][1];
         $brace = strpos($css, '{', $start);
         if ($brace === false) {
             return '';
