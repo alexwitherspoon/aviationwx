@@ -125,8 +125,38 @@ final class NotamFetchReliabilityTest extends TestCase
         self::assertFileExists(dirname($cacheFile) . '/kspb.fetch-attempt');
     }
 
+    public function testProcessAirportNotam_SkipsFetchAttemptWhenAllQueriesDeferred(): void
+    {
+        $cacheFile = $this->cacheDir . '/kspb.json';
+        $original = [
+            'fetched_at' => 1700000000,
+            'airport' => 'kspb',
+            'notams' => [['id' => 'keep-me', 'text' => 'RWY CLSD']],
+            'status' => 'success',
+        ];
+        file_put_contents($cacheFile, json_encode($original, JSON_THROW_ON_ERROR));
+
+        $backoffRoot = sys_get_temp_dir() . '/aviationwx-notam-backoff-' . bin2hex(random_bytes(4));
+        mkdir($backoffRoot, 0755, true);
+
+        try {
+            $result = $this->runProcessAirportNotamSubprocess($cacheFile, [
+                'global_backoff' => true,
+                'backoff_root' => $backoffRoot,
+            ]);
+
+            self::assertTrue($result['success']);
+            self::assertFileDoesNotExist(dirname($cacheFile) . '/kspb.fetch-attempt');
+            $after = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame('keep-me', $after['notams'][0]['id']);
+            self::assertSame(1700000000, $after['fetched_at']);
+        } finally {
+            $this->removeTree($backoffRoot);
+        }
+    }
+
     /**
-     * @param array{fetch_succeeded?: bool, force_write_fail?: bool, fetch_throw?: string} $options
+     * @param array{fetch_succeeded?: bool, force_write_fail?: bool, fetch_throw?: string, global_backoff?: bool, backoff_root?: string} $options
      * @return array{success: bool, output: string}
      */
     private function runProcessAirportNotamSubprocess(string $cacheFile, array $options = []): array
@@ -157,6 +187,16 @@ if (getenv('NOTAM_TEST_FORCE_WRITE_FAIL') === '1') {
     define('AVIATIONWX_NOTAM_TEST_FORCE_WRITE_FAIL', true);
 }
 require getenv('NOTAM_TEST_ROOT') . '/scripts/fetch-notam.php';
+if (getenv('NOTAM_TEST_GLOBAL_BACKOFF') === '1') {
+    $GLOBALS['upstreamRateLimitTestRoot'] = getenv('NOTAM_TEST_BACKOFF_ROOT');
+    $GLOBALS['notamRateLimitTestClientId'] = 'client-http';
+    $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-http';
+    $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
+    $GLOBALS['notamTestBearerToken'] = 'test-token';
+    $GLOBALS['notamTestSkipSleep'] = true;
+    notamRateLimitTestForceEnforcement();
+    recordNotamGlobalRateLimitFailure(429, null, time());
+}
 $ok = processAirportNotam('kspb', 'test-invocation', false);
 echo json_encode(['success' => $ok], JSON_THROW_ON_ERROR);
 
@@ -176,6 +216,10 @@ PHP;
         }
         if (!empty($options['force_write_fail'])) {
             $env['NOTAM_TEST_FORCE_WRITE_FAIL'] = '1';
+        }
+        if (!empty($options['global_backoff'])) {
+            $env['NOTAM_TEST_GLOBAL_BACKOFF'] = '1';
+            $env['NOTAM_TEST_BACKOFF_ROOT'] = (string) ($options['backoff_root'] ?? '');
         }
         $proc = proc_open([PHP_BINARY, $tmp], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
         self::assertIsResource($proc);

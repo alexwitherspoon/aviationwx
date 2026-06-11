@@ -76,6 +76,25 @@ final class NotamFetcherDedupTest extends TestCase
 
         self::assertTrue($summary['attempted']);
         self::assertTrue($summary['fetchSucceeded']);
+        self::assertFalse($summary['allDeferred']);
+    }
+
+    public function testSummarizeFetchQueryOutcomes_AllDeferredWhenEveryQueryDeferred(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([null, null]);
+
+        self::assertTrue($summary['attempted']);
+        self::assertFalse($summary['fetchSucceeded']);
+        self::assertTrue($summary['allDeferred']);
+    }
+
+    public function testSummarizeFetchQueryOutcomes_NotAllDeferredWhenMixedWithHardFailure(): void
+    {
+        $summary = notamSummarizeFetchQueryOutcomes([null, false]);
+
+        self::assertTrue($summary['attempted']);
+        self::assertFalse($summary['fetchSucceeded']);
+        self::assertFalse($summary['allDeferred']);
     }
 
     public function testNotamCanonicalDedupKey_StableForIdenticalRows(): void

@@ -159,7 +159,7 @@ function notamResolveLocationQueryCode(array $airport): ?string
  * @param array<string, mixed> $logContext Log context fields
  * @param array{deferred?: bool, http_code?: int|null, error?: string} $queryResult Result from notamExecuteNmsQuery()
  * @param bool $reportQueryOutcome Whether to update $querySucceeded
- * @param bool|null $querySucceeded Outcome flag passed by caller
+ * @param bool|null $querySucceeded Outcome flag passed by caller (true success, false hard failure, null deferred)
  */
 function notamRecordNmsQueryFailure(
     string $endpoint,
@@ -169,12 +169,16 @@ function notamRecordNmsQueryFailure(
     bool $reportQueryOutcome,
     ?bool &$querySucceeded,
 ): void {
-    if ($reportQueryOutcome) {
-        $querySucceeded = false;
+    if (($queryResult['deferred'] ?? false) === true) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = null;
+        }
+
+        return;
     }
 
-    if (($queryResult['deferred'] ?? false) === true) {
-        return;
+    if ($reportQueryOutcome) {
+        $querySucceeded = false;
     }
 
     $httpCode = $queryResult['http_code'] ?? null;
@@ -191,7 +195,7 @@ function notamRecordNmsQueryFailure(
  * @param string $location NMS location query code from {@see notamResolveLocationQueryCode()}
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors; null when deferred by global backoff
  * @return array<int, string> Array of AIXM XML strings
  */
 function queryNotamsByLocation(
@@ -258,7 +262,7 @@ function queryNotamsByLocation(
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors; null when deferred by global backoff
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByCoordinates(
@@ -352,17 +356,20 @@ function deduplicateNotams(array $notams): array {
 /**
  * Aggregate per-query NMS outcomes for dual location + geo fetches.
  *
- * @param list<bool> $queryOutcomes Success flag for each attempted query (in order)
- * @return array{attempted: bool, fetchSucceeded: bool}
+ * @param list<bool|null> $queryOutcomes Per-query outcome (true success, false hard failure, null deferred)
+ * @return array{attempted: bool, fetchSucceeded: bool, allDeferred: bool}
  */
 function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
 {
     $attempted = $queryOutcomes !== [];
     $anySucceeded = in_array(true, $queryOutcomes, true);
+    $anyHardFailure = in_array(false, $queryOutcomes, true);
+    $allDeferred = $attempted && !$anySucceeded && !$anyHardFailure;
 
     return [
         'attempted' => $attempted,
         'fetchSucceeded' => $attempted && $anySucceeded,
+        'allDeferred' => $allDeferred,
     ];
 }
 
@@ -376,10 +383,17 @@ function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
  * @param bool|null $fetchSucceeded When passed, true when at least one NMS query succeeds; false when no query runs or every attempted query fails
+ * @param bool|null $fetchAllDeferred When passed, true when every attempted query was deferred by global NMS backoff
  * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
-function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchSucceeded = null): array {
+function fetchNotamsForAirport(
+    string $airportId,
+    array $airport,
+    ?bool &$fetchSucceeded = null,
+    ?bool &$fetchAllDeferred = null,
+): array {
     $reportFetchOutcome = func_num_args() >= 3;
+    $reportAllDeferred = func_num_args() >= 4;
     $lastRequestTime = 0.0;
     $allNotams = [];
     $queryOutcomes = [];
@@ -419,6 +433,9 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
     if ($reportFetchOutcome) {
         $fetchSucceeded = $fetchSummary['fetchSucceeded'];
+    }
+    if ($reportAllDeferred) {
+        $fetchAllDeferred = $fetchSummary['allDeferred'];
     }
     
     // 3. Parse XML to structured data

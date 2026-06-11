@@ -26,9 +26,11 @@ final class NotamNmsHttpTest extends TestCase
         $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
         $GLOBALS['notamTestSkipSleep'] = true;
         $GLOBALS['notamTestSleepAccumulatedSeconds'] = 0;
+        $GLOBALS['notamTestBearerToken'] = 'test-token';
 
         require_once dirname(__DIR__, 2) . '/lib/notam/http.php';
         require_once dirname(__DIR__, 2) . '/lib/notam/circuit-breaker.php';
+        require_once dirname(__DIR__, 2) . '/lib/notam/fetcher.php';
 
         notamRateLimitTestForceEnforcement();
         clearNotamGlobalBackoff();
@@ -45,7 +47,8 @@ final class NotamNmsHttpTest extends TestCase
             $GLOBALS['notamRateLimitTestForceEnforcement'],
             $GLOBALS['notamTestSkipSleep'],
             $GLOBALS['notamTestSleepAccumulatedSeconds'],
-            $GLOBALS['notamTestNmsHttpHandler']
+            $GLOBALS['notamTestNmsHttpHandler'],
+            $GLOBALS['notamTestBearerToken']
         );
         if ($this->testRoot !== null && is_dir($this->testRoot)) {
             $files = new RecursiveIteratorIterator(
@@ -178,5 +181,34 @@ final class NotamNmsHttpTest extends TestCase
 
         $this->assertSame([], $rows);
         $this->assertTrue($querySucceeded);
+    }
+
+    public function testQueryNotamsByLocation_DeferredSetsQuerySucceededNull(): void
+    {
+        recordNotamGlobalRateLimitFailure(429, null, time());
+
+        $lastRequestTime = 0.0;
+        $querySucceeded = false;
+        $rows = queryNotamsByLocation('OR81', $lastRequestTime, [], $querySucceeded);
+
+        $this->assertSame([], $rows);
+        $this->assertNull($querySucceeded);
+    }
+
+    public function testFetchNotamsForAirport_AllDeferredWhenGlobalBackoffBlocksQueries(): void
+    {
+        recordNotamGlobalRateLimitFailure(429, null, time());
+
+        $config = loadConfig();
+        $this->assertIsArray($config);
+        $airport = $config['airports']['kspb'] ?? null;
+        $this->assertIsArray($airport);
+
+        $fetchSucceeded = true;
+        $fetchAllDeferred = false;
+        fetchNotamsForAirport('kspb', $airport, $fetchSucceeded, $fetchAllDeferred);
+
+        $this->assertFalse($fetchSucceeded);
+        $this->assertTrue($fetchAllDeferred);
     }
 }
