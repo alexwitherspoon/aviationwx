@@ -92,7 +92,7 @@ class NotamBannerStylesTest extends TestCase
 
         $this->assertDoesNotMatchRegularExpression('/white-space\s*:\s*nowrap\b/', $rule);
         $this->assertMatchesRegularExpression('/overflow-wrap\s*:\s*break-word/', $rule);
-        $this->assertMatchesRegularExpression('/min-width\s*:\s*0\b/', $rule);
+        $this->assertMatchesRegularExpression('/min-width\s*:\s*0(px)?\b/', $rule);
     }
 
     public function testNotamTimeRange_MobileBlockStacksOnOwnRow(): void
