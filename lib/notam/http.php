@@ -95,7 +95,7 @@ function notamPerformNmsHttpGet(string $url, string $bearerToken): array
  * Execute one NMS GET with rate limiting, global backoff, and one 429 retry.
  *
  * @param string $endpoint Health endpoint key (location, geo, auth)
- * @param float $lastRequestTime Updated by rateLimitWait()
+ * @param float $lastRequestTime Updated to microtime(true) after each notamRateLimitAcquire()
  * @return array{
  *   ok: bool,
  *   deferred: bool,
