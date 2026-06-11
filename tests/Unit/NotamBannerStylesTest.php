@@ -49,17 +49,17 @@ class NotamBannerStylesTest extends TestCase
     /**
      * Extract a full @-rule block (for example @media) using brace balancing.
      *
-     * @param string $css        Full stylesheet contents
-     * @param string $atRuleNeedle Substring that identifies the rule (e.g. "@media (max-width: 600px)")
+     * @param string $css            Full stylesheet contents
+     * @param string $headerPattern  Regex from the @ through the opening brace (no delimiters)
      * @return string Rule block including the @ prefix and braces, or empty when missing
      */
-    private function extractAtRuleBlock(string $css, string $atRuleNeedle): string
+    private function extractAtRuleBlock(string $css, string $headerPattern): string
     {
-        $start = strpos($css, $atRuleNeedle);
-        if ($start === false) {
+        if (!preg_match('/' . $headerPattern . '/', $css, $matches, PREG_OFFSET_CAPTURE)) {
             return '';
         }
 
+        $start = $matches[0][1];
         $brace = strpos($css, '{', $start);
         if ($brace === false) {
             return '';
@@ -100,7 +100,10 @@ class NotamBannerStylesTest extends TestCase
         $css = file_get_contents(dirname(__DIR__, 2) . '/public/css/styles.css');
         $this->assertIsString($css);
 
-        $media = $this->extractAtRuleBlock($css, '@media (max-width: 600px)');
+        $media = $this->extractAtRuleBlock(
+            $css,
+            '@media\s*\(\s*max-width\s*:\s*600px\s*\)\s*\{'
+        );
         $this->assertNotSame('', $media, 'Expected mobile NOTAM @media block in styles.css');
 
         $rule = $this->extractRuleBlock($media, '.notam-time-range');
