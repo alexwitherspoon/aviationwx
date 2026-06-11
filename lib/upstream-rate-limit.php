@@ -433,7 +433,7 @@ function upstreamRateTryTake(
  * @param string $fingerprint From upstreamRateFingerprint()
  * @param int $burst Maximum burst size
  */
-function upstreamRateRefund(string $fingerprint, int $rpm, int $burst): void
+function upstreamRateRefund(string $fingerprint, int $burst): void
 {
     $stateFile = upstreamRateLimitStateFilePath($fingerprint);
     $stateDir = dirname($stateFile);
@@ -576,7 +576,7 @@ function upstreamRateLimitConsumeForSource(array $source): array
         $consumed = false;
         if (!upstreamRateTryTake($scope['fingerprint'], $scope['rpm'], $scope['burst'], null, $consumed)) {
             foreach (array_reverse($takenScopes) as $prior) {
-                upstreamRateRefund($prior['fingerprint'], $prior['rpm'], $prior['burst']);
+                upstreamRateRefund($prior['fingerprint'], $prior['burst']);
             }
 
             return [
