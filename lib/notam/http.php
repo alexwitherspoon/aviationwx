@@ -53,10 +53,19 @@ function notamPerformNmsHttpGet(string $url, string $bearerToken): array
             return ['body' => false, 'http_code' => 0, 'headers' => [], 'error' => 'invalid test handler'];
         }
 
+        $rawHeaders = is_array($result['headers'] ?? null) ? $result['headers'] : [];
+        $headers = [];
+        foreach ($rawHeaders as $name => $value) {
+            if (!is_string($name) || !is_scalar($value)) {
+                continue;
+            }
+            $headers[strtolower(trim($name))] = trim((string) $value);
+        }
+
         return [
             'body' => $result['body'] ?? false,
             'http_code' => (int) ($result['http_code'] ?? 0),
-            'headers' => is_array($result['headers'] ?? null) ? $result['headers'] : [],
+            'headers' => $headers,
             'error' => (string) ($result['error'] ?? ''),
         ];
     }

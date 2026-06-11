@@ -111,6 +111,29 @@ final class NotamNmsHttpTest extends TestCase
         $this->assertFalse(checkNotamGlobalBackoff()['skip']);
     }
 
+    public function testExecuteNmsQuery_NormalizesMixedCaseTestHandlerHeaders(): void
+    {
+        $calls = 0;
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken) use (&$calls): array {
+            $calls++;
+
+            return $calls === 1
+                ? ['body' => 'busy', 'http_code' => 429, 'headers' => ['Retry-After' => '7'], 'error' => '']
+                : ['body' => '{"status":"Success","data":{}}', 'http_code' => 200, 'headers' => [], 'error' => ''];
+        };
+
+        $lastRequestTime = 0.0;
+        $result = notamExecuteNmsQuery(
+            'https://example.test/nmsapi/v1/notams?location=OR81',
+            'location',
+            $lastRequestTime,
+            'test-token',
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(7, $GLOBALS['notamTestSleepAccumulatedSeconds']);
+    }
+
     public function testExecuteNmsQuery_429Then200RecordsUpstream429InHealth(): void
     {
         $healthFile = $this->testRoot . '/notam_health.json';
