@@ -26,6 +26,7 @@ require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/runways.php';
 require_once __DIR__ . '/variant-health.php';
 require_once __DIR__ . '/weather-health.php';
+require_once __DIR__ . '/notam-health.php';
 require_once __DIR__ . '/weather/outage-detection.php';
 
 /**
@@ -297,18 +298,20 @@ function checkSystemHealth(): array {
     
     // Uses cached data from weather-health.php
     $weatherDataHealth = weatherHealthGetStatus();
-    
-    $weatherSources = weatherHealthGetSources();
-    if (!empty($weatherSources)) {
-        $sourceSummary = [];
-        foreach ($weatherSources as $type => $sourceData) {
-            $rate = $sourceData['metrics']['success_rate'] ?? 100;
-            $sourceSummary[] = ucfirst($type) . ': ' . $rate . '%';
-        }
-        $weatherDataHealth['source_summary'] = implode(' · ', $sourceSummary);
+    $weatherProviders = weatherHealthGetProviderBreakdown();
+    if ($weatherProviders !== []) {
+        $weatherDataHealth['providers'] = $weatherProviders;
     }
-    
+
     $health['components']['weather_fetching'] = $weatherDataHealth;
+
+    $notamDataHealth = notamHealthGetStatus();
+    $notamProviders = notamHealthGetProviders();
+    if ($notamProviders !== []) {
+        $notamDataHealth['providers'] = $notamProviders;
+    }
+
+    $health['components']['notam_fetching'] = $notamDataHealth;
     
     // Runway cache (FAA/OurAirports)
     $runwayCacheHealth = checkRunwayCacheHealth($config);

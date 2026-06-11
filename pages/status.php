@@ -464,6 +464,74 @@ if (php_sapi_name() === 'cli') {
         .component-item:last-child {
             border-bottom: none;
         }
+
+        .component-item-expandable .component-name {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .component-expand-btn {
+            border: none;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            line-height: 1;
+            color: #6b7280;
+        }
+
+        .component-expand-btn .expand-icon {
+            display: inline-block;
+            transition: transform 0.2s;
+            font-size: 0.75rem;
+        }
+
+        .component-expand-btn[aria-expanded="true"] .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .component-providers {
+            margin-top: 0.5rem;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+        }
+
+        .component-providers.collapsed {
+            max-height: 0;
+            margin-top: 0;
+        }
+
+        .component-providers.expanded {
+            max-height: 1200px;
+        }
+
+        .component-provider-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .component-provider-table th,
+        .component-provider-table td {
+            padding: 0.2rem 0.5rem 0.2rem 0;
+            text-align: left;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .component-provider-table th {
+            font-weight: 600;
+            color: #888;
+        }
+
+        .component-provider-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .component-provider-429-warn {
+            color: #b45309;
+            font-weight: 600;
+        }
         
         .component-info {
             flex: 1;
@@ -917,10 +985,28 @@ if (php_sapi_name() === 'cli') {
                 </div>
                 
                 <ul class="component-list">
-                    <?php foreach ($systemHealth['components'] as $component): ?>
-                    <li class="component-item">
+                    <?php foreach ($systemHealth['components'] as $componentIndex => $component): ?>
+                    <?php
+                    $componentProviders = (isset($component['providers']) && is_array($component['providers']))
+                        ? $component['providers']
+                        : [];
+                    $hasProviderBreakdown = $componentProviders !== [];
+                    ?>
+                    <li class="component-item<?php echo $hasProviderBreakdown ? ' component-item-expandable' : ''; ?>">
                         <div class="component-info">
-                            <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>
+                            <div class="component-name">
+                                <?php if ($hasProviderBreakdown): ?>
+                                <button type="button"
+                                        class="component-expand-btn"
+                                        aria-expanded="false"
+                                        aria-controls="component-providers-<?php echo (int) $componentIndex; ?>"
+                                        data-component-toggle="<?php echo (int) $componentIndex; ?>"
+                                        title="Show per-provider HTTP 429 counts">
+                                    <span class="expand-icon" aria-hidden="true">▶</span>
+                                </button>
+                                <?php endif; ?>
+                                <span><?php echo htmlspecialchars($component['name']); ?></span>
+                            </div>
                             <div class="component-message"><?php echo htmlspecialchars($component['message']); ?></div>
                             <?php if (isset($component['metrics']) && is_array($component['metrics']) && !empty($component['metrics'])): ?>
                             <div class="component-metrics" style="margin-top: 0.25rem; font-size: 0.8rem; color: #888;">
@@ -937,6 +1023,34 @@ if (php_sapi_name() === 'cli') {
                                 }
                                 echo htmlspecialchars(implode(' · ', $metricParts));
                                 ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasProviderBreakdown): ?>
+                            <div class="component-providers collapsed" id="component-providers-<?php echo (int) $componentIndex; ?>">
+                                <table class="component-provider-table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Provider</th>
+                                            <th scope="col">429 (1h)</th>
+                                            <th scope="col">Attempts</th>
+                                            <th scope="col">Success</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($componentProviders as $providerRow): ?>
+                                        <?php
+                                        $provider429 = (int) ($providerRow['upstream_429'] ?? 0);
+                                        $provider429Class = $provider429 > 0 ? ' component-provider-429-warn' : '';
+                                        ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars((string) ($providerRow['name'] ?? '')); ?></td>
+                                            <td class="<?php echo trim($provider429Class); ?>"><?php echo $provider429; ?></td>
+                                            <td><?php echo (int) ($providerRow['attempts'] ?? 0); ?></td>
+                                            <td><?php echo htmlspecialchars((string) ($providerRow['success_rate'] ?? 0)); ?>%</td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
                             <?php endif; ?>
                             <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
@@ -1387,6 +1501,33 @@ if (php_sapi_name() === 'cli') {
             }
 
             window.toggleAirport = toggleAirport;
+
+            function toggleComponentProviders(componentIndex) {
+                var btn = document.querySelector('.component-expand-btn[data-component-toggle="' + componentIndex + '"]');
+                var panel = document.getElementById('component-providers-' + componentIndex);
+                if (!btn || !panel) {
+                    return;
+                }
+                var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    panel.classList.remove('expanded');
+                    panel.classList.add('collapsed');
+                } else {
+                    btn.setAttribute('aria-expanded', 'true');
+                    panel.classList.remove('collapsed');
+                    panel.classList.add('expanded');
+                }
+            }
+
+            document.querySelectorAll('.component-expand-btn[data-component-toggle]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var idx = btn.getAttribute('data-component-toggle');
+                    if (idx !== null && idx !== '') {
+                        toggleComponentProviders(idx);
+                    }
+                });
+            });
 
             document.querySelectorAll('.airport-card-header[data-airport-toggle]').forEach(function (hdr) {
                 hdr.addEventListener('click', function () {

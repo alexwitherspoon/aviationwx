@@ -21,6 +21,8 @@ use PHPUnit\Framework\TestCase;
  * @covers ::weatherHealthFlush
  * @covers ::weatherHealthGetStatus
  * @covers ::weatherHealthGetSources
+ * @covers ::weatherHealthGetProviderBreakdown
+ * @covers ::weatherHealthProviderDisplayName
  */
 final class UpstreamObservabilityTest extends TestCase
 {
@@ -248,5 +250,26 @@ final class UpstreamObservabilityTest extends TestCase
         $decoded = json_decode((string) file_get_contents($this->healthCacheFile), true);
         $this->assertIsArray($decoded);
         $this->assertArrayNotHasKey($oldHour, $decoded['hourly_buckets'] ?? []);
+    }
+
+    public function testWeatherHealthGetProviderBreakdown_SortsByUpstream429(): void
+    {
+        weatherHealthTrackFetch('kspb', 'ambient', false, 429);
+        weatherHealthTrackFetch('kspb', 'ambient', false, 429);
+        weatherHealthTrackFetch('kspb', 'tempest', true, 200);
+        weatherHealthTrackMetarBulkDownloadFailure(429);
+        weatherHealthFlush();
+
+        $providers = weatherHealthGetProviderBreakdown();
+        $this->assertNotEmpty($providers);
+        $this->assertSame('ambient', $providers[0]['id'] ?? null);
+        $this->assertSame(2, $providers[0]['upstream_429'] ?? null);
+
+        $byId = [];
+        foreach ($providers as $row) {
+            $byId[$row['id']] = $row;
+        }
+        $this->assertSame(1, $byId['metar_bulk']['upstream_429'] ?? null);
+        $this->assertSame('METAR bulk (AWC national gzip)', $byId['metar_bulk']['name'] ?? null);
     }
 }

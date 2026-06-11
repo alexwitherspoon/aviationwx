@@ -511,6 +511,25 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
 
     $circuitBySource = is_array($weatherFull) ? operations_snapshot_weather_circuit_by_source($weatherFull) : [];
 
+    $notamPath = $cacheBaseDir . '/notam_health.json';
+    $notamHealth = [
+        'name' => 'NOTAM Data Fetching',
+        'status' => 'operational',
+        'message' => 'No data available',
+        'lastChanged' => 0,
+        'metrics' => [],
+    ];
+    $notamFull = [];
+    if (is_readable($notamPath)) {
+        $n = @file_get_contents($notamPath);
+        if ($n !== false) {
+            $notamFull = json_decode($n, true);
+            if (is_array($notamFull) && isset($notamFull['health']) && is_array($notamFull['health'])) {
+                $notamHealth = $notamFull['health'];
+            }
+        }
+    }
+
     return [
         'snapshot_meta' => [
             'schema_version' => OPERATIONS_SNAPSHOT_SCHEMA_VERSION,
@@ -527,6 +546,7 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
                 'counts' => $airSummary['counts'],
             ],
             'weather' => $weatherHealth,
+            'notam' => $notamHealth,
             'variant' => $variantHealth,
         ],
         'capacity_layer' => [
