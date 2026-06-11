@@ -84,7 +84,7 @@ final class NotamNmsHttpTest extends TestCase
     public function testExecuteNmsQuery_429Then200OnRetrySucceeds(): void
     {
         $calls = 0;
-        $GLOBALS['notamTestNmsHttpHandler'] = static function () use (&$calls): array {
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken) use (&$calls): array {
             $calls++;
 
             return $calls === 1
@@ -109,7 +109,7 @@ final class NotamNmsHttpTest extends TestCase
 
     public function testExecuteNmsQuery_Double429RecordsGlobalBackoff(): void
     {
-        $GLOBALS['notamTestNmsHttpHandler'] = static function (): array {
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken): array {
             return ['body' => 'busy', 'http_code' => 429, 'headers' => ['retry-after' => '1'], 'error' => ''];
         };
 
@@ -130,7 +130,7 @@ final class NotamNmsHttpTest extends TestCase
     {
         recordNotamGlobalRateLimitFailure(429, ['retry-after' => '1'], time() - 120);
 
-        $GLOBALS['notamTestNmsHttpHandler'] = static function (): array {
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken): array {
             return [
                 'body' => '{"status":"Success","data":{"aixm":[]}}',
                 'http_code' => 200,
@@ -163,7 +163,7 @@ final class NotamNmsHttpTest extends TestCase
         require_once dirname(__DIR__, 2) . '/lib/notam/fetcher.php';
 
         $GLOBALS['notamTestBearerToken'] = 'token-test';
-        $GLOBALS['notamTestNmsHttpHandler'] = static function (): array {
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken): array {
             return [
                 'body' => '{"status":"Success","data":{}}',
                 'http_code' => 200,
