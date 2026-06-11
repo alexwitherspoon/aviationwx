@@ -198,9 +198,6 @@ if (!defined('NOTAM_GEO_QUERY_FEATURE')) {
 if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
     define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius for API query
 }
-if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
-    define('NOTAM_RATE_LIMIT_SECONDS', 1); // documented NMS policy (1 request per second)
-}
 if (!defined('NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE')) {
     define('NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE', 54); // client-side margin under the 60/min cap
 }
