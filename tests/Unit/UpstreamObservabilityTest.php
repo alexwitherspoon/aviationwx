@@ -48,7 +48,13 @@ final class UpstreamObservabilityTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['metarBulkTestCacheRoot'], $GLOBALS['weatherHealthTestCacheFile']);
+        unset(
+            $GLOBALS['metarBulkTestCacheRoot'],
+            $GLOBALS['weatherHealthTestCacheFile'],
+            $GLOBALS['upstreamRateLimitTestRoot'],
+            $GLOBALS['upstreamRateLimitTestForcePersistFailure'],
+            $GLOBALS['upstreamRateLimitTestForceEnforcement']
+        );
 
         if ($this->cacheRoot !== null && is_dir($this->cacheRoot)) {
             $files = new \RecursiveIteratorIterator(
@@ -205,6 +211,34 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertSame('degraded', $status['status'] ?? null);
         $this->assertStringContainsString('fail-open', (string) ($status['message'] ?? ''));
         $this->assertSame(1, $status['metrics']['upstream_rate_limit_fail_open_last_hour'] ?? null);
+    }
+
+    public function testUpstreamRateTryTake_PersistFailure_RecordsFailOpenCounter(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $GLOBALS['upstreamRateLimitTestForcePersistFailure'] = true;
+
+        $consumed = false;
+        $this->assertTrue(upstreamRateTryTake(
+            hash('sha256', 'persist_fail_obs_' . bin2hex(random_bytes(4))),
+            60,
+            1,
+            1_700_000_000.0,
+            $consumed
+        ));
+        $this->assertFalse($consumed);
+
+        weatherHealthFlush();
+        $status = weatherHealthGetStatus();
+        $this->assertGreaterThanOrEqual(
+            1,
+            $status['metrics']['upstream_rate_limit_fail_open_last_hour'] ?? 0
+        );
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestForcePersistFailure']);
     }
 
     public function testWeatherHealthFlush_CreatesCacheWhenMissing(): void

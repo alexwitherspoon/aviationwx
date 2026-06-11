@@ -397,11 +397,9 @@ function upstreamRateTryTake(
         'last_refill' => $result['last_refill'],
     ], JSON_UNESCAPED_UNICODE);
     if ($payload === false) {
-        aviationwx_log('warning', 'upstream rate limit state encode failed, allowing request', [
-            'fingerprint_prefix' => substr($fingerprint, 0, 8),
-        ], 'app');
         flock($fp, LOCK_UN);
         fclose($fp);
+        upstreamRateLimitRecordFailOpen('state_encode_failed', $fingerprint);
 
         return true;
     }
@@ -417,11 +415,6 @@ function upstreamRateTryTake(
 
     $persisted = is_int($written) && $written === strlen($payload);
     if (!$persisted) {
-        aviationwx_log('warning', 'upstream rate limit state write failed, allowing request', [
-            'fingerprint_prefix' => substr($fingerprint, 0, 8),
-            'file' => $stateFile,
-        ], 'app');
-
         $restorePayload = json_encode([
             'tokens' => $preTakeTokens,
             'last_refill' => $preTakeLastRefill,
@@ -435,6 +428,7 @@ function upstreamRateTryTake(
 
         flock($fp, LOCK_UN);
         fclose($fp);
+        upstreamRateLimitRecordFailOpen('state_write_failed', $fingerprint, ['file' => $stateFile]);
 
         return true;
     }
