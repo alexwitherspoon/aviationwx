@@ -1,6 +1,6 @@
 <?php
 /**
- * NMS HTTP client: global backoff gate, header capture, and one bounded 429 retry.
+ * NMS HTTP client: global backoff gate, header capture, and one bounded 429/503 retry.
  */
 
 declare(strict_types=1);
@@ -27,7 +27,7 @@ function notamCompute429RetryWaitSeconds(int $httpCode, array $responseHeaders):
 }
 
 /**
- * Sleep before an in-fetch 429 retry (no-op in tests when notamTestSkipSleep is set).
+ * Sleep before an in-fetch 429/503 retry (no-op in tests when notamTestSkipSleep is set).
  */
 function notamSleepFor429Retry(int $seconds): void
 {
@@ -103,7 +103,7 @@ function notamPerformNmsHttpGet(string $url, string $bearerToken): array
 }
 
 /**
- * Execute one NMS GET with rate limiting, global backoff, and one 429 retry.
+ * Execute one NMS GET with rate limiting, global backoff, and one bounded 429/503 retry.
  *
  * @param string $endpoint Health endpoint key (location, geo, auth)
  * @param float $lastRequestTime Updated to microtime(true) after each notamRateLimitAcquire()
