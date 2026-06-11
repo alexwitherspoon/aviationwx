@@ -10,7 +10,7 @@ The **Public API** (`https://api.aviationwx.org/v1/...`) is the supported integr
 > **Canonical Public API base URL (public deployment):** `https://api.aviationwx.org/v1`  
 > Self-hosted deployments may set `config.public_api.canonical_base_url` so docs match their origin.
 
-**Production health snapshot:** `GET /v1/operations` returns a scheduler-built JSON summary (system and Public API health caches, weather and variant health, capacity metrics, optional scrubbed log fingerprints). It is intended for operators and support tooling, not for flight-critical minute-by-minute data. The scheduler writes `cache/operations_snapshot.json`; if the job stalls, responses may be served with `snapshot_meta.freshness` set to `stale` for up to 30 minutes.
+**Production health snapshot:** `GET /v1/operations` returns a scheduler-built JSON summary (system and Public API health caches, weather, NOTAM, and variant health in `data_plane`, capacity metrics, optional scrubbed log fingerprints). It is intended for operators and support tooling, not for flight-critical minute-by-minute data. The scheduler writes `cache/operations_snapshot.json`; if the job stalls, responses may be served with `snapshot_meta.freshness` set to `stale` for up to 30 minutes.
 
 ---
 

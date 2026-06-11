@@ -340,6 +340,10 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     if (is_array($var) && (($var['status'] ?? '') !== 'operational')) {
         return true;
     }
+    $notam = $dp['notam'] ?? null;
+    if (is_array($notam) && (($notam['status'] ?? '') !== 'operational')) {
+        return true;
+    }
     $summary = isset($dp['airport_summary']) && is_array($dp['airport_summary']) ? $dp['airport_summary'] : [];
     $counts = isset($summary['counts']) && is_array($summary['counts']) ? $summary['counts'] : [];
     $bad = (int) ($counts['degraded'] ?? 0) + (int) ($counts['down'] ?? 0);
@@ -353,6 +357,10 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     }
     $m = is_array($wx) && isset($wx['metrics']) && is_array($wx['metrics']) ? $wx['metrics'] : [];
     if ((int) ($m['circuit_open_events_last_hour'] ?? 0) > 0) {
+        return true;
+    }
+    $nm = is_array($notam) && isset($notam['metrics']) && is_array($notam['metrics']) ? $notam['metrics'] : [];
+    if ((int) ($nm['upstream_429_last_hour'] ?? 0) > 0) {
         return true;
     }
     return false;
