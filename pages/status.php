@@ -985,12 +985,13 @@ if (php_sapi_name() === 'cli') {
                 </div>
                 
                 <ul class="component-list">
-                    <?php foreach ($systemHealth['components'] as $componentIndex => $component): ?>
+                    <?php foreach ($systemHealth['components'] as $componentKey => $component): ?>
                     <?php
                     $componentProviders = (isset($component['providers']) && is_array($component['providers']))
                         ? $component['providers']
                         : [];
                     $hasProviderBreakdown = $componentProviders !== [];
+                    $componentKeyEscaped = htmlspecialchars((string) $componentKey, ENT_QUOTES, 'UTF-8');
                     ?>
                     <li class="component-item<?php echo $hasProviderBreakdown ? ' component-item-expandable' : ''; ?>">
                         <div class="component-info">
@@ -999,9 +1000,9 @@ if (php_sapi_name() === 'cli') {
                                 <button type="button"
                                         class="component-expand-btn"
                                         aria-expanded="false"
-                                        aria-controls="component-providers-<?php echo (int) $componentIndex; ?>"
+                                        aria-controls="component-providers-<?php echo $componentKeyEscaped; ?>"
                                         aria-label="Show per-provider HTTP 429 counts for <?php echo htmlspecialchars($component['name']); ?>"
-                                        data-component-toggle="<?php echo (int) $componentIndex; ?>"
+                                        data-component-toggle="<?php echo $componentKeyEscaped; ?>"
                                         data-component-name="<?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                         title="Show per-provider HTTP 429 counts">
                                     <span class="expand-icon" aria-hidden="true">▶</span>
@@ -1028,7 +1029,7 @@ if (php_sapi_name() === 'cli') {
                             </div>
                             <?php endif; ?>
                             <?php if ($hasProviderBreakdown): ?>
-                            <div class="component-providers collapsed" id="component-providers-<?php echo (int) $componentIndex; ?>">
+                            <div class="component-providers collapsed" id="component-providers-<?php echo $componentKeyEscaped; ?>">
                                 <table class="component-provider-table">
                                     <thead>
                                         <tr>
