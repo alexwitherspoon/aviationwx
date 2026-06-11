@@ -33,6 +33,25 @@ function notamDecodeNmsJsonResponse(string $response): ?array {
 }
 
 /**
+ * Whether decoded NMS JSON reports a successful query.
+ *
+ * @param array<string, mixed>|null $data Decoded NMS JSON body
+ */
+function notamNmsResponseIndicatesSuccess(?array $data): bool
+{
+    if ($data === null) {
+        return false;
+    }
+
+    $status = $data['status'] ?? null;
+    if (!is_string($status)) {
+        return false;
+    }
+
+    return strcasecmp(trim($status), 'Success') === 0;
+}
+
+/**
  * Extract AIXM XML rows from decoded NMS JSON.
  *
  * NMS omits `data.aixm` when there are no NOTAMs (`{"status":"Success","data":{}}`).
@@ -42,7 +61,11 @@ function notamDecodeNmsJsonResponse(string $response): ?array {
  */
 function notamExtractAixmRowsFromNmsResponse(?array $data): ?array
 {
-    if ($data === null || !isset($data['data']) || !is_array($data['data'])) {
+    if (!notamNmsResponseIndicatesSuccess($data)) {
+        return null;
+    }
+
+    if (!isset($data['data']) || !is_array($data['data'])) {
         return null;
     }
 

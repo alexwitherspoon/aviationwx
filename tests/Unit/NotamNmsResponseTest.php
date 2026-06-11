@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
  * NMS JSON payload parsing for location and geo queries.
  *
  * @covers ::notamExtractAixmRowsFromNmsResponse
+ * @covers ::notamNmsResponseIndicatesSuccess
  * @covers ::notamDecodeNmsJsonResponse
  */
 final class NotamNmsResponseTest extends TestCase
@@ -81,6 +82,14 @@ final class NotamNmsResponseTest extends TestCase
         self::assertNull(notamExtractAixmRowsFromNmsResponse([
             'status' => 'Success',
             'data' => ['aixm' => 'not-an-array'],
+        ]));
+    }
+
+    public function testExtract_NonSuccessStatus_ReturnsNull(): void
+    {
+        self::assertNull(notamExtractAixmRowsFromNmsResponse([
+            'status' => 'Error',
+            'data' => [],
         ]));
     }
 
