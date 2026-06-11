@@ -1036,7 +1036,7 @@ if (php_sapi_name() === 'cli') {
                                             <th scope="col">Provider</th>
                                             <th scope="col">429 (1h)</th>
                                             <th scope="col">Attempts</th>
-                                            <th scope="col">Success</th>
+                                            <th scope="col">Success %</th>
                                         </tr>
                                     </thead>
                                     <tbody>
