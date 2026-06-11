@@ -389,9 +389,9 @@ function upstreamRateTryTake(
     }
 
     $result = upstreamRateTokenBucketComputeTake($tokens, $lastRefill, $rpm, $burst, $now);
+    $preTakeTokens = $tokens;
+    $preTakeLastRefill = $lastRefill;
 
-    rewind($fp);
-    ftruncate($fp, 0);
     $payload = json_encode([
         'tokens' => $result['tokens'],
         'last_refill' => $result['last_refill'],
@@ -403,16 +403,40 @@ function upstreamRateTryTake(
         flock($fp, LOCK_UN);
         fclose($fp);
 
-        return $result['allowed'];
+        return true;
     }
 
-    $written = @fwrite($fp, $payload);
+    rewind($fp);
+    ftruncate($fp, 0);
+    if (!empty($GLOBALS['upstreamRateLimitTestForcePersistFailure'])) {
+        $written = false;
+    } else {
+        $written = @fwrite($fp, $payload);
+    }
     @fflush($fp);
-    if ($written === false) {
+
+    $persisted = is_int($written) && $written === strlen($payload);
+    if (!$persisted) {
         aviationwx_log('warning', 'upstream rate limit state write failed, allowing request', [
             'fingerprint_prefix' => substr($fingerprint, 0, 8),
             'file' => $stateFile,
         ], 'app');
+
+        $restorePayload = json_encode([
+            'tokens' => $preTakeTokens,
+            'last_refill' => $preTakeLastRefill,
+        ], JSON_UNESCAPED_UNICODE);
+        if ($restorePayload !== false) {
+            rewind($fp);
+            ftruncate($fp, 0);
+            @fwrite($fp, $restorePayload);
+            @fflush($fp);
+        }
+
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return true;
     }
 
     flock($fp, LOCK_UN);

@@ -23,7 +23,10 @@ final class UpstreamRateLimitTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['upstreamRateLimitTestRoot']);
+        unset(
+            $GLOBALS['upstreamRateLimitTestRoot'],
+            $GLOBALS['upstreamRateLimitTestForcePersistFailure']
+        );
         if ($this->testRoot !== null && is_dir($this->testRoot)) {
             $files = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->testRoot, \FilesystemIterator::SKIP_DOTS),
@@ -149,6 +152,24 @@ final class UpstreamRateLimitTest extends TestCase
 
         $t0 = 1_700_000_000.0;
         $this->assertFalse(upstreamRateTryTake($fingerprint, 60, 3, $t0));
+    }
+
+    public function testTryTake_PersistFailure_FailsOpenWithoutConsumedFlag(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $fingerprint = hash('sha256', 'persist-failure-test');
+        $t0 = 1_700_000_100.0;
+        $consumed = false;
+
+        $GLOBALS['upstreamRateLimitTestForcePersistFailure'] = true;
+        $this->assertTrue(upstreamRateTryTake($fingerprint, 60, 1, $t0, $consumed));
+        $this->assertFalse($consumed);
+
+        unset($GLOBALS['upstreamRateLimitTestForcePersistFailure']);
+        $consumed = false;
+        $this->assertTrue(upstreamRateTryTake($fingerprint, 60, 1, $t0, $consumed));
+        $this->assertTrue($consumed);
     }
 
     public function testFingerprint_Metar_DifferentStationIds_ReturnsDifferentHash(): void
