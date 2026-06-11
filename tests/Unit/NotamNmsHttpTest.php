@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
  * @covers ::notamExecuteNmsQuery
  * @covers ::notamPerformNmsHttpGet
  * @covers ::notamCompute429RetryWaitSeconds
+ * @covers ::notamLogInvalidNmsPayload
  */
 final class NotamNmsHttpTest extends TestCase
 {
@@ -210,5 +211,26 @@ final class NotamNmsHttpTest extends TestCase
 
         $this->assertFalse($fetchSucceeded);
         $this->assertTrue($fetchAllDeferred);
+    }
+
+    public function testQueryNotamsByLocation_FailsWhenHttp200HasNonSuccessPayload(): void
+    {
+        clearNotamGlobalBackoff();
+
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken): array {
+            return [
+                'body' => '{"status":"Error","data":{}}',
+                'http_code' => 200,
+                'headers' => [],
+                'error' => '',
+            ];
+        };
+
+        $lastRequestTime = 0.0;
+        $querySucceeded = true;
+        $rows = queryNotamsByLocation('OR81', $lastRequestTime, [], $querySucceeded);
+
+        $this->assertSame([], $rows);
+        $this->assertFalse($querySucceeded);
     }
 }

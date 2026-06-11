@@ -86,6 +86,28 @@ function notamExtractAixmRowsFromNmsResponse(?array $data): ?array
 }
 
 /**
+ * Log diagnostic context when NMS returns HTTP 200 but the body cannot be parsed.
+ *
+ * @param string $endpoint Health endpoint key (location, geo)
+ * @param array<string, mixed> $context Query-specific fields (location, lat/lon, etc.)
+ * @param string $response Raw HTTP body
+ * @param array<string, mixed>|null $data Decoded JSON when decode succeeded
+ */
+function notamLogInvalidNmsPayload(
+    string $endpoint,
+    array $context,
+    string $response,
+    ?array $data,
+): void {
+    aviationwx_log('warning', 'notam fetcher: invalid NMS payload', array_merge($context, [
+        'endpoint' => $endpoint,
+        'http_code' => 200,
+        'nms_status' => is_array($data) ? ($data['status'] ?? null) : null,
+        'response_prefix' => substr($response, 0, 200),
+    ]), 'app');
+}
+
+/**
  * Block until the shared NMS credential may issue another NOTAM API request.
  *
  * Coordinates across scheduler worker processes (not just this fetch). The
@@ -238,6 +260,7 @@ function queryNotamsByLocation(
     $data = notamDecodeNmsJsonResponse($response);
     $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
     if ($aixmRows === null) {
+        notamLogInvalidNmsPayload('location', ['location' => $location], $response, $data);
         notamHealthTrackRequest('location', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
@@ -312,6 +335,11 @@ function queryNotamsByCoordinates(
     $data = notamDecodeNmsJsonResponse($response);
     $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
     if ($aixmRows === null) {
+        notamLogInvalidNmsPayload('geo', [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'radius' => $radius,
+        ], $response, $data);
         notamHealthTrackRequest('geo', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
