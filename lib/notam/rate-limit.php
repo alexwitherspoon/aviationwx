@@ -30,7 +30,7 @@ function notamRateLimitFingerprint(): string
 
     $material = [
         'client_id' => trim($clientId),
-        'base_url' => trim($baseUrl),
+        'base_url' => rtrim(trim($baseUrl), '/'),
     ];
     ksort($material);
 

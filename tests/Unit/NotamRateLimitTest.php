@@ -65,6 +65,20 @@ final class NotamRateLimitTest extends TestCase
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', notamRateLimitFingerprint());
     }
 
+    public function testNotamRateLimitFingerprint_TrailingSlashOnBaseUrl_MatchesWithoutSlash(): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/notam/rate-limit.php';
+
+        $GLOBALS['notamRateLimitTestClientId'] = 'client-a';
+        $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
+        $withoutSlash = notamRateLimitFingerprint();
+
+        $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms/';
+        $withSlash = notamRateLimitFingerprint();
+
+        $this->assertSame($withoutSlash, $withSlash);
+    }
+
     public function testNotamRateLimitAcquire_SecondRequestWithinOneSecondWaits(): void
     {
         require_once dirname(__DIR__, 2) . '/lib/notam/rate-limit.php';
