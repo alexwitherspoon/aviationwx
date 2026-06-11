@@ -510,11 +510,33 @@ function weatherHealthComputeSourceStatus(array $data): array
 }
 
 /**
+ * Read and decode the weather health cache file.
+ *
+ * @return array<string, mixed>|null Decoded cache or null when missing/unreadable
+ */
+function weatherHealthLoadCache(): ?array
+{
+    if (!file_exists(getWeatherHealthCacheFilePath())) {
+        return null;
+    }
+
+    $content = @file_get_contents(getWeatherHealthCacheFilePath());
+    if ($content === false) {
+        return null;
+    }
+
+    $data = @json_decode($content, true);
+
+    return is_array($data) ? $data : null;
+}
+
+/**
  * Get weather health status (for status page).
  *
+ * @param array<string, mixed>|null $cache Preloaded cache from weatherHealthLoadCache()
  * @return array<string, mixed> Health status
  */
-function weatherHealthGetStatus(): array
+function weatherHealthGetStatus(?array $cache = null): array
 {
     $default = [
         'name' => 'Weather Data Fetching',
@@ -524,17 +546,8 @@ function weatherHealthGetStatus(): array
         'metrics' => [],
     ];
 
-    if (!file_exists(getWeatherHealthCacheFilePath())) {
-        return $default;
-    }
-
-    $content = @file_get_contents(getWeatherHealthCacheFilePath());
-    if ($content === false) {
-        return $default;
-    }
-
-    $data = @json_decode($content, true);
-    if (!is_array($data) || !isset($data['health'])) {
+    $data = $cache ?? weatherHealthLoadCache();
+    if ($data === null || !isset($data['health'])) {
         return $default;
     }
 
@@ -590,21 +603,13 @@ function weatherHealthProviderDisplayName(string $provider): string
 /**
  * Build per-provider rows for status page upstream 429 breakdown.
  *
+ * @param array<string, mixed>|null $cache Preloaded cache from weatherHealthLoadCache()
  * @return list<array<string, mixed>> Provider rows sorted by upstream 429 count
  */
-function weatherHealthGetProviderBreakdown(): array
+function weatherHealthGetProviderBreakdown(?array $cache = null): array
 {
-    if (!file_exists(getWeatherHealthCacheFilePath())) {
-        return [];
-    }
-
-    $content = @file_get_contents(getWeatherHealthCacheFilePath());
-    if ($content === false) {
-        return [];
-    }
-
-    $data = @json_decode($content, true);
-    if (!is_array($data)) {
+    $data = $cache ?? weatherHealthLoadCache();
+    if ($data === null) {
         return [];
     }
 

@@ -390,11 +390,33 @@ function notamHealthComputeProviderStatus(array $data): array
 }
 
 /**
+ * Read and decode the NOTAM health cache file.
+ *
+ * @return array<string, mixed>|null Decoded cache or null when missing/unreadable
+ */
+function notamHealthLoadCache(): ?array
+{
+    if (!file_exists(getNotamHealthCacheFilePath())) {
+        return null;
+    }
+
+    $content = @file_get_contents(getNotamHealthCacheFilePath());
+    if ($content === false) {
+        return null;
+    }
+
+    $data = @json_decode($content, true);
+
+    return is_array($data) ? $data : null;
+}
+
+/**
  * Get NOTAM health status (for status page).
  *
+ * @param array<string, mixed>|null $cache Preloaded cache from notamHealthLoadCache()
  * @return array<string, mixed> Health status
  */
-function notamHealthGetStatus(): array
+function notamHealthGetStatus(?array $cache = null): array
 {
     $default = [
         'name' => 'NOTAM Data Fetching',
@@ -404,17 +426,8 @@ function notamHealthGetStatus(): array
         'metrics' => [],
     ];
 
-    if (!file_exists(getNotamHealthCacheFilePath())) {
-        return $default;
-    }
-
-    $content = @file_get_contents(getNotamHealthCacheFilePath());
-    if ($content === false) {
-        return $default;
-    }
-
-    $data = @json_decode($content, true);
-    if (!is_array($data) || !isset($data['health'])) {
+    $data = $cache ?? notamHealthLoadCache();
+    if ($data === null || !isset($data['health'])) {
         return $default;
     }
 
@@ -424,21 +437,13 @@ function notamHealthGetStatus(): array
 /**
  * Get per-endpoint provider breakdown (for status page).
  *
+ * @param array<string, mixed>|null $cache Preloaded cache from notamHealthLoadCache()
  * @return list<array<string, mixed>> Provider rows
  */
-function notamHealthGetProviders(): array
+function notamHealthGetProviders(?array $cache = null): array
 {
-    if (!file_exists(getNotamHealthCacheFilePath())) {
-        return [];
-    }
-
-    $content = @file_get_contents(getNotamHealthCacheFilePath());
-    if ($content === false) {
-        return [];
-    }
-
-    $data = @json_decode($content, true);
-    if (!is_array($data) || !isset($data['providers']) || !is_array($data['providers'])) {
+    $data = $cache ?? notamHealthLoadCache();
+    if ($data === null || !isset($data['providers']) || !is_array($data['providers'])) {
         return [];
     }
 

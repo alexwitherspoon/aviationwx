@@ -297,16 +297,18 @@ function checkSystemHealth(): array {
     $health['components']['variant_generation'] = $variantHealth;
     
     // Uses cached data from weather-health.php
-    $weatherDataHealth = weatherHealthGetStatus();
-    $weatherProviders = weatherHealthGetProviderBreakdown();
+    $weatherCache = weatherHealthLoadCache();
+    $weatherDataHealth = weatherHealthGetStatus($weatherCache);
+    $weatherProviders = weatherHealthGetProviderBreakdown($weatherCache);
     if ($weatherProviders !== []) {
         $weatherDataHealth['providers'] = $weatherProviders;
     }
 
     $health['components']['weather_fetching'] = $weatherDataHealth;
 
-    $notamDataHealth = notamHealthGetStatus();
-    $notamProviders = notamHealthGetProviders();
+    $notamCache = notamHealthLoadCache();
+    $notamDataHealth = notamHealthGetStatus($notamCache);
+    $notamProviders = notamHealthGetProviders($notamCache);
     if ($notamProviders !== []) {
         $notamDataHealth['providers'] = $notamProviders;
     }
