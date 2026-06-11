@@ -334,7 +334,8 @@ function upstreamRateTryTake(
     ?float $now = null,
     ?bool &$consumed = null
 ): bool {
-    if ($consumed !== null) {
+    $trackConsumed = func_num_args() >= 5;
+    if ($trackConsumed) {
         $consumed = false;
     }
 
@@ -417,8 +418,8 @@ function upstreamRateTryTake(
     flock($fp, LOCK_UN);
     fclose($fp);
 
-    if ($consumed !== null && $result['allowed']) {
-        $consumed = true;
+    if ($trackConsumed) {
+        $consumed = $result['allowed'];
     }
 
     return $result['allowed'];
