@@ -43,7 +43,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `scheduler_config_reload_seconds` | `60` | Config reload check interval |
 | `weather_worker_pool_size` | `5` | Concurrent weather workers. After upstream throttles and METAR bulk are enabled, consider lowering this if you still see upstream 429s or throttle skips in `cache/weather_health.json`; raise only when fetches are consistently fast and under provider limits. |
 | `webcam_worker_pool_size` | `5` | Concurrent webcam workers |
-| `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
+| `notam_worker_pool_size` | `1` | Concurrent NOTAM worker processes. **Keep at 1** in most deployments: NMS allows 1 req/s and the scheduler starts at most one new NOTAM job per tick (`NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP`). Values greater than 1 do not increase parallel NMS API calls; they only let additional workers stay in flight while others wait on rate limits or finish parsing. `validateAirportsJsonStructure()` warns when this is set above 1. |
 | `station_power_worker_pool_size` | `1` | Concurrent station power fetch workers (`fetch-station-power.php`) |
 | `station_power_refresh_seconds` | `900` (15 min) | Default dashboard poll interval for `/api/station-power.php` (minimum 60; overridable per airport) |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
@@ -729,6 +729,8 @@ When the bucket is empty, that source is skipped for one fetch cycle (weather ma
 `lib/notam/rate-limit.php` enforces 1 request per second per NMS credential (`notam_api_client_id` + `notam_api_base_url`) using the same flock-backed token buckets as weather (`cache/upstream-limits/`). Workers wait for a token (poll `NOTAM_RATE_LIMIT_POLL_MICROSECONDS`, fail open after `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`) so location and geo queries for one airport still complete.
 
 The scheduler staggers NOTAM enqueue across the refresh window (`notamStaggerOffsetSeconds()` in `lib/notam/scheduling.php`) and starts at most `NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP` (default 1) new NOTAM worker per scheduler tick.
+
+**Worker pool vs enqueue cap:** `notam_worker_pool_size` limits how many NOTAM workers may run at once; the per-tick enqueue cap limits how many *new* jobs the scheduler starts each second. With the default pool size of 1, extra capacity is unused by design. Raising the pool without raising the enqueue cap (or without a higher NMS rate limit) leaves slots idle. Raising both still serializes on the shared 1 req/s NMS token bucket in `lib/notam/rate-limit.php`. Prefer `notam_worker_pool_size: 1` unless profiling shows benefit from workers overlapping non-API work (for example parse/cache while another worker waits on HTTP).
 
 HTTP **429** and other NMS outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). On the status page, expand **NOTAM Data Fetching** for per-endpoint 429 counts (location, geo, auth) in the last hour.
 
