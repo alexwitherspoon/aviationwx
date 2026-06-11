@@ -356,17 +356,23 @@ body {
 .notam-time-range {
     font-size: 13px;
     opacity: 0.9;
-    flex-shrink: 0;
-    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
-/* Responsive: stack on narrow screens */
+/* Responsive: stack time range on its own row on narrow screens */
 @media (max-width: 600px) {
     .notam-line {
         padding: 12px 15px;
     }
-    
+
+    .notam-message {
+        min-width: 0;
+    }
+
     .notam-time-range {
+        flex-basis: 100%;
         width: 100%;
         margin-top: 4px;
         padding-left: 24px;
