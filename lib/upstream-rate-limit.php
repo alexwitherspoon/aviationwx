@@ -277,6 +277,27 @@ function upstreamRateTokenBucketComputeTake(
 }
 
 /**
+ * Pure token-bucket refund step (testable without filesystem).
+ *
+ * @param float $tokens Current token balance after a prior take
+ * @param float $lastRefill Unix timestamp of last refill
+ * @param int $burst Maximum bucket size
+ * @return array{tokens: float, last_refill: float}
+ */
+function upstreamRateTokenBucketComputeRefund(
+    float $tokens,
+    float $lastRefill,
+    int $burst
+): array {
+    $burst = max(1, $burst);
+
+    return [
+        'tokens' => min((float) $burst, $tokens + 1.0),
+        'last_refill' => $lastRefill,
+    ];
+}
+
+/**
  * Resolve on-disk state path for a fingerprint (test hook via $GLOBALS).
  */
 function upstreamRateLimitStateFilePath(string $fingerprint): string
@@ -303,10 +324,20 @@ function upstreamRateLimitStateFilePath(string $fingerprint): string
  * @param int $rpm Sustained requests per minute
  * @param int $burst Maximum burst size
  * @param float|null $now Injectable Unix timestamp for tests
+ * @param bool|null $consumed When provided, set true only if a token was persisted
  * @return bool True when a token was consumed; false when budget exhausted
  */
-function upstreamRateTryTake(string $fingerprint, int $rpm, int $burst, ?float $now = null): bool
-{
+function upstreamRateTryTake(
+    string $fingerprint,
+    int $rpm,
+    int $burst,
+    ?float $now = null,
+    ?bool &$consumed = null
+): bool {
+    if ($consumed !== null) {
+        $consumed = false;
+    }
+
     if ($now === null && isset($GLOBALS['upstreamRateLimitTestNow']) && is_numeric($GLOBALS['upstreamRateLimitTestNow'])) {
         $now = (float) $GLOBALS['upstreamRateLimitTestNow'];
     }
@@ -386,7 +417,98 @@ function upstreamRateTryTake(string $fingerprint, int $rpm, int $burst, ?float $
     flock($fp, LOCK_UN);
     fclose($fp);
 
+    if ($consumed !== null && $result['allowed']) {
+        $consumed = true;
+    }
+
     return $result['allowed'];
+}
+
+/**
+ * Return one token to a bucket after a failed multi-scope take (compensating transaction).
+ *
+ * Best-effort: I/O failure leaves the bucket unchanged (slightly conservative).
+ *
+ * @param string $fingerprint From upstreamRateFingerprint()
+ * @param int $burst Maximum burst size
+ */
+function upstreamRateRefund(string $fingerprint, int $rpm, int $burst): void
+{
+    $stateFile = upstreamRateLimitStateFilePath($fingerprint);
+    $stateDir = dirname($stateFile);
+    if (!is_dir($stateDir) && !@mkdir($stateDir, 0755, true) && !is_dir($stateDir)) {
+        aviationwx_log('warning', 'upstream rate limit refund skipped, state dir unavailable', [
+            'dir' => $stateDir,
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+        ], 'app');
+
+        return;
+    }
+
+    $fp = @fopen($stateFile, 'c+');
+    if ($fp === false) {
+        aviationwx_log('warning', 'upstream rate limit refund skipped, state file unavailable', [
+            'file' => $stateFile,
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+        ], 'app');
+
+        return;
+    }
+
+    if (!@flock($fp, LOCK_EX)) {
+        @fclose($fp);
+        aviationwx_log('warning', 'upstream rate limit refund skipped, flock failed', [
+            'file' => $stateFile,
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+        ], 'app');
+
+        return;
+    }
+
+    $tokens = (float) $burst;
+    $lastRefill = 0.0;
+    $fileSize = @filesize($stateFile);
+    if ($fileSize !== false && $fileSize > 0) {
+        rewind($fp);
+        $content = @stream_get_contents($fp);
+        if ($content !== false && $content !== '') {
+            $decoded = json_decode($content, true);
+            if (is_array($decoded)) {
+                $tokens = (float) ($decoded['tokens'] ?? $burst);
+                $lastRefill = (float) ($decoded['last_refill'] ?? 0.0);
+            }
+        }
+    }
+
+    $result = upstreamRateTokenBucketComputeRefund($tokens, $lastRefill, $burst);
+
+    rewind($fp);
+    ftruncate($fp, 0);
+    $payload = json_encode([
+        'tokens' => $result['tokens'],
+        'last_refill' => $result['last_refill'],
+    ], JSON_UNESCAPED_UNICODE);
+    if ($payload === false) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        aviationwx_log('warning', 'upstream rate limit refund encode failed', [
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+        ], 'app');
+
+        return;
+    }
+
+    $written = @fwrite($fp, $payload);
+    @fflush($fp);
+    if ($written === false) {
+        aviationwx_log('warning', 'upstream rate limit refund write failed', [
+            'fingerprint_prefix' => substr($fingerprint, 0, 8),
+            'file' => $stateFile,
+        ], 'app');
+    }
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
 }
 
 /**
@@ -447,13 +569,25 @@ function upstreamRateLimitConsumeForSource(array $source): array
     }
 
     $prefix = null;
+    $takenScopes = [];
+
     foreach ($scopes as $scope) {
-        if (!upstreamRateTryTake($scope['fingerprint'], $scope['rpm'], $scope['burst'])) {
+        $consumed = false;
+        if (!upstreamRateTryTake($scope['fingerprint'], $scope['rpm'], $scope['burst'], null, $consumed)) {
+            foreach (array_reverse($takenScopes) as $prior) {
+                upstreamRateRefund($prior['fingerprint'], $prior['rpm'], $prior['burst']);
+            }
+
             return [
                 'allowed' => false,
                 'fingerprint_prefix' => substr($scope['fingerprint'], 0, 8),
             ];
         }
+
+        if ($consumed) {
+            $takenScopes[] = $scope;
+        }
+
         if ($prefix === null) {
             $prefix = substr($scope['fingerprint'], 0, 8);
         }

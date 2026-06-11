@@ -272,6 +272,63 @@ final class UpstreamRateLimitTest extends TestCase
         unset($GLOBALS['upstreamRateLimitTestNow']);
     }
 
+    public function testConsumeForSource_Ambient_PartialDenyRefundsEarlierScopeTokens(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $t0 = 1_700_000_000.0;
+        $sharedApp = 'shared-developer-key';
+        $deniedSource = [
+            'type' => 'ambient',
+            'api_key' => 'user-d',
+            'application_key' => $sharedApp,
+        ];
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        foreach (
+            [
+                ['type' => 'ambient', 'api_key' => 'user-a', 'application_key' => $sharedApp],
+                ['type' => 'ambient', 'api_key' => 'user-b', 'application_key' => $sharedApp],
+                ['type' => 'ambient', 'api_key' => 'user-c', 'application_key' => $sharedApp],
+            ] as $source
+        ) {
+            $this->assertTrue(upstreamRateLimitConsumeForSource($source)['allowed']);
+        }
+
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertFalse(upstreamRateLimitConsumeForSource($deniedSource)['allowed']);
+
+        $apiFingerprint = upstreamRateFingerprintForScope(
+            'ambient',
+            'api_key',
+            $deniedSource,
+            ['api_key']
+        );
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+        $this->assertTrue(
+            upstreamRateTryTake(
+                $apiFingerprint,
+                UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_RPM,
+                UPSTREAM_RATE_LIMIT_AMBIENT_API_KEY_BURST,
+                $t0
+            ),
+            'api_key token should be refunded when application_key scope denies the take'
+        );
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestNow']);
+    }
+
+    public function testTokenBucketComputeRefund_CapsAtBurst(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $result = upstreamRateTokenBucketComputeRefund(2.0, 100.0, 3);
+        $this->assertSame(3.0, $result['tokens']);
+        $this->assertSame(100.0, $result['last_refill']);
+    }
+
     public function testConsumeForSource_Ambient_ApiKeyScopeAllowsOnePerSecond(): void
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
