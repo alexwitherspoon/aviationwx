@@ -151,6 +151,7 @@ function notamExecuteNmsQuery(string $url, string $endpoint, float &$lastRequest
 
         $isRateLimit = notamGlobalBackoffShouldRecord($httpCode);
         if ($isRateLimit && $attempts === 1) {
+            notamHealthTrackRequest($endpoint, false, $httpCode);
             $waitSeconds = notamCompute429RetryWaitSeconds($httpCode, $headers);
             notamSleepFor429Retry($waitSeconds);
             notamRateLimitAcquire();

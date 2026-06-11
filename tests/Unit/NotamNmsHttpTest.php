@@ -111,6 +111,36 @@ final class NotamNmsHttpTest extends TestCase
         $this->assertFalse(checkNotamGlobalBackoff()['skip']);
     }
 
+    public function testExecuteNmsQuery_429Then200RecordsUpstream429InHealth(): void
+    {
+        $healthFile = $this->testRoot . '/notam_health.json';
+        $GLOBALS['notamHealthTestCacheFile'] = $healthFile;
+        require_once dirname(__DIR__, 2) . '/lib/notam-health.php';
+
+        $calls = 0;
+        $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken) use (&$calls): array {
+            $calls++;
+
+            return $calls === 1
+                ? ['body' => 'busy', 'http_code' => 429, 'headers' => ['retry-after' => '2'], 'error' => '']
+                : ['body' => '{"status":"Success","data":{}}', 'http_code' => 200, 'headers' => [], 'error' => ''];
+        };
+
+        $lastRequestTime = 0.0;
+        $result = notamExecuteNmsQuery(
+            'https://example.test/nmsapi/v1/notams?location=OR81',
+            'location',
+            $lastRequestTime,
+            'test-token',
+        );
+
+        $this->assertTrue($result['ok']);
+        notamHealthFlush();
+
+        $status = notamHealthGetStatus();
+        $this->assertSame(1, $status['metrics']['upstream_429_last_hour'] ?? null);
+    }
+
     public function testExecuteNmsQuery_Double429RecordsGlobalBackoff(): void
     {
         $GLOBALS['notamTestNmsHttpHandler'] = static function (string $url, string $bearerToken): array {
