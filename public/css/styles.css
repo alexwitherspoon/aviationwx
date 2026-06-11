@@ -356,7 +356,7 @@ body {
 .notam-time-range {
     font-size: 13px;
     opacity: 0.9;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-wrap: break-word;
 }
