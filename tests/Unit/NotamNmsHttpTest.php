@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * NMS HTTP execution with global backoff, header capture, and one 429 retry.
+ * NMS HTTP execution with global backoff, header capture, and one bounded 429/503 retry.
  *
  * @covers ::notamExecuteNmsQuery
  * @covers ::notamPerformNmsHttpGet
@@ -28,6 +28,9 @@ final class NotamNmsHttpTest extends TestCase
         $GLOBALS['notamTestSkipSleep'] = true;
         $GLOBALS['notamTestSleepAccumulatedSeconds'] = 0;
         $GLOBALS['notamTestBearerToken'] = 'test-token';
+        $GLOBALS['notamRateLimitTestSkipSleep'] = true;
+        $GLOBALS['notamRateLimitTestPollMicroseconds'] = 50_000;
+        $GLOBALS['upstreamRateLimitTestNow'] = 1_700_000_000.0;
 
         require_once dirname(__DIR__, 2) . '/lib/notam/http.php';
         require_once dirname(__DIR__, 2) . '/lib/notam/circuit-breaker.php';
@@ -46,6 +49,9 @@ final class NotamNmsHttpTest extends TestCase
             $GLOBALS['notamRateLimitTestClientSecret'],
             $GLOBALS['notamRateLimitTestBaseUrl'],
             $GLOBALS['notamRateLimitTestForceEnforcement'],
+            $GLOBALS['notamRateLimitTestSkipSleep'],
+            $GLOBALS['notamRateLimitTestPollMicroseconds'],
+            $GLOBALS['upstreamRateLimitTestNow'],
             $GLOBALS['notamTestSkipSleep'],
             $GLOBALS['notamTestSleepAccumulatedSeconds'],
             $GLOBALS['notamTestNmsHttpHandler'],
