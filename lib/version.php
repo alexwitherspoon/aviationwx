@@ -43,8 +43,16 @@ function getBuildVersionInfo(): array
         }
     }
 
-    // Deterministic hash for testing/development so ?v= busting and the
-    // version cookie keep a stable, expected format without a deploy file
+    // No version.json means a non-deploy environment: the deploy workflow
+    // always generates the file before the image builds. The fallback
+    // hashes the checkout path and current time, which keeps the 7-hex
+    // format the version cookie contract pins (containers ship without
+    // .git, so the version API's git fallback would yield 'unknown' and
+    // break that format). The per-request churn is intentional in dev:
+    // ?v= busts on every render so edited assets stay fresh under the
+    // immutable cache rules, and the version check tolerates the hash
+    // mismatch by design - the session reload marker caps the cost at
+    // one quiet reload per tab session.
     if ($buildHash === 'unknown') {
         $projectRoot = dirname(__DIR__);
         $buildHash = substr(md5($projectRoot . $buildTimestamp), 0, 7);
