@@ -1289,7 +1289,11 @@ if ($themeCookie === 'dark') {
                                  width="<?= $width ?>"
                                  height="<?= $height ?>"
                                  style="aspect-ratio: <?= $width ?>/<?= $height ?>; width: 100%; height: auto; position: relative; z-index: 2;"
-                                 fetchpriority="high"
+                                 <?php // First cam is the LCP element; below-fold cams load lazily so they
+                                       // stop competing with it for bandwidth on slow connections. Layout is
+                                       // reserved via aspect-ratio, so lazy loading cannot shift the page. ?>
+                                 fetchpriority="<?= $index === 0 ? 'high' : 'auto' ?>"
+                                 loading="<?= $index === 0 ? 'eager' : 'lazy' ?>"
                                  decoding="async"
                                  onerror="handleWebcamError(<?= $index ?>, this)"
                                  onload="if(typeof observeWebcamFormat === 'function') { observeWebcamFormat(<?= $index ?>, this); } const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
