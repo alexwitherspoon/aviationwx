@@ -71,11 +71,6 @@ Options -Indexes
     RewriteCond %{REQUEST_URI} ^/guides
     RewriteRule ^guides/?(.*)$ index.php [QSA,L]
     
-    # Ensure service worker is served correctly (must come before catch-all)
-    # Allow service worker file to be served as-is (don't route to index.php)
-    RewriteCond %{REQUEST_URI} ^/public/js/service-worker\.js
-    RewriteRule ^(.*)$ - [L]
-
     # Default to index.php for routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

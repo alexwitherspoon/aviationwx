@@ -648,13 +648,11 @@ jobs:
           DEPLOY_VERSION="${DEPLOY_SHA:0:7}-$(date +%s)"
           echo "Updating cache version to: ${DEPLOY_VERSION}"
           
-          # Update the cache version in public/js/service-worker.js
-          # The script handles missing files and verification
+          # Generate config/version.json so clients can detect this deploy
           bash scripts/deploy-update-cache-version.sh "${DEPLOY_VERSION}"
           
-          # Note: We don't commit service-worker.js changes during deployment
-          # The updated file will be synced to the server via rsync
-          # This avoids creating unnecessary commits and deployment loops
+          # Note: version.json is generated, not committed; it syncs to the
+          # server via rsync. This avoids deployment commit loops.
           echo "✓ Cache version updated (will be synced to server)"
 
       - name: Ensure server deployment paths exist
@@ -1867,22 +1865,6 @@ jobs:
               exit 1
             fi
           fi
-          EOF
-
-      - name: Purge browser and service worker caches on server
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          cd ~/aviationwx
-          # Force service worker update by updating public/js/service-worker.js timestamp
-          # This ensures clients will download new version
-          # Done after Nginx restart to ensure fresh content is served
-          touch public/js/service-worker.js || true
-          echo "✓ Updated service worker file timestamp to force cache bust"
-          
-          # If using Nginx proxy_cache, we would purge here
-          # Currently not using proxy_cache, but keeping this for future reference
-          # docker exec nginx nginx -s reload || true
           EOF
 
       - name: Post-deployment verification (quick check)

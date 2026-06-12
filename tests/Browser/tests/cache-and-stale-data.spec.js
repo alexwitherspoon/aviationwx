@@ -456,8 +456,7 @@ test.describe('Cache and Stale Data Handling', () => {
     expect(requestCount).toBeLessThanOrEqual(2); // Allow 1-2 requests (initial + maybe one forced)
   });
 
-  test('should handle Service Worker cache-busting correctly', async ({ page, context }) => {
-    // Register Service Worker if not already registered
+  test('should add cache-busting to forced weather refreshes', async ({ page }) => {
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     // Wait for 'load' to ensure all scripts are executed (critical for CI)
     await page.waitForLoadState('load', { timeout: 30000 });
@@ -468,20 +467,14 @@ test.describe('Cache and Stale Data Handling', () => {
       { timeout: 10000 }
     );
     
-    // Wait for Service Worker to be registered (optional - SW might not be available in test)
-    await page.waitForFunction(
-      () => 'serviceWorker' in navigator,
-      { timeout: 5000 }
-    ).catch(() => {}); // Service Worker might not be available in test
-    
     // Monitor network requests BEFORE triggering fetch
-    const swRequests = [];
+    const weatherRequests = [];
     const requestListener = request => {
       const url = request.url();
       // Match weather.php in various URL formats
       if (url.includes('weather.php')) {
         const hasCacheBusting = url.includes('_cb=') || url.includes('&_cb=') || url.match(/[?&]_cb=/);
-        swRequests.push({
+        weatherRequests.push({
           url,
           headers: request.headers(),
           hasCacheBusting
@@ -501,20 +494,20 @@ test.describe('Cache and Stale Data Handling', () => {
     await page.waitForTimeout(3000);
     
     // At least one request should have cache-busting parameter
-    const forcedRefreshRequests = swRequests.filter(r => r.hasCacheBusting);
+    const forcedRefreshRequests = weatherRequests.filter(r => r.hasCacheBusting);
     
-    if (forcedRefreshRequests.length === 0 && swRequests.length > 0) {
-      console.log('Service Worker cache-busting test - all requests:', swRequests.map(r => r.url));
+    if (forcedRefreshRequests.length === 0 && weatherRequests.length > 0) {
+      console.log('Cache-busting test - all requests:', weatherRequests.map(r => r.url));
     }
     
     // If no requests were captured, the function might not have been called or requests were cached
     // This is acceptable - the important thing is that if requests were made, they had cache-busting
-    if (swRequests.length > 0) {
+    if (weatherRequests.length > 0) {
       expect(forcedRefreshRequests.length).toBeGreaterThan(0);
     } else {
       // If no requests were made (possibly cached), that's also acceptable
       // The test verifies the mechanism works when requests are made
-      expect(swRequests.length).toBeGreaterThanOrEqual(0);
+      expect(weatherRequests.length).toBeGreaterThanOrEqual(0);
     }
   });
 

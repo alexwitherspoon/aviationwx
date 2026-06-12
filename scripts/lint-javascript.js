@@ -22,7 +22,6 @@ const DEFAULT_FILES = [
   'pages/error-404-airport.php',
   'pages/error-404.php',
   'pages/status.php',
-  'public/js/service-worker.js',
   'public/js/webcam-player-utils.js',
   'public/js/webcam-player-scroll-lock.js',
   'public/js/weather-timestamp-utils.js',
