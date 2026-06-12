@@ -101,7 +101,7 @@ function renderClientVersionCheckScript(string $buildHash, int $buildTimestamp, 
             'use strict';
 
             const BUILD_TIMESTAMP = <?= (int) $buildTimestamp ?>;
-            const BUILD_HASH = '<?= addslashes($buildHash) ?>';
+            const BUILD_HASH = <?= json_encode($buildHash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
             const MAX_NO_UPDATE_DAYS = <?= (int) $maxNoUpdateDays ?>;
             const LAST_CHECK_KEY = 'aviationwx-last-version-check';
             const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
