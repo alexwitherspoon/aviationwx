@@ -804,40 +804,38 @@ if ($themeCookie === 'dark') {
             /**
              * Check if dead man's switch should trigger
              * Returns reason string if cleanup needed, null otherwise
+             *
+             * Escalates only when BOTH signals are stale: the build this
+             * page is running AND the last confirmed contact (successful
+             * version check or fresh page load). Requiring both means a
+             * returning visitor who was simply away does not get wiped
+             * (their no-cache page load delivers a fresh build), while a
+             * genuinely stuck client (old cached build, nothing confirmed
+             * for the whole window) does.
              */
             function checkDeadManSwitch() {
                 const now = Date.now();
                 const maxAgeMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
+                if (maxAgeMs <= 0) {
+                    return null; // 0 = disabled via dead_man_switch_days
+                }
+                
+                const buildAge = now - (BUILD_TIMESTAMP * 1000);
+                if (buildAge <= maxAgeMs) {
+                    return null; // Running a recent build - nothing is stuck
+                }
                 
                 const lastCheckStr = safeStorageGet(LAST_CHECK_KEY);
-                
                 if (!lastCheckStr) {
-                    // No record of a successful check - this could be:
-                    // 1. First visit ever (normal)
-                    // 2. localStorage was cleared (normal)
-                    // 3. Very old client that never had this tracking (concerning)
-                    
-                    // Check if this build is suspiciously old
-                    const buildAge = now - (BUILD_TIMESTAMP * 1000);
-                    if (buildAge > maxAgeMs) {
-                        // Build is older than max age AND we have no check record
-                        // This suggests a stuck client with cleared storage
-                        return `Build is ${Math.floor(buildAge / 86400000)} days old with no version check record`;
-                    }
-                    
-                    safeStorageSet(LAST_CHECK_KEY, now.toString());
-                    return null;
+                    // Old build and no record of any confirmed contact
+                    // (first visit on a stuck cache, or storage cleared)
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with no version check record`;
                 }
                 
                 const lastCheck = parseInt(lastCheckStr, 10);
-                if (isNaN(lastCheck) || lastCheck <= 0) {
-                    safeStorageSet(LAST_CHECK_KEY, now.toString());
-                    return null;
-                }
-                
                 const timeSinceCheck = now - lastCheck;
-                if (timeSinceCheck > maxAgeMs) {
-                    return `No successful version check in ${Math.floor(timeSinceCheck / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
+                if (isNaN(lastCheck) || lastCheck <= 0 || timeSinceCheck > maxAgeMs) {
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with no confirmed contact in ${Math.floor(timeSinceCheck / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
                 }
                 
                 return null;
@@ -925,9 +923,14 @@ if ($themeCookie === 'dark') {
                     const serverNewerByMs = (serverVersion.timestamp - BUILD_TIMESTAMP) * 1000;
                     
                     // Far behind: soft reloads have not worked (or never ran);
-                    // escalate to a full cleanup
-                    const maxBehindMs = (serverVersion.max_no_update_days || MAX_NO_UPDATE_DAYS) * 24 * 60 * 60 * 1000;
-                    if (serverNewerByMs > maxBehindMs) {
+                    // escalate to a full cleanup. The server value wins so a
+                    // config change reaches old tabs; 0 disables escalation
+                    // and must not fall through to the client default.
+                    const maxBehindDays = Number.isFinite(serverVersion.max_no_update_days)
+                        ? serverVersion.max_no_update_days
+                        : MAX_NO_UPDATE_DAYS;
+                    const maxBehindMs = maxBehindDays * 24 * 60 * 60 * 1000;
+                    if (maxBehindMs > 0 && serverNewerByMs > maxBehindMs) {
                         performFullCleanup(`Client build is ${Math.floor(serverNewerByMs / 86400000)} days behind server`);
                         return;
                     }
@@ -966,6 +969,20 @@ if ($themeCookie === 'dark') {
                 if (deadManReason) {
                     performFullCleanup(deadManReason);
                     return; // Don't continue, we're reloading
+                }
+                
+                // A fresh page load is itself confirmed contact: dashboard
+                // HTML is no-cache, so a recent build timestamp means the
+                // server just served this page. This baseline keeps the dead
+                // man's switch from counting time the user was simply away,
+                // and a broken version endpoint alone (load works, checks
+                // fail) cannot trigger recurring cleanups. A stale build
+                // does not refresh the baseline: HTML served by a stuck
+                // intermediary cache must not keep deferring escalation.
+                const loadBuildAgeMs = Date.now() - (BUILD_TIMESTAMP * 1000);
+                const deadManWindowMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
+                if (deadManWindowMs <= 0 || loadBuildAgeMs <= deadManWindowMs) {
+                    safeStorageSet(LAST_CHECK_KEY, Date.now().toString());
                 }
                 
                 // First check during idle time to avoid blocking page load;
