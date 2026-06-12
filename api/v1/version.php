@@ -11,6 +11,7 @@
  * - timestamp: Unix timestamp of deployment
  * - deploy_date: ISO 8601 formatted deployment date
  * - max_no_update_days: Days before dead man's switch triggers
+ * - stuck_client_cleanup: Whether server-side stuck-client cleanup is enabled
  */
 
 // Prevent caching - clients should always get fresh version info

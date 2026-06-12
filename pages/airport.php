@@ -833,8 +833,12 @@ if ($themeCookie === 'dark') {
                 }
                 
                 const lastCheck = parseInt(lastCheckStr, 10);
+                if (isNaN(lastCheck) || lastCheck <= 0) {
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with an unreadable contact record`;
+                }
+                
                 const timeSinceCheck = now - lastCheck;
-                if (isNaN(lastCheck) || lastCheck <= 0 || timeSinceCheck > maxAgeMs) {
+                if (timeSinceCheck > maxAgeMs) {
                     return `Build is ${Math.floor(buildAge / 86400000)} days old with no confirmed contact in ${Math.floor(timeSinceCheck / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
                 }
                 
