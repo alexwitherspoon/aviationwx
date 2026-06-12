@@ -17,6 +17,7 @@ require_once __DIR__ . '/../lib/version.php';
 // Static assets below carry ?v=<build hash> and stay long-cached. Open
 // tabs converge through the client version check.
 header('Cache-Control: no-cache, must-revalidate');
+header('Pragma: no-cache');
 
 $buildVersion = getBuildVersionInfo();
 $buildHashShort = $buildVersion['hash_short'];
