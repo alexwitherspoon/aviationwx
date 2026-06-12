@@ -575,11 +575,25 @@ if ($themeCookie === 'dark') {
             // The reload-attempt marker must survive the reload it guards
             // even when sessionStorage throws (iOS Private Browsing), or a
             // client stuck on an old build would re-arm after every reload.
-            // Session cookies still work there, so they back the marker up.
+            // A session cookie backs the marker up, but only when storage
+            // is genuinely unavailable: cookies are shared across tabs, and
+            // one tab's reload must not suppress soft pickup in the others.
+            let sessionStorageUsable = null;
+            function sessionStorageWorks() {
+                if (sessionStorageUsable === null) {
+                    try {
+                        sessionStorage.setItem('aviationwx-storage-probe', '1');
+                        sessionStorage.removeItem('aviationwx-storage-probe');
+                        sessionStorageUsable = true;
+                    } catch (e) {
+                        sessionStorageUsable = false;
+                    }
+                }
+                return sessionStorageUsable;
+            }
             function reloadMarkerGet() {
-                const stored = safeSessionStorageGet(RELOAD_ATTEMPTED_KEY);
-                if (stored !== null) {
-                    return stored;
+                if (sessionStorageWorks()) {
+                    return safeSessionStorageGet(RELOAD_ATTEMPTED_KEY);
                 }
                 const match = document.cookie.match(/(?:^|;\s*)aviationwx_reload_attempted=([^;]+)/);
                 if (!match) {
@@ -594,7 +608,10 @@ if ($themeCookie === 'dark') {
                 }
             }
             function reloadMarkerSet(value) {
-                safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, value);
+                if (sessionStorageWorks()) {
+                    safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, value);
+                    return;
+                }
                 try {
                     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
                     document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax' + secure;
