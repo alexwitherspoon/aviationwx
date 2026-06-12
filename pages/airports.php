@@ -1524,6 +1524,24 @@ $breadcrumbs = generateBreadcrumbSchema([
         $buildVersion['max_no_update_days']
     );
     ?>
+    <script>
+    // The version-check script runs once at load; on the dashboard the
+    // 30-minute repeat comes from timer-lifecycle.js, which expects the
+    // dashboard's timer worker and would log warnings forever here. The
+    // map page only needs the schedule, so it carries its own. Hidden
+    // tabs stay on the schedule too: browser throttling just stretches
+    // the cadence, and a hidden tab that finds a newer build reloads at
+    // the quietest possible moment.
+    (function() {
+        'use strict';
+        const VERSION_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+        setInterval(function() {
+            if (typeof window.aviationwxCheckVersion === 'function') {
+                window.aviationwxCheckVersion();
+            }
+        }, VERSION_CHECK_INTERVAL_MS);
+    })();
+    </script>
     
     <script>
     (function() {
