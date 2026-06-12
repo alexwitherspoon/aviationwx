@@ -85,7 +85,7 @@ class VersionFileTest extends TestCase
         $content = file_get_contents($this->versionFile);
         $json = json_decode($content, true);
         
-        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'max_no_update_days'];
+        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'max_no_update_days', 'stuck_client_cleanup'];
         
         foreach ($requiredFields as $field) {
             $this->assertArrayHasKey(
@@ -125,6 +125,7 @@ class VersionFileTest extends TestCase
                 'timestamp' => time(),
                 'deploy_date' => gmdate('Y-m-d\TH:i:s\Z'),
                 'max_no_update_days' => 7,
+                'stuck_client_cleanup' => false,
                 '_fallback' => true
             ];
         }
