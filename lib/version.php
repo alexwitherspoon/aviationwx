@@ -14,8 +14,10 @@ require_once __DIR__ . '/config.php';
 /**
  * Read the deployed build version from config/version.json
  *
- * Falls back to a deterministic per-checkout hash in development and
- * testing, where the file is generated only at deploy time.
+ * In development and testing, where the file is generated only at deploy
+ * time, falls back to a generated hash that keeps the 7-hex format but
+ * changes per request on purpose; the fallback comment below has the
+ * full trade-off.
  *
  * @return array {
  *   'hash' => string,            // Full or generated build hash
