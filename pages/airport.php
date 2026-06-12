@@ -348,9 +348,9 @@ if ($themeCookie === 'dark') {
             
             // Check if it's currently night (evening civil twilight until morning civil twilight)
             function isNightTime() {
-                if (!nightData || !nightData.timezone) return false;
-                if (nightData.polarNight) return true;
-                if (nightData.nightStartHour === undefined || nightData.nightEndHour === undefined) return false;
+                if (!nightData || !nightData.timezone) { return false; }
+                if (nightData.polarNight) { return true; }
+                if (nightData.nightStartHour === undefined || nightData.nightEndHour === undefined) { return false; }
                 var currentMins = nightData.currentHour * 60 + nightData.currentMin;
                 var nightStartMins = nightData.nightStartHour * 60 + nightData.nightStartMin;
                 var nightEndMins = nightData.nightEndHour * 60 + nightData.nightEndMin;
@@ -364,7 +364,7 @@ if ($themeCookie === 'dark') {
             // Legacy support: convert old preferences
             if (!themePref) {
                 var oldNightPref = getCookie('aviationwx_night_mode');
-                if (oldNightPref === 'off') themePref = 'day';
+                if (oldNightPref === 'off') { themePref = 'day'; }
             }
             
             // Note: 'night' preference is now valid (manually selected by user)
@@ -659,7 +659,7 @@ if ($themeCookie === 'dark') {
                 try {
                     const flag = sessionStorage.getItem('aviationwx-cleanup-in-progress');
                     sessionStorage.clear();
-                    if (flag) sessionStorage.setItem('aviationwx-cleanup-in-progress', flag);
+                    if (flag) { sessionStorage.setItem('aviationwx-cleanup-in-progress', flag); }
                 } catch(e) {}
                 
                 // Unregister service workers

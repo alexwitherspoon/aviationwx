@@ -974,7 +974,7 @@ Best regards,
             var selectedIndex = -1;
             var searchTimeout = null;
             
-            if (!searchInput || !dropdown) return;
+            if (!searchInput || !dropdown) { return; }
             
             function navigateToAirport(airportId) {
                 var protocol = window.location.protocol;
@@ -983,7 +983,7 @@ Best regards,
             }
             
             function searchAirports(query) {
-                if (!query || query.length < 2) return [];
+                if (!query || query.length < 2) { return []; }
                 
                 var queryLower = query.toLowerCase().trim();
                 var results = [];
@@ -1009,8 +1009,8 @@ Best regards,
                                 (b.icao && b.icao.toLowerCase() === queryLower) ||
                                 (b.iata && b.iata.toLowerCase() === queryLower);
                     
-                    if (aExact && !bExact) return -1;
-                    if (!aExact && bExact) return 1;
+                    if (aExact && !bExact) { return -1; }
+                    if (!aExact && bExact) { return 1; }
                     return a.name.localeCompare(b.name);
                 });
                 
@@ -1117,13 +1117,13 @@ Best regards,
                     }
                 } else if (e.key === 'Enter') {
                     e.preventDefault();
+                    var airportId = null;
                     if (selectedIndex >= 0 && selectedIndex < items.length) {
-                        var airportId = items[selectedIndex].dataset.airportId;
-                        if (airportId) navigateToAirport(airportId);
+                        airportId = items[selectedIndex].dataset.airportId;
                     } else if (items.length === 1) {
-                        var airportId = items[0].dataset.airportId;
-                        if (airportId) navigateToAirport(airportId);
+                        airportId = items[0].dataset.airportId;
                     }
+                    if (airportId) { navigateToAirport(airportId); }
                 } else if (e.key === 'Escape') {
                     dropdown.classList.remove('show');
                     searchInput.blur();

@@ -58,31 +58,15 @@ function extractJavaScriptFromPHP(filePath) {
   let scriptIndex = 0;
   
   while ((match = scriptTagRegex.exec(content)) !== null) {
-    let jsCode = match[1];
+    const jsCode = match[1];
     const scriptTagStart = match.index;
     
-    // If JavaScript uses PHP output buffering (ob_start/ob_get_clean),
-    // the script tag might not have a proper closing tag in source.
-    // Check if jsCode contains PHP code that shouldn't be there
-    // (PHP code after JavaScript should be excluded)
-    if (jsCode.includes('<?php') || jsCode.includes('<?=')) {
-      // Find the last valid JavaScript line before PHP code
-      // Look for patterns that indicate end of JavaScript: });, });, etc.
-      // Split by PHP tags and take only the JavaScript parts
-      const parts = jsCode.split(/(<\?php|<\?=)/);
-      if (parts.length > 1) {
-        // Take only the JavaScript part before the first PHP tag
-        // This handles cases where PHP code appears after JavaScript
-        jsCode = parts[0].trim();
-        
-        // If the JavaScript part is too short, it might be a false positive
-        // (PHP tags might be inside JavaScript strings)
-        if (jsCode.length < 10) {
-          // Restore original - might be PHP in string literal
-          jsCode = match[1];
-        }
-      }
-    }
+    // Blocks containing PHP tags are linted whole: the placeholder
+    // substitution below rewrites <?= ?> and <?php ?> into valid JS.
+    // (An earlier version truncated such blocks at the first PHP tag to
+    // cope with pages/airport.php's output-buffer capture, which had no
+    // closing </script> in source. That capture pattern is gone, and the
+    // truncation hid most of each block from ESLint.)
     
     // Skip empty scripts
     if (!jsCode.trim()) {
@@ -153,12 +137,16 @@ function extractJavaScriptFromPHP(filePath) {
       return '0'; // Default placeholder (use number to avoid syntax issues)
     });
     
-    // First, handle ?> followed by semicolon (common pattern: const x = <?php ... ?>;)
-    // This must come BEFORE replacing <?php ... ?> blocks
-    cleanedCode = cleanedCode.replace(/\?>\s*;/g, '/* PHP close */');
+    // Replace <?php ... ?> blocks in expression position (const x = <?php ... ?>;)
+    // with a null placeholder so the statement stays valid JavaScript.
+    // Newlines are preserved so reported line numbers stay accurate.
+    cleanedCode = cleanedCode.replace(/(=\s*)<\?php([\s\S]*?)\?>/g, (match, prefix, phpCode) => {
+      const lines = (phpCode.match(/\n/g) || []).length;
+      return prefix + 'null' + '\n'.repeat(lines);
+    });
     
-    // Replace <?php ... ?> blocks with comments (preserve line count)
-    // Use non-greedy matching to handle nested cases
+    // Replace remaining (statement-position) <?php ... ?> blocks with comments
+    // (preserve line count). Use non-greedy matching to handle nested cases.
     cleanedCode = cleanedCode.replace(/<\?php[\s\S]*?\?>/gs, (phpCode) => {
       const lines = (phpCode.match(/\n/g) || []).length;
       // Replace with equivalent number of comment lines
@@ -328,7 +316,6 @@ async function lintJavaScript() {
       }
       
       // Count only real errors (not parsing errors)
-      errorCount += realErrors.length;
       errorCount += realErrors.length;
     }
   }

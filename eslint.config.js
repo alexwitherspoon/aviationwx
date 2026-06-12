@@ -56,6 +56,9 @@ module.exports = defineConfig([
                 "WEBCAM_REFRESH_SECONDS": "readonly",
                 // Cross-file: defined by public/js/exif-timestamp.js
                 "ExifTimestamp": "readonly",
+                // Cross-file namespace: created by public/js/units.js and
+                // public/js/weather-timestamp-utils.js
+                "AviationWX": "readonly",
                 // Disable Node.js-specific globals that don't exist in browser
                 // Only disable globals that are Node-only (not in browser)
                 ...Object.fromEntries(
@@ -136,6 +139,17 @@ module.exports = defineConfig([
         "no-implicit-globals": "off",
         "curly": "off",
         "no-use-before-define": "off",
+    },
+},
+{
+    // The inline bootstrap in pages/airport.php is the one place that
+    // DECLARES the dashboard globals listed in languageOptions.globals
+    // (every other file only reads them). Same-scope duplicate detection
+    // stays on via no-redeclare with builtinGlobals disabled.
+    files: ["pages/airport.php"],
+    rules: {
+        "no-redeclare": ["error", { builtinGlobals: false }],
+        "no-implicit-globals": "off",
     },
 }]);
 
