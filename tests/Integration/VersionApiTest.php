@@ -90,8 +90,11 @@ class VersionApiTest extends TestCase
         $json = $response['json'];
         
         $this->assertArrayHasKey('hash', $json, 'Response should contain hash');
+        $this->assertArrayHasKey('hash_full', $json, 'Response should contain hash_full');
         $this->assertArrayHasKey('timestamp', $json, 'Response should contain timestamp');
+        $this->assertArrayHasKey('deploy_date', $json, 'Response should contain deploy_date');
         $this->assertArrayHasKey('max_no_update_days', $json, 'Response should contain max_no_update_days');
+        $this->assertArrayHasKey('stuck_client_cleanup', $json, 'Response should contain stuck_client_cleanup');
     }
     
     public function testVersionEndpoint_HashIsValidFormat(): void
