@@ -633,41 +633,6 @@ if ($themeCookie === 'dark') {
     ?>
     <link rel="preconnect" href="<?= $protocol ?>://<?= htmlspecialchars($host) ?>">
     
-    <!-- Resource hints for external APIs (conditional based on weather source) -->
-    <?php
-    // Only preconnect to APIs that are actually used by this airport's weather sources
-    $weatherSourceType = getPrimaryWeatherSourceType($airport);
-    $needsMetar = isMetarEnabled($airport);
-    
-    switch ($weatherSourceType) {
-        case 'tempest':
-            echo "    <link rel=\"preconnect\" href=\"https://swd.weatherflow.com\" crossorigin>\n";
-            echo "    <link rel=\"dns-prefetch\" href=\"https://swd.weatherflow.com\">\n";
-            break;
-        case 'ambient':
-            echo "    <link rel=\"preconnect\" href=\"https://api.ambientweather.net\" crossorigin>\n";
-            echo "    <link rel=\"dns-prefetch\" href=\"https://api.ambientweather.net\">\n";
-            break;
-        case 'weatherlink':
-            echo "    <link rel=\"preconnect\" href=\"https://api.weatherlink.com\" crossorigin>\n";
-            echo "    <link rel=\"dns-prefetch\" href=\"https://api.weatherlink.com\">\n";
-            break;
-        case 'pwsweather':
-            echo "    <link rel=\"preconnect\" href=\"https://api.aerisapi.com\" crossorigin>\n";
-            echo "    <link rel=\"dns-prefetch\" href=\"https://api.aerisapi.com\">\n";
-            break;
-        case 'synopticdata':
-            echo "    <link rel=\"preconnect\" href=\"https://api.synopticdata.com\" crossorigin>\n";
-            echo "    <link rel=\"dns-prefetch\" href=\"https://api.synopticdata.com\">\n";
-            break;
-    }
-    
-    if ($needsMetar) {
-        echo "    <link rel=\"preconnect\" href=\"https://aviationweather.gov\" crossorigin>\n";
-        echo "    <link rel=\"dns-prefetch\" href=\"https://aviationweather.gov\">\n";
-    }
-    ?>
-    
     <?php
     // Enhanced meta tags
     echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
