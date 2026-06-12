@@ -93,4 +93,30 @@ final class NotamSchedulerQueueTest extends TestCase
 
         $this->assertCount(2, $selected);
     }
+
+    public function testSelectAirportsToEnqueue_ReturnsEmptyWhenGlobalBackoffActive(): void
+    {
+        require_once dirname(__DIR__, 2) . '/lib/notam/circuit-breaker.php';
+        require_once dirname(__DIR__, 2) . '/lib/notam/scheduler-queue.php';
+
+        $GLOBALS['notamRateLimitTestClientId'] = 'client-sched';
+        $GLOBALS['notamRateLimitTestClientSecret'] = 'secret-sched';
+        $GLOBALS['notamRateLimitTestBaseUrl'] = 'https://example.test/nms';
+
+        try {
+            recordNotamGlobalRateLimitFailure(429, null, time());
+            touch(notamCacheFilePath('stale'), time() - 10_000);
+
+            $selected = notamSelectAirportsToEnqueue(['stale'], 60, 5, time());
+
+            $this->assertSame([], $selected);
+        } finally {
+            clearNotamGlobalBackoff();
+            unset(
+                $GLOBALS['notamRateLimitTestClientId'],
+                $GLOBALS['notamRateLimitTestClientSecret'],
+                $GLOBALS['notamRateLimitTestBaseUrl'],
+            );
+        }
+    }
 }
