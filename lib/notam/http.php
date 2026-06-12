@@ -76,6 +76,15 @@ function notamPerformNmsHttpGet(string $url, string $bearerToken): array
     };
 
     $ch = curl_init();
+    if ($ch === false) {
+        return [
+            'body' => false,
+            'http_code' => 0,
+            'headers' => [],
+            'error' => 'curl_init failed',
+        ];
+    }
+
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
