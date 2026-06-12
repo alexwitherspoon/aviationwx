@@ -5380,9 +5380,25 @@ if (hasWeatherSources) {
         displayEmptyWeather();
     }
     
-    // Fetch immediately on page load (no delay - prioritize showing data quickly)
-    // This will update the display with fresh data if available
-    fetchWeather();
+    // First fetch: the weather API serves the same server-side cache the page
+    // just embedded, so when the embedded observation is provably fresher than
+    // the refresh interval, schedule the first fetch for when it ages out
+    // instead of re-requesting identical data. Fail closed: any doubt (no
+    // resolvable timestamp, client clock skew, future-dated observation, or
+    // age past the interval) fetches immediately.
+    let initialFetchDelayMs = 0;
+    if (weatherLastUpdated !== null && !clientClockSkewDetected) {
+        const dataAgeMs = Date.now() - weatherLastUpdated.getTime();
+        if (dataAgeMs >= 0 && dataAgeMs < weatherRefreshMs) {
+            initialFetchDelayMs = weatherRefreshMs - dataAgeMs;
+        }
+    }
+    if (initialFetchDelayMs > 0) {
+        console.log('[Weather] Embedded data is fresh, first refresh in ' + Math.round(initialFetchDelayMs / 1000) + 's');
+        setTimeout(fetchWeather, initialFetchDelayMs);
+    } else {
+        fetchWeather();
+    }
     
     // Register weather refresh with timer worker
     registerTimer('weather', weatherRefreshMs, function() {
