@@ -120,11 +120,6 @@ function notamExecuteNmsQuery(string $url, string $endpoint, float &$lastRequest
 {
     $backoff = checkNotamGlobalBackoff();
     if ($backoff['skip']) {
-        aviationwx_log('info', 'notam fetcher: deferred during global NMS backoff', [
-            'endpoint' => $endpoint,
-            'backoff_remaining' => $backoff['backoff_remaining'],
-        ], 'app');
-
         return [
             'ok' => false,
             'deferred' => true,
