@@ -122,7 +122,7 @@ More traditional, supports more browsers but more complex setup.
    - Stale cache detection (server data older than client)
    - Visual indicators for stale data
    - Concurrent fetch prevention
-   - Service Worker cache-busting handling
+   - Forced-refresh cache-busting handling
    - Network timeout handling on slow connections
 
 6. **Webcam Display**

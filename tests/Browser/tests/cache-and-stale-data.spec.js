@@ -493,22 +493,14 @@ test.describe('Cache and Stale Data Handling', () => {
     // Wait for request to be made
     await page.waitForTimeout(3000);
     
-    // At least one request should have cache-busting parameter
-    const forcedRefreshRequests = weatherRequests.filter(r => r.hasCacheBusting);
-    
-    if (forcedRefreshRequests.length === 0 && weatherRequests.length > 0) {
-      console.log('Cache-busting test - all requests:', weatherRequests.map(r => r.url));
+    if (weatherRequests.length === 0 || !weatherRequests.some(r => r.hasCacheBusting)) {
+      console.log('Cache-busting test - captured requests:', weatherRequests.map(r => r.url));
     }
     
-    // If no requests were captured, the function might not have been called or requests were cached
-    // This is acceptable - the important thing is that if requests were made, they had cache-busting
-    if (weatherRequests.length > 0) {
-      expect(forcedRefreshRequests.length).toBeGreaterThan(0);
-    } else {
-      // If no requests were made (possibly cached), that's also acceptable
-      // The test verifies the mechanism works when requests are made
-      expect(weatherRequests.length).toBeGreaterThanOrEqual(0);
-    }
+    // A forced refresh must hit the network (nothing intercepts fetches),
+    // and the forced request must carry the cache-busting parameter
+    expect(weatherRequests.length).toBeGreaterThan(0);
+    expect(weatherRequests.some(r => r.hasCacheBusting)).toBe(true);
   });
 
   test('should handle network timeouts gracefully on slow connections', async ({ page }) => {

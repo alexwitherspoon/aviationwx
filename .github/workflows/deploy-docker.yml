@@ -640,20 +640,20 @@ jobs:
           echo "✅ Pre-deployment validation passed - code is ready for production"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       
-      - name: Update cache version for cache busting
+      - name: Generate version.json for client version checks
         run: |
           # Generate a unique version based on commit SHA and timestamp
           # Use the determined deployment SHA
           DEPLOY_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
           DEPLOY_VERSION="${DEPLOY_SHA:0:7}-$(date +%s)"
-          echo "Updating cache version to: ${DEPLOY_VERSION}"
+          echo "Generating version.json for deploy: ${DEPLOY_VERSION}"
           
           # Generate config/version.json so clients can detect this deploy
           bash scripts/deploy-update-cache-version.sh "${DEPLOY_VERSION}"
           
           # Note: version.json is generated, not committed; it syncs to the
           # server via rsync. This avoids deployment commit loops.
-          echo "✓ Cache version updated (will be synced to server)"
+          echo "✓ version.json generated (will be synced to server)"
 
       - name: Ensure server deployment paths exist
         run: |

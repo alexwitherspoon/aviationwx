@@ -8,7 +8,7 @@ DEPLOY_VERSION="${1:-$(date +%s)}"
 VERSION_FILE="config/version.json"
 AIRPORTS_FILE="config/airports.json"
 
-echo "Updating cache version to: ${DEPLOY_VERSION}"
+echo "Generating version.json for deploy: ${DEPLOY_VERSION}"
 
 # Get git information
 GIT_HASH_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
