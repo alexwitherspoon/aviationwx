@@ -51,6 +51,37 @@ class InternalApiCacheHeadersTest extends TestCase
         $this->assertStringNotContainsString('public', $cacheControl);
     }
 
+    public function testStationPowerApi_Success_SendsSharedCacheHeaders(): void
+    {
+        // spfx carries station_power in the test fixture; a 200 needs no
+        // cache file because displayable:false is still a success payload
+        $response = $this->makeRequest('api/station-power.php?airport=spfx');
+
+        if ($response['http_code'] === 0) {
+            $this->markTestSkipped('Endpoint not available');
+        }
+        if ($response['http_code'] === 404) {
+            // Served config does not include the fixture airport (for
+            // example a dev stack running real airports); the contract is
+            // asserted where the fixture config is served, such as the QA
+            // workflow's Docker stack
+            $this->markTestSkipped('Fixture airport spfx not in served config');
+        }
+
+        $this->assertSame(200, $response['http_code']);
+        $cacheControl = $response['headers']['cache-control'] ?? '';
+        $this->assertStringContainsString('public', $cacheControl);
+        $this->assertStringContainsString(
+            'max-age=' . STATION_POWER_API_BROWSER_TTL_SECONDS,
+            $cacheControl
+        );
+        $this->assertStringContainsString(
+            's-maxage=' . STATION_POWER_API_CDN_TTL_SECONDS,
+            $cacheControl
+        );
+        $this->assertStringContainsString('stale-while-revalidate=', $cacheControl);
+    }
+
     public function testStationPowerApi_NotConfigured_SendsNoStore(): void
     {
         // kspb has no station_power in test fixtures, so this exercises the
@@ -66,10 +97,25 @@ class InternalApiCacheHeadersTest extends TestCase
         $this->assertStringContainsString('no-store', $cacheControl);
     }
 
+    public function testStationPowerApi_MethodNotAllowed_SendsNoStore(): void
+    {
+        // 405 is heuristically cacheable per RFC 9111, so the endpoint must
+        // send explicit no-store on that path too
+        $response = $this->makeRequest('api/station-power.php?airport=kspb', 'POST');
+
+        if ($response['http_code'] === 0) {
+            $this->markTestSkipped('Endpoint not available');
+        }
+
+        $this->assertSame(405, $response['http_code']);
+        $cacheControl = $response['headers']['cache-control'] ?? '';
+        $this->assertStringContainsString('no-store', $cacheControl);
+    }
+
     /**
      * @return array{http_code: int, body: string, headers: array<string, string>}
      */
-    private function makeRequest(string $path): array
+    private function makeRequest(string $path, string $method = 'GET'): array
     {
         if (!function_exists('curl_init')) {
             $this->markTestSkipped('cURL not available');
@@ -78,6 +124,9 @@ class InternalApiCacheHeadersTest extends TestCase
         $url = rtrim($this->baseUrl, '/') . '/' . ltrim($path, '/');
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
+        if ($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        }
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, getenv('CI') ? 15 : 10);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, getenv('CI') ? 10 : 5);
