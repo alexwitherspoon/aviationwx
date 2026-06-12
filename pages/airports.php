@@ -1866,6 +1866,41 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         }
         
+        var cloudsRefreshInterval = null;
+        var cloudsHourBucket = null;
+        
+        // Hour bucket in the tile URL matches the server-side tile cache TTL;
+        // a new bucket is a new URL, so Leaflet refetches and an open map
+        // picks up fresh cloud imagery instead of showing the load-time tiles
+        // forever. The radar layer gets the same effect from RainViewer frame
+        // ids; clouds tiles have no time component of their own.
+        function cloudsUrlForCurrentHour() {
+            cloudsHourBucket = Math.floor(Date.now() / 3600000);
+            return '/api/map-tiles.php?layer=clouds_new&t=' + cloudsHourBucket + '&z={z}&x={x}&y={y}';
+        }
+        
+        function startCloudsRefreshInterval() {
+            stopCloudsRefreshInterval();
+            // Check well inside the hour so a rollover is picked up promptly
+            cloudsRefreshInterval = setInterval(function() {
+                if (!cloudsLayer) {
+                    return;
+                }
+                var currentBucket = Math.floor(Date.now() / 3600000);
+                if (currentBucket !== cloudsHourBucket) {
+                    console.log('Cloud tiles hour bucket updated:', cloudsHourBucket, '->', currentBucket);
+                    cloudsLayer.setUrl(cloudsUrlForCurrentHour());
+                }
+            }, 10 * 60 * 1000);
+        }
+        
+        function stopCloudsRefreshInterval() {
+            if (cloudsRefreshInterval) {
+                clearInterval(cloudsRefreshInterval);
+                cloudsRefreshInterval = null;
+            }
+        }
+        
         function addCloudsLayer() {
             // Only add cloud layer if API key is configured
             if (!hasCloudLayer || !openWeatherMapApiKey) {
@@ -1877,7 +1912,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             // Note: Server-side caching via proxy reduces API calls dramatically.
             // Tiles are cached for 1 hour on server, then browser caches additionally.
             // Free tier: 60 calls/min, 1M/month. Server cache reduces this to ~100 calls/day typically.
-            var cloudsUrl = '/api/map-tiles.php?layer=clouds_new&z={z}&x={x}&y={y}';
+            var cloudsUrl = cloudsUrlForCurrentHour();
             
             cloudsLayer = L.tileLayer(cloudsUrl, {
                 opacity: 0.6,
@@ -1913,10 +1948,12 @@ $breadcrumbs = generateBreadcrumbSchema([
             });
             
             cloudsLayer.addTo(map);
+            startCloudsRefreshInterval();
             console.log('Cloud layer added');
         }
         
         function removeCloudsLayer() {
+            stopCloudsRefreshInterval();
             if (cloudsLayer) {
                 map.removeLayer(cloudsLayer);
                 cloudsLayer = null;
