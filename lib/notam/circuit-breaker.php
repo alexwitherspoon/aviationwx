@@ -53,13 +53,17 @@ function checkNotamGlobalBackoff(?int $now = null): array
     }
 
     clearstatcache(true, $backoffFile);
-    $backoffData = @json_decode((string) file_get_contents($backoffFile), true) ?: [];
+    $decoded = @json_decode((string) file_get_contents($backoffFile), true);
+    $backoffData = is_array($decoded) ? $decoded : [];
     $key = notamGlobalBackoffKey();
     if (!isset($backoffData[$key])) {
         return $default;
     }
 
     $state = $backoffData[$key];
+    if (!is_array($state)) {
+        return $default;
+    }
     $failures = (int) ($state['failures'] ?? 0);
     $nextAllowed = (int) ($state['next_allowed_time'] ?? 0);
 
@@ -143,11 +147,16 @@ function notamGlobalBackoffSetUntil(int $nextAllowedTime, ?int $now = null, ?int
     }
 
     $content = @stream_get_contents($fp);
-    $backoffData = ($content !== false && $content !== '')
-        ? (@json_decode($content, true) ?: [])
-        : [];
+    $decoded = ($content !== false && $content !== '')
+        ? @json_decode($content, true)
+        : null;
+    $backoffData = is_array($decoded) ? $decoded : [];
 
-    $existingNext = (int) ($backoffData[$key]['next_allowed_time'] ?? 0);
+    $existingNext = 0;
+    $existingState = $backoffData[$key] ?? null;
+    if (is_array($existingState)) {
+        $existingNext = (int) ($existingState['next_allowed_time'] ?? 0);
+    }
     $nextAllowedTime = max($nextAllowedTime, $existingNext);
     $backoffSeconds = max(0, $nextAllowedTime - $now);
 

@@ -122,6 +122,59 @@ final class NotamGlobalBackoffTest extends TestCase
         $this->assertFalse(checkNotamGlobalBackoff($now)['skip']);
     }
 
+    public function testCheck_TreatsScalarBackoffFileAsInactive(): void
+    {
+        file_put_contents($this->backoffFile, '"corrupted"', LOCK_EX);
+        clearstatcache();
+
+        $this->assertFalse(checkNotamGlobalBackoff(1_700_000_000)['skip']);
+    }
+
+    public function testCheck_TreatsMalformedEntryAsInactive(): void
+    {
+        file_put_contents(
+            $this->backoffFile,
+            json_encode([notamGlobalBackoffKey() => 'not-an-array'], JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+        clearstatcache();
+
+        $this->assertFalse(checkNotamGlobalBackoff(1_700_000_000)['skip']);
+    }
+
+    public function testSetUntil_RecoversFromScalarBackoffFile(): void
+    {
+        file_put_contents($this->backoffFile, '"corrupted"', LOCK_EX);
+        clearstatcache();
+
+        $now = 1_700_000_000;
+        recordNotamGlobalRateLimitFailure(429, null, $now);
+
+        $result = checkNotamGlobalBackoff($now + 10);
+        $this->assertTrue($result['skip']);
+
+        $decoded = json_decode((string) file_get_contents($this->backoffFile), true);
+        $this->assertIsArray($decoded);
+        $this->assertIsArray($decoded[notamGlobalBackoffKey()] ?? null);
+    }
+
+    public function testSetUntil_RecoversFromMalformedExistingEntry(): void
+    {
+        file_put_contents(
+            $this->backoffFile,
+            json_encode([notamGlobalBackoffKey() => 'not-an-array'], JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+        clearstatcache();
+
+        $now = 1_700_000_000;
+        recordNotamGlobalRateLimitFailure(429, ['retry-after' => '30'], $now);
+
+        $result = checkNotamGlobalBackoff($now + 10);
+        $this->assertTrue($result['skip']);
+        $this->assertGreaterThanOrEqual(15, $result['backoff_remaining']);
+    }
+
     private function clearBackoffKey(): void
     {
         clearNotamGlobalBackoff();
