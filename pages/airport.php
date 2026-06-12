@@ -569,6 +569,24 @@ if ($themeCookie === 'dark') {
             function safeSessionStorageSet(key, value) {
                 try { sessionStorage.setItem(key, value); } catch (e) { /* unavailable */ }
             }
+            // The reload-attempt marker must survive the reload it guards
+            // even when sessionStorage throws (iOS Private Browsing), or a
+            // client stuck on an old build would re-arm after every reload.
+            // Session cookies still work there, so they back the marker up.
+            function reloadMarkerGet() {
+                const stored = safeSessionStorageGet(RELOAD_ATTEMPTED_KEY);
+                if (stored !== null) {
+                    return stored;
+                }
+                const match = document.cookie.match(/(?:^|;\s*)aviationwx_reload_attempted=([^;]+)/);
+                return match ? decodeURIComponent(match[1]) : null;
+            }
+            function reloadMarkerSet(value) {
+                safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, value);
+                try {
+                    document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax';
+                } catch (e) { /* cookies unavailable too - in-page guard still applies */ }
+            }
 
             const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
             const BUILD_HASH = '<?= $buildHash ?>';
@@ -741,13 +759,13 @@ if ($themeCookie === 'dark') {
                 if (reloadArmed) {
                     return;
                 }
-                if (safeSessionStorageGet(RELOAD_ATTEMPTED_KEY) === serverHash) {
+                if (reloadMarkerGet() === serverHash) {
                     return;
                 }
                 reloadArmed = true;
                 
                 const doReload = (confirmedHash) => {
-                    safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, confirmedHash);
+                    reloadMarkerSet(confirmedHash);
                     console.log('[Version] Reloading to pick up server build', confirmedHash);
                     window.location.reload();
                 };

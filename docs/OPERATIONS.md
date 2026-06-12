@@ -309,9 +309,12 @@ Handles rare cases where browser clients get stuck on old cached versions.
 
 ```json
 {
-  "hash": "abc123",
+  "hash": "abc1234",
+  "hash_full": "abc1234567890abcdef1234567890abcdef123456",
   "timestamp": 1735142400,
-  "max_no_update_days": 7
+  "deploy_date": "2025-12-25T16:00:00Z",
+  "max_no_update_days": 7,
+  "stuck_client_cleanup": false
 }
 ```
 

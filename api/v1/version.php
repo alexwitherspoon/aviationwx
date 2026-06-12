@@ -10,7 +10,9 @@
  * - hash_full: Full git hash
  * - timestamp: Unix timestamp of deployment
  * - deploy_date: ISO 8601 formatted deployment date
- * - max_no_update_days: Days before dead man's switch triggers
+ * - max_no_update_days: Full-cleanup threshold in days, both for a client
+ *   build behind the server and for a build that old without confirmed
+ *   contact (0 = disabled)
  * - stuck_client_cleanup: Whether server-side stuck-client cleanup is enabled
  */
 
