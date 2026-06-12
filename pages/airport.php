@@ -849,12 +849,43 @@ if ($themeCookie === 'dark') {
             let reloadArmed = false;
             
             /**
+             * Whether the server still serves a meaningfully newer build.
+             * Used right before a deferred reload fires: between arming and
+             * firing the deploy may have been rolled back or the server may
+             * have become unreachable, and reloading into either is worse
+             * than staying on the running page.
+             */
+            async function serverStillMeaningfullyNewer() {
+                try {
+                    const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) {
+                        return null;
+                    }
+                    const serverVersion = await response.json();
+                    if (!serverVersion || !serverVersion.hash || !serverVersion.timestamp) {
+                        return null;
+                    }
+                    const serverNewerByMs = (serverVersion.timestamp - BUILD_TIMESTAMP) * 1000;
+                    if (serverVersion.hash !== BUILD_HASH && serverNewerByMs > DEPLOY_GRACE_MS) {
+                        return serverVersion.hash;
+                    }
+                    return null;
+                } catch (err) {
+                    return null;
+                }
+            }
+            
+            /**
              * Pick up a newer server build with a plain reload at a quiet
              * moment: immediately when the tab is hidden, otherwise on the
              * next tab-hide or after a bounded delay (kiosks stay visible
              * forever). One attempt per server hash, tracked in
              * sessionStorage, so a reload that does not resolve the
              * mismatch cannot loop; the dead man's switch escalates later.
+             * Deferred reloads re-verify the server first and disarm when
+             * it is no longer ahead, so a later deploy can re-arm.
              */
             function armSoftReload(serverHash) {
                 if (reloadArmed) {
@@ -865,28 +896,41 @@ if ($themeCookie === 'dark') {
                 }
                 reloadArmed = true;
                 
-                const doReload = () => {
-                    safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, serverHash);
-                    console.log('[Version] Reloading to pick up server build', serverHash);
+                const doReload = (confirmedHash) => {
+                    safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, confirmedHash);
+                    console.log('[Version] Reloading to pick up server build', confirmedHash);
                     window.location.reload();
                 };
                 
                 if (document.hidden) {
-                    doReload();
+                    // The arming check itself just confirmed the server is
+                    // ahead; no need to re-verify milliseconds later
+                    doReload(serverHash);
                     return;
                 }
                 
                 console.log('[Version] New server build', serverHash, '- reload scheduled');
+                let delayTimer = null;
+                const deferredReload = async () => {
+                    const confirmedHash = await serverStillMeaningfullyNewer();
+                    if (confirmedHash === null) {
+                        reloadArmed = false;
+                        console.log('[Version] Scheduled reload skipped - server no longer ahead or unreachable');
+                        return;
+                    }
+                    doReload(confirmedHash);
+                };
                 const visibilityHandler = () => {
                     if (document.hidden) {
                         document.removeEventListener('visibilitychange', visibilityHandler);
-                        doReload();
+                        clearTimeout(delayTimer);
+                        deferredReload();
                     }
                 };
                 document.addEventListener('visibilitychange', visibilityHandler);
-                setTimeout(() => {
+                delayTimer = setTimeout(() => {
                     document.removeEventListener('visibilitychange', visibilityHandler);
-                    doReload();
+                    deferredReload();
                 }, VISIBLE_RELOAD_DELAY_MS);
             }
             
