@@ -408,15 +408,6 @@ if ($themeCookie === 'dark') {
     echo "\n    ";
     ?>
     
-    <!-- Preconnect to same origin for faster CSS loading -->
-    <?php
-    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
-    // Get base domain from global config
-    $baseDomain = getBaseDomain();
-    $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : $baseDomain;
-    ?>
-    <link rel="preconnect" href="<?= $protocol ?>://<?= htmlspecialchars($host) ?>">
-    
     <?php
     // Enhanced meta tags
     echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
