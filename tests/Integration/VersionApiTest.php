@@ -135,7 +135,7 @@ class VersionApiTest extends TestCase
         $this->assertLessThan($maxTimestamp, $timestamp, 'Timestamp should not be far in the future');
     }
     
-    public function testVersionEndpoint_MaxNoUpdateDaysIsPositiveInteger(): void
+    public function testVersionEndpoint_MaxNoUpdateDaysIsNonNegativeInteger(): void
     {
         $this->skipIfServerUnavailable();
         
@@ -143,7 +143,8 @@ class VersionApiTest extends TestCase
         $maxDays = $response['json']['max_no_update_days'] ?? null;
         
         $this->assertIsInt($maxDays, 'max_no_update_days should be an integer');
-        $this->assertGreaterThan(0, $maxDays, 'max_no_update_days should be positive');
+        // 0 is valid and means escalation is disabled
+        $this->assertGreaterThanOrEqual(0, $maxDays, 'max_no_update_days should be non-negative');
         $this->assertLessThanOrEqual(30, $maxDays, 'max_no_update_days should be reasonable (<= 30)');
     }
     
