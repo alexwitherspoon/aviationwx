@@ -45,10 +45,13 @@ class InternalApiCacheHeadersTest extends TestCase
         }
 
         $this->assertSame(400, $response['http_code']);
-        // No Cache-Control at all means the CDN bypasses under
-        // "use cache-control header if present" cache rules
-        $cacheControl = $response['headers']['cache-control'] ?? '';
-        $this->assertStringNotContainsString('public', $cacheControl);
+        // The contract is no Cache-Control header at all: the CDN then
+        // bypasses under "use cache-control header if present" cache rules
+        $this->assertArrayNotHasKey(
+            'cache-control',
+            $response['headers'],
+            'NOTAM error responses must not send any Cache-Control header'
+        );
     }
 
     public function testStationPowerApi_Success_SendsSharedCacheHeaders(): void
@@ -142,6 +145,8 @@ class InternalApiCacheHeadersTest extends TestCase
         });
         $body = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        // No curl_close(): the CurlHandle object frees itself at scope exit
+        // (curl_close is a no-op since PHP 8.0, deprecated since 8.5)
 
         return [
             'http_code' => $httpCode,
