@@ -361,14 +361,22 @@ keeps those uncached.
 | `/api/weather.php` | `s-maxage=30, stale-while-revalidate=300` | Highest-traffic endpoint; `_cb=` busts forced refreshes |
 | `/api/notam.php` | `s-maxage=60, stale-while-revalidate=120` on success only | Errors carry no cache headers and bypass |
 | `/api/station-power.php` | `s-maxage=60, stale-while-revalidate=300` on success only | Errors and rate limits stay `no-store` |
+| `/api/map-tiles.php` | `public, max-age=900` (radar) or `max-age=3600` (clouds) on tiles | Airports map overlays; tile URLs are frame- and hour-addressed, errors carry no cache headers |
+| `/api/rainviewer-weather-maps.php` | `public, max-age=300, stale-while-revalidate=600` | Radar frame manifest for the airports map |
 
 ### Never cache
 
-Dashboard and homepage HTML (live safety data, `no-cache` by design),
-`/api/time.php` (clock skew reference, `no-store`), `/api/v1/version.php`
-(deploy detection, `no-store`), and the rest of the Public API under
-`/api/v1/` (rate-limited, per-client semantics). None of these need an
-exclusion rule as long as no rule makes them eligible.
+Dashboard, homepage, and airports directory HTML (live safety data,
+`no-cache` by design), `/api/time.php` (clock skew reference, `no-store`),
+`/api/v1/version.php` (deploy detection, `no-store`), the rest of the
+Public API under `/api/v1/` (rate-limited, per-client semantics), and
+`/api/notam-map.php` (TFR GeoJSON behind a same-origin guard, so the
+response varies by request headers). None of these need an exclusion
+rule as long as no rule makes them eligible.
+
+Versioned static assets (`/public/**.css` and `.js` with `?v=`) need no
+rule at all: Cloudflare caches those extensions by default and respects
+the origin's immutable headers from the versioned-asset nginx rules.
 
 ### Verifying a rule
 
