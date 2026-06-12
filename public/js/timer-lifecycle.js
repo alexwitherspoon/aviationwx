@@ -165,14 +165,13 @@
      * Run the page's shared version check (defined by the dashboard
      * bootstrap as window.aviationwxCheckVersion). The comparison and
      * pickup logic live there; this module only provides the schedule.
+     *
+     * Hidden tabs check too: a hidden tab that detects a newer build
+     * reloads immediately, which is the quietest possible pickup.
+     * Browsers throttle hidden-tab intervals, which only stretches the
+     * 30 minute cadence.
      */
     function checkVersion() {
-        // Don't check if page is hidden - the dashboard check arms a
-        // reload on tab-hide anyway, and hidden tabs check on resume
-        if (document.hidden) {
-            return;
-        }
-        
         if (typeof window.aviationwxCheckVersion === 'function') {
             window.aviationwxCheckVersion();
         }

@@ -68,7 +68,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `cloudflare.zone_id` | - | Cloudflare Zone ID |
 | `cloudflare.account_id` | - | Cloudflare Account ID |
 | **Client Version Management** |||
-| `dead_man_switch_days` | `7` | Days without update before cleanup (0 = disabled) |
+| `dead_man_switch_days` | `7` | Full cleanup when the client build is this many days behind the server, or this old without confirmed contact (0 = disabled) |
 | `stuck_client_cleanup` | `false` | Inject cleanup for clients stuck on old code |
 | **Staleness Thresholds (3-tier model)** |||
 | `stale_warning_seconds` | `600` | Warning tier threshold (yellow indicator) |
