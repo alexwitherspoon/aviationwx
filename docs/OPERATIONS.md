@@ -363,16 +363,17 @@ keeps those uncached.
 | `/api/station-power.php` | `s-maxage=60, stale-while-revalidate=300` on success only | Errors and rate limits stay `no-store` |
 | `/api/map-tiles.php` | `public, max-age=900` (radar) or `max-age=3600` (clouds) on tiles | Airports map overlays; tile URLs are frame- and hour-addressed, errors carry no cache headers |
 | `/api/rainviewer-weather-maps.php` | `public, max-age=300, stale-while-revalidate=600` | Radar frame manifest for the airports map |
+| `api.aviationwx.org/*` (Public API) | Per-endpoint profiles from `lib/public-api/response.php`: weather `s-maxage=60`, airport metadata `s-maxage=3600`, timestamped webcam frames immutable | Same respect-origin rule; `version.php` and other `no-store` responses self-exclude. Cached hits never reach origin, so they do not consume a client's app-level rate limit; `X-RateLimit-*` headers on a cached hit reflect the request that filled the cache |
 
 ### Never cache
 
 Dashboard, homepage, and airports directory HTML (live safety data,
 `no-cache` by design), `/api/time.php` (clock skew reference, `no-store`),
-`/api/v1/version.php` (deploy detection, `no-store`), the rest of the
-Public API under `/api/v1/` (rate-limited, per-client semantics), and
+`/api/v1/version.php` (deploy detection, `no-store`), and
 `/api/notam-map.php` (TFR GeoJSON behind a same-origin guard, so the
 response varies by request headers). None of these need an exclusion
-rule as long as no rule makes them eligible.
+rule as long as no rule makes them eligible or the rule covering them
+respects origin headers.
 
 Versioned static assets (`/public/**.css` and `.js` with `?v=`) need no
 rule at all: Cloudflare caches those extensions by default and respects
@@ -387,6 +388,35 @@ curl -sI "https://kspb.aviationwx.org/api/weather.php?airport=kspb" | grep -i cf
 # no-store endpoints must stay DYNAMIC even when their path is rule-eligible
 curl -sI "https://kspb.aviationwx.org/webcam.php?id=kspb&cam=0&mtime=1" | grep -i cf-cache-status
 ```
+
+### Challenges and the Public API host
+
+Programmatic clients (Java SDKs, curl, server-to-server integrations)
+cannot solve a Cloudflare challenge: any challenge issued on
+`api.aviationwx.org` is a hard failure for the caller, usually surfacing
+as a 403 with challenge HTML. Challenges are reputation-driven (client
+IP, TLS fingerprint), so a partner behind a VPN can be challenged while
+the same request succeeds elsewhere - which makes the breakage look
+intermittent.
+
+Configuration for the API host (Cloudflare dashboard, not this repo):
+
+- A WAF custom rule `(http.host eq "api.aviationwx.org")` with action
+  **Skip**, covering Security Level, Browser Integrity Check, and bot
+  protection products the plan allows skipping. Free-plan Bot Fight Mode
+  cannot be skipped per-host; if Security Events attributes challenges
+  to it, the choice is disabling it zone-wide or upgrading.
+- Any rate limiting or abuse rule that targets the API host must use
+  **Block** (429), never a challenge action. The app already enforces
+  per-client rate limits with `X-RateLimit-*` headers and 429s, which
+  API clients handle correctly.
+- L3/4 and HTTP DDoS managed rulesets stay on regardless; they are
+  independent of challenge settings and only engage under attack
+  patterns.
+
+To diagnose a partner report, ask for the `cf-ray` ID from a failing
+response and look it up under Security > Events, which names the product
+that issued the challenge.
 
 ---
 
