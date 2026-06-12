@@ -66,6 +66,7 @@ if (!file_exists($versionFile)) {
         'timestamp' => time(),
         'deploy_date' => gmdate('Y-m-d\TH:i:s\Z'),
         'max_no_update_days' => 7,
+        'stuck_client_cleanup' => false,
         '_fallback' => true  // Indicates this was generated on-the-fly
     ];
     
