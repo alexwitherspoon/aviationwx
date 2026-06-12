@@ -162,59 +162,19 @@
     // ==========================================================================
     
     /**
-     * Get version cookie value
-     * @returns {Object|null} Parsed version { hash, timestamp } or null
+     * Run the page's shared version check (defined by the dashboard
+     * bootstrap as window.aviationwxCheckVersion). The comparison and
+     * pickup logic live there; this module only provides the schedule.
      */
-    function getVersionCookie() {
-        const match = document.cookie.match(/aviationwx_v=([^;]+)/);
-        if (!match) return null;
+    function checkVersion() {
+        // Don't check if page is hidden - the dashboard check arms a
+        // reload on tab-hide anyway, and hidden tabs check on resume
+        if (document.hidden) {
+            return;
+        }
         
-        const parts = match[1].split('.');
-        if (parts.length !== 2) return null;
-        
-        return {
-            hash: parts[0],
-            timestamp: parseInt(parts[1], 10)
-        };
-    }
-    
-    /**
-     * Check version API and compare with cookie
-     * Logs if a newer version is available
-     */
-    async function checkVersion() {
-        // Don't check if page is hidden
-        if (document.hidden) return;
-        
-        try {
-            const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
-                cache: 'no-store'
-            });
-            
-            if (!response.ok) {
-                console.warn('[TimerLifecycle] Version API returned status:', response.status);
-                return;
-            }
-            
-            const serverVersion = await response.json();
-            const cookieVersion = getVersionCookie();
-            
-            if (!serverVersion.hash || !cookieVersion) {
-                return;
-            }
-            
-            // Compare first 7 chars of hash (what we store in cookie)
-            const serverHashShort = serverVersion.hash.substring(0, 7);
-            
-            if (serverHashShort !== cookieVersion.hash) {
-                console.log('[TimerLifecycle] New version available on server');
-                console.log('[TimerLifecycle] Cookie:', cookieVersion.hash, '→ Server:', serverHashShort);
-            }
-        } catch (e) {
-            // Network errors are expected when offline
-            if (navigator.onLine !== false) {
-                console.warn('[TimerLifecycle] Version check failed:', e.message);
-            }
+        if (typeof window.aviationwxCheckVersion === 'function') {
+            window.aviationwxCheckVersion();
         }
     }
     
