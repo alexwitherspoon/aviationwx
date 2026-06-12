@@ -697,6 +697,18 @@ if ($themeCookie === 'dark') {
         (function() {
             'use strict';
 
+            const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
+            const BUILD_HASH = '<?= $buildHash ?>';
+            const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
+            const LAST_CHECK_KEY = 'aviationwx-last-version-check';
+            const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
+            const RELOAD_ATTEMPTED_KEY = 'aviationwx-reload-attempted';
+            // Ignore server builds newer by less than this: mid-deploy reads
+            // could otherwise reload clients onto a half-deployed version
+            const DEPLOY_GRACE_MS = 10 * 60 * 1000;
+            // Visible tabs reload after this delay; hidden tabs reload immediately
+            const VISIBLE_RELOAD_DELAY_MS = 10 * 60 * 1000;
+
             // localStorage/sessionStorage throw SecurityError in iOS Private Browsing
             function safeStorageGet(key) {
                 try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -755,18 +767,6 @@ if ($themeCookie === 'dark') {
                     document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax' + secure;
                 } catch (e) { /* cookies unavailable too - in-page guard still applies */ }
             }
-
-            const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
-            const BUILD_HASH = '<?= $buildHash ?>';
-            const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
-            const LAST_CHECK_KEY = 'aviationwx-last-version-check';
-            const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
-            const RELOAD_ATTEMPTED_KEY = 'aviationwx-reload-attempted';
-            // Ignore server builds newer by less than this: mid-deploy reads
-            // could otherwise reload clients onto a half-deployed version
-            const DEPLOY_GRACE_MS = 10 * 60 * 1000;
-            // Visible tabs reload after this delay; hidden tabs reload immediately
-            const VISIBLE_RELOAD_DELAY_MS = 10 * 60 * 1000;
 
             /**
              * Perform full cleanup - clear all caches, storage, and service workers
