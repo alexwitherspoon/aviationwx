@@ -10,7 +10,6 @@
  * - hash_full: Full git hash
  * - timestamp: Unix timestamp of deployment
  * - deploy_date: ISO 8601 formatted deployment date
- * - force_cleanup: Emergency flag to force all clients to cleanup
  * - max_no_update_days: Days before dead man's switch triggers
  */
 
@@ -65,7 +64,6 @@ if (!file_exists($versionFile)) {
         'hash_full' => $hashFull,
         'timestamp' => time(),
         'deploy_date' => gmdate('Y-m-d\TH:i:s\Z'),
-        'force_cleanup' => false,
         'max_no_update_days' => 7,
         '_fallback' => true  // Indicates this was generated on-the-fly
     ];

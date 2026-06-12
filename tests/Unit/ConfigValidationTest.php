@@ -2805,7 +2805,6 @@ class ConfigValidationTest extends TestCase
                 'default_timezone' => 'UTC',
                 'base_domain' => 'aviationwx.org',
                 'dead_man_switch_days' => 7,
-                'force_cleanup' => false,
                 'stuck_client_cleanup' => false,
                 'stale_warning_seconds' => 600,
                 'stale_error_seconds' => 3600,
@@ -4277,43 +4276,6 @@ class ConfigValidationTest extends TestCase
         $config['config']['dead_man_switch_days'] = 7.5;
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Float dead_man_switch_days should be invalid');
-    }
-
-    /**
-     * Test force_cleanup validation - Valid values
-     */
-    public function testForceCleanup_Valid()
-    {
-        $config = $this->createMinimalConfig();
-        
-        // Valid: true
-        $config['config']['force_cleanup'] = true;
-        $result = validateAirportsJsonStructure($config);
-        $this->assertTrue($result['valid'], 'force_cleanup = true should be valid');
-
-        // Valid: false
-        $config['config']['force_cleanup'] = false;
-        $result = validateAirportsJsonStructure($config);
-        $this->assertTrue($result['valid'], 'force_cleanup = false should be valid');
-    }
-
-    /**
-     * Test force_cleanup validation - Invalid values
-     */
-    public function testForceCleanup_Invalid()
-    {
-        $config = $this->createMinimalConfig();
-
-        // Invalid: integer (truthy)
-        $config['config']['force_cleanup'] = 1;
-        $result = validateAirportsJsonStructure($config);
-        $this->assertFalse($result['valid'], 'Integer force_cleanup should be invalid');
-        $this->assertStringContainsString('force_cleanup', implode(' ', $result['errors']));
-
-        // Invalid: string
-        $config['config']['force_cleanup'] = 'true';
-        $result = validateAirportsJsonStructure($config);
-        $this->assertFalse($result['valid'], 'String force_cleanup should be invalid');
     }
 
     /**

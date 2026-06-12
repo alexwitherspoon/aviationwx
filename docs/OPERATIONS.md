@@ -311,26 +311,24 @@ Handles rare cases where browser clients get stuck on old cached versions.
 {
   "hash": "abc123",
   "timestamp": 1735142400,
-  "force_cleanup": false,
   "max_no_update_days": 7
 }
 ```
 
-### Emergency Client Cleanup
+### Client Version Pickup
 
-Force ALL clients to clear caches and reload:
-
-1. Edit `airports.json` on production server
-2. Set `"force_cleanup": true` in the `config` section
-3. All clients will clear caches on next visit
-4. After resolved, set `"force_cleanup": false`
+Dashboard clients poll the version API and pick up new deploys
+automatically: when the server build is newer, the page soft-reloads at
+a quiet moment (hidden tab, or after a short delay when visible). The
+no-cache HTML plus versioned static assets guarantee a reload always
+loads current code. Clients that stay behind anyway escalate to a full
+cleanup (caches, storage, service workers) via the dead man's switch.
 
 ### Configuration Options (in `airports.json`)
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `dead_man_switch_days` | 7 | Days without SW update before cleanup (0 = disabled) |
-| `force_cleanup` | false | Emergency flag to force all client cleanup |
+| `dead_man_switch_days` | 7 | Days behind server or without a confirmed version check before full cleanup (0 = disabled) |
 | `stuck_client_cleanup` | false | Inject cleanup for clients stuck on old code |
 
 ---

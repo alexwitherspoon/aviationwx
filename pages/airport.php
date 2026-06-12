@@ -695,7 +695,6 @@ if ($themeCookie === 'dark') {
          * Detects stuck/stale client versions and forces a full cleanup when:
          * 1. No service worker update has occurred in max_no_update_days
          * 2. The build timestamp age is unknown (localStorage cleared but client stuck)
-         * 3. Server responds with force_cleanup flag
          * 
          * This is a safety net for rare edge cases where normal SW updates fail.
          */
@@ -851,12 +850,6 @@ if ($themeCookie === 'dark') {
                         }
                         
                         const serverVersion = await response.json();
-                        
-                        // Check for emergency force_cleanup flag
-                        if (serverVersion.force_cleanup === true) {
-                            performFullCleanup('Server requested force_cleanup');
-                            return;
-                        }
                         
                         // Check if server version is significantly newer
                         // (Hash mismatch alone isn't enough - could be mid-deploy)

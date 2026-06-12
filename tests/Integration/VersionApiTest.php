@@ -91,7 +91,6 @@ class VersionApiTest extends TestCase
         
         $this->assertArrayHasKey('hash', $json, 'Response should contain hash');
         $this->assertArrayHasKey('timestamp', $json, 'Response should contain timestamp');
-        $this->assertArrayHasKey('force_cleanup', $json, 'Response should contain force_cleanup');
         $this->assertArrayHasKey('max_no_update_days', $json, 'Response should contain max_no_update_days');
     }
     
@@ -131,17 +130,6 @@ class VersionApiTest extends TestCase
         
         $this->assertGreaterThan($minTimestamp, $timestamp, 'Timestamp should be after 2024-01-01');
         $this->assertLessThan($maxTimestamp, $timestamp, 'Timestamp should not be far in the future');
-    }
-    
-    public function testVersionEndpoint_ForceCleanupIsBoolean(): void
-    {
-        $this->skipIfServerUnavailable();
-        
-        $response = $this->fetchVersion();
-        $forceCleanup = $response['json']['force_cleanup'] ?? null;
-        
-        $this->assertIsBool($forceCleanup, 'force_cleanup should be a boolean');
-        $this->assertFalse($forceCleanup, 'force_cleanup should default to false');
     }
     
     public function testVersionEndpoint_MaxNoUpdateDaysIsPositiveInteger(): void

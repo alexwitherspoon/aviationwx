@@ -209,16 +209,6 @@
             if (serverHashShort !== cookieVersion.hash) {
                 console.log('[TimerLifecycle] New version available on server');
                 console.log('[TimerLifecycle] Cookie:', cookieVersion.hash, '→ Server:', serverHashShort);
-                
-                // Check for force_cleanup flag
-                if (serverVersion.force_cleanup === true) {
-                    console.warn('[TimerLifecycle] Server requested force_cleanup');
-                    
-                    // Trigger cleanup if function is available
-                    if (typeof window.performFullCleanup === 'function') {
-                        window.performFullCleanup('Server requested force_cleanup via version API');
-                    }
-                }
             }
         } catch (e) {
             // Network errors are expected when offline

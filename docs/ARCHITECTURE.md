@@ -337,10 +337,9 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 **Service Worker & Version Management**:
 - **Service Worker** (`public/js/service-worker.js`): Provides offline support with network-first caching for weather data
 - **Automatic Updates**: SW updates check every 5 minutes, with immediate activation via `skipWaiting()`
-- **Version Checking**: Client-side dead man's switch detects stuck versions:
-  - Tracks last SW update in localStorage
-  - Fetches `/api/v1/version.php` during idle time (non-blocking)
-  - Triggers full cleanup if no update in 7 days or if server sets `force_cleanup` flag
+- **Version Checking**: Clients poll `/api/v1/version.php` (on load and periodically) and compare the server build to their own:
+  - Newer server build: soft reload at a quiet moment picks up current code (no-cache HTML + versioned assets)
+  - Client more than `dead_man_switch_days` behind, or no confirmed check in that window: full cleanup (caches, storage, service workers)
 - **Version File**: `config/version.json` generated during deploy with git hash and timestamp
   - Configuration values sourced from `airports.json` config section
 - **Version Cookie** (`aviationwx_v`): Cross-subdomain cookie set on every response containing hash.timestamp

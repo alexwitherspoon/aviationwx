@@ -69,7 +69,6 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `cloudflare.account_id` | - | Cloudflare Account ID |
 | **Client Version Management** |||
 | `dead_man_switch_days` | `7` | Days without update before cleanup (0 = disabled) |
-| `force_cleanup` | `false` | Emergency flag to force all clients to cleanup |
 | `stuck_client_cleanup` | `false` | Inject cleanup for clients stuck on old code |
 | **Staleness Thresholds (3-tier model)** |||
 | `stale_warning_seconds` | `600` | Warning tier threshold (yellow indicator) |
@@ -214,7 +213,6 @@ Unit toggle defaults resolve in this order (first match wins):
     "upload_hostname": "upload.aviationwx.org",
     
     "dead_man_switch_days": 7,
-    "force_cleanup": false,
     "stuck_client_cleanup": false,
     
     "stale_warning_seconds": 600,
