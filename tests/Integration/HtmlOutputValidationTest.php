@@ -602,21 +602,21 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_LegacyServiceWorkerCleanupPresent()
     {
-        $response = $this->makeRequest('/?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0) {
+        if ($html === null) {
             $this->markTestSkipped('Airport page endpoint not available');
             return;
         }
         
         $this->assertStringContainsString(
             'Unregistering legacy service worker',
-            $response['body'],
+            $html,
             'Dashboard should contain the legacy service worker unregister pass'
         );
-        $this->assertStringNotContainsString(
-            'serviceWorker.register(',
-            $response['body'],
+        $this->assertDoesNotMatchRegularExpression(
+            '/serviceWorker\s*\.\s*register\s*\(/',
+            $html,
             'Dashboard must not register a service worker'
         );
     }

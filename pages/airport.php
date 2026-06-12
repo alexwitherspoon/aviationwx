@@ -471,10 +471,13 @@ if ($themeCookie === 'dark') {
                     })))
                     .then((results) => {
                         results.forEach((result) => {
+                            // unregister() can reject or resolve false;
+                            // either way a legacy worker may remain on the
+                            // client, which is worth seeing in the console
                             if (result.status === 'rejected') {
-                                // Surfacing this matters: a failure here
-                                // leaves a legacy worker on the client
                                 console.warn('[SW] Legacy service worker unregister failed:', result.reason);
+                            } else if (result.value === false) {
+                                console.warn('[SW] Legacy service worker unregister returned false');
                             }
                         });
                     })
