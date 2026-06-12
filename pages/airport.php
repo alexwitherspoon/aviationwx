@@ -446,25 +446,16 @@ if ($themeCookie === 'dark') {
     ?>
     
     <?php
-    // Inline CSS to eliminate render-blocking request
-    // Use minified CSS if available, fallback to regular CSS
-    $cssPath = file_exists(__DIR__ . '/../public/css/styles.min.css') 
-        ? __DIR__ . '/../public/css/styles.min.css' 
-        : __DIR__ . '/../public/css/styles.css';
-    
-    // Defensive error handling: prevent file read failures from outputting warnings
-    $cssContent = '';
-    if (file_exists($cssPath) && is_readable($cssPath)) {
-        $cssContent = @file_get_contents($cssPath);
-        if ($cssContent === false) {
-            error_log('Failed to read CSS file: ' . $cssPath);
-            $cssContent = ''; // Fallback to empty CSS
-        }
-    } else {
-        error_log('CSS file not found or not readable: ' . $cssPath);
-    }
+    // External stylesheet with build-hash cache busting: pilots re-check the
+    // same airport constantly, so a cached stylesheet beats re-inlining ~85KB
+    // of CSS into every HTML response. Minified build is produced by the
+    // Docker image build (scripts/minify-css.sh); fall back to styles.css
+    // when it is absent (local dev with the repo bind-mounted).
+    $cssHref = file_exists(__DIR__ . '/../public/css/styles.min.css')
+        ? '/public/css/styles.min.css'
+        : '/public/css/styles.css';
     ?>
-    <style><?= $cssContent ?></style>
+    <link rel="stylesheet" href="<?= $cssHref ?>?v=<?= $buildHashShort ?>">
     <script>
         // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {
