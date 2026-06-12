@@ -10,6 +10,17 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/pwa-help-screenshots.php';
+require_once __DIR__ . '/../lib/version.php';
+
+// The page body changes when airports.json changes (new airports) and on
+// deploys; always revalidate so clients pick those up on the next load.
+// Static assets below carry ?v=<build hash> and stay long-cached. Open
+// tabs converge through the client version check.
+header('Cache-Control: no-cache, must-revalidate');
+header('Pragma: no-cache');
+
+$buildVersion = getBuildVersionInfo();
+$buildHashShort = $buildVersion['hash_short'];
 
 // Load configuration and get listed airports (excludes unlisted airports from discovery)
 $config = loadConfig();
@@ -185,13 +196,13 @@ $breadcrumbs = generateBreadcrumbSchema([
     ?>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="/public/css/leaflet.css">
+    <link rel="stylesheet" href="/public/css/leaflet.css?v=<?= $buildHashShort ?>">
     <!-- Leaflet MarkerCluster CSS -->
-    <link rel="stylesheet" href="/public/css/MarkerCluster.css">
-    <link rel="stylesheet" href="/public/css/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.css?v=<?= $buildHashShort ?>">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.Default.css?v=<?= $buildHashShort ?>">
     
-    <link rel="stylesheet" href="/public/css/styles.css">
-    <link rel="stylesheet" href="/public/css/navigation.css">
+    <link rel="stylesheet" href="/public/css/styles.css?v=<?= $buildHashShort ?>">
+    <link rel="stylesheet" href="/public/css/navigation.css?v=<?= $buildHashShort ?>">
     <style>
         html {
             scroll-behavior: smooth;
@@ -1501,9 +1512,37 @@ $breadcrumbs = generateBreadcrumbSchema([
     </main>
     
     <!-- Leaflet JS -->
-    <script src="/public/js/leaflet.js"></script>
+    <script src="/public/js/leaflet.js?v=<?= $buildHashShort ?>"></script>
     <!-- Leaflet MarkerCluster -->
-    <script src="/public/js/leaflet.markercluster.js"></script>
+    <script src="/public/js/leaflet.markercluster.js?v=<?= $buildHashShort ?>"></script>
+    <?php
+    // Same automatic build pickup as the dashboard: a newer server build
+    // soft-reloads at a quiet moment, which also republishes the airport
+    // markers when airports.json changes with a deploy
+    renderClientVersionCheckScript(
+        $buildVersion['hash'],
+        $buildVersion['timestamp'],
+        $buildVersion['max_no_update_days']
+    );
+    ?>
+    <script>
+    // The version-check script runs once at load; on the dashboard the
+    // 30-minute repeat comes from timer-lifecycle.js, which expects the
+    // dashboard's timer worker and would log warnings forever here. The
+    // map page only needs the schedule, so it carries its own. Hidden
+    // tabs stay on the schedule too: browser throttling just stretches
+    // the cadence, and a hidden tab that finds a newer build reloads at
+    // the quietest possible moment.
+    (function() {
+        'use strict';
+        const VERSION_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+        setInterval(function() {
+            if (typeof window.aviationwxCheckVersion === 'function') {
+                window.aviationwxCheckVersion();
+            }
+        }, VERSION_CHECK_INTERVAL_MS);
+    })();
+    </script>
     
     <script>
     (function() {
@@ -1846,6 +1885,41 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         }
         
+        var cloudsRefreshInterval = null;
+        var cloudsHourBucket = null;
+        
+        // Hour bucket in the tile URL matches the server-side tile cache TTL;
+        // a new bucket is a new URL, so Leaflet refetches and an open map
+        // picks up fresh cloud imagery instead of showing the load-time tiles
+        // forever. The radar layer gets the same effect from RainViewer frame
+        // ids; clouds tiles have no time component of their own.
+        function cloudsUrlForCurrentHour() {
+            cloudsHourBucket = Math.floor(Date.now() / 3600000);
+            return '/api/map-tiles.php?layer=clouds_new&t=' + cloudsHourBucket + '&z={z}&x={x}&y={y}';
+        }
+        
+        function startCloudsRefreshInterval() {
+            stopCloudsRefreshInterval();
+            // Check well inside the hour so a rollover is picked up promptly
+            cloudsRefreshInterval = setInterval(function() {
+                if (!cloudsLayer) {
+                    return;
+                }
+                var currentBucket = Math.floor(Date.now() / 3600000);
+                if (currentBucket !== cloudsHourBucket) {
+                    console.log('Cloud tiles hour bucket updated:', cloudsHourBucket, '->', currentBucket);
+                    cloudsLayer.setUrl(cloudsUrlForCurrentHour());
+                }
+            }, 10 * 60 * 1000);
+        }
+        
+        function stopCloudsRefreshInterval() {
+            if (cloudsRefreshInterval) {
+                clearInterval(cloudsRefreshInterval);
+                cloudsRefreshInterval = null;
+            }
+        }
+        
         function addCloudsLayer() {
             // Only add cloud layer if API key is configured
             if (!hasCloudLayer || !openWeatherMapApiKey) {
@@ -1857,7 +1931,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             // Note: Server-side caching via proxy reduces API calls dramatically.
             // Tiles are cached for 1 hour on server, then browser caches additionally.
             // Free tier: 60 calls/min, 1M/month. Server cache reduces this to ~100 calls/day typically.
-            var cloudsUrl = '/api/map-tiles.php?layer=clouds_new&z={z}&x={x}&y={y}';
+            var cloudsUrl = cloudsUrlForCurrentHour();
             
             cloudsLayer = L.tileLayer(cloudsUrl, {
                 opacity: 0.6,
@@ -1893,10 +1967,12 @@ $breadcrumbs = generateBreadcrumbSchema([
             });
             
             cloudsLayer.addTo(map);
+            startCloudsRefreshInterval();
             console.log('Cloud layer added');
         }
         
         function removeCloudsLayer() {
+            stopCloudsRefreshInterval();
             if (cloudsLayer) {
                 map.removeLayer(cloudsLayer);
                 cloudsLayer = null;
