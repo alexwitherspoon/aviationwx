@@ -65,6 +65,7 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
 
     try {
         $fetchSucceeded = false;
+        $fetchAllDeferred = false;
         if (defined('AVIATIONWX_NOTAM_TEST_FETCH_THROW') && AVIATIONWX_NOTAM_TEST_FETCH_THROW !== '') {
             throw new RuntimeException((string) AVIATIONWX_NOTAM_TEST_FETCH_THROW);
         }
@@ -74,7 +75,16 @@ function processAirportNotam(string $airportId, string $invocationId, bool $expe
                 ? (array) AVIATIONWX_NOTAM_TEST_FETCH_NOTAMS
                 : [];
         } else {
-            $notams = fetchNotamsForAirport($airportId, $airport, $fetchSucceeded);
+            $notams = fetchNotamsForAirport($airportId, $airport, $fetchSucceeded, $fetchAllDeferred);
+        }
+
+        if ($fetchAllDeferred) {
+            aviationwx_log('info', 'notam fetch: deferred during global NMS backoff', [
+                'invocation_id' => $invocationId,
+                'airport' => $airportId,
+            ], 'app');
+
+            return true;
         }
 
         if (!$fetchSucceeded) {

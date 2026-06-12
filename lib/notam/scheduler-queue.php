@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/scheduling.php';
 require_once __DIR__ . '/cache.php';
+require_once __DIR__ . '/circuit-breaker.php';
 
 /**
  * Choose airports to refresh this scheduler tick (oldest cache first, capped).
@@ -29,6 +30,10 @@ function notamSelectAirportsToEnqueue(
     }
 
     $now = $now ?? time();
+    if (checkNotamGlobalBackoff($now)['skip']) {
+        return [];
+    }
+
     $eligible = [];
 
     foreach ($airportIds as $airportId) {

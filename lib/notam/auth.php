@@ -19,6 +19,13 @@ require_once __DIR__ . '/../notam-health.php';
  * @return string|null Bearer token on success, null on failure
  */
 function getNotamBearerToken(): ?string {
+    if (isset($GLOBALS['notamTestBearerToken'])
+        && is_string($GLOBALS['notamTestBearerToken'])
+        && $GLOBALS['notamTestBearerToken'] !== ''
+    ) {
+        return $GLOBALS['notamTestBearerToken'];
+    }
+
     $clientId = getNotamApiClientId();
     $clientSecret = getNotamApiClientSecret();
     $baseUrl = getNotamApiBaseUrl();

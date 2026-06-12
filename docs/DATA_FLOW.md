@@ -1378,7 +1378,9 @@ The system uses a **dual query strategy** to capture both airport-specific NOTAM
 1. **Location Query** (when an identifier is configured): Fetches NOTAMs for the airport via `notamResolveLocationQueryCode()` (ICAO, then IATA, then FAA)
 2. **Geospatial Query** (if coordinates available): Fetches TFR-focused airspace NOTAMs with `feature=AIRSPACE`, then applies a cheap XML pre-filter before parse (closures still come from the location query)
 
-Both queries are executed sequentially. NMS rate limiting uses a shared file-backed token bucket (`lib/notam/rate-limit.php`, 1 request per second per `notam_api_client_id` + base URL) so scheduler workers in separate processes do not burst above the API cap when one airport fetch follows another. Workers **wait** for a token (up to `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`, then fail open) rather than skipping the fetch.
+Both queries are executed sequentially through `lib/notam/http.php`. A shared file-backed token bucket (`lib/notam/rate-limit.php`, `NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE` under the documented 60/min cap) paces outbound calls per `notam_api_client_id` + base URL. Workers wait for a token (up to `NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS`, then fail open) rather than skipping the fetch.
+
+On HTTP **429** or **503**, `lib/notam/circuit-breaker.php` records a shared `global_notam_{fingerprint}` pause for the credential. While active, location and geo queries defer without calling NMS. One in-fetch retry runs after a capped `Retry-After` wait (`NOTAM_429_RETRY_MAX_WAIT_SECONDS`) before the pause is extended.
 
 **Observability**: NMS request outcomes increment counters in `cache/notam_health.json` via `lib/notam-health.php` (scheduler flush every 60 seconds). HTTP **429** responses increment `upstream_429` and per-endpoint `upstream_429_{location|geo|auth}` counters. On the status page, expand **NOTAM Data Fetching** to see per-endpoint 429 counts for the last hour.
 
@@ -1419,6 +1421,8 @@ The system uses OAuth bearer token authentication:
 
 The NMS API returns NOTAMs in AIXM 5.1.1 XML format embedded within a JSON wrapper:
 - `data.aixm`: Array of AIXM XML strings, one per NOTAM
+- When there are no NOTAMs, NMS may omit `data.aixm` and return `{"status":"Success","data":{}}`
+- `notamExtractAixmRowsFromNmsResponse()` treats a missing or null `data.aixm` as an empty row list
 - Each XML string contains the full NOTAM details
 
 ---
@@ -1556,10 +1560,10 @@ Filtered NOTAMs are cached per airport:
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes). The scheduler staggers per-airport due times across the refresh window and starts at most `NOTAM_SCHEDULER_MAX_ENQUEUE_PER_LOOP` (default 1) new NOTAM worker per scheduler tick so NMS traffic stays near 1 req/s without bursting when many airports become due together.
 - **Atomic writes**: `notamWriteCacheFile()` writes a temp file then renames into place
 - **Refresh failure backoff**: `scripts/fetch-notam.php` records `cache/notam/{airport_id}.fetch-attempt` (without changing cache payload or `mtime`) when a worker refresh fails so `notamShouldEnqueueRefresh()` backs off for `NOTAM_FETCH_FAILURE_BACKOFF_SECONDS` before re-enqueueing. This applies to:
-  - **Hard NMS failure**: every attempted query fails (missing credentials, HTTP error, invalid JSON) - existing cache is preserved instead of overwriting with an empty result
+  - **Hard NMS failure**: every attempted query fails (missing credentials, HTTP error, invalid JSON, or malformed `data.aixm`) - existing cache is preserved instead of overwriting with an empty result
   - **Worker exception**: uncaught error during fetch/parse/filter
   - **Cache write failure**: NMS succeeded but `notamWriteCacheFile()` could not persist (existing cache file, if any, is left unchanged)
-- **HTTP 200 with empty `aixm`**: treated as a successful fetch; cache is updated (including to an empty `notams` list). This differs from hard failure above: an empty payload is a valid "no NOTAMs" response, not a transport error. When NMS returns rows that filter to zero (for example cancellations), the cache is also updated to empty because raw AIXM was present.
+- **HTTP 200 with no NOTAMs**: missing, null, or empty `data.aixm` is a successful fetch; cache is updated (including to an empty `notams` list). Filtered-to-zero rows (for example cancellations) also update the cache when raw AIXM was present.
 
 ### Serve-Time Status Re-validation
 

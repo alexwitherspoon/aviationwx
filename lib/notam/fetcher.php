@@ -14,6 +14,7 @@ require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/geo-prefilter.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/http.php';
 require_once __DIR__ . '/../notam-health.php';
 
 /**
@@ -29,6 +30,81 @@ function notamDecodeNmsJsonResponse(string $response): ?array {
         return null;
     }
     return $data;
+}
+
+/**
+ * Whether decoded NMS JSON reports a successful query.
+ *
+ * @param array<string, mixed>|null $data Decoded NMS JSON body
+ */
+function notamNmsResponseIndicatesSuccess(?array $data): bool
+{
+    if ($data === null) {
+        return false;
+    }
+
+    $status = $data['status'] ?? null;
+    if (!is_string($status)) {
+        return false;
+    }
+
+    return strcasecmp(trim($status), 'Success') === 0;
+}
+
+/**
+ * Extract AIXM XML rows from decoded NMS JSON.
+ *
+ * NMS omits `data.aixm` when there are no NOTAMs (`{"status":"Success","data":{}}`).
+ *
+ * @param array<string, mixed>|null $data Decoded NMS JSON body
+ * @return array<int, string>|null Row list; empty when NMS reports no NOTAMs; null when payload is invalid
+ */
+function notamExtractAixmRowsFromNmsResponse(?array $data): ?array
+{
+    if (!notamNmsResponseIndicatesSuccess($data)) {
+        return null;
+    }
+
+    if (!isset($data['data']) || !is_array($data['data'])) {
+        return null;
+    }
+
+    if (!array_key_exists('aixm', $data['data'])) {
+        return [];
+    }
+
+    $aixm = $data['data']['aixm'];
+    if ($aixm === null) {
+        return [];
+    }
+
+    if (!is_array($aixm)) {
+        return null;
+    }
+
+    return $aixm;
+}
+
+/**
+ * Log diagnostic context when NMS returns HTTP 200 but the body cannot be parsed.
+ *
+ * @param string $endpoint Health endpoint key (location, geo)
+ * @param array<string, mixed> $context Query-specific fields (location, lat/lon, etc.)
+ * @param string $response Raw HTTP body
+ * @param array<string, mixed>|null $data Decoded JSON when decode succeeded
+ */
+function notamLogInvalidNmsPayload(
+    string $endpoint,
+    array $context,
+    string $response,
+    ?array $data,
+): void {
+    aviationwx_log('warning', 'notam fetcher: invalid NMS payload', array_merge($context, [
+        'endpoint' => $endpoint,
+        'http_code' => 200,
+        'nms_status' => is_array($data) ? ($data['status'] ?? null) : null,
+        'response_prefix' => substr($response, 0, 200),
+    ]), 'app');
 }
 
 /**
@@ -98,12 +174,50 @@ function notamResolveLocationQueryCode(array $airport): ?string
 }
 
 /**
+ * Record a failed NMS query attempt for health metrics and logs.
+ *
+ * @param string $endpoint Health endpoint key (location, geo)
+ * @param string $logMessage Structured log message
+ * @param array<string, mixed> $logContext Log context fields
+ * @param array{deferred?: bool, http_code?: int|null, error?: string} $queryResult Result from notamExecuteNmsQuery()
+ * @param bool $reportQueryOutcome Whether to update $querySucceeded
+ * @param bool|null $querySucceeded Outcome flag passed by caller (true success, false hard failure, null deferred)
+ */
+function notamRecordNmsQueryFailure(
+    string $endpoint,
+    string $logMessage,
+    array $logContext,
+    array $queryResult,
+    bool $reportQueryOutcome,
+    ?bool &$querySucceeded,
+): void {
+    if (($queryResult['deferred'] ?? false) === true) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = null;
+        }
+
+        return;
+    }
+
+    if ($reportQueryOutcome) {
+        $querySucceeded = false;
+    }
+
+    $httpCode = $queryResult['http_code'] ?? null;
+    notamHealthTrackRequest($endpoint, false, is_int($httpCode) ? $httpCode : null);
+    aviationwx_log('warning', $logMessage, array_merge($logContext, [
+        'http_code' => $httpCode,
+        'error' => $queryResult['error'] ?? '',
+    ]), 'app');
+}
+
+/**
  * Query NOTAMs by NMS location code (ICAO, IATA, or FAA identifier).
  *
  * @param string $location NMS location query code from {@see notamResolveLocationQueryCode()}
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
  * @param array<string, string> $queryParams Optional NMS query parameters (e.g. feature=RWY)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors; null when deferred by global backoff
  * @return array<int, string> Array of AIXM XML strings
  */
 function queryNotamsByLocation(
@@ -125,42 +239,28 @@ function queryNotamsByLocation(
     $baseUrl = getNotamApiBaseUrl();
     $params = notamBuildLocationQueryParams($location, $queryParams);
     $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query($params);
-    
-    rateLimitWait($lastRequestTime);
-    
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer ' . $token,
-            'nmsResponseFormat: AIXM',
-            'Accept: application/json'
-        ],
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    
-    if ($httpCode !== 200 || $response === false) {
-        notamHealthTrackRequest('location', false, is_int($httpCode) ? $httpCode : null);
-        aviationwx_log('warning', 'notam fetcher: location query failed', [
-            'location' => $location,
-            'http_code' => $httpCode,
-            'error' => $error
-        ], 'app');
-        if ($reportQueryOutcome) {
-            $querySucceeded = false;
-        }
+
+    $queryResult = notamExecuteNmsQuery($url, 'location', $lastRequestTime, $token);
+    if (!$queryResult['ok']) {
+        notamRecordNmsQueryFailure(
+            'location',
+            'notam fetcher: location query failed',
+            ['location' => $location],
+            $queryResult,
+            $reportQueryOutcome,
+            $querySucceeded,
+        );
 
         return [];
     }
-    
+
+    $response = $queryResult['body'];
+    $httpCode = (int) ($queryResult['http_code'] ?? 0);
+
     $data = notamDecodeNmsJsonResponse($response);
-    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
+    if ($aixmRows === null) {
+        notamLogInvalidNmsPayload('location', ['location' => $location], $response, $data);
         notamHealthTrackRequest('location', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
@@ -174,8 +274,8 @@ function queryNotamsByLocation(
     if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
-    
-    return $data['data']['aixm'];
+
+    return $aixmRows;
 }
 
 /**
@@ -185,7 +285,7 @@ function queryNotamsByLocation(
  * @param float $longitude Longitude in decimal degrees
  * @param int $radius Radius in nautical miles
  * @param float &$lastRequestTime Last request timestamp (for rate limiting)
- * @param bool|null $querySucceeded When passed, true on HTTP 200 with valid payload; false when credentials are missing, the request fails, or the payload is invalid
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload (including an empty NOTAM list); false on credential, transport, or payload errors; null when deferred by global backoff
  * @return array Array of AIXM XML strings
  */
 function queryNotamsByCoordinates(
@@ -210,44 +310,36 @@ function queryNotamsByCoordinates(
     $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query(
         notamBuildGeoQueryParams($latitude, $longitude, $radius),
     );
-    
-    rateLimitWait($lastRequestTime);
-    
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer ' . $token,
-            'nmsResponseFormat: AIXM',
-            'Accept: application/json'
-        ],
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    
-    if ($httpCode !== 200 || $response === false) {
-        notamHealthTrackRequest('geo', false, is_int($httpCode) ? $httpCode : null);
-        aviationwx_log('warning', 'notam fetcher: geospatial query failed', [
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-            'radius' => $radius,
-            'http_code' => $httpCode,
-            'error' => $error
-        ], 'app');
-        if ($reportQueryOutcome) {
-            $querySucceeded = false;
-        }
+
+    $queryResult = notamExecuteNmsQuery($url, 'geo', $lastRequestTime, $token);
+    if (!$queryResult['ok']) {
+        notamRecordNmsQueryFailure(
+            'geo',
+            'notam fetcher: geospatial query failed',
+            [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'radius' => $radius,
+            ],
+            $queryResult,
+            $reportQueryOutcome,
+            $querySucceeded,
+        );
 
         return [];
     }
-    
+
+    $response = $queryResult['body'];
+    $httpCode = (int) ($queryResult['http_code'] ?? 0);
+
     $data = notamDecodeNmsJsonResponse($response);
-    if ($data === null || !isset($data['data']['aixm']) || !is_array($data['data']['aixm'])) {
+    $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
+    if ($aixmRows === null) {
+        notamLogInvalidNmsPayload('geo', [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'radius' => $radius,
+        ], $response, $data);
         notamHealthTrackRequest('geo', false, $httpCode);
         if ($reportQueryOutcome) {
             $querySucceeded = false;
@@ -261,8 +353,8 @@ function queryNotamsByCoordinates(
     if ($reportQueryOutcome) {
         $querySucceeded = true;
     }
-    
-    return $data['data']['aixm'];
+
+    return $aixmRows;
 }
 
 /**
@@ -292,17 +384,20 @@ function deduplicateNotams(array $notams): array {
 /**
  * Aggregate per-query NMS outcomes for dual location + geo fetches.
  *
- * @param list<bool> $queryOutcomes Success flag for each attempted query (in order)
- * @return array{attempted: bool, fetchSucceeded: bool}
+ * @param list<bool|null> $queryOutcomes Per-query outcome (true success, false hard failure, null deferred)
+ * @return array{attempted: bool, fetchSucceeded: bool, allDeferred: bool}
  */
 function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
 {
     $attempted = $queryOutcomes !== [];
     $anySucceeded = in_array(true, $queryOutcomes, true);
+    $anyHardFailure = in_array(false, $queryOutcomes, true);
+    $allDeferred = $attempted && !$anySucceeded && !$anyHardFailure;
 
     return [
         'attempted' => $attempted,
         'fetchSucceeded' => $attempted && $anySucceeded,
+        'allDeferred' => $allDeferred,
     ];
 }
 
@@ -316,10 +411,17 @@ function notamSummarizeFetchQueryOutcomes(array $queryOutcomes): array
  * @param string $airportId Airport ID (e.g., 'khio')
  * @param array<string, mixed> $airport Airport configuration
  * @param bool|null $fetchSucceeded When passed, true when at least one NMS query succeeds; false when no query runs or every attempted query fails
+ * @param bool|null $fetchAllDeferred When passed, true when every attempted query was deferred by global NMS backoff
  * @return array<int, array<string, mixed>> Filtered NOTAMs with notam_type and status
  */
-function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchSucceeded = null): array {
+function fetchNotamsForAirport(
+    string $airportId,
+    array $airport,
+    ?bool &$fetchSucceeded = null,
+    ?bool &$fetchAllDeferred = null,
+): array {
     $reportFetchOutcome = func_num_args() >= 3;
+    $reportAllDeferred = func_num_args() >= 4;
     $lastRequestTime = 0.0;
     $allNotams = [];
     $queryOutcomes = [];
@@ -359,6 +461,9 @@ function fetchNotamsForAirport(string $airportId, array $airport, ?bool &$fetchS
     $fetchSummary = notamSummarizeFetchQueryOutcomes($queryOutcomes);
     if ($reportFetchOutcome) {
         $fetchSucceeded = $fetchSummary['fetchSucceeded'];
+    }
+    if ($reportAllDeferred) {
+        $fetchAllDeferred = $fetchSummary['allDeferred'];
     }
     
     // 3. Parse XML to structured data

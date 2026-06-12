@@ -114,7 +114,7 @@ function notamRateLimitAcquire(): void
 
     $fingerprint = notamRateLimitFingerprint();
 
-    $rpm = (int) (60 / max(NOTAM_RATE_LIMIT_SECONDS, 1));
+    $rpm = NOTAM_RATE_LIMIT_REQUESTS_PER_MINUTE;
     $burst = 1;
     $deadline = microtime(true) + NOTAM_RATE_LIMIT_MAX_WAIT_SECONDS;
 
