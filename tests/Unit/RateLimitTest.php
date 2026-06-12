@@ -115,6 +115,27 @@ class RateLimitTest extends TestCase
     }
 
     /**
+     * Whitespace-only headers must fall through instead of bucketing
+     * every such client together on an empty identity
+     */
+    public function testGetRateLimitClientIp_WhitespaceHeadersFallThrough()
+    {
+        $this->withServerVars([
+            'HTTP_CF_CONNECTING_IP' => '   ',
+            'HTTP_X_FORWARDED_FOR' => ' , 10.0.0.1',
+            'REMOTE_ADDR' => '192.0.2.44',
+        ], function () {
+            $this->assertSame('192.0.2.44', getRateLimitClientIp());
+        });
+
+        $this->withServerVars([
+            'HTTP_X_FORWARDED_FOR' => '  ',
+        ], function () {
+            $this->assertSame('unknown', getRateLimitClientIp());
+        });
+    }
+
+    /**
      * checkRateLimit and getRateLimitRemaining must bucket by the same
      * identity or the X-RateLimit-* headers describe the wrong client
      */

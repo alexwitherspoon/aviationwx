@@ -23,13 +23,21 @@ require_once __DIR__ . '/config.php';
  * @return string Client IP, or 'unknown' when none is available
  */
 function getRateLimitClientIp(): string {
-    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-        return trim($_SERVER['HTTP_CF_CONNECTING_IP']);
+    // Trim before testing: a whitespace-only header passes empty() and
+    // would collapse all such clients onto the md5('') bucket
+    $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
+    if ($cfIp !== '') {
+        return $cfIp;
     }
 
-    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     // X-Forwarded-For can contain a comma-separated chain; first is the client
-    return trim(explode(',', $ip)[0]);
+    $xff = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')[0]);
+    if ($xff !== '') {
+        return $xff;
+    }
+
+    $remoteAddr = trim($_SERVER['REMOTE_ADDR'] ?? '');
+    return $remoteAddr !== '' ? $remoteAddr : 'unknown';
 }
 
 /**
