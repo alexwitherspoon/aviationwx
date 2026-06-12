@@ -129,6 +129,25 @@ if (!defined('STALE_WHILE_REVALIDATE_SECONDS')) {
     define('STALE_WHILE_REVALIDATE_SECONDS', 300);
 }
 
+// --- Internal API cache TTLs for slow-changing endpoints ---
+// NOTAM and station power responses may be shared briefly by browsers and
+// the CDN. Their data changes far more slowly than weather: the upstream
+// NMS refresh is hourly (NOTAM_CACHE_TTL_DEFAULT) and power samples drift
+// over hours, so a one-minute shared window adds nothing meaningful to the
+// pipeline latency that the upstream refresh and dashboard polls dominate.
+if (!defined('NOTAM_API_CACHE_TTL_SECONDS')) {
+    define('NOTAM_API_CACHE_TTL_SECONDS', 60);
+}
+if (!defined('NOTAM_API_CACHE_SWR_SECONDS')) {
+    define('NOTAM_API_CACHE_SWR_SECONDS', 120);
+}
+if (!defined('STATION_POWER_API_BROWSER_TTL_SECONDS')) {
+    define('STATION_POWER_API_BROWSER_TTL_SECONDS', 30); // half the minimum dashboard poll (60s)
+}
+if (!defined('STATION_POWER_API_CDN_TTL_SECONDS')) {
+    define('STATION_POWER_API_CDN_TTL_SECONDS', 60);
+}
+
 // Primary source recovery thresholds (for switching back from backup to primary)
 // Both conditions must be met before switching back to primary source
 if (!defined('PRIMARY_RECOVERY_CYCLES_THRESHOLD')) {
