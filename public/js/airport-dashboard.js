@@ -5406,19 +5406,25 @@ if (hasWeatherSources) {
             initialFetchDelayMs = weatherRefreshMs - dataAgeMs;
         }
     }
+
+    // The recurring timer starts alongside the first fetch so refreshes stay
+    // one full interval apart (registering it earlier would let its first
+    // tick race a deferred first fetch). Wake recovery is unaffected during
+    // the deferred window: it drives refreshes through checkDataStaleness(),
+    // and the embedded data is by definition fresher than the interval.
+    function startWeatherRefresh() {
+        fetchWeather();
+        registerTimer('weather', weatherRefreshMs, function() {
+            fetchWeather();
+        });
+        console.log('[Weather] Registered timer, interval:', (weatherRefreshMs / 1000) + 's');
+    }
     if (initialFetchDelayMs > 0) {
         console.log('[Weather] Embedded data is fresh, first refresh in ' + Math.round(initialFetchDelayMs / 1000) + 's');
-        setTimeout(fetchWeather, initialFetchDelayMs);
+        setTimeout(startWeatherRefresh, initialFetchDelayMs);
     } else {
-        fetchWeather();
+        startWeatherRefresh();
     }
-    
-    // Register weather refresh with timer worker
-    registerTimer('weather', weatherRefreshMs, function() {
-        fetchWeather();
-    });
-    
-    console.log('[Weather] Registered timer, interval:', (weatherRefreshMs / 1000) + 's');
 }
 
 // Track which images have already been handled to prevent infinite loops
