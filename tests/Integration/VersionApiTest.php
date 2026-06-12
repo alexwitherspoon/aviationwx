@@ -90,9 +90,11 @@ class VersionApiTest extends TestCase
         $json = $response['json'];
         
         $this->assertArrayHasKey('hash', $json, 'Response should contain hash');
+        $this->assertArrayHasKey('hash_full', $json, 'Response should contain hash_full');
         $this->assertArrayHasKey('timestamp', $json, 'Response should contain timestamp');
-        $this->assertArrayHasKey('force_cleanup', $json, 'Response should contain force_cleanup');
+        $this->assertArrayHasKey('deploy_date', $json, 'Response should contain deploy_date');
         $this->assertArrayHasKey('max_no_update_days', $json, 'Response should contain max_no_update_days');
+        $this->assertArrayHasKey('stuck_client_cleanup', $json, 'Response should contain stuck_client_cleanup');
     }
     
     public function testVersionEndpoint_HashIsValidFormat(): void
@@ -133,18 +135,7 @@ class VersionApiTest extends TestCase
         $this->assertLessThan($maxTimestamp, $timestamp, 'Timestamp should not be far in the future');
     }
     
-    public function testVersionEndpoint_ForceCleanupIsBoolean(): void
-    {
-        $this->skipIfServerUnavailable();
-        
-        $response = $this->fetchVersion();
-        $forceCleanup = $response['json']['force_cleanup'] ?? null;
-        
-        $this->assertIsBool($forceCleanup, 'force_cleanup should be a boolean');
-        $this->assertFalse($forceCleanup, 'force_cleanup should default to false');
-    }
-    
-    public function testVersionEndpoint_MaxNoUpdateDaysIsPositiveInteger(): void
+    public function testVersionEndpoint_MaxNoUpdateDaysIsNonNegativeInteger(): void
     {
         $this->skipIfServerUnavailable();
         
@@ -152,7 +143,8 @@ class VersionApiTest extends TestCase
         $maxDays = $response['json']['max_no_update_days'] ?? null;
         
         $this->assertIsInt($maxDays, 'max_no_update_days should be an integer');
-        $this->assertGreaterThan(0, $maxDays, 'max_no_update_days should be positive');
+        // 0 is valid and means escalation is disabled
+        $this->assertGreaterThanOrEqual(0, $maxDays, 'max_no_update_days should be non-negative');
         $this->assertLessThanOrEqual(30, $maxDays, 'max_no_update_days should be reasonable (<= 30)');
     }
     

@@ -4081,13 +4081,6 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
             
-            // force_cleanup: Emergency flag to force all clients to cleanup
-            if (isset($cfg['force_cleanup'])) {
-                if (!is_bool($cfg['force_cleanup'])) {
-                    $errors[] = "config.force_cleanup must be a boolean (true or false)";
-                }
-            }
-            
             // stuck_client_cleanup: Inject cleanup for clients stuck on old code
             if (isset($cfg['stuck_client_cleanup'])) {
                 if (!is_bool($cfg['stuck_client_cleanup'])) {

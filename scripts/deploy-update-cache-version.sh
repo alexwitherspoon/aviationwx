@@ -23,7 +23,6 @@ echo "Deploy timestamp: ${DEPLOY_TIMESTAMP} (${DEPLOY_DATE})"
 # Read configuration from airports.json (with defaults if not found)
 # These settings control client version management and cleanup behavior
 MAX_NO_UPDATE_DAYS=7
-FORCE_CLEANUP="false"
 STUCK_CLIENT_CLEANUP="false"
 
 if [ -f "${AIRPORTS_FILE}" ]; then
@@ -35,14 +34,6 @@ if [ -f "${AIRPORTS_FILE}" ]; then
     if [ -n "${DAYS_VALUE}" ]; then
         MAX_NO_UPDATE_DAYS="${DAYS_VALUE}"
         echo "  dead_man_switch_days: ${MAX_NO_UPDATE_DAYS}"
-    fi
-    
-    # force_cleanup (look for the one in config section, not in comments)
-    if grep -q '"force_cleanup"[[:space:]]*:[[:space:]]*true' "${AIRPORTS_FILE}"; then
-        FORCE_CLEANUP="true"
-        echo "  force_cleanup: true"
-    else
-        echo "  force_cleanup: false (default)"
     fi
     
     # stuck_client_cleanup
@@ -65,7 +56,6 @@ cat > "${VERSION_FILE}" << EOF
     "hash_full": "${GIT_HASH_FULL}",
     "timestamp": ${DEPLOY_TIMESTAMP},
     "deploy_date": "${DEPLOY_DATE}",
-    "force_cleanup": ${FORCE_CLEANUP},
     "max_no_update_days": ${MAX_NO_UPDATE_DAYS},
     "stuck_client_cleanup": ${STUCK_CLIENT_CLEANUP}
 }

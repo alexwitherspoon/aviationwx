@@ -40,7 +40,7 @@ class VersionFileTest extends TestCase
         $content = file_get_contents($this->versionExampleFile);
         $json = json_decode($content, true);
         
-        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'force_cleanup', 'max_no_update_days', 'stuck_client_cleanup'];
+        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'max_no_update_days', 'stuck_client_cleanup'];
         
         foreach ($requiredFields as $field) {
             $this->assertArrayHasKey(
@@ -60,7 +60,6 @@ class VersionFileTest extends TestCase
         $this->assertIsString($json['hash_full'], 'hash_full should be a string');
         $this->assertIsInt($json['timestamp'], 'timestamp should be an integer');
         $this->assertIsString($json['deploy_date'], 'deploy_date should be a string');
-        $this->assertIsBool($json['force_cleanup'], 'force_cleanup should be a boolean');
         $this->assertIsInt($json['max_no_update_days'], 'max_no_update_days should be an integer');
         $this->assertIsBool($json['stuck_client_cleanup'], 'stuck_client_cleanup should be a boolean');
     }
@@ -86,8 +85,7 @@ class VersionFileTest extends TestCase
         $content = file_get_contents($this->versionFile);
         $json = json_decode($content, true);
         
-        // Note: emergency_cleanup_enabled is optional for backwards compatibility
-        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'force_cleanup', 'max_no_update_days'];
+        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'max_no_update_days', 'stuck_client_cleanup'];
         
         foreach ($requiredFields as $field) {
             $this->assertArrayHasKey(
@@ -126,8 +124,8 @@ class VersionFileTest extends TestCase
                 'hash_full' => $hashFull,
                 'timestamp' => time(),
                 'deploy_date' => gmdate('Y-m-d\TH:i:s\Z'),
-                'force_cleanup' => false,
                 'max_no_update_days' => 7,
+                'stuck_client_cleanup' => false,
                 '_fallback' => true
             ];
         }

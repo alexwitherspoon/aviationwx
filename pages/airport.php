@@ -681,17 +681,33 @@ if ($themeCookie === 'dark') {
     <?php endif; ?>
     <script>
         /**
-         * Client Version Checking & Dead Man's Switch
-         * 
-         * Detects stuck/stale client versions and forces a full cleanup when:
-         * 1. No service worker update has occurred in max_no_update_days
-         * 2. The build timestamp age is unknown (localStorage cleared but client stuck)
-         * 3. Server responds with force_cleanup flag
-         * 
-         * This is a safety net for rare edge cases where normal SW updates fail.
+         * Client Version Checking
+         *
+         * Keeps long-lived dashboard tabs on current code. Clients compare
+         * the server build (version API) to their own on load and on the
+         * periodic check from timer-lifecycle.js:
+         *
+         * 1. Server build newer: soft reload at a quiet moment (hidden tab,
+         *    or after a short delay when visible). No-cache HTML plus
+         *    versioned static assets make a plain reload sufficient.
+         * 2. Client more than max_no_update_days behind the server, or no
+         *    successful version check in that window (dead man's switch):
+         *    full cleanup of caches, storage, and service workers.
          */
         (function() {
             'use strict';
+
+            const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
+            const BUILD_HASH = '<?= $buildHash ?>';
+            const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
+            const LAST_CHECK_KEY = 'aviationwx-last-version-check';
+            const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
+            const RELOAD_ATTEMPTED_KEY = 'aviationwx-reload-attempted';
+            // Ignore server builds newer by less than this: mid-deploy reads
+            // could otherwise reload clients onto a half-deployed version
+            const DEPLOY_GRACE_MS = 10 * 60 * 1000;
+            // Visible tabs reload after this delay; hidden tabs reload immediately
+            const VISIBLE_RELOAD_DELAY_MS = 10 * 60 * 1000;
 
             // localStorage/sessionStorage throw SecurityError in iOS Private Browsing
             function safeStorageGet(key) {
@@ -706,12 +722,51 @@ if ($themeCookie === 'dark') {
             function safeSessionStorageSet(key, value) {
                 try { sessionStorage.setItem(key, value); } catch (e) { /* unavailable */ }
             }
-
-            const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
-            const BUILD_HASH = '<?= $buildHash ?>';
-            const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
-            const LAST_UPDATE_KEY = 'aviationwx-last-sw-update';
-            const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
+            // The reload-attempt marker must survive the reload it guards
+            // even when sessionStorage throws (iOS Private Browsing), or a
+            // client stuck on an old build would re-arm after every reload.
+            // A session cookie backs the marker up, but only when storage
+            // is genuinely unavailable: cookies are shared across tabs, and
+            // one tab's reload must not suppress soft pickup in the others.
+            let sessionStorageUsable = null;
+            function sessionStorageWorks() {
+                if (sessionStorageUsable === null) {
+                    try {
+                        sessionStorage.setItem('aviationwx-storage-probe', '1');
+                        sessionStorage.removeItem('aviationwx-storage-probe');
+                        sessionStorageUsable = true;
+                    } catch (e) {
+                        sessionStorageUsable = false;
+                    }
+                }
+                return sessionStorageUsable;
+            }
+            function reloadMarkerGet() {
+                if (sessionStorageWorks()) {
+                    return safeSessionStorageGet(RELOAD_ATTEMPTED_KEY);
+                }
+                const match = document.cookie.match(/(?:^|;\s*)aviationwx_reload_attempted=([^;]+)/);
+                if (!match) {
+                    return null;
+                }
+                try {
+                    return decodeURIComponent(match[1]);
+                } catch (e) {
+                    // Malformed percent-encoding (tampered or mangled cookie)
+                    // must not break the version check; treat as no marker
+                    return null;
+                }
+            }
+            function reloadMarkerSet(value) {
+                if (sessionStorageWorks()) {
+                    safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, value);
+                    return;
+                }
+                try {
+                    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                    document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax' + secure;
+                } catch (e) { /* cookies unavailable too - in-page guard still applies */ }
+            }
 
             /**
              * Perform full cleanup - clear all caches, storage, and service workers
@@ -785,125 +840,213 @@ if ($themeCookie === 'dark') {
             /**
              * Check if dead man's switch should trigger
              * Returns reason string if cleanup needed, null otherwise
+             *
+             * Escalates only when BOTH signals are stale: the build this
+             * page is running AND the last confirmed contact (successful
+             * version check or fresh page load). Requiring both means a
+             * returning visitor who was simply away does not get wiped
+             * (their no-cache page load delivers a fresh build), while a
+             * genuinely stuck client (old cached build, nothing confirmed
+             * for the whole window) does.
              */
             function checkDeadManSwitch() {
                 const now = Date.now();
                 const maxAgeMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
-                
-                const lastUpdateStr = safeStorageGet(LAST_UPDATE_KEY);
-                
-                if (!lastUpdateStr) {
-                    // No record of last update - this could be:
-                    // 1. First visit ever (normal)
-                    // 2. localStorage was cleared (normal)
-                    // 3. Very old client that never had this tracking (concerning)
-                    
-                    // Check if this build is suspiciously old
-                    const buildAge = now - (BUILD_TIMESTAMP * 1000);
-                    if (buildAge > maxAgeMs) {
-                        // Build is older than max age AND we have no update record
-                        // This suggests a stuck client with cleared storage
-                        return `Build is ${Math.floor(buildAge / 86400000)} days old with no update record`;
-                    }
-                    
-                    safeStorageSet(LAST_UPDATE_KEY, now.toString());
-                    return null;
+                if (maxAgeMs <= 0) {
+                    return null; // 0 = disabled via dead_man_switch_days
                 }
                 
-                const lastUpdate = parseInt(lastUpdateStr, 10);
-                if (isNaN(lastUpdate) || lastUpdate <= 0) {
-                    safeStorageSet(LAST_UPDATE_KEY, now.toString());
-                    return null;
+                const buildAge = now - (BUILD_TIMESTAMP * 1000);
+                if (buildAge <= maxAgeMs) {
+                    return null; // Running a recent build - nothing is stuck
                 }
                 
-                const timeSinceUpdate = now - lastUpdate;
-                if (timeSinceUpdate > maxAgeMs) {
-                    return `No SW update in ${Math.floor(timeSinceUpdate / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
+                const lastCheckStr = safeStorageGet(LAST_CHECK_KEY);
+                if (!lastCheckStr) {
+                    // Old build and no record of any confirmed contact
+                    // (first visit on a stuck cache, or storage cleared)
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with no version check record`;
+                }
+                
+                const lastCheck = parseInt(lastCheckStr, 10);
+                if (isNaN(lastCheck) || lastCheck <= 0) {
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with an unreadable contact record`;
+                }
+                
+                const timeSinceCheck = now - lastCheck;
+                if (timeSinceCheck > maxAgeMs) {
+                    return `Build is ${Math.floor(buildAge / 86400000)} days old with no confirmed contact in ${Math.floor(timeSinceCheck / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
                 }
                 
                 return null;
             }
             
+            // Soft reload state: arm at most once per server hash per session
+            let reloadArmed = false;
+            
             /**
-             * Non-blocking version check via API
-             * Uses requestIdleCallback or setTimeout for minimal performance impact
+             * Whether the server still serves a meaningfully newer build.
+             * Used right before a deferred reload fires: between arming and
+             * firing the deploy may have been rolled back or the server may
+             * have become unreachable, and reloading into either is worse
+             * than staying on the running page.
              */
-            function scheduleVersionCheck() {
-                const doCheck = async () => {
-                    try {
-                        // Add cache-busting parameter
-                        const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
-                            cache: 'no-store'
-                        });
-                        
-                        if (!response.ok) {
-                            console.warn('[Version] API returned status:', response.status);
-                            return;
-                        }
-                        
-                        const serverVersion = await response.json();
-                        
-                        // Check for emergency force_cleanup flag
-                        if (serverVersion.force_cleanup === true) {
-                            performFullCleanup('Server requested force_cleanup');
-                            return;
-                        }
-                        
-                        // Check if server version is significantly newer
-                        // (Hash mismatch alone isn't enough - could be mid-deploy)
-                        if (serverVersion.hash !== BUILD_HASH && serverVersion.timestamp) {
-                            const serverBuildAge = Date.now() - (serverVersion.timestamp * 1000);
-                            const clientBuildAge = Date.now() - (BUILD_TIMESTAMP * 1000);
-                            
-                            // If client is more than max_no_update_days older than server
-                            const maxAgeDiff = (serverVersion.max_no_update_days || MAX_NO_UPDATE_DAYS) * 24 * 60 * 60 * 1000;
-                            if (clientBuildAge - serverBuildAge > maxAgeDiff) {
-                                performFullCleanup(`Client build is ${Math.floor((clientBuildAge - serverBuildAge) / 86400000)} days behind server`);
-                                return;
-                            }
-                        }
-                        
-                    } catch (err) {
-                        // Network errors are expected when offline - don't log as error
-                        if (navigator.onLine !== false) {
-                            console.warn('[Version] API check failed:', err.message);
-                        }
+            async function serverStillMeaningfullyNewer() {
+                try {
+                    const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) {
+                        return null;
                     }
-                };
-                
-                // Schedule check during idle time to avoid blocking page load
-                if ('requestIdleCallback' in window) {
-                    requestIdleCallback(doCheck, { timeout: 10000 });
-                } else {
-                    // Fallback: run after initial page load settles
-                    setTimeout(doCheck, 5000);
+                    const serverVersion = await response.json();
+                    if (!serverVersion || !serverVersion.hash || !serverVersion.timestamp) {
+                        return null;
+                    }
+                    const serverNewerByMs = (serverVersion.timestamp - BUILD_TIMESTAMP) * 1000;
+                    if (serverVersion.hash !== BUILD_HASH && serverNewerByMs > DEPLOY_GRACE_MS) {
+                        return serverVersion.hash;
+                    }
+                    return null;
+                } catch (err) {
+                    return null;
                 }
             }
             
             /**
-             * Update last SW update timestamp when controller changes
-             * This indicates a successful service worker update
+             * Pick up a newer server build with a plain reload at a quiet
+             * moment: immediately when the tab is hidden, otherwise on the
+             * next tab-hide or after a bounded delay (kiosks stay visible
+             * forever). One attempt per server hash, tracked in
+             * sessionStorage, so a reload that does not resolve the
+             * mismatch cannot loop; the dead man's switch escalates later.
+             * Deferred reloads re-verify the server first and disarm when
+             * it is no longer ahead, so a later deploy can re-arm.
              */
-            function trackSwUpdates() {
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        safeStorageSet(LAST_UPDATE_KEY, Date.now().toString());
-                        console.log('[Version] SW controller changed, updated last update timestamp');
+            function armSoftReload(serverHash) {
+                if (reloadArmed) {
+                    return;
+                }
+                if (reloadMarkerGet() === serverHash) {
+                    return;
+                }
+                reloadArmed = true;
+                
+                const doReload = (confirmedHash) => {
+                    reloadMarkerSet(confirmedHash);
+                    console.log('[Version] Reloading to pick up server build', confirmedHash);
+                    window.location.reload();
+                };
+                
+                if (document.hidden) {
+                    // The arming check itself just confirmed the server is
+                    // ahead; no need to re-verify milliseconds later
+                    doReload(serverHash);
+                    return;
+                }
+                
+                console.log('[Version] New server build', serverHash, '- reload scheduled');
+                let delayTimer = null;
+                const deferredReload = async () => {
+                    const confirmedHash = await serverStillMeaningfullyNewer();
+                    if (confirmedHash === null) {
+                        reloadArmed = false;
+                        console.log('[Version] Scheduled reload skipped - server no longer ahead or unreachable');
+                        return;
+                    }
+                    doReload(confirmedHash);
+                };
+                const visibilityHandler = () => {
+                    if (document.hidden) {
+                        document.removeEventListener('visibilitychange', visibilityHandler);
+                        clearTimeout(delayTimer);
+                        deferredReload();
+                    }
+                };
+                document.addEventListener('visibilitychange', visibilityHandler);
+                delayTimer = setTimeout(() => {
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                    deferredReload();
+                }, VISIBLE_RELOAD_DELAY_MS);
+            }
+            
+            /**
+             * Compare the server build to this page's build and act:
+             * escalate to full cleanup when far behind, soft reload when a
+             * meaningfully newer build is available. A successful check
+             * feeds the dead man's switch regardless of outcome.
+             * Shared with timer-lifecycle.js via window.aviationwxCheckVersion.
+             */
+            async function checkVersionAgainstServer() {
+                try {
+                    // Add cache-busting parameter
+                    const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
+                        cache: 'no-store'
                     });
+                    
+                    if (!response.ok) {
+                        console.warn('[Version] API returned status:', response.status);
+                        return;
+                    }
+                    
+                    const serverVersion = await response.json();
+                    if (!serverVersion || !serverVersion.hash) {
+                        console.warn('[Version] API response missing hash');
+                        return;
+                    }
+                    
+                    // The check itself succeeded - the update channel works
+                    safeStorageSet(LAST_CHECK_KEY, Date.now().toString());
+                    
+                    if (serverVersion.hash === BUILD_HASH || !serverVersion.timestamp) {
+                        return;
+                    }
+                    
+                    // Both timestamps are server-generated, so this comparison
+                    // is immune to client clock skew
+                    const serverNewerByMs = (serverVersion.timestamp - BUILD_TIMESTAMP) * 1000;
+                    
+                    // Far behind: soft reloads have not worked (or never ran);
+                    // escalate to a full cleanup. The server value wins so a
+                    // config change reaches old tabs; 0 disables escalation
+                    // and must not fall through to the client default.
+                    const maxBehindDays = Number.isFinite(serverVersion.max_no_update_days)
+                        ? serverVersion.max_no_update_days
+                        : MAX_NO_UPDATE_DAYS;
+                    const maxBehindMs = maxBehindDays * 24 * 60 * 60 * 1000;
+                    if (maxBehindMs > 0 && serverNewerByMs > maxBehindMs) {
+                        performFullCleanup(`Client build is ${Math.floor(serverNewerByMs / 86400000)} days behind server`);
+                        return;
+                    }
+                    
+                    // Meaningfully newer: pick it up with a plain reload
+                    if (serverNewerByMs > DEPLOY_GRACE_MS) {
+                        armSoftReload(serverVersion.hash);
+                    }
+                    
+                } catch (err) {
+                    // Network errors are expected when offline - don't log as error
+                    if (navigator.onLine !== false) {
+                        console.warn('[Version] API check failed:', err.message);
+                    }
                 }
             }
+            
+            // Shared with timer-lifecycle.js, which schedules periodic checks
+            window.aviationwxCheckVersion = checkVersionAgainstServer;
             
             // Initialize version checking
             function init() {
                 if (safeSessionStorageGet(CLEANUP_IN_PROGRESS_KEY)) {
                     try { sessionStorage.removeItem(CLEANUP_IN_PROGRESS_KEY); } catch (e) { /* unavailable */ }
                     console.log('[Version] Post-cleanup reload complete');
-                    safeStorageSet(LAST_UPDATE_KEY, Date.now().toString());
+                    safeStorageSet(LAST_CHECK_KEY, Date.now().toString());
                     return;
                 }
                 
-                // Track SW updates
-                trackSwUpdates();
+                // Drop the pre-simplification tracking key (was only updated
+                // by service worker controllerchange, which never fired)
+                try { localStorage.removeItem('aviationwx-last-sw-update'); } catch (e) { /* unavailable */ }
                 
                 // Check dead man's switch immediately
                 const deadManReason = checkDeadManSwitch();
@@ -912,8 +1055,27 @@ if ($themeCookie === 'dark') {
                     return; // Don't continue, we're reloading
                 }
                 
-                // Schedule non-blocking version API check
-                scheduleVersionCheck();
+                // A fresh page load is itself confirmed contact: dashboard
+                // HTML is no-cache, so a recent build timestamp means the
+                // server just served this page. This baseline keeps the dead
+                // man's switch from counting time the user was simply away,
+                // and a broken version endpoint alone (load works, checks
+                // fail) cannot trigger recurring cleanups. A stale build
+                // does not refresh the baseline: HTML served by a stuck
+                // intermediary cache must not keep deferring escalation.
+                const loadBuildAgeMs = Date.now() - (BUILD_TIMESTAMP * 1000);
+                const deadManWindowMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
+                if (deadManWindowMs <= 0 || loadBuildAgeMs <= deadManWindowMs) {
+                    safeStorageSet(LAST_CHECK_KEY, Date.now().toString());
+                }
+                
+                // First check during idle time to avoid blocking page load;
+                // timer-lifecycle.js repeats it periodically
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(checkVersionAgainstServer, { timeout: 10000 });
+                } else {
+                    setTimeout(checkVersionAgainstServer, 5000);
+                }
             }
             
             // Run on page load
