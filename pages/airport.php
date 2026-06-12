@@ -729,12 +729,22 @@ if ($themeCookie === 'dark') {
                     return stored;
                 }
                 const match = document.cookie.match(/(?:^|;\s*)aviationwx_reload_attempted=([^;]+)/);
-                return match ? decodeURIComponent(match[1]) : null;
+                if (!match) {
+                    return null;
+                }
+                try {
+                    return decodeURIComponent(match[1]);
+                } catch (e) {
+                    // Malformed percent-encoding (tampered or mangled cookie)
+                    // must not break the version check; treat as no marker
+                    return null;
+                }
             }
             function reloadMarkerSet(value) {
                 safeSessionStorageSet(RELOAD_ATTEMPTED_KEY, value);
                 try {
-                    document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax';
+                    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                    document.cookie = 'aviationwx_reload_attempted=' + encodeURIComponent(value) + '; path=/; SameSite=Lax' + secure;
                 } catch (e) { /* cookies unavailable too - in-page guard still applies */ }
             }
 
