@@ -8,10 +8,35 @@ require_once __DIR__ . '/config.php';
  */
 
 /**
+ * Get the client IP used for rate limit bucketing
+ *
+ * Prefers CF-Connecting-IP: Cloudflare overwrites it on every proxied
+ * request, so clients cannot forge it through the CDN. X-Forwarded-For
+ * comes second because its first entry is client-supplied - Cloudflare
+ * appends the real address to whatever arrived, so trusting XFF alone
+ * lets an abuser rotate buckets with a spoofed header. Matches the
+ * Public API's getPublicApiClientIp() ordering.
+ *
+ * Bucketing identity only. NOT for security decisions like first-party
+ * detection; those must use REMOTE_ADDR (see isFirstPartyRequest()).
+ *
+ * @return string Client IP, or 'unknown' when none is available
+ */
+function getRateLimitClientIp(): string {
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        return trim($_SERVER['HTTP_CF_CONNECTING_IP']);
+    }
+
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    // X-Forwarded-For can contain a comma-separated chain; first is the client
+    return trim(explode(',', $ip)[0]);
+}
+
+/**
  * Check if request should be rate limited
  * 
  * Implements IP-based rate limiting using APCu (preferred) or file-based fallback.
- * Extracts client IP from X-Forwarded-For header or REMOTE_ADDR.
+ * Buckets by client IP via getRateLimitClientIp().
  * 
  * @param string $key Unique key for this rate limit (e.g., 'weather_api', 'webcam_api')
  * @param int $maxRequests Maximum requests allowed in the time window (default: RATE_LIMIT_WEATHER_MAX)
@@ -19,10 +44,7 @@ require_once __DIR__ . '/config.php';
  * @return bool True if allowed, false if rate limited
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
-    // Get client IP (respect proxy headers)
-    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    // Handle comma-separated IPs (X-Forwarded-For can contain multiple IPs)
-    $ip = trim(explode(',', $ip)[0]);
+    $ip = getRateLimitClientIp();
     
     // Use APCu if available for rate limiting
     if (function_exists('apcu_fetch') && function_exists('apcu_store')) {
@@ -238,8 +260,9 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
  * @return array Returns array with 'remaining' (int) and 'reset' (int timestamp) keys
  */
 function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
-    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    $ip = trim(explode(',', $ip)[0]);
+    // Must derive the same identity as checkRateLimit, or the
+    // X-RateLimit-* headers describe a different client's bucket
+    $ip = getRateLimitClientIp();
     
     if (!function_exists('apcu_fetch')) {
         require_once __DIR__ . '/cache-paths.php';

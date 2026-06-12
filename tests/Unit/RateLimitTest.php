@@ -37,6 +37,110 @@ class RateLimitTest extends TestCase
     }
 
     /**
+     * Restore $_SERVER IP-related keys after a test mutates them
+     */
+    private function withServerVars(array $vars, callable $fn): void
+    {
+        $keys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
+        $saved = [];
+        foreach ($keys as $key) {
+            $saved[$key] = $_SERVER[$key] ?? null;
+            unset($_SERVER[$key]);
+        }
+        foreach ($vars as $key => $value) {
+            $_SERVER[$key] = $value;
+        }
+
+        try {
+            $fn();
+        } finally {
+            foreach ($keys as $key) {
+                if ($saved[$key] === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $saved[$key];
+                }
+            }
+        }
+    }
+
+    /**
+     * Cloudflare's header wins even when a client supplies a spoofed
+     * X-Forwarded-For, so abusers cannot rotate rate limit buckets
+     */
+    public function testGetRateLimitClientIp_CfConnectingIpBeatsSpoofedXff()
+    {
+        $this->withServerVars([
+            'HTTP_CF_CONNECTING_IP' => '203.0.113.7',
+            'HTTP_X_FORWARDED_FOR' => '198.51.100.99, 203.0.113.7',
+            'REMOTE_ADDR' => '172.68.1.1',
+        ], function () {
+            $this->assertSame('203.0.113.7', getRateLimitClientIp());
+        });
+    }
+
+    /**
+     * Without Cloudflare the first X-Forwarded-For entry is the client
+     */
+    public function testGetRateLimitClientIp_XffFirstEntryWhenNoCfHeader()
+    {
+        $this->withServerVars([
+            'HTTP_X_FORWARDED_FOR' => ' 198.51.100.20 , 10.0.0.1',
+            'REMOTE_ADDR' => '10.0.0.1',
+        ], function () {
+            $this->assertSame('198.51.100.20', getRateLimitClientIp());
+        });
+    }
+
+    /**
+     * Direct connections fall back to the TCP source address
+     */
+    public function testGetRateLimitClientIp_RemoteAddrFallback()
+    {
+        $this->withServerVars([
+            'REMOTE_ADDR' => '192.0.2.33',
+        ], function () {
+            $this->assertSame('192.0.2.33', getRateLimitClientIp());
+        });
+    }
+
+    /**
+     * CLI and malformed requests must not fail the limiter
+     */
+    public function testGetRateLimitClientIp_UnknownWhenNothingAvailable()
+    {
+        $this->withServerVars([], function () {
+            $this->assertSame('unknown', getRateLimitClientIp());
+        });
+    }
+
+    /**
+     * checkRateLimit and getRateLimitRemaining must bucket by the same
+     * identity or the X-RateLimit-* headers describe the wrong client
+     */
+    public function testRateLimit_BucketsByCfConnectingIp()
+    {
+        $this->withServerVars([
+            'HTTP_CF_CONNECTING_IP' => '203.0.113.50',
+            'HTTP_X_FORWARDED_FOR' => '198.51.100.1',
+            'REMOTE_ADDR' => '172.68.2.2',
+        ], function () {
+            $key = 'test_cf_bucket_' . uniqid();
+            $max = 5;
+            checkRateLimit($key, $max, 60);
+            $afterFirst = getRateLimitRemaining($key, $max, 60)['remaining'];
+
+            // A different spoofed XFF must not move the client to a new bucket
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.2';
+            checkRateLimit($key, $max, 60);
+            $afterSecond = getRateLimitRemaining($key, $max, 60)['remaining'];
+
+            $this->assertSame($afterFirst - 1, $afterSecond,
+                'Spoofed XFF rotated the bucket despite CF-Connecting-IP being present');
+        });
+    }
+
+    /**
      * Ensures first request is allowed, establishing baseline rate limit behavior
      */
     public function testCheckRateLimit_FirstRequest()

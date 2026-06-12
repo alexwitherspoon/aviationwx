@@ -73,7 +73,8 @@ if (!checkRateLimit('map_tiles', 300, 60)) {
         'retry_after' => 60
     ]);
     aviationwx_log('warning', 'map tiles rate limit exceeded', [
-        'ip' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+        // Log the same identity the limiter bucketed by
+        'ip' => getRateLimitClientIp(),
         'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
     ], 'api');
     exit;
