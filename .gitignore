@@ -54,6 +54,9 @@ coverage.xml
 config/nginx.conf
 config/version.json
 
+# Generated at build time (scripts/minify-css.sh)
+public/css/styles.min.css
+
 # Node.js (for Playwright tests)
 node_modules/
 npm-debug.log*

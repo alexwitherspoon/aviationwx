@@ -29,6 +29,36 @@ module.exports = defineConfig([
                 "AIRPORT_NAV_DATA": "readonly",
                 "RUNWAYS": "readonly",
                 "DEFAULT_TIMEZONE": "readonly",
+                // Dashboard bootstrap constants: declared in the inline
+                // bootstrap script that pages/airport.php emits before
+                // public/js/airport-dashboard.js loads
+                "SERVER_TIME_UTC": "readonly",
+                "CLIENT_CLOCK_SKEW_SECONDS": "readonly",
+                "clientClockSkewDetected": "writable",
+                "INITIAL_BANNER_STATE": "readonly",
+                "INITIAL_WEATHER_DATA": "readonly",
+                "INITIAL_TIMEZONE_DISPLAY": "readonly",
+                "DEFAULT_PREFERENCES": "readonly",
+                "MAGNETIC_DECLINATION": "readonly",
+                "RUNWAY_SEGMENTS": "readonly",
+                "STALE_WARNING_SECONDS": "readonly",
+                "STALE_ERROR_SECONDS": "readonly",
+                "STALE_FAILCLOSED_SECONDS": "readonly",
+                "OUTAGE_BANNER_THRESHOLD_SECONDS": "readonly",
+                "METAR_STALE_WARNING_SECONDS": "readonly",
+                "METAR_STALE_ERROR_SECONDS": "readonly",
+                "METAR_STALE_FAILCLOSED_SECONDS": "readonly",
+                "SECONDS_PER_HOUR": "readonly",
+                "STATION_POWER_POLL_MS": "readonly",
+                "HAS_STATION_POWER_UI": "readonly",
+                "NIGHT_MODE_DATA": "readonly",
+                "WEBCAM_INITIAL_TIMESTAMPS": "readonly",
+                "WEBCAM_REFRESH_SECONDS": "readonly",
+                // Cross-file: defined by public/js/exif-timestamp.js
+                "ExifTimestamp": "readonly",
+                // Cross-file namespace: created by public/js/units.js and
+                // public/js/weather-timestamp-utils.js
+                "AviationWX": "readonly",
                 // Disable Node.js-specific globals that don't exist in browser
                 // Only disable globals that are Node-only (not in browser)
                 ...Object.fromEntries(
@@ -96,6 +126,30 @@ module.exports = defineConfig([
             avoidEscape: true,
         }],
         "comma-dangle": ["warn", "never"],
+    },
+},
+{
+    // Dashboard app code, moved verbatim out of pages/airport.php where it
+    // was inline (and effectively unlinted). It intentionally defines
+    // top-level functions consumed by inline HTML attributes (onclick,
+    // onload), and its legacy formatting predates these rules. Correctness
+    // rules (no-undef, no-redeclare, eqeqeq, semi) still apply in full.
+    files: ["public/js/airport-dashboard.js"],
+    rules: {
+        "no-implicit-globals": "off",
+        "curly": "off",
+        "no-use-before-define": "off",
+    },
+},
+{
+    // The inline bootstrap in pages/airport.php is the one place that
+    // DECLARES the dashboard globals listed in languageOptions.globals
+    // (every other file only reads them). Same-scope duplicate detection
+    // stays on via no-redeclare with builtinGlobals disabled.
+    files: ["pages/airport.php"],
+    rules: {
+        "no-redeclare": ["error", { builtinGlobals: false }],
+        "no-implicit-globals": "off",
     },
 }]);
 

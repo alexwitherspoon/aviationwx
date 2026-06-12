@@ -117,6 +117,12 @@ RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
 # This ensures code changes don't invalidate earlier layers
 COPY --chown=www-data:www-data . /var/www/html/
 
+# Build minified CSS so the dashboard serves the smaller cacheable file.
+# The dashboard falls back to styles.css when the min file is absent
+# (e.g. local dev with the repo bind-mounted over the image).
+RUN sh scripts/minify-css.sh \
+    && chown www-data:www-data public/css/styles.min.css
+
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache \
