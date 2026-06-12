@@ -465,16 +465,21 @@ if ($themeCookie === 'dark') {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.getRegistrations()
-                    .then((registrations) => {
-                        for (const registration of registrations) {
-                            console.log('[SW] Unregistering legacy service worker:', registration.scope);
-                            registration.unregister();
-                        }
+                    .then((registrations) => Promise.allSettled(registrations.map((registration) => {
+                        console.log('[SW] Unregistering legacy service worker:', registration.scope);
+                        return registration.unregister();
+                    })))
+                    .then((results) => {
+                        results.forEach((result) => {
+                            if (result.status === 'rejected') {
+                                // Surfacing this matters: a failure here
+                                // leaves a legacy worker on the client
+                                console.warn('[SW] Legacy service worker unregister failed:', result.reason);
+                            }
+                        });
                     })
                     .catch((err) => {
-                        // Surfacing this matters: a failure here leaves a
-                        // legacy worker registered on the client
-                        console.warn('[SW] Could not enumerate legacy service workers:', err.message);
+                        console.warn('[SW] Could not enumerate legacy service workers:', err);
                     });
             });
         }
