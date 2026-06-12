@@ -21,6 +21,11 @@ if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         http_response_code(405);
         header('Allow: GET');
+        // 405 is heuristically cacheable (RFC 9111), so it needs the same
+        // explicit no-store as the other error paths
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
         $out = stationPowerApiEncodeJson(['success' => false, 'error' => 'Method not allowed']);
         echo $out ?? '{"success":false,"error":"Method not allowed"}';
         exit;
