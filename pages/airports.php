@@ -10,6 +10,16 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/pwa-help-screenshots.php';
+require_once __DIR__ . '/../lib/version.php';
+
+// The page body changes when airports.json changes (new airports) and on
+// deploys; always revalidate so clients pick those up on the next load.
+// Static assets below carry ?v=<build hash> and stay long-cached. Open
+// tabs converge through the client version check.
+header('Cache-Control: no-cache, must-revalidate');
+
+$buildVersion = getBuildVersionInfo();
+$buildHashShort = $buildVersion['hash_short'];
 
 // Load configuration and get listed airports (excludes unlisted airports from discovery)
 $config = loadConfig();
@@ -185,13 +195,13 @@ $breadcrumbs = generateBreadcrumbSchema([
     ?>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="/public/css/leaflet.css">
+    <link rel="stylesheet" href="/public/css/leaflet.css?v=<?= $buildHashShort ?>">
     <!-- Leaflet MarkerCluster CSS -->
-    <link rel="stylesheet" href="/public/css/MarkerCluster.css">
-    <link rel="stylesheet" href="/public/css/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.css?v=<?= $buildHashShort ?>">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.Default.css?v=<?= $buildHashShort ?>">
     
-    <link rel="stylesheet" href="/public/css/styles.css">
-    <link rel="stylesheet" href="/public/css/navigation.css">
+    <link rel="stylesheet" href="/public/css/styles.css?v=<?= $buildHashShort ?>">
+    <link rel="stylesheet" href="/public/css/navigation.css?v=<?= $buildHashShort ?>">
     <style>
         html {
             scroll-behavior: smooth;
@@ -1501,9 +1511,19 @@ $breadcrumbs = generateBreadcrumbSchema([
     </main>
     
     <!-- Leaflet JS -->
-    <script src="/public/js/leaflet.js"></script>
+    <script src="/public/js/leaflet.js?v=<?= $buildHashShort ?>"></script>
     <!-- Leaflet MarkerCluster -->
-    <script src="/public/js/leaflet.markercluster.js"></script>
+    <script src="/public/js/leaflet.markercluster.js?v=<?= $buildHashShort ?>"></script>
+    <?php
+    // Same automatic build pickup as the dashboard: a newer server build
+    // soft-reloads at a quiet moment, which also republishes the airport
+    // markers when airports.json changes with a deploy
+    renderClientVersionCheckScript(
+        $buildVersion['hash'],
+        $buildVersion['timestamp'],
+        $buildVersion['max_no_update_days']
+    );
+    ?>
     
     <script>
     (function() {
