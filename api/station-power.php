@@ -26,13 +26,13 @@ if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
         exit;
     }
 
-    header('Cache-Control: no-cache, no-store, must-revalidate');
-    header('Pragma: no-cache');
-    header('Expires: 0');
     header('X-Request-ID: ' . aviationwx_get_request_id());
 
     if (!checkRateLimit('station_power_api', RATE_LIMIT_STATION_POWER_MAX, RATE_LIMIT_STATION_POWER_WINDOW)) {
         http_response_code(429);
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
         header('Retry-After: ' . RATE_LIMIT_STATION_POWER_WINDOW);
         $out = stationPowerApiEncodeJson(['success' => false, 'error' => 'Too many requests. Please try again later.']);
         echo $out ?? '{"success":false,"error":"Too many requests. Please try again later."}';
@@ -48,8 +48,28 @@ if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
             'message' => json_last_error_msg(),
         ], 'app');
         http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
         echo '{"success":false,"error":"Internal error"}';
         exit;
+    }
+
+    // Successful responses may be shared briefly: power samples drift over
+    // hours, so a short browser TTL and a one-minute CDN TTL track the
+    // scheduler's own refresh cadence. Everything else stays uncached so
+    // errors and rate limits never persist at the edge.
+    if ($httpCode === 200) {
+        header(
+            'Cache-Control: public'
+            . ', max-age=' . STATION_POWER_API_BROWSER_TTL_SECONDS
+            . ', s-maxage=' . STATION_POWER_API_CDN_TTL_SECONDS
+            . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS
+        );
+    } else {
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
     }
 
     http_response_code($httpCode);
