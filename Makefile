@@ -286,16 +286,9 @@ dev: init up logs ## Start development environment
 # Testing workflow
 test-rebuild: test-local ## Rebuild containers before testing (alias for test-local)
 
-# Minification (optional - CSS minification for production)
-minify: ## Minify CSS (requires perl or sed)
-	@echo "Minifying CSS..."
-	@perl -pe 's/\/\*.*?\*\///g; s/^\s*//; s/\s*$$//; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g' public/css/styles.css > public/css/styles.min.css 2>/dev/null || \
-	 sed 's|/\*.*\*/||g; s/^[[:space:]]*//; s/[[:space:]]*$$//; s/[[:space:]]\{1,\}/ /g' public/css/styles.css > public/css/styles.min.css 2>/dev/null || \
-	 echo "Warning: minification failed (install perl or use online tool)"
-	@if [ -f public/css/styles.min.css ]; then \
-		echo "✓ Created public/css/styles.min.css"; \
-		ls -lh public/css/styles.css public/css/styles.min.css; \
-	fi
+# Minification (CSS minification, also run during Docker image build)
+minify: ## Minify CSS (requires perl)
+	@sh scripts/minify-css.sh
 
 # Configuration update
 update-config: ## Update configuration and restart (recreates containers to pick up env var changes)
