@@ -326,8 +326,21 @@ function isSafari() {
         const addressLinks = document.querySelectorAll('.address-link[data-apple-maps]');
         addressLinks.forEach(link => {
             const appleMapsUrl = link.getAttribute('data-apple-maps');
-            if (appleMapsUrl) {
-                link.href = appleMapsUrl;
+            if (!appleMapsUrl) {
+                return;
+            }
+            // Defense in depth: the server only emits https://maps.apple.com
+            // URLs in this attribute. Re-validate before assigning to href so
+            // a tampered attribute can never become a javascript: link; on any
+            // mismatch keep the server-rendered geo: href.
+            let parsed = null;
+            try {
+                parsed = new URL(appleMapsUrl, window.location.href);
+            } catch (e) {
+                parsed = null;
+            }
+            if (parsed && parsed.protocol === 'https:' && parsed.hostname === 'maps.apple.com') {
+                link.href = parsed.href;
             }
         });
     }
