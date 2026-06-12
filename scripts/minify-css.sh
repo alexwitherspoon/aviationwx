@@ -6,10 +6,11 @@
 # so a missing min file degrades gracefully at runtime. This script still
 # fails loudly so build pipelines notice when minification breaks.
 #
-# The perl pass strips comments and collapses whitespace line by line.
-# That is safe for this stylesheet (no quoted content strings), and the
-# verification step below guards against structural corruption if the
-# stylesheet grows constructs the regex mishandles.
+# The perl pass slurps the whole file (-0777) so comment removal spans
+# multi-line blocks, then collapses whitespace. That is safe for this
+# stylesheet (no quoted content strings), and the verification step below
+# guards against structural corruption if the stylesheet grows constructs
+# the regex mishandles.
 
 set -e
 
@@ -26,21 +27,23 @@ if ! command -v perl >/dev/null 2>&1; then
     exit 1
 fi
 
-perl -pe 's/\/\*.*?\*\///g; s/^\s*//; s/\s*$//; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g' "$SRC" > "$OUT"
+perl -0777 -pe 's/\/\*.*?\*\///gs; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g; s/^\s+|\s+$//g' "$SRC" > "$OUT"
 
 # Verify structure survived minification: brace counts must match the
-# source and comments must stay balanced (an unterminated /* would
-# silently swallow every rule after it).
+# comment-stripped source (comments may legitimately contain braces),
+# and no comment markers may remain in the output (an unterminated /*
+# would silently swallow every rule after it).
 verify=$(perl -e '
     local $/;
     open(my $s, "<", $ARGV[0]) or die "cannot read $ARGV[0]";
     open(my $m, "<", $ARGV[1]) or die "cannot read $ARGV[1]";
     my $src = <$s>; my $min = <$m>;
+    $src =~ s/\/\*.*?\*\///gs;
     my $so = () = $src =~ /\{/g; my $sc = () = $src =~ /\}/g;
     my $mo = () = $min =~ /\{/g; my $mc = () = $min =~ /\}/g;
     my $co = () = $min =~ /\/\*/g; my $cc = () = $min =~ /\*\//g;
-    if ($so != $mo || $sc != $mc) { print "brace mismatch: src $so/$sc min $mo/$mc"; exit 0; }
-    if ($co != $cc) { print "unbalanced comments in output: $co open, $cc close"; exit 0; }
+    if ($so != $mo || $sc != $mc) { print "brace mismatch: stripped src $so/$sc min $mo/$mc"; exit 0; }
+    if ($co != 0 || $cc != 0) { print "comment markers remain in output: $co open, $cc close"; exit 0; }
     print "ok";
 ' "$SRC" "$OUT")
 
