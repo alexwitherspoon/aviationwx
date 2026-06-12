@@ -1941,13 +1941,9 @@ const METAR_STALE_FAILCLOSED_SECONDS = <?= getMetarStaleFailclosedSeconds() ?>;
 
 const SECONDS_PER_HOUR = 3600;
 
-<?php if (!empty($showStationPowerBlock)): ?>
-const STATION_POWER_POLL_MS = <?= (int) ($stationPowerPollSeconds * 1000) ?>;
-const HAS_STATION_POWER_UI = true;
-<?php else: ?>
-const STATION_POWER_POLL_MS = 0;
-const HAS_STATION_POWER_UI = false;
-<?php endif; ?>
+// Station power UI (limited-availability airports with configured sensors)
+const STATION_POWER_POLL_MS = <?= !empty($showStationPowerBlock) ? (int) ($stationPowerPollSeconds * 1000) : 0 ?>;
+const HAS_STATION_POWER_UI = <?= !empty($showStationPowerBlock) ? 'true' : 'false' ?>;
 
 // Night mode window (civil twilight times in the airport timezone)
 var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
