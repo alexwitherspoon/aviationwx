@@ -448,179 +448,32 @@ if ($themeCookie === 'dark') {
     ?>
     <link rel="stylesheet" href="<?= $cssHref ?>?v=<?= $buildHashShort ?>">
     <script>
-        // Register service worker for offline support with cache busting
+        // The service worker was removed: it registered with /public/js/
+        // scope (no Service-Worker-Allowed header), so it never controlled
+        // the page and its offline/weather caching never ran. Unregister
+        // legacy registrations so existing clients drop them promptly;
+        // their update checks 404 and unregister as a fallback.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Unregister any old service workers at incorrect paths (e.g., /sw.js)
-                navigator.serviceWorker.getRegistrations().then((registrations) => {
-                    for (const registration of registrations) {
-                        // Check if this is an old registration at wrong path
-                        if (registration.scope && (registration.active?.scriptURL?.includes('/sw.js') || registration.waiting?.scriptURL?.includes('/sw.js') || registration.installing?.scriptURL?.includes('/sw.js'))) {
-                            console.log('[SW] Unregistering old service worker:', registration.scope);
-                            registration.unregister();
-                        }
-                    }
-                });
-                
-                // Add cache-busting query parameter based on service worker file modification time
-                // This ensures the service worker is re-fetched when the file changes on deploy
-                const swMtime = <?= file_exists(__DIR__ . '/../public/js/service-worker.js') ? filemtime(__DIR__ . '/../public/js/service-worker.js') : time() ?>;
-                const swUrl = '/public/js/service-worker.js?v=' + swMtime;
-                
-                // Track recovery attempts for last-resort page reload
-                let swRecoveryAttempts = 0;
-                const MAX_RECOVERY_ATTEMPTS = 3;
-                const RECOVERY_RESET_TIME = 3600000; // Reset counter after 1 hour of successful updates
-                let lastSuccessfulUpdate = Date.now();
-                
-                /**
-                 * Safely update service worker registration with recovery logic
-                 * Handles cases where registration becomes stale after long periods (sleep/wake)
-                 */
-                async function safeUpdateServiceWorker(registration) {
-                    try {
-                        // Check if registration still has an active or waiting worker
-                        if (!registration.active && !registration.waiting) {
-                            console.warn('[SW] Registration has no active or waiting worker - attempting recovery');
-                            swRecoveryAttempts++;
-                            
-                            // Strategy 1: Try to get a fresh registration
-                            try {
-                                const freshRegistration = await navigator.serviceWorker.ready;
-                                if (freshRegistration && (freshRegistration.active || freshRegistration.waiting)) {
-                                    console.log('[SW] Successfully re-established registration');
-                                    await freshRegistration.update();
-                                    swRecoveryAttempts = 0; // Reset on success
-                                    lastSuccessfulUpdate = Date.now();
-                                    return;
-                                }
-                            } catch (readyError) {
-                                console.warn('[SW] Failed to get ready registration:', readyError);
-                            }
-                            
-                            // Strategy 2: Re-register the service worker
-                            console.log('[SW] Attempting to re-register service worker');
-                            try {
-                                const newRegistration = await navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' });
-                                console.log('[SW] Successfully re-registered service worker');
-                                swRecoveryAttempts = 0; // Reset on success
-                                lastSuccessfulUpdate = Date.now();
-                                return;
-                            } catch (registerError) {
-                                console.error('[SW] Failed to re-register:', registerError);
-                            }
-                            
-                            // Strategy 3: Last resort - force page reload after multiple failures
-                            if (swRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-                                console.error('[SW] Recovery failed after ' + MAX_RECOVERY_ATTEMPTS + ' attempts - forcing page reload');
-                                sessionStorage.setItem('aviationwx-sw-recovery-reload', Date.now().toString());
-                                window.location.reload();
-                                return;
-                            }
-                            
-                            console.warn('[SW] Recovery attempt ' + swRecoveryAttempts + ' of ' + MAX_RECOVERY_ATTEMPTS + ' - will retry on next interval');
-                            return;
-                        }
-                        
-                        // Registration looks valid - perform normal update
-                        await registration.update();
-                        
-                        // Reset recovery counter after successful update
-                        const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
-                        if (timeSinceLastSuccess > RECOVERY_RESET_TIME && swRecoveryAttempts > 0) {
-                            console.log('[SW] Resetting recovery counter after successful operation');
-                            swRecoveryAttempts = 0;
-                        }
-                        lastSuccessfulUpdate = Date.now();
-                        
-                    } catch (error) {
-                        // Handle InvalidStateError and other update failures
-                        if (error.name === 'InvalidStateError') {
-                            console.error('[SW] InvalidStateError during update:', error.message);
-                            swRecoveryAttempts++;
-                            
-                            if (swRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-                                console.error('[SW] Multiple InvalidStateErrors - forcing page reload');
-                                sessionStorage.setItem('aviationwx-sw-recovery-reload', Date.now().toString());
-                                window.location.reload();
-                            }
-                        } else {
-                            console.error('[SW] Update failed:', error);
-                        }
-                    }
-                }
-                
-                navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
-                    .then((registration) => {
-                        console.log('[SW] Registered:', registration.scope);
-                        
-                        // Check if this page load was triggered by recovery reload
-                        const recoveryReload = sessionStorage.getItem('aviationwx-sw-recovery-reload');
-                        if (recoveryReload) {
-                            const reloadTime = parseInt(recoveryReload, 10);
-                            const timeSinceReload = Date.now() - reloadTime;
-                            if (timeSinceReload < 5000) { // Within 5 seconds of reload
-                                console.log('[SW] Page reloaded after recovery - service worker re-established');
-                            }
-                            sessionStorage.removeItem('aviationwx-sw-recovery-reload');
-                        }
-
-                        // Check for updates immediately after registration
-                        safeUpdateServiceWorker(registration);
-
-                        // If there's a waiting SW, activate it immediately
-                        if (registration.waiting) {
-                            console.log('[SW] Waiting service worker found, activating...');
-                            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                            // Force reload after a short delay
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 100);
-                        }
-
-                        // Listen for updates; when installed and waiting, take over
-                        registration.addEventListener('updatefound', () => {
-                            console.log('[SW] Update found, new service worker installing...');
-                            const newWorker = registration.installing;
-                            if (!newWorker) {
-                                return;
-                            }
-                            
-                            newWorker.addEventListener('statechange', function() {
-                                if (newWorker.state === 'installed') {
-                                    if (navigator.serviceWorker.controller) {
-                                        // There's a new SW waiting - activate it immediately
-                                        console.log('[SW] New service worker installed, activating...');
-                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                        // Force reload after activation
-                                        setTimeout(() => {
-                                            window.location.reload();
-                                        }, 100);
-                                    } else {
-                                        // First install
-                                        console.log('[SW] Service worker installed for first time');
-                                    }
-                                }
-                            });
-                        });
-
-                        // Auto-reload when new SW takes control
-                        let refreshing = false;
-                        navigator.serviceWorker.addEventListener('controllerchange', () => {
-                            if (!refreshing) {
-                                refreshing = true;
-                                console.log('[SW] Controller changed, reloading page...');
-                                window.location.reload();
+                navigator.serviceWorker.getRegistrations()
+                    .then((registrations) => Promise.allSettled(registrations.map((registration) => {
+                        console.log('[SW] Unregistering legacy service worker:', registration.scope);
+                        return registration.unregister();
+                    })))
+                    .then((results) => {
+                        results.forEach((result) => {
+                            // unregister() can reject or resolve false;
+                            // either way a legacy worker may remain on the
+                            // client, which is worth seeing in the console
+                            if (result.status === 'rejected') {
+                                console.warn('[SW] Legacy service worker unregister failed:', result.reason);
+                            } else if (result.value === false) {
+                                console.warn('[SW] Legacy service worker unregister returned false');
                             }
                         });
-
-                        // Check for updates every 5 minutes with safe recovery logic
-                        setInterval(() => {
-                            safeUpdateServiceWorker(registration);
-                        }, 300000); // 5 minutes
                     })
                     .catch((err) => {
-                        console.warn('[SW] Registration failed:', err);
+                        console.warn('[SW] Could not enumerate legacy service workers:', err);
                     });
             });
         }

@@ -23,7 +23,6 @@ const DEFAULT_FILES = [
   'pages/error-404.php',
   'pages/status.php',
   'public/js/airport-dashboard.js',
-  'public/js/service-worker.js',
   'public/js/webcam-player-utils.js',
   'public/js/webcam-player-scroll-lock.js',
   'public/js/weather-timestamp-utils.js',

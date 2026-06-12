@@ -92,7 +92,6 @@ aviationwx.org/
 ├── public/
 │   ├── css/styles.css        # Application styles
 │   ├── js/
-│   │   ├── service-worker.js # Service worker for offline support
 │   │   └── timer-lifecycle.js # Timer lifecycle management (deferred)
 │   └── favicons/             # Favicon files
 ├── docker/                   # Docker configuration files
@@ -334,9 +333,7 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 - Unit conversion functions
 - Timestamp formatting
 
-**Service Worker & Version Management**:
-- **Service Worker** (`public/js/service-worker.js`): Provides offline support with network-first caching for weather data
-- **Automatic Updates**: SW updates check every 5 minutes, with immediate activation via `skipWaiting()`
+**Version Management**:
 - **Version Checking**: Clients poll `/api/v1/version.php` (on load and periodically) and compare the server build to their own:
   - Newer server build: soft reload at a quiet moment picks up current code (no-cache HTML + versioned assets)
   - Client more than `dead_man_switch_days` behind, or no confirmed check in that window: full cleanup (caches, storage, service workers)
@@ -345,7 +342,8 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 - **Version Cookie** (`aviationwx_v`): Cross-subdomain cookie set on every response containing hash.timestamp
   - Server detects stuck clients by missing/stale cookie
   - Cleanup injected when `stuck_client_cleanup: true` in config
-- See [Operations Guide](OPERATIONS.md#client-version-management) for emergency cleanup procedures
+- **No service worker**: pages are intentionally served live (no-cache HTML, versioned static assets); a previous service worker never controlled the page (it was scoped to `/public/js/`) and was removed. The dashboard unregisters legacy registrations
+- See [Operations Guide](OPERATIONS.md#client-version-management) for cleanup procedures
 
 **Timer Worker System**:
 - **Web Worker** (inline Blob URL): Provides reliable timer management not throttled in background tabs

@@ -1996,11 +1996,11 @@ async function fetchWeather(forceRefresh = false) {
         
         // If data is stale or we're forcing refresh, bypass cache using multiple strategies
         if (shouldForceRefresh) {
-            // Strategy 1: Add cache-busting query parameter (forces Service Worker to treat as new request)
+            // Strategy 1: Add cache-busting query parameter (unique URL defeats any cache keyed on it)
             url += `&_cb=${Date.now()}`;
             // Strategy 2: Use cache: 'reload' to bypass browser cache
             fetchOptions.cache = 'reload';
-            // Strategy 3: Add Cache-Control header to bypass Service Worker cache
+            // Strategy 3: Add Cache-Control header so intermediaries revalidate
             fetchOptions.headers['Cache-Control'] = 'no-cache';
             // Only log in development/debug mode to reduce production log noise
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {

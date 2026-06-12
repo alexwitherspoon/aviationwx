@@ -197,7 +197,7 @@ function getSunsetTime($airport)
  * Add cache-busting parameter to URL
  * 
  * Adds a cache-busting query parameter (`_cb`) to a URL to force fresh requests.
- * This is used client-side to bypass Service Worker and browser caches.
+ * This is used client-side to bypass browser and intermediary caches.
  * 
  * The parameter value is a timestamp (milliseconds since epoch) to ensure uniqueness.
  * 

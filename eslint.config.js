@@ -21,8 +21,6 @@ module.exports = defineConfig([
             globals: {
                 // Browser globals (provided by browser environment) - spread first
                 ...globals.browser,
-                // Service Worker globals (available in both browser and service worker contexts)
-                ...globals.serviceworker,
                 // Application-specific globals
                 "AIRPORT_ID": "readonly",
                 "AIRPORT_DATA": "readonly",
@@ -97,8 +95,7 @@ module.exports = defineConfig([
             allow: ["err", "error", "e"], // Common error variable names
         }],
         
-        // Enforce IIFE pattern for HTML scripts (service workers are exception)
-        // Service workers use explicit self.* assignments which is acceptable
+        // Enforce IIFE pattern for HTML scripts
         "no-implicit-globals": ["error", {
             lexicalBindings: false, // Allow const/let in global scope (they're not truly global)
         }],

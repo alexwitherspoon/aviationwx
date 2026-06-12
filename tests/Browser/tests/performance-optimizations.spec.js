@@ -49,139 +49,35 @@ test.describe('Performance Optimizations', () => {
     expect(scriptsExecuted).toBeTruthy();
   });
 
-  test('Service worker should register successfully', async ({ page, context }) => {
-    // Grant service worker permissions (notifications permission helps with service workers)
-    await context.grantPermissions(['notifications']);
+  test('Legacy service workers should unregister without errors', async ({ page }) => {
+    const swErrors = [];
     
-    const swRegistrationErrors = [];
-    const swSuccess = [];
-    
-    // Listen for console messages about service worker BEFORE navigation
-    page.on('console', msg => {
-      const text = msg.text();
-      if (text.includes('[SW]') || text.includes('service worker') || text.includes('ServiceWorker')) {
-        if (msg.type() === 'error') {
-          swRegistrationErrors.push(text);
-        } else if (text.includes('Registered') || text.includes('registered')) {
-          swSuccess.push(text);
-        }
-      }
-    });
-    
-    // Listen for page errors
+    // Listen for service worker related errors BEFORE navigation
     page.on('pageerror', error => {
       const errorText = error.message;
       if (errorText.includes('service worker') || errorText.includes('ServiceWorker') || errorText.includes('sw.js')) {
-        swRegistrationErrors.push(errorText);
+        swErrors.push(errorText);
       }
     });
     
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Wait for service worker registration (service workers register on 'load' event)
     await page.waitForLoadState('load');
-    await page.waitForTimeout(2000); // Additional wait for async registration
+    await page.waitForTimeout(2000); // Allow the unregister pass to run
     
-    // Check service worker registration
-    const swRegistered = await page.evaluate(async () => {
-      if ('serviceWorker' in navigator) {
-        try {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          return {
-            registered: registrations.length > 0,
-            count: registrations.length,
-            scopes: registrations.map(r => r.scope)
-          };
-        } catch (e) {
-          return {
-            registered: false,
-            error: e.message
-          };
-        }
+    // The page no longer registers a service worker; the inline cleanup
+    // script unregisters any legacy registrations from older builds
+    const swState = await page.evaluate(async () => {
+      if (!('serviceWorker' in navigator)) {
+        return { supported: false, count: 0 };
       }
-      return {
-        registered: false,
-        reason: 'ServiceWorker not supported'
-      };
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      return { supported: true, count: registrations.length };
     });
     
-    // Service worker should either be registered or not supported (both are OK)
-    // But if there are registration errors, that's a problem
-    if (swRegistrationErrors.length > 0) {
-      // Check if error is about old /sw.js path (expected and handled)
-      const oldPathErrors = swRegistrationErrors.filter(err => 
-        err.includes('/sw.js') && (err.includes('404') || err.includes('Failed'))
-      );
-      
-      // Other errors are problems
-      const otherErrors = swRegistrationErrors.filter(err => 
-        !err.includes('/sw.js') || (!err.includes('404') && !err.includes('Failed'))
-      );
-      
-      // Log for debugging
-      if (otherErrors.length > 0) {
-        console.log('Service worker registration errors:', otherErrors);
-        console.log('Service worker registration status:', swRegistered);
-      }
-      
-      expect(otherErrors).toHaveLength(0);
+    expect(swErrors).toHaveLength(0);
+    if (swState.supported) {
+      expect(swState.count).toBe(0);
     }
-    
-    // If service worker is supported, it should register (unless there's a legitimate error)
-    if (swRegistered.reason !== 'ServiceWorker not supported' && !swRegistered.error) {
-      // Service worker should be registered if supported
-      // But we don't fail if it's not - might be first load or other legitimate reasons
-      // The important thing is that there are no errors
-    }
-  });
-
-  test('Service worker file should be served with correct MIME type', async ({ page }) => {
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Get the service worker URL from the page
-    const swUrl = await page.evaluate(() => {
-      // Look for service worker registration in the page
-      const scripts = Array.from(document.querySelectorAll('script'));
-      for (const script of scripts) {
-        const text = script.textContent || '';
-        // Match service-worker.js with optional query parameters
-        const match = text.match(/service-worker\.js[^'"]*/);
-        if (match) {
-          // Extract the full path including query params
-          const fullMatch = match[0];
-          // Check if it already starts with /public/js/
-          if (fullMatch.startsWith('/public/js/')) {
-            return fullMatch;
-          }
-          // Otherwise prepend the path
-          return '/public/js/' + fullMatch;
-        }
-      }
-      return null;
-    });
-    
-    // If we can't find the URL in the page, try the standard path
-    const testUrl = swUrl || '/public/js/service-worker.js';
-    
-    // Try to fetch the service worker file using page.request (better for API calls)
-    const response = await page.request.get(`${baseUrl}${testUrl}`);
-    
-    // Should get a successful response
-    expect(response.ok()).toBeTruthy();
-    
-    const contentType = response.headers()['content-type'] || '';
-    const body = await response.text();
-    
-    // Should be JavaScript MIME type
-    expect(contentType).toMatch(/javascript|application\/javascript|text\/javascript/);
-    
-    // Should not be HTML (404 page)
-    expect(body).not.toMatch(/<!DOCTYPE|<html|<body/);
-    
-    // Should contain JavaScript code
-    expect(body).toMatch(/serviceWorker|self\.addEventListener|const/);
   });
 
   test('window.styleMedia should be removed to prevent Safari warnings', async ({ page }) => {

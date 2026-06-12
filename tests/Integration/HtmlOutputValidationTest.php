@@ -593,57 +593,31 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
-     * Test that Service Worker file exists and has correct MIME type
-     * This ensures the Service Worker file is accessible and properly configured
+     * The dashboard must ship the legacy service worker unregister pass.
+     *
+     * No service worker is registered anymore (removed as inert), but
+     * clients from older builds still carry registrations. Losing this
+     * inline cleanup would leave those workers in place with nothing to
+     * remove them except eventual 404-triggered unregistration.
      */
-    public function testServiceWorker_FileExistsAndHasCorrectMimeType()
+    public function testAirportPage_LegacyServiceWorkerCleanupPresent()
     {
-        $swPath = '/public/js/service-worker.js';
-        $response = $this->makeRequest($swPath);
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0) {
-            $this->markTestSkipped("Service Worker endpoint not available");
+        if ($html === null) {
+            $this->markTestSkipped('Airport page endpoint not available');
             return;
         }
         
-        // Service Worker file should exist (200) or be accessible
-        $this->assertEquals(
-            200,
-            $response['http_code'],
-            "Service Worker file should be accessible (got HTTP {$response['http_code']})"
+        $this->assertStringContainsString(
+            'Unregistering legacy service worker',
+            $html,
+            'Dashboard should contain the legacy service worker unregister pass'
         );
-        
-        // Get content type from headers (if available) or check file content
-        $body = $response['body'];
-        
-        // Should not be HTML (404 page)
-        $this->assertStringNotContainsString(
-            '<!DOCTYPE',
-            $body,
-            "Service Worker file should not return HTML (404 page)"
-        );
-        
-        $this->assertStringNotContainsString(
-            '<html',
-            $body,
-            "Service Worker file should not return HTML (404 page)"
-        );
-        
-        // Should contain JavaScript code (Service Worker specific)
-        // Check for serviceWorker (case-insensitive) or self.addEventListener
-        $hasServiceWorkerCode = stripos($body, 'serviceWorker') !== false || 
-                               stripos($body, 'self.addEventListener') !== false ||
-                               stripos($body, 'addEventListener') !== false;
-        $this->assertTrue(
-            $hasServiceWorkerCode,
-            "Service Worker file should contain serviceWorker code or addEventListener (Service Worker API)"
-        );
-        
-        // Should contain self.addEventListener (Service Worker API) - more specific check
-        $hasSelfAddEventListener = stripos($body, 'self.addEventListener') !== false;
-        $this->assertTrue(
-            $hasSelfAddEventListener,
-            "Service Worker file should contain self.addEventListener (Service Worker API)"
+        $this->assertDoesNotMatchRegularExpression(
+            '/serviceWorker\s*\.\s*register\s*\(/',
+            $html,
+            'Dashboard must not register a service worker'
         );
     }
     
