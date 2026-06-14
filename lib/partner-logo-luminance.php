@@ -134,20 +134,34 @@ function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance):
  */
 function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
 {
-    if (!is_readable($imagePath) || !function_exists('imagecreatefrompng')) {
+    if (!is_readable($imagePath)) {
         return null;
     }
 
     $ext = strtolower(pathinfo($imagePath, PATHINFO_EXTENSION));
     $img = false;
     if ($ext === 'png') {
+        if (!function_exists('imagecreatefrompng')) {
+            return null;
+        }
         $img = @imagecreatefrompng($imagePath);
     } elseif (in_array($ext, ['jpg', 'jpeg'], true)) {
+        if (!function_exists('imagecreatefromjpeg')) {
+            return null;
+        }
         $img = @imagecreatefromjpeg($imagePath);
     } elseif ($ext === 'gif') {
+        if (!function_exists('imagecreatefromgif')) {
+            return null;
+        }
         $img = @imagecreatefromgif($imagePath);
-    } elseif ($ext === 'webp' && function_exists('imagecreatefromwebp')) {
+    } elseif ($ext === 'webp') {
+        if (!function_exists('imagecreatefromwebp')) {
+            return null;
+        }
         $img = @imagecreatefromwebp($imagePath);
+    } else {
+        return null;
     }
 
     if ($img === false) {
