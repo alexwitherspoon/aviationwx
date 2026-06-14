@@ -1175,6 +1175,70 @@ function applyTheme(theme) {
         document.body.classList.add('light-mode');
     }
     // auto mode = no class (allows @media prefers-color-scheme to apply)
+
+    if (typeof updatePartnerLogoTiles === 'function') {
+        updatePartnerLogoTiles();
+    }
+}
+
+/**
+ * Whether the partner card background is light in the current theme.
+ * Mirrors CSS: light-mode and default auto light use the pale tile.
+ */
+function isPartnerTileBackgroundLight() {
+    if (document.body.classList.contains('light-mode')) {
+        return true;
+    }
+    if (document.body.classList.contains('dark-mode') || document.body.classList.contains('night-mode')) {
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Apply contrast-aware tile classes from server-provided logo luminance.
+ * Light logos on light tiles get a dark plaque; dark logos on dark tiles
+ * get a light plaque. Thresholds come from the page bootstrap constants.
+ */
+function updatePartnerLogoTiles() {
+    var links = document.querySelectorAll('.partner-link[data-logo-lum]');
+    if (!links.length) {
+        return;
+    }
+
+    var lightTile = isPartnerTileBackgroundLight();
+    var lumLight = typeof PARTNER_LOGO_LUM_LIGHT === 'number' ? PARTNER_LOGO_LUM_LIGHT : 0.65;
+    var lumDark = typeof PARTNER_LOGO_LUM_DARK === 'number' ? PARTNER_LOGO_LUM_DARK : 0.35;
+
+    for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        var lum = parseFloat(link.getAttribute('data-logo-lum'), 10);
+        link.classList.remove('partner-link--dark-tile', 'partner-link--light-tile');
+        if (!Number.isFinite(lum)) {
+            continue;
+        }
+        if (lightTile && lum > lumLight) {
+            link.classList.add('partner-link--dark-tile');
+        } else if (!lightTile && lum < lumDark) {
+            link.classList.add('partner-link--light-tile');
+        }
+    }
+}
+
+function initPartnerLogoContrastTiles() {
+    updatePartnerLogoTiles();
+    if (!window.matchMedia) {
+        return;
+    }
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    if (typeof darkQuery.addEventListener === 'function') {
+        darkQuery.addEventListener('change', updatePartnerLogoTiles);
+    } else if (typeof darkQuery.addListener === 'function') {
+        darkQuery.addListener(updatePartnerLogoTiles);
+    }
 }
 
 // Legacy compatibility
@@ -1436,6 +1500,14 @@ if (document.getElementById('night-mode-toggle')) {
         document.addEventListener('DOMContentLoaded', initNightModeToggle);
     } else {
         initNightModeToggle();
+    }
+}
+
+if (document.querySelector('.partner-link[data-logo-lum]')) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPartnerLogoContrastTiles);
+    } else {
+        initPartnerLogoContrastTiles();
     }
 }
 

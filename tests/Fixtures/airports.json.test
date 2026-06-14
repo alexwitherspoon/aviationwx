@@ -99,7 +99,7 @@
         {
           "name": "Test Partner Organization",
           "url": "https://example.com/partner",
-          "logo": "https://example.com/partner-logo.png",
+          "logo": "/tests/Fixtures/partner-logos/light-on-transparent.png",
           "description": "Test partner description"
         },
         {
