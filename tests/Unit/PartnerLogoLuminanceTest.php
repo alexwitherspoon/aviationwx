@@ -18,7 +18,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertDirectoryExists($this->fixtureDir);
     }
 
-    public function testAnalyzePartnerLogoMeanLuminance_LightMarkOnTransparent(): void
+    public function testAnalyzePartnerLogoMeanLuminance_LightMarkOnTransparent_ExceedsLightThreshold(): void
     {
         $path = $this->fixtureDir . '/light-on-transparent.png';
         $lum = analyzePartnerLogoMeanLuminance($path);
@@ -27,7 +27,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertGreaterThan(PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD, $lum);
     }
 
-    public function testAnalyzePartnerLogoMeanLuminance_DarkMarkOnTransparent(): void
+    public function testAnalyzePartnerLogoMeanLuminance_DarkMarkOnTransparent_BelowDarkThreshold(): void
     {
         $path = $this->fixtureDir . '/dark-on-transparent.png';
         $lum = analyzePartnerLogoMeanLuminance($path);
@@ -36,7 +36,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertLessThan(PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD, $lum);
     }
 
-    public function testAnalyzePartnerLogoMeanLuminance_PaletteGif(): void
+    public function testAnalyzePartnerLogoMeanLuminance_PaletteGif_BelowDarkThreshold(): void
     {
         $path = $this->fixtureDir . '/palette.gif';
         $this->assertFileExists($path);
@@ -46,7 +46,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertLessThan(PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD, $lum);
     }
 
-    public function testAirportFixturePartnerLogo_HasContrastMetadata(): void
+    public function testGetPartnerLogoMeanLuminance_FixtureAirportLogo_ExceedsLightThreshold(): void
     {
         $configPath = __DIR__ . '/../Fixtures/airports.json.test';
         $config = json_decode((string) file_get_contents($configPath), true);
@@ -58,7 +58,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertGreaterThan(PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD, $lum);
     }
 
-    public function testGetPartnerLogoMeanLuminance_CachesInWritablePartnersDir(): void
+    public function testGetPartnerLogoMeanLuminance_SecondCall_ReadsWritableCache(): void
     {
         $path = $this->fixtureDir . '/light-on-transparent.png';
         $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/light-on-transparent.png');

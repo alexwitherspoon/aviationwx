@@ -19,7 +19,7 @@ class PartnerLogoContrastTest extends TestCase
             ?: 'http://localhost:8080';
     }
 
-    public function testAirportPage_EmbedsLogoLuminanceForLocalPartnerLogo(): void
+    public function testGetPartnerLogoMeanLuminance_AirportPageWithFixtureLogo_EmbedsDataLogoLumAttribute(): void
     {
         if (!function_exists('curl_init')) {
             $this->markTestSkipped('cURL not available');
