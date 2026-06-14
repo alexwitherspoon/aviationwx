@@ -311,6 +311,10 @@ if (!defined('PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD')) {
 if (!defined('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD')) {
     define('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD', 0.35);
 }
+// Opaque coverage at or above OPAQUE_COVERAGE means a baked-in background; skip hints.
+if (!defined('PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD')) {
+    define('PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD', 0.85);
+}
 
 // Cloudflare analytics - scheduler pre-warms cache; on-demand fetch is fallback when empty
 if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {

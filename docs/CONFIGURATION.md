@@ -1414,7 +1414,7 @@ Displayed prominently above footer:
 
 Logos are cached locally for 30 days (remote URLs). Text fallback if the image fails to load.
 
-**Contrast-aware tiles:** When the logo file is readable (local path or a warmed remote cache entry), the airport page samples opaque pixels once and embeds mean luminance on the partner link. The dashboard applies a dark or light tile background when a light logo would sit on a light card (or a dark logo on a dark card), without inverting the image. Results are cached in `cache/partners/lum/` (keyed by image path and invalidated when the file mtime changes). Remote logos only get contrast hints after the image cache exists (first page view may use the default tile until cache warm).
+**Contrast-aware tiles:** When the logo file is readable (local path or a warmed remote cache entry), the airport page samples opaque pixels once and embeds mean luminance on the partner link when opaque coverage is below `PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD` (0.85 in `lib/constants.php`; mostly transparent logos with light or dark marks that need a contrasting tile). Logos with baked-in backgrounds (JPEG or PNG with high opaque coverage) keep the default tile. The dashboard applies a dark or light tile background when a light logo would sit on a light card (or a dark logo on a dark card), without inverting the image. Results are cached in `cache/partners/lum/` (keyed by image path and invalidated when the file mtime changes). Remote logos only get contrast hints after the image cache exists (first page view may use the default tile until cache warm).
 
 ### Custom Links
 

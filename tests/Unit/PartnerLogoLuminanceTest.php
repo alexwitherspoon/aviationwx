@@ -18,6 +18,16 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertDirectoryExists($this->fixtureDir);
     }
 
+    public function testAnalyzePartnerLogoContrastHints_LightMarkOnTransparent_LowOpaqueCoverage(): void
+    {
+        $path = $this->fixtureDir . '/light-on-transparent.png';
+        $hints = analyzePartnerLogoContrastHints($path);
+
+        $this->assertNotNull($hints);
+        $this->assertLessThan(PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD, $hints['opaque_coverage']);
+        $this->assertGreaterThan(PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD, $hints['mean_luminance']);
+    }
+
     public function testAnalyzePartnerLogoMeanLuminance_LightMarkOnTransparent_ExceedsLightThreshold(): void
     {
         $path = $this->fixtureDir . '/light-on-transparent.png';
@@ -44,6 +54,54 @@ class PartnerLogoLuminanceTest extends TestCase
         $lum = analyzePartnerLogoMeanLuminance($path);
         $this->assertNotNull($lum);
         $this->assertLessThan(PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD, $lum);
+    }
+
+    public function testGetPartnerLogoMeanLuminance_OpaqueWhiteBackgroundJpeg_ReturnsNull(): void
+    {
+        $lum = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/opaque-white-background.jpeg');
+        $this->assertNull($lum);
+    }
+
+    public function testGetPartnerLogoMeanLuminance_OpaqueWhiteBackgroundPng_ReturnsNull(): void
+    {
+        $lum = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/opaque-white-background.png');
+        $this->assertNull($lum);
+    }
+
+    public function testGetPartnerLogoMeanLuminance_OpaqueWhiteBackgroundJpeg_WritesCacheMetadata(): void
+    {
+        $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/opaque-white-background.jpeg');
+        $this->assertNotNull($resolved);
+        $metaPath = getPartnerLogoLuminanceCachePath($resolved);
+        @unlink($metaPath);
+
+        $this->assertNull(getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/opaque-white-background.jpeg'));
+        $this->assertFileExists($metaPath);
+
+        $decoded = json_decode((string) file_get_contents($metaPath), true);
+        $this->assertIsArray($decoded);
+        $this->assertGreaterThanOrEqual(PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD, $decoded['opaque_coverage']);
+
+        $second = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/opaque-white-background.jpeg');
+        $this->assertNull($second);
+
+        @unlink($metaPath);
+    }
+
+    public function testReadPartnerLogoLuminanceMeta_MissingOpaqueCoverage_ReturnsNull(): void
+    {
+        $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/light-on-transparent.png');
+        $this->assertNotNull($resolved);
+        $metaPath = getPartnerLogoLuminanceCachePath($resolved);
+        @unlink($metaPath);
+
+        file_put_contents(
+            $metaPath,
+            json_encode(['mean_luminance' => 0.9, 'source_mtime' => filemtime($resolved)])
+        );
+        $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
+
+        @unlink($metaPath);
     }
 
     public function testGetPartnerLogoMeanLuminance_FixtureAirportLogo_ExceedsLightThreshold(): void
@@ -76,6 +134,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $decoded = json_decode($raw, true);
         $this->assertIsArray($decoded);
         $this->assertSame((int) filemtime($path), $decoded['source_mtime']);
+        $this->assertArrayHasKey('opaque_coverage', $decoded);
 
         $second = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/light-on-transparent.png');
         $this->assertEqualsWithDelta($first, $second, 0.0001);
