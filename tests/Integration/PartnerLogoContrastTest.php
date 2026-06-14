@@ -43,35 +43,39 @@ class PartnerLogoContrastTest extends TestCase
 
         $url = rtrim($this->baseUrl, '/') . '/?airport=kspb';
         $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, getenv('CI') ? 15 : 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, getenv('CI') ? 10 : 5);
-        $html = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        try {
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, getenv('CI') ? 15 : 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, getenv('CI') ? 10 : 5);
+            $html = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        if ($httpCode === 0) {
-            $this->markTestSkipped('Airport page not available');
-        }
+            if ($httpCode === 0) {
+                $this->markTestSkipped('Airport page not available');
+            }
 
-        $this->assertSame(200, $httpCode);
-        $this->assertIsString($html);
+            $this->assertSame(200, $httpCode);
+            $this->assertIsString($html);
 
-        if (!preg_match('/data-logo-lum="/', $html)) {
-            $this->markTestSkipped(
-                'Live server config lacks analyzable local partner logos (run test-up on :9080 or use fixture CONFIG_PATH)'
+            if (!preg_match('/data-logo-lum="/', $html)) {
+                $this->markTestSkipped(
+                    'Live server config lacks analyzable local partner logos (run test-up on :9080 or use fixture CONFIG_PATH)'
+                );
+            }
+
+            $rounded = number_format(round($expectedLum, 4), 4, '.', '');
+            $this->assertStringContainsString(
+                'data-logo-lum="' . $rounded . '"',
+                $html,
+                'Partner link should carry server-computed logo luminance'
             );
+            $this->assertStringContainsString(
+                'PARTNER_LOGO_LUM_LIGHT',
+                $html,
+                'Bootstrap should expose contrast thresholds to the dashboard script'
+            );
+        } finally {
+            unset($ch);
         }
-
-        $rounded = number_format(round($expectedLum, 4), 4, '.', '');
-        $this->assertStringContainsString(
-            'data-logo-lum="' . $rounded . '"',
-            $html,
-            'Partner link should carry server-computed logo luminance'
-        );
-        $this->assertStringContainsString(
-            'PARTNER_LOGO_LUM_LIGHT',
-            $html,
-            'Bootstrap should expose contrast thresholds to the dashboard script'
-        );
     }
 }
