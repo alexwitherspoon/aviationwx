@@ -43,6 +43,10 @@ class PartnerLogoContrastTest extends TestCase
 
         $url = rtrim($this->baseUrl, '/') . '/?airport=kspb';
         $ch = curl_init($url);
+        if ($ch === false) {
+            $this->markTestSkipped('cURL could not initialize request');
+        }
+
         try {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, getenv('CI') ? 15 : 10);
