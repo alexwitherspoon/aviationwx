@@ -190,13 +190,12 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
         $step = max(1, (int) floor(max($width, $height) / 64));
         $sum = 0.0;
         $count = 0;
-        $alphaCutoff = 100;
 
         for ($y = 0; $y < $height; $y += $step) {
             for ($x = 0; $x < $width; $x += $step) {
                 $rgba = imagecolorat($img, $x, $y);
                 $alpha = ($rgba & 0x7F000000) >> 24;
-                if ($alpha > $alphaCutoff) {
+                if ($alpha !== 0) {
                     continue;
                 }
                 $r = ($rgba >> 16) & 0xFF;
