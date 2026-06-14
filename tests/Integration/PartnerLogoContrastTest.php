@@ -36,7 +36,8 @@ class PartnerLogoContrastTest extends TestCase
             $this->markTestSkipped('Test fixture has no partner logo');
         }
 
-        $expectedLum = getPartnerLogoMeanLuminance((string) $partners[0]['logo']);
+        $fixtureLogo = (string) $partners[0]['logo'];
+        $expectedLum = getPartnerLogoMeanLuminance($fixtureLogo);
         if ($expectedLum === null) {
             $this->markTestSkipped('Fixture partner logo luminance unavailable');
         }
@@ -64,9 +65,10 @@ class PartnerLogoContrastTest extends TestCase
             $this->assertSame(200, $httpCode);
             $this->assertIsString($html);
 
-            if (!preg_match('/data-logo-lum="/', $html)) {
+            $fixtureLogoSrc = '/api/partner-logo.php?url=' . urlencode($fixtureLogo);
+            if (!str_contains($html, $fixtureLogoSrc)) {
                 $this->markTestSkipped(
-                    'Live server config lacks analyzable local partner logos (run test-up on :9080 or use fixture CONFIG_PATH)'
+                    'Server is not using test fixture partner logo config (run test-up on :9080 or CONFIG_PATH fixture)'
                 );
             }
 
