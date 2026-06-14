@@ -1215,7 +1215,7 @@ function updatePartnerLogoTiles() {
 
     for (var i = 0; i < links.length; i++) {
         var link = links[i];
-        var lum = parseFloat(link.getAttribute('data-logo-lum'), 10);
+        var lum = parseFloat(link.getAttribute('data-logo-lum'));
         link.classList.remove('partner-link--dark-tile', 'partner-link--light-tile');
         if (!Number.isFinite(lum)) {
             continue;
