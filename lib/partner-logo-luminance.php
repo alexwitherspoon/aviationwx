@@ -67,7 +67,7 @@ function resolvePartnerLogoImagePath(string $logoUrl): ?string
  * Whether opaque coverage is high enough that the logo brings its own background.
  *
  * @param float $opaqueCoverage Fraction of sampled pixels that are fully opaque (0..1)
- * @return bool
+ * @return bool True when the logo brings its own background
  */
 function partnerLogoHasOpaqueBackground(float $opaqueCoverage): bool
 {
@@ -78,7 +78,7 @@ function partnerLogoHasOpaqueBackground(float $opaqueCoverage): bool
  * Read cached luminance metadata when still valid for the image mtime.
  *
  * @param string $imagePath Absolute path to the logo image
- * @return array{mean_luminance: float, opaque_coverage: float, source_mtime: int}|null
+ * @return array{mean_luminance: float, opaque_coverage: float, source_mtime: int}|null Cached metadata, or null when missing or stale
  */
 function readPartnerLogoLuminanceMeta(string $imagePath): ?array
 {
@@ -172,7 +172,7 @@ function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance, 
  * Samples on a coarse grid for speed; sufficient for logo contrast hints.
  *
  * @param string $imagePath Absolute path to a PNG, JPEG, GIF, or WebP file
- * @return array{mean_luminance: float, opaque_coverage: float}|null
+ * @return array{mean_luminance: float, opaque_coverage: float}|null Contrast hints, or null when analysis fails
  */
 function analyzePartnerLogoContrastHints(string $imagePath): ?array
 {
@@ -285,7 +285,7 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
  * Returns null when the logo has its own opaque background or analysis fails.
  *
  * @param string $logoUrl Local path or remote URL from airports.json
- * @return float|null Relative luminance 0..1, or null when unavailable
+ * @return float|null Relative luminance 0..1, or null when unavailable or skipped for opaque backgrounds
  */
 function getPartnerLogoMeanLuminance(string $logoUrl): ?float
 {

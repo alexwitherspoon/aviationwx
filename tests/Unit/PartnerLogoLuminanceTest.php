@@ -68,7 +68,7 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertNull($lum);
     }
 
-    public function testGetPartnerLogoMeanLuminance_OpaqueBackground_StillCachesAnalysis(): void
+    public function testGetPartnerLogoMeanLuminance_OpaqueWhiteBackgroundJpeg_WritesCacheMetadata(): void
     {
         $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/opaque-white-background.jpeg');
         $this->assertNotNull($resolved);
@@ -81,6 +81,25 @@ class PartnerLogoLuminanceTest extends TestCase
         $decoded = json_decode((string) file_get_contents($metaPath), true);
         $this->assertIsArray($decoded);
         $this->assertGreaterThanOrEqual(PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD, $decoded['opaque_coverage']);
+
+        $second = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/opaque-white-background.jpeg');
+        $this->assertNull($second);
+
+        @unlink($metaPath);
+    }
+
+    public function testReadPartnerLogoLuminanceMeta_MissingOpaqueCoverage_ReturnsNull(): void
+    {
+        $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/light-on-transparent.png');
+        $this->assertNotNull($resolved);
+        $metaPath = getPartnerLogoLuminanceCachePath($resolved);
+        @unlink($metaPath);
+
+        file_put_contents(
+            $metaPath,
+            json_encode(['mean_luminance' => 0.9, 'source_mtime' => filemtime($resolved)])
+        );
+        $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
 
         @unlink($metaPath);
     }
@@ -131,12 +150,6 @@ class PartnerLogoLuminanceTest extends TestCase
         @unlink($metaPath);
 
         file_put_contents($metaPath, '{"mean_luminance":"bad","source_mtime":"x"}');
-        $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
-
-        file_put_contents(
-            $metaPath,
-            json_encode(['mean_luminance' => 0.9, 'source_mtime' => filemtime($resolved)])
-        );
         $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
 
         file_put_contents(
