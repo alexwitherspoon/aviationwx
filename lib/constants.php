@@ -311,6 +311,11 @@ if (!defined('PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD')) {
 if (!defined('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD')) {
     define('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD', 0.35);
 }
+// Logos that are mostly opaque (JPEG or PNG with baked-in background) already
+// provide contrast; skip tile overrides when opaque pixel coverage exceeds this.
+if (!defined('PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD')) {
+    define('PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD', 0.85);
+}
 
 // Cloudflare analytics - scheduler pre-warms cache; on-demand fetch is fallback when empty
 if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {

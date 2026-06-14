@@ -4,7 +4,8 @@
  *
  * Light marks on transparent PNGs disappear on the default light partner
  * card; sampling opaque pixels once (cached under cache/partners/lum/)
- * lets the dashboard pick a readable tile background per theme.
+ * lets the dashboard pick a readable tile background per theme. Logos that
+ * are mostly opaque (JPEG or baked-in backgrounds) are left on the default tile.
  */
 
 require_once __DIR__ . '/constants.php';
@@ -63,10 +64,21 @@ function resolvePartnerLogoImagePath(string $logoUrl): ?string
 }
 
 /**
+ * Whether opaque coverage is high enough that the logo brings its own background.
+ *
+ * @param float $opaqueCoverage Fraction of sampled pixels that are fully opaque (0..1)
+ * @return bool
+ */
+function partnerLogoHasOpaqueBackground(float $opaqueCoverage): bool
+{
+    return $opaqueCoverage >= PARTNER_LOGO_OPAQUE_COVERAGE_THRESHOLD;
+}
+
+/**
  * Read cached luminance metadata when still valid for the image mtime.
  *
  * @param string $imagePath Absolute path to the logo image
- * @return array{mean_luminance: float, source_mtime: int}|null
+ * @return array{mean_luminance: float, opaque_coverage: float, source_mtime: int}|null
  */
 function readPartnerLogoLuminanceMeta(string $imagePath): ?array
 {
@@ -81,7 +93,10 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
     }
 
     $decoded = json_decode($raw, true);
-    if (!is_array($decoded) || !isset($decoded['mean_luminance'], $decoded['source_mtime'])) {
+    if (
+        !is_array($decoded)
+        || !isset($decoded['mean_luminance'], $decoded['opaque_coverage'], $decoded['source_mtime'])
+    ) {
         return null;
     }
 
@@ -90,12 +105,20 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
         return null;
     }
 
-    if (!is_numeric($decoded['mean_luminance']) || !is_numeric($decoded['source_mtime'])) {
+    if (
+        !is_numeric($decoded['mean_luminance'])
+        || !is_numeric($decoded['opaque_coverage'])
+        || !is_numeric($decoded['source_mtime'])
+    ) {
         return null;
     }
 
     $meanLuminance = (float) $decoded['mean_luminance'];
+    $opaqueCoverage = (float) $decoded['opaque_coverage'];
     if ($meanLuminance < 0.0 || $meanLuminance > 1.0) {
+        return null;
+    }
+    if ($opaqueCoverage < 0.0 || $opaqueCoverage > 1.0) {
         return null;
     }
 
@@ -105,6 +128,7 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
 
     return [
         'mean_luminance' => $meanLuminance,
+        'opaque_coverage' => $opaqueCoverage,
         'source_mtime' => $mtime,
     ];
 }
@@ -114,9 +138,10 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
  *
  * @param string $imagePath Absolute path to the logo image
  * @param float $meanLuminance Relative luminance 0..1 of opaque pixels
+ * @param float $opaqueCoverage Fraction of sampled pixels that are fully opaque (0..1)
  * @return void
  */
-function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance): void
+function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance, float $opaqueCoverage): void
 {
     $mtime = filemtime($imagePath);
     if ($mtime === false) {
@@ -125,6 +150,7 @@ function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance):
 
     $payload = json_encode([
         'mean_luminance' => round($meanLuminance, 4),
+        'opaque_coverage' => round($opaqueCoverage, 4),
         'source_mtime' => $mtime,
     ], JSON_UNESCAPED_SLASHES);
 
@@ -141,14 +167,14 @@ function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance):
 }
 
 /**
- * Compute mean relative luminance (0..1) of opaque pixels in an image file.
+ * Sample logo pixels for contrast hints (mean luminance and opaque coverage).
  *
  * Samples on a coarse grid for speed; sufficient for logo contrast hints.
  *
  * @param string $imagePath Absolute path to a PNG, JPEG, GIF, or WebP file
- * @return float|null Mean luminance, or null when analysis fails
+ * @return array{mean_luminance: float, opaque_coverage: float}|null
  */
-function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
+function analyzePartnerLogoContrastHints(string $imagePath): ?array
 {
     if (!is_readable($imagePath)) {
         return null;
@@ -205,10 +231,12 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
 
         $step = max(1, (int) floor(max($width, $height) / 64));
         $sum = 0.0;
-        $count = 0;
+        $opaqueCount = 0;
+        $totalSamples = 0;
 
         for ($y = 0; $y < $height; $y += $step) {
             for ($x = 0; $x < $width; $x += $step) {
+                $totalSamples++;
                 $rgba = imagecolorat($img, $x, $y);
                 $alpha = ($rgba & 0x7F000000) >> 24;
                 if ($alpha !== 0) {
@@ -218,22 +246,43 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
                 $g = ($rgba >> 8) & 0xFF;
                 $b = $rgba & 0xFF;
                 $sum += (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-                $count++;
+                $opaqueCount++;
             }
         }
 
-        if ($count === 0) {
+        if ($opaqueCount === 0 || $totalSamples === 0) {
             return null;
         }
 
-        return $sum / $count;
+        return [
+            'mean_luminance' => $sum / $opaqueCount,
+            'opaque_coverage' => $opaqueCount / $totalSamples,
+        ];
     } finally {
         unset($img);
     }
 }
 
 /**
+ * Compute mean relative luminance (0..1) of opaque pixels in an image file.
+ *
+ * @param string $imagePath Absolute path to a PNG, JPEG, GIF, or WebP file
+ * @return float|null Mean luminance, or null when analysis fails
+ */
+function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
+{
+    $hints = analyzePartnerLogoContrastHints($imagePath);
+    if ($hints === null) {
+        return null;
+    }
+
+    return (float) $hints['mean_luminance'];
+}
+
+/**
  * Mean luminance for a partner logo path or URL, cached under cache/partners/lum/.
+ *
+ * Returns null when the logo has its own opaque background or analysis fails.
  *
  * @param string $logoUrl Local path or remote URL from airports.json
  * @return float|null Relative luminance 0..1, or null when unavailable
@@ -247,17 +296,29 @@ function getPartnerLogoMeanLuminance(string $logoUrl): ?float
 
     $cached = readPartnerLogoLuminanceMeta($imagePath);
     if ($cached !== null) {
+        if (partnerLogoHasOpaqueBackground((float) $cached['opaque_coverage'])) {
+            return null;
+        }
+
         return (float) $cached['mean_luminance'];
     }
 
-    $mean = analyzePartnerLogoMeanLuminance($imagePath);
-    if ($mean === null) {
+    $hints = analyzePartnerLogoContrastHints($imagePath);
+    if ($hints === null) {
         return null;
     }
 
-    writePartnerLogoLuminanceMeta($imagePath, $mean);
+    writePartnerLogoLuminanceMeta(
+        $imagePath,
+        (float) $hints['mean_luminance'],
+        (float) $hints['opaque_coverage']
+    );
 
-    return $mean;
+    if (partnerLogoHasOpaqueBackground((float) $hints['opaque_coverage'])) {
+        return null;
+    }
+
+    return (float) $hints['mean_luminance'];
 }
 
 /**

@@ -540,7 +540,7 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 ### 10. Partner Logo Contrast Tiles
 
 - **Why**: White or very light marks on transparent PNGs disappear on the default light partner card; dark marks can vanish on dark/night tiles.
-- **Implementation**: `lib/partner-logo-luminance.php` samples opaque pixels (GD, coarse grid) on airport page render; mean luminance is cached in writable `cache/partners/lum/` keyed by absolute image path and invalidated by file mtime (works with read-only `/partner-logos/` deploy mounts). `pages/airport.php` embeds `data-logo-lum`; `public/js/airport-dashboard.js` applies `partner-link--dark-tile` or `partner-link--light-tile` per theme without inverting the image (night-mode logo filters unchanged).
+- **Implementation**: `lib/partner-logo-luminance.php` samples pixels on a coarse grid (GD) on airport page render; mean luminance of opaque pixels and opaque coverage are cached in writable `cache/partners/lum/` keyed by absolute image path and invalidated by file mtime (works with read-only `/partner-logos/` deploy mounts). `pages/airport.php` embeds `data-logo-lum` only when opaque coverage is below the threshold (transparent logos); JPEG and other baked-background logos keep the default tile. `public/js/airport-dashboard.js` applies `partner-link--dark-tile` or `partner-link--light-tile` per theme without inverting the image (night-mode logo filters unchanged).
 - **Remote logos**: Luminance is available only after `lib/partner-logo-cache.php` has a cached image file.
 - **Regression tests**: `tests/Unit/PartnerLogoLuminanceTest.php`, `tests/Integration/PartnerLogoContrastTest.php`
 
