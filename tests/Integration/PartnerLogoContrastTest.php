@@ -52,6 +52,9 @@ class PartnerLogoContrastTest extends TestCase
             curl_setopt($ch, CURLOPT_TIMEOUT, getenv('CI') ? 15 : 10);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, getenv('CI') ? 10 : 5);
             $html = curl_exec($ch);
+            if ($html === false) {
+                $this->markTestSkipped('cURL request failed: ' . curl_error($ch));
+            }
             $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
             if ($httpCode === 0) {
