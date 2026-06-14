@@ -1342,7 +1342,7 @@ if ($themeCookie === 'dark') {
                         $partnerLinkAttrs = '';
                         if ($partnerLogoLum !== null) {
                             $partnerLinkAttrs = ' data-logo-lum="' . htmlspecialchars(
-                                (string) round($partnerLogoLum, 4),
+                                number_format($partnerLogoLum, 4, '.', ''),
                                 ENT_QUOTES,
                                 'UTF-8'
                             ) . '"';
