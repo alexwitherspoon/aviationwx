@@ -173,7 +173,12 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
 
         // Palette images: imagecolorat returns an index, not packed RGBA
         if (!imageistruecolor($img) && function_exists('imagepalettetotruecolor')) {
-            imagepalettetotruecolor($img);
+            if (!imagepalettetotruecolor($img)) {
+                return null;
+            }
+        }
+        if (!imageistruecolor($img)) {
+            return null;
         }
 
         $width = imagesx($img);
