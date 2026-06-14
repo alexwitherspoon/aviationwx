@@ -48,15 +48,18 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertGreaterThan(PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD, $lum);
     }
 
-    public function testGetPartnerLogoMeanLuminance_CachesBesideImage(): void
+    public function testGetPartnerLogoMeanLuminance_CachesInWritablePartnersDir(): void
     {
         $path = $this->fixtureDir . '/light-on-transparent.png';
-        $metaPath = getPartnerLogoLuminanceMetaPath($path);
+        $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/light-on-transparent.png');
+        $this->assertNotNull($resolved);
+        $metaPath = getPartnerLogoLuminanceCachePath($resolved);
         @unlink($metaPath);
 
         $first = getPartnerLogoMeanLuminance('/tests/Fixtures/partner-logos/light-on-transparent.png');
         $this->assertNotNull($first);
         $this->assertFileExists($metaPath);
+        $this->assertStringContainsString('/partners/lum/', $metaPath);
 
         $raw = file_get_contents($metaPath);
         $this->assertIsString($raw);

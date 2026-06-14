@@ -96,6 +96,7 @@ function isRunningInCI(): bool {
  * - Webcam images (webcams/*.jpg, *.webp)
  * - METAR bulk station JSON under cache/metar-bulk/stations/
  * - Partner logo cache files (partners/* under CACHE_PARTNERS_DIR)
+ * - Partner logo luminance metadata (partners/lum/{prefix}/{hash}.json)
  * - Daily tracking files (peak_gusts.json, temp_extremes.json)
  * - Outage detection files (outage_*.json)
  * - Rate limit files (rate_limits/{prefix}/*.json)
@@ -165,6 +166,16 @@ function cleanTestCache(): void {
     $partnerFiles = glob($partnerPattern);
     if ($partnerFiles !== false) {
         foreach ($partnerFiles as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    }
+
+    $partnerLumPattern = CACHE_PARTNERS_LUM_DIR . '/*/*.json';
+    $partnerLumFiles = glob($partnerLumPattern);
+    if ($partnerLumFiles !== false) {
+        foreach ($partnerLumFiles as $file) {
             if (is_file($file)) {
                 @unlink($file);
             }

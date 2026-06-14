@@ -1500,9 +1500,9 @@ body.night-mode #station-power-last-updated {
 }
 
 /* Contrast-aware partner tiles: applied when server-side luminance sampling
-   finds a light logo on a light card (or dark on dark). JS toggles classes
-   on theme change; !important wins over theme defaults without touching
-   night-mode logo filters on the image itself. */
+   finds a light logo on a light card (or dark on dark). Metadata is cached
+   under cache/partners/lum/; JS toggles classes on theme change. !important
+   wins over theme defaults without touching night-mode logo filters. */
 .partner-link.partner-link--dark-tile {
     background: #2c3e50 !important;
     border-color: #3d5166 !important;

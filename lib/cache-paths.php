@@ -30,7 +30,10 @@
  * ├── station-power/
  * │   └── {airport}.json           # Canonical station power snapshot (provider-agnostic)
  * ├── partners/
- * │   └── {hash}.{ext}             # Partner logo cache
+ * │   ├── {hash}.{ext}             # Partner logo image cache (remote URLs)
+ * │   └── lum/                     # Logo luminance metadata (contrast tiles)
+ * │       └── {prefix}/
+ * │           └── {hash}.json      # Keyed by absolute image path; invalidated by mtime
  * ├── map_tiles/
  * │   └── {layer}/{z}/{x}/
  * │       └── {y}.png              # Hierarchical tile cache (limits files per dir)
@@ -621,6 +624,28 @@ function getPartnerLogoCachedFilePath(string $hash, string $extension): string {
     return CACHE_PARTNERS_DIR . '/' . $hash . '.' . $extension;
 }
 
+if (!defined('CACHE_PARTNERS_LUM_DIR')) {
+    define('CACHE_PARTNERS_LUM_DIR', CACHE_PARTNERS_DIR . '/lum');
+}
+
+/**
+ * Writable cache path for partner logo luminance metadata.
+ *
+ * Keyed by SHA-256 of the resolved absolute image path so read-only
+ * `/partner-logos/` mounts do not need sidecar writes beside the image.
+ *
+ * @param string $imagePath Absolute filesystem path to the logo image
+ * @return string Full path to the JSON metadata file under CACHE_PARTNERS_LUM_DIR
+ */
+function getPartnerLogoLuminanceCachePath(string $imagePath): string {
+    $hash = hash('sha256', $imagePath);
+    $prefix = substr($hash, 0, 2);
+    $dir = CACHE_PARTNERS_LUM_DIR . '/' . $prefix;
+    ensureCacheDir($dir);
+
+    return $dir . '/' . $hash . '.json';
+}
+
 // =============================================================================
 // RATE LIMIT PATHS
 // =============================================================================
@@ -1006,6 +1031,7 @@ function ensureAllCacheDirs(): array {
         CACHE_NOTAM_DIR,
         CACHE_STATION_POWER_DIR,
         CACHE_PARTNERS_DIR,
+        CACHE_PARTNERS_LUM_DIR,
         CACHE_RATE_LIMITS_DIR,
         CACHE_UPSTREAM_LIMITS_DIR,
         CACHE_METRICS_DIR,

@@ -3,13 +3,14 @@
  * Partner logo luminance analysis for contrast-aware tile styling.
  *
  * Light marks on transparent PNGs disappear on the default light partner
- * card; sampling opaque pixels once (cached beside the image) lets the
- * dashboard pick a readable tile background per theme.
+ * card; sampling opaque pixels once (cached under cache/partners/lum/)
+ * lets the dashboard pick a readable tile background per theme.
  */
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/partner-logo-cache.php';
+require_once __DIR__ . '/logger.php';
 
 /**
  * Resolve a partner logo config path or URL to a readable image file.
@@ -62,17 +63,6 @@ function resolvePartnerLogoImagePath(string $logoUrl): ?string
 }
 
 /**
- * Sidecar path for cached luminance metadata.
- *
- * @param string $imagePath Absolute path to the logo image
- * @return string Path to the .lum.json sidecar
- */
-function getPartnerLogoLuminanceMetaPath(string $imagePath): string
-{
-    return $imagePath . '.lum.json';
-}
-
-/**
  * Read cached luminance metadata when still valid for the image mtime.
  *
  * @param string $imagePath Absolute path to the logo image
@@ -80,7 +70,7 @@ function getPartnerLogoLuminanceMetaPath(string $imagePath): string
  */
 function readPartnerLogoLuminanceMeta(string $imagePath): ?array
 {
-    $metaPath = getPartnerLogoLuminanceMetaPath($imagePath);
+    $metaPath = getPartnerLogoLuminanceCachePath($imagePath);
     if (!is_readable($metaPath)) {
         return null;
     }
@@ -104,7 +94,7 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
 }
 
 /**
- * Persist luminance metadata beside the image file.
+ * Persist luminance metadata in the writable partners cache.
  *
  * @param string $imagePath Absolute path to the logo image
  * @param float $meanLuminance Relative luminance 0..1 of opaque pixels
@@ -126,7 +116,12 @@ function writePartnerLogoLuminanceMeta(string $imagePath, float $meanLuminance):
         return;
     }
 
-    @file_put_contents(getPartnerLogoLuminanceMetaPath($imagePath), $payload, LOCK_EX);
+    $metaPath = getPartnerLogoLuminanceCachePath($imagePath);
+    if (file_put_contents($metaPath, $payload, LOCK_EX) === false) {
+        aviationwx_log('warning', 'Partner logo luminance cache write failed', [
+            'path' => $metaPath,
+        ]);
+    }
 }
 
 /**
@@ -194,7 +189,7 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
 }
 
 /**
- * Mean luminance for a partner logo path or URL, cached beside the image file.
+ * Mean luminance for a partner logo path or URL, cached under cache/partners/lum/.
  *
  * @param string $logoUrl Local path or remote URL from airports.json
  * @return float|null Relative luminance 0..1, or null when unavailable

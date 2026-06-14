@@ -136,4 +136,3 @@ docs/*SUMMARY*.md
 
 # Docker Compose local overrides (user-specific paths)
 docker/docker-compose.override.yml
-*.lum.json
