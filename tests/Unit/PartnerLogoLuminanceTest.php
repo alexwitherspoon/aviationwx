@@ -78,6 +78,12 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertNull(resolvePartnerLogoImagePath('/partner-logos/../secrets/airports.json'));
     }
 
+    public function testIsResolvedPathUnderBase_RejectsSiblingDirectoryPrefix(): void
+    {
+        $this->assertTrue(isResolvedPathUnderBase('/var/www/html/partner-logos/logo.png', '/var/www/html'));
+        $this->assertFalse(isResolvedPathUnderBase('/var/www/html2/partner-logos/logo.png', '/var/www/html'));
+    }
+
     public function testGetPartnerLogoMeanLuminance_ReturnsNullForMissingFile(): void
     {
         $this->assertNull(getPartnerLogoMeanLuminance('/partner-logos/does-not-exist.png'));

@@ -47,7 +47,7 @@ function resolvePartnerLogoImagePath(string $logoUrl): ?string
         }
 
         $requestedPath = realpath($fullPath);
-        if ($requestedPath === false || strpos($requestedPath, $realBase) !== 0) {
+        if ($requestedPath === false || !isResolvedPathUnderBase($requestedPath, $realBase)) {
             return null;
         }
 
@@ -214,4 +214,20 @@ function getPartnerLogoMeanLuminance(string $logoUrl): ?float
     writePartnerLogoLuminanceMeta($imagePath, $mean);
 
     return $mean;
+}
+
+/**
+ * Whether a resolved path stays under a resolved base directory.
+ *
+ * Avoids prefix false positives (e.g. /var/www/app vs /var/www/app2).
+ *
+ * @param string $path Absolute resolved filesystem path
+ * @param string $baseDir Absolute resolved base directory path
+ * @return bool
+ */
+function isResolvedPathUnderBase(string $path, string $baseDir): bool
+{
+    $prefix = rtrim($baseDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+    return str_starts_with($path, $prefix);
 }
