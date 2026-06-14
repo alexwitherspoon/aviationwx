@@ -36,6 +36,16 @@ class PartnerLogoLuminanceTest extends TestCase
         $this->assertLessThan(PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD, $lum);
     }
 
+    public function testAnalyzePartnerLogoMeanLuminance_PaletteGif(): void
+    {
+        $path = $this->fixtureDir . '/palette.gif';
+        $this->assertFileExists($path);
+
+        $lum = analyzePartnerLogoMeanLuminance($path);
+        $this->assertNotNull($lum);
+        $this->assertLessThan(PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD, $lum);
+    }
+
     public function testAirportFixturePartnerLogo_HasContrastMetadata(): void
     {
         $configPath = __DIR__ . '/../Fixtures/airports.json.test';
