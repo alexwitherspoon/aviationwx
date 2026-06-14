@@ -168,38 +168,42 @@ function analyzePartnerLogoMeanLuminance(string $imagePath): ?float
         return null;
     }
 
-    imagesavealpha($img, true);
-    $width = imagesx($img);
-    $height = imagesy($img);
-    if ($width < 1 || $height < 1) {
-        return null;
-    }
-
-    $step = max(1, (int) floor(max($width, $height) / 64));
-    $sum = 0.0;
-    $count = 0;
-    $alphaCutoff = 100;
-
-    for ($y = 0; $y < $height; $y += $step) {
-        for ($x = 0; $x < $width; $x += $step) {
-            $rgba = imagecolorat($img, $x, $y);
-            $alpha = ($rgba & 0x7F000000) >> 24;
-            if ($alpha > $alphaCutoff) {
-                continue;
-            }
-            $r = ($rgba >> 16) & 0xFF;
-            $g = ($rgba >> 8) & 0xFF;
-            $b = $rgba & 0xFF;
-            $sum += (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-            $count++;
+    try {
+        imagesavealpha($img, true);
+        $width = imagesx($img);
+        $height = imagesy($img);
+        if ($width < 1 || $height < 1) {
+            return null;
         }
-    }
 
-    if ($count === 0) {
-        return null;
-    }
+        $step = max(1, (int) floor(max($width, $height) / 64));
+        $sum = 0.0;
+        $count = 0;
+        $alphaCutoff = 100;
 
-    return $sum / $count;
+        for ($y = 0; $y < $height; $y += $step) {
+            for ($x = 0; $x < $width; $x += $step) {
+                $rgba = imagecolorat($img, $x, $y);
+                $alpha = ($rgba & 0x7F000000) >> 24;
+                if ($alpha > $alphaCutoff) {
+                    continue;
+                }
+                $r = ($rgba >> 16) & 0xFF;
+                $g = ($rgba >> 8) & 0xFF;
+                $b = $rgba & 0xFF;
+                $sum += (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
+                $count++;
+            }
+        }
+
+        if ($count === 0) {
+            return null;
+        }
+
+        return $sum / $count;
+    } finally {
+        unset($img);
+    }
 }
 
 /**
