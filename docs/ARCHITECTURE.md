@@ -42,6 +42,7 @@ aviationwx.org/
 │   ├── airport-identifiers.php # Airport code validation
 │   ├── address-formatter.php # Address formatting utilities
 │   ├── partner-logo-cache.php # Partner logo caching
+│   ├── partner-logo-luminance.php # Partner logo contrast hints (opaque-pixel luminance)
 │   ├── push-webcam-validator.php # Push webcam validation
 │   ├── webcam-error-detector.php # Webcam image validation (error frames, pixelation, uniform color)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, JPEG)
@@ -535,6 +536,13 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 - **Implementation**: `pickObservationUnixTimestamp` / `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`; PHP aggregate `last_updated` remains max-of-candidates for metadata staleness (different purpose).
 - **Regression tests**: `tests/js/weather-timestamp-utils.test.js`
 - **Detail**: [DATA_FLOW.md (Airport "Last updated")](DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time)
+
+### 10. Partner Logo Contrast Tiles
+
+- **Why**: White or very light marks on transparent PNGs disappear on the default light partner card; dark marks can vanish on dark/night tiles.
+- **Implementation**: `lib/partner-logo-luminance.php` samples opaque pixels (GD, coarse grid) on airport page render; mean luminance is cached in writable `cache/partners/lum/` keyed by absolute image path and invalidated by file mtime (works with read-only `/partner-logos/` deploy mounts). `pages/airport.php` embeds `data-logo-lum`; `public/js/airport-dashboard.js` applies `partner-link--dark-tile` or `partner-link--light-tile` per theme without inverting the image (night-mode logo filters unchanged).
+- **Remote logos**: Luminance is available only after `lib/partner-logo-cache.php` has a cached image file.
+- **Regression tests**: `tests/Unit/PartnerLogoLuminanceTest.php`, `tests/Integration/PartnerLogoContrastTest.php`
 
 ## Security Considerations
 

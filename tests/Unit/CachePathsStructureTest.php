@@ -96,6 +96,17 @@ class CachePathsStructureTest extends TestCase
     }
 
     /**
+     * Partner logo luminance metadata uses sharded JSON under cache/partners/lum/
+     */
+    public function testGetPartnerLogoLuminanceCachePath_UsesPartnersLumDir(): void
+    {
+        $path = getPartnerLogoLuminanceCachePath('/var/www/html/partner-logos/example.png');
+        $this->assertStringContainsString('partners/lum/', $path);
+        $this->assertStringEndsWith('.json', $path);
+        $this->assertMatchesRegularExpression('#/partners/lum/[0-9a-f]{2}/[0-9a-f]{64}\.json$#', $path);
+    }
+
+    /**
      * Partner logo on-disk cache path uses CACHE_PARTNERS_DIR with hash and extension
      */
     public function testGetPartnerLogoCachedFilePath_UsesPartnersDirAndExtension(): void

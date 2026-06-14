@@ -46,7 +46,7 @@ services:
 make dev
 ```
 
-This setup uses real API keys, real webcam sources, and partner logos.
+This setup uses real API keys, real webcam sources, and partner logos. Luminance metadata for contrast-aware partner tiles is written to the writable cache (`cache/partners/lum/`), not beside files on the read-only `partner-logos` mount.
 
 ### Option B: With Mock Data (Contributors)
 

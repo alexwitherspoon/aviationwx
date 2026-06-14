@@ -47,6 +47,8 @@ module.exports = defineConfig([
                 "METAR_STALE_ERROR_SECONDS": "readonly",
                 "METAR_STALE_FAILCLOSED_SECONDS": "readonly",
                 "SECONDS_PER_HOUR": "readonly",
+                "PARTNER_LOGO_LUM_LIGHT": "readonly",
+                "PARTNER_LOGO_LUM_DARK": "readonly",
                 "STATION_POWER_POLL_MS": "readonly",
                 "HAS_STATION_POWER_UI": "readonly",
                 "NIGHT_MODE_DATA": "readonly",

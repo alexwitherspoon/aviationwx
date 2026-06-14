@@ -13,6 +13,7 @@ require_once __DIR__ . '/../lib/station-power/station-power-dashboard-format.php
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/version.php';
+require_once __DIR__ . '/../lib/partner-logo-luminance.php';
 
 // Check if airport has any weather sources configured
 $hasWeatherSources = hasWeatherSources($airport);
@@ -1333,8 +1334,22 @@ if ($themeCookie === 'dark') {
                     <p class="partnerships-subheading">These organizations make this airport service possible. Click to visit and show your support.</p>
                     <div class="partners-grid">
                         <?php foreach ($partners as $partner): ?>
+                        <?php
+                        $partnerLogoLum = null;
+                        if (!empty($partner['logo'])) {
+                            $partnerLogoLum = getPartnerLogoMeanLuminance((string) $partner['logo']);
+                        }
+                        $partnerLinkAttrs = '';
+                        if ($partnerLogoLum !== null) {
+                            $partnerLinkAttrs = ' data-logo-lum="' . htmlspecialchars(
+                                number_format($partnerLogoLum, 4, '.', ''),
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) . '"';
+                        }
+                        ?>
                         <div class="partner-item">
-                            <a href="<?= htmlspecialchars($partner['url']) ?>" target="_blank" rel="noopener" class="partner-link" title="<?= htmlspecialchars($partner['description'] ?? $partner['name']) ?>">
+                            <a href="<?= htmlspecialchars($partner['url']) ?>" target="_blank" rel="noopener" class="partner-link" title="<?= htmlspecialchars($partner['description'] ?? $partner['name']) ?>"<?= $partnerLinkAttrs ?>>
                                 <?php if (!empty($partner['logo'])): ?>
                                 <img src="/api/partner-logo.php?url=<?= urlencode($partner['logo']) ?>" 
                                      alt="<?= htmlspecialchars($partner['name']) ?> logo" 
@@ -1531,6 +1546,10 @@ const METAR_STALE_ERROR_SECONDS = <?= getMetarStaleErrorSeconds() ?>;
 const METAR_STALE_FAILCLOSED_SECONDS = <?= getMetarStaleFailclosedSeconds() ?>;
 
 const SECONDS_PER_HOUR = 3600;
+
+// Partner logo contrast thresholds (must match lib/constants.php)
+const PARTNER_LOGO_LUM_LIGHT = <?= PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD ?>;
+const PARTNER_LOGO_LUM_DARK = <?= PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD ?>;
 
 // Station power UI (limited-availability airports with configured sensors)
 const STATION_POWER_POLL_MS = <?= !empty($showStationPowerBlock) ? (int) ($stationPowerPollSeconds * 1000) : 0 ?>;

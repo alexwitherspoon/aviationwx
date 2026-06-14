@@ -1499,6 +1499,40 @@ body.night-mode #station-power-last-updated {
     flex-shrink: 0;
 }
 
+/* Contrast-aware partner tiles: applied when server-side luminance sampling
+   finds a light logo on a light card (or dark on dark). Metadata is cached
+   under cache/partners/lum/; JS toggles classes on theme change. !important
+   wins over theme defaults without touching night-mode logo filters. */
+.partner-link.partner-link--dark-tile {
+    background: #2c3e50 !important;
+    border-color: #3d5166 !important;
+    color: #f0f0f0 !important;
+}
+
+.partner-link.partner-link--dark-tile:hover {
+    background: #34495e !important;
+    border-color: #0066cc !important;
+}
+
+.partner-link.partner-link--dark-tile .partner-name {
+    color: #f0f0f0 !important;
+}
+
+.partner-link.partner-link--light-tile {
+    background: #f9f9f9 !important;
+    border-color: #e0e0e0 !important;
+    color: #333 !important;
+}
+
+.partner-link.partner-link--light-tile:hover {
+    background: #f0f0f0 !important;
+    border-color: #0066cc !important;
+}
+
+.partner-link.partner-link--light-tile .partner-name {
+    color: #333 !important;
+}
+
 .data-sources-content {
     display: flex;
     justify-content: center;

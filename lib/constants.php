@@ -303,6 +303,14 @@ if (!defined('PLACEHOLDER_CACHE_TTL')) {
 if (!defined('PARTNER_LOGO_CACHE_TTL')) {
     define('PARTNER_LOGO_CACHE_TTL', 2592000); // 30 days
 }
+// Partner tile contrast: mean opaque-pixel luminance above LIGHT needs a dark
+// tile on light backgrounds; below DARK needs a light tile on dark backgrounds.
+if (!defined('PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD')) {
+    define('PARTNER_LOGO_LUMINANCE_LIGHT_THRESHOLD', 0.65);
+}
+if (!defined('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD')) {
+    define('PARTNER_LOGO_LUMINANCE_DARK_THRESHOLD', 0.35);
+}
 
 // Cloudflare analytics - scheduler pre-warms cache; on-demand fetch is fallback when empty
 if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {

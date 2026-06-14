@@ -1405,7 +1405,16 @@ Displayed prominently above footer:
 ]
 ```
 
-Logos are cached locally for 30 days. Text fallback if logo fails.
+**Logo values:**
+
+| Form | Example | Notes |
+|------|---------|-------|
+| Remote URL | `https://club.example.com/logo.png` | Served via `/api/partner-logo.php`; image cached under `cache/partners/` for 30 days |
+| Local path | `/partner-logos/club-logo.png` | File deployed beside `airports.json` (secrets repo); not web-public except through the logo API |
+
+Logos are cached locally for 30 days (remote URLs). Text fallback if the image fails to load.
+
+**Contrast-aware tiles:** When the logo file is readable (local path or a warmed remote cache entry), the airport page samples opaque pixels once and embeds mean luminance on the partner link. The dashboard applies a dark or light tile background when a light logo would sit on a light card (or a dark logo on a dark card), without inverting the image. Results are cached in `cache/partners/lum/` (keyed by image path and invalidated when the file mtime changes). Remote logos only get contrast hints after the image cache exists (first page view may use the default tile until cache warm).
 
 ### Custom Links
 
