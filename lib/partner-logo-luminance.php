@@ -86,11 +86,27 @@ function readPartnerLogoLuminanceMeta(string $imagePath): ?array
     }
 
     $mtime = filemtime($imagePath);
-    if ($mtime === false || (int) $decoded['source_mtime'] !== $mtime) {
+    if ($mtime === false) {
         return null;
     }
 
-    return $decoded;
+    if (!is_numeric($decoded['mean_luminance']) || !is_numeric($decoded['source_mtime'])) {
+        return null;
+    }
+
+    $meanLuminance = (float) $decoded['mean_luminance'];
+    if ($meanLuminance < 0.0 || $meanLuminance > 1.0) {
+        return null;
+    }
+
+    if ((int) $decoded['source_mtime'] !== $mtime) {
+        return null;
+    }
+
+    return [
+        'mean_luminance' => $meanLuminance,
+        'source_mtime' => $mtime,
+    ];
 }
 
 /**

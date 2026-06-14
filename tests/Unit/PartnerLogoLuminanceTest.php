@@ -83,6 +83,25 @@ class PartnerLogoLuminanceTest extends TestCase
         @unlink($metaPath);
     }
 
+    public function testReadPartnerLogoLuminanceMeta_RejectsInvalidCachePayload(): void
+    {
+        $resolved = resolvePartnerLogoImagePath('/tests/Fixtures/partner-logos/light-on-transparent.png');
+        $this->assertNotNull($resolved);
+        $metaPath = getPartnerLogoLuminanceCachePath($resolved);
+        @unlink($metaPath);
+
+        file_put_contents($metaPath, '{"mean_luminance":"bad","source_mtime":"x"}');
+        $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
+
+        file_put_contents(
+            $metaPath,
+            json_encode(['mean_luminance' => 1.5, 'source_mtime' => filemtime($resolved)])
+        );
+        $this->assertNull(readPartnerLogoLuminanceMeta($resolved));
+
+        @unlink($metaPath);
+    }
+
     public function testResolvePartnerLogoImagePath_RejectsTraversal(): void
     {
         $this->assertNull(resolvePartnerLogoImagePath('/partner-logos/../secrets/airports.json'));
