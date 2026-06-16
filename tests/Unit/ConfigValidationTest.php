@@ -1734,6 +1734,34 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
     }
 
+    public function testWebcam_ApproximateHeading_RejectsExplicitNullOnMaintenanceAirport(): void
+    {
+        $config = [
+            'airports' => [
+                'pdx' => [
+                    'name' => 'Maintenance Airport',
+                    'enabled' => true,
+                    'maintenance' => true,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => null,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid approximate_heading', implode(' ', $result['errors']));
+    }
+
     public function testWebcam_ApproximateHeading_InvalidRange(): void
     {
         $config = [

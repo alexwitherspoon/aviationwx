@@ -2954,11 +2954,11 @@ function validateWebcamApproximateHeading(
     $label = "Airport '{$airportCode}' webcam[{$idx}]";
 
     if ($requiresHeading) {
-        if (!isset($webcam['approximate_heading'])) {
+        if (!array_key_exists('approximate_heading', $webcam)) {
             $errors[] = "{$label} missing required 'approximate_heading' (airport is enabled and not in maintenance)";
             return $errors;
         }
-    } elseif (!isset($webcam['approximate_heading'])) {
+    } elseif (!array_key_exists('approximate_heading', $webcam)) {
         return $errors;
     }
 
