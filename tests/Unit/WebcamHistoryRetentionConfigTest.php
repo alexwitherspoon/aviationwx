@@ -48,10 +48,12 @@ class WebcamHistoryRetentionConfigTest extends TestCase
             ],
         ]);
 
-        $this->assertSame(0.0, getWebcamHistoryRetentionHours('kspb'));
-        $this->assertFalse(isWebcamHistoryEnabledForAirport('kspb'));
-
-        @unlink($tmp);
+        try {
+            $this->assertSame(0.0, getWebcamHistoryRetentionHours('kspb'));
+            $this->assertFalse(isWebcamHistoryEnabledForAirport('kspb'));
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     public function testGetWebcamHistoryRetentionHours_AirportOverrideTakesPrecedence(): void
@@ -70,10 +72,12 @@ class WebcamHistoryRetentionConfigTest extends TestCase
             ],
         ]);
 
-        $this->assertSame(6.0, getWebcamHistoryRetentionHours('kspb'));
-        $this->assertTrue(isWebcamHistoryEnabledForAirport('kspb'));
-
-        @unlink($tmp);
+        try {
+            $this->assertSame(6.0, getWebcamHistoryRetentionHours('kspb'));
+            $this->assertTrue(isWebcamHistoryEnabledForAirport('kspb'));
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     private function clearConfigCache(): void
