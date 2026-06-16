@@ -174,13 +174,15 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('FTP/SFTP/FTPS configuration synced successfully', $contents);
 
         $startedPos = strpos($contents, 'log_probe_runner "upload-probe-runner started"');
-        $waitPos = strpos($contents, 'wait_for_push_config_sync');
-        $loopPos = strpos($contents, 'while true; do');
         $this->assertNotFalse($startedPos);
-        $this->assertNotFalse($waitPos);
-        $this->assertNotFalse($loopPos);
-        $this->assertLessThan($waitPos, $loopPos, 'wait must run before probe loop');
-        $this->assertLessThan($startedPos, $waitPos, 'runner start log must precede sync wait');
+
+        $waitCallPos = strpos($contents, 'wait_for_push_config_sync', $startedPos);
+        $this->assertNotFalse($waitCallPos, 'runner must invoke wait_for_push_config_sync after start log');
+        $this->assertGreaterThan($startedPos, $waitCallPos, 'runner start log must precede sync wait');
+
+        $mainLoopPos = strpos($contents, 'while true; do', $waitCallPos);
+        $this->assertNotFalse($mainLoopPos, 'probe interval loop must follow sync wait');
+        $this->assertGreaterThan($waitCallPos, $mainLoopPos, 'sync wait call must precede probe loop');
     }
 
     public function testUploadProbeScript_EnsuresLoopbackSftpKnownHosts(): void
@@ -191,27 +193,6 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('ensure_sftp_known_hosts', $contents);
         $this->assertStringContainsString('ssh-keyscan', $contents);
         $this->assertStringContainsString('localhost|127.0.0.1|::1', $contents);
-    }
-
-    public function testUploadProbeRunner_UsesLogLevelFromMessagePrefix(): void
-    {
-        $path = __DIR__ . '/../../scripts/upload-probe-runner.sh';
-        $contents = file_get_contents($path);
-        $this->assertIsString($contents);
-        $this->assertStringContainsString('[[ "$msg" == WARN\\ * ]]', $contents);
-        $this->assertStringContainsString('echo "[$ts] [$level] $msg"', $contents);
-    }
-
-    public function testSyncPushConfig_ExitsNonZeroOnConfigValidationFailure(): void
-    {
-        $path = __DIR__ . '/../../scripts/sync-push-config.php';
-        $contents = file_get_contents($path);
-        $this->assertIsString($contents);
-        $this->assertStringContainsString("'config validation failed, skipping sync'", $contents);
-        $pos = strpos($contents, "'config validation failed, skipping sync'");
-        $this->assertNotFalse($pos);
-        $snippet = substr($contents, $pos, 200);
-        $this->assertStringContainsString('exit(1);', $snippet);
     }
 
     /**

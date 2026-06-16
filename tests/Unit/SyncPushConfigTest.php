@@ -262,8 +262,21 @@ class SyncPushConfigTest extends TestCase
         $parsed = parseVsftpdVirtualUsersFile($path);
 
         $this->assertNotEmpty($parsed['errors']);
-        $this->assertStringContainsString('empty password', $parsed['errors'][0]);
+        $this->assertStringContainsString('incomplete username/password pair', $parsed['errors'][0]);
         $this->assertSame(['usertwo14chars' => 'passtwo14chars'], $parsed['users']);
+    }
+
+    public function testValidateSyncPushUploadCredentials_DelegatesToPushWebcamValidator(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $errors = validateSyncPushUploadCredentials('bad user', 'short', 'test-context');
+        $this->assertNotEmpty($errors);
+
+        $this->assertSame(
+            [],
+            validateSyncPushUploadCredentials('aB3xK9mP2qR7vN', 'mK8pL3nQ6rT9vW', 'test-context')
+        );
     }
 
     public function testValidateConfigBeforeApply_RejectsDuplicatePushUsernames(): void

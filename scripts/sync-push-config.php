@@ -15,15 +15,6 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/push-webcam-validator.php';
 
-$invocationId = aviationwx_get_invocation_id();
-$triggerInfo = aviationwx_detect_trigger_type();
-
-aviationwx_log('info', 'push-config sync started', [
-    'invocation_id' => $invocationId,
-    'trigger' => $triggerInfo['trigger'],
-    'context' => $triggerInfo['context']
-], 'app');
-
 /**
  * Check if script is running as root (required for system operations)
  */
@@ -844,36 +835,45 @@ function saveUsernameMapping($mapping) {
 }
 
 /**
- * Validate username format (14 characters or less, alphanumeric, no spaces)
- * 
- * Validates that a username matches the required format for push webcam accounts.
- * 
- * @param string $username Username to validate
- * @return bool True if username is valid, false otherwise
+ * Validate push upload credentials for sync-time provisioning.
+ *
+ * @return list<string> Empty when both username and password are valid
  */
-function validateUsername($username) {
-    if (strlen($username) > 14) {
-        return false;
-    }
-    if (preg_match('/\s/', $username)) {
-        return false;
-    }
-    return preg_match('/^[a-zA-Z0-9]+$/', $username) === 1;
+function validateSyncPushUploadCredentials(string $username, string $password, string $contextLabel): array {
+    return array_merge(
+        validatePushUploadUsername($username, $contextLabel),
+        validatePushUploadPassword($password, $contextLabel)
+    );
 }
 
 /**
- * Validate password format (14 alphanumeric characters)
- * 
- * Validates that a password matches the required format for push webcam accounts.
- * 
- * @param string $password Password to validate
- * @return bool True if password is valid, false otherwise
+ * Ensure a push webcam upload directory is ftp:www-data with setgid (02775).
+ *
+ * @param string $uploadDir Writable FTP or SFTP files/ directory
+ * @return void
  */
-function validatePassword($password) {
-    if (strlen($password) !== 14) {
-        return false;
+function repairPushUploadDirectoryPermissions(string $uploadDir): void {
+    if (!is_dir($uploadDir)) {
+        return;
     }
-    return preg_match('/^[a-zA-Z0-9]{14}$/', $password) === 1;
+
+    $ftpInfo = @posix_getpwnam('ftp');
+    $wwwDataInfo = @posix_getpwnam('www-data');
+    if ($ftpInfo === false || $wwwDataInfo === false) {
+        return;
+    }
+
+    $verification = verifyDirectoryPermissions(
+        $uploadDir,
+        $ftpInfo['uid'],
+        'www-data',
+        02775
+    );
+    if (!$verification['success']) {
+        @chown($uploadDir, $ftpInfo['uid']);
+        @chgrp($uploadDir, $wwwDataInfo['gid']);
+        @chmod($uploadDir, 02775);
+    }
 }
 
 /**
@@ -983,14 +983,8 @@ function parseVsftpdVirtualUsersFile(string $path = '/etc/vsftpd/virtual_users.t
         $lineNum = $i + 1;
 
         if ($username === '' || $password === '') {
-            if ($username === '' && $password === '') {
-                $errors[] = 'vsftpd virtual_users.txt has empty username/password pair at lines '
-                    . $lineNum . '-' . ($lineNum + 1);
-            } elseif ($username === '') {
-                $errors[] = 'vsftpd virtual_users.txt has empty username at line ' . $lineNum;
-            } else {
-                $errors[] = 'vsftpd virtual_users.txt has empty password for username at line ' . ($lineNum + 1);
-            }
+            $errors[] = 'vsftpd virtual_users.txt has incomplete username/password pair at lines '
+                . $lineNum . '-' . ($lineNum + 1);
             continue;
         }
 
@@ -1019,6 +1013,50 @@ function writeVsftpdVirtualUsersFile(array $users, string $path = '/etc/vsftpd/v
     }
 
     return @file_put_contents($path, $content) !== false;
+}
+
+/**
+ * Rebuild vsftpd Berkeley DB from virtual_users.txt.
+ *
+ * @param string $context Short label for logs (for example upsert, removal, rebuild)
+ * @param string $failureLevel Log level when db_load fails (error or warning)
+ * @return bool True when db_load produced a non-empty database file
+ */
+function loadVsftpdDatabaseFromUsersFile(string $context, string $failureLevel = 'error'): bool {
+    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
+    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
+
+    if (file_exists($vsftpdDbFile)) {
+        @unlink($vsftpdDbFile);
+    }
+
+    $output = [];
+    $code = 0;
+    exec(
+        'db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1',
+        $output,
+        $code
+    );
+
+    if ($code !== 0) {
+        aviationwx_log($failureLevel, 'sync-push-config: db_load failed during ' . $context, [
+            'output' => implode("\n", $output),
+            'return_code' => $code,
+        ], 'app');
+        return false;
+    }
+
+    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
+        aviationwx_log($failureLevel, 'sync-push-config: database file not created or is empty after db_load', [
+            'context' => $context,
+            'db_file' => $vsftpdDbFile,
+            'exists' => file_exists($vsftpdDbFile),
+            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0,
+        ], 'app');
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -1051,35 +1089,14 @@ function rebuildVsftpdDatabase() {
         }
         return true;
     }
-    
-    if (file_exists($vsftpdDbFile)) {
-        @unlink($vsftpdDbFile);
-    }
-    
-    $output = [];
-    $returnCode = 0;
-    exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $returnCode);
-    
-    if ($returnCode !== 0) {
-        aviationwx_log('error', 'sync-push-config: db_load failed during database rebuild', [
-            'output' => implode("\n", $output),
-            'return_code' => $returnCode
-        ], 'app');
+
+    if (!loadVsftpdDatabaseFromUsersFile('database rebuild')) {
         return false;
     }
-    
-    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
-        aviationwx_log('error', 'sync-push-config: database file not created or is empty after rebuild', [
-            'db_file' => $vsftpdDbFile,
-            'exists' => file_exists($vsftpdDbFile),
-            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0
-        ], 'app');
-        return false;
-    }
-    
+
     $output = [];
     $returnCode = 0;
-    @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
+    @exec('db_verify ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $returnCode);
     if ($returnCode !== 0) {
         aviationwx_log('error', 'sync-push-config: database verification failed after rebuild', [
             'output' => implode("\n", $output),
@@ -1107,7 +1124,6 @@ function rebuildVsftpdDatabase() {
  */
 function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
 
     $parsed = parseVsftpdVirtualUsersFile($vsftpdUserFile);
     if ($parsed['errors'] !== []) {
@@ -1126,27 +1142,7 @@ function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
         return false;
     }
 
-    if (file_exists($vsftpdDbFile)) {
-        @unlink($vsftpdDbFile);
-    }
-
-    $output = [];
-    $code = 0;
-    exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
-
-    if ($code !== 0) {
-        aviationwx_log('error', 'sync-push-config: db_load failed', [
-            'output' => implode("\n", $output)
-        ], 'app');
-        return false;
-    }
-
-    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
-        aviationwx_log('error', 'sync-push-config: database file not created or is empty after db_load', [
-            'db_file' => $vsftpdDbFile,
-            'exists' => file_exists($vsftpdDbFile),
-            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0
-        ], 'app');
+    if (!loadVsftpdDatabaseFromUsersFile('ftp user upsert')) {
         return false;
     }
 
@@ -1238,19 +1234,7 @@ function removeFtpUser($username) {
     }
     
     if (count($users) > 0) {
-        if (file_exists($vsftpdDbFile)) {
-            @unlink($vsftpdDbFile);
-        }
-        
-        $output = [];
-        $code = 0;
-        exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
-        if ($code !== 0) {
-            aviationwx_log('warning', 'sync-push-config: db_load failed during user removal', [
-                'output' => implode("\n", $output),
-                'username' => $username
-            ], 'app');
-        }
+        loadVsftpdDatabaseFromUsersFile('ftp user removal', 'warning');
     } else {
         @unlink($vsftpdDbFile);
     }
@@ -1315,21 +1299,17 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
         return false;
     }
     
-    if (!validateUsername($username)) {
-        aviationwx_log('error', 'sync-push-config: invalid username format', [
+    $credentialErrors = validateSyncPushUploadCredentials(
+        $username,
+        $password,
+        "sync-push-config: airport '{$airportId}' webcam {$camIndex}"
+    );
+    if ($credentialErrors !== []) {
+        aviationwx_log('error', 'sync-push-config: invalid push upload credentials', [
             'airport' => $airportId,
             'cam' => $camIndex,
             'username' => $username,
-            'expected' => '14 characters or less, alphanumeric, no spaces'
-        ], 'app');
-        return false;
-    }
-    
-    if (!validatePassword($password)) {
-        aviationwx_log('error', 'sync-push-config: invalid password format', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'expected' => '14 alphanumeric characters'
+            'errors' => $credentialErrors,
         ], 'app');
         return false;
     }
@@ -1433,14 +1413,6 @@ function removeCameraUser($username, $protocols = null) {
  * @return void
  */
 function syncAllPushCameras($config) {
-    $usernameCheck = validateUniquePushUsernames($config);
-    if (!$usernameCheck['valid']) {
-        aviationwx_log('error', 'sync-push-config: duplicate push usernames in config, aborting camera sync', [
-            'errors' => $usernameCheck['errors'],
-        ], 'app');
-        return;
-    }
-
     $existing = getExistingPushCameras();
     $configured = [];
     $usernameMapping = loadUsernameMapping();
@@ -1475,40 +1447,8 @@ function syncAllPushCameras($config) {
                 // Create both FTP and SFTP users
                 if ($username && isset($cam['push_config']['password'])) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
-                        $ftpInfo = @posix_getpwnam('ftp');
-                        $wwwDataInfo = @posix_getpwnam('www-data');
-                        
-                        // Verify FTP directory permissions
-                        $ftpDir = getWebcamFtpUploadDir($airportId, $username);
-                        if (is_dir($ftpDir) && $ftpInfo !== false && $wwwDataInfo !== false) {
-                            $verification = verifyDirectoryPermissions(
-                                $ftpDir,
-                                $ftpInfo['uid'],
-                                'www-data',
-                                02775
-                            );
-                            if (!$verification['success']) {
-                                @chown($ftpDir, $ftpInfo['uid']);
-                                @chgrp($ftpDir, $wwwDataInfo['gid']);
-                                @chmod($ftpDir, 02775);
-                            }
-                        }
-                        
-                        // Verify SFTP directory permissions
-                        $sftpDir = getWebcamSftpUploadDir($username);
-                        if (is_dir($sftpDir) && $ftpInfo !== false && $wwwDataInfo !== false) {
-                            $verification = verifyDirectoryPermissions(
-                                $sftpDir,
-                                $ftpInfo['uid'],
-                                'www-data',
-                                02775
-                            );
-                            if (!$verification['success']) {
-                                @chown($sftpDir, $ftpInfo['uid']);
-                                @chgrp($sftpDir, $wwwDataInfo['gid']);
-                                @chmod($sftpDir, 02775);
-                            }
-                        }
+                        repairPushUploadDirectoryPermissions(getWebcamFtpUploadDir($airportId, $username));
+                        repairPushUploadDirectoryPermissions(getWebcamSftpUploadDir($username));
                     }
                 }
             }
@@ -1611,32 +1551,28 @@ function getUploadHealthProbeSyncPlan(): array {
 
     $plan = [];
 
-    $ftps = $settings['ftps'] ?? null;
-    if (is_array($ftps)) {
-        $username = $ftps['username'] ?? '';
-        $password = $ftps['password'] ?? '';
-        if (is_string($username) && $username !== '' && is_string($password) && $password !== '') {
-            $plan[] = [
-                'protocol' => 'ftps',
-                'username' => $username,
-                'password' => $password,
-                'ftp_local_root' => getUploadHealthProbeFtpDir($username),
-            ];
+    $append = static function (string $protocol, $creds) use (&$plan): void {
+        if (!is_array($creds)) {
+            return;
         }
-    }
+        $username = $creds['username'] ?? '';
+        $password = $creds['password'] ?? '';
+        if (!is_string($username) || $username === '' || !is_string($password) || $password === '') {
+            return;
+        }
+        $entry = [
+            'protocol' => $protocol,
+            'username' => $username,
+            'password' => $password,
+        ];
+        if ($protocol === 'ftps') {
+            $entry['ftp_local_root'] = getUploadHealthProbeFtpDir($username);
+        }
+        $plan[] = $entry;
+    };
 
-    $sftp = $settings['sftp'] ?? null;
-    if (is_array($sftp)) {
-        $username = $sftp['username'] ?? '';
-        $password = $sftp['password'] ?? '';
-        if (is_string($username) && $username !== '' && is_string($password) && $password !== '') {
-            $plan[] = [
-                'protocol' => 'sftp',
-                'username' => $username,
-                'password' => $password,
-            ];
-        }
-    }
+    $append('ftps', $settings['ftps'] ?? null);
+    $append('sftp', $settings['sftp'] ?? null);
 
     return $plan;
 }
@@ -1649,30 +1585,9 @@ function getUploadHealthProbeSyncPlan(): array {
  * @return bool True on success
  */
 function syncUploadHealthProbeFtpUser(string $username, string $password): bool {
-    if (!validateUsername($username)) {
-        aviationwx_log('error', 'sync-push-config: invalid upload health probe FTP username', [
-            'username' => $username,
-        ], 'app');
-        return false;
-    }
-
-    if (!validatePassword($password)) {
-        aviationwx_log('error', 'sync-push-config: invalid upload health probe FTP password shape', [
-            'username' => $username,
-        ], 'app');
-        return false;
-    }
-
     ensureWebcamsBaseDirectory();
 
-    $probeBase = CACHE_UPLOADS_DIR . '/' . UPLOAD_HEALTH_PROBE_FTP_NAMESPACE;
-    if (!is_dir($probeBase)) {
-        @mkdir($probeBase, 0755, true);
-    }
-
-    $ftpDir = getUploadHealthProbeFtpDir($username);
-
-    return upsertFtpVirtualUser($username, $password, $ftpDir, [
+    return upsertFtpVirtualUser($username, $password, getUploadHealthProbeFtpDir($username), [
         'purpose' => 'upload_health_probe',
     ]);
 }
@@ -1685,20 +1600,6 @@ function syncUploadHealthProbeFtpUser(string $username, string $password): bool 
  * @return bool True on success
  */
 function syncUploadHealthProbeSftpUser(string $username, string $password): bool {
-    if (!validateUsername($username)) {
-        aviationwx_log('error', 'sync-push-config: invalid upload health probe SFTP username', [
-            'username' => $username,
-        ], 'app');
-        return false;
-    }
-
-    if (!validatePassword($password)) {
-        aviationwx_log('error', 'sync-push-config: invalid upload health probe SFTP password shape', [
-            'username' => $username,
-        ], 'app');
-        return false;
-    }
-
     if (!createSftpUser('_probe', -1, $username, $password)) {
         aviationwx_log('error', 'sync-push-config: upload health probe SFTP user sync failed', [
             'username' => $username,
@@ -1734,6 +1635,21 @@ function syncUploadHealthProbeUsers(): bool {
         $username = $target['username'] ?? '';
         $password = $target['password'] ?? '';
 
+        $credentialErrors = validateSyncPushUploadCredentials(
+            $username,
+            $password,
+            'config.upload_health_probe.' . $protocol
+        );
+        if ($credentialErrors !== []) {
+            aviationwx_log('error', 'sync-push-config: invalid upload health probe credentials', [
+                'protocol' => $protocol,
+                'username' => $username,
+                'errors' => $credentialErrors,
+            ], 'app');
+            $allOk = false;
+            continue;
+        }
+
         if ($protocol === 'ftps') {
             if (!syncUploadHealthProbeFtpUser($username, $password)) {
                 $allOk = false;
@@ -1741,10 +1657,8 @@ function syncUploadHealthProbeUsers(): bool {
             continue;
         }
 
-        if ($protocol === 'sftp') {
-            if (!syncUploadHealthProbeSftpUser($username, $password)) {
-                $allOk = false;
-            }
+        if ($protocol === 'sftp' && !syncUploadHealthProbeSftpUser($username, $password)) {
+            $allOk = false;
         }
     }
 
@@ -1761,6 +1675,14 @@ function syncUploadHealthProbeUsers(): bool {
  * Main sync function
  */
 function syncPushConfig() {
+    $invocationId = aviationwx_get_invocation_id();
+    $triggerInfo = aviationwx_detect_trigger_type();
+    aviationwx_log('info', 'push-config sync started', [
+        'invocation_id' => $invocationId,
+        'trigger' => $triggerInfo['trigger'],
+        'context' => $triggerInfo['context'],
+    ], 'app');
+
     if (!checkRootPermissions()) {
         aviationwx_log('error', 'sync-push-config: exiting due to insufficient permissions', [], 'app');
         exit(1);
