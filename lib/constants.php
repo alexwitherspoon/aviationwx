@@ -268,12 +268,6 @@ if (!defined('TFR_RADIUS_MIN_NM')) {
 if (!defined('TFR_RADIUS_MAX_NM')) {
     define('TFR_RADIUS_MAX_NM', 100);
 }
-if (!defined('RATE_LIMIT_CONFIG_GENERATOR_MAX')) {
-    define('RATE_LIMIT_CONFIG_GENERATOR_MAX', 10);
-}
-if (!defined('RATE_LIMIT_CONFIG_GENERATOR_WINDOW')) {
-    define('RATE_LIMIT_CONFIG_GENERATOR_WINDOW', 3600);
-}
 if (!defined('RATE_LIMIT_APCU_TTL_BUFFER')) {
     define('RATE_LIMIT_APCU_TTL_BUFFER', 10);
 }

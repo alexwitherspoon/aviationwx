@@ -468,7 +468,6 @@ jobs:
             "lib/webcam-worker.php"
             "lib/webcam-acquisition.php"
             "lib/webcam-pipeline.php"
-            "pages/config-generator.php"
             "docker/vsftpd.conf"
             "docker/sshd_config"
             "docker/docker-compose.prod.yml"

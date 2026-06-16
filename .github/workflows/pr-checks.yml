@@ -256,11 +256,6 @@ jobs:
             exit 1
           fi
           
-          if ! grep -q "checkRateLimit" pages/config-generator.php; then
-            echo "❌ CRITICAL: Rate limiting not enforced in pages/config-generator.php!"
-            exit 1
-          fi
-          
           if ! grep -q "validatePushWebcamConfig" lib/push-webcam-validator.php; then
             echo "❌ CRITICAL: Push webcam validation function missing!"
             exit 1

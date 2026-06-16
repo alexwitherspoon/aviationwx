@@ -11,7 +11,6 @@ aviationwx.org/
 │   ├── airport.php           # Airport page template with weather display
 │   ├── homepage.php          # Homepage with airport list
 │   ├── status.php            # Status page
-│   ├── config-generator.php  # Configuration generator
 │   ├── error-404.php         # 404 error page
 │   └── error-404-airport.php # Airport-specific 404 page
 ├── api/
