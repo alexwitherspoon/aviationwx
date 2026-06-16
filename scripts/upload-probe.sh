@@ -142,7 +142,11 @@ run_ftps_probe() {
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 30 \
         --fail -X "DELE ${file_name}" "$base_url" >/dev/null 2>&1; then
-        log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
+        if [ "$use_tls" = "true" ]; then
+            log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
+        else
+            log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
+        fi
     fi
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
