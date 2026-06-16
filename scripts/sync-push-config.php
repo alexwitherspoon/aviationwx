@@ -6,12 +6,14 @@
  *
  * Runs on container startup (docker-entrypoint.sh) and during deployment (GitHub Actions).
  * Always repairs SFTP chroot ownership first (sshd requires root:root on /var/sftp/{user}/).
+ * Reprovisions upload health probe accounts on every run (container-local /etc state).
  * Full user/directory sync is skipped when config is unchanged unless vsftpd DB is missing.
  */
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/push-webcam-validator.php';
 
 $invocationId = aviationwx_get_invocation_id();
 $triggerInfo = aviationwx_detect_trigger_type();
@@ -437,15 +439,14 @@ function isVsftpdDatabaseCorrupted() {
 
 /**
  * Validate config before applying
- * 
- * Validates JSON syntax and basic structure of configuration file before
- * applying changes. Prevents applying invalid configurations that could
- * break the system.
- * 
+ *
+ * Validates JSON syntax, basic structure, and runtime schema (including unique push usernames)
+ * before applying changes.
+ *
  * @param string $configFile Path to config file to validate
  * @return array {
- *   'valid' => bool,    // True if config is valid
- *   'error' => string   // Error message if invalid (optional)
+ *   'valid' => bool,
+ *   'error' => string
  * }
  */
 function validateConfigBeforeApply($configFile) {
@@ -462,6 +463,11 @@ function validateConfigBeforeApply($configFile) {
     // Basic structure validation
     if (!is_array($config) || !isset($config['airports'])) {
         return ['valid' => false, 'error' => 'Invalid config structure'];
+    }
+
+    $schema = validateRuntimeConfigSchema($config);
+    if (!$schema['valid']) {
+        return ['valid' => false, 'error' => implode('; ', $schema['errors'])];
     }
     
     return ['valid' => true];
@@ -946,6 +952,73 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
 }
 
 /**
+ * Parse vsftpd virtual_users.txt (alternating username/password lines).
+ *
+ * Shared passwords across different usernames are valid; duplicate usernames are not.
+ *
+ * @param string $path Path to virtual_users.txt
+ * @return array{users: array<string, string>, errors: list<string>}
+ */
+function parseVsftpdVirtualUsersFile(string $path = '/etc/vsftpd/virtual_users.txt'): array {
+    $users = [];
+    $errors = [];
+
+    if (!file_exists($path)) {
+        return ['users' => [], 'errors' => []];
+    }
+
+    $rawLines = @file($path, FILE_IGNORE_NEW_LINES);
+    if ($rawLines === false) {
+        return ['users' => [], 'errors' => ["Cannot read vsftpd users file: {$path}"]];
+    }
+
+    $lines = [];
+    foreach ($rawLines as $lineNum => $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '') {
+            $errors[] = 'vsftpd virtual_users.txt has empty line at line ' . ($lineNum + 1);
+            continue;
+        }
+        $lines[] = $trimmed;
+    }
+
+    if (count($lines) % 2 !== 0) {
+        $errors[] = 'vsftpd virtual_users.txt has odd line count (incomplete username/password pair)';
+    }
+
+    for ($i = 0; $i + 1 < count($lines); $i += 2) {
+        $username = $lines[$i];
+        $password = $lines[$i + 1];
+        $lineNum = $i + 1;
+
+        if (isset($users[$username])) {
+            $errors[] = "Duplicate vsftpd username '{$username}' at line {$lineNum}";
+            continue;
+        }
+
+        $users[$username] = $password;
+    }
+
+    return ['users' => $users, 'errors' => $errors];
+}
+
+/**
+ * Write vsftpd virtual_users.txt from a username => password map.
+ *
+ * @param array<string, string> $users Username to password map
+ * @param string $path Path to virtual_users.txt
+ * @return bool True when the file was written successfully
+ */
+function writeVsftpdVirtualUsersFile(array $users, string $path = '/etc/vsftpd/virtual_users.txt'): bool {
+    $content = '';
+    foreach ($users as $user => $pass) {
+        $content .= $user . "\n" . $pass . "\n";
+    }
+
+    return @file_put_contents($path, $content) !== false;
+}
+
+/**
  * Rebuild vsftpd database from users file
  * 
  * Rebuilds the vsftpd Berkeley DB database from the virtual_users.txt file.
@@ -1021,65 +1094,50 @@ function rebuildVsftpdDatabase() {
 }
 
 /**
- * Create FTP user (vsftpd virtual user)
- * 
- * Creates a new vsftpd virtual user account for FTP/FTPS access.
- * Updates virtual_users.txt, rebuilds database, and creates user config.
- * 
- * vsftpd local_root points to files/ so FTP users land directly in the
- * writable upload directory (same location SFTP users upload to via /files/).
- * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
+ * Upsert vsftpd virtual user with local_root and writable upload directory.
+ *
  * @param string $username Username (up to 14 alphanumeric characters)
  * @param string $password Password (14 alphanumeric characters)
+ * @param string $ftpDir Absolute local_root for this user
+ * @param array<string, mixed> $logContext Extra fields for success log context
  * @return bool True on success, false on failure
  */
-function createFtpUser($airportId, $camIndex, $username, $password) {
+function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
-    
-    $users = [];
-    if (file_exists($vsftpdUserFile)) {
-        $lines = @file($vsftpdUserFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($lines) {
-            for ($i = 0; $i < count($lines); $i += 2) {
-                if (isset($lines[$i + 1])) {
-                    $users[$lines[$i]] = $lines[$i + 1];
-                }
-            }
-        }
+
+    $parsed = parseVsftpdVirtualUsersFile($vsftpdUserFile);
+    if ($parsed['errors'] !== []) {
+        aviationwx_log('warning', 'sync-push-config: vsftpd users file parse issues', [
+            'errors' => $parsed['errors'],
+        ], 'app');
     }
-    
+    $users = $parsed['users'];
+
     $users[$username] = $password;
-    
-    $content = '';
-    foreach ($users as $user => $pass) {
-        $content .= $user . "\n" . $pass . "\n";
-    }
-    
-    if (@file_put_contents($vsftpdUserFile, $content) === false) {
+
+    if (!writeVsftpdVirtualUsersFile($users, $vsftpdUserFile)) {
         aviationwx_log('error', 'sync-push-config: Cannot write vsftpd users file', [
             'file' => $vsftpdUserFile
         ], 'app');
         return false;
     }
-    
+
     if (file_exists($vsftpdDbFile)) {
         @unlink($vsftpdDbFile);
     }
-    
+
     $output = [];
     $code = 0;
     exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
-    
+
     if ($code !== 0) {
         aviationwx_log('error', 'sync-push-config: db_load failed', [
             'output' => implode("\n", $output)
         ], 'app');
         return false;
     }
-    
+
     if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
         aviationwx_log('error', 'sync-push-config: database file not created or is empty after db_load', [
             'db_file' => $vsftpdDbFile,
@@ -1088,84 +1146,88 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         ], 'app');
         return false;
     }
-    
-    // Get FTP upload directory (simple flat structure, no chroot)
-    $ftpDir = getWebcamFtpUploadDir($airportId, $username);
-    
-    // Get user/group info
+
     $ftpInfo = @posix_getpwnam('ftp');
     $ftpUid = $ftpInfo ? $ftpInfo['uid'] : 101;
     $wwwDataInfo = @posix_getpwnam('www-data');
     $wwwDataGid = $wwwDataInfo ? $wwwDataInfo['gid'] : 33;
-    
-    // Ensure directory structure exists
-    ensureWebcamsBaseDirectory();
-    
-    // Airport directory
-    $airportDir = CACHE_UPLOADS_DIR . '/' . strtolower($airportId);
-    if (!is_dir($airportDir)) {
-        @mkdir($airportDir, 0755, true);
-    }
-    
-    // FTP upload directory (ftp:www-data with setgid)
+
     if (!is_dir($ftpDir)) {
         @mkdir($ftpDir, 02775, true);
     }
     @chown($ftpDir, $ftpUid);
     @chgrp($ftpDir, $wwwDataGid);
     @chmod($ftpDir, 02775);
-    
-    // Create per-user vsftpd config - local_root points to FTP directory
+
     $userConfigDir = '/etc/vsftpd/users';
     if (!is_dir($userConfigDir)) {
         @mkdir($userConfigDir, 0755, true);
     }
     $userConfigFile = $userConfigDir . '/' . $username;
     $userConfig = "local_root={$ftpDir}\n";
-    
+
     if (@file_put_contents($userConfigFile, $userConfig) === false) {
         aviationwx_log('error', 'sync-push-config: Cannot write user config file', [
             'file' => $userConfigFile
         ], 'app');
         return false;
     }
-    
-    aviationwx_log('info', 'sync-push-config: FTP user created/updated', [
+
+    aviationwx_log('info', 'sync-push-config: FTP user created/updated', array_merge([
         'username' => $username,
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'local_root' => $ftpDir
-    ], 'app');
-    
+        'local_root' => $ftpDir,
+    ], $logContext), 'app');
+
     return true;
 }
 
 /**
- * Remove FTP user
+ * Create FTP user (vsftpd virtual user) for a push camera inbox.
+ *
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $username Username (up to 14 alphanumeric characters)
+ * @param string $password Password (14 alphanumeric characters)
+ * @return bool True on success, false on failure
+ */
+function createFtpUser($airportId, $camIndex, $username, $password) {
+    $ftpDir = getWebcamFtpUploadDir($airportId, $username);
+
+    ensureWebcamsBaseDirectory();
+
+    $airportDir = CACHE_UPLOADS_DIR . '/' . strtolower($airportId);
+    if (!is_dir($airportDir)) {
+        @mkdir($airportDir, 0755, true);
+    }
+
+    return upsertFtpVirtualUser($username, $password, $ftpDir, [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+    ]);
+}
+
+/**
+ * Remove FTP user from vsftpd virtual users and per-user config.
+ *
+ * @param string $username FTP username to remove
+ * @return void
  */
 function removeFtpUser($username) {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
     $userConfigFile = '/etc/vsftpd/users/' . $username;
-    
-    $users = [];
-    if (file_exists($vsftpdUserFile)) {
-        $lines = @file($vsftpdUserFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($lines) {
-            for ($i = 0; $i < count($lines); $i += 2) {
-                if (isset($lines[$i + 1]) && $lines[$i] !== $username) {
-                    $users[$lines[$i]] = $lines[$i + 1];
-                }
-            }
-        }
+
+    $parsed = parseVsftpdVirtualUsersFile($vsftpdUserFile);
+    if ($parsed['errors'] !== []) {
+        aviationwx_log('warning', 'sync-push-config: vsftpd users file parse issues during removal', [
+            'errors' => $parsed['errors'],
+            'username' => $username,
+        ], 'app');
     }
-    
-    $content = '';
-    foreach ($users as $user => $pass) {
-        $content .= $user . "\n" . $pass . "\n";
-    }
-    
-    if (@file_put_contents($vsftpdUserFile, $content) === false) {
+    $users = $parsed['users'];
+    unset($users[$username]);
+
+    if (!writeVsftpdVirtualUsersFile($users, $vsftpdUserFile)) {
         aviationwx_log('warning', 'sync-push-config: Cannot write vsftpd users file during removal', [
             'file' => $vsftpdUserFile,
             'username' => $username
@@ -1368,6 +1430,14 @@ function removeCameraUser($username, $protocols = null) {
  * @return void
  */
 function syncAllPushCameras($config) {
+    $usernameCheck = validateUniquePushUsernames($config);
+    if (!$usernameCheck['valid']) {
+        aviationwx_log('error', 'sync-push-config: duplicate push usernames in config, aborting camera sync', [
+            'errors' => $usernameCheck['errors'],
+        ], 'app');
+        return;
+    }
+
     $existing = getExistingPushCameras();
     $configured = [];
     $usernameMapping = loadUsernameMapping();
@@ -1520,6 +1590,171 @@ function syncAllPushCameras($config) {
 }
 
 /**
+ * Build sync plan for upload health probe accounts (production only).
+ *
+ * Probe users are isolated from push camera inboxes and must not enter the webcam pipeline.
+ *
+ * @return list<array{protocol:string,username:string,password:string,ftp_local_root?:string}>
+ */
+function getUploadHealthProbeSyncPlan(): array {
+    if (!isProduction()) {
+        return [];
+    }
+
+    $settings = getUploadHealthProbeSettings();
+    if (!($settings['enabled'] ?? false)) {
+        return [];
+    }
+
+    $plan = [];
+
+    $ftps = $settings['ftps'] ?? null;
+    if (is_array($ftps)) {
+        $username = $ftps['username'] ?? '';
+        $password = $ftps['password'] ?? '';
+        if (is_string($username) && $username !== '' && is_string($password) && $password !== '') {
+            $plan[] = [
+                'protocol' => 'ftps',
+                'username' => $username,
+                'password' => $password,
+                'ftp_local_root' => getUploadHealthProbeFtpDir($username),
+            ];
+        }
+    }
+
+    $sftp = $settings['sftp'] ?? null;
+    if (is_array($sftp)) {
+        $username = $sftp['username'] ?? '';
+        $password = $sftp['password'] ?? '';
+        if (is_string($username) && $username !== '' && is_string($password) && $password !== '') {
+            $plan[] = [
+                'protocol' => 'sftp',
+                'username' => $username,
+                'password' => $password,
+            ];
+        }
+    }
+
+    return $plan;
+}
+
+/**
+ * Provision FTPS probe account in an isolated FTP directory.
+ *
+ * @param string $username Probe username
+ * @param string $password Probe password
+ * @return bool True on success
+ */
+function syncUploadHealthProbeFtpUser(string $username, string $password): bool {
+    if (!validateUsername($username)) {
+        aviationwx_log('error', 'sync-push-config: invalid upload health probe FTP username', [
+            'username' => $username,
+        ], 'app');
+        return false;
+    }
+
+    if (!validatePassword($password)) {
+        aviationwx_log('error', 'sync-push-config: invalid upload health probe FTP password shape', [
+            'username' => $username,
+        ], 'app');
+        return false;
+    }
+
+    ensureWebcamsBaseDirectory();
+
+    $probeBase = CACHE_UPLOADS_DIR . '/' . UPLOAD_HEALTH_PROBE_FTP_NAMESPACE;
+    if (!is_dir($probeBase)) {
+        @mkdir($probeBase, 0755, true);
+    }
+
+    $ftpDir = getUploadHealthProbeFtpDir($username);
+
+    return upsertFtpVirtualUser($username, $password, $ftpDir, [
+        'purpose' => 'upload_health_probe',
+    ]);
+}
+
+/**
+ * Provision SFTP probe account (chroot under /var/sftp, uploads in files/).
+ *
+ * @param string $username Probe username
+ * @param string $password Probe password
+ * @return bool True on success
+ */
+function syncUploadHealthProbeSftpUser(string $username, string $password): bool {
+    if (!validateUsername($username)) {
+        aviationwx_log('error', 'sync-push-config: invalid upload health probe SFTP username', [
+            'username' => $username,
+        ], 'app');
+        return false;
+    }
+
+    if (!validatePassword($password)) {
+        aviationwx_log('error', 'sync-push-config: invalid upload health probe SFTP password shape', [
+            'username' => $username,
+        ], 'app');
+        return false;
+    }
+
+    if (!createSftpUser('_probe', -1, $username, $password)) {
+        aviationwx_log('error', 'sync-push-config: upload health probe SFTP user sync failed', [
+            'username' => $username,
+        ], 'app');
+        return false;
+    }
+
+    aviationwx_log('info', 'sync-push-config: upload health probe SFTP user synced', [
+        'username' => $username,
+        'purpose' => 'upload_health_probe',
+    ], 'app');
+
+    return true;
+}
+
+/**
+ * Sync dedicated upload health probe users (FTPS and SFTP).
+ *
+ * Runs on container startup with push camera sync so probe accounts survive image recreates.
+ *
+ * @return bool True when all configured probe accounts synced successfully
+ */
+function syncUploadHealthProbeUsers(): bool {
+    $plan = getUploadHealthProbeSyncPlan();
+    if ($plan === []) {
+        return true;
+    }
+
+    $allOk = true;
+
+    foreach ($plan as $target) {
+        $protocol = $target['protocol'] ?? '';
+        $username = $target['username'] ?? '';
+        $password = $target['password'] ?? '';
+
+        if ($protocol === 'ftps') {
+            if (!syncUploadHealthProbeFtpUser($username, $password)) {
+                $allOk = false;
+            }
+            continue;
+        }
+
+        if ($protocol === 'sftp') {
+            if (!syncUploadHealthProbeSftpUser($username, $password)) {
+                $allOk = false;
+            }
+        }
+    }
+
+    if ($allOk) {
+        aviationwx_log('info', 'sync-push-config: upload health probe users synced', [
+            'accounts' => count($plan),
+        ], 'app');
+    }
+
+    return $allOk;
+}
+
+/**
  * Main sync function
  */
 function syncPushConfig() {
@@ -1565,6 +1800,10 @@ function syncPushConfig() {
                 'last_sync' => $lastSync,
                 'config_mtime' => $configMtime
             ], 'app');
+            // Probe accounts live in container-local /etc and must be reprovisioned each startup.
+            if (!syncUploadHealthProbeUsers()) {
+                aviationwx_log('warning', 'sync-push-config: upload health probe user sync incomplete', [], 'app');
+            }
             return;
         }
         
@@ -1591,6 +1830,9 @@ function syncPushConfig() {
     }
     
     syncAllPushCameras($config);
+    if (!syncUploadHealthProbeUsers()) {
+        aviationwx_log('warning', 'sync-push-config: upload health probe user sync incomplete', [], 'app');
+    }
     updateLastSyncTimestamp();
     
     aviationwx_log('info', 'push-config sync completed', [], 'app');

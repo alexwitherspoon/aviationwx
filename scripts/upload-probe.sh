@@ -78,28 +78,71 @@ probe_setup_netrc() {
     } >"$PROBE_NETRC_FILE"
 }
 
+ensure_sftp_known_hosts() {
+    local host="$1"
+    local port="$2"
+    if ! command -v ssh-keyscan >/dev/null 2>&1; then
+        return 0
+    fi
+    local ssh_dir="${HOME:-/root}/.ssh"
+    local known_hosts="${ssh_dir}/known_hosts"
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir" 2>/dev/null || true
+    touch "$known_hosts"
+    chmod 600 "$known_hosts" 2>/dev/null || true
+    if ! grep -qF "[${host}]:${port}" "$known_hosts" 2>/dev/null \
+        && ! grep -qF "${host}" "$known_hosts" 2>/dev/null; then
+        ssh-keyscan -p "$port" "$host" >>"$known_hosts" 2>/dev/null || true
+    fi
+}
+
+vsftpd_ssl_enabled() {
+    local conf="${VSFTPD_CONF:-/etc/vsftpd/vsftpd.conf}"
+    if [ ! -f "$conf" ]; then
+        return 1
+    fi
+    if grep -qE '^[[:space:]]*ssl_enable[[:space:]]*=[[:space:]]*YES' "$conf" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
 run_ftps_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed
+    local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail
+    local -a curl_tls_args=()
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    base_url="ftps://${host}:${port}/"
+    # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
+    base_url="ftp://${host}:${port}/"
+    if vsftpd_ssl_enabled; then
+        use_tls="true"
+        curl_tls_args=(--ftp-ssl-reqd)
+        ok_detail="ok"
+    else
+        use_tls="false"
+        ok_detail="ok (plain ftp, ssl_enable=NO)"
+    fi
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 45 \
         --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>&1; then
         rm -f "$local_file"
-        echo "false|0|ftps upload failed"
+        if [ "$use_tls" = "true" ]; then
+            echo "false|0|ftps upload failed"
+        else
+            echo "false|0|ftp upload failed"
+        fi
         return 1
     fi
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 30 \
         --fail -X "DELE ${file_name}" "$base_url" >/dev/null 2>&1; then
-        log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
+        log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
     fi
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
@@ -107,7 +150,7 @@ run_ftps_probe() {
     if [ "$elapsed" -lt 0 ]; then
         elapsed=0
     fi
-    echo "true|${elapsed}|ok"
+    echo "true|${elapsed}|${ok_detail}"
 }
 
 run_sftp_probe() {
@@ -119,6 +162,7 @@ run_sftp_probe() {
     base_url="sftp://${host}:${port}/"
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
+    ensure_sftp_known_hosts "$host" "$port"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"

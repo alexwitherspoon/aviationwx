@@ -16,6 +16,9 @@ require_once __DIR__ . '/../../lib/logger.php';
 class SyncPushConfigTest extends TestCase
 {
     private string $testMappingFile;
+
+    /** @var list<string> */
+    private array $tempPaths = [];
     
     protected function setUp(): void
     {
@@ -27,12 +30,24 @@ class SyncPushConfigTest extends TestCase
     
     protected function tearDown(): void
     {
-        // Clean up test file
         if (file_exists($this->testMappingFile)) {
             unlink($this->testMappingFile);
         }
+        foreach ($this->tempPaths as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+        $this->tempPaths = [];
         
         parent::tearDown();
+    }
+
+    private function trackTempFile(string $path): string
+    {
+        $this->tempPaths[] = $path;
+
+        return $path;
     }
     
     /**
@@ -192,5 +207,85 @@ class SyncPushConfigTest extends TestCase
             $src,
             'local_root in logs must not use $filesDir (SFTP path; undefined in FTP flow)'
         );
+    }
+
+    public function testParseVsftpdVirtualUsersFile_AllowsSharedPasswordsAcrossUsernames(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/vsftpd-users-' . uniqid('', true) . '.txt');
+        file_put_contents($path, "kczkcam1\nsharedpass14xx\nkczkcam2\nsharedpass14xx\n");
+
+        $parsed = parseVsftpdVirtualUsersFile($path);
+
+        $this->assertSame([], $parsed['errors']);
+        $this->assertCount(2, $parsed['users']);
+        $this->assertSame('sharedpass14xx', $parsed['users']['kczkcam1']);
+        $this->assertSame('sharedpass14xx', $parsed['users']['kczkcam2']);
+    }
+
+    public function testParseVsftpdVirtualUsersFile_DetectsDuplicateUsernames(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/vsftpd-users-' . uniqid('', true) . '.txt');
+        file_put_contents($path, "dupuser14chars\npassone14chars\ndupuser14chars\npasstwo14chars\n");
+
+        $parsed = parseVsftpdVirtualUsersFile($path);
+
+        $this->assertNotEmpty($parsed['errors']);
+        $this->assertStringContainsString("Duplicate vsftpd username 'dupuser14chars'", $parsed['errors'][0]);
+        $this->assertSame(['dupuser14chars' => 'passone14chars'], $parsed['users']);
+    }
+
+    public function testParseVsftpdVirtualUsersFile_DetectsOddLineCount(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/vsftpd-users-' . uniqid('', true) . '.txt');
+        file_put_contents($path, "onlyuser14char\n");
+
+        $parsed = parseVsftpdVirtualUsersFile($path);
+
+        $this->assertNotEmpty($parsed['errors']);
+        $this->assertStringContainsString('odd line count', $parsed['errors'][0]);
+        $this->assertSame([], $parsed['users']);
+    }
+
+    public function testValidateConfigBeforeApply_RejectsDuplicatePushUsernames(): void
+    {
+        require_once __DIR__ . '/../../lib/config.php';
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/sync-config-' . uniqid('', true) . '.json');
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'webcams' => [
+                        [
+                            'type' => 'push',
+                            'push_config' => [
+                                'username' => 'aB3xK9mP2qR7vN',
+                                'password' => 'mK8pL3nQ6rT9vW',
+                            ],
+                        ],
+                        [
+                            'type' => 'push',
+                            'push_config' => [
+                                'username' => 'aB3xK9mP2qR7vN',
+                                'password' => 'xY9zA2bC4dE6fG',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        file_put_contents($path, json_encode($config, JSON_THROW_ON_ERROR));
+
+        $result = validateConfigBeforeApply($path);
+
+        $this->assertFalse($result['valid']);
+        $this->assertArrayHasKey('error', $result);
+        $this->assertStringContainsString('Duplicate username', $result['error']);
     }
 }

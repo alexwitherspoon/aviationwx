@@ -19,7 +19,8 @@
  * │       ├── pull_metadata.json   # Pull cameras: ETag + checksum for conditional/unchanged skip
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── ftp/
- * │   └── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)
+ * │   ├── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)
+ * │   └── {namespace}/{username}/  # Upload health probe only (UPLOAD_HEALTH_PROBE_FTP_NAMESPACE)
  * 
  * SFTP uploads are stored separately in /var/sftp/ (not under cache/)
  * because SSH chroot requires ALL parent directories to be root-owned.
@@ -436,6 +437,20 @@ if (!defined('CACHE_SFTP_DIR')) {
  */
 function getWebcamFtpUploadDir(string $airportId, string $username): string {
     return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
+}
+
+/**
+ * FTP local_root for upload health probe accounts (isolated from camera inboxes).
+ *
+ * @param string $username Probe FTPS username from config.upload_health_probe.ftps
+ * @return string Full path to probe-only FTP directory
+ */
+function getUploadHealthProbeFtpDir(string $username): string {
+    if (!defined('UPLOAD_HEALTH_PROBE_FTP_NAMESPACE')) {
+        require_once __DIR__ . '/constants.php';
+    }
+
+    return CACHE_UPLOADS_DIR . '/' . UPLOAD_HEALTH_PROBE_FTP_NAMESPACE . '/' . $username;
 }
 
 /**

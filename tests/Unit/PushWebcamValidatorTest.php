@@ -311,5 +311,36 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('Invalid IP address', $result['errors'][0]);
     }
+
+    public function testDuplicateUsernames_CaseInsensitive(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'webcams' => [
+                        [
+                            'type' => 'push',
+                            'push_config' => [
+                                'username' => 'aB3xK9mP2qR7vN',
+                                'password' => 'mK8pL3nQ6rT9vW',
+                            ],
+                        ],
+                        [
+                            'type' => 'push',
+                            'push_config' => [
+                                'username' => 'ab3xk9mp2qr7vn',
+                                'password' => 'xY9zA2bC4dE6fG',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateUniquePushUsernames($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('Duplicate username', $result['errors'][0]);
+    }
 }
 
