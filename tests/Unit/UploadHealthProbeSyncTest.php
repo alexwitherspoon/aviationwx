@@ -185,6 +185,28 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertIsString($contents);
         $this->assertStringContainsString('ensure_sftp_known_hosts', $contents);
         $this->assertStringContainsString('ssh-keyscan', $contents);
+        $this->assertStringContainsString('localhost|127.0.0.1|::1', $contents);
+    }
+
+    public function testUploadProbeRunner_UsesLogLevelFromMessagePrefix(): void
+    {
+        $path = __DIR__ . '/../../scripts/upload-probe-runner.sh';
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('[[ "$msg" == WARN\\ * ]]', $contents);
+        $this->assertStringContainsString('echo "[$ts] [$level] $msg"', $contents);
+    }
+
+    public function testSyncPushConfig_ExitsNonZeroOnConfigValidationFailure(): void
+    {
+        $path = __DIR__ . '/../../scripts/sync-push-config.php';
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString("'config validation failed, skipping sync'", $contents);
+        $pos = strpos($contents, "'config validation failed, skipping sync'");
+        $this->assertNotFalse($pos);
+        $snippet = substr($contents, $pos, 200);
+        $this->assertStringContainsString('exit(1);', $snippet);
     }
 
     /**

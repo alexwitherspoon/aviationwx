@@ -15,10 +15,18 @@ PROBE_SCRIPT="${SCRIPT_DIR}/upload-probe.sh"
 PROBE_LOG="${PROBE_LOG:-/var/log/aviationwx/upload-probe.log}"
 
 log_probe_runner() {
-    local ts msg
+    local level="INFO"
+    local msg="$1"
+    if [[ "$msg" == WARN\ * ]]; then
+        level="WARN"
+        msg="${msg#WARN }"
+    elif [[ "$msg" == ERROR\ * ]]; then
+        level="ERROR"
+        msg="${msg#ERROR }"
+    fi
+    local ts
     ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    msg="$1"
-    echo "[$ts] [INFO] $msg" >>"$PROBE_LOG"
+    echo "[$ts] [$level] $msg" >>"$PROBE_LOG"
 }
 
 # Wait for entrypoint background sync before the first probe (probe accounts live in /etc).
