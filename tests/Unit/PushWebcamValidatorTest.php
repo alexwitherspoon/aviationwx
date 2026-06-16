@@ -379,7 +379,8 @@ class PushWebcamValidatorTest extends TestCase
 
         $this->assertFalse($result['valid']);
         $this->assertCount(1, $result['errors']);
-        $this->assertStringContainsString("Duplicate username 'ab3xk9mp2qr7vn'", $result['errors'][0]);
+        $this->assertStringContainsString("Duplicate username 'aB3xK9mP2qR7vN'", $result['errors'][0]);
+        $this->assertStringContainsString('(case-insensitive)', $result['errors'][0]);
         $this->assertStringContainsString('kspb_0', $result['errors'][0]);
         $this->assertStringContainsString('kspb_1', $result['errors'][0]);
         $this->assertStringContainsString('kspb_2', $result['errors'][0]);

@@ -162,6 +162,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
 function validateUniquePushUsernames($config) {
     $errors = [];
     $usernames = [];
+    $usernameLabels = [];
     $duplicates = [];
     
     foreach ($config['airports'] ?? [] as $airportId => $airport) {
@@ -188,6 +189,7 @@ function validateUniquePushUsernames($config) {
                     $duplicates[$normalized][] = $key;
                 } else {
                     $usernames[$normalized] = $key;
+                    $usernameLabels[$normalized] = $username;
                 }
             }
         }
@@ -195,7 +197,9 @@ function validateUniquePushUsernames($config) {
     
     if (!empty($duplicates)) {
         foreach ($duplicates as $normalized => $keys) {
-            $errors[] = "Duplicate username '{$normalized}' found in cameras: " . implode(', ', array_unique($keys));
+            $label = $usernameLabels[$normalized] ?? $normalized;
+            $errors[] = "Duplicate username '{$label}' (case-insensitive) found in cameras: "
+                . implode(', ', array_unique($keys));
         }
     }
     
