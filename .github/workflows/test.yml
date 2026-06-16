@@ -245,7 +245,6 @@ jobs:
             "lib/webcam-worker.php"
             "lib/webcam-acquisition.php"
             "lib/webcam-pipeline.php"
-            "pages/config-generator.php"
             "pages/status.php"
           )
           for file in "${required_files[@]}"; do
