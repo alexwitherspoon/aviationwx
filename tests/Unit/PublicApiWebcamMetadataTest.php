@@ -55,6 +55,34 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertNull($formatted['approximate_heading']);
+        $this->assertArrayNotHasKey('history_enabled', $formatted);
+        $this->assertArrayNotHasKey('history_url', $formatted);
+    }
+
+    public function testFormatWebcamMetadata_IncludesHistoryWhenEnabled(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = ['enabled' => true, 'maintenance' => false];
+        $webcam = ['name' => 'Camera', 'approximate_heading' => 90];
+
+        $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
+
+        $this->assertTrue($formatted['history_enabled']);
+        $this->assertSame('/v1/airports/kspb/webcams/0/history', $formatted['history_url']);
+    }
+
+    public function testFormatWebcamMetadata_OmitsHistoryWhenDisabled(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = ['enabled' => true, 'maintenance' => true];
+        $webcam = ['name' => 'Camera'];
+
+        $formatted = formatWebcamMetadata('pdx', 0, $webcam, $airport);
+
+        $this->assertArrayNotHasKey('history_enabled', $formatted);
+        $this->assertArrayNotHasKey('history_url', $formatted);
     }
 
     public function testFormatWebcamMetadata_AlwaysIncludesHeadingKey(): void
