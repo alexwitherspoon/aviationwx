@@ -774,8 +774,8 @@ echo "All services started successfully"
 # Runs in background so Apache startup is not blocked; upload-probe-runner waits for completion.
 echo "Syncing FTP/SFTP/FTPS configuration (background)..."
 (cd /var/www/html && timeout 30 /usr/local/bin/php scripts/sync-push-config.php > /tmp/sync-push-config.log 2>&1 && \
-    echo "✓ FTP/SFTP/FTPS configuration synced successfully" || \
-    echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed or timed out (check /tmp/sync-push-config.log)") &
+    echo "✓ FTP/SFTP/FTPS configuration synced successfully" >> /tmp/sync-push-config.log || \
+    echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed or timed out (check /tmp/sync-push-config.log)" >> /tmp/sync-push-config.log) &
 SYNC_PID=$!
 
 # Start upload probe runner (30s) and service watchdog (50s loop) in background
