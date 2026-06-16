@@ -1627,6 +1627,224 @@ class ConfigValidationTest extends TestCase
     }
 
     /**
+     * approximate_heading is required on enabled, non-maintenance airports.
+     */
+    public function testWebcam_ApproximateHeading_RequiredOnEnabledAirport(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString("missing required 'approximate_heading'", implode(' ', $result['errors']));
+    }
+
+    public function testWebcam_ApproximateHeading_ValidOnEnabledAirport(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => 90,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
+    public function testWebcam_ApproximateHeading_OptionalOnMaintenanceAirport(): void
+    {
+        $config = [
+            'airports' => [
+                'pdx' => [
+                    'name' => 'Maintenance Airport',
+                    'enabled' => true,
+                    'maintenance' => true,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
+    public function testWebcam_ApproximateHeading_OptionalOnDisabledAirport(): void
+    {
+        $config = [
+            'airports' => [
+                'ksea' => [
+                    'name' => 'Disabled Airport',
+                    'enabled' => false,
+                    'lat' => 47.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
+    public function testWebcam_ApproximateHeading_InvalidRange(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => 361,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid approximate_heading', implode(' ', $result['errors']));
+    }
+
+    public function testWebcam_ApproximateHeading_RejectsStringValue(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => '180',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid approximate_heading', implode(' ', $result['errors']));
+    }
+
+    public function testWebcam_ApproximateHeading_RequiredOnDisabledPlaceholderSlot(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Reserved slot',
+                            'enabled' => false,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString("missing required 'approximate_heading'", implode(' ', $result['errors']));
+    }
+
+    public function testWebcam_ApproximateHeading_ValidOnDisabledPlaceholderSlotWhenSet(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Reserved slot',
+                            'enabled' => false,
+                            'approximate_heading' => 270,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
+    /**
      * Test weather source validation - Valid configurations
      */
     public function testWeatherSource_ValidTempest()
