@@ -55,8 +55,6 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertNull($formatted['approximate_heading']);
-        $this->assertArrayNotHasKey('history_enabled', $formatted);
-        $this->assertArrayNotHasKey('history_url', $formatted);
     }
 
     public function testFormatWebcamMetadata_IncludesHistoryWhenEnabled(): void
@@ -68,6 +66,8 @@ class PublicApiWebcamMetadataTest extends TestCase
 
         $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
 
+        $this->assertArrayHasKey('history_enabled', $formatted);
+        $this->assertArrayHasKey('history_url', $formatted);
         $this->assertTrue($formatted['history_enabled']);
         $this->assertSame('/v1/airports/kspb/webcams/0/history', $formatted['history_url']);
     }
@@ -76,7 +76,8 @@ class PublicApiWebcamMetadataTest extends TestCase
     {
         self::loadFormatWebcamMetadata();
 
-        $airport = ['enabled' => true, 'maintenance' => true];
+        // pdx fixture sets webcam_history_retention_hours to 0 (history disabled via config).
+        $airport = ['enabled' => true, 'maintenance' => false];
         $webcam = ['name' => 'Camera'];
 
         $formatted = formatWebcamMetadata('pdx', 0, $webcam, $airport);
