@@ -96,8 +96,7 @@ ensure_sftp_known_hosts() {
     chmod 700 "$ssh_dir" 2>/dev/null || true
     touch "$known_hosts"
     chmod 600 "$known_hosts" 2>/dev/null || true
-    if ! grep -qF "[${host}]:${port}" "$known_hosts" 2>/dev/null \
-        && ! grep -qF "${host}" "$known_hosts" 2>/dev/null; then
+    if ! grep -qF "[${host}]:${port}" "$known_hosts" 2>/dev/null; then
         ssh-keyscan -p "$port" "$host" >>"$known_hosts" 2>/dev/null || true
     fi
 }
