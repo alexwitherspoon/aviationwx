@@ -248,10 +248,14 @@ main() {
     sftp_skipped="false"
 
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
+        local ftp_probe_label="FTP"
+        if vsftpd_ssl_enabled; then
+            ftp_probe_label="FTPS"
+        fi
         IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftp_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
-        log_probe "INFO" "FTPS probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
+        log_probe "INFO" "${ftp_probe_label} probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
         if [ "$ftps_ok" != "true" ]; then
-            log_upload_health_app "error" "FTPS upload health probe failed" \
+            log_upload_health_app "error" "${ftp_probe_label} upload health probe failed" \
                 "$(jq -n --arg detail "$ftps_detail" --arg host "$connect_host" '{detail: $detail, connect_host: $host}')"
         fi
     else
