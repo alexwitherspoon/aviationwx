@@ -32,6 +32,9 @@ log_probe_runner() {
 # Wait for entrypoint background sync before the first probe (probe accounts live in /etc).
 wait_for_push_config_sync() {
     local max_sec="${UPLOAD_PROBE_SYNC_WAIT_SEC:-90}"
+    if ! [[ "$max_sec" =~ ^[0-9]+$ ]] || [ "$max_sec" -lt 1 ]; then
+        max_sec=90
+    fi
     local start_sec elapsed
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     while true; do
