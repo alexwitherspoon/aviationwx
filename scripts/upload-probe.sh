@@ -81,6 +81,12 @@ probe_setup_netrc() {
 ensure_sftp_known_hosts() {
     local host="$1"
     local port="$2"
+    case "$host" in
+        localhost|127.0.0.1|::1) ;;
+        *)
+            return 0
+            ;;
+    esac
     if ! command -v ssh-keyscan >/dev/null 2>&1; then
         return 0
     fi
