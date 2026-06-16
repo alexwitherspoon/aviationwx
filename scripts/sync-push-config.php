@@ -1817,7 +1817,7 @@ function syncPushConfig() {
         aviationwx_log('error', 'config validation failed, skipping sync', [
             'error' => $validation['error']
         ], 'app');
-        return;
+        exit(1);
     }
     
     $backupFile = backupConfigFile($configFile);
