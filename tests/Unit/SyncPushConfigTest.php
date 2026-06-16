@@ -262,7 +262,7 @@ class SyncPushConfigTest extends TestCase
         $parsed = parseVsftpdVirtualUsersFile($path);
 
         $this->assertNotEmpty($parsed['errors']);
-        $this->assertStringContainsString('incomplete username/password pair', $parsed['errors'][0]);
+        $this->assertStringContainsString("empty password for 'userone14chars'", $parsed['errors'][0]);
         $this->assertSame(['usertwo14chars' => 'passtwo14chars'], $parsed['users']);
     }
 

@@ -983,8 +983,15 @@ function parseVsftpdVirtualUsersFile(string $path = '/etc/vsftpd/virtual_users.t
         $lineNum = $i + 1;
 
         if ($username === '' || $password === '') {
-            $errors[] = 'vsftpd virtual_users.txt has incomplete username/password pair at lines '
-                . $lineNum . '-' . ($lineNum + 1);
+            if ($username === '' && $password === '') {
+                $errors[] = 'vsftpd virtual_users.txt has empty username/password pair at lines '
+                    . $lineNum . '-' . ($lineNum + 1);
+            } elseif ($username === '') {
+                $errors[] = 'vsftpd virtual_users.txt has empty username at line ' . $lineNum;
+            } else {
+                $errors[] = "vsftpd virtual_users.txt has empty password for '{$username}' at line "
+                    . ($lineNum + 1);
+            }
             continue;
         }
 
