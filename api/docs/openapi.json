@@ -1363,8 +1363,7 @@
                 "image_url",
                 "history_enabled",
                 "refresh_seconds",
-                "approximate_heading",
-                "approximate_heading_reference"
+                "approximate_heading"
               ],
               "properties": {
                 "index": {
@@ -1392,13 +1391,7 @@
                   "nullable": true,
                   "minimum": 0,
                   "maximum": 360,
-                  "description": "Direction the camera lens points, in true-north degrees (0-360). Non-null on active non-maintenance airports. Null when the airport is in maintenance or heading is not yet commissioned."
-                },
-                "approximate_heading_reference": {
-                  "type": "string",
-                  "nullable": true,
-                  "enum": ["true_north"],
-                  "description": "Reference frame for approximate_heading. true_north when approximate_heading is set; null otherwise."
+                  "description": "Direction the camera lens points, in true-north degrees clockwise from north (0-360). Non-null on active non-maintenance airports. Null when the airport is in maintenance or heading is not yet commissioned."
                 }
               }
             }

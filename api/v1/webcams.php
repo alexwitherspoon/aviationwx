@@ -98,9 +98,6 @@ function formatWebcamMetadata(string $airportId, int $index, array $webcam, arra
         'approximate_heading' => isset($webcam['approximate_heading'])
             ? (int) $webcam['approximate_heading']
             : null,
-        'approximate_heading_reference' => isset($webcam['approximate_heading'])
-            ? 'true_north'
-            : null,
     ];
 }
 

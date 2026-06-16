@@ -498,9 +498,8 @@ class PublicApiWebcamTest extends TestCase
 
         foreach ($webcams as $webcam) {
             $this->assertArrayHasKey('approximate_heading', $webcam);
-            $this->assertArrayHasKey('approximate_heading_reference', $webcam);
+            $this->assertArrayNotHasKey('approximate_heading_reference', $webcam);
             $this->assertIsInt($webcam['approximate_heading']);
-            $this->assertSame('true_north', $webcam['approximate_heading_reference']);
             $this->assertArrayHasKey('image_url', $webcam);
         }
     }
@@ -527,9 +526,8 @@ class PublicApiWebcamTest extends TestCase
 
         foreach ($webcams as $webcam) {
             $this->assertArrayHasKey('approximate_heading', $webcam);
-            $this->assertArrayHasKey('approximate_heading_reference', $webcam);
+            $this->assertArrayNotHasKey('approximate_heading_reference', $webcam);
             $this->assertNull($webcam['approximate_heading']);
-            $this->assertNull($webcam['approximate_heading_reference']);
         }
     }
 

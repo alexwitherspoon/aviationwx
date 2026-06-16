@@ -33,9 +33,8 @@ class PublicApiWebcamMetadataTest extends TestCase
         $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
 
         $this->assertArrayHasKey('approximate_heading', $formatted);
-        $this->assertArrayHasKey('approximate_heading_reference', $formatted);
+        $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertSame(90, $formatted['approximate_heading']);
-        $this->assertSame('true_north', $formatted['approximate_heading_reference']);
     }
 
     public function testFormatWebcamMetadata_NullHeadingWhenOmitted(): void
@@ -54,12 +53,11 @@ class PublicApiWebcamMetadataTest extends TestCase
         $formatted = formatWebcamMetadata('pdx', 0, $webcam, $airport);
 
         $this->assertArrayHasKey('approximate_heading', $formatted);
-        $this->assertArrayHasKey('approximate_heading_reference', $formatted);
+        $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertNull($formatted['approximate_heading']);
-        $this->assertNull($formatted['approximate_heading_reference']);
     }
 
-    public function testFormatWebcamMetadata_AlwaysIncludesHeadingKeys(): void
+    public function testFormatWebcamMetadata_AlwaysIncludesHeadingKey(): void
     {
         self::loadFormatWebcamMetadata();
 
@@ -69,7 +67,7 @@ class PublicApiWebcamMetadataTest extends TestCase
         $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
 
         $this->assertArrayHasKey('approximate_heading', $formatted);
-        $this->assertArrayHasKey('approximate_heading_reference', $formatted);
+        $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertArrayHasKey('image_url', $formatted);
         $this->assertSame('/v1/airports/kspb/webcams/0/image', $formatted['image_url']);
     }
