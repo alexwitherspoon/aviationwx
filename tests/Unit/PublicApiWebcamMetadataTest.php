@@ -72,6 +72,7 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertSame(318, $formatted['approximate_heading']);
+        $this->assertArrayHasKey('history_url', $formatted);
         $this->assertArrayHasKey('image_url', $formatted);
         $this->assertSame('/v1/airports/kspb/webcams/0/image', $formatted['image_url']);
     }

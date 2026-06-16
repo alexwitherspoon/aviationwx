@@ -1362,6 +1362,7 @@
                 "name",
                 "image_url",
                 "history_enabled",
+                "history_url",
                 "refresh_seconds",
                 "approximate_heading"
               ],
