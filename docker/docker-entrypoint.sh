@@ -773,7 +773,8 @@ echo "All services started successfully"
 # Sync FTP/SFTP/FTPS configuration before upload probes (probe accounts live in /etc).
 # Runs in background so Apache startup is not blocked; upload-probe-runner waits for completion.
 echo "Syncing FTP/SFTP/FTPS configuration (background)..."
-(cd /var/www/html && timeout 30 /usr/local/bin/php scripts/sync-push-config.php > /tmp/sync-push-config.log 2>&1 && \
+: > /tmp/sync-push-config.log
+(cd /var/www/html && timeout 30 /usr/local/bin/php scripts/sync-push-config.php >> /tmp/sync-push-config.log 2>&1 && \
     echo "✓ FTP/SFTP/FTPS configuration synced successfully" >> /tmp/sync-push-config.log || \
     echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed or timed out (check /tmp/sync-push-config.log)" >> /tmp/sync-push-config.log) &
 SYNC_PID=$!
