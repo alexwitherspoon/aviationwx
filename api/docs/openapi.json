@@ -1376,11 +1376,12 @@
                 },
                 "history_url": {
                   "type": "string",
-                  "description": "URL to webcam history endpoint. Present only when webcam history is enabled globally and for this airport (retention configured)."
+                  "description": "URL to webcam history endpoint. Present only when webcam history retention is greater than zero for this airport (airport-specific, global, or default setting)."
                 },
                 "history_enabled": {
                   "type": "boolean",
-                  "description": "Present and true when webcam history is enabled globally and for this airport."
+                  "enum": [true],
+                  "description": "Present and true when webcam history retention is greater than zero for this airport."
                 },
                 "refresh_seconds": {
                   "type": "integer"
