@@ -972,24 +972,27 @@ function parseVsftpdVirtualUsersFile(string $path = '/etc/vsftpd/virtual_users.t
         return ['users' => [], 'errors' => ["Cannot read vsftpd users file: {$path}"]];
     }
 
-    $lines = [];
-    foreach ($rawLines as $lineNum => $line) {
-        $trimmed = trim($line);
-        if ($trimmed === '') {
-            $errors[] = 'vsftpd virtual_users.txt has empty line at line ' . ($lineNum + 1);
-            continue;
-        }
-        $lines[] = $trimmed;
-    }
-
-    if (count($lines) % 2 !== 0) {
+    $lineCount = count($rawLines);
+    if ($lineCount % 2 !== 0) {
         $errors[] = 'vsftpd virtual_users.txt has odd line count (incomplete username/password pair)';
     }
 
-    for ($i = 0; $i + 1 < count($lines); $i += 2) {
-        $username = $lines[$i];
-        $password = $lines[$i + 1];
+    for ($i = 0; $i + 1 < $lineCount; $i += 2) {
+        $username = trim($rawLines[$i]);
+        $password = trim($rawLines[$i + 1]);
         $lineNum = $i + 1;
+
+        if ($username === '' || $password === '') {
+            if ($username === '' && $password === '') {
+                $errors[] = 'vsftpd virtual_users.txt has empty username/password pair at lines '
+                    . $lineNum . '-' . ($lineNum + 1);
+            } elseif ($username === '') {
+                $errors[] = 'vsftpd virtual_users.txt has empty username at line ' . $lineNum;
+            } else {
+                $errors[] = 'vsftpd virtual_users.txt has empty password for username at line ' . ($lineNum + 1);
+            }
+            continue;
+        }
 
         if (isset($users[$username])) {
             $errors[] = "Duplicate vsftpd username '{$username}' at line {$lineNum}";

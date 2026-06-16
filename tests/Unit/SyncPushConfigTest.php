@@ -252,6 +252,20 @@ class SyncPushConfigTest extends TestCase
         $this->assertSame([], $parsed['users']);
     }
 
+    public function testParseVsftpdVirtualUsersFile_SkipsMisalignedPairsWithoutShifting(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/vsftpd-users-' . uniqid('', true) . '.txt');
+        file_put_contents($path, "userone14chars\n\nusertwo14chars\npasstwo14chars\n");
+
+        $parsed = parseVsftpdVirtualUsersFile($path);
+
+        $this->assertNotEmpty($parsed['errors']);
+        $this->assertStringContainsString('empty password', $parsed['errors'][0]);
+        $this->assertSame(['usertwo14chars' => 'passtwo14chars'], $parsed['users']);
+    }
+
     public function testValidateConfigBeforeApply_RejectsDuplicatePushUsernames(): void
     {
         require_once __DIR__ . '/../../lib/config.php';
