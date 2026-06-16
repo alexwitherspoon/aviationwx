@@ -9,22 +9,24 @@ use PHPUnit\Framework\TestCase;
  */
 class WebcamHistoryRetentionConfigTest extends TestCase
 {
-    private string $originalConfigPath = '';
+    /** @var string|false */
+    private $originalConfigPath;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->originalConfigPath = getenv('CONFIG_PATH') ?: '';
+        $this->originalConfigPath = getenv('CONFIG_PATH');
         $this->clearConfigCache();
     }
 
     protected function tearDown(): void
     {
-        putenv('CONFIG_PATH=' . $this->originalConfigPath);
-        if ($this->originalConfigPath !== '') {
+        if ($this->originalConfigPath !== false) {
+            putenv('CONFIG_PATH=' . $this->originalConfigPath);
             $_ENV['CONFIG_PATH'] = $this->originalConfigPath;
             $_SERVER['CONFIG_PATH'] = $this->originalConfigPath;
         } else {
+            putenv('CONFIG_PATH');
             unset($_ENV['CONFIG_PATH'], $_SERVER['CONFIG_PATH']);
         }
         $this->clearConfigCache();
