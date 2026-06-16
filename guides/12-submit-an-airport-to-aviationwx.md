@@ -154,6 +154,7 @@ This is the simplest and usually produces the best still-image quality.
 - Camera brand + model (example: Reolink RLC‑810WA)
 - "I want scheduled JPEG uploads" (FTP/FTPs/SFTP)
 - Desired upload interval (start at 5 minutes unless you have a reason not to)
+- **Approximate look direction per camera** (true north degrees 0-360; see Guide 02)
 
 **What happens next**
 - AviationWX will reply with the **upload destination details** (server/port/username/path), so you can configure the camera.
@@ -169,11 +170,13 @@ https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-up-FTP-for
 - Camera brand + model
 - RTSP URL (or enough info for us to derive it)
 - A dedicated camera user + password (ideally a **view-only** account created specifically for AviationWX)
+- **Approximate look direction** (true north degrees 0-360; see Guide 02)
 
 ### Option C - Snapshot URL (HTTP/HTTPS)
 **What to send**
 - Snapshot URL
 - Any credentials required (again: a dedicated "AviationWX" view-only account is ideal)
+- **Approximate look direction** (true north degrees 0-360; see Guide 02)
 
 > Security note: please do **not** send your personal admin login if you can avoid it. When possible, create a dedicated read-only account for the camera/stream and share that instead.
 
@@ -184,6 +187,7 @@ After you email us, we'll validate:
 
 ### Camera validation
 - The view is useful for pilots (see Guide 02: horizon + runway/approach context)
+- **Approximate heading** is recorded per camera in config (required before go-live)
 - Image is readable in common conditions (overcast, rain, fog, sunrise/sunset)
 - Updates arrive reliably (and recover after outages)
 - The install respects permission + privacy expectations (Guide 01)
@@ -224,6 +228,7 @@ Body:
 - Number of cameras:
 - Method: FTP/FTPs/SFTP (preferred) / RTSP / Snapshot URL
 - Camera models:
+- Approximate heading per camera (true north, 0-360):
 - Details (RTSP URL, snapshot URL, or request for FTP destination):
 
 Attachments:

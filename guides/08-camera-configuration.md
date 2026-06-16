@@ -562,6 +562,15 @@ Use this checklist when evaluating any camera for AviationWX.
 
 ---
 
+## Approximate heading (required in final config)
+Each camera needs `approximate_heading` in the airport config when the airport is **enabled** and **not in maintenance**: true-north degrees **0-360** for the direction the lens points.
+
+- Use **true north**, not magnetic (runway numbers on charts are magnetic; this field is not).
+- Measure after the mount is aimed (see Guide 02).
+- Aim within about **±10°** when possible.
+
+Full schema details: `docs/CONFIGURATION.md`.
+
 ## Decision (write it down)
 
 After configuring your camera, document these details:
@@ -571,6 +580,7 @@ After configuring your camera, document these details:
 | Item | Your Answer |
 |------|-------------|
 | Camera model(s) | |
+| Approximate heading per camera (true north, 0-360) | CAM1: ___ / CAM2: ___ / … |
 | Integration method | FTPS / SFTP / FTP / RTSP / Bridge |
 | Capture/upload interval | |
 | Resolution | |

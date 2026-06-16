@@ -50,6 +50,18 @@ If you have multiple cameras, a simple, pilot-friendly recipe is:
 
 Windsock visibility is **not a priority** (wind is better captured by a local weather station).
 
+### Camera look direction (`approximate_heading`)
+AviationWX records **which way each camera points** in config as `approximate_heading`: an integer **0-360** in **true north** degrees (0 = north, 90 = east, 180 = south, 270 = west).
+
+**Naming tip:** when a camera name ends with a cardinal direction (for example `North`, `East`, `NW Facing`), that usually means **look direction** from the mount, not where the camera is mounted. `02ID - North` looks north (~0°), not "mounted on the north side."
+
+**How to measure:**
+- Stand at the camera mount (or use Google Earth from the mount point toward a landmark in the frame).
+- Record the bearing in **true north** degrees.
+- Aim within about **±10°** when you can (operational target; exact survey is not required for every field).
+
+You will enter this value in the final airport config (see Guide 08 and `docs/CONFIGURATION.md`).
+
 ### Weather station
 Place it where it reflects **field conditions** (not sheltered, not heat-soaked), while staying safe and permitted.
 

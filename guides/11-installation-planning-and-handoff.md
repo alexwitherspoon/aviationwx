@@ -125,6 +125,7 @@ Recommended spares:
 - ☐ Identify the primary local maintainer and a backup contact
 - ☐ Document how to access equipment (keys, escort rules, contact numbers)
 - ☐ Document how to verify the system is healthy (simple "green checks")
+- ☐ Record **approximate heading** per camera after mount (true north, 0-360; Guide 02)
 - ☐ Document how to reboot safely (what to power-cycle first)
 - ☐ Document who pays for ongoing costs (LTE plan, Starlink, etc.)
 - ☐ Store credentials and configuration in a shared, controlled location
@@ -133,7 +134,7 @@ Recommended spares:
 ### Minimal documentation template (copy/paste)
 - **Airport:** ________
 - **Location(s):** ________
-- **Cameras:** CAM1 (model) ________ / CAM2 ________ / …
+- **Cameras:** CAM1 (model) ________ heading: ___ / CAM2 ________ heading: ___ / …
 - **Weather station:** ________
 - **Power:** ________
 - **Internet:** ________

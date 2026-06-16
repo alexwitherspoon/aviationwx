@@ -74,7 +74,8 @@
       "webcams": [
         {
           "name": "Test Camera 1",
-          "url": "https://example.com/cam1.jpg"
+          "url": "https://example.com/cam1.jpg",
+          "approximate_heading": 318
         }
       ],
       "runways": [

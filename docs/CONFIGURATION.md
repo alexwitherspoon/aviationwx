@@ -155,6 +155,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 |--------|---------|-------------|
 | **Common** |||
 | `name` | - | Display name |
+| `approximate_heading` | - | **Required** when the airport is `enabled: true` and not in `maintenance`. Integer **0**-**360**: direction the camera lens points, in **true north** degrees. Optional on maintenance or disabled airports until commissioned. Aim within ±10° when measuring (operational target, not validated). See [Guide 02](../guides/02-location-and-siting.md) (how to measure) and [Guide 08](../guides/08-camera-configuration.md) (installer checklist). |
 | `enabled` | `true` | When `false`, the slot stays in config/UI but acquisition fields such as `url`, `push_config`, and `base_url` are not required and workers do not run for this camera |
 | **Conditional** |||
 | `url` | - | Stream/image URL for pull types (`http` / `mjpeg` / `static_jpeg` / `static_png` / `rtsp`). Not used for `push` (credentials live under `push_config`) or for `aviationwx_api` (use `base_url`). Omit for `enabled: false` placeholders. |

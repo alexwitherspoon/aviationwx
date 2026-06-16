@@ -213,45 +213,52 @@
         {
           "name": "North Runway Camera (MJPEG)",
           "url": "https://example.com/video.mjpg",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 318
         },
         {
           "name": "South Runway Camera (MJPEG Auth)",
           "url": "https://example.com/mjpg/stream",
           "type": "mjpeg",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 210
         },
         {
           "name": "West Camera (Static JPEG)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
-          "refresh_seconds": 120
+          "refresh_seconds": 120,
+          "approximate_heading": 270
         },
         {
           "name": "East Camera (Static JPEG Auth)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 90
         },
         {
           "name": "North-East Camera (Static PNG)",
           "url": "https://example.com/webcam.png",
           "type": "static_png",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 45
         },
         {
           "name": "Runway Camera (RTSP Basic)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 152
         },
         {
           "name": "Tower Camera (RTSP Auth)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 180
         },
         {
           "name": "Hangar Camera (RTSP Advanced)",
@@ -261,21 +268,24 @@
           "rtsp_fetch_timeout": 10,
           "rtsp_max_runtime": 6,
           "transcode_timeout": 8,
-          "refresh_seconds": 30
+          "refresh_seconds": 30,
+          "approximate_heading": 270
         },
         {
           "name": "Field Camera (RTSP UDP)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "udp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 90
         },
         {
           "name": "UniFi Protect Camera (Local RTSP)",
           "url": "rtsp://192.168.1.1:7447/FKEFbCxO0CiAF3TH",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 315
         },
         {
           "name": "UniFi Protect Camera (Shared RTSPS)",
@@ -285,19 +295,22 @@
           "rtsp_fetch_timeout": 10,
           "rtsp_max_runtime": 6,
           "transcode_timeout": 8,
-          "refresh_seconds": 30
+          "refresh_seconds": 30,
+          "approximate_heading": 135
         },
         {
           "name": "Private Network Camera (RTSP)",
           "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 225
         },
         {
           "name": "Push Camera (Basic)",
           "type": "push",
           "refresh_seconds": 60,
+          "approximate_heading": 0,
           "push_config": {
             "username": "kspbCam0Push01",
             "password": "SecurePass1234",
@@ -309,6 +322,7 @@
           "name": "Push Camera (Full Config)",
           "type": "push",
           "refresh_seconds": 60,
+          "approximate_heading": 180,
           "push_config": {
             "username": "kspbCam1Push02",
             "password": "AnotherPass5678",
@@ -320,6 +334,7 @@
           "name": "Push Camera (Large Files)",
           "type": "push",
           "refresh_seconds": 120,
+          "approximate_heading": 90,
           "push_config": {
             "username": "kspbCam2Push03",
             "password": "SecurePass9012",
@@ -474,8 +489,8 @@
       "frequencies": {"ctaf": "122.9"},
       "services": {"repairs_available": false},
       "webcams": [
-        {"name": "North - POE", "url": "https://example.com/north.jpg"},
-        {"name": "South - POE", "url": "https://example.com/south.jpg"}
+        {"name": "North - POE", "url": "https://example.com/north.jpg", "approximate_heading": 0},
+        {"name": "South - POE", "url": "https://example.com/south.jpg", "approximate_heading": 180}
       ],
       "partners": [],
       "weather_sources": [],

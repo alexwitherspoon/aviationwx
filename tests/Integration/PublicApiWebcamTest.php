@@ -473,4 +473,79 @@ class PublicApiWebcamTest extends TestCase
         $this->assertEquals(count($frames), $frameCount,
             'Frame count in meta should match actual frames array length');
     }
+
+    /**
+     * GET /v1/airports/{id}/webcams returns approximate_heading on active airports.
+     */
+    public function testListWebcams_IncludesApproximateHeadingOnActiveAirport(): void
+    {
+        $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams');
+
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+
+        if ($response['status'] === 429) {
+            $this->markTestSkipped('Rate limited - test requires API key');
+        }
+
+        $this->assertEquals(200, $response['status'], 'Webcam list should return 200');
+
+        $data = $response['json'];
+        $this->assertTrue($data['success'] ?? false);
+        $webcams = $data['webcams'] ?? [];
+        $this->assertNotEmpty($webcams, 'kspb fixture should have webcams');
+
+        foreach ($webcams as $webcam) {
+            $this->assertArrayHasKey('approximate_heading', $webcam);
+            $this->assertArrayNotHasKey('approximate_heading_reference', $webcam);
+            $this->assertIsInt($webcam['approximate_heading']);
+            $this->assertArrayHasKey('image_url', $webcam);
+        }
+    }
+
+    /**
+     * Maintenance airports may return null approximate_heading when not configured.
+     */
+    public function testListWebcams_NullHeadingOnMaintenanceAirport(): void
+    {
+        $response = $this->apiRequest('/airports/pdx/webcams');
+
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+
+        if ($response['status'] === 429) {
+            $this->markTestSkipped('Rate limited - test requires API key');
+        }
+
+        $this->assertEquals(200, $response['status']);
+
+        $webcams = $response['json']['webcams'] ?? [];
+        $this->assertNotEmpty($webcams);
+
+        foreach ($webcams as $webcam) {
+            $this->assertArrayHasKey('approximate_heading', $webcam);
+            $this->assertArrayNotHasKey('approximate_heading_reference', $webcam);
+            $this->assertNull($webcam['approximate_heading']);
+        }
+    }
+
+    /**
+     * Disabled airports are not served by the Public API.
+     */
+    public function testListWebcams_DisabledAirportReturns404(): void
+    {
+        $response = $this->apiRequest('/airports/ksea/webcams');
+
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+
+        if ($response['status'] === 429) {
+            $this->markTestSkipped('Rate limited - test requires API key');
+        }
+
+        $this->assertEquals(404, $response['status']);
+    }
 }

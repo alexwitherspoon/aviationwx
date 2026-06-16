@@ -95,6 +95,30 @@ function formatWebcamMetadata(string $airportId, int $index, array $webcam, arra
             ? '/v1/airports/' . $airportId . '/webcams/' . $index . '/history'
             : null,
         'refresh_seconds' => $refreshSeconds,
+        'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
     ];
+}
+
+/**
+ * Resolve approximate_heading for Public API output without unsafe coercion.
+ *
+ * Config validation requires integer 0-360, but runtime config may be stale or
+ * hand-edited. Reject non-integers and out-of-range values rather than casting.
+ *
+ * @param array $webcam Webcam configuration
+ * @return int|null Heading degrees, or null when omitted or invalid
+ */
+function formatWebcamApproximateHeadingForApi(array $webcam): ?int
+{
+    if (!array_key_exists('approximate_heading', $webcam)) {
+        return null;
+    }
+
+    $heading = $webcam['approximate_heading'];
+    if (!is_int($heading) || $heading < 0 || $heading > 360) {
+        return null;
+    }
+
+    return $heading;
 }
 

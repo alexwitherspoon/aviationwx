@@ -346,7 +346,8 @@ Example single-airport config:
           "name": "Runway 27",
           "url": "rtsp://camera.local/stream1",
           "type": "rtsp",
-          "refresh_seconds": 60
+          "refresh_seconds": 60,
+          "approximate_heading": 270
         }
       ]
     }
