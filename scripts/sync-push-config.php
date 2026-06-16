@@ -1012,7 +1012,19 @@ function writeVsftpdVirtualUsersFile(array $users, string $path = '/etc/vsftpd/v
         $content .= $user . "\n" . $pass . "\n";
     }
 
-    return @file_put_contents($path, $content) !== false;
+    $dir = dirname($path);
+    $tmpPath = $dir . '/.' . basename($path) . '.tmp.' . getmypid();
+    if (@file_put_contents($tmpPath, $content, LOCK_EX) === false) {
+        @unlink($tmpPath);
+        return false;
+    }
+
+    if (!@rename($tmpPath, $path)) {
+        @unlink($tmpPath);
+        return false;
+    }
+
+    return true;
 }
 
 /**
