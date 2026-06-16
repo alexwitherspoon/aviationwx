@@ -172,10 +172,15 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertIsString($contents);
         $this->assertStringContainsString('wait_for_push_config_sync', $contents);
         $this->assertStringContainsString('FTP/SFTP/FTPS configuration synced successfully', $contents);
-        $this->assertStringContainsString(
-            "log_probe_runner \"upload-probe-runner started\"\nwait_for_push_config_sync\n\nwhile true; do",
-            $contents
-        );
+
+        $startedPos = strpos($contents, 'log_probe_runner "upload-probe-runner started"');
+        $waitPos = strpos($contents, 'wait_for_push_config_sync');
+        $loopPos = strpos($contents, 'while true; do');
+        $this->assertNotFalse($startedPos);
+        $this->assertNotFalse($waitPos);
+        $this->assertNotFalse($loopPos);
+        $this->assertLessThan($waitPos, $loopPos, 'wait must run before probe loop');
+        $this->assertLessThan($startedPos, $waitPos, 'runner start log must precede sync wait');
     }
 
     public function testUploadProbeScript_EnsuresLoopbackSftpKnownHosts(): void
