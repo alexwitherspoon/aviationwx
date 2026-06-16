@@ -182,8 +182,10 @@ function validateUniquePushUsernames($config) {
                 $normalized = strtolower($username);
                 
                 if (isset($usernames[$normalized])) {
-                    $duplicates[$username][] = $key;
-                    $duplicates[$username][] = $usernames[$normalized];
+                    if (!isset($duplicates[$normalized])) {
+                        $duplicates[$normalized] = [$usernames[$normalized]];
+                    }
+                    $duplicates[$normalized][] = $key;
                 } else {
                     $usernames[$normalized] = $key;
                 }
@@ -192,8 +194,8 @@ function validateUniquePushUsernames($config) {
     }
     
     if (!empty($duplicates)) {
-        foreach ($duplicates as $username => $keys) {
-            $errors[] = "Duplicate username '{$username}' found in cameras: " . implode(', ', array_unique($keys));
+        foreach ($duplicates as $normalized => $keys) {
+            $errors[] = "Duplicate username '{$normalized}' found in cameras: " . implode(', ', array_unique($keys));
         }
     }
     
