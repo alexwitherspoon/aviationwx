@@ -1361,8 +1361,6 @@
                 "index",
                 "name",
                 "image_url",
-                "history_enabled",
-                "history_url",
                 "refresh_seconds",
                 "approximate_heading"
               ],
@@ -1378,11 +1376,12 @@
                 },
                 "history_url": {
                   "type": "string",
-                  "nullable": true,
-                  "description": "URL to webcam history endpoint (null if history disabled)"
+                  "description": "URL to webcam history endpoint. Present only when webcam history retention is greater than zero for this airport (airport-specific, global, or default setting)."
                 },
                 "history_enabled": {
-                  "type": "boolean"
+                  "type": "boolean",
+                  "enum": [true],
+                  "description": "Present and true when webcam history retention is greater than zero for this airport."
                 },
                 "refresh_seconds": {
                   "type": "integer"

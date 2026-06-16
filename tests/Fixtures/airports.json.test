@@ -113,6 +113,7 @@
       "name": "Portland International Airport",
       "enabled": true,
       "maintenance": true,
+      "webcam_history_retention_hours": 0,
       "icao": "KPDX",
       "iata": "PDX",
       "faa": "PDX",

@@ -1613,15 +1613,16 @@ function getWebcamHistoryRetentionHours(string $airportId): float {
     }
     
     $airport = $config['airports'][$airportId] ?? [];
+    $globalConfig = $config['config'] ?? [];
     
     // New config: webcam_history_retention_hours (takes precedence)
     if (isset($airport['webcam_history_retention_hours'])) {
         return (float)$airport['webcam_history_retention_hours'];
     }
     
-    // Check global new config
-    if (isset($config['webcam_history_retention_hours'])) {
-        return (float)$config['webcam_history_retention_hours'];
+    // Check global new config (config.webcam_history_retention_hours)
+    if (isset($globalConfig['webcam_history_retention_hours'])) {
+        return (float) $globalConfig['webcam_history_retention_hours'];
     }
     
     // Legacy config: webcam_history_max_frames (convert to hours)
@@ -1635,10 +1636,10 @@ function getWebcamHistoryRetentionHours(string $airportId): float {
         return ($maxFrames * $refreshSeconds) / 3600;
     }
     
-    // Check global legacy config
-    if (isset($config['webcam_history_max_frames'])) {
+    // Check global legacy config (config.webcam_history_max_frames)
+    if (isset($globalConfig['webcam_history_max_frames'])) {
         aviationwx_log('warning', 'Deprecated config: webcam_history_max_frames - use webcam_history_retention_hours instead');
-        $maxFrames = (int)$config['webcam_history_max_frames'];
+        $maxFrames = (int) $globalConfig['webcam_history_max_frames'];
         $refreshSeconds = getWebcamRefreshSecondsForAirport($airportId);
         return ($maxFrames * $refreshSeconds) / 3600;
     }
@@ -1659,15 +1660,16 @@ function getWebcamHistoryDefaultHours(string $airportId): int {
     }
     
     $airport = $config['airports'][$airportId] ?? [];
+    $globalConfig = $config['config'] ?? [];
     
     // Airport-specific
     if (isset($airport['webcam_history_default_hours'])) {
         return (int)$airport['webcam_history_default_hours'];
     }
     
-    // Global
-    if (isset($config['webcam_history_default_hours'])) {
-        return (int)$config['webcam_history_default_hours'];
+    // Global (config.webcam_history_default_hours)
+    if (isset($globalConfig['webcam_history_default_hours'])) {
+        return (int) $globalConfig['webcam_history_default_hours'];
     }
     
     return WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT;
@@ -1686,6 +1688,7 @@ function getWebcamHistoryPresetHours(string $airportId): array {
     }
     
     $airport = $config['airports'][$airportId] ?? [];
+    $globalConfig = $config['config'] ?? [];
     
     // Airport-specific
     if (isset($airport['webcam_history_preset_hours']) && is_array($airport['webcam_history_preset_hours'])) {
@@ -1694,9 +1697,9 @@ function getWebcamHistoryPresetHours(string $airportId): array {
         return $presets;
     }
     
-    // Global
-    if (isset($config['webcam_history_preset_hours']) && is_array($config['webcam_history_preset_hours'])) {
-        $presets = array_map('intval', $config['webcam_history_preset_hours']);
+    // Global (config.webcam_history_preset_hours)
+    if (isset($globalConfig['webcam_history_preset_hours']) && is_array($globalConfig['webcam_history_preset_hours'])) {
+        $presets = array_map('intval', $globalConfig['webcam_history_preset_hours']);
         sort($presets);
         return $presets;
     }

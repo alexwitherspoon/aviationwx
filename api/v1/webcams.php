@@ -86,17 +86,20 @@ function formatWebcamMetadata(string $airportId, int $index, array $webcam, arra
         ?? $airport['webcam_refresh_seconds'] 
         ?? 60;
     
-    return [
+    $metadata = [
         'index' => $index,
         'name' => $webcam['name'] ?? 'Camera ' . ($index + 1),
         'image_url' => '/v1/airports/' . $airportId . '/webcams/' . $index . '/image',
-        'history_enabled' => $historyEnabled,
-        'history_url' => $historyEnabled 
-            ? '/v1/airports/' . $airportId . '/webcams/' . $index . '/history'
-            : null,
         'refresh_seconds' => $refreshSeconds,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
     ];
+
+    if ($historyEnabled) {
+        $metadata['history_enabled'] = true;
+        $metadata['history_url'] = '/v1/airports/' . $airportId . '/webcams/' . $index . '/history';
+    }
+
+    return $metadata;
 }
 
 /**
