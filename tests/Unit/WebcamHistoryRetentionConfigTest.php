@@ -80,6 +80,50 @@ class WebcamHistoryRetentionConfigTest extends TestCase
         }
     }
 
+    public function testGetWebcamHistoryDefaultHours_HonorsGlobalConfigBlock(): void
+    {
+        $tmp = $this->writeTempConfig([
+            'config' => [
+                'base_domain' => 'example.org',
+                'webcam_history_default_hours' => 6,
+            ],
+            'airports' => [
+                'kspb' => [
+                    'enabled' => true,
+                    'webcams' => [['name' => 'Cam', 'url' => 'https://example.com/cam.jpg']],
+                ],
+            ],
+        ]);
+
+        try {
+            $this->assertSame(6, getWebcamHistoryDefaultHours('kspb'));
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    public function testGetWebcamHistoryPresetHours_HonorsGlobalConfigBlock(): void
+    {
+        $tmp = $this->writeTempConfig([
+            'config' => [
+                'base_domain' => 'example.org',
+                'webcam_history_preset_hours' => [2, 4, 8],
+            ],
+            'airports' => [
+                'kspb' => [
+                    'enabled' => true,
+                    'webcams' => [['name' => 'Cam', 'url' => 'https://example.com/cam.jpg']],
+                ],
+            ],
+        ]);
+
+        try {
+            $this->assertSame([2, 4, 8], getWebcamHistoryPresetHours('kspb'));
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
     private function clearConfigCache(): void
     {
         if (function_exists('clearConfigCache')) {
