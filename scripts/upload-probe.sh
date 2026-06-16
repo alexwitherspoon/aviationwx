@@ -117,7 +117,8 @@ vsftpd_ssl_enabled() {
     return 1
 }
 
-run_ftps_probe() {
+# FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
+run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
     local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail
     local -a curl_tls_args=()
@@ -247,7 +248,7 @@ main() {
     sftp_skipped="false"
 
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
-        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftps_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
+        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftp_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
         log_probe "INFO" "FTPS probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
         if [ "$ftps_ok" != "true" ]; then
             log_upload_health_app "error" "FTPS upload health probe failed" \
