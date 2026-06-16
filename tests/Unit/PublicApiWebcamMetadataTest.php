@@ -62,12 +62,16 @@ class PublicApiWebcamMetadataTest extends TestCase
         self::loadFormatWebcamMetadata();
 
         $airport = ['enabled' => true, 'maintenance' => false];
-        $webcam = ['name' => 'Camera'];
+        $webcam = [
+            'name' => 'Camera',
+            'approximate_heading' => 318,
+        ];
 
         $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
 
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
+        $this->assertSame(318, $formatted['approximate_heading']);
         $this->assertArrayHasKey('image_url', $formatted);
         $this->assertSame('/v1/airports/kspb/webcams/0/image', $formatted['image_url']);
     }
