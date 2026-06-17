@@ -465,6 +465,47 @@ function deduplicateBannerNotams(array $notams): array
 }
 
 /**
+ * Restriction start used for banner display ordering at $nowUnix.
+ *
+ * Uses the next EFFECTIVE window for scheduled gaps; otherwise the earliest future start.
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @param int $nowUnix Current Unix time
+ */
+function notamBannerSortableRestrictionStartUnix(array &$notam, int $nowUnix): int
+{
+    $status = (string) ($notam['status'] ?? '');
+    if ($status === 'inactive_scheduled') {
+        $nextUtc = notamNextRestrictionStartUtc($notam, $nowUnix);
+        if ($nextUtc !== null && $nextUtc !== '') {
+            $nextTs = strtotime($nextUtc);
+            if ($nextTs !== false && $nextTs > 0) {
+                return $nextTs;
+            }
+        }
+    }
+
+    $firstStart = notamFirstRestrictionStartUnix($notam);
+    if ($firstStart !== null && $firstStart > $nowUnix) {
+        return $firstStart;
+    }
+
+    if ($status === 'active') {
+        return $nowUnix;
+    }
+
+    $nextUtc = notamNextRestrictionStartUtc($notam, $nowUnix);
+    if ($nextUtc !== null && $nextUtc !== '') {
+        $nextTs = strtotime($nextUtc);
+        if ($nextTs !== false && $nextTs > 0) {
+            return $nextTs;
+        }
+    }
+
+    return $firstStart ?? $nowUnix;
+}
+
+/**
  * Sort key for banner selection (lower = higher priority).
  *
  * @param array<string, mixed> $notam Enriched NOTAM row
@@ -478,10 +519,7 @@ function notamBannerSelectionSortKey(array $notam, int $nowUnix): array
     $statusPri = NOTAM_BANNER_STATUS_PRIORITY[$status] ?? 99;
     $scopePri = NOTAM_BANNER_SCOPE_PRIORITY[$scope] ?? 99;
 
-    $nextStart = notamFirstRestrictionStartUnix($notam);
-    if ($nextStart === null || $nextStart <= $nowUnix) {
-        $nextStart = $nowUnix;
-    }
+    $nextStart = notamBannerSortableRestrictionStartUnix($notam, $nowUnix);
 
     return [$statusPri, $scopePri, $nextStart];
 }
@@ -489,7 +527,7 @@ function notamBannerSelectionSortKey(array $notam, int $nowUnix): array
 /**
  * Sort banner NOTAM rows for stable dashboard display (all deduplicated rows returned).
  *
- * Order: status priority, then scope priority, then nearest restriction start.
+ * Order: status priority, then scope priority, then nearest upcoming restriction start.
  *
  * @param array<int, array<string, mixed>> $notams Deduplicated rows with banner fields
  * @param int $nowUnix Current Unix time

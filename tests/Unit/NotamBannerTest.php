@@ -148,6 +148,50 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('fp-future', $sorted[1]['banner_event_fingerprint']);
     }
 
+    public function testSortBannerNotamsForDisplay_OrdersInactiveScheduledByNextWindow(): void
+    {
+        $now = strtotime('2026-06-17T16:00:00Z');
+        $soonerGap = [
+            'status' => 'inactive_scheduled',
+            'banner_scope' => 'runway',
+            'banner_category' => 'full_closure',
+            'text' => 'RWY 15/33 CLSD',
+            'effective_segments' => [
+                [
+                    'start_time_utc' => '2026-06-17T10:00:00Z',
+                    'end_time_utc' => '2026-06-17T14:00:00Z',
+                ],
+                [
+                    'start_time_utc' => '2026-06-17T20:00:00Z',
+                    'end_time_utc' => '2026-06-18T05:00:00Z',
+                ],
+            ],
+            'banner_event_fingerprint' => 'fp-sooner',
+        ];
+        $laterGap = [
+            'status' => 'inactive_scheduled',
+            'banner_scope' => 'runway',
+            'banner_category' => 'full_closure',
+            'text' => 'RWY 15/33 CLSD',
+            'effective_segments' => [
+                [
+                    'start_time_utc' => '2026-06-17T08:00:00Z',
+                    'end_time_utc' => '2026-06-17T12:00:00Z',
+                ],
+                [
+                    'start_time_utc' => '2026-06-18T14:00:00Z',
+                    'end_time_utc' => '2026-06-19T05:00:00Z',
+                ],
+            ],
+            'banner_event_fingerprint' => 'fp-later',
+        ];
+
+        $sorted = sortBannerNotamsForDisplay([$laterGap, $soonerGap], $now);
+
+        $this->assertSame('fp-sooner', $sorted[0]['banner_event_fingerprint']);
+        $this->assertSame('fp-later', $sorted[1]['banner_event_fingerprint']);
+    }
+
     public function testSortBannerNotamsForDisplay_ReturnsAllDistinctDedupedRows(): void
     {
         $now = time();
