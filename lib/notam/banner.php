@@ -339,6 +339,19 @@ function notamBannerBuildAirspaceHeadline(string $category, string $text): strin
  */
 function notamBannerBuildScheduleLine(array &$notam, string $status, string $timezone, int $nowUnix): string
 {
+    if ($status === 'inactive_scheduled') {
+        $next = notamNextRestrictionStartUtc($notam, $nowUnix);
+        if ($next !== null && $next !== '') {
+            $ts = strtotime($next);
+            if ($ts !== false && $ts > $nowUnix) {
+                return 'Not active now - next window '
+                    . notamTfrMapLayerFormatLocalDateTimeForTooltip($ts, $timezone);
+            }
+        }
+
+        return 'Not active now - see NOTAM for schedule';
+    }
+
     $fromMap = notamTfrMapLayerTooltipStatusLine($notam, $status, $timezone, $nowUnix);
     if ($fromMap !== null && $fromMap !== '') {
         return $fromMap;
@@ -361,19 +374,6 @@ function notamBannerBuildScheduleLine(array &$notam, string $status, string $tim
         }
 
         return 'Active now';
-    }
-
-    if ($status === 'inactive_scheduled') {
-        $next = notamNextRestrictionStartUtc($notam, $nowUnix);
-        if ($next !== null && $next !== '') {
-            $ts = strtotime($next);
-            if ($ts !== false && $ts > $nowUnix) {
-                return 'Not active now - next window '
-                    . notamTfrMapLayerFormatLocalDateTimeForTooltip($ts, $timezone);
-            }
-        }
-
-        return 'Not active now - see NOTAM for schedule';
     }
 
     $start = notamFirstRestrictionStartUnix($notam);

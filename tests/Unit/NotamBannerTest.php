@@ -119,6 +119,31 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('A3389/2026', $deduped[0]['id']);
     }
 
+    public function testNotamBannerBuildScheduleLine_InactiveScheduled_UsesNextWindowPhrasing(): void
+    {
+        $notam = [
+            'effective_segments' => [
+                [
+                    'start_time_utc' => '2026-06-17T10:00:00Z',
+                    'end_time_utc' => '2026-06-17T14:00:00Z',
+                ],
+                [
+                    'start_time_utc' => '2026-06-17T20:00:00Z',
+                    'end_time_utc' => '2026-06-18T05:00:00Z',
+                ],
+            ],
+        ];
+        $line = notamBannerBuildScheduleLine(
+            $notam,
+            'inactive_scheduled',
+            'America/Los_Angeles',
+            strtotime('2026-06-17T16:00:00Z')
+        );
+
+        $this->assertStringStartsWith('Not active now - next window', $line);
+        $this->assertStringNotContainsString('Upcoming from', $line);
+    }
+
     public function testSortBannerNotamsForDisplay_TodayBeforeFuture_OrdersByStatus(): void
     {
         $now = strtotime('2026-06-17T12:00:00Z');
