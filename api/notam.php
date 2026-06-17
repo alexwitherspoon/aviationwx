@@ -154,12 +154,12 @@ foreach ($notams as $notam) {
     $bannerCandidates[] = $notam;
 }
 
-$selectedForBanner = notamPrepareDashboardBannerRows($bannerCandidates, $airport, $timezone, $nowUnix);
+$bannerRows = notamPrepareDashboardBannerRows($bannerCandidates, $airport, $timezone, $nowUnix);
 
-// Format selected NOTAMs for frontend (add local times, official links, banner headlines)
+// Format deduplicated banner NOTAMs for frontend (add local times, official links, banner headlines)
 $formattedNotams = [];
 
-foreach ($selectedForBanner as $notam) {
+foreach ($bannerRows as $notam) {
     $currentStatus = (string) ($notam['status'] ?? revalidateNotamStatus($notam, $timezone));
     $startTimeUtc = $notam['start_time_utc'] ?? '';
     $endTimeUtc = $notam['end_time_utc'] ?? null;

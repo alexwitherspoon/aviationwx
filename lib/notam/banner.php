@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Dashboard NOTAM banner taxonomy, headlines, deduplication, and selection.
+ * Dashboard NOTAM banner taxonomy, headlines, deduplication, and display ordering.
  *
  * Full NOTAM text is always retained for safety; headlines are visual cues only.
  */
@@ -487,16 +487,15 @@ function notamBannerSelectionSortKey(array $notam, int $nowUnix): array
 }
 
 /**
- * Select up to two NOTAM rows for the dashboard banner.
+ * Sort banner NOTAM rows for stable dashboard display (all deduplicated rows returned).
  *
- * Primary is the highest-priority current or next event. Secondary appears only when
- * scope differs from primary (e.g. runway closure plus nearby TFR).
+ * Order: status priority, then scope priority, then nearest restriction start.
  *
  * @param array<int, array<string, mixed>> $notams Deduplicated rows with banner fields
  * @param int $nowUnix Current Unix time
  * @return array<int, array<string, mixed>>
  */
-function selectNotamsForDashboardBanner(array $notams, int $nowUnix): array
+function sortBannerNotamsForDisplay(array $notams, int $nowUnix): array
 {
     if ($notams === []) {
         return [];
@@ -509,29 +508,19 @@ function selectNotamsForDashboardBanner(array $notams, int $nowUnix): array
         return $ka <=> $kb;
     });
 
-    $primary = $notams[0];
-    $selected = [$primary];
-    $primaryScope = (string) ($primary['banner_scope'] ?? '');
-
-    foreach (array_slice($notams, 1) as $candidate) {
-        $candidateScope = (string) ($candidate['banner_scope'] ?? '');
-        if ($candidateScope !== $primaryScope) {
-            $selected[] = $candidate;
-            break;
-        }
-    }
-
-    return $selected;
+    return $notams;
 }
 
 /**
- * Enrich, deduplicate, and select dashboard banner NOTAMs.
+ * Enrich, deduplicate, and sort dashboard banner NOTAMs.
+ *
+ * Returns every banner-eligible row after event deduplication (no row cap).
  *
  * @param array<int, array<string, mixed>> $notams Filtered cache rows (notam_type set)
  * @param array<string, mixed> $airport Airport configuration
  * @param string $timezone Airport IANA timezone
  * @param int $nowUnix Current Unix time
- * @return array<int, array<string, mixed>> Up to two rows for the banner API
+ * @return array<int, array<string, mixed>> Deduped rows for the banner API
  */
 function notamPrepareDashboardBannerRows(
     array $notams,
@@ -559,5 +548,5 @@ function notamPrepareDashboardBannerRows(
 
     $deduped = deduplicateBannerNotams($enriched);
 
-    return selectNotamsForDashboardBanner($deduped, $nowUnix);
+    return sortBannerNotamsForDisplay($deduped, $nowUnix);
 }

@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../lib/notam/filter.php';
 require_once __DIR__ . '/../../lib/notam/banner.php';
 
 /**
- * Dashboard NOTAM banner taxonomy, deduplication, and selection.
+ * Dashboard NOTAM banner taxonomy, deduplication, and display ordering.
  */
 final class NotamBannerTest extends TestCase
 {
@@ -119,7 +119,7 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('A3389/2026', $deduped[0]['id']);
     }
 
-    public function testSelectNotamsForDashboardBanner_PrefersUpcomingTodayOverFutureSeries(): void
+    public function testSortBannerNotamsForDisplay_OrdersByStatusThenScope(): void
     {
         $now = strtotime('2026-06-17T12:00:00Z');
         $today = [
@@ -141,13 +141,14 @@ final class NotamBannerTest extends TestCase
             'banner_event_fingerprint' => 'fp-future',
         ];
 
-        $selected = selectNotamsForDashboardBanner([$future, $today], $now);
+        $sorted = sortBannerNotamsForDisplay([$future, $today], $now);
 
-        $this->assertCount(1, $selected);
-        $this->assertSame('fp-today', $selected[0]['banner_event_fingerprint']);
+        $this->assertCount(2, $sorted);
+        $this->assertSame('fp-today', $sorted[0]['banner_event_fingerprint']);
+        $this->assertSame('fp-future', $sorted[1]['banner_event_fingerprint']);
     }
 
-    public function testSelectNotamsForDashboardBanner_AllowsSecondRowWhenScopeDiffers(): void
+    public function testSortBannerNotamsForDisplay_ReturnsAllDistinctDedupedRows(): void
     {
         $now = time();
         $runway = [
@@ -169,14 +170,14 @@ final class NotamBannerTest extends TestCase
             'banner_event_fingerprint' => 'tfr-fp',
         ];
 
-        $selected = selectNotamsForDashboardBanner([$tfr, $runway], $now);
+        $sorted = sortBannerNotamsForDisplay([$tfr, $runway], $now);
 
-        $this->assertCount(2, $selected);
-        $this->assertSame('runway', $selected[0]['banner_scope']);
-        $this->assertSame('airspace', $selected[1]['banner_scope']);
+        $this->assertCount(2, $sorted);
+        $this->assertSame('runway', $sorted[0]['banner_scope']);
+        $this->assertSame('airspace', $sorted[1]['banner_scope']);
     }
 
-    public function testPrepareDashboardBannerRows_S83LikePairCollapsesToOne(): void
+    public function testPrepareDashboardBannerRows_S83LikeDedupesPairsKeepsDistinctEvents(): void
     {
         $airport = ['icao' => 'KS83', 'faa' => 'S83', 'name' => 'Shoshone County', 'lat' => 47.49, 'lon' => -115.87];
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
@@ -209,11 +210,13 @@ final class NotamBannerTest extends TestCase
             ],
         ];
 
-        $selected = notamPrepareDashboardBannerRows($notams, $airport, 'America/Los_Angeles', time());
+        $rows = notamPrepareDashboardBannerRows($notams, $airport, 'America/Los_Angeles', time());
 
-        $this->assertCount(1, $selected);
-        $this->assertSame('airspace', $selected[0]['banner_scope']);
-        $this->assertStringContainsString('Fire TFR', $selected[0]['banner_headline']);
-        $this->assertNotEmpty($selected[0]['banner_schedule_line']);
+        $this->assertCount(2, $rows);
+        $this->assertSame('upcoming_today', $rows[0]['status']);
+        $this->assertStringContainsString('Fire TFR', $rows[0]['banner_headline']);
+        $this->assertSame('upcoming_future', $rows[1]['status']);
+        $this->assertStringContainsString('Daily fire TFR', $rows[1]['banner_headline']);
+        $this->assertNotEmpty($rows[0]['banner_schedule_line']);
     }
 }

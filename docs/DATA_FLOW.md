@@ -1548,7 +1548,7 @@ Each NOTAM is classified by temporal status (`classifyNotamDisplayStatusAt()` in
 
 **Cache filter** (`notamIsBannerRelevantStatus()`): retains `active`, `inactive_scheduled`, `upcoming_today`, and `upcoming_future` rows whose first window is within `NOTAM_BANNER_UPCOMING_FUTURE_HORIZON_SECONDS` (48 hours).
 
-**Serve filter** (`api/notam.php`): drops `expired` and `unknown`; returns the same banner-eligible statuses as the cache (re-validated at request time).
+**Serve filter** (`api/notam.php`): drops `expired` and `unknown`; returns the same banner-eligible statuses as the cache (re-validated at request time). Serve-time **event deduplication** (`deduplicateBannerNotams()` in `lib/notam/banner.php`) merges paired NOTAM rows for the same restriction (for example A-series and numeric ids for one fire TFR) before the API responds; there is no row cap after dedup.
 
 **Dashboard banners** (`pages/airport.php`): red **ACTIVE**, purple **SCHEDULED BREAK**, orange **UPCOMING** for `upcoming_today` and `upcoming_future`.
 
@@ -1716,7 +1716,8 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 #### NOTAM Content
 - **ID**: NOTAM identifier with link to official FAA source when `id` is present
 - **Status labels**: ACTIVE NOTAM, SCHEDULED BREAK, or UPCOMING NOTAM
-- **Message**: Full NOTAM text (all matching rows shown; no collapse)
+- **Headline**: Short parsed summary (`banner_headline`) plus schedule line; full NOTAM text remains below
+- **Message**: Full NOTAM text (all deduplicated matching rows shown; no collapse)
 - **Effective Times**: Envelope or segment window times in airport local timezone
 
 #### Visual Indicators
