@@ -1612,12 +1612,14 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
 4. Emit a GeoJSON Feature per row: polygon outer ring from decoded vertices, or a Point + `radius_nm` for circle TFRs (client draws `L.circle` in meters).
 5. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
 
-   | Priority | Status |
-   |----------|--------|
-   | 1 (wins) | `active` |
-   | 2 | `inactive_scheduled` |
-   | 3 | `upcoming_today` |
-   | 4 | `upcoming_future` |
+   | Rank (`NOTAM_TFR_MAP_STATUS_PRIORITY`) | Status |
+   |----------------------------------------|--------|
+   | 0 (wins) | `active` |
+   | 1 | `inactive_scheduled` |
+   | 2 | `upcoming_today` |
+   | 3 | `upcoming_future` |
+
+   Lower rank wins (`notamTfrMapLayerStatusPriority()`).
 
    Equal-priority ties break on lower `notam_id` (lexicographic). This is **not** the dashboard banner event fingerprint (`notamBannerEventFingerprint()`): map keys use rounded circle center + radius, or polygon ring vertices in ring order, so paired A/numeric NOTAMs and same-shape upcoming series merge for display only.
 
