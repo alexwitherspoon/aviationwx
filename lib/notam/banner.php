@@ -204,9 +204,11 @@ function notamBannerEventFingerprint(array $notam, array $airport): string
     $text = (string) ($notam['text'] ?? '');
 
     $airportKey = strtolower((string) ($airport['icao'] ?? $airport['faa'] ?? $airport['iata'] ?? ''));
+    $startKey = trim((string) ($notam['start_time_utc'] ?? ''));
+    $endKey = trim((string) ($notam['end_time_utc'] ?? ''));
 
     if ($scope === 'aerodrome') {
-        return 'aerodrome|' . $airportKey . '|' . $category;
+        return 'aerodrome|' . $airportKey . '|' . $category . '|' . $startKey . '|' . $endKey;
     }
 
     if ($scope === 'runway') {
@@ -215,7 +217,7 @@ function notamBannerEventFingerprint(array $notam, array $airport): string
             ? substr(sha1(strtoupper($text)), 0, 12)
             : 'full';
 
-        return 'runway|' . $airportKey . '|' . $rwy . '|' . $partial;
+        return 'runway|' . $airportKey . '|' . $rwy . '|' . $partial . '|' . $startKey . '|' . $endKey;
     }
 
     if ($scope === 'airspace') {

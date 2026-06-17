@@ -119,6 +119,45 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('A3389/2026', $deduped[0]['id']);
     }
 
+    public function testDeduplicateBannerNotams_DifferentRunwayClosureWindows_KeepsBothRows(): void
+    {
+        $airport = $this->kspbAirport();
+        $base = [
+            'notam_type' => 'aerodrome_closure',
+            'text' => 'RWY 15/33 CLSD',
+            'banner_scope' => 'runway',
+            'banner_category' => 'full_closure',
+        ];
+        $first = $base + [
+            'id' => 'A1001/2026',
+            'start_time_utc' => '2026-06-17T14:00:00Z',
+            'end_time_utc' => '2026-06-18T05:00:00Z',
+            'banner_event_fingerprint' => notamBannerEventFingerprint(
+                $base + [
+                    'start_time_utc' => '2026-06-17T14:00:00Z',
+                    'end_time_utc' => '2026-06-18T05:00:00Z',
+                ],
+                $airport
+            ),
+        ];
+        $second = $base + [
+            'id' => 'A1002/2026',
+            'start_time_utc' => '2026-06-20T14:00:00Z',
+            'end_time_utc' => '2026-06-21T05:00:00Z',
+            'banner_event_fingerprint' => notamBannerEventFingerprint(
+                $base + [
+                    'start_time_utc' => '2026-06-20T14:00:00Z',
+                    'end_time_utc' => '2026-06-21T05:00:00Z',
+                ],
+                $airport
+            ),
+        ];
+
+        $deduped = deduplicateBannerNotams([$first, $second]);
+
+        $this->assertCount(2, $deduped);
+    }
+
     public function testNotamBannerBuildScheduleLine_InactiveScheduled_UsesNextWindowPhrasing(): void
     {
         $notam = [
