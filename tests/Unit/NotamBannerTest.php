@@ -183,6 +183,34 @@ final class NotamBannerTest extends TestCase
         $this->assertStringNotContainsString('Upcoming from', $line);
     }
 
+    public function testSortBannerNotamsForDisplay_TiedActiveRunwayClosures_OrdersByFingerprint(): void
+    {
+        $now = strtotime('2026-06-17T12:00:00Z');
+        $alpha = [
+            'status' => 'active',
+            'banner_scope' => 'runway',
+            'banner_category' => 'full_closure',
+            'text' => 'RWY 15/33 CLSD',
+            'start_time_utc' => '2026-06-17T10:00:00Z',
+            'end_time_utc' => '2026-06-18T05:00:00Z',
+            'banner_event_fingerprint' => 'alpha-fp',
+        ];
+        $beta = [
+            'status' => 'active',
+            'banner_scope' => 'runway',
+            'banner_category' => 'full_closure',
+            'text' => 'RWY 03/21 CLSD',
+            'start_time_utc' => '2026-06-17T10:00:00Z',
+            'end_time_utc' => '2026-06-18T05:00:00Z',
+            'banner_event_fingerprint' => 'beta-fp',
+        ];
+
+        $sorted = sortBannerNotamsForDisplay([$beta, $alpha], $now);
+
+        $this->assertSame('alpha-fp', $sorted[0]['banner_event_fingerprint']);
+        $this->assertSame('beta-fp', $sorted[1]['banner_event_fingerprint']);
+    }
+
     public function testSortBannerNotamsForDisplay_TodayBeforeFuture_OrdersByStatus(): void
     {
         $now = strtotime('2026-06-17T12:00:00Z');

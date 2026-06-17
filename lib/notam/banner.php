@@ -512,7 +512,7 @@ function notamBannerSortableRestrictionStartUnix(array &$notam, int $nowUnix): i
  *
  * @param array<string, mixed> $notam Enriched NOTAM row
  * @param int $nowUnix Current Unix time
- * @return array{0: int, 1: int, 2: int} Tuple for spaceship operator
+ * @return array{0: int, 1: int, 2: int, 3: string} Tuple for spaceship operator
  */
 function notamBannerSelectionSortKey(array $notam, int $nowUnix): array
 {
@@ -522,8 +522,9 @@ function notamBannerSelectionSortKey(array $notam, int $nowUnix): array
     $scopePri = NOTAM_BANNER_SCOPE_PRIORITY[$scope] ?? 99;
 
     $nextStart = notamBannerSortableRestrictionStartUnix($notam, $nowUnix);
+    $tieBreak = (string) ($notam['banner_event_fingerprint'] ?? $notam['id'] ?? '');
 
-    return [$statusPri, $scopePri, $nextStart];
+    return [$statusPri, $scopePri, $nextStart, $tieBreak];
 }
 
 /**
