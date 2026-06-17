@@ -62,6 +62,14 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringNotContainsString('/kspb/', $probeDir);
     }
 
+    public function testIsUploadHealthProbeFtpCacheNamespace_MatchesReservedTopLevelDir(): void
+    {
+        $this->assertTrue(isUploadHealthProbeFtpCacheNamespace('_probe'));
+        $this->assertTrue(isUploadHealthProbeFtpCacheNamespace('_PROBE'));
+        $this->assertFalse(isUploadHealthProbeFtpCacheNamespace('keul'));
+        $this->assertFalse(isUploadHealthProbeFtpCacheNamespace('kspb'));
+    }
+
     public function testGetUploadHealthProbeSyncPlan_ReturnsEmptyWhenDisabled(): void
     {
         $this->useProductionConfig([

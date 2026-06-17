@@ -454,6 +454,19 @@ function getUploadHealthProbeFtpDir(string $username): string {
 }
 
 /**
+ * Whether a top-level FTP upload cache directory basename is reserved for upload health probes.
+ *
+ * cleanup-cache.php must preserve this tree even when empty (vsftpd local_root).
+ */
+function isUploadHealthProbeFtpCacheNamespace(string $basename): bool {
+    if (!defined('UPLOAD_HEALTH_PROBE_FTP_NAMESPACE')) {
+        require_once __DIR__ . '/constants.php';
+    }
+
+    return strtolower($basename) === strtolower(UPLOAD_HEALTH_PROBE_FTP_NAMESPACE);
+}
+
+/**
  * Get SFTP chroot directory for a push webcam
  * 
  * This is the SFTP chroot directory (root-owned, not writable).
