@@ -22,7 +22,7 @@ final class NotamBannerTest extends TestCase
         ];
     }
 
-    public function testClassifyScope_RunwayClosure(): void
+    public function testNotamBannerClassifyScope_RunwayClosureText_ReturnsRunwayScope(): void
     {
         $airport = $this->kspbAirport();
         $notam = [
@@ -43,7 +43,7 @@ final class NotamBannerTest extends TestCase
         ]));
     }
 
-    public function testClassifyScope_AerodromeClosure(): void
+    public function testNotamBannerClassifyScope_AerodromeClosureText_ReturnsAerodromeScope(): void
     {
         $airport = $this->kspbAirport();
         $notam = [
@@ -61,7 +61,7 @@ final class NotamBannerTest extends TestCase
         ]));
     }
 
-    public function testClassifyScope_PartialRunwayRestrictionHeadline(): void
+    public function testNotamBannerClassifyCategory_PartialRunwayRestriction_ReturnsWingspanHeadline(): void
     {
         $text = 'DFW RWY 13L/31R CLSD TO ACFT WINGSPAN MORE THAN 214FT';
         $this->assertTrue(notamBannerTextIndicatesPartialRunwayRestriction($text));
@@ -76,7 +76,7 @@ final class NotamBannerTest extends TestCase
         );
     }
 
-    public function testClassifyAirspace_FireTfrHeadline(): void
+    public function testNotamBannerClassifyAirspace_FireTfrText_ReturnsFireHeadline(): void
     {
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
             . 'PURSUANT TO 14 CFR SECTION 91.137(A)(2) WI AN AREA DEFINED AS 7NM RADIUS OF '
@@ -87,7 +87,7 @@ final class NotamBannerTest extends TestCase
         $this->assertStringContainsString('7 NM radius', $headline);
     }
 
-    public function testClassifyAirspace_RocketTestCategory(): void
+    public function testNotamBannerClassifyAirspace_RocketTestText_ReturnsSpaceLaunchCategory(): void
     {
         $text = 'ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS WITHIN AN AREA '
             . 'DEFINED AS 5NM RADIUS OF 413900N1122300W STATIC GROUND BASED ROCKET ENGINE TEST.';
@@ -95,7 +95,7 @@ final class NotamBannerTest extends TestCase
         $this->assertStringContainsString('Rocket test TFR', notamBannerBuildAirspaceHeadline('space_launch', $text));
     }
 
-    public function testDeduplicateBannerNotams_MergesPairedFireTfrIds(): void
+    public function testDeduplicateBannerNotams_MatchingFingerprints_MergesToSingleRow(): void
     {
         $airport = ['icao' => 'KS83', 'faa' => 'S83', 'name' => 'Shoshone County'];
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
@@ -119,7 +119,7 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('A3389/2026', $deduped[0]['id']);
     }
 
-    public function testSortBannerNotamsForDisplay_OrdersByStatusThenScope(): void
+    public function testSortBannerNotamsForDisplay_TodayBeforeFuture_OrdersByStatus(): void
     {
         $now = strtotime('2026-06-17T12:00:00Z');
         $today = [
@@ -148,7 +148,7 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('fp-future', $sorted[1]['banner_event_fingerprint']);
     }
 
-    public function testSortBannerNotamsForDisplay_OrdersInactiveScheduledByNextWindow(): void
+    public function testSortBannerNotamsForDisplay_InactiveScheduled_OrdersByNextWindowStart(): void
     {
         $now = strtotime('2026-06-17T16:00:00Z');
         $soonerGap = [
@@ -192,7 +192,7 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('fp-later', $sorted[1]['banner_event_fingerprint']);
     }
 
-    public function testSortBannerNotamsForDisplay_ReturnsAllDistinctDedupedRows(): void
+    public function testSortBannerNotamsForDisplay_ActiveRunwayAndTfr_ReturnsBothRowsRunwayFirst(): void
     {
         $now = time();
         $runway = [
@@ -221,7 +221,7 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('airspace', $sorted[1]['banner_scope']);
     }
 
-    public function testPrepareDashboardBannerRows_S83LikeDedupesPairsKeepsDistinctEvents(): void
+    public function testNotamPrepareDashboardBannerRows_S83LikePairs_DedupesToTwoDistinctEvents(): void
     {
         $airport = ['icao' => 'KS83', 'faa' => 'S83', 'name' => 'Shoshone County', 'lat' => 47.49, 'lon' => -115.87];
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
