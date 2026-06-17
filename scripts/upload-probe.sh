@@ -249,10 +249,12 @@ main() {
 
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
         local ftp_probe_label="FTP"
+        local ftp_probe_fail_detail="ftp failed"
         if vsftpd_ssl_enabled; then
             ftp_probe_label="FTPS"
+            ftp_probe_fail_detail="ftps failed"
         fi
-        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftp_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
+        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftp_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|${ftp_probe_fail_detail}")
         log_probe "INFO" "${ftp_probe_label} probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
         if [ "$ftps_ok" != "true" ]; then
             log_upload_health_app "error" "${ftp_probe_label} upload health probe failed" \
