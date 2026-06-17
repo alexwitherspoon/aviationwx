@@ -266,6 +266,15 @@ class SyncPushConfigTest extends TestCase
         $this->assertSame(['usertwo14chars' => 'passtwo14chars'], $parsed['users']);
     }
 
+    public function testWriteVsftpdVirtualUsersFile_SetsRestrictivePermissions(): void
+    {
+        require_once __DIR__ . '/../../scripts/sync-push-config.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/vsftpd-users-' . uniqid('', true) . '.txt');
+        $this->assertTrue(writeVsftpdVirtualUsersFile(['userone14chars' => 'passone14chars'], $path));
+        $this->assertSame(0600, fileperms($path) & 0777);
+    }
+
     public function testValidateSyncPushUploadCredentials_DelegatesToPushWebcamValidator(): void
     {
         require_once __DIR__ . '/../../scripts/sync-push-config.php';

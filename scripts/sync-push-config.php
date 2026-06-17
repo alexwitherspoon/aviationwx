@@ -1025,11 +1025,14 @@ function writeVsftpdVirtualUsersFile(array $users, string $path = '/etc/vsftpd/v
         @unlink($tmpPath);
         return false;
     }
+    @chmod($tmpPath, 0600);
 
     if (!@rename($tmpPath, $path)) {
         @unlink($tmpPath);
         return false;
     }
+
+    @chmod($path, 0600);
 
     return true;
 }
