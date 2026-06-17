@@ -154,14 +154,15 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex, ?int $globalCache
 }
 
 /**
- * Check for duplicate usernames across all push cameras
- * 
+ * Check for duplicate push camera usernames (case-insensitive).
+ *
  * @param array $config Full configuration
- * @return array ['valid' => bool, 'errors' => array, 'duplicates' => array]
+ * @return array{valid: bool, errors: list<string>, duplicates: array<string, list<string>>}
  */
 function validateUniquePushUsernames($config) {
     $errors = [];
     $usernames = [];
+    $usernameLabels = [];
     $duplicates = [];
     
     foreach ($config['airports'] ?? [] as $airportId => $airport) {
@@ -175,21 +176,30 @@ function validateUniquePushUsernames($config) {
             
             if ($isPush && isset($cam['push_config']['username'])) {
                 $username = $cam['push_config']['username'];
+                if (!is_string($username) || $username === '') {
+                    continue;
+                }
                 $key = $airportId . '_' . $camIndex;
+                $normalized = strtolower($username);
                 
-                if (isset($usernames[$username])) {
-                    $duplicates[$username][] = $key;
-                    $duplicates[$username][] = $usernames[$username];
+                if (isset($usernames[$normalized])) {
+                    if (!isset($duplicates[$normalized])) {
+                        $duplicates[$normalized] = [$usernames[$normalized]];
+                    }
+                    $duplicates[$normalized][] = $key;
                 } else {
-                    $usernames[$username] = $key;
+                    $usernames[$normalized] = $key;
+                    $usernameLabels[$normalized] = $username;
                 }
             }
         }
     }
     
     if (!empty($duplicates)) {
-        foreach ($duplicates as $username => $keys) {
-            $errors[] = "Duplicate username '{$username}' found in cameras: " . implode(', ', array_unique($keys));
+        foreach ($duplicates as $normalized => $keys) {
+            $label = $usernameLabels[$normalized] ?? $normalized;
+            $errors[] = "Duplicate username '{$label}' (case-insensitive) found in cameras: "
+                . implode(', ', array_unique($keys));
         }
     }
     

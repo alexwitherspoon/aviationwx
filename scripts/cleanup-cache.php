@@ -1116,6 +1116,14 @@ function cleanupEmptyDirectoriesExcludingUploads(
     
     foreach ($airportDirs as $airportDir) {
         $airportId = strtolower(basename($airportDir));
+
+        // Upload health probe FTPS local_root lives under /cache/ftp/_probe/ (not an airport ID)
+        if (isUploadHealthProbeFtpCacheNamespace($airportId)) {
+            if ($verbose) {
+                echo "  ℹ️  Preserving upload health probe FTP namespace: {$airportId}\n";
+            }
+            continue;
+        }
         
         // Skip directories for configured airports - these may have push webcams
         if (in_array($airportId, $configuredLower)) {
@@ -1219,6 +1227,14 @@ function cleanupEmptyDirectoriesExcludingSftp(
                     }
                 }
             }
+        }
+    }
+
+    $probeRaw = getGlobalConfig('upload_health_probe');
+    if (is_array($probeRaw) && ($probeRaw['enabled'] ?? false) === true) {
+        $probeSftpUser = $probeRaw['sftp']['username'] ?? null;
+        if (is_string($probeSftpUser) && $probeSftpUser !== '') {
+            $configuredUsernames[] = strtolower($probeSftpUser);
         }
     }
     

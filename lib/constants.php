@@ -1175,6 +1175,9 @@ if (!defined('UPLOAD_HEALTH_PROBE_WATCHDOG_LOOP_SEC')) {
 if (!defined('UPLOAD_HEALTH_PROBE_FILE_PREFIX')) {
     define('UPLOAD_HEALTH_PROBE_FILE_PREFIX', 'aviationwx-probe-');
 }
+if (!defined('UPLOAD_HEALTH_PROBE_FTP_NAMESPACE')) {
+    define('UPLOAD_HEALTH_PROBE_FTP_NAMESPACE', '_probe');
+}
 
 // Push FTP/SFTP credentials (push_config and upload_health_probe)
 if (!defined('PUSH_UPLOAD_USERNAME_MAX_LENGTH')) {

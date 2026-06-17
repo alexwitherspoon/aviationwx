@@ -78,28 +78,86 @@ probe_setup_netrc() {
     } >"$PROBE_NETRC_FILE"
 }
 
-run_ftps_probe() {
+ensure_sftp_known_hosts() {
+    local host="$1"
+    local port="$2"
+    case "$host" in
+        localhost|127.0.0.1|::1) ;;
+        *)
+            return 0
+            ;;
+    esac
+    if ! command -v ssh-keyscan >/dev/null 2>&1; then
+        return 0
+    fi
+    local ssh_dir="${HOME:-/root}/.ssh"
+    local known_hosts="${ssh_dir}/known_hosts"
+    mkdir -p "$ssh_dir"
+    chmod 700 "$ssh_dir" 2>/dev/null || true
+    touch "$known_hosts"
+    chmod 600 "$known_hosts" 2>/dev/null || true
+    if grep -qF "[${host}]:${port}" "$known_hosts" 2>/dev/null; then
+        return 0
+    fi
+    # Port 22 entries are often stored as "host keytype ..." without [host]:port.
+    if [ "$port" = "22" ] && grep -qF "${host} " "$known_hosts" 2>/dev/null; then
+        return 0
+    fi
+    ssh-keyscan -T 5 -p "$port" "$host" >>"$known_hosts" 2>/dev/null || true
+}
+
+vsftpd_ssl_enabled() {
+    local conf="${VSFTPD_CONF:-/etc/vsftpd/vsftpd.conf}"
+    if [ ! -f "$conf" ]; then
+        return 1
+    fi
+    if grep -qE '^[[:space:]]*ssl_enable[[:space:]]*=[[:space:]]*YES' "$conf" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
+run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed
+    local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail
+    local -a curl_tls_args=()
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    base_url="ftps://${host}:${port}/"
+    # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
+    base_url="ftp://${host}:${port}/"
+    if vsftpd_ssl_enabled; then
+        use_tls="true"
+        curl_tls_args=(--ftp-ssl-reqd)
+        ok_detail="ok"
+    else
+        use_tls="false"
+        ok_detail="ok (plain ftp, ssl_enable=NO)"
+    fi
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 45 \
         --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>&1; then
         rm -f "$local_file"
-        echo "false|0|ftps upload failed"
+        if [ "$use_tls" = "true" ]; then
+            echo "false|0|ftps upload failed"
+        else
+            echo "false|0|ftp upload failed"
+        fi
         return 1
     fi
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc --ftp-ssl-reqd --ftp-pasv \
+    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 30 \
         --fail -X "DELE ${file_name}" "$base_url" >/dev/null 2>&1; then
-        log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
+        if [ "$use_tls" = "true" ]; then
+            log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
+        else
+            log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
+        fi
     fi
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
@@ -107,7 +165,7 @@ run_ftps_probe() {
     if [ "$elapsed" -lt 0 ]; then
         elapsed=0
     fi
-    echo "true|${elapsed}|ok"
+    echo "true|${elapsed}|${ok_detail}"
 }
 
 run_sftp_probe() {
@@ -119,6 +177,7 @@ run_sftp_probe() {
     base_url="sftp://${host}:${port}/"
     mkdir -p "$PROBE_TMP_DIR"
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
+    ensure_sftp_known_hosts "$host" "$port"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
@@ -189,10 +248,16 @@ main() {
     sftp_skipped="false"
 
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
-        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftps_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|ftps failed")
-        log_probe "INFO" "FTPS probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
+        local ftp_probe_label="FTP"
+        local ftp_probe_fail_detail="ftp failed"
+        if vsftpd_ssl_enabled; then
+            ftp_probe_label="FTPS"
+            ftp_probe_fail_detail="ftps failed"
+        fi
+        IFS='|' read -r ftps_ok ftps_duration_sec ftps_detail < <(run_ftp_probe "$connect_host" "$ftp_port" "$ftps_user" "$ftps_pass" || echo "false|0|${ftp_probe_fail_detail}")
+        log_probe "INFO" "${ftp_probe_label} probe ok=${ftps_ok} duration_sec=${ftps_duration_sec} detail=${ftps_detail} host=${connect_host}"
         if [ "$ftps_ok" != "true" ]; then
-            log_upload_health_app "error" "FTPS upload health probe failed" \
+            log_upload_health_app "error" "${ftp_probe_label} upload health probe failed" \
                 "$(jq -n --arg detail "$ftps_detail" --arg host "$connect_host" '{detail: $detail, connect_host: $host}')"
         fi
     else

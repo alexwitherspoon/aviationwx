@@ -15,13 +15,50 @@ PROBE_SCRIPT="${SCRIPT_DIR}/upload-probe.sh"
 PROBE_LOG="${PROBE_LOG:-/var/log/aviationwx/upload-probe.log}"
 
 log_probe_runner() {
-    local ts msg
+    local level="INFO"
+    local msg="$1"
+    if [[ "$msg" == WARN\ * ]]; then
+        level="WARN"
+        msg="${msg#WARN }"
+    elif [[ "$msg" == ERROR\ * ]]; then
+        level="ERROR"
+        msg="${msg#ERROR }"
+    fi
+    local ts
     ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    msg="$1"
-    echo "[$ts] [INFO] $msg" >>"$PROBE_LOG"
+    echo "[$ts] [$level] $msg" >>"$PROBE_LOG"
+}
+
+# Wait for entrypoint background sync before the first probe (probe accounts live in /etc).
+wait_for_push_config_sync() {
+    local max_sec="${UPLOAD_PROBE_SYNC_WAIT_SEC:-90}"
+    if ! [[ "$max_sec" =~ ^[0-9]+$ ]] || [ "$max_sec" -lt 1 ]; then
+        max_sec=90
+    fi
+    local start_sec elapsed
+    start_sec="$(date +%s 2>/dev/null || echo 0)"
+    while true; do
+        if [ -f /tmp/sync-push-config.log ]; then
+            if grep -q 'FTP/SFTP/FTPS configuration synced successfully' /tmp/sync-push-config.log 2>/dev/null; then
+                log_probe_runner "push-config sync finished before first probe"
+                return 0
+            fi
+            if grep -q 'configuration sync failed or timed out' /tmp/sync-push-config.log 2>/dev/null; then
+                log_probe_runner "WARN push-config sync failed; running probe anyway"
+                return 0
+            fi
+        fi
+        elapsed=$(( $(date +%s 2>/dev/null || echo 0) - start_sec ))
+        if [ "$elapsed" -ge "$max_sec" ]; then
+            log_probe_runner "WARN push-config sync wait timeout (${max_sec}s); running probe anyway"
+            return 0
+        fi
+        sleep 2
+    done
 }
 
 log_probe_runner "upload-probe-runner started"
+wait_for_push_config_sync
 
 while true; do
     interval="$(read_probe_interval_from_config)"
