@@ -147,7 +147,7 @@ foreach ($notams as $notam) {
     }
     notamEnsureEffectiveSegments($notam);
     $currentStatus = revalidateNotamStatus($notam, $timezone);
-    if (!notamIsBannerRelevantStatus($currentStatus, $notam)) {
+    if (!notamIsBannerRelevantStatus($currentStatus, $notam, $nowUnix)) {
         continue;
     }
     $notam['status'] = $currentStatus;

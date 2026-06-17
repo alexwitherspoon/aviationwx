@@ -534,7 +534,7 @@ function notamPrepareDashboardBannerRows(
             continue;
         }
         $status = (string) ($notam['status'] ?? revalidateNotamStatus($notam, $timezone));
-        if (!notamIsBannerRelevantStatus($status, $notam)) {
+        if (!notamIsBannerRelevantStatus($status, $notam, $nowUnix)) {
             continue;
         }
         $row = $notam;

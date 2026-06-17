@@ -1165,10 +1165,11 @@ function filterRelevantNotams(array $notams, array $airport): array {
  *
  * @param string $status Status from {@see determineNotamStatus()}
  * @param array<string, mixed> $notam Parsed NOTAM; upcoming_future horizon uses {@see notamFirstRestrictionStartUnix()}
+ * @param int|null $nowUnix Reference time for horizon checks; null uses {@see time()}
  * @return bool True when the NOTAM should be retained in cache for this airport
  */
-function notamIsBannerRelevantStatus(string $status, array $notam): bool {
-    $now = time();
+function notamIsBannerRelevantStatus(string $status, array $notam, ?int $nowUnix = null): bool {
+    $now = $nowUnix ?? time();
     if (in_array($status, ['active', 'upcoming_today', 'inactive_scheduled'], true)) {
         return true;
     }
