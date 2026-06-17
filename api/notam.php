@@ -5,7 +5,8 @@
  * Serves NOTAM data to frontend with stale-while-revalidate caching.
  * Safety-critical: Re-validates NOTAM expiration at serve time and
  * implements failclosed when cache exceeds staleness threshold.
- * JSON NOTAM entries may include schedule_source, effective_segments, and current/next restriction window times.
+ * JSON NOTAM entries may include schedule_source, effective_segments, current/next restriction window times,
+ * and banner_headline / banner_schedule_line (visual cues; full message text remains authoritative).
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -16,6 +17,7 @@ require_once __DIR__ . '/../lib/notam/fetcher.php';
 require_once __DIR__ . '/../lib/notam/filter.php';
 require_once __DIR__ . '/../lib/notam/schedule.php';
 require_once __DIR__ . '/../lib/notam/cache.php';
+require_once __DIR__ . '/../lib/notam/banner.php';
 
 // Start output buffering
 ob_start();
@@ -134,22 +136,31 @@ if ($isFailclosed) {
 // Use cached data if available, otherwise return empty
 $notams = $cachedData['notams'] ?? [];
 
-// Format NOTAMs for frontend (add local times, official links)
-// Re-validate status at serve time to catch NOTAMs that expired since caching
-$formattedNotams = [];
+// Re-validate and collect banner-eligible rows before selection
+$bannerCandidates = [];
 $timezone = getAirportTimezone($airportId, $airport);
+$nowUnix = time();
 
 foreach ($notams as $notam) {
-    notamEnsureEffectiveSegments($notam);
-    // Re-validate status at serve time using airport timezone (safety-critical)
-    $currentStatus = revalidateNotamStatus($notam, $timezone);
-    
-    // Banner eligibility (status + 48h horizon) at serve time; cache may retain rows until next fetch
-    if (!notamIsBannerRelevantStatus($currentStatus, $notam)) {
+    if (!is_array($notam)) {
         continue;
     }
-    
-    // Format times
+    notamEnsureEffectiveSegments($notam);
+    $currentStatus = revalidateNotamStatus($notam, $timezone);
+    if (!notamIsBannerRelevantStatus($currentStatus, $notam, $nowUnix)) {
+        continue;
+    }
+    $notam['status'] = $currentStatus;
+    $bannerCandidates[] = $notam;
+}
+
+$bannerRows = notamPrepareDashboardBannerRows($bannerCandidates, $airport, $timezone, $nowUnix);
+
+// Format deduplicated banner NOTAMs for frontend (add local times, official links, banner headlines)
+$formattedNotams = [];
+
+foreach ($bannerRows as $notam) {
+    $currentStatus = (string) ($notam['status'] ?? revalidateNotamStatus($notam, $timezone));
     $startTimeUtc = $notam['start_time_utc'] ?? '';
     $endTimeUtc = $notam['end_time_utc'] ?? null;
     
@@ -208,7 +219,6 @@ foreach ($notams as $notam) {
         ];
     }
     
-    $nowUnix = time();
     $currentWindowEndUtc = notamCurrentRestrictionEndUtc($notam, $nowUnix);
     $nextWindowStartUtc = notamNextRestrictionStartUtc($notam, $nowUnix);
     $currentWindowEndLocal = '';
@@ -243,6 +253,10 @@ foreach ($notams as $notam) {
         'id' => $notamId,
         'type' => $notam['notam_type'] ?? 'unknown',
         'status' => $currentStatus,
+        'banner_scope' => $notam['banner_scope'] ?? null,
+        'banner_category' => $notam['banner_category'] ?? null,
+        'banner_headline' => $notam['banner_headline'] ?? null,
+        'banner_schedule_line' => $notam['banner_schedule_line'] ?? null,
         'start_time_utc' => $startTimeUtc,
         'end_time_utc' => $endTimeUtc,
         'start_time_local' => $startTimeLocal,
