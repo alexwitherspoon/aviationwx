@@ -119,6 +119,48 @@ final class NotamBannerTest extends TestCase
         $this->assertSame('A3389/2026', $deduped[0]['id']);
     }
 
+    public function testDeduplicateBannerNotams_DifferentAirspaceWindowsSameGeometry_KeepsBothRows(): void
+    {
+        $airport = ['icao' => 'KS83', 'faa' => 'S83', 'name' => 'Shoshone County'];
+        $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
+            . 'PURSUANT TO 14 CFR SECTION 91.137(A)(2) WI AN AREA DEFINED AS 7NM RADIUS OF '
+            . '473130N1160445W SFC-7500FT';
+        $base = [
+            'notam_type' => 'tfr',
+            'text' => $text,
+            'banner_scope' => 'airspace',
+            'banner_category' => 'fire',
+        ];
+        $first = $base + [
+            'id' => 'A2001/2026',
+            'start_time_utc' => '2026-06-17T14:00:00Z',
+            'end_time_utc' => '2026-06-18T05:00:00Z',
+            'banner_event_fingerprint' => notamBannerEventFingerprint(
+                $base + [
+                    'start_time_utc' => '2026-06-17T14:00:00Z',
+                    'end_time_utc' => '2026-06-18T05:00:00Z',
+                ],
+                $airport
+            ),
+        ];
+        $second = $base + [
+            'id' => 'A2002/2026',
+            'start_time_utc' => '2026-06-20T14:00:00Z',
+            'end_time_utc' => '2026-06-21T05:00:00Z',
+            'banner_event_fingerprint' => notamBannerEventFingerprint(
+                $base + [
+                    'start_time_utc' => '2026-06-20T14:00:00Z',
+                    'end_time_utc' => '2026-06-21T05:00:00Z',
+                ],
+                $airport
+            ),
+        ];
+
+        $deduped = deduplicateBannerNotams([$first, $second]);
+
+        $this->assertCount(2, $deduped);
+    }
+
     public function testDeduplicateBannerNotams_DifferentRunwayClosureWindows_KeepsBothRows(): void
     {
         $airport = $this->kspbAirport();

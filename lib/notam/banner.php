@@ -230,13 +230,9 @@ function notamBannerEventFingerprint(array $notam, array $airport): string
         }
         $radiusKey = $radius !== null ? (string) round($radius, 2) : 'poly';
         $dailyKey = preg_match('/\bDLY\b/', strtoupper($text)) === 1 ? 'daily' : 'single';
-        $startKey = trim((string) ($notam['start_time_utc'] ?? ''));
-        if ($dailyKey === 'daily') {
-            $startKey = 'series';
-        }
 
-        return 'airspace|' . $category . '|' . $centerKey . '|' . $radiusKey . '|' . $vertical
-            . '|' . $dailyKey . '|' . $startKey;
+        return 'airspace|' . $airportKey . '|' . $category . '|' . $centerKey . '|' . $radiusKey . '|' . $vertical
+            . '|' . $dailyKey . '|' . $startKey . '|' . $endKey;
     }
 
     return 'unknown|' . trim((string) ($notam['id'] ?? '')) . '|' . substr(sha1($text), 0, 16);
