@@ -227,34 +227,35 @@ final class NotamBannerTest extends TestCase
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
             . 'PURSUANT TO 14 CFR SECTION 91.137(A)(2) WI AN AREA DEFINED AS 7NM RADIUS OF '
             . '473130N1160445W (MLP268018.0) SFC-7500FT';
+        $now = strtotime('2026-06-17T12:00:00Z');
         $notams = [
             [
                 'id' => 'A3389/2026',
                 'notam_type' => 'tfr',
                 'text' => $text,
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 36000),
+                'start_time_utc' => '2026-06-17T14:00:00Z',
+                'end_time_utc' => '2026-06-18T05:00:00Z',
                 'status' => 'upcoming_today',
             ],
             [
                 'id' => '8838/2026',
                 'notam_type' => 'tfr',
                 'text' => $text,
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 36000),
+                'start_time_utc' => '2026-06-17T14:00:00Z',
+                'end_time_utc' => '2026-06-18T05:00:00Z',
                 'status' => 'upcoming_today',
             ],
             [
                 'id' => '8821/2026',
                 'notam_type' => 'tfr',
                 'text' => $text . ' DLY 1400-0500',
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 90000),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 1200000),
+                'start_time_utc' => '2026-06-18T14:00:00Z',
+                'end_time_utc' => '2026-07-02T05:00:00Z',
                 'status' => 'upcoming_future',
             ],
         ];
 
-        $rows = notamPrepareDashboardBannerRows($notams, $airport, 'America/Los_Angeles', time());
+        $rows = notamPrepareDashboardBannerRows($notams, $airport, 'America/Los_Angeles', $now);
 
         $this->assertCount(2, $rows);
         $this->assertSame('upcoming_today', $rows[0]['status']);
