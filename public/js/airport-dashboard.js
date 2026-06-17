@@ -5349,7 +5349,7 @@ function createNotamLine(notam, mode) {
     const notamId = notam.id ? `[${escapeHtml(notam.id)}]` : '';
     const headline = notam.banner_headline
         ? escapeHtml(notam.banner_headline)
-        : escapeHtml(notam.message);
+        : escapeHtml(notam.message || '');
     const scheduleLine = notam.banner_schedule_line
         ? escapeHtml(notam.banner_schedule_line)
         : escapeHtml(formatNotamTimeRange(notam, mode));
