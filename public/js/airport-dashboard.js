@@ -5347,15 +5347,24 @@ function createNotamLine(notam, mode) {
         statusText = 'SCHEDULED BREAK';
     }
     const notamId = notam.id ? `[${escapeHtml(notam.id)}]` : '';
-    const timeRange = formatNotamTimeRange(notam, mode);
+    const headline = notam.banner_headline
+        ? escapeHtml(notam.banner_headline)
+        : escapeHtml(notam.message);
+    const scheduleLine = notam.banner_schedule_line
+        ? escapeHtml(notam.banner_schedule_line)
+        : escapeHtml(formatNotamTimeRange(notam, mode));
+    const fullText = escapeHtml(notam.message || '');
     
     return `
         <div class="notam-line">
-            <span class="notam-icon">${icon}</span>
-            <span class="notam-status">${statusText}</span>
-            <span class="notam-id">${notamId}</span>
-            <span class="notam-message">${escapeHtml(notam.message)}</span>
-            <span class="notam-time-range">${timeRange}</span>
+            <div class="notam-headline-row">
+                <span class="notam-icon">${icon}</span>
+                <span class="notam-status">${statusText}</span>
+                <span class="notam-id">${notamId}</span>
+                <span class="notam-headline">${headline}</span>
+                <span class="notam-time-range">${scheduleLine}</span>
+            </div>
+            <div class="notam-full-text">${fullText}</div>
         </div>
     `;
 }
