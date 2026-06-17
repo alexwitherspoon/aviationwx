@@ -18,6 +18,14 @@ require_once __DIR__ . '/schedule.php';
 /** Segments on approximate circle rings (visual only, not for navigation). */
 const NOTAM_TFR_MAP_CIRCLE_SEGMENTS = 64;
 
+/** @var array<string, int> Lower value = higher priority when geometry overlaps */
+const NOTAM_TFR_MAP_STATUS_PRIORITY = [
+    'active' => 0,
+    'inactive_scheduled' => 1,
+    'upcoming_today' => 2,
+    'upcoming_future' => 3,
+];
+
 /**
  * Build one closed GeoJSON outer ring [lon, lat] from decoded TFR vertices.
  *
@@ -82,6 +90,145 @@ function notamTfrMapLayerGeoJsonRingFromCircle(float $centerLat, float $centerLo
  */
 function notamTfrMapLayerStyleBucket(string $status): string {
     return $status === 'active' ? 'active' : 'upcoming';
+}
+
+/**
+ * Sortable priority for overlapping map features (lower = wins).
+ *
+ * Aligns with dashboard banner status ordering; kept local so the map layer
+ * does not depend on banner headline/dedup code.
+ *
+ * @param string $status From {@see classifyNotamDisplayStatusAt()}
+ * @return int Priority rank (lower = higher priority)
+ */
+function notamTfrMapLayerStatusPriority(string $status): int {
+    return NOTAM_TFR_MAP_STATUS_PRIORITY[$status] ?? 99;
+}
+
+/**
+ * Stable geometry key for deduplicating overlapping TFR map features.
+ *
+ * @param array<string, mixed> $feature GeoJSON Feature with geometry and properties
+ * @return string|null Null when geometry cannot be keyed
+ */
+function notamTfrMapLayerFeatureGeometryKey(array $feature): ?string {
+    $geometry = $feature['geometry'] ?? null;
+    if (!is_array($geometry)) {
+        return null;
+    }
+    $type = (string) ($geometry['type'] ?? '');
+    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+
+    if ($type === 'Point' && ($props['geometry_kind'] ?? '') === 'circle') {
+        $coords = $geometry['coordinates'] ?? null;
+        if (!is_array($coords) || count($coords) < 2) {
+            return null;
+        }
+        $radiusNm = isset($props['radius_nm']) ? (float) $props['radius_nm'] : 0.0;
+        if ($radiusNm <= 0) {
+            return null;
+        }
+
+        return sprintf(
+            'circle|%.4f|%.4f|%.2f',
+            round((float) $coords[1], 4),
+            round((float) $coords[0], 4),
+            round($radiusNm, 2)
+        );
+    }
+
+    if ($type === 'Polygon') {
+        $rings = $geometry['coordinates'] ?? null;
+        if (!is_array($rings) || !isset($rings[0]) || !is_array($rings[0])) {
+            return null;
+        }
+        $parts = [];
+        $ring = $rings[0];
+        $count = count($ring);
+        for ($i = 0; $i < $count; $i++) {
+            if ($i === $count - 1 && $count > 1) {
+                $first = $ring[0];
+                $last = $ring[$i];
+                if (is_array($first) && is_array($last)
+                    && abs((float) $first[0] - (float) $last[0]) < 1e-9
+                    && abs((float) $first[1] - (float) $last[1]) < 1e-9
+                ) {
+                    continue;
+                }
+            }
+            if (!is_array($ring[$i]) || count($ring[$i]) < 2) {
+                continue;
+            }
+            $parts[] = sprintf('%.4f,%.4f', round((float) $ring[$i][0], 4), round((float) $ring[$i][1], 4));
+        }
+        if ($parts === []) {
+            return null;
+        }
+
+        return 'poly|' . implode(';', $parts);
+    }
+
+    return null;
+}
+
+/**
+ * Pick the higher-priority feature when two share the same geometry key.
+ *
+ * @param array<string, mixed> $candidate New feature
+ * @param array<string, mixed> $incumbent Existing feature for the geometry key
+ * @return array<string, mixed>
+ */
+function notamTfrMapLayerPreferFeature(array $candidate, array $incumbent): array {
+    $candidateStatus = (string) (($candidate['properties'] ?? [])['status'] ?? '');
+    $incumbentStatus = (string) (($incumbent['properties'] ?? [])['status'] ?? '');
+    $candidatePri = notamTfrMapLayerStatusPriority($candidateStatus);
+    $incumbentPri = notamTfrMapLayerStatusPriority($incumbentStatus);
+    if ($candidatePri < $incumbentPri) {
+        return $candidate;
+    }
+    if ($candidatePri > $incumbentPri) {
+        return $incumbent;
+    }
+
+    $candidateId = (string) (($candidate['properties'] ?? [])['notam_id'] ?? '');
+    $incumbentId = (string) (($incumbent['properties'] ?? [])['notam_id'] ?? '');
+
+    return strcmp($candidateId, $incumbentId) < 0 ? $candidate : $incumbent;
+}
+
+/**
+ * Collapse overlapping TFR features so the highest-priority status wins.
+ *
+ * Map-only dedup: distinct drawable geometry (not dashboard event fingerprints).
+ * Active restrictions must not be masked by overlapping upcoming NOTAMs.
+ *
+ * @param array<int, array<string, mixed>> $features GeoJSON features
+ * @return array<int, array<string, mixed>>
+ */
+function notamTfrMapLayerDeduplicateFeaturesByGeometry(array $features): array {
+    if ($features === []) {
+        return [];
+    }
+
+    $byGeometry = [];
+    $ungrouped = [];
+    foreach ($features as $feature) {
+        if (!is_array($feature)) {
+            continue;
+        }
+        $key = notamTfrMapLayerFeatureGeometryKey($feature);
+        if ($key === null || $key === '') {
+            $ungrouped[] = $feature;
+            continue;
+        }
+        if (!isset($byGeometry[$key])) {
+            $byGeometry[$key] = $feature;
+            continue;
+        }
+        $byGeometry[$key] = notamTfrMapLayerPreferFeature($feature, $byGeometry[$key]);
+    }
+
+    return array_merge(array_values($byGeometry), $ungrouped);
 }
 
 /**
@@ -318,6 +465,8 @@ function notamTfrMapLayerBuildPayload(array $config): array {
             ];
         }
     }
+
+    $features = notamTfrMapLayerDeduplicateFeaturesByGeometry($features);
 
     return [
         'type' => 'FeatureCollection',

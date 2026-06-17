@@ -1,14 +1,18 @@
 <?php
-/**
- * NOTAM TFR map layer (GeoJSON aggregation) unit tests.
- */
+
+declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/notam/map-layer.php';
 
-class NotamMapLayerTest extends TestCase {
-    public function testGeoJsonRingFromVertices_ClosedSquare(): void {
+/**
+ * NOTAM TFR map layer (GeoJSON aggregation) unit tests.
+ */
+final class NotamMapLayerTest extends TestCase
+{
+    public function testNotamTfrMapLayerGeoJsonRingFromVertices_ClosedSquare_ReturnsClosedRing(): void
+    {
         $vertices = [
             ['lat' => 45.0, 'lon' => -122.0],
             ['lat' => 45.0, 'lon' => -123.0],
@@ -24,20 +28,23 @@ class NotamMapLayerTest extends TestCase {
         $this->assertEqualsWithDelta($first[1], $last[1], 1e-9);
     }
 
-    public function testGeoJsonRingFromCircle_Closed(): void {
+    public function testNotamTfrMapLayerGeoJsonRingFromCircle_DefaultSegments_ReturnsClosedRing(): void
+    {
         $ring = notamTfrMapLayerGeoJsonRingFromCircle(45.0, -122.0, 5.0);
         $this->assertCount(NOTAM_TFR_MAP_CIRCLE_SEGMENTS + 1, $ring);
         $this->assertEqualsWithDelta($ring[0][0], $ring[count($ring) - 1][0], 1e-9);
         $this->assertEqualsWithDelta($ring[0][1], $ring[count($ring) - 1][1], 1e-9);
     }
 
-    public function testMapLayerStyleBucket(): void {
+    public function testNotamTfrMapLayerStyleBucket_VariousStatuses_MapsToActiveOrUpcoming(): void
+    {
         $this->assertSame('active', notamTfrMapLayerStyleBucket('active'));
         $this->assertSame('upcoming', notamTfrMapLayerStyleBucket('inactive_scheduled'));
         $this->assertSame('upcoming', notamTfrMapLayerStyleBucket('upcoming_today'));
     }
 
-    public function testTooltipStatusLine_ActiveUntilSegmentEnd(): void {
+    public function testNotamTfrMapLayerTooltipStatusLine_ActiveSegment_ReturnsActiveUntilLine(): void
+    {
         $notam = [
             'id' => 'T1',
             'text' => '',
@@ -53,7 +60,8 @@ class NotamMapLayerTest extends TestCase {
         $this->assertStringContainsString('May 15, 2026', $line);
     }
 
-    public function testTooltipStatusLine_UpcomingFirstWindow(): void {
+    public function testNotamTfrMapLayerTooltipStatusLine_UpcomingFirstWindow_ReturnsUpcomingFromLine(): void
+    {
         $notam = [
             'id' => 'T1',
             'text' => '',
@@ -68,7 +76,8 @@ class NotamMapLayerTest extends TestCase {
         $this->assertStringContainsString(' to ', $line);
     }
 
-    public function testTooltipStatusLine_InactiveScheduledNextWindow(): void {
+    public function testNotamTfrMapLayerTooltipStatusLine_InactiveScheduledGap_ReturnsUpcomingFromLine(): void
+    {
         $notam = [
             'id' => 'T1',
             'text' => '',
@@ -84,7 +93,8 @@ class NotamMapLayerTest extends TestCase {
         $this->assertStringContainsString('10:00 PM', $line);
     }
 
-    public function testTooltipStatusLine_EnvelopeOnlyActive(): void {
+    public function testNotamTfrMapLayerTooltipStatusLine_EnvelopeOnlyActive_ReturnsActiveUntilLine(): void
+    {
         $notam = [
             'id' => 'T2',
             'text' => '',
@@ -95,5 +105,94 @@ class NotamMapLayerTest extends TestCase {
         $line = notamTfrMapLayerTooltipStatusLine($notam, 'active', 'UTC', $now);
         $this->assertNotNull($line);
         $this->assertStringStartsWith('Active now until', $line);
+    }
+
+    public function testNotamTfrMapLayerDeduplicateFeaturesByGeometry_ActiveAndUpcomingCircle_KeepsActive(): void
+    {
+        $active = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'active',
+                'map_layer_style' => 'active',
+                'notam_id' => 'A3389/2026',
+            ],
+        ];
+        $upcoming = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'upcoming_future',
+                'map_layer_style' => 'upcoming',
+                'notam_id' => '8821/2026',
+            ],
+        ];
+
+        $deduped = notamTfrMapLayerDeduplicateFeaturesByGeometry([$upcoming, $active]);
+
+        $this->assertCount(1, $deduped);
+        $this->assertSame('active', $deduped[0]['properties']['status']);
+        $this->assertSame('A3389/2026', $deduped[0]['properties']['notam_id']);
+    }
+
+    public function testNotamTfrMapLayerDeduplicateFeaturesByGeometry_ScheduledGapAndUpcomingCircle_KeepsScheduledGap(): void
+    {
+        $scheduled = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'inactive_scheduled',
+                'notam_id' => 'A1001/2026',
+            ],
+        ];
+        $upcoming = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'upcoming_future',
+                'notam_id' => 'A1002/2026',
+            ],
+        ];
+
+        $deduped = notamTfrMapLayerDeduplicateFeaturesByGeometry([$upcoming, $scheduled]);
+
+        $this->assertCount(1, $deduped);
+        $this->assertSame('inactive_scheduled', $deduped[0]['properties']['status']);
+    }
+
+    public function testNotamTfrMapLayerDeduplicateFeaturesByGeometry_DistinctCircles_KeepsBoth(): void
+    {
+        $a = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'upcoming_today',
+                'notam_id' => 'A1',
+            ],
+        ];
+        $b = [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'Point', 'coordinates' => [-117.08, 48.52]],
+            'properties' => [
+                'geometry_kind' => 'circle',
+                'radius_nm' => 7.0,
+                'status' => 'upcoming_today',
+                'notam_id' => 'A2',
+            ],
+        ];
+
+        $deduped = notamTfrMapLayerDeduplicateFeaturesByGeometry([$a, $b]);
+
+        $this->assertCount(2, $deduped);
     }
 }

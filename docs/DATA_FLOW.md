@@ -1600,6 +1600,35 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 - Adds official FAA NOTAM links for each NOTAM
 - Returns JSON array of formatted NOTAMs
 
+### Airports directory TFR map layer
+
+The airports network map (`pages/airports.php`, served at `airports.aviationwx.org`) draws geo-relevant TFRs from an aggregated GeoJSON layer. This path is separate from per-airport dashboard banners: banners list every deduplicated event row; the map shows one drawable shape per geometry.
+
+**Build** (`notamTfrMapLayerBuildPayload()` in `lib/notam/map-layer.php`):
+
+1. Read each listed airport NOTAM cache (`cache/notam/{airport_id}.json`).
+2. Keep TFR rows where `classifyNotamDisplayStatusAt()` is not `expired` or `unknown`.
+3. Skip duplicate global NOTAM `id` values while scanning caches.
+4. Emit a GeoJSON Feature per row: polygon outer ring from decoded vertices, or a Point + `radius_nm` for circle TFRs (client draws `L.circle` in meters).
+5. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
+
+   | Rank (`NOTAM_TFR_MAP_STATUS_PRIORITY`) | Status |
+   |----------------------------------------|--------|
+   | 0 (wins) | `active` |
+   | 1 | `inactive_scheduled` |
+   | 2 | `upcoming_today` |
+   | 3 | `upcoming_future` |
+
+   Lower rank wins (`notamTfrMapLayerStatusPriority()`).
+
+   Equal-priority ties break on lower `notam_id` (lexicographic). This is **not** the dashboard banner event fingerprint (`notamBannerEventFingerprint()`): map keys use rounded circle center + radius, or polygon ring vertices in ring order, so paired A/numeric NOTAMs and same-shape upcoming series merge for display only.
+
+**Style bucket** (`notamTfrMapLayerStyleBucket()`): `active` (red stroke/fill) only when status is `active`; all other retained statuses map to `upcoming` (amber), including `inactive_scheduled`.
+
+**Serve**: `GET /api/notam-map.php` returns cached GeoJSON when younger than `getNotamCacheTtlSeconds()`; otherwise rebuilds and writes the aggregate cache file. Production access is browser-only (`lib/notam/map-api-access.php`).
+
+**Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map.
+
 ---
 
 ## Data Display on Dashboard
@@ -1723,6 +1752,14 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 #### Visual Indicators
 - **Icons**: 🚨 active, ⏸️ scheduled gap, ⚠️ upcoming
 - **Color Coding**: Red active, purple scheduled, orange upcoming (see `.notam-banner-*` in `public/css/styles.css`)
+
+#### Airports directory map (TFR layer)
+
+- **Location**: Leaflet map on `pages/airports.php` (`airports.aviationwx.org`)
+- **Data**: `GET /api/notam-map.php` (aggregated GeoJSON; see [Airports directory TFR map layer](#airports-directory-tfr-map-layer))
+- **Geometry**: Polygons or true-radius circles (`L.circle`); tap/click opens popup with NOTAM id, schedule line, vertical limits, FAA link
+- **Styling**: Red active, amber upcoming (includes scheduled gaps between EFFECTIVE windows)
+- **Refresh**: Client polls on the same cadence as NOTAM cache TTL
 
 ### Data Refresh Behavior
 
