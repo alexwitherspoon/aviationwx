@@ -430,37 +430,6 @@ if ($themeCookie === 'dark') {
         : '/public/css/styles.css';
     ?>
     <link rel="stylesheet" href="<?= $cssHref ?>?v=<?= $buildHashShort ?>">
-    <script>
-        // The service worker was removed: it registered with /public/js/
-        // scope (no Service-Worker-Allowed header), so it never controlled
-        // the page and its offline/weather caching never ran. Unregister
-        // legacy registrations so existing clients drop them promptly;
-        // their update checks 404 and unregister as a fallback.
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.getRegistrations()
-                    .then((registrations) => Promise.allSettled(registrations.map((registration) => {
-                        console.log('[SW] Unregistering legacy service worker:', registration.scope);
-                        return registration.unregister();
-                    })))
-                    .then((results) => {
-                        results.forEach((result) => {
-                            // unregister() can reject or resolve false;
-                            // either way a legacy worker may remain on the
-                            // client, which is worth seeing in the console
-                            if (result.status === 'rejected') {
-                                console.warn('[SW] Legacy service worker unregister failed:', result.reason);
-                            } else if (result.value === false) {
-                                console.warn('[SW] Legacy service worker unregister returned false');
-                            }
-                        });
-                    })
-                    .catch((err) => {
-                        console.warn('[SW] Could not enumerate legacy service workers:', err);
-                    });
-            });
-        }
-    </script>
     <?php if ($injectStuckClientCleanup): ?>
     <!-- Stuck client cleanup - clears caches for clients on old code -->
     <script>

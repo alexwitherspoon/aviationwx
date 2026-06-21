@@ -593,14 +593,9 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
-     * The dashboard must ship the legacy service worker unregister pass.
-     *
-     * No service worker is registered anymore (removed as inert), but
-     * clients from older builds still carry registrations. Losing this
-     * inline cleanup would leave those workers in place with nothing to
-     * remove them except eventual 404-triggered unregistration.
+     * The dashboard must not register a service worker.
      */
-    public function testAirportPage_LegacyServiceWorkerCleanupPresent()
+    public function testAirportPage_DoesNotRegisterServiceWorker()
     {
         $html = $this->getCachedHtml('kspb');
         
@@ -609,11 +604,6 @@ class HtmlOutputValidationTest extends TestCase
             return;
         }
         
-        $this->assertStringContainsString(
-            'Unregistering legacy service worker',
-            $html,
-            'Dashboard should contain the legacy service worker unregister pass'
-        );
         $this->assertDoesNotMatchRegularExpression(
             '/serviceWorker\s*\.\s*register\s*\(/',
             $html,
