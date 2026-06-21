@@ -447,6 +447,9 @@ function notamTfrMapLayerLoadListedAirportCaches(array $config): array {
             if ($id === '') {
                 continue;
             }
+            if (isset($result['by_id'][$id])) {
+                continue;
+            }
             $result['by_id'][$id] = [
                 'notam' => $notam,
                 'timezone' => $timezone,
