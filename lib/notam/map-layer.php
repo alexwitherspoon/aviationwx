@@ -30,8 +30,8 @@ const NOTAM_TFR_MAP_STATUS_PRIORITY = [
 ];
 
 /**
- * Bump when map build, dedup, or serve-time revalidation logic changes and
- * {@see getGitSha()} is empty (local dev, some CI jobs).
+ * Bump when map build, dedup, or serve-time revalidation logic changes.
+ * Always included in {@see notamTfrMapLayerCurrentBuildToken()} alongside deploy SHA.
  */
 const NOTAM_TFR_MAP_LAYER_LOGIC_VERSION = 1;
 
@@ -355,15 +355,19 @@ function notamTfrMapLayerTooltipStatusLine(array &$notam, string $status, string
 /**
  * Build token stored in aggregate cache so code deploys invalidate stale geometry.
  *
- * @return string Short deploy SHA or a logic-version fallback
+ * Combines deploy SHA ({@see getGitSha()}) and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}
+ * so map-layer logic changes invalidate the aggregate even when GIT_SHA is unchanged.
+ *
+ * @return string Token such as `abc1234-v1`, or `logic-v1` when SHA is unavailable
  */
 function notamTfrMapLayerCurrentBuildToken(): string {
+    $versionSuffix = '-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION;
     $sha = getGitSha();
     if ($sha !== '') {
-        return $sha;
+        return $sha . $versionSuffix;
     }
 
-    return 'logic-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION;
+    return 'logic' . $versionSuffix;
 }
 
 /**
