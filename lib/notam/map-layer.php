@@ -5,7 +5,8 @@
  * Geometry is cached on disk and rebuilt when per-airport NOTAM sources change,
  * aggregate age exceeds {@see getNotamCacheTtlSeconds()}, or the cache is missing.
  * Status, style, and tooltip lines are revalidated at serve time from per-airport
- * caches so restriction colors track wall-clock windows without rebuilding geometry.
+ * caches using {@see revalidateNotamStatus()} so restriction colors track wall-clock
+ * windows without rebuilding geometry. Geometry build uses the same helper.
  */
 
 require_once __DIR__ . '/../logger.php';
@@ -521,7 +522,7 @@ function notamTfrMapLayerBuildPayload(array $config, ?array $listedCaches = null
             }
 
             notamEnsureEffectiveSegments($notam);
-            $status = classifyNotamDisplayStatusAt($notam, $timezone, $now);
+            $status = revalidateNotamStatus($notam, $timezone, $now);
             if ($status === 'expired' || $status === 'unknown') {
                 continue;
             }

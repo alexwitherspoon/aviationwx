@@ -263,6 +263,46 @@ final class NotamMapLayerTest extends TestCase
             . 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 413900N1122300W (OGD319029) STATIC GROUND BASED ROCKET ENGINE TEST.';
     }
 
+    public function testNotamTfrMapLayerBuildPayload_UsesCachedStatusWhenStartTimeMissing(): void
+    {
+        $config = $this->minimalListedAirportConfig();
+        $tfrText = $this->sampleTfrText();
+        $this->writePerAirportNotamCache('s83', [
+            [
+                'id' => 'CACHE1/2026',
+                'text' => $tfrText,
+                'start_time_utc' => '',
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
+                'status' => 'active',
+            ],
+        ]);
+
+        $payload = notamTfrMapLayerBuildPayload($config);
+
+        $this->assertCount(1, $payload['features']);
+        $this->assertSame('active', $payload['features'][0]['properties']['status'] ?? null);
+        $this->assertSame('active', $payload['features'][0]['properties']['map_layer_style'] ?? null);
+    }
+
+    public function testNotamTfrMapLayerBuildPayload_SkipsUnknownCachedStatusWhenStartTimeMissing(): void
+    {
+        $config = $this->minimalListedAirportConfig();
+        $tfrText = $this->sampleTfrText();
+        $this->writePerAirportNotamCache('s83', [
+            [
+                'id' => 'CACHE2/2026',
+                'text' => $tfrText,
+                'start_time_utc' => '',
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
+                'status' => 'unknown',
+            ],
+        ]);
+
+        $payload = notamTfrMapLayerBuildPayload($config);
+
+        $this->assertSame([], $payload['features']);
+    }
+
     public function testNotamTfrMapLayerRevalidatePayload_UpdatesStatusAndPromotesActiveOnDedup(): void
     {
         $config = $this->minimalListedAirportConfig();
