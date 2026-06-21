@@ -135,6 +135,7 @@ if (!defined('STALE_WHILE_REVALIDATE_SECONDS')) {
 // NMS refresh is hourly (NOTAM_CACHE_TTL_DEFAULT) and power samples drift
 // over hours, so a one-minute shared window adds nothing meaningful to the
 // pipeline latency that the upstream refresh and dashboard polls dominate.
+// GET /api/notam-map.php uses the same NOTAM_* values for the airports map.
 if (!defined('NOTAM_API_CACHE_TTL_SECONDS')) {
     define('NOTAM_API_CACHE_TTL_SECONDS', 60);
 }

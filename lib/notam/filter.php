@@ -1084,10 +1084,11 @@ function notamUpcomingBucketForStartAt(int $startUnix, string $timezone, int $no
  * 
  * @param array<string, mixed> $notam Cached NOTAM row: start_time_utc, optional effective_segments, optional status
  * @param string $timezone Airport timezone (e.g., 'America/Denver'), defaults to UTC
+ * @param int|null $nowUnix Optional fixed clock for tests; defaults to {@see time()}
  * @return string When start_time_utc is valid: 'active', 'inactive_scheduled', 'upcoming_today', 'upcoming_future', or 'expired'. When start is missing or invalid: cached status or 'unknown'
  */
-function revalidateNotamStatus(array $notam, string $timezone = 'UTC'): string {
-    $now = time();
+function revalidateNotamStatus(array $notam, string $timezone = 'UTC', ?int $nowUnix = null): string {
+    $now = $nowUnix ?? time();
     $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
     $startTime = ($startTimeRaw !== false && $startTimeRaw > 0) ? $startTimeRaw : null;
     if ($startTime === null) {

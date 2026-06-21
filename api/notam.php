@@ -18,34 +18,13 @@ require_once __DIR__ . '/../lib/notam/filter.php';
 require_once __DIR__ . '/../lib/notam/schedule.php';
 require_once __DIR__ . '/../lib/notam/cache.php';
 require_once __DIR__ . '/../lib/notam/banner.php';
+require_once __DIR__ . '/../lib/notam/http-cache-headers.php';
 
 // Start output buffering
 ob_start();
 
 // Set JSON header
 header('Content-Type: application/json');
-
-/**
- * Send cache headers for successful NOTAM responses
- *
- * Browsers and the CDN may share a response for NOTAM_API_CACHE_TTL_SECONDS,
- * with stale-while-revalidate letting the edge refresh in the background.
- * The window is small against the hourly upstream NMS refresh and the
- * 3 minute dashboard poll, so a new restriction is never delayed
- * meaningfully by the cache. Error responses carry no cache headers and
- * stay uncached at the edge.
- *
- * @return void
- */
-function notamApiSendCacheHeaders(): void
-{
-    header(
-        'Cache-Control: public'
-        . ', max-age=' . NOTAM_API_CACHE_TTL_SECONDS
-        . ', s-maxage=' . NOTAM_API_CACHE_TTL_SECONDS
-        . ', stale-while-revalidate=' . NOTAM_API_CACHE_SWR_SECONDS
-    );
-}
 
 // Get airport ID
 $airportId = isset($_GET['airport']) ? trim($_GET['airport']) : '';

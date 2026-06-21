@@ -2,9 +2,11 @@
 /**
  * Internal NOTAM TFR map layer API (airports directory map only).
  *
- * Serves a GeoJSON FeatureCollection built from per-airport NOTAM caches.
- * Cache TTL matches {@see getNotamCacheTtlSeconds()} (same as per-airport NOTAM JSON).
- * In production, access is limited to browser use from the airport map UI; see
+ * Drawable geometry is cached on disk; status and map colors are revalidated
+ * at serve time from per-airport NOTAM caches. HTTP Cache-Control uses
+ * {@see NOTAM_API_CACHE_TTL_SECONDS} (shared with api/notam.php); JSON
+ * cache_ttl_seconds reflects {@see getNotamCacheTtlSeconds()} for client poll.
+ * Production access is limited to browser use from the airport map UI; see
  * {@see notamMapLayerApiRequestIsAllowed()}.
  */
 
@@ -12,6 +14,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/notam/map-api-access.php';
+require_once __DIR__ . '/../lib/notam/http-cache-headers.php';
 require_once __DIR__ . '/../lib/notam/map-layer.php';
 
 ob_start();
@@ -36,6 +39,7 @@ if (!notamMapLayerApiRequestIsAllowed()) {
 
 try {
     $payload = notamTfrMapLayerServeOrRebuild();
+    notamInternalApiSendSharedCacheHeaders();
     echo json_encode($payload, JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     ob_clean();

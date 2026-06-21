@@ -54,6 +54,21 @@ class InternalApiCacheHeadersTest extends TestCase
         );
     }
 
+    public function testNotamMapApi_Success_SendsSharedCacheHeaders(): void
+    {
+        $response = $this->makeRequest('api/notam-map.php');
+
+        if ($response['http_code'] === 0) {
+            $this->markTestSkipped('Endpoint not available');
+        }
+
+        $this->assertSame(200, $response['http_code']);
+        $cacheControl = $response['headers']['cache-control'] ?? '';
+        $this->assertStringContainsString('public', $cacheControl);
+        $this->assertStringContainsString('s-maxage=' . NOTAM_API_CACHE_TTL_SECONDS, $cacheControl);
+        $this->assertStringContainsString('stale-while-revalidate=', $cacheControl);
+    }
+
     public function testStationPowerApi_Success_SendsSharedCacheHeaders(): void
     {
         // spfx carries station_power in the test fixture; a 200 needs no

@@ -597,10 +597,26 @@ function getNotamCachePath(string $airportId): string {
 /**
  * Aggregated TFR GeoJSON for the airports directory map (internal use).
  *
+ * Uses {@see notamCacheDirectory()} when available so test overrides align
+ * with per-airport NOTAM cache paths.
+ *
  * @return string Full path to JSON cache file
  */
 function getNotamTfrMapLayerCachePath(): string {
-    return CACHE_NOTAM_DIR . '/tfr-map-layer.json';
+    require_once __DIR__ . '/notam/cache.php';
+
+    return notamCacheDirectory() . '/tfr-map-layer.json';
+}
+
+/**
+ * Exclusive flock target for single-flight NOTAM map layer rebuilds.
+ *
+ * @return string Full path to lock file (created on demand)
+ */
+function getNotamTfrMapLayerRebuildLockPath(): string {
+    require_once __DIR__ . '/notam/cache.php';
+
+    return notamCacheDirectory() . '/tfr-map-layer.rebuild.lock';
 }
 
 /**
