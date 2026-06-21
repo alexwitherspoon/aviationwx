@@ -110,6 +110,9 @@ class WmmCalculatorTest extends TestCase
     public static function noaaFixtureProvider(): array
     {
         $fixtures = self::loadFixtureData()['fixtures'] ?? [];
+        if ($fixtures === []) {
+            throw new \RuntimeException('WMM fixture file contains no test vectors');
+        }
         $cases = [];
 
         foreach ($fixtures as $fixture) {
