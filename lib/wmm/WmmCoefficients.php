@@ -20,28 +20,28 @@ final class WmmCoefficients
     private string $releaseDate;
 
     /** @var array<int, array<int, float>> Main field g (nT), indexed [m][n] */
-    private array $g;
+    private array $g = [];
 
     /** @var array<int, array<int, float>> Main field h (nT), indexed [n][m-1] for m > 0 */
-    private array $h;
+    private array $h = [];
 
     /** @var array<int, array<int, float>> Secular variation dg (nT/yr), indexed [m][n] */
-    private array $dg;
+    private array $dg = [];
 
     /** @var array<int, array<int, float>> Secular variation dh (nT/yr), indexed [n][m-1] for m > 0 */
-    private array $dh;
+    private array $dh = [];
 
     /** @var array<int, float> Schmidt quasi-normalized factors (flat index n + m * harmonicStride) */
-    private array $snorm;
+    private array $snorm = [];
 
     /** @var array<int, array<int, float>> Recursion coefficients k[m][n] */
-    private array $k;
+    private array $k = [];
 
     /** @var array<int, float> */
-    private array $fn;
+    private array $fn = [];
 
     /** @var array<int, float> */
-    private array $fm;
+    private array $fm = [];
 
     /**
      * @param string $cofPath Absolute path to WMM.COF
