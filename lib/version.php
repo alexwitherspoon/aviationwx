@@ -449,10 +449,6 @@ function renderClientVersionCheckScript(string $buildHash, int $buildTimestamp, 
                     return;
                 }
                 
-                // Drop the pre-simplification tracking key (was only updated
-                // by service worker controllerchange, which never fired)
-                try { localStorage.removeItem('aviationwx-last-sw-update'); } catch (e) { /* unavailable */ }
-                
                 // Check dead man's switch immediately
                 const deadManReason = checkDeadManSwitch();
                 if (deadManReason) {
