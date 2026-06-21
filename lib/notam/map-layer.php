@@ -230,35 +230,11 @@ function notamTfrMapLayerMinimalFeatureForGeometryKey(array $notam): ?array {
 }
 
 /**
- * Collect geometry dedup keys present in a cached aggregate FeatureCollection.
- *
- * @param array<string, mixed> $cachedPayload Decoded aggregate cache
- * @return array<string, true> Keys from {@see notamTfrMapLayerFeatureGeometryKey()}
- */
-function notamTfrMapLayerAggregateGeometryKeys(array $cachedPayload): array {
-    $keys = [];
-    $features = $cachedPayload['features'] ?? [];
-    if (!is_array($features)) {
-        return $keys;
-    }
-    foreach ($features as $feature) {
-        if (!is_array($feature)) {
-            continue;
-        }
-        $key = notamTfrMapLayerFeatureGeometryKey($feature);
-        if ($key !== null && $key !== '') {
-            $keys[$key] = true;
-        }
-    }
-
-    return $keys;
-}
-
-/**
  * True when listed sources contain drawable TFR geometry absent from the aggregate.
  *
- * Uses the same geometry keys as {@see notamTfrMapLayerDeduplicateFeaturesByGeometry()}
- * so duplicate NOTAM ids for one shape do not force endless rebuilds.
+ * Only runs when the aggregate has no features. Non-empty aggregates rely on
+ * source mtime and build-token invalidation to avoid parsing every TFR on each
+ * serve-path request. Covers the empty-aggregate gap from issue #144.
  *
  * @param array<string, mixed> $cachedPayload Decoded aggregate cache
  * @param array{
@@ -274,7 +250,11 @@ function notamTfrMapLayerAggregateMissingDrawableGeometry(
     array $listedCaches,
     int $nowUnix
 ): bool {
-    $aggregateKeys = notamTfrMapLayerAggregateGeometryKeys($cachedPayload);
+    $features = $cachedPayload['features'] ?? [];
+    if (is_array($features) && $features !== []) {
+        return false;
+    }
+
     $sourceKeys = [];
     $seenIds = [];
 
@@ -312,13 +292,7 @@ function notamTfrMapLayerAggregateMissingDrawableGeometry(
         }
     }
 
-    foreach ($sourceKeys as $key => $_) {
-        if (!isset($aggregateKeys[$key])) {
-            return true;
-        }
-    }
-
-    return false;
+    return $sourceKeys !== [];
 }
 
 /**
