@@ -398,6 +398,18 @@ function notamTfrMapLayerAggregateBuildTokenMatches(?array $cachedPayload): bool
 }
 
 /**
+ * Aggregate map layer file mtime after clearing PHP's per-request stat cache.
+ *
+ * @return int Unix mtime, or 0 when the file is missing
+ */
+function notamTfrMapLayerAggregateCacheMtime(): int {
+    $path = getNotamTfrMapLayerCachePath();
+    clearstatcache(true, $path);
+
+    return is_file($path) ? (int)@filemtime($path) : 0;
+}
+
+/**
  * Load listed airport NOTAM caches in one pass for build and serve-time revalidation.
  *
  * @param array<string, mixed> $config Full config from {@see loadConfig()}
@@ -647,6 +659,7 @@ function notamTfrMapLayerAggregateNeedsRebuild(
  */
 function notamTfrMapLayerReadAggregateCache(): ?array {
     $path = getNotamTfrMapLayerCachePath();
+    clearstatcache(true, $path);
     if (!is_readable($path)) {
         return null;
     }
@@ -808,7 +821,7 @@ function notamTfrMapLayerRebuildAggregateLocked(
 
     try {
         $path = getNotamTfrMapLayerCachePath();
-        $currentMtime = is_file($path) ? (int)@filemtime($path) : 0;
+        $currentMtime = notamTfrMapLayerAggregateCacheMtime();
         $currentCached = $currentMtime !== $mapMtime
             ? notamTfrMapLayerReadAggregateCache()
             : $cachedPayload;
@@ -877,7 +890,7 @@ function notamTfrMapLayerRebuildAggregateBlocking(array $config, int $ttl, array
 
     try {
         $path = getNotamTfrMapLayerCachePath();
-        $currentMtime = is_file($path) ? (int)@filemtime($path) : 0;
+        $currentMtime = notamTfrMapLayerAggregateCacheMtime();
         $currentCached = notamTfrMapLayerReadAggregateCache();
         if (!notamTfrMapLayerAggregateNeedsRebuild(
             $currentMtime,
@@ -925,7 +938,7 @@ function notamTfrMapLayerRebuildAggregateBlocking(array $config, int $ttl, array
  */
 function notamTfrMapLayerResolveCachedGeometry(array $config, int $ttl, array $listedCaches): array {
     $path = getNotamTfrMapLayerCachePath();
-    $mapMtime = is_file($path) ? (int)@filemtime($path) : 0;
+    $mapMtime = notamTfrMapLayerAggregateCacheMtime();
     $cached = notamTfrMapLayerReadAggregateCache();
 
     if (!notamTfrMapLayerAggregateNeedsRebuild(
