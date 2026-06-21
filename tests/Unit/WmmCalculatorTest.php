@@ -23,26 +23,8 @@ class WmmCalculatorTest extends TestCase
 {
     private const FIXTURE_PATH = __DIR__ . '/../Fixtures/wmm-noaa-reference.json';
 
-    private array $fixtures = [];
-
-    private float $toleranceDegrees = 0.05;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->loadFixtures();
-    }
-
-    private function loadFixtures(): void
-    {
-        $json = file_get_contents(self::FIXTURE_PATH);
-        $data = json_decode($json, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->fail('Invalid fixture JSON: ' . json_last_error_msg());
-        }
-        $this->fixtures = $data['fixtures'] ?? [];
-        $this->toleranceDegrees = (float) ($data['_meta']['tolerance_degrees'] ?? 0.05);
-    }
+    /** @var array<string, mixed>|null */
+    private static ?array $fixtureData = null;
 
     #[DataProvider('noaaFixtureProvider')]
     public function testGetDeclinationForDecimalYear_NoaaFixture_WithinTolerance(
@@ -54,12 +36,13 @@ class WmmCalculatorTest extends TestCase
         float $expectedDeclination,
         float $expectedInclination
     ): void {
+        $toleranceDegrees = self::getToleranceDegrees();
         $declination = \WmmCalculator::getDeclinationForDecimalYear($decimalYear, $lat, $lon, $altitudeKm);
 
         $this->assertEqualsWithDelta(
             $expectedDeclination,
             $declination,
-            $this->toleranceDegrees,
+            $toleranceDegrees,
             "Fixture $id: declination mismatch"
         );
 
@@ -72,7 +55,7 @@ class WmmCalculatorTest extends TestCase
         $this->assertEqualsWithDelta(
             $expectedInclination,
             $elements['inclination'],
-            $this->toleranceDegrees,
+            $toleranceDegrees,
             "Fixture $id: inclination mismatch"
         );
     }
@@ -126,10 +109,7 @@ class WmmCalculatorTest extends TestCase
 
     public static function noaaFixtureProvider(): array
     {
-        $path = __DIR__ . '/../Fixtures/wmm-noaa-reference.json';
-        $json = file_get_contents($path);
-        $data = json_decode($json, true);
-        $fixtures = $data['fixtures'] ?? [];
+        $fixtures = self::loadFixtureData()['fixtures'] ?? [];
         $cases = [];
 
         foreach ($fixtures as $fixture) {
@@ -145,5 +125,34 @@ class WmmCalculatorTest extends TestCase
         }
 
         return $cases;
+    }
+
+    private static function getToleranceDegrees(): float
+    {
+        return (float) (self::loadFixtureData()['_meta']['tolerance_degrees'] ?? 0.05);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function loadFixtureData(): array
+    {
+        if (self::$fixtureData !== null) {
+            return self::$fixtureData;
+        }
+
+        $json = file_get_contents(self::FIXTURE_PATH);
+        if ($json === false) {
+            throw new \RuntimeException('Failed to read WMM fixture file: ' . self::FIXTURE_PATH);
+        }
+
+        $data = json_decode($json, true);
+        if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException('Invalid WMM fixture JSON: ' . json_last_error_msg());
+        }
+
+        self::$fixtureData = $data;
+
+        return self::$fixtureData;
     }
 }
