@@ -758,11 +758,22 @@ function notamTfrMapLayerAggregateNeedsRebuild(
         return true;
     }
 
-    $listedCaches = $listedCaches ?? notamTfrMapLayerLoadListedAirportCaches($config);
-    $sourceMtime = $newestSourceMtime ?? $listedCaches['newest_mtime'];
+    if ($newestSourceMtime === null) {
+        $listedCaches = $listedCaches ?? notamTfrMapLayerLoadListedAirportCaches($config);
+        $sourceMtime = $listedCaches['newest_mtime'];
+    } else {
+        $sourceMtime = $newestSourceMtime;
+    }
     if ($sourceMtime > $mapMtime) {
         return true;
     }
+
+    $features = $cachedPayload['features'] ?? [];
+    if (is_array($features) && $features !== []) {
+        return false;
+    }
+
+    $listedCaches = $listedCaches ?? notamTfrMapLayerLoadListedAirportCaches($config);
 
     return notamTfrMapLayerAggregateMissingDrawableGeometry($cachedPayload, $listedCaches, $nowUnix);
 }
