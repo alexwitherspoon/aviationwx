@@ -128,6 +128,39 @@ final class WmmCalculator
         return $year + $fractionOfYear;
     }
 
+    /**
+     * Convert decimal year (UTC) to Unix timestamp, inverse of timestampToDecimalYear().
+     *
+     * @param float $decimalYear Decimal year (for example 2025.5)
+     * @return int Unix timestamp at matching UTC instant within the year
+     * @throws \InvalidArgumentException When decimal year is out of range for conversion
+     */
+    public static function decimalYearToTimestamp(float $decimalYear): int
+    {
+        $year = (int) floor($decimalYear);
+        if ($year < 1970) {
+            throw new \InvalidArgumentException('Decimal year must be 1970 or later for timestamp conversion');
+        }
+
+        $fraction = $decimalYear - $year;
+        if ($fraction < 0.0 || $fraction >= 1.0) {
+            $fraction = 0.0;
+        }
+
+        $isLeapYear = ($year % 4 === 0 && ($year % 100 !== 0 || $year % 400 === 0)) ? 1 : 0;
+        $daysInYear = 365 + $isLeapYear;
+        $maxSeconds = $daysInYear * 86400 - 1;
+        $secondsIntoYear = (int) round($fraction * $daysInYear * 86400);
+        $secondsIntoYear = max(0, min($maxSeconds, $secondsIntoYear));
+
+        $base = gmmktime(0, 0, 0, 1, 1, $year);
+        if ($base === false) {
+            throw new \InvalidArgumentException('Failed to convert decimal year to timestamp');
+        }
+
+        return $base + $secondsIntoYear;
+    }
+
     private static function getBundledCoefficients(): WmmCoefficients
     {
         if (self::$bundledCoefficients === null) {

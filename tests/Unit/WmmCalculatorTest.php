@@ -64,7 +64,7 @@ class WmmCalculatorTest extends TestCase
         );
 
         $elements = \WmmCalculator::getElements(
-            self::decimalYearToTimestamp($decimalYear),
+            \WmmCalculator::decimalYearToTimestamp($decimalYear),
             $lat,
             $lon,
             $altitudeKm
@@ -103,13 +103,20 @@ class WmmCalculatorTest extends TestCase
         $this->assertEqualsWithDelta(2025.5, $decimalYear, 0.01);
     }
 
+    public function testDecimalYearToTimestamp_MidYear_RoundTrips(): void
+    {
+        $decimalYear = 2025.5;
+        $timestamp = \WmmCalculator::decimalYearToTimestamp($decimalYear);
+        $this->assertEqualsWithDelta($decimalYear, \WmmCalculator::timestampToDecimalYear($timestamp), 0.0001);
+    }
+
     public function testGetDeclination_TimestampPathMatchesDecimalYear(): void
     {
         $decimalYear = 2025.0;
         $lat = 14.0;
         $lon = 143.0;
         $altitudeKm = 66.0;
-        $ts = gmmktime(0, 0, 0, 1, 1, 2025);
+        $ts = \WmmCalculator::decimalYearToTimestamp($decimalYear);
 
         $fromDecimalYear = \WmmCalculator::getDeclinationForDecimalYear($decimalYear, $lat, $lon, $altitudeKm);
         $fromTimestamp = \WmmCalculator::getDeclination($ts, $lat, $lon, $altitudeKm);
@@ -138,17 +145,5 @@ class WmmCalculatorTest extends TestCase
         }
 
         return $cases;
-    }
-
-    private static function decimalYearToTimestamp(float $decimalYear): int
-    {
-        $year = (int) floor($decimalYear);
-        $fraction = $decimalYear - $year;
-        $isLeap = ($year % 4 === 0 && ($year % 100 !== 0 || $year % 400 === 0));
-        $daysInYear = 365 + ($isLeap ? 1 : 0);
-        $dayOfYear = (int) floor($fraction * $daysInYear) + 1;
-        $dayOfYear = max(1, min($daysInYear, $dayOfYear));
-
-        return gmmktime(0, 0, 0, 1, $dayOfYear, $year);
     }
 }
