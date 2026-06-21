@@ -55,7 +55,7 @@ final class NotamMapLayerTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $config
+     * @param array<int, array<string, mixed>> $notams
      */
     private function writePerAirportNotamCache(string $airportId, array $notams): void
     {
