@@ -10,7 +10,7 @@ require_once __DIR__ . '/../../lib/wmm/WmmCoefficients.php';
 
 class WmmCoefficientsTest extends TestCase
 {
-    public function testBundledCofMatchesManifest(): void
+    public function testFromBundledPath_ManifestMetadata_MatchesCofFile(): void
     {
         $manifestPath = \WmmCoefficients::getBundledManifestPath();
         $this->assertFileExists($manifestPath);
@@ -30,7 +30,7 @@ class WmmCoefficientsTest extends TestCase
         $this->assertSame($manifest['release_date'], $coefficients->getReleaseDate());
     }
 
-    public function testConstructorRejectsMissingFile(): void
+    public function testConstructor_MissingCofFile_ThrowsInvalidArgumentException(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new \WmmCoefficients('/nonexistent/WMM.COF');
