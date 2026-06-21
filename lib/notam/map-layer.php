@@ -772,7 +772,7 @@ function notamTfrMapLayerAggregateNeedsRebuild(
         return true;
     }
 
-    $age = time() - $mapMtime;
+    $age = $nowUnix - $mapMtime;
     if ($age < 0 || $age >= $ttl) {
         return true;
     }
