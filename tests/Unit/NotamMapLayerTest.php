@@ -17,7 +17,9 @@ final class NotamMapLayerTest extends TestCase
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/aviationwx-notam-map-' . bin2hex(random_bytes(4));
-        mkdir($this->cacheDir, 0755, true);
+        if (!mkdir($this->cacheDir, 0755, true) && !is_dir($this->cacheDir)) {
+            self::fail('Could not create NOTAM map test cache directory: ' . $this->cacheDir);
+        }
         $GLOBALS['notamCacheTestDirectory'] = $this->cacheDir;
     }
 
