@@ -267,7 +267,9 @@ final class WmmCoefficients
             }
 
             if (count($parts) < 6) {
-                continue;
+                throw new \InvalidArgumentException(
+                    'WMM coefficient file has malformed coefficient row: ' . $line
+                );
             }
 
             $n = (int) $parts[0];
