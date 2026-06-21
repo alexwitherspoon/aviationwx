@@ -648,8 +648,31 @@ function notamTfrMapLayerReadAggregateCache(): ?array {
         return null;
     }
 
-    $decoded = json_decode((string)@file_get_contents($path), true);
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        aviationwx_log('warning', 'notam map layer: unreadable aggregate cache', [
+            'path' => $path,
+        ], 'app');
+
+        return null;
+    }
+
+    try {
+        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        aviationwx_log('warning', 'notam map layer: invalid aggregate cache JSON', [
+            'path' => $path,
+            'error' => $e->getMessage(),
+        ], 'app');
+
+        return null;
+    }
+
     if (!notamTfrMapLayerAggregateFileIsValid(is_array($decoded) ? $decoded : null)) {
+        aviationwx_log('warning', 'notam map layer: aggregate cache has unexpected shape', [
+            'path' => $path,
+        ], 'app');
+
         return null;
     }
 
