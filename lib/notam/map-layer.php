@@ -906,6 +906,93 @@ function notamTfrMapLayerRevalidatePayload(
 }
 
 /**
+ * Rebuild aggregate geometry under flock (shared by non-blocking and blocking paths).
+ *
+ * @param array<string, mixed> $config Full config from {@see loadConfig()}
+ * @param int $ttl Aggregate max age from {@see getNotamCacheTtlSeconds()}
+ * @param array{
+ *     newest_mtime: int,
+ *     by_id: array<string, array{notam: array<string, mixed>, timezone: string, airport_id: string}>,
+ *     airports: array<string, array{airport: array<string, mixed>, timezone: string, notams: array<int, mixed>, cache_mtime: int}>
+ * } $listedCaches Preloaded per-airport caches
+ * @param bool $blocking True for {@see flock()} LOCK_EX; false for LOCK_NB
+ * @param int|null $mapMtime Known aggregate mtime before lock (non-blocking only)
+ * @param array<string, mixed>|null $cachedPayload Decoded aggregate JSON (non-blocking only)
+ * @return array<string, mixed>|null Payload, existing cache, or null when non-blocking lock is held
+ */
+function notamTfrMapLayerRebuildAggregateUnderFlock(
+    array $config,
+    int $ttl,
+    array $listedCaches,
+    bool $blocking,
+    ?int $mapMtime = null,
+    ?array $cachedPayload = null
+): ?array {
+    $lockPath = getNotamTfrMapLayerRebuildLockPath();
+    $lockDir = dirname($lockPath);
+    if (!is_dir($lockDir)) {
+        if (!@mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
+            return notamTfrMapLayerBuildPayload($config, $listedCaches);
+        }
+    }
+
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        return notamTfrMapLayerBuildPayload($config, $listedCaches);
+    }
+
+    $lockFlags = $blocking ? LOCK_EX : (LOCK_EX | LOCK_NB);
+    if (!@flock($fp, $lockFlags)) {
+        fclose($fp);
+
+        return $blocking ? notamTfrMapLayerReadAggregateCache() : null;
+    }
+
+    try {
+        $path = getNotamTfrMapLayerCachePath();
+        $currentMtime = notamTfrMapLayerAggregateCacheMtime();
+        if (!$blocking && $mapMtime !== null && $currentMtime === $mapMtime) {
+            $currentCached = $cachedPayload;
+        } else {
+            $currentCached = notamTfrMapLayerReadAggregateCache();
+        }
+
+        if (!notamTfrMapLayerAggregateNeedsRebuild(
+            $currentMtime,
+            $config,
+            $ttl,
+            $currentCached,
+            $listedCaches['newest_mtime'],
+            $listedCaches
+        )) {
+            if ($blocking) {
+                return $currentCached;
+            }
+
+            return $currentCached ?? notamTfrMapLayerReadAggregateCache();
+        }
+
+        $payload = notamTfrMapLayerBuildPayload($config, $listedCaches);
+        if (!notamTfrMapLayerWriteCache($payload)) {
+            aviationwx_log('warning', 'notam map layer: failed to write cache', [
+                'path' => $path,
+                'feature_count' => count($payload['features'] ?? []),
+            ], 'app');
+        } elseif (!$blocking) {
+            aviationwx_log('info', 'notam map layer: cache rebuilt', [
+                'feature_count' => count($payload['features'] ?? []),
+                'ttl_seconds' => $ttl,
+            ], 'app');
+        }
+
+        return $payload;
+    } finally {
+        @flock($fp, LOCK_UN);
+        fclose($fp);
+    }
+}
+
+/**
  * Rebuild aggregate geometry under an exclusive flock (single-flight, non-blocking).
  *
  * @param array<string, mixed> $config Full config from {@see loadConfig()}
@@ -926,61 +1013,14 @@ function notamTfrMapLayerRebuildAggregateLocked(
     array $listedCaches,
     ?array $cachedPayload = null
 ): ?array {
-    $lockPath = getNotamTfrMapLayerRebuildLockPath();
-    $lockDir = dirname($lockPath);
-    if (!is_dir($lockDir)) {
-        if (!@mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
-            return notamTfrMapLayerBuildPayload($config, $listedCaches);
-        }
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if ($fp === false) {
-        return notamTfrMapLayerBuildPayload($config, $listedCaches);
-    }
-
-    if (!@flock($fp, LOCK_EX | LOCK_NB)) {
-        fclose($fp);
-
-        return null;
-    }
-
-    try {
-        $path = getNotamTfrMapLayerCachePath();
-        $currentMtime = notamTfrMapLayerAggregateCacheMtime();
-        $currentCached = $currentMtime !== $mapMtime
-            ? notamTfrMapLayerReadAggregateCache()
-            : $cachedPayload;
-
-        if (!notamTfrMapLayerAggregateNeedsRebuild(
-            $currentMtime,
-            $config,
-            $ttl,
-            $currentCached,
-            $listedCaches['newest_mtime'],
-            $listedCaches
-        )) {
-            return $currentCached ?? notamTfrMapLayerReadAggregateCache();
-        }
-
-        $payload = notamTfrMapLayerBuildPayload($config, $listedCaches);
-        if (!notamTfrMapLayerWriteCache($payload)) {
-            aviationwx_log('warning', 'notam map layer: failed to write cache', [
-                'path' => $path,
-                'feature_count' => count($payload['features'] ?? []),
-            ], 'app');
-        } else {
-            aviationwx_log('info', 'notam map layer: cache rebuilt', [
-                'feature_count' => count($payload['features'] ?? []),
-                'ttl_seconds' => $ttl,
-            ], 'app');
-        }
-
-        return $payload;
-    } finally {
-        @flock($fp, LOCK_UN);
-        fclose($fp);
-    }
+    return notamTfrMapLayerRebuildAggregateUnderFlock(
+        $config,
+        $ttl,
+        $listedCaches,
+        false,
+        $mapMtime,
+        $cachedPayload
+    );
 }
 
 /**
@@ -996,53 +1036,7 @@ function notamTfrMapLayerRebuildAggregateLocked(
  * @return array<string, mixed>|null Fresh or existing payload
  */
 function notamTfrMapLayerRebuildAggregateBlocking(array $config, int $ttl, array $listedCaches): ?array {
-    $lockPath = getNotamTfrMapLayerRebuildLockPath();
-    $lockDir = dirname($lockPath);
-    if (!is_dir($lockDir)) {
-        if (!@mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
-            return notamTfrMapLayerBuildPayload($config, $listedCaches);
-        }
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if ($fp === false) {
-        return notamTfrMapLayerBuildPayload($config, $listedCaches);
-    }
-
-    if (!@flock($fp, LOCK_EX)) {
-        fclose($fp);
-
-        return notamTfrMapLayerReadAggregateCache();
-    }
-
-    try {
-        $path = getNotamTfrMapLayerCachePath();
-        $currentMtime = notamTfrMapLayerAggregateCacheMtime();
-        $currentCached = notamTfrMapLayerReadAggregateCache();
-        if (!notamTfrMapLayerAggregateNeedsRebuild(
-            $currentMtime,
-            $config,
-            $ttl,
-            $currentCached,
-            $listedCaches['newest_mtime'],
-            $listedCaches
-        )) {
-            return $currentCached;
-        }
-
-        $payload = notamTfrMapLayerBuildPayload($config, $listedCaches);
-        if (!notamTfrMapLayerWriteCache($payload)) {
-            aviationwx_log('warning', 'notam map layer: failed to write cache', [
-                'path' => $path,
-                'feature_count' => count($payload['features'] ?? []),
-            ], 'app');
-        }
-
-        return $payload;
-    } finally {
-        @flock($fp, LOCK_UN);
-        fclose($fp);
-    }
+    return notamTfrMapLayerRebuildAggregateUnderFlock($config, $ttl, $listedCaches, true);
 }
 
 /**
