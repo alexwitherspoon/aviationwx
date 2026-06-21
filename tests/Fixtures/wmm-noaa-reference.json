@@ -1,0 +1,311 @@
+{
+  "_meta": {
+    "description": "NOAA WMM2025 published test vectors for declination validation.",
+    "tolerance_degrees": 0.05,
+    "source_file": "WMM2025_TestValues.txt (NOAA WMM2025COF.zip)",
+    "coefficient_model": "WMM-2025",
+    "coefficient_epoch": 2025.0
+  },
+  "fixtures": [
+    {
+      "id": "wmm_2025p0_89p0_m121p0_28p0",
+      "decimal_year": 2025.0,
+      "altitude_km": 28.0,
+      "lat": 89.0,
+      "lon": -121.0,
+      "declination": -99.77,
+      "inclination": 88.47,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p0_80p0_m96p0_48p0",
+      "decimal_year": 2025.0,
+      "altitude_km": 48.0,
+      "lat": 80.0,
+      "lon": -96.0,
+      "declination": -29.91,
+      "inclination": 87.77,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p0_82p0_87p0_54p0",
+      "decimal_year": 2025.0,
+      "altitude_km": 54.0,
+      "lat": 82.0,
+      "lon": 87.0,
+      "declination": 54.89,
+      "inclination": 87.68,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p0_14p0_143p0_66p0",
+      "decimal_year": 2025.0,
+      "altitude_km": 66.0,
+      "lat": 14.0,
+      "lon": 143.0,
+      "declination": -0.19,
+      "inclination": 12.82,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p0_0p0_21p0_18p0",
+      "decimal_year": 2025.0,
+      "altitude_km": 18.0,
+      "lat": 0.0,
+      "lon": 21.0,
+      "declination": 1.29,
+      "inclination": -26.06,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p5_m37p0_140p0_22p0",
+      "decimal_year": 2025.5,
+      "altitude_km": 22.0,
+      "lat": -37.0,
+      "lon": 140.0,
+      "declination": 9.28,
+      "inclination": -68.62,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2025p5_m81p0_m67p0_50p0",
+      "decimal_year": 2025.5,
+      "altitude_km": 50.0,
+      "lat": -81.0,
+      "lon": -67.0,
+      "declination": 28.13,
+      "inclination": -67.61,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p0_m3p0_m147p0_33p0",
+      "decimal_year": 2026.0,
+      "altitude_km": 33.0,
+      "lat": -3.0,
+      "lon": -147.0,
+      "declination": 9.71,
+      "inclination": -2.12,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p0_m72p0_m22p0_47p0",
+      "decimal_year": 2026.0,
+      "altitude_km": 47.0,
+      "lat": -72.0,
+      "lon": -22.0,
+      "declination": -6.32,
+      "inclination": -61.16,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p0_86p0_m46p0_83p0",
+      "decimal_year": 2026.0,
+      "altitude_km": 83.0,
+      "lat": 86.0,
+      "lon": -46.0,
+      "declination": -30.61,
+      "inclination": 86.84,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p0_m81p0_40p0_56p0",
+      "decimal_year": 2026.0,
+      "altitude_km": 56.0,
+      "lat": -81.0,
+      "lon": 40.0,
+      "declination": -59.77,
+      "inclination": -68.45,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p5_0p0_80p0_14p0",
+      "decimal_year": 2026.5,
+      "altitude_km": 14.0,
+      "lat": 0.0,
+      "lon": 80.0,
+      "declination": -3.1,
+      "inclination": -17.15,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p5_m82p0_m68p0_12p0",
+      "decimal_year": 2026.5,
+      "altitude_km": 12.0,
+      "lat": -82.0,
+      "lon": -68.0,
+      "declination": 29.79,
+      "inclination": -68.07,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2026p5_m46p0_m42p0_44p0",
+      "decimal_year": 2026.5,
+      "altitude_km": 44.0,
+      "lat": -46.0,
+      "lon": -42.0,
+      "declination": -11.36,
+      "inclination": -54.39,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2027p0_m66p0_m5p0_37p0",
+      "decimal_year": 2027.0,
+      "altitude_km": 37.0,
+      "lat": -66.0,
+      "lon": -5.0,
+      "declination": -17.22,
+      "inclination": -59.04,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2027p0_59p0_m77p0_61p0",
+      "decimal_year": 2027.0,
+      "altitude_km": 61.0,
+      "lat": 59.0,
+      "lon": -77.0,
+      "declination": -16.48,
+      "inclination": 78.68,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2027p5_m5p0_159p0_98p0",
+      "decimal_year": 2027.5,
+      "altitude_km": 98.0,
+      "lat": -5.0,
+      "lon": 159.0,
+      "declination": 7.79,
+      "inclination": -23.22,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2027p5_m46p0_m85p0_96p0",
+      "decimal_year": 2027.5,
+      "altitude_km": 96.0,
+      "lat": -46.0,
+      "lon": -85.0,
+      "declination": 17.93,
+      "inclination": -47.37,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2027p5_m87p0_38p0_72p0",
+      "decimal_year": 2027.5,
+      "altitude_km": 72.0,
+      "lat": -87.0,
+      "lon": 38.0,
+      "declination": -65.44,
+      "inclination": -70.97,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2028p0_5p0_m13p0_71p0",
+      "decimal_year": 2028.0,
+      "altitude_km": 71.0,
+      "lat": 5.0,
+      "lon": -13.0,
+      "declination": -6.47,
+      "inclination": -17.66,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2028p0_m85p0_m79p0_86p0",
+      "decimal_year": 2028.0,
+      "altitude_km": 86.0,
+      "lat": -85.0,
+      "lon": -79.0,
+      "declination": 41.09,
+      "inclination": -70.25,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2028p0_m36p0_m64p0_30p0",
+      "decimal_year": 2028.0,
+      "altitude_km": 30.0,
+      "lat": -36.0,
+      "lon": -64.0,
+      "declination": -4.65,
+      "inclination": -40.08,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2028p5_m65p0_m88p0_39p0",
+      "decimal_year": 2028.5,
+      "altitude_km": 39.0,
+      "lat": -65.0,
+      "lon": -88.0,
+      "declination": 29.45,
+      "inclination": -60.2,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2028p5_86p0_70p0_55p0",
+      "decimal_year": 2028.5,
+      "altitude_km": 55.0,
+      "lat": 86.0,
+      "lon": 70.0,
+      "declination": 67.64,
+      "inclination": 87.57,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p0_m60p0_m59p0_95p0",
+      "decimal_year": 2029.0,
+      "altitude_km": 95.0,
+      "lat": -60.0,
+      "lon": -59.0,
+      "declination": 8.58,
+      "inclination": -55.17,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p0_87p0_m154p0_50p0",
+      "decimal_year": 2029.0,
+      "altitude_km": 50.0,
+      "lat": 87.0,
+      "lon": -154.0,
+      "declination": -73.48,
+      "inclination": 89.07,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p0_42p0_m19p0_41p0",
+      "decimal_year": 2029.0,
+      "altitude_km": 41.0,
+      "lat": 42.0,
+      "lon": -19.0,
+      "declination": -4.13,
+      "inclination": 56.44,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p5_m2p0_158p0_93p0",
+      "decimal_year": 2029.5,
+      "altitude_km": 93.0,
+      "lat": -2.0,
+      "lon": 158.0,
+      "declination": 7.09,
+      "inclination": -17.84,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p5_9p0_m172p0_18p0",
+      "decimal_year": 2029.5,
+      "altitude_km": 18.0,
+      "lat": 9.0,
+      "lon": -172.0,
+      "declination": 9.24,
+      "inclination": 15.85,
+      "source": "NOAA WMM2025_TestValues.txt"
+    },
+    {
+      "id": "wmm_2029p5_88p0_26p0_63p0",
+      "decimal_year": 2029.5,
+      "altitude_km": 63.0,
+      "lat": 88.0,
+      "lon": 26.0,
+      "declination": 36.52,
+      "inclination": 87.37,
+      "source": "NOAA WMM2025_TestValues.txt"
+    }
+  ]
+}
