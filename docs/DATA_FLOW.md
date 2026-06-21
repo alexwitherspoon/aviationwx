@@ -1625,7 +1625,14 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
 
 **Style bucket** (`notamTfrMapLayerStyleBucket()`): `active` (red stroke/fill) only when status is `active`; all other retained statuses map to `upcoming` (amber), including `inactive_scheduled`.
 
-**Serve**: `GET /api/notam-map.php` returns cached GeoJSON when younger than `getNotamCacheTtlSeconds()`; otherwise rebuilds and writes the aggregate cache file. Production access is browser-only (`lib/notam/map-api-access.php`).
+**Serve** (`notamTfrMapLayerServeOrRebuild()`):
+
+1. **Shared disk cache** (`cache/notam/tfr-map-layer.json`) stores drawable geometry and `map_layer_build_token` ({@see getGitSha()} or {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION} when SHA is unset). Rebuild when the aggregate file is missing or invalid, older than `getNotamCacheTtlSeconds()`, any listed per-airport NOTAM cache file is newer than the aggregate, or the build token no longer matches (code deploy).
+2. **Single-flight rebuild**: `flock()` on `tfr-map-layer.rebuild.lock` so concurrent requests do not all parse geometry; waiters serve the existing aggregate when present.
+3. **Serve-time status revalidation** (`notamTfrMapLayerRevalidatePayload()`): one pass over listed airport caches, then `revalidateNotamStatus()` and `isTfr()` parity with `api/notam.php`, refresh `map_layer_style` / `status_line`, drop expired rows, and re-apply geometry dedup.
+4. **HTTP cache**: `GET /api/notam-map.php` sends `Cache-Control` with `NOTAM_API_CACHE_TTL_SECONDS` / `NOTAM_API_CACHE_SWR_SECONDS` (same as `api/notam.php`). JSON `cache_ttl_seconds` is the disk/client poll TTL (`getNotamCacheTtlSeconds()`), not the HTTP window.
+
+Production access is browser-only (`lib/notam/map-api-access.php`).
 
 **Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map.
 

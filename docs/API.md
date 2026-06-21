@@ -140,7 +140,7 @@ Returns filtered NOTAM rows (closures and relevant TFRs) as JSON for the per-air
 
 #### `GET /api/notam-map.php`
 
-Returns a GeoJSON `FeatureCollection` of TFR geometries for the **airports directory map** (`pages/airports.php`). Features include properties such as `notam_id`, `status`, `status_line`, `vertical_limits`, `geometry_kind` (`polygon` or `circle`), `official_link`, and style hints. The payload is cached on disk with the same TTL as per-airport NOTAM JSON (`getNotamCacheTtlSeconds()`).
+Returns a GeoJSON `FeatureCollection` of TFR geometries for the **airports directory map** (`pages/airports.php`). Features include properties such as `notam_id`, `status`, `status_line`, `vertical_limits`, `geometry_kind` (`polygon` or `circle`), `official_link`, and style hints. Drawable geometry is cached on disk (`cache/notam/tfr-map-layer.json`) with a `map_layer_build_token` for deploy invalidation; status and map colors are revalidated at serve time using the same `revalidateNotamStatus()` / `isTfr()` checks as `api/notam.php`. Successful responses use the short shared HTTP cache window (`NOTAM_API_CACHE_TTL_SECONDS`); JSON `cache_ttl_seconds` reflects the disk/client poll interval (`getNotamCacheTtlSeconds()`).
 
 **Access:** In production, callers must satisfy map-only browser rules (`lib/notam/map-api-access.php`); nginx also rejects `Sec-Fetch-Site: cross-site` for this path (`docker/nginx.conf`). Non-production and test mode allow open access for local development and CI.
 
