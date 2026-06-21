@@ -777,11 +777,6 @@ function notamTfrMapLayerAggregateNeedsRebuild(
         return true;
     }
 
-    $sourceMtime = $newestSourceMtime ?? notamTfrMapLayerNewestPerAirportCacheMtime($config);
-    if ($sourceMtime > $mapMtime) {
-        return true;
-    }
-
     if ($cachedPayload === null || !notamTfrMapLayerAggregateFileIsValid($cachedPayload)) {
         return true;
     }
@@ -791,6 +786,10 @@ function notamTfrMapLayerAggregateNeedsRebuild(
     }
 
     $listedCaches = $listedCaches ?? notamTfrMapLayerLoadListedAirportCaches($config);
+    $sourceMtime = $newestSourceMtime ?? $listedCaches['newest_mtime'];
+    if ($sourceMtime > $mapMtime) {
+        return true;
+    }
 
     return notamTfrMapLayerAggregateMissingDrawableGeometry($cachedPayload, $listedCaches, $nowUnix);
 }
