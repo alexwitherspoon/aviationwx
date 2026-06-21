@@ -155,6 +155,73 @@ final class NotamMapLayerTest extends TestCase
         ));
     }
 
+    public function testNotamTfrMapLayerCurrentBuildToken_WithGitSha_IncludesLogicVersion(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        putenv('GIT_SHA=abcdef12');
+        try {
+            $this->assertSame(
+                'abcdef1-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION,
+                notamTfrMapLayerCurrentBuildToken()
+            );
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+        }
+    }
+
+    public function testNotamTfrMapLayerAggregateBuildTokenMatches_RejectsLegacyShaOnlyToken(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        putenv('GIT_SHA=abcdef12');
+        try {
+            $legacy = [
+                'type' => 'FeatureCollection',
+                'features' => [],
+                'map_layer_build_token' => 'abcdef1',
+            ];
+            $this->assertFalse(notamTfrMapLayerAggregateBuildTokenMatches($legacy));
+
+            $legacy['map_layer_build_token'] = notamTfrMapLayerCurrentBuildToken();
+            $this->assertTrue(notamTfrMapLayerAggregateBuildTokenMatches($legacy));
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+        }
+    }
+
+    public function testNotamTfrMapLayerAggregateNeedsRebuild_LegacyShaOnlyToken_ReturnsTrue(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        putenv('GIT_SHA=abcdef12');
+        try {
+            $config = $this->minimalListedAirportConfig();
+            $now = time();
+            $this->writePerAirportNotamCache('s83', []);
+            $this->writeAggregateCache([], $now, 'abcdef1');
+
+            $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
+                $now,
+                $config,
+                3600,
+                notamTfrMapLayerReadAggregateCache(),
+                $now
+            ));
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+        }
+    }
+
     public function testNotamTfrMapLayerAggregateNeedsRebuild_NewerSource_ReturnsTrue(): void
     {
         $config = $this->minimalListedAirportConfig();
