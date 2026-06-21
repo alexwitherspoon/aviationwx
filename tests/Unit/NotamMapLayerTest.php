@@ -46,14 +46,22 @@ final class NotamMapLayerTest extends TestCase
     private function writeAggregateCache(array $features, int $mtime, ?string $buildToken = null): void
     {
         $mapPath = getNotamTfrMapLayerCachePath();
-        file_put_contents($mapPath, json_encode([
+        $json = json_encode([
             'type' => 'FeatureCollection',
             'features' => $features,
             'generated_at' => $mtime,
             'cache_ttl_seconds' => 3600,
             'map_layer_build_token' => $buildToken ?? notamTfrMapLayerCurrentBuildToken(),
-        ], JSON_UNESCAPED_SLASHES));
-        touch($mapPath, $mtime);
+        ], JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            self::fail('Could not encode NOTAM map aggregate test cache JSON');
+        }
+        if (file_put_contents($mapPath, $json) === false) {
+            self::fail('Could not write NOTAM map aggregate test cache: ' . $mapPath);
+        }
+        if (!touch($mapPath, $mtime)) {
+            self::fail('Could not set mtime on NOTAM map aggregate test cache: ' . $mapPath);
+        }
     }
 
     /**
@@ -62,12 +70,21 @@ final class NotamMapLayerTest extends TestCase
     private function writePerAirportNotamCache(string $airportId, array $notams): void
     {
         $path = notamCacheFilePath($airportId);
+        $fetchedAt = time();
         $payload = [
             'notams' => $notams,
-            'fetched_at' => time(),
+            'fetched_at' => $fetchedAt,
         ];
-        file_put_contents($path, json_encode($payload, JSON_UNESCAPED_SLASHES));
-        touch($path, time());
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            self::fail('Could not encode per-airport NOTAM test cache JSON for ' . $airportId);
+        }
+        if (file_put_contents($path, $json) === false) {
+            self::fail('Could not write per-airport NOTAM test cache: ' . $path);
+        }
+        if (!touch($path, $fetchedAt)) {
+            self::fail('Could not set mtime on per-airport NOTAM test cache: ' . $path);
+        }
     }
 
     /**
