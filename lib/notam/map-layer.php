@@ -255,7 +255,6 @@ function notamTfrMapLayerAggregateMissingDrawableGeometry(
         return false;
     }
 
-    $sourceKeys = [];
     $seenIds = [];
 
     foreach ($listedCaches['airports'] as $entry) {
@@ -287,12 +286,12 @@ function notamTfrMapLayerAggregateMissingDrawableGeometry(
             $seenIds[$id] = true;
             $key = notamTfrMapLayerFeatureGeometryKey($minimal);
             if ($key !== null && $key !== '') {
-                $sourceKeys[$key] = true;
+                return true;
             }
         }
     }
 
-    return $sourceKeys !== [];
+    return false;
 }
 
 /**
