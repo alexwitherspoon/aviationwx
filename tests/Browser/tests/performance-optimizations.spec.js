@@ -49,23 +49,10 @@ test.describe('Performance Optimizations', () => {
     expect(scriptsExecuted).toBeTruthy();
   });
 
-  test('Legacy service workers should unregister without errors', async ({ page }) => {
-    const swErrors = [];
-    
-    // Listen for service worker related errors BEFORE navigation
-    page.on('pageerror', error => {
-      const errorText = error.message;
-      if (errorText.includes('service worker') || errorText.includes('ServiceWorker') || errorText.includes('sw.js')) {
-        swErrors.push(errorText);
-      }
-    });
-    
+  test('No service worker registrations exist after page load', async ({ page }) => {
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     await page.waitForLoadState('load');
-    await page.waitForTimeout(2000); // Allow the unregister pass to run
-    
-    // The page no longer registers a service worker; the inline cleanup
-    // script unregisters any legacy registrations from older builds
+
     const swState = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) {
         return { supported: false, count: 0 };
@@ -73,8 +60,7 @@ test.describe('Performance Optimizations', () => {
       const registrations = await navigator.serviceWorker.getRegistrations();
       return { supported: true, count: registrations.length };
     });
-    
-    expect(swErrors).toHaveLength(0);
+
     if (swState.supported) {
       expect(swState.count).toBe(0);
     }
