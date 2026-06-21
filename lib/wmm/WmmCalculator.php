@@ -144,7 +144,9 @@ final class WmmCalculator
 
         $fraction = $decimalYear - $year;
         if ($fraction < 0.0 || $fraction >= 1.0) {
-            $fraction = 0.0;
+            throw new \InvalidArgumentException(
+                'Decimal year fraction must be in [0, 1); got ' . $decimalYear
+            );
         }
 
         $isLeapYear = ($year % 4 === 0 && ($year % 100 !== 0 || $year % 400 === 0)) ? 1 : 0;
