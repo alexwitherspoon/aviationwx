@@ -255,9 +255,12 @@ final class WmmCoefficients
                 continue;
             }
 
-            if (!$headerParsed && count($parts) <= 3) {
+            if (!$headerParsed) {
+                if (count($parts) < 2 || !is_numeric($parts[0]) || !preg_match('/^WMM-/', $parts[1])) {
+                    throw new \InvalidArgumentException('WMM coefficient file has invalid or missing header');
+                }
                 $this->epoch = (float) $parts[0];
-                $this->modelName = $parts[1] ?? 'WMM';
+                $this->modelName = $parts[1];
                 $this->releaseDate = $parts[2] ?? '';
                 $headerParsed = true;
                 continue;
