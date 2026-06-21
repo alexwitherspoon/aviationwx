@@ -243,8 +243,11 @@ final class WmmCoefficients
         $headerParsed = false;
         foreach ($lines as $line) {
             $line = trim($line);
-            if ($line === '' || str_starts_with($line, '9999')) {
+            if (str_starts_with($line, '9999')) {
                 break;
+            }
+            if ($line === '') {
+                continue;
             }
 
             $parts = preg_split('/\s+/', $line);
