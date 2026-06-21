@@ -257,6 +257,77 @@ final class NotamMapLayerTest extends TestCase
         ));
     }
 
+    public function testNotamTfrMapLayerAggregateNeedsRebuild_EmptyAggregateWithDrawableSource_ReturnsTrue(): void
+    {
+        $config = $this->minimalListedAirportConfig();
+        $now = time();
+        $tfrText = $this->sampleTfrText();
+        $this->writePerAirportNotamCache('s83', [
+            [
+                'id' => 'GAP1/2026',
+                'text' => $tfrText,
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+            ],
+        ]);
+        touch(notamCacheFilePath('s83'), $now - 120);
+        $this->writeAggregateCache([], $now);
+        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+
+        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
+            $now,
+            $config,
+            3600,
+            notamTfrMapLayerReadAggregateCache(),
+            $listedCaches['newest_mtime'],
+            $listedCaches,
+            $now
+        ));
+    }
+
+    public function testNotamTfrMapLayerAggregateNeedsRebuild_EmptyAggregateWithoutDrawableSource_ReturnsFalse(): void
+    {
+        $config = $this->minimalListedAirportConfig();
+        $now = time();
+        $this->writePerAirportNotamCache('s83', []);
+        touch(notamCacheFilePath('s83'), $now - 120);
+        $this->writeAggregateCache([], $now);
+        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+
+        $this->assertFalse(notamTfrMapLayerAggregateNeedsRebuild(
+            $now,
+            $config,
+            3600,
+            notamTfrMapLayerReadAggregateCache(),
+            $listedCaches['newest_mtime'],
+            $listedCaches,
+            $now
+        ));
+    }
+
+    public function testNotamTfrMapLayerResolveCachedGeometry_RebuildsWhenAggregateEmptyButSourcesHaveDrawableTfr(): void
+    {
+        $config = $this->minimalListedAirportConfig();
+        $now = time();
+        $tfrText = $this->sampleTfrText();
+        $this->writePerAirportNotamCache('s83', [
+            [
+                'id' => 'GAP2/2026',
+                'text' => $tfrText,
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+            ],
+        ]);
+        touch(notamCacheFilePath('s83'), $now - 120);
+        $this->writeAggregateCache([], $now);
+        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+
+        $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
+
+        $this->assertNotEmpty($geometry['features']);
+        $this->assertSame('GAP2/2026', $geometry['features'][0]['properties']['notam_id'] ?? null);
+    }
+
     private function sampleTfrText(): string
     {
         return 'ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS '

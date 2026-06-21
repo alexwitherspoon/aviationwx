@@ -182,6 +182,146 @@ function notamTfrMapLayerFeatureGeometryKey(array $feature): ?string {
 }
 
 /**
+ * Minimal GeoJSON feature for geometry-key checks and build (drawable TFR text only).
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @return array<string, mixed>|null Feature with geometry and geometry_kind only
+ */
+function notamTfrMapLayerMinimalFeatureForGeometryKey(array $notam): ?array {
+    $text = (string)($notam['text'] ?? '');
+    $meta = parseTfrPolygonVerticesMeta($text);
+    $vertices = $meta['vertices'];
+    $ringClosed = $meta['ring_closed'];
+    $parsedRadius = parseTfrRadiusNm($text);
+    $polygonRing = null;
+    if ($ringClosed && count($vertices) >= 3) {
+        $polygonRing = notamTfrMapLayerGeoJsonRingFromVertices($vertices, true);
+    }
+
+    if ($polygonRing !== null) {
+        return [
+            'type' => 'Feature',
+            'geometry' => [
+                'type' => 'Polygon',
+                'coordinates' => [$polygonRing],
+            ],
+            'properties' => [
+                'geometry_kind' => 'polygon',
+            ],
+        ];
+    }
+
+    $geo = parseTfrGeographicRelevanceReference($text, $vertices, $parsedRadius);
+    if ($geo === null || $geo['radius_nm'] <= 0) {
+        return null;
+    }
+
+    return [
+        'type' => 'Feature',
+        'geometry' => [
+            'type' => 'Point',
+            'coordinates' => [(float)$geo['lon'], (float)$geo['lat']],
+        ],
+        'properties' => [
+            'geometry_kind' => 'circle',
+            'radius_nm' => (float)$geo['radius_nm'],
+        ],
+    ];
+}
+
+/**
+ * Collect geometry dedup keys present in a cached aggregate FeatureCollection.
+ *
+ * @param array<string, mixed> $cachedPayload Decoded aggregate cache
+ * @return array<string, true> Keys from {@see notamTfrMapLayerFeatureGeometryKey()}
+ */
+function notamTfrMapLayerAggregateGeometryKeys(array $cachedPayload): array {
+    $keys = [];
+    $features = $cachedPayload['features'] ?? [];
+    if (!is_array($features)) {
+        return $keys;
+    }
+    foreach ($features as $feature) {
+        if (!is_array($feature)) {
+            continue;
+        }
+        $key = notamTfrMapLayerFeatureGeometryKey($feature);
+        if ($key !== null && $key !== '') {
+            $keys[$key] = true;
+        }
+    }
+
+    return $keys;
+}
+
+/**
+ * True when listed sources contain drawable TFR geometry absent from the aggregate.
+ *
+ * Uses the same geometry keys as {@see notamTfrMapLayerDeduplicateFeaturesByGeometry()}
+ * so duplicate NOTAM ids for one shape do not force endless rebuilds.
+ *
+ * @param array<string, mixed> $cachedPayload Decoded aggregate cache
+ * @param array{
+ *     newest_mtime: int,
+ *     by_id: array<string, array{notam: array<string, mixed>, timezone: string, airport_id: string}>,
+ *     airports: array<string, array{airport: array<string, mixed>, timezone: string, notams: array<int, mixed>, cache_mtime: int}>
+ * } $listedCaches Preloaded per-airport caches
+ * @param int $nowUnix Current Unix time (UTC instants)
+ * @return bool
+ */
+function notamTfrMapLayerAggregateMissingDrawableGeometry(
+    array $cachedPayload,
+    array $listedCaches,
+    int $nowUnix
+): bool {
+    $aggregateKeys = notamTfrMapLayerAggregateGeometryKeys($cachedPayload);
+    $sourceKeys = [];
+    $seenIds = [];
+
+    foreach ($listedCaches['airports'] as $entry) {
+        $airport = $entry['airport'];
+        if (!is_array($airport) || !isset($airport['lat'], $airport['lon'])) {
+            continue;
+        }
+        $timezone = $entry['timezone'];
+        foreach ($entry['notams'] as $notam) {
+            if (!is_array($notam)) {
+                continue;
+            }
+            if (!isTfr($notam)) {
+                continue;
+            }
+            $id = trim((string)($notam['id'] ?? ''));
+            if ($id === '' || isset($seenIds[$id])) {
+                continue;
+            }
+            notamEnsureEffectiveSegments($notam);
+            $status = revalidateNotamStatus($notam, $timezone, $nowUnix);
+            if ($status === 'expired' || $status === 'unknown') {
+                continue;
+            }
+            $minimal = notamTfrMapLayerMinimalFeatureForGeometryKey($notam);
+            if ($minimal === null) {
+                continue;
+            }
+            $seenIds[$id] = true;
+            $key = notamTfrMapLayerFeatureGeometryKey($minimal);
+            if ($key !== null && $key !== '') {
+                $sourceKeys[$key] = true;
+            }
+        }
+    }
+
+    foreach ($sourceKeys as $key => $_) {
+        if (!isset($aggregateKeys[$key])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Pick the higher-priority feature when two share the same geometry key.
  *
  * @param array<string, mixed> $candidate New feature
@@ -527,22 +667,9 @@ function notamTfrMapLayerBuildPayload(array $config, ?array $listedCaches = null
                 continue;
             }
 
-            $text = (string)($notam['text'] ?? '');
-            $meta = parseTfrPolygonVerticesMeta($text);
-            $vertices = $meta['vertices'];
-            $ringClosed = $meta['ring_closed'];
-            $parsedRadius = parseTfrRadiusNm($text);
-            $polygonRing = null;
-            if ($ringClosed && count($vertices) >= 3) {
-                $polygonRing = notamTfrMapLayerGeoJsonRingFromVertices($vertices, true);
-            }
-
-            $geo = null;
-            if ($polygonRing === null) {
-                $geo = parseTfrGeographicRelevanceReference($text, $vertices, $parsedRadius);
-                if ($geo === null || $geo['radius_nm'] <= 0) {
-                    continue;
-                }
+            $minimal = notamTfrMapLayerMinimalFeatureForGeometryKey($notam);
+            if ($minimal === null) {
+                continue;
             }
 
             $seenIds[$id] = true;
@@ -560,36 +687,32 @@ function notamTfrMapLayerBuildPayload(array $config, ?array $listedCaches = null
             if ($statusLine !== null && $statusLine !== '') {
                 $baseProps['status_line'] = $statusLine;
             }
+            $text = (string)($notam['text'] ?? '');
             $verticalLimits = parseTfrVerticalLimitsSummary($text);
             if ($verticalLimits !== null && $verticalLimits !== '') {
                 $baseProps['vertical_limits'] = $verticalLimits;
             }
 
-            if ($polygonRing !== null) {
+            $geometryKind = (string)($minimal['properties']['geometry_kind'] ?? '');
+            if ($geometryKind === 'polygon') {
                 $baseProps['geometry_kind'] = 'polygon';
                 $features[] = [
                     'type' => 'Feature',
                     'id' => 'tfr-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $id),
-                    'geometry' => [
-                        'type' => 'Polygon',
-                        'coordinates' => [$polygonRing],
-                    ],
+                    'geometry' => $minimal['geometry'],
                     'properties' => $baseProps,
                 ];
                 continue;
             }
 
-            // Circle TFRs: Point + radius so the client can use L.circle (true circle in map projection).
             $baseProps['geometry_kind'] = 'circle';
-            $baseProps['radius_nm'] = (float)$geo['radius_nm'];
-            $baseProps['radius_m'] = (float)$geo['radius_nm'] * METERS_PER_NAUTICAL_MILE;
+            $radiusNm = (float)($minimal['properties']['radius_nm'] ?? 0);
+            $baseProps['radius_nm'] = $radiusNm;
+            $baseProps['radius_m'] = $radiusNm * METERS_PER_NAUTICAL_MILE;
             $features[] = [
                 'type' => 'Feature',
                 'id' => 'tfr-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $id),
-                'geometry' => [
-                    'type' => 'Point',
-                    'coordinates' => [(float)$geo['lon'], (float)$geo['lat']],
-                ],
+                'geometry' => $minimal['geometry'],
                 'properties' => $baseProps,
             ];
         }
@@ -627,6 +750,12 @@ function notamTfrMapLayerNewestPerAirportCacheMtime(array $config): int {
  * @param int $ttl Aggregate max age from {@see getNotamCacheTtlSeconds()}
  * @param array<string, mixed>|null $cachedPayload Decoded aggregate JSON, if available
  * @param int|null $newestSourceMtime Optional preload from {@see notamTfrMapLayerLoadListedAirportCaches()}
+ * @param array{
+ *     newest_mtime: int,
+ *     by_id: array<string, array{notam: array<string, mixed>, timezone: string, airport_id: string}>,
+ *     airports: array<string, array{airport: array<string, mixed>, timezone: string, notams: array<int, mixed>, cache_mtime: int}>
+ * }|null $listedCaches Optional preload from {@see notamTfrMapLayerLoadListedAirportCaches()}
+ * @param int|null $nowUnix Optional fixed clock for tests; defaults to {@see time()}
  * @return bool True when geometry rebuild is required
  */
 function notamTfrMapLayerAggregateNeedsRebuild(
@@ -634,8 +763,11 @@ function notamTfrMapLayerAggregateNeedsRebuild(
     array $config,
     int $ttl,
     ?array $cachedPayload = null,
-    ?int $newestSourceMtime = null
+    ?int $newestSourceMtime = null,
+    ?array $listedCaches = null,
+    ?int $nowUnix = null
 ): bool {
+    $nowUnix = $nowUnix ?? time();
     if ($mapMtime <= 0) {
         return true;
     }
@@ -654,7 +786,13 @@ function notamTfrMapLayerAggregateNeedsRebuild(
         return true;
     }
 
-    return !notamTfrMapLayerAggregateBuildTokenMatches($cachedPayload);
+    if (!notamTfrMapLayerAggregateBuildTokenMatches($cachedPayload)) {
+        return true;
+    }
+
+    $listedCaches = $listedCaches ?? notamTfrMapLayerLoadListedAirportCaches($config);
+
+    return notamTfrMapLayerAggregateMissingDrawableGeometry($cachedPayload, $listedCaches, $nowUnix);
 }
 
 /**
@@ -836,7 +974,8 @@ function notamTfrMapLayerRebuildAggregateLocked(
             $config,
             $ttl,
             $currentCached,
-            $listedCaches['newest_mtime']
+            $listedCaches['newest_mtime'],
+            $listedCaches
         )) {
             return $currentCached ?? notamTfrMapLayerReadAggregateCache();
         }
@@ -902,7 +1041,8 @@ function notamTfrMapLayerRebuildAggregateBlocking(array $config, int $ttl, array
             $config,
             $ttl,
             $currentCached,
-            $listedCaches['newest_mtime']
+            $listedCaches['newest_mtime'],
+            $listedCaches
         )) {
             return $currentCached;
         }
@@ -951,7 +1091,8 @@ function notamTfrMapLayerResolveCachedGeometry(array $config, int $ttl, array $l
         $config,
         $ttl,
         $cached,
-        $listedCaches['newest_mtime']
+        $listedCaches['newest_mtime'],
+        $listedCaches
     )) {
         return $cached ?? [
             'type' => 'FeatureCollection',
