@@ -14,6 +14,9 @@ final class NotamMapLayerTest extends TestCase
 {
     private string $cacheDir = '';
 
+    /** @var (callable(): void)|null Active rebuild lock holder subprocess release hook */
+    private $rebuildLockHolderRelease = null;
+
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/aviationwx-notam-map-' . bin2hex(random_bytes(4));
@@ -25,6 +28,11 @@ final class NotamMapLayerTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->rebuildLockHolderRelease !== null) {
+            ($this->rebuildLockHolderRelease)();
+            $this->rebuildLockHolderRelease = null;
+        }
+
         unset($GLOBALS['notamCacheTestDirectory']);
         if ($this->cacheDir === '' || !is_dir($this->cacheDir)) {
             return;
@@ -118,36 +126,116 @@ final class NotamMapLayerTest extends TestCase
     }
 
     /**
-     * Hold exclusive rebuild lock (simulates another worker rebuilding).
+     * Start a child PHP process that holds the rebuild flock until released.
      *
-     * @return resource File handle; release via {@see releaseRebuildLock()}
+     * Uses a separate process so LOCK_NB contention matches another worker (not
+     * same-process flock upgrade behavior on some platforms).
+     *
+     * @return callable Release function; also invoked from tearDown on failure.
      */
-    private function holdRebuildLock()
+    private function startRebuildLockHolder(): callable
     {
+        if ($this->rebuildLockHolderRelease !== null) {
+            self::fail('Rebuild lock holder subprocess already active');
+        }
+
         $lockPath = getNotamTfrMapLayerRebuildLockPath();
         $lockDir = dirname($lockPath);
         if (!is_dir($lockDir) && !mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
             self::fail('Could not create NOTAM map rebuild lock directory: ' . $lockDir);
         }
-        $fp = fopen($lockPath, 'c+');
-        if ($fp === false) {
-            self::fail('Could not open NOTAM map rebuild lock file: ' . $lockPath);
-        }
-        if (!flock($fp, LOCK_EX)) {
-            fclose($fp);
-            self::fail('Could not acquire exclusive NOTAM map rebuild lock: ' . $lockPath);
-        }
 
-        return $fp;
+        $helperScript = $this->cacheDir . '/hold-rebuild-lock.php';
+        $readyPath = $this->cacheDir . '/hold-rebuild-lock.ready';
+        $written = file_put_contents($helperScript, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+$lockPath = $argv[1] ?? '';
+$readyPath = $argv[2] ?? '';
+if ($lockPath === '' || $readyPath === '') {
+    fwrite(STDERR, "missing lock or ready path\n");
+    exit(1);
+}
+
+$fp = fopen($lockPath, 'c+');
+if ($fp === false || !flock($fp, LOCK_EX)) {
+    fwrite(STDERR, "lock acquire failed\n");
+    exit(1);
+}
+
+if (file_put_contents($readyPath, 'ready', LOCK_EX) === false) {
+    fwrite(STDERR, "ready marker write failed\n");
+    exit(1);
+}
+
+while (!feof(STDIN)) {
+    $chunk = fread(STDIN, 1024);
+    if ($chunk === false) {
+        break;
     }
+}
 
-    /**
-     * @param resource $fp Lock handle from {@see holdRebuildLock()}
-     */
-    private function releaseRebuildLock($fp): void
-    {
-        flock($fp, LOCK_UN);
-        fclose($fp);
+@unlink($readyPath);
+flock($fp, LOCK_UN);
+fclose($fp);
+PHP
+        );
+        if ($written === false) {
+            self::fail('Could not write rebuild lock holder script: ' . $helperScript);
+        }
+
+        $phpBinary = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'r'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = proc_open([$phpBinary, $helperScript, $lockPath, $readyPath], $descriptors, $pipes);
+        if (!is_resource($process)) {
+            @unlink($helperScript);
+            self::fail('Could not start rebuild lock holder subprocess');
+        }
+
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($readyPath) && microtime(true) < $deadline) {
+            usleep(10_000);
+        }
+        if (!is_file($readyPath)) {
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            proc_close($process);
+            @unlink($helperScript);
+            self::fail('Rebuild lock holder subprocess did not become ready: ' . trim((string) $stderr));
+        }
+
+        $release = function () use ($process, $pipes, $helperScript, $readyPath): void {
+            if (isset($pipes[0]) && is_resource($pipes[0])) {
+                fclose($pipes[0]);
+            }
+            if (isset($pipes[1]) && is_resource($pipes[1])) {
+                fclose($pipes[1]);
+            }
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                fclose($pipes[2]);
+            }
+            proc_close($process);
+            @unlink($helperScript);
+            @unlink($readyPath);
+        };
+
+        $this->rebuildLockHolderRelease = $release;
+
+        return function () use ($release): void {
+            if ($this->rebuildLockHolderRelease === null) {
+                return;
+            }
+            $release();
+            $this->rebuildLockHolderRelease = null;
+        };
     }
 
     /**
@@ -386,7 +474,7 @@ final class NotamMapLayerTest extends TestCase
         $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
         $mapMtime = notamTfrMapLayerAggregateCacheMtime();
 
-        $lockFp = $this->holdRebuildLock();
+        $releaseLock = $this->startRebuildLockHolder();
         try {
             $this->assertNull(notamTfrMapLayerRebuildAggregateLocked(
                 $config,
@@ -396,7 +484,7 @@ final class NotamMapLayerTest extends TestCase
                 notamTfrMapLayerReadAggregateCache()
             ));
         } finally {
-            $this->releaseRebuildLock($lockFp);
+            $releaseLock();
         }
     }
 
@@ -409,13 +497,13 @@ final class NotamMapLayerTest extends TestCase
         $this->writeAggregateCache([], $now - 120);
         $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
 
-        $lockFp = $this->holdRebuildLock();
+        $releaseLock = $this->startRebuildLockHolder();
         try {
             $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
 
             $this->assertSame([], $geometry['features']);
         } finally {
-            $this->releaseRebuildLock($lockFp);
+            $releaseLock();
         }
 
         $geometryAfterLock = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
@@ -431,7 +519,7 @@ final class NotamMapLayerTest extends TestCase
         touch(notamCacheFilePath('s83'), $now);
         $this->writeAggregateCache([], $now - 120);
 
-        $lockFp = $this->holdRebuildLock();
+        $releaseLock = $this->startRebuildLockHolder();
         try {
             $refreshedFeatures = [
                 [
@@ -457,7 +545,7 @@ final class NotamMapLayerTest extends TestCase
             $this->assertCount(1, $geometry['features']);
             $this->assertSame('WAIT2/2026', $geometry['features'][0]['properties']['notam_id'] ?? null);
         } finally {
-            $this->releaseRebuildLock($lockFp);
+            $releaseLock();
         }
     }
 
