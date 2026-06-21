@@ -3,9 +3,9 @@
  * Aggregated TFR GeoJSON for the airports directory map (internal API only).
  *
  * Builds and styles TFR map geometry and tooltip copy. Disk cache orchestration
- * (aggregate JSON, flock rebuild, serve entry) lives in {@see map-layer-cache.php}.
- * Status fields are revalidated at serve time via
- * {@see notamTfrMapLayerRevalidatePayload()} in map-layer-cache.php.
+ * (aggregate JSON, flock rebuild, serve entry) is handled by
+ * {@see notamTfrMapLayerServeOrRebuild()}. Status fields are revalidated at
+ * serve time via {@see notamTfrMapLayerRevalidatePayload()}.
  */
 
 require_once __DIR__ . '/../logger.php';
