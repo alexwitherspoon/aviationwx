@@ -62,9 +62,6 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ready\.php$ health/ready.php [L]
 
-    # Return 404 for old service worker path (sw.js) - no longer used
-    RewriteRule ^sw\.js$ - [R=404,L]
-    
     # Route guides paths to index.php (for local dev/testing)
     # Must come before directory checks to prevent Apache from trying to access the guides/ directory
     # Match /guides, /guides/, and /guides/anything - force rewrite even if directory exists
