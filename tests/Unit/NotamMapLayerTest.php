@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/notam/cache.php';
-require_once __DIR__ . '/../../lib/notam/map-layer.php';
+require_once __DIR__ . '/../../lib/notam/map-layer-cache.php';
 
 /**
  * NOTAM TFR map layer (GeoJSON aggregation) unit tests.

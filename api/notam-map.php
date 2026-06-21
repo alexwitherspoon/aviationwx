@@ -15,7 +15,7 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/notam/map-api-access.php';
 require_once __DIR__ . '/../lib/notam/http-cache-headers.php';
-require_once __DIR__ . '/../lib/notam/map-layer.php';
+require_once __DIR__ . '/../lib/notam/map-layer-cache.php';
 
 ob_start();
 header('Content-Type: application/json; charset=UTF-8');
