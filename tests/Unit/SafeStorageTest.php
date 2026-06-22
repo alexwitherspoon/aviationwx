@@ -66,7 +66,7 @@ class SafeStorageTest extends TestCase
     /**
      * Airport dashboard preferences live in the extracted JS bundle.
      */
-    public function testAirportPage_ContainsSafeStorageHelpers(): void
+    public function testAirportDashboardJs_ContainsSafeStorageHelpers(): void
     {
         $content = $this->readProjectFile('public/js/airport-dashboard.js');
 
@@ -78,7 +78,7 @@ class SafeStorageTest extends TestCase
     /**
      * Airport dashboard preference getters use safeStorageGet (not raw localStorage.getItem).
      */
-    public function testAirportPage_PreferenceGettersUseSafeStorage(): void
+    public function testAirportDashboardJs_PreferenceGettersUseSafeStorage(): void
     {
         $content = $this->readProjectFile('public/js/airport-dashboard.js');
 
@@ -97,7 +97,7 @@ class SafeStorageTest extends TestCase
     /**
      * Version-check IIFE (rendered from lib/version.php) documents Private Browsing handling.
      */
-    public function testAirportPage_VersionBlockHasSafeStorage(): void
+    public function testVersionPhp_VersionBlockHasSafeStorage(): void
     {
         $content = $this->readProjectFile('lib/version.php');
 
