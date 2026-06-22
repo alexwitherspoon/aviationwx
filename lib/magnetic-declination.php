@@ -70,10 +70,10 @@ function getWmmManifest(): ?array
 /**
  * Whether bundled WMM coefficients are valid for the given timestamp.
  *
- * Manifest valid_through_epoch is a WMM decimal year (e.g. 2030.0), not a Unix timestamp.
+ * Manifest epoch and valid_through_epoch are WMM decimal years (e.g. 2025.0..2030.0), not Unix timestamps.
  *
  * @param int $timestamp Unix timestamp (UTC)
- * @return bool True when the timestamp's decimal year is within valid_through_epoch
+ * @return bool True when the timestamp's decimal year is within the manifest validity window
  */
 function isWmmValidForTimestamp(int $timestamp): bool
 {
@@ -82,21 +82,22 @@ function isWmmValidForTimestamp(int $timestamp): bool
     }
 
     $manifest = getWmmManifest();
-    if ($manifest === null || !isset($manifest['valid_through_epoch'])) {
+    if ($manifest === null || !isset($manifest['valid_through_epoch'], $manifest['epoch'])) {
         return false;
     }
 
+    $epochDecimalYear = (float) $manifest['epoch'];
     $validThroughDecimalYear = (float) $manifest['valid_through_epoch'];
     $decimalYear = WmmCalculator::timestampToDecimalYear($timestamp);
 
-    return $decimalYear <= $validThroughDecimalYear;
+    return $decimalYear >= $epochDecimalYear && $decimalYear <= $validThroughDecimalYear;
 }
 
 /**
  * Fetch magnetic declination from bundled WMM coefficients.
  *
- * Returns null when coordinates are invalid, the timestamp's decimal year exceeds the
- * manifest valid_through_epoch (WMM decimal year, not Unix time), or calculation fails.
+ * Returns null when coordinates are invalid, the timestamp's decimal year is outside the
+ * manifest validity window (epoch..valid_through_epoch, WMM decimal years), or calculation fails.
  * Caller must fall back to 0.
  *
  * @param float $lat       Latitude (-90 to 90)
@@ -125,12 +126,13 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
         $manifest = getWmmManifest();
         if ($manifest === null) {
             aviationwx_log('error', 'wmm: manifest unavailable', $context, 'app');
-        } elseif (!isset($manifest['valid_through_epoch'])) {
-            aviationwx_log('error', 'wmm: manifest missing valid_through_epoch', $context, 'app');
+        } elseif (!isset($manifest['valid_through_epoch'], $manifest['epoch'])) {
+            aviationwx_log('error', 'wmm: manifest missing epoch or valid_through_epoch', $context, 'app');
         } else {
             $context['decimal_year'] = WmmCalculator::timestampToDecimalYear($timestamp);
+            $context['epoch'] = (float) $manifest['epoch'];
             $context['valid_through_epoch'] = (float) $manifest['valid_through_epoch'];
-            aviationwx_log('warning', 'wmm: decimal year past valid_through_epoch', $context, 'app');
+            aviationwx_log('warning', 'wmm: timestamp outside coefficient validity window', $context, 'app');
         }
         return null;
     }
