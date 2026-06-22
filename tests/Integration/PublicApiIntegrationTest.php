@@ -252,10 +252,15 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertNotNull($airport, 'Response should include airport');
         $this->assertArrayHasKey('magnetic_declination', $airport);
         $this->assertIsFloat($airport['magnetic_declination']);
+        $this->assertArrayHasKey('lat', $airport, 'Airport response must include lat for WMM validation');
+        $this->assertArrayHasKey('lon', $airport, 'Airport response must include lon for WMM validation');
+        $this->assertTrue(is_numeric($airport['lat']), 'lat must be numeric');
+        $this->assertTrue(is_numeric($airport['lon']), 'lon must be numeric');
 
+        require_once dirname(__DIR__, 2) . '/lib/wmm/WmmCoefficients.php';
         require_once dirname(__DIR__, 2) . '/lib/wmm/WmmCalculator.php';
-        $lat = (float) ($airport['lat'] ?? 0);
-        $lon = (float) ($airport['lon'] ?? 0);
+        $lat = (float) $airport['lat'];
+        $lon = (float) $airport['lon'];
         $expected = WmmCalculator::getDeclination(time(), $lat, $lon);
         $this->assertEqualsWithDelta($expected, $airport['magnetic_declination'], 0.05);
     }
