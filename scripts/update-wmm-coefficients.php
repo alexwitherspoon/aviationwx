@@ -6,7 +6,7 @@
  * Downloads the current WMM*COF.zip, updates data/wmm/WMM.COF and manifest.json,
  * and refreshes golden fixture expected values in tests/Fixtures/wmm-noaa-reference.json.
  *
- * Does not commit or deploy. Run `make test-unit` (or test-ci) after updating, then open a PR.
+ * Does not commit or deploy. Run `make test-ci` after updating, then open a PR.
  *
  * Usage:
  *   php scripts/update-wmm-coefficients.php [--dry-run]
@@ -146,6 +146,6 @@ fwrite(STDOUT, "\nUpdated:\n");
 fwrite(STDOUT, "  - data/wmm/WMM.COF\n");
 fwrite(STDOUT, "  - data/wmm/manifest.json\n");
 fwrite(STDOUT, "  - tests/Fixtures/wmm-noaa-reference.json\n");
-fwrite(STDOUT, "\nNext: run make test-unit (or make test-ci), then commit and open a reviewed PR.\n");
+fwrite(STDOUT, "\nNext: run make test-ci, then commit and open a reviewed PR.\n");
 
 exit(0);
