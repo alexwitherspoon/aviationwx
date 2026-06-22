@@ -85,7 +85,12 @@ if ($extracted['test_values'] === null) {
     wmmUpdateFail(['NOAA coefficient zip did not include a TestValues.txt file']);
 }
 
-$fixtureUpdates = WmmNoaaSync::refreshGoldenFixtures($extracted['test_values'], $fixtureJson);
+try {
+    $fixtureUpdates = WmmNoaaSync::refreshGoldenFixtures($extracted['test_values'], $fixtureJson);
+} catch (\InvalidArgumentException $e) {
+    wmmUpdateFail(['Golden fixture refresh failed: ' . $e->getMessage()]);
+}
+
 if ($fixtureUpdates['missing'] !== []) {
     wmmUpdateFail([
         'Golden fixtures missing from NOAA test vectors: ' . implode(', ', $fixtureUpdates['missing']),
