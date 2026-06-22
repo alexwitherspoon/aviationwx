@@ -43,13 +43,13 @@ function getWmmManifest(): ?array
     $loaded = true;
     $manifestPath = WmmCoefficients::getBundledManifestPath();
     if (!is_readable($manifestPath)) {
-        aviationwx_log('error', 'wmm: manifest file is not readable', ['path' => $manifestPath], 'app');
+        aviationwx_log('error', 'wmm: manifest file is not readable', ['path' => $manifestPath], 'app', true);
         return null;
     }
 
     $manifestJson = file_get_contents($manifestPath);
     if ($manifestJson === false) {
-        aviationwx_log('error', 'wmm: failed to read manifest file', ['path' => $manifestPath], 'app');
+        aviationwx_log('error', 'wmm: failed to read manifest file', ['path' => $manifestPath], 'app', true);
         return null;
     }
 
@@ -58,7 +58,7 @@ function getWmmManifest(): ?array
         aviationwx_log('error', 'wmm: invalid manifest JSON', [
             'path' => $manifestPath,
             'json_error' => json_last_error_msg(),
-        ], 'app');
+        ], 'app', true);
         return null;
     }
 
@@ -122,21 +122,28 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
     }
 
     if (!isWmmValidForTimestamp($timestamp)) {
-        $context = [
-            'lat' => $lat,
-            'lon' => $lon,
-            'timestamp' => $timestamp,
-        ];
-        $manifest = getWmmManifest();
-        if ($manifest === null) {
-            aviationwx_log('error', 'wmm: manifest unavailable', $context, 'app');
-        } elseif (!isset($manifest['valid_through_epoch'], $manifest['epoch'])) {
-            aviationwx_log('error', 'wmm: manifest missing epoch or valid_through_epoch', $context, 'app');
-        } else {
-            $context['decimal_year'] = WmmCalculator::timestampToDecimalYear($timestamp);
-            $context['epoch'] = (float) $manifest['epoch'];
-            $context['valid_through_epoch'] = (float) $manifest['valid_through_epoch'];
-            aviationwx_log('warning', 'wmm: timestamp outside coefficient validity window', $context, 'app');
+        static $loggedWmmValidityFailure = false;
+        if (!$loggedWmmValidityFailure) {
+            $loggedWmmValidityFailure = true;
+            $manifest = getWmmManifest();
+            if ($manifest === null) {
+                // getWmmManifest() already logged unreadable/invalid manifest details once.
+            } elseif (
+                !isset($manifest['valid_through_epoch'], $manifest['epoch'])
+                || !is_numeric($manifest['epoch'])
+                || !is_numeric($manifest['valid_through_epoch'])
+            ) {
+                aviationwx_log('error', 'wmm: manifest missing or non-numeric epoch bounds', [
+                    'path' => WmmCoefficients::getBundledManifestPath(),
+                ], 'app', true);
+            } else {
+                aviationwx_log('warning', 'wmm: timestamp outside coefficient validity window', [
+                    'timestamp' => $timestamp,
+                    'decimal_year' => WmmCalculator::timestampToDecimalYear($timestamp),
+                    'epoch' => (float) $manifest['epoch'],
+                    'valid_through_epoch' => (float) $manifest['valid_through_epoch'],
+                ], 'app', true);
+            }
         }
         return null;
     }
