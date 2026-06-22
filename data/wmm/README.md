@@ -12,7 +12,7 @@ When NOAA publishes a new WMM model (or the weekly verify CI job reports drift):
 
 ```bash
 php scripts/update-wmm-coefficients.php   # refresh WMM.COF, manifest.json, golden fixtures
-make test-unit                            # full unit test suite (includes WmmCalculatorTest)
+make test-ci                            # full CI validation (required before commit/push)
 make verify-wmm-coefficients            # networked NOAA verify (same as weekly CI)
 ```
 
