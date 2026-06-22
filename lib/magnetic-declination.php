@@ -86,6 +86,10 @@ function isWmmValidForTimestamp(int $timestamp): bool
         return false;
     }
 
+    if (!is_numeric($manifest['epoch']) || !is_numeric($manifest['valid_through_epoch'])) {
+        return false;
+    }
+
     $epochDecimalYear = (float) $manifest['epoch'];
     $validThroughDecimalYear = (float) $manifest['valid_through_epoch'];
     $decimalYear = WmmCalculator::timestampToDecimalYear($timestamp);
