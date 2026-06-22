@@ -305,6 +305,7 @@ final class WmmNoaaSync
      * @param string $testValuesContent Raw WMM*_TestValues.txt from NOAA zip
      * @param array<string, mixed> $existingFixtureJson Parsed wmm-noaa-reference.json
      * @return array{fixtures: array<int, array<string, mixed>>, missing: list<string>}
+     * @throws \InvalidArgumentException When fixture JSON is missing a fixtures array
      */
     public static function refreshGoldenFixtures(string $testValuesContent, array $existingFixtureJson): array
     {
