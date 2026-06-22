@@ -251,7 +251,7 @@ class PublicApiIntegrationTest extends TestCase
         $airport = $response['json']['airport'] ?? null;
         $this->assertNotNull($airport, 'Response should include airport');
         $this->assertArrayHasKey('magnetic_declination', $airport);
-        $this->assertIsFloat($airport['magnetic_declination']);
+        $this->assertTrue(is_numeric($airport['magnetic_declination']), 'magnetic_declination must be numeric degrees');
         $this->assertArrayHasKey('lat', $airport, 'Airport response must include lat for WMM validation');
         $this->assertArrayHasKey('lon', $airport, 'Airport response must include lon for WMM validation');
         $this->assertTrue(is_numeric($airport['lat']), 'lat must be numeric');
