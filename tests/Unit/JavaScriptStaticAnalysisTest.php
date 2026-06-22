@@ -18,11 +18,12 @@ class JavaScriptStaticAnalysisTest extends TestCase
     {
         parent::setUp();
         
-        // Files that contain JavaScript code
+        // Files that contain JavaScript code (inline in PHP pages and extracted dashboard JS)
         $this->testFiles = [
             __DIR__ . '/../../pages/airport.php',
             __DIR__ . '/../../pages/homepage.php',
             __DIR__ . '/../../pages/error-404-airport.php',
+            __DIR__ . '/../../public/js/airport-dashboard.js',
         ];
     }
     

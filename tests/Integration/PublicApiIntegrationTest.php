@@ -235,6 +235,32 @@ class PublicApiIntegrationTest extends TestCase
     }
 
     /**
+     * GET /v1/airports/{id} returns offline WMM magnetic declination when no override is set.
+     */
+    public function testGetAirport_MagneticDeclination_FromOfflineWmm(): void
+    {
+        $this->skipIfApiDisabled();
+
+        $response = $this->apiRequest('/airports/kspb');
+
+        if ($response['code'] !== 200) {
+            $this->markTestSkipped('Airport kspb not available (got ' . $response['code'] . ')');
+            return;
+        }
+
+        $airport = $response['json']['airport'] ?? null;
+        $this->assertNotNull($airport, 'Response should include airport');
+        $this->assertArrayHasKey('magnetic_declination', $airport);
+        $this->assertIsFloat($airport['magnetic_declination']);
+
+        require_once dirname(__DIR__, 2) . '/lib/wmm/WmmCalculator.php';
+        $lat = (float) ($airport['lat'] ?? 0);
+        $lon = (float) ($airport['lon'] ?? 0);
+        $expected = WmmCalculator::getDeclination(time(), $lat, $lon);
+        $this->assertEqualsWithDelta($expected, $airport['magnetic_declination'], 0.05);
+    }
+
+    /**
      * GET /v1/airports/{id} exposes custom_links and external_links; legacy top-level links key is absent.
      */
     public function testGetAirport_CustomLinksAndExternalLinksKeys(): void

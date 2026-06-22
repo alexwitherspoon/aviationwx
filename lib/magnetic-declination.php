@@ -1,13 +1,15 @@
 <?php
 
 /**
- * Magnetic Declination Lookup (NOAA NCEI Geomagnetic API)
+ * Magnetic Declination Lookup
  *
  * Safety-critical: Declination aligns runway wind diagram with magnetic north.
  * Incorrect values could mislead pilots interpreting wind vs runway orientation.
  *
- * Fetches from NOAA NCEI when geomag_api_key is configured. Falls back to config
- * override or 0. Results cached 7 days (declination ~0.1°/year).
+ * Production cascade (via getMagneticDeclination in config.php):
+ * airport override → global override → offline WMM → 0.
+ *
+ * Also provides NOAA NCEI geomag-web API helpers (deprecated in cascade; removed in phase 3).
  *
  * API: https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination
  * Registration: https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml
@@ -16,6 +18,8 @@
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/circuit-breaker.php';
+require_once __DIR__ . '/wmm/WmmCoefficients.php';
+require_once __DIR__ . '/wmm/WmmCalculator.php';
 
 /** NOAA NCEI geomag-web API base URL */
 const GEOMAG_API_BASE = 'https://www.ngdc.noaa.gov/geomag-web/calculators/calculateDeclination';
@@ -23,6 +27,131 @@ const GEOMAG_API_BASE = 'https://www.ngdc.noaa.gov/geomag-web/calculators/calcul
 /** Valid declination range (degrees). Values outside indicate bad data. */
 const GEOMAG_DECLINATION_MIN = -180.0;
 const GEOMAG_DECLINATION_MAX = 180.0;
+
+/**
+ * Load bundled WMM manifest metadata (cached for the request).
+ *
+ * @return array<string, mixed>|null Parsed manifest, or null when unreadable or invalid
+ */
+function getWmmManifest(): ?array
+{
+    static $manifest = null;
+    static $loaded = false;
+
+    if ($loaded) {
+        return $manifest;
+    }
+
+    $loaded = true;
+    $manifestPath = WmmCoefficients::getBundledManifestPath();
+    if (!is_readable($manifestPath)) {
+        aviationwx_log('error', 'wmm: manifest file is not readable', ['path' => $manifestPath], 'app');
+        return null;
+    }
+
+    $manifestJson = file_get_contents($manifestPath);
+    if ($manifestJson === false) {
+        aviationwx_log('error', 'wmm: failed to read manifest file', ['path' => $manifestPath], 'app');
+        return null;
+    }
+
+    $parsed = json_decode($manifestJson, true);
+    if (!is_array($parsed) || json_last_error() !== JSON_ERROR_NONE) {
+        aviationwx_log('error', 'wmm: invalid manifest JSON', [
+            'path' => $manifestPath,
+            'json_error' => json_last_error_msg(),
+        ], 'app');
+        return null;
+    }
+
+    $manifest = $parsed;
+
+    return $manifest;
+}
+
+/**
+ * Whether bundled WMM coefficients are valid for the given timestamp.
+ *
+ * @param int $timestamp Unix timestamp (UTC)
+ * @return bool True when the timestamp is within manifest valid_through_epoch
+ */
+function isWmmValidForTimestamp(int $timestamp): bool
+{
+    if ($timestamp < 0) {
+        return false;
+    }
+
+    $manifest = getWmmManifest();
+    if ($manifest === null || !isset($manifest['valid_through_epoch'])) {
+        return false;
+    }
+
+    $validThrough = (float) $manifest['valid_through_epoch'];
+    $decimalYear = WmmCalculator::timestampToDecimalYear($timestamp);
+
+    return $decimalYear <= $validThrough;
+}
+
+/**
+ * Fetch magnetic declination from bundled WMM coefficients.
+ *
+ * Returns null when coordinates are invalid, coefficients are past valid_through_epoch,
+ * or calculation fails. Caller must fall back to 0.
+ *
+ * @param float $lat       Latitude (-90 to 90)
+ * @param float $lon       Longitude (-180 to 180)
+ * @param int|null $timestamp Unix timestamp (UTC); defaults to now
+ * @return float|null Declination in degrees, or null on failure
+ */
+function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp = null): ?float
+{
+    $timestamp ??= time();
+
+    if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+        return null;
+    }
+
+    if (!isWmmValidForTimestamp($timestamp)) {
+        $context = [
+            'lat' => $lat,
+            'lon' => $lon,
+            'timestamp' => $timestamp,
+        ];
+        $manifest = getWmmManifest();
+        if ($manifest === null) {
+            aviationwx_log('error', 'wmm: manifest unavailable', $context, 'app');
+        } elseif (!isset($manifest['valid_through_epoch'])) {
+            aviationwx_log('error', 'wmm: manifest missing valid_through_epoch', $context, 'app');
+        } else {
+            $context['decimal_year'] = WmmCalculator::timestampToDecimalYear($timestamp);
+            $context['valid_through_epoch'] = (float) $manifest['valid_through_epoch'];
+            aviationwx_log('warning', 'wmm: timestamp past valid_through_epoch', $context, 'app');
+        }
+        return null;
+    }
+
+    try {
+        $declination = WmmCalculator::getDeclination($timestamp, $lat, $lon);
+    } catch (\InvalidArgumentException $e) {
+        aviationwx_log('warning', 'wmm: declination calculation failed', [
+            'lat' => $lat,
+            'lon' => $lon,
+            'error' => $e->getMessage(),
+        ], 'app');
+        return null;
+    }
+
+    if ($declination < GEOMAG_DECLINATION_MIN || $declination > GEOMAG_DECLINATION_MAX) {
+        aviationwx_log('warning', 'wmm: declination out of bounds', [
+            'lat' => $lat,
+            'lon' => $lon,
+            'declination' => $declination,
+        ], 'app');
+        return null;
+    }
+
+    return $declination;
+}
 
 /**
  * Fetch magnetic declination from NOAA NCEI API (with cache)

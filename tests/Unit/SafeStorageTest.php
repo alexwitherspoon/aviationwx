@@ -5,7 +5,9 @@
  * Verifies that pages using localStorage include the safeStorageGet/safeStorageSet
  * pattern to handle SecurityError in iOS Private Browsing and disabled storage.
  *
- * @see pages/airports.php
+ * @see pages/airports.php (inline preferences script)
+ * @see public/js/airport-dashboard.js (airport dashboard preferences; extracted from pages/airport.php)
+ * @see lib/version.php (version-check IIFE embedded in pages/airport.php)
  * @see pages/airport.php
  */
 
@@ -23,13 +25,20 @@ class SafeStorageTest extends TestCase
         $this->projectRoot = dirname(__DIR__, 2);
     }
 
+    private function readProjectFile(string $relativePath): string
+    {
+        $content = file_get_contents($this->projectRoot . '/' . $relativePath);
+        $this->assertNotFalse($content, $relativePath . ' should be readable');
+
+        return $content;
+    }
+
     /**
      * safeStorageGet pattern: try/catch around localStorage.getItem returning null on error
      */
     public function testAirportsPage_ContainsSafeStorageGetPattern(): void
     {
-        $content = file_get_contents($this->projectRoot . '/pages/airports.php');
-        $this->assertNotEmpty($content, 'airports.php should be readable');
+        $content = $this->readProjectFile('pages/airports.php');
 
         $this->assertStringContainsString('safeStorageGet', $content, 'Should define safeStorageGet');
         $this->assertStringContainsString('localStorage.getItem', $content, 'Should use localStorage');
@@ -45,7 +54,7 @@ class SafeStorageTest extends TestCase
      */
     public function testAirportsPage_ContainsSafeStorageSetPattern(): void
     {
-        $content = file_get_contents($this->projectRoot . '/pages/airports.php');
+        $content = $this->readProjectFile('pages/airports.php');
         $this->assertStringContainsString('safeStorageSet', $content, 'Should define safeStorageSet');
         $this->assertMatchesRegularExpression(
             '/try\s*\{\s*localStorage\.setItem\([^)]+\)\s*;\s*\}\s*catch/',
@@ -55,12 +64,11 @@ class SafeStorageTest extends TestCase
     }
 
     /**
-     * Airport page preferences block contains safe storage helpers
+     * Airport dashboard preferences live in the extracted JS bundle.
      */
     public function testAirportPage_ContainsSafeStorageHelpers(): void
     {
-        $content = file_get_contents($this->projectRoot . '/pages/airport.php');
-        $this->assertNotEmpty($content, 'airport.php should be readable');
+        $content = $this->readProjectFile('public/js/airport-dashboard.js');
 
         $this->assertStringContainsString('safeStorageGet', $content, 'Should define safeStorageGet');
         $this->assertStringContainsString('safeStorageSet', $content, 'Should define safeStorageSet');
@@ -68,11 +76,11 @@ class SafeStorageTest extends TestCase
     }
 
     /**
-     * Airport page uses safeStorageGet for preference reads (not raw localStorage.getItem)
+     * Airport dashboard preference getters use safeStorageGet (not raw localStorage.getItem).
      */
     public function testAirportPage_PreferenceGettersUseSafeStorage(): void
     {
-        $content = file_get_contents($this->projectRoot . '/pages/airport.php');
+        $content = $this->readProjectFile('public/js/airport-dashboard.js');
 
         $this->assertStringContainsString(
             'safeStorageGet(\'aviationwx_time_format\')',
@@ -87,11 +95,11 @@ class SafeStorageTest extends TestCase
     }
 
     /**
-     * Airport page version check block has its own safe storage helpers (IIFE scope)
+     * Version-check IIFE (rendered from lib/version.php) documents Private Browsing handling.
      */
     public function testAirportPage_VersionBlockHasSafeStorage(): void
     {
-        $content = file_get_contents($this->projectRoot . '/pages/airport.php');
+        $content = $this->readProjectFile('lib/version.php');
 
         $this->assertMatchesRegularExpression(
             '/SecurityError.*Private Browsing/',
