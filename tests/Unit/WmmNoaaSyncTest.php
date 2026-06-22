@@ -6,7 +6,6 @@ namespace AviationWX\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../lib/wmm/WmmCoefficients.php';
 require_once __DIR__ . '/../../lib/wmm/WmmNoaaSync.php';
 
 class WmmNoaaSyncTest extends TestCase
