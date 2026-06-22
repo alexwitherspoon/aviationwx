@@ -1065,9 +1065,9 @@ function getMagneticDeclination(?array $airport = null): float
 {
     $decl = 0.0;
 
-    if ($airport !== null && isset($airport['magnetic_declination'])) {
+    if ($airport !== null && isset($airport['magnetic_declination']) && is_numeric($airport['magnetic_declination'])) {
         $decl = (float) $airport['magnetic_declination'];
-    } elseif (($global = getGlobalConfig('magnetic_declination')) !== null) {
+    } elseif (($global = getGlobalConfig('magnetic_declination')) !== null && is_numeric($global)) {
         $decl = (float) $global;
     } elseif ($airport !== null) {
         if (
