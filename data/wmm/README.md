@@ -12,8 +12,8 @@ When NOAA publishes a new WMM model (or the weekly verify CI job reports drift):
 
 ```bash
 php scripts/update-wmm-coefficients.php   # refresh WMM.COF, manifest.json, golden fixtures
-make test-unit                            # WmmCalculatorTest + WmmCoefficientsTest
-make verify-wmm-coefficients            # confirm alignment with NOAA (optional dry-run check)
+make test-unit                            # full unit test suite (includes WmmCalculatorTest)
+make verify-wmm-coefficients            # networked NOAA verify (same as weekly CI)
 ```
 
 Use `--dry-run` on the update script to preview metadata without writing files. Commit all three paths above in one reviewed PR - production never downloads coefficients at runtime.
