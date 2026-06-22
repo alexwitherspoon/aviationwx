@@ -17,6 +17,9 @@ class WmmCoefficientsTest extends TestCase
 
         $manifest = json_decode((string) file_get_contents($manifestPath), true);
         $this->assertIsArray($manifest);
+        foreach (['cof_sha256', 'model', 'epoch', 'release_date'] as $key) {
+            $this->assertArrayHasKey($key, $manifest, "Manifest missing required key: $key");
+        }
 
         $cofPath = \WmmCoefficients::getBundledCofPath();
         $this->assertFileExists($cofPath);
