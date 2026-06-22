@@ -154,8 +154,10 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
         aviationwx_log('warning', 'wmm: declination calculation failed', [
             'lat' => $lat,
             'lon' => $lon,
+            'timestamp' => $timestamp,
+            'decimal_year' => WmmCalculator::timestampToDecimalYear($timestamp),
             'error' => $e->getMessage(),
-        ], 'app');
+        ], 'app', true);
         return null;
     }
 
