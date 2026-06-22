@@ -25,7 +25,7 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 
 This deployment requires **minimal host customization**:
 - ✅ **No log directory setup** - CD creates `/var/aviationwx/logs` on host; logs persist across reboots
-- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` subdirectories matching `ensureAllCacheDirs()` in `lib/cache-paths.php` (e.g. `weather/history`, `webcams`, `ftp`, `notam`, `partners`, `partners/lum`, `rate_limits`, `metrics/*`, `peak_gusts`, `temp_extremes`, `runways`, `geomag`, `map_tiles`) plus `sftp` for the `/var/sftp` bind mount. Deploy chown applies to cache data dirs only (not `sftp/{user}/` chroots); `sync-push-config.php` and nightly `set-cache-permissions.sh` repair SFTP chroot ownership (`root:root` on `{user}/`, `ftp:www-data` on `files/`)
+- ✅ **Cache and SFTP host paths** - CD creates `/tmp/aviationwx-cache` subdirectories matching `ensureAllCacheDirs()` in `lib/cache-paths.php` (e.g. `weather/history`, `webcams`, `ftp`, `notam`, `partners`, `partners/lum`, `rate_limits`, `metrics/*`, `peak_gusts`, `temp_extremes`, `runways`, `map_tiles`) plus `sftp` for the `/var/sftp` bind mount. Deploy chown applies to cache data dirs only (not `sftp/{user}/` chroots); `sync-push-config.php` and nightly `set-cache-permissions.sh` repair SFTP chroot ownership (`root:root` on `{user}/`, `ftp:www-data` on `files/`)
 - ✅ **Partner logos directory** - CD creates `/home/aviationwx/partner-logos`; logo files come from the secrets repo deploy
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
@@ -345,7 +345,7 @@ See [Configuration Guide](CONFIGURATION.md) for detailed configuration options.
 
 **Deployment checklist** – Ensure `airports.json` includes keys for full functionality:
 - Weather sources (Open-Meteo, AviationWX API, etc.)
-- `geomag_api_key` – NOAA NCEI geomagnetic API key for automatic magnetic declination (runway wind diagram). [Register free](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml). Optional; without it, declination falls back to config override or 0.
+- Magnetic declination uses bundled offline WMM when lat/lon are set; optional per-airport or global `magnetic_declination` overrides (see [CONFIGURATION.md](CONFIGURATION.md#magnetic-declination))
 - NOTAM API credentials (if using NOTAMs)
 - OpenWeatherMap API key (if using cloud layer)
 

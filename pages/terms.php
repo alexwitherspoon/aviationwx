@@ -328,8 +328,8 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                     METAR, TAF, and other official aviation weather products. Public domain as a work of the U.S. Government.</li>
                     <li><strong><a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service (NWS) / NOAA</a></strong> - 
                     Weather forecasts, observations (ASOS), and alerts. Public domain as a work of the U.S. Government.</li>
-                    <li><strong><a href="https://www.ngdc.noaa.gov/geomag/" target="_blank" rel="noopener">NOAA NCEI Geomagnetic Data</a></strong> - 
-                    Magnetic declination for runway wind diagrams. Public domain as a work of the U.S. Government.</li>
+                    <li><strong><a href="https://www.ncei.noaa.gov/products/world-magnetic-model" target="_blank" rel="noopener">NOAA NCEI World Magnetic Model</a></strong> -
+                    Magnetic declination coefficients for runway wind diagrams. Public domain as a work of the U.S. Government.</li>
                     <li><strong><a href="https://dd.weather.gc.ca/" target="_blank" rel="noopener">Environment and Climate Change Canada</a></strong> - 
                     SWOB-ML weather observations for Canadian automated and manned stations (Nav Canada AWOS/HWOS). 
                     Data used under Open Government Licence – Canada.</li>

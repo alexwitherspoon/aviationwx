@@ -242,7 +242,7 @@ AviationWX uses the following external data sources. See [Terms of Service](http
 ### Weather Data
 - **Aviation Weather Center** ([aviationweather.gov](https://aviationweather.gov)) – METAR, TAF (U.S. Government, public domain)
 - **National Weather Service** ([weather.gov](https://www.weather.gov)) – ASOS observations (U.S. Government, public domain)
-- **NOAA NCEI** ([geomag](https://www.ngdc.noaa.gov/geomag/)) – Magnetic declination (U.S. Government, public domain)
+- **NOAA NCEI** ([World Magnetic Model](https://www.ncei.noaa.gov/products/world-magnetic-model)) – Magnetic declination coefficients (U.S. Government, public domain)
 - **Environment Canada** ([dd.weather.gc.ca](https://dd.weather.gc.ca/)) – SWOB-ML for Canadian stations (Open Government Licence – Canada)
 - **AWOSnet** ([awosnet.com](https://awosnet.com)) – AWOS station data
 - **PWSWeather** ([pwsweather.com](https://pwsweather.com)) – Via AerisWeather/XWeather API

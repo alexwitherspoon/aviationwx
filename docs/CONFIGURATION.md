@@ -56,8 +56,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_history_max_frames` | - | *Deprecated* - use retention_hours |
 | `http_integrity_digest_cache_ttl_seconds` | max(webcam_history, weather_history) | APCu TTL for Content-Digest/MD5 cache; defaults to longest retention (images + weather) |
 | `default_preferences` | - | Default unit toggle settings (see below) |
-| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport |
-| `geomag_api_key` | - | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
+| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport. When unset per-airport, offline WMM is used when lat/lon are available. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | - | NOTAM API client ID |
 | `notam_api_client_secret` | - | NOTAM API client secret |
@@ -122,7 +121,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
-| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram and `wind_direction_magnetic`. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
+| `magnetic_declination` | global or WMM | Magnetic declination in degrees for runway wind diagram and `wind_direction_magnetic`. Positive = East (mag N east of true N), negative = West. Manual override; when absent, computed from bundled offline WMM when lat/lon are set. |
 | `frequencies` | `{}` | Radio frequencies (see [Radio frequencies](#radio-frequencies)) |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
@@ -1385,7 +1384,32 @@ Each runway end ident (e.g. `15`, `33`, `28L`, `10R`) maps to `{ lat, lon }` coo
 
 Parallel runways (L/C/R) are automatically detected and displayed side-by-side.
 
-**Magnetic declination** (optional): Override per-airport or globally for runway wind diagram alignment. Positive = East (mag N east of true N). When `geomag_api_key` is configured, declination is fetched from NOAA when no override exists. See `magnetic_declination` in the options table.
+**Magnetic declination** (optional): Override per-airport or globally for runway wind diagram alignment. Positive = East (mag N east of true N). When no override is set, declination is computed from the bundled NOAA World Magnetic Model (offline WMM) using airport lat/lon. See [Magnetic declination](#magnetic-declination) below.
+
+---
+
+## Magnetic declination
+
+Magnetic declination drives the runway wind diagram and `wind_direction_magnetic` in weather responses. Values are in degrees; positive = East (magnetic north east of true north), negative = West.
+
+### Resolution cascade
+
+1. **Per-airport `magnetic_declination`** in `airports.{id}` when set to a numeric value
+2. **Global `config.magnetic_declination`** when set to a numeric value
+3. **Offline WMM** from bundled NOAA coefficients when the airport has numeric `lat` and `lon`
+4. **`0`** when none of the above apply (fail-safe default)
+
+Non-numeric override values are ignored so the cascade can fall through to WMM or `0`.
+
+### Offline WMM
+
+Coefficients ship in `data/wmm/` (see `data/wmm/manifest.json` for model epoch and validity window). No API key or network access is required. Typical accuracy is on the order of **0.3-0.5°** for CONUS; error grows toward the poles and with stale coefficients past the model validity window.
+
+When coefficients are unreadable or outside the validity window, the cascade fails closed to `0` and logs an internal warning.
+
+### Manual overrides
+
+Use per-airport or global overrides when you need a fixed value (for example a field survey) or when lat/lon are missing. Overrides take precedence over WMM.
 
 ---
 
