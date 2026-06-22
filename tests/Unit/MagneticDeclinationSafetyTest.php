@@ -10,7 +10,7 @@
  * - Cascade: airport override → global override → offline WMM → 0 (fail-safe)
  * - Bounds: declination must be -180° to 180°
  * - WMM staleness refusal past manifest valid_through_epoch
- * - Legacy geomag API response parsing (removed from cascade in phase 3)
+ * - Legacy geomag API response parsing helpers (removed in phase 3; no longer in cascade)
  * - Fallback to 0 when WMM is unavailable (never expose stale/wrong data)
  *
  * Reference: NOAA WMM, Natural Resources Canada (Canadian airports)
