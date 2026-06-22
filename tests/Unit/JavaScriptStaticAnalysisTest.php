@@ -64,7 +64,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
+            $content = $this->readTestFileContent($file);
             $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
 
             foreach ($jsBlocks as $index => $jsCode) {
@@ -151,7 +151,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
+            $content = $this->readTestFileContent($file);
             $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
 
             foreach ($jsBlocks as $index => $jsCode) {
@@ -197,8 +197,8 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
-            if (strpos($content, '/api/weather.php') !== false || 
+            $content = $this->readTestFileContent($file);
+            if (strpos($content, '/api/weather.php') !== false ||
                 strpos($content, 'api/weather.php') !== false) {
                 $foundCorrectEndpoint = true;
                 break;
@@ -225,7 +225,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
+            $content = $this->readTestFileContent($file);
             $filename = basename($file);
 
             if ($this->isStandaloneJavaScriptFile($file)) {
@@ -319,7 +319,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
+            $content = $this->readTestFileContent($file);
             $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
 
             foreach ($jsBlocks as $index => $jsCode) {
@@ -422,5 +422,15 @@ class JavaScriptStaticAnalysisTest extends TestCase
     private function isStandaloneJavaScriptFile(string $file): bool
     {
         return str_ends_with(strtolower($file), '.js');
+    }
+
+    private function readTestFileContent(string $file): string
+    {
+        $content = file_get_contents($file);
+        if ($content === false) {
+            $this->fail(sprintf('Failed to read test file: %s', $file));
+        }
+
+        return $content;
     }
 }
