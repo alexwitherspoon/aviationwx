@@ -69,7 +69,11 @@ try {
 
 $cofSha256 = hash('sha256', $extracted['cof']);
 $manifest = WmmNoaaSync::buildManifest($header, $cofSha256, $zipUrl);
-$manifestJson = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+$manifestEncoded = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+if ($manifestEncoded === false) {
+    wmmUpdateFail(['Failed to encode manifest JSON: ' . json_last_error_msg()]);
+}
+$manifestJson = $manifestEncoded . "\n";
 
 $fixtureJsonRaw = file_get_contents($fixturePath);
 if ($fixtureJsonRaw === false) {
@@ -110,7 +114,11 @@ $updatedFixture = [
     '_meta' => $meta,
     'fixtures' => $fixtureUpdates['fixtures'],
 ];
-$fixtureOut = json_encode($updatedFixture, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+$fixtureEncoded = json_encode($updatedFixture, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+if ($fixtureEncoded === false) {
+    wmmUpdateFail(['Failed to encode golden fixture JSON: ' . json_last_error_msg()]);
+}
+$fixtureOut = $fixtureEncoded . "\n";
 
 fwrite(STDOUT, "NOAA WMM coefficient update summary\n");
 fwrite(STDOUT, sprintf("  zip_url=%s\n", $zipUrl));

@@ -54,13 +54,7 @@ final class WmmNoaaSync
      */
     public static function fetchSourcePageHtml(?string $sourcePage = null): string
     {
-        $url = $sourcePage ?? self::SOURCE_PAGE;
-        $html = self::httpGet($url);
-        if ($html === null) {
-            throw new \RuntimeException('Failed to fetch NOAA WMM coefficients page: ' . $url);
-        }
-
-        return $html;
+        return self::httpGet($sourcePage ?? self::SOURCE_PAGE);
     }
 
     /**
@@ -73,8 +67,8 @@ final class WmmNoaaSync
     public static function downloadZipToTempFile(string $zipUrl): string
     {
         $body = self::httpGet($zipUrl);
-        if ($body === null || $body === '') {
-            throw new \RuntimeException('Failed to download WMM coefficient zip: ' . $zipUrl);
+        if ($body === '') {
+            throw new \RuntimeException('Downloaded WMM coefficient zip is empty: ' . $zipUrl);
         }
 
         $tempPath = tempnam(sys_get_temp_dir(), 'wmm-cof-');
@@ -423,7 +417,10 @@ final class WmmNoaaSync
         return sprintf('%.1f|%d|%.0f|%.0f', $decimalYear, (int) round($altKm), $lat, $lon);
     }
 
-    private static function httpGet(string $url): ?string
+    /**
+     * @throws \RuntimeException When cURL is unavailable or the request fails
+     */
+    private static function httpGet(string $url): string
     {
         if (!function_exists('curl_init')) {
             throw new \RuntimeException('PHP curl extension is required for NOAA WMM sync');
@@ -431,7 +428,7 @@ final class WmmNoaaSync
 
         $ch = curl_init($url);
         if ($ch === false) {
-            return null;
+            throw new \RuntimeException('Failed to initialize cURL for: ' . $url);
         }
 
         curl_setopt_array($ch, [
@@ -442,14 +439,34 @@ final class WmmNoaaSync
             CURLOPT_TIMEOUT => 120,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_USERAGENT => self::USER_AGENT,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
         ]);
 
         $body = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $effectiveUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $curlError = curl_error($ch);
         // CurlHandle frees at scope exit; curl_close() is a no-op since PHP 8.0 (deprecated 8.5).
 
         if ($body === false || $code < 200 || $code >= 400) {
-            return null;
+            $details = [];
+            if ($curlError !== '') {
+                $details[] = 'cURL error: ' . $curlError;
+            }
+            if ($code > 0) {
+                $details[] = 'HTTP status: ' . $code;
+            }
+            if ($effectiveUrl !== '' && $effectiveUrl !== $url) {
+                $details[] = 'effective URL: ' . $effectiveUrl;
+            }
+
+            $message = 'HTTP GET failed for ' . $url;
+            if ($details !== []) {
+                $message .= ' (' . implode('; ', $details) . ')';
+            }
+
+            throw new \RuntimeException($message);
         }
 
         return $body;
