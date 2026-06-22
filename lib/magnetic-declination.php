@@ -15,9 +15,7 @@
  * Registration: https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml
  */
 
-require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/logger.php';
-require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/wmm/WmmCoefficients.php';
 require_once __DIR__ . '/wmm/WmmCalculator.php';
 
@@ -168,6 +166,9 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
  */
 function fetchMagneticDeclinationFromApi(float $lat, float $lon, string $apiKey): ?float
 {
+    require_once __DIR__ . '/cache-paths.php';
+    require_once __DIR__ . '/circuit-breaker.php';
+
     if ($apiKey === '' || $lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
         return null;
     }
