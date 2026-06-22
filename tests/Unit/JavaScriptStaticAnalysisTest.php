@@ -416,7 +416,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
 
         preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
 
-        return $matches[1];
+        return $matches[1] ?? [];
     }
 
     private function isStandaloneJavaScriptFile(string $file): bool
