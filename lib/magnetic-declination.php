@@ -112,6 +112,10 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
         return null;
     }
 
+    if ($timestamp < 0) {
+        return null;
+    }
+
     if (!isWmmValidForTimestamp($timestamp)) {
         $context = [
             'lat' => $lat,
