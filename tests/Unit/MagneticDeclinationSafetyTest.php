@@ -9,8 +9,7 @@
  * Tests verify:
  * - Cascade: airport override → global override → offline WMM → 0 (fail-safe)
  * - Bounds: declination must be -180° to 180°
- * - WMM staleness refusal past manifest valid_through_epoch
- * - Legacy geomag API response parsing helpers (removed in phase 3; no longer in cascade)
+ * - WMM validity window (epoch through valid_through_epoch)
  * - Fallback to 0 when WMM is unavailable (never expose stale/wrong data)
  *
  * Reference: NOAA WMM, Natural Resources Canada (Canadian airports)
@@ -198,87 +197,6 @@ class MagneticDeclinationSafetyTest extends TestCase
     public function testIsWmmValidForTimestamp_CurrentTime_ReturnsTrue(): void
     {
         $this->assertTrue(isWmmValidForTimestamp(time()));
-    }
-
-    /**
-     * SAFETY: extractDeclinationFromResponse - result.declination format (NOAA)
-     */
-    public function testExtractDeclination_NoaaResultFormat_ReturnsValue(): void
-    {
-        $data = ['result' => ['declination' => 13.2]];
-        $this->assertSame(13.2, extractDeclinationFromResponse($data));
-    }
-
-    /**
-     * SAFETY: extractDeclinationFromResponse - top-level declination
-     */
-    public function testExtractDeclination_TopLevel_ReturnsValue(): void
-    {
-        $data = ['declination' => -7.3];
-        $this->assertSame(-7.3, extractDeclinationFromResponse($data));
-    }
-
-    /**
-     * SAFETY: extractDeclinationFromResponse - declination_value format
-     */
-    public function testExtractDeclination_DeclinationValue_ReturnsValue(): void
-    {
-        $data = ['declination_value' => 8.5];
-        $this->assertSame(8.5, extractDeclinationFromResponse($data));
-    }
-
-    /**
-     * SAFETY: Unknown format must return null (never guess)
-     */
-    public function testExtractDeclination_UnknownFormat_ReturnsNull(): void
-    {
-        $data = ['other_field' => 123];
-        $this->assertNull(extractDeclinationFromResponse($data));
-    }
-
-    /**
-     * SAFETY: Empty array must return null
-     */
-    public function testExtractDeclination_EmptyArray_ReturnsNull(): void
-    {
-        $this->assertNull(extractDeclinationFromResponse([]));
-    }
-
-    /**
-     * SAFETY: fetchMagneticDeclinationFromApi - invalid lat returns null
-     */
-    public function testFetchMagneticDeclination_InvalidLat_ReturnsNull(): void
-    {
-        $result = fetchMagneticDeclinationFromApi(95.0, -122.95, 'test_key');
-        $this->assertNull($result);
-    }
-
-    /**
-     * SAFETY: fetchMagneticDeclinationFromApi - invalid lon returns null
-     */
-    public function testFetchMagneticDeclination_InvalidLon_ReturnsNull(): void
-    {
-        $result = fetchMagneticDeclinationFromApi(45.54, -200.0, 'test_key');
-        $this->assertNull($result);
-    }
-
-    /**
-     * SAFETY: fetchMagneticDeclinationFromApi - empty API key returns null
-     */
-    public function testFetchMagneticDeclination_EmptyApiKey_ReturnsNull(): void
-    {
-        $result = fetchMagneticDeclinationFromApi(45.54, -122.95, '');
-        $this->assertNull($result);
-    }
-
-    /**
-     * SAFETY: fetchMagneticDeclinationFromApi - mock mode returns null (no real API calls)
-     */
-    public function testFetchMagneticDeclination_MockMode_ReturnsNull(): void
-    {
-        $this->assertTrue(shouldMockExternalServices(), 'Test env must use mock mode');
-        $result = fetchMagneticDeclinationFromApi(45.54, -122.95, 'real_key');
-        $this->assertNull($result);
     }
 
     /**

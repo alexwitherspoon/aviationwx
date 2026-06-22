@@ -330,5 +330,5 @@ See `config/env.example` for full list. Key Docker/infrastructure variables:
 
 **Note:** Application defaults (timezone, refresh intervals, etc.) are configured in the `config` section of `airports.json`, not in `.env`. See [CONFIGURATION.md](CONFIGURATION.md) for details.
 
-**Magnetic declination:** For automatic runway wind diagram alignment, add `geomag_api_key` to the `config` section of `airports.json`. [Register free](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml). Without it, declination uses config override or 0.
+**Magnetic declination:** Runway wind diagram alignment uses bundled offline WMM when airports have lat/lon. Optional per-airport or global `magnetic_declination` overrides apply first. See [CONFIGURATION.md](CONFIGURATION.md#magnetic-declination).
 

@@ -105,7 +105,6 @@ define('CLEANUP_ORPHAN_AGE', 2592000);            // 30 days
 define('CLEANUP_OURAIRPORTS_AGE', 2592000);       // 30 days (primary: 7 days)
 define('CLEANUP_ICAO_AIRPORTS_AGE', 5184000);     // 60 days (primary: 30 days)
 define('CLEANUP_MAPPING_CACHE_AGE', 5184000);     // 60 days
-define('CLEANUP_GEOMAG_AGE', 2592000);            // 30 days (geomag cache TTL 7 days)
 define('CLEANUP_AIRPORT_COUNTRY_RESOLUTION_AGE', 7776000); // 90 days (aggregate policy max 30d; safety net)
 
 // Disk usage warning thresholds
@@ -366,14 +365,6 @@ cleanupFilesByAge(
     $stats, $dryRun, $verbose
 );
 
-// Geomag declination cache (NOAA NCEI API; TTL 7 days, clean stale after 30 days)
-cleanupFilesByPattern(
-    CACHE_GEOMAG_DIR . '/*.json',
-    CLEANUP_GEOMAG_AGE,
-    'Geomag declination cache',
-    $stats, $dryRun, $verbose
-);
-
 cleanupFilesByAge(
     CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE,
     CLEANUP_AIRPORT_COUNTRY_RESOLUTION_AGE,
@@ -415,7 +406,6 @@ cleanupEmptyDirectories(CACHE_WEATHER_HISTORY_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/notam', $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/rate_limits', $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/map_tiles', $stats, $dryRun, $verbose);
-cleanupEmptyDirectories(CACHE_GEOMAG_DIR, $stats, $dryRun, $verbose);
 
 // ============================================================================
 // LAYER 5: Ensure push webcam upload directories exist (safety net)
