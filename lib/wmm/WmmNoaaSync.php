@@ -446,7 +446,7 @@ final class WmmNoaaSync
 
         $body = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // CurlHandle frees at scope exit; curl_close() is a no-op since PHP 8.0 (deprecated 8.5).
 
         if ($body === false || $code < 200 || $code >= 400) {
             return null;
