@@ -166,7 +166,7 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
             'lat' => $lat,
             'lon' => $lon,
             'declination' => $declination,
-        ], 'app');
+        ], 'app', true);
         return null;
     }
 
