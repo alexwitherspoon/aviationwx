@@ -1,0 +1,45 @@
+name: Weekly WMM coefficient verify
+run-name: "WMM coefficient verify (${{ github.event_name }})"
+
+on:
+  schedule:
+    # Wednesday 10:30 UTC (staggered from upstream probes Tuesday 10:15 UTC)
+    - cron: '30 10 * * 3'
+  workflow_dispatch: {}
+
+concurrency:
+  group: weekly-wmm-coefficients
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-wmm:
+    name: Verify vendored WMM vs NOAA
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, json, mbstring, zip
+          coverage: none
+
+      - name: Verify WMM coefficients against NOAA
+        run: php scripts/verify-wmm-coefficients.php
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## WMM coefficient verify"
+            echo ""
+            echo "Vendored \`data/wmm/WMM.COF\` matches NOAA's published coefficient zip."
+            echo "When this job fails, run \`scripts/update-wmm-coefficients.php\` locally and open a reviewed PR."
+          } >> "$GITHUB_STEP_SUMMARY"
