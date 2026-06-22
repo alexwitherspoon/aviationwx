@@ -15,7 +15,11 @@ class WmmCoefficientsTest extends TestCase
         $manifestPath = \WmmCoefficients::getBundledManifestPath();
         $this->assertFileExists($manifestPath);
 
-        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+        $manifestJson = file_get_contents($manifestPath);
+        $this->assertNotFalse($manifestJson, 'Failed to read WMM manifest file');
+
+        $manifest = json_decode($manifestJson, true);
+        $this->assertSame(JSON_ERROR_NONE, json_last_error(), 'Invalid WMM manifest JSON: ' . json_last_error_msg());
         $this->assertIsArray($manifest);
         foreach (['cof_sha256', 'model', 'epoch', 'release_date'] as $key) {
             $this->assertArrayHasKey($key, $manifest, "Manifest missing required key: $key");
