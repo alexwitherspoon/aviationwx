@@ -72,8 +72,10 @@ function getWmmManifest(): ?array
 /**
  * Whether bundled WMM coefficients are valid for the given timestamp.
  *
+ * Manifest valid_through_epoch is a WMM decimal year (e.g. 2030.0), not a Unix timestamp.
+ *
  * @param int $timestamp Unix timestamp (UTC)
- * @return bool True when the timestamp is within manifest valid_through_epoch
+ * @return bool True when the timestamp's decimal year is within valid_through_epoch
  */
 function isWmmValidForTimestamp(int $timestamp): bool
 {
@@ -86,17 +88,18 @@ function isWmmValidForTimestamp(int $timestamp): bool
         return false;
     }
 
-    $validThrough = (float) $manifest['valid_through_epoch'];
+    $validThroughDecimalYear = (float) $manifest['valid_through_epoch'];
     $decimalYear = WmmCalculator::timestampToDecimalYear($timestamp);
 
-    return $decimalYear <= $validThrough;
+    return $decimalYear <= $validThroughDecimalYear;
 }
 
 /**
  * Fetch magnetic declination from bundled WMM coefficients.
  *
- * Returns null when coordinates are invalid, coefficients are past valid_through_epoch,
- * or calculation fails. Caller must fall back to 0.
+ * Returns null when coordinates are invalid, the timestamp's decimal year exceeds the
+ * manifest valid_through_epoch (WMM decimal year, not Unix time), or calculation fails.
+ * Caller must fall back to 0.
  *
  * @param float $lat       Latitude (-90 to 90)
  * @param float $lon       Longitude (-180 to 180)
@@ -125,7 +128,7 @@ function fetchMagneticDeclinationFromWmm(float $lat, float $lon, ?int $timestamp
         } else {
             $context['decimal_year'] = WmmCalculator::timestampToDecimalYear($timestamp);
             $context['valid_through_epoch'] = (float) $manifest['valid_through_epoch'];
-            aviationwx_log('warning', 'wmm: timestamp past valid_through_epoch', $context, 'app');
+            aviationwx_log('warning', 'wmm: decimal year past valid_through_epoch', $context, 'app');
         }
         return null;
     }
