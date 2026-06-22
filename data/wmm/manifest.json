@@ -1,0 +1,10 @@
+{
+    "model": "WMM-2025",
+    "epoch": 2025.0,
+    "release_date": "11/13/2024",
+    "valid_through_epoch": 2030.0,
+    "source_page": "https://www.ncei.noaa.gov/products/world-magnetic-model/wmm-coefficients",
+    "source_zip_url": "https://www.ncei.noaa.gov/sites/default/files/2024-12/WMM2025COF.zip",
+    "cof_file": "WMM.COF",
+    "cof_sha256": "dfa8597825af4e0b87ff4198a5b4fb661b3c49f4cd090cd0164e0259b075582f"
+}
