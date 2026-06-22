@@ -38,7 +38,12 @@ function wmmUpdateFail(array $errors): never
     exit(1);
 }
 
-$html = WmmNoaaSync::fetchSourcePageHtml();
+try {
+    $html = WmmNoaaSync::fetchSourcePageHtml();
+} catch (\RuntimeException $e) {
+    wmmUpdateFail([$e->getMessage()]);
+}
+
 $zipUrl = WmmNoaaSync::discoverCoefficientZipUrl($html);
 if ($zipUrl === null) {
     wmmUpdateFail(['Could not discover WMM coefficient zip URL on NOAA coefficients page']);
