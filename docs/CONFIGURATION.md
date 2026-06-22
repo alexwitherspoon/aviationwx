@@ -56,7 +56,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_history_max_frames` | - | *Deprecated* - use retention_hours |
 | `http_integrity_digest_cache_ttl_seconds` | max(webcam_history, weather_history) | APCu TTL for Content-Digest/MD5 cache; defaults to longest retention (images + weather) |
 | `default_preferences` | - | Default unit toggle settings (see below) |
-| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport. When unset per-airport, offline WMM is used when lat/lon are available. |
+| `magnetic_declination` | - | Global override (degrees) for runway diagram and `wind_direction_magnetic`. When set to a numeric value (including `0`), applies to airports without a per-airport override and skips offline WMM. Omit to allow the cascade to reach WMM when lat/lon are set. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | - | NOTAM API client ID |
 | `notam_api_client_secret` | - | NOTAM API client secret |
