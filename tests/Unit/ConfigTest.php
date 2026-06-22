@@ -611,13 +611,15 @@ class ConfigTest extends TestCase {
     }
 
     /**
-     * Test getMagneticDeclination() returns 0 when no override and no API key
+     * Test getMagneticDeclination() returns offline WMM when no override is set
      */
-    public function testGetMagneticDeclination_NoOverride_ReturnsZero(): void {
+    public function testGetMagneticDeclination_NoOverride_ReturnsWmmValue(): void {
+        require_once __DIR__ . '/../../lib/wmm/WmmCoefficients.php';
+        require_once __DIR__ . '/../../lib/wmm/WmmCalculator.php';
         $airport = ['lat' => 45.54, 'lon' => -122.95];
+        $expected = WmmCalculator::getDeclination(time(), 45.54, -122.95);
         $result = getMagneticDeclination($airport);
-        $this->assertIsFloat($result);
-        $this->assertSame(0.0, $result, 'Should return 0 when no override (API not called in test mode)');
+        $this->assertEqualsWithDelta($expected, $result, 0.05);
     }
 
     /**

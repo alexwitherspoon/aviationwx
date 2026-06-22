@@ -1055,31 +1055,32 @@ function getStalenessThresholds(?array $airport = null): array {
  *
  * Safety-critical: Aligns runway wind diagram with magnetic north.
  * Positive = East (magnetic north is East of true north), negative = West.
- * Cascade: airport override → global override → NOAA API (when geomag_api_key set) → 0.
- * Values clamped to -180..180 (invalid config/API data must not mislead).
+ * Cascade: airport override → global override → offline WMM → 0.
+ * Values clamped to -180..180 (invalid override or computed data must not mislead).
  *
- * @param array|null $airport Airport config (with lat, lon for API lookup)
+ * @param array|null $airport Airport config (with lat, lon for WMM lookup)
  * @return float Declination in degrees (-180 to 180)
  */
 function getMagneticDeclination(?array $airport = null): float
 {
     $decl = 0.0;
 
-    if ($airport !== null && isset($airport['magnetic_declination'])) {
+    if ($airport !== null && isset($airport['magnetic_declination']) && is_numeric($airport['magnetic_declination'])) {
         $decl = (float) $airport['magnetic_declination'];
-    } elseif (($global = getGlobalConfig('magnetic_declination')) !== null) {
+    } elseif (($global = getGlobalConfig('magnetic_declination')) !== null && is_numeric($global)) {
         $decl = (float) $global;
-    } else {
-        $apiKey = getGlobalConfig('geomag_api_key');
-        if (is_string($apiKey) && $apiKey !== '' && $airport !== null) {
-            $lat = isset($airport['lat']) ? (float) $airport['lat'] : null;
-            $lon = isset($airport['lon']) ? (float) $airport['lon'] : null;
-            if ($lat !== null && $lon !== null) {
-                require_once __DIR__ . '/magnetic-declination.php';
-                $apiDecl = fetchMagneticDeclinationFromApi($lat, $lon, $apiKey);
-                if ($apiDecl !== null) {
-                    $decl = $apiDecl;
-                }
+    } elseif ($airport !== null) {
+        if (
+            isset($airport['lat'], $airport['lon'])
+            && is_numeric($airport['lat'])
+            && is_numeric($airport['lon'])
+        ) {
+            $lat = (float) $airport['lat'];
+            $lon = (float) $airport['lon'];
+            require_once __DIR__ . '/magnetic-declination.php';
+            $wmmDecl = fetchMagneticDeclinationFromWmm($lat, $lon);
+            if ($wmmDecl !== null) {
+                $decl = $wmmDecl;
             }
         }
     }

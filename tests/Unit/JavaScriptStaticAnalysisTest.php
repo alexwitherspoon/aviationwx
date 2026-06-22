@@ -18,11 +18,12 @@ class JavaScriptStaticAnalysisTest extends TestCase
     {
         parent::setUp();
         
-        // Files that contain JavaScript code
+        // Files that contain JavaScript code (inline in PHP pages and extracted dashboard JS)
         $this->testFiles = [
             __DIR__ . '/../../pages/airport.php',
             __DIR__ . '/../../pages/homepage.php',
             __DIR__ . '/../../pages/error-404-airport.php',
+            __DIR__ . '/../../public/js/airport-dashboard.js',
         ];
     }
     
@@ -63,12 +64,10 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
-            
-            // Extract JavaScript code blocks
-            preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
-            
-            foreach ($matches[1] as $index => $jsCode) {
+            $content = $this->readTestFileContent($file);
+            $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
+
+            foreach ($jsBlocks as $index => $jsCode) {
                 // Skip empty scripts
                 if (trim($jsCode) === '') {
                     continue;
@@ -152,12 +151,10 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
-            
-            // Extract JavaScript code blocks
-            preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
-            
-            foreach ($matches[1] as $index => $jsCode) {
+            $content = $this->readTestFileContent($file);
+            $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
+
+            foreach ($jsBlocks as $index => $jsCode) {
                 // Check for incorrect weather.php calls
                 // Should use /api/weather.php, not /weather.php
                 $incorrectPatterns = [
@@ -200,8 +197,8 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
-            if (strpos($content, '/api/weather.php') !== false || 
+            $content = $this->readTestFileContent($file);
+            if (strpos($content, '/api/weather.php') !== false ||
                 strpos($content, 'api/weather.php') !== false) {
                 $foundCorrectEndpoint = true;
                 break;
@@ -228,8 +225,12 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
+            $content = $this->readTestFileContent($file);
             $filename = basename($file);
+
+            if ($this->isStandaloneJavaScriptFile($file)) {
+                continue;
+            }
             
             // Check if file uses output buffering for script handling
             // These files dynamically generate </script> tags via PHP, so simple
@@ -318,12 +319,10 @@ class JavaScriptStaticAnalysisTest extends TestCase
                 continue;
             }
             
-            $content = file_get_contents($file);
-            
-            // Extract JavaScript code blocks
-            preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
-            
-            foreach ($matches[1] as $index => $jsCode) {
+            $content = $this->readTestFileContent($file);
+            $jsBlocks = $this->extractJavaScriptBlocks($file, $content);
+
+            foreach ($jsBlocks as $index => $jsCode) {
                 // Remove PHP code blocks from JavaScript code for analysis
                 // PHP blocks should be excluded from JavaScript analysis
                 $jsCodeWithoutPhp = preg_replace('/<\?php.*?\?>/is', '', $jsCode);
@@ -402,5 +401,36 @@ class JavaScriptStaticAnalysisTest extends TestCase
         }
         
         $this->assertTrue(true);
+    }
+
+    /**
+     * Standalone .js bundles are analyzed as one source unit; PHP pages use inline script blocks.
+     *
+     * @return list<string>
+     */
+    private function extractJavaScriptBlocks(string $file, string $content): array
+    {
+        if ($this->isStandaloneJavaScriptFile($file)) {
+            return $content === '' ? [] : [$content];
+        }
+
+        preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
+
+        return $matches[1] ?? [];
+    }
+
+    private function isStandaloneJavaScriptFile(string $file): bool
+    {
+        return str_ends_with(strtolower($file), '.js');
+    }
+
+    private function readTestFileContent(string $file): string
+    {
+        $content = file_get_contents($file);
+        if ($content === false) {
+            $this->fail(sprintf('Failed to read test file: %s', $file));
+        }
+
+        return $content;
     }
 }
