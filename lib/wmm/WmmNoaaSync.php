@@ -395,6 +395,17 @@ final class WmmNoaaSync
                 continue;
             }
 
+            if (
+                !is_numeric($parts[0])
+                || !is_numeric($parts[1])
+                || !is_numeric($parts[2])
+                || !is_numeric($parts[3])
+                || !is_numeric($parts[4])
+                || !is_numeric($parts[5])
+            ) {
+                continue;
+            }
+
             $key = self::fixtureMatchKey(
                 (float) $parts[0],
                 (float) $parts[1],
