@@ -241,7 +241,8 @@ final class WmmCalculator
         $q1 = $altitudeKm * $q;
         $q2 = (($q1 + $a2) / ($q1 + $b2)) ** 2;
         $ct = $srlat / sqrt($q2 * $crlat2 + $srlat2);
-        $st = sqrt(1.0 - $ct * $ct);
+        $ct = max(-1.0, min(1.0, $ct));
+        $st = sqrt(max(0.0, 1.0 - $ct * $ct));
         $r2 = $altitudeKm * $altitudeKm + 2.0 * $q1 + ($a4 - $c4 * $srlat2) / ($q * $q);
         $r = sqrt($r2);
         $d = sqrt($a2 * $crlat2 + $b2 * $srlat2);
