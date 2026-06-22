@@ -74,6 +74,16 @@ class MagneticDeclinationSafetyTest extends TestCase
     }
 
     /**
+     * SAFETY: Non-numeric airport override must fall through to offline WMM
+     */
+    public function testGetMagneticDeclination_NonNumericAirportOverride_UsesWmm(): void
+    {
+        $airport = ['magnetic_declination' => '', 'lat' => 45.54, 'lon' => -122.95];
+        $expected = WmmCalculator::getDeclination(time(), 45.54, -122.95);
+        $this->assertEqualsWithDelta($expected, getMagneticDeclination($airport), 0.05);
+    }
+
+    /**
      * SAFETY: Global override must beat offline WMM
      */
     public function testGetMagneticDeclination_Cascade_GlobalOverrideBeatsWmm(): void
