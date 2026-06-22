@@ -1070,9 +1070,13 @@ function getMagneticDeclination(?array $airport = null): float
     } elseif (($global = getGlobalConfig('magnetic_declination')) !== null) {
         $decl = (float) $global;
     } elseif ($airport !== null) {
-        $lat = isset($airport['lat']) ? (float) $airport['lat'] : null;
-        $lon = isset($airport['lon']) ? (float) $airport['lon'] : null;
-        if ($lat !== null && $lon !== null) {
+        if (
+            isset($airport['lat'], $airport['lon'])
+            && is_numeric($airport['lat'])
+            && is_numeric($airport['lon'])
+        ) {
+            $lat = (float) $airport['lat'];
+            $lon = (float) $airport['lon'];
             require_once __DIR__ . '/magnetic-declination.php';
             $wmmDecl = fetchMagneticDeclinationFromWmm($lat, $lon);
             if ($wmmDecl !== null) {

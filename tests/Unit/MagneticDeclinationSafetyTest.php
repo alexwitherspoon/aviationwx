@@ -147,6 +147,15 @@ class MagneticDeclinationSafetyTest extends TestCase
     }
 
     /**
+     * SAFETY: Non-numeric coordinates must fall through to 0 (not cast to 0.0, 0.0)
+     */
+    public function testGetMagneticDeclination_NonNumericCoordinates_ReturnsZero(): void
+    {
+        $airport = ['lat' => '', 'lon' => '-122.95'];
+        $this->assertSame(0.0, getMagneticDeclination($airport));
+    }
+
+    /**
      * SAFETY: fetchMagneticDeclinationFromWmm - invalid lat returns null
      */
     public function testFetchMagneticDeclinationFromWmm_InvalidLat_ReturnsNull(): void
