@@ -60,6 +60,12 @@ class WmmCalculatorTest extends TestCase
         );
     }
 
+    public function testGetDeclination_RejectsNonFiniteLatitude(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        \WmmCalculator::getDeclination(time(), NAN, 0.0);
+    }
+
     public function testGetDeclination_RejectsInvalidLatitude(): void
     {
         $this->expectException(\InvalidArgumentException::class);

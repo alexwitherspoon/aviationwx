@@ -350,6 +350,9 @@ final class WmmCalculator
 
     private static function validateCoordinates(float $lat, float $lon, float $altitudeKm): void
     {
+        if (!is_finite($lat) || !is_finite($lon) || !is_finite($altitudeKm)) {
+            throw new \InvalidArgumentException('Latitude, longitude, and altitude must be finite numbers');
+        }
         if ($lat < -90 || $lat > 90) {
             throw new \InvalidArgumentException('Latitude must be between -90 and 90');
         }
