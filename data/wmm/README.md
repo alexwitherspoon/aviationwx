@@ -6,4 +6,18 @@
 - **Manifest:** `manifest.json` records model metadata and SHA-256 for verification
 - **Source:** [WMM coefficients](https://www.ncei.noaa.gov/products/world-magnetic-model/wmm-coefficients)
 
-Update only when NOAA releases a new WMM model; refresh `manifest.json` and golden tests in the same change.
+## Maintainer updates
+
+When NOAA publishes a new WMM model (or the weekly verify CI job reports drift):
+
+```bash
+php scripts/update-wmm-coefficients.php   # refresh WMM.COF, manifest.json, golden fixtures
+make test-unit                            # WmmCalculatorTest + WmmCoefficientsTest
+make verify-wmm-coefficients            # confirm alignment with NOAA (optional dry-run check)
+```
+
+Use `--dry-run` on the update script to preview metadata without writing files. Commit all three paths above in one reviewed PR - production never downloads coefficients at runtime.
+
+## Weekly CI
+
+`.github/workflows/weekly-wmm-coefficients.yml` runs `scripts/verify-wmm-coefficients.php` every Wednesday. It discovers the current WMM*COF.zip from NOAA's coefficients page and compares header fields and SHA-256 to `manifest.json`. Failures mean NOAA has published new coefficients that are not yet vendored in the repo.
