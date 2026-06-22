@@ -323,13 +323,8 @@ function checkSystemHealth(): array {
         $configSha256ForStatus !== '' ? $configSha256ForStatus : null
     );
 
-    // Magnetic declination (NOAA geomag) - only when geomag_api_key is configured
-    $geomagKey = getGlobalConfig('geomag_api_key');
-    if ($geomagKey !== null && $geomagKey !== '' && trim((string) $geomagKey) !== '') {
-        $geomagHealth = checkMagneticDeclinationHealth();
-        $health['components']['magnetic_declination'] = $geomagHealth;
-    }
-    
+    $health['components']['magnetic_declination'] = checkMagneticDeclinationHealth();
+
     return $health;
 }
 
@@ -668,36 +663,46 @@ function checkAirportCountryResolutionHealth(?array $config, ?string $configSha2
 }
 
 /**
- * Check magnetic declination (geomag) health when API key is configured
+ * Check offline WMM magnetic declination health (bundled coefficients).
  *
  * @return array Component health array
  */
 function checkMagneticDeclinationHealth(): array {
-    $breaker = checkGeomagCircuitBreaker();
-    $geomagDir = CACHE_GEOMAG_DIR;
-    $cacheExists = is_dir($geomagDir);
-    $cacheFiles = $cacheExists ? glob($geomagDir . '/*.json') : [];
-    $cacheCount = is_array($cacheFiles) ? count($cacheFiles) : 0;
-    if ($breaker['skip']) {
+    require_once __DIR__ . '/magnetic-declination.php';
+
+    $manifest = getWmmManifest();
+    if ($manifest === null) {
+        return [
+            'name' => 'Magnetic Declination',
+            'status' => 'down',
+            'message' => 'WMM manifest unreadable',
+            'lastChanged' => 0,
+        ];
+    }
+
+    $model = isset($manifest['model']) && is_string($manifest['model']) ? $manifest['model'] : 'WMM';
+    $details = [
+        'model' => $model,
+        'epoch' => $manifest['epoch'] ?? null,
+        'valid_through_epoch' => $manifest['valid_through_epoch'] ?? null,
+    ];
+
+    if (!isWmmValidForTimestamp(time())) {
         return [
             'name' => 'Magnetic Declination',
             'status' => 'degraded',
-            'message' => 'Circuit breaker open: ' . ($breaker['last_failure_reason'] ?? $breaker['reason'] ?? 'API temporarily disabled'),
+            'message' => 'WMM coefficients outside validity window - update bundled model',
             'lastChanged' => 0,
-            'details' => ['cached_locations' => $cacheCount],
+            'details' => $details,
         ];
     }
-    $status = 'operational';
-    $message = 'NOAA geomag API available';
-    if ($cacheCount > 0) {
-        $message .= " • {$cacheCount} locations cached";
-    }
+
     return [
         'name' => 'Magnetic Declination',
-        'status' => $status,
-        'message' => $message,
+        'status' => 'operational',
+        'message' => "Offline {$model} available",
         'lastChanged' => 0,
-        'details' => ['cached_locations' => $cacheCount],
+        'details' => $details,
     ];
 }
 
