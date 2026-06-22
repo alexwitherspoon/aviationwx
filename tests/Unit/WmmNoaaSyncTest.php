@@ -17,7 +17,7 @@ class WmmNoaaSyncTest extends TestCase
 
     private const SAMPLE_COF_HEADER = "    2025.0            WMM-2025     11/13/2024\n";
 
-    public function testDiscoverCoefficientZipUrl_PicksHighestModelYear(): void
+    public function testDiscoverCoefficientZipUrl_MultipleModelYears_ReturnsHighestYearUrl(): void
     {
         $url = \WmmNoaaSync::discoverCoefficientZipUrl(self::SAMPLE_HTML);
         $this->assertSame(
@@ -31,7 +31,7 @@ class WmmNoaaSyncTest extends TestCase
         $this->assertNull(\WmmNoaaSync::discoverCoefficientZipUrl('<html>no zip links</html>'));
     }
 
-    public function testDiscoverCoefficientZipUrl_IgnoresNonNoaaHosts(): void
+    public function testDiscoverCoefficientZipUrl_NonNoaaHostPresent_ReturnsNoaaUrl(): void
     {
         $html = <<<'HTML'
         <a href="https://evil.example/WMM2099COF.zip">fake</a>
@@ -53,7 +53,7 @@ class WmmNoaaSyncTest extends TestCase
         $this->assertSame('11/13/2024', $header['release_date']);
     }
 
-    public function testBuildManifest_IncludesFiveYearValidityWindow(): void
+    public function testBuildManifest_StandardHeader_SetsFiveYearValidityWindow(): void
     {
         $manifest = \WmmNoaaSync::buildManifest(
             ['epoch' => 2025.0, 'model' => 'WMM-2025', 'release_date' => '11/13/2024'],
@@ -97,10 +97,11 @@ class WmmNoaaSyncTest extends TestCase
         $this->assertStringContainsString('SHA-256 mismatch', $result['errors'][0]);
     }
 
-    public function testRefreshGoldenFixtures_UpdatesExpectedValues(): void
+    public function testRefreshGoldenFixtures_MatchingFixtureKey_UpdatesDeclinationAndInclination(): void
     {
         $testValues = <<<'TXT'
 # comment
+Field 1  Decimal year
 2025.000000      28      89    -121   -99.77    88.47
 2025.000000      48      80     -96   -29.91    87.77
 TXT;
@@ -126,7 +127,7 @@ TXT;
         $this->assertSame(88.47, $result['fixtures'][0]['inclination']);
     }
 
-    public function testExtractZipContents_ReadsBundledNoaaZip(): void
+    public function testExtractZipContents_ValidArchive_ReturnsCofAndEntryPaths(): void
     {
         if (!class_exists(\ZipArchive::class)) {
             $this->markTestSkipped('ZipArchive extension not available');
