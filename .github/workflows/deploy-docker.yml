@@ -1111,7 +1111,7 @@ jobs:
             /tmp/aviationwx-cache/nws-points \
             /tmp/aviationwx-cache/metrics/hourly /tmp/aviationwx-cache/metrics/daily /tmp/aviationwx-cache/metrics/weekly /tmp/aviationwx-cache/metrics/spill \
             /tmp/aviationwx-cache/peak_gusts /tmp/aviationwx-cache/temp_extremes /tmp/aviationwx-cache/runways \
-            /tmp/aviationwx-cache/geomag /tmp/aviationwx-cache/map_tiles"
+            /tmp/aviationwx-cache/map_tiles"
           if mkdir -p ${CACHE_MKDIRS} 2>/dev/null; then
             echo "✓ Created cache directories without sudo"
           else
@@ -1129,7 +1129,7 @@ jobs:
           # {user}/ chroot must stay root:root for sshd (www-data breaks bridge SFTP uploads).
           CACHE_CHOWN_DIRS="webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits \
             metar-bulk nws-points metrics metrics/hourly metrics/daily metrics/weekly metrics/spill \
-            peak_gusts temp_extremes runways geomag map_tiles push_webcams"
+            peak_gusts temp_extremes runways map_tiles push_webcams"
           for d in ${CACHE_CHOWN_DIRS}; do
             target="/tmp/aviationwx-cache/${d}"
             if [ -d "$target" ]; then
@@ -1151,7 +1151,7 @@ jobs:
             for d in webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits \
               metar-bulk nws-points push_webcams \
               metrics metrics/hourly metrics/daily metrics/weekly metrics/spill \
-              peak_gusts temp_extremes runways geomag map_tiles; do
+              peak_gusts temp_extremes runways map_tiles; do
               sudo chmod 775 "/tmp/aviationwx-cache/${d}" 2>/dev/null || chmod 775 "/tmp/aviationwx-cache/${d}" || true
             done
 

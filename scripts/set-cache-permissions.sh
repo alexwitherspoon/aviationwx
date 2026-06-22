@@ -38,7 +38,6 @@ METRICS_WEEKLY_DIR="${METRICS_DIR}/weekly"
 PEAK_GUSTS_DIR="${CACHE_DIR}/peak_gusts"
 TEMP_EXTREMES_DIR="${CACHE_DIR}/temp_extremes"
 RUNWAYS_DIR="${CACHE_DIR}/runways"
-GEOMAG_DIR="${CACHE_DIR}/geomag"
 NOTAM_DIR="${CACHE_DIR}/notam"
 STATION_POWER_DIR="${CACHE_DIR}/station-power"
 PARTNERS_DIR="${CACHE_DIR}/partners"
@@ -65,7 +64,7 @@ if [ -d "${CACHE_DIR}" ]; then
         chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
     fi
     # Writable app data under cache (www-data); ftp/ is re-owned root below for vsftpd
-    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${GEOMAG_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
+    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
         if [ -d "${_d}" ]; then
             chmod 775 "${_d}" 2>/dev/null || true
         fi
