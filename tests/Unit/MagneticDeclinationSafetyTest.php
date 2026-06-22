@@ -127,6 +127,15 @@ class MagneticDeclinationSafetyTest extends TestCase
     }
 
     /**
+     * SAFETY: WMM must refuse timestamps before the manifest epoch
+     */
+    public function testIsWmmValidForTimestamp_BeforeEpoch_ReturnsFalse(): void
+    {
+        $timestamp = WmmCalculator::decimalYearToTimestamp(2024.5);
+        $this->assertFalse(isWmmValidForTimestamp($timestamp));
+    }
+
+    /**
      * SAFETY: WMM must refuse coefficients past valid_through_epoch
      */
     public function testFetchMagneticDeclinationFromWmm_PastValidThroughEpoch_ReturnsNull(): void
