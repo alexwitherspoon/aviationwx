@@ -29,7 +29,12 @@ final class WmmNoaaSync
      */
     public static function discoverCoefficientZipUrl(string $html): ?string
     {
-        if (!preg_match_all('#https://[^"\s<>]+WMM(\d+)COF\.zip#i', $html, $matches, PREG_SET_ORDER)) {
+        if (!preg_match_all(
+            '#https://(?:www\.)?ncei\.noaa\.gov/[^"\s<>]+WMM(\d+)COF\.zip#i',
+            $html,
+            $matches,
+            PREG_SET_ORDER
+        )) {
             return null;
         }
 

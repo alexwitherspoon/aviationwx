@@ -31,6 +31,20 @@ class WmmNoaaSyncTest extends TestCase
         $this->assertNull(\WmmNoaaSync::discoverCoefficientZipUrl('<html>no zip links</html>'));
     }
 
+    public function testDiscoverCoefficientZipUrl_IgnoresNonNoaaHosts(): void
+    {
+        $html = <<<'HTML'
+        <a href="https://evil.example/WMM2099COF.zip">fake</a>
+        <a href="https://www.ncei.noaa.gov/sites/default/files/2024-12/WMM2025COF.zip">real</a>
+        HTML;
+
+        $url = \WmmNoaaSync::discoverCoefficientZipUrl($html);
+        $this->assertSame(
+            'https://www.ncei.noaa.gov/sites/default/files/2024-12/WMM2025COF.zip',
+            $url
+        );
+    }
+
     public function testParseCofHeaderFromContent_ValidHeader_ReturnsFields(): void
     {
         $header = \WmmNoaaSync::parseCofHeaderFromContent(self::SAMPLE_COF_HEADER);
