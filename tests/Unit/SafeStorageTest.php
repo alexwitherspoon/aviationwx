@@ -8,7 +8,6 @@
  * @see pages/airports.php (inline preferences script)
  * @see public/js/airport-dashboard.js (airport dashboard preferences; extracted from pages/airport.php)
  * @see lib/version.php (version-check IIFE embedded in pages/airport.php)
- * @see pages/airport.php
  */
 
 namespace AviationWX\Tests;
