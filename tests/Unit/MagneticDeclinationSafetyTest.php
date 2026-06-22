@@ -82,14 +82,14 @@ class MagneticDeclinationSafetyTest extends TestCase
         $tmpConfig = tempnam(sys_get_temp_dir(), 'awx-mag-decl-');
         $this->assertNotFalse($tmpConfig);
 
-        $fixture = json_decode(
-            (string) file_get_contents(__DIR__ . '/../Fixtures/airports.json.test'),
-            true
-        );
+        $fixtureContents = file_get_contents(__DIR__ . '/../Fixtures/airports.json.test');
+        $this->assertNotFalse($fixtureContents, 'Fixture file must be readable');
+        $fixture = json_decode($fixtureContents, true, 512, JSON_THROW_ON_ERROR);
         $this->assertIsArray($fixture);
         $fixture['config']['magnetic_declination'] = 9.25;
 
-        file_put_contents($tmpConfig, json_encode($fixture, JSON_THROW_ON_ERROR));
+        $written = file_put_contents($tmpConfig, json_encode($fixture, JSON_THROW_ON_ERROR));
+        $this->assertNotFalse($written, 'Temp config must be writable');
         putenv('CONFIG_PATH=' . $tmpConfig);
         clearConfigCache();
 
