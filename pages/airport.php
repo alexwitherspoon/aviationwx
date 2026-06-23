@@ -1359,6 +1359,7 @@ if ($themeCookie === 'dark') {
     <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/weather-timestamp-utils.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/runway-label-layout.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/wind-visual.js?v=<?= $buildHashShort ?>"></script>
     <?php
     // Webcam seed data for the dashboard bootstrap below. Timestamps reuse
     // $webcamTimestamps from the markup loop so CAM_TS always matches the
