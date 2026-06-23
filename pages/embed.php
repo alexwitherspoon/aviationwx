@@ -184,7 +184,7 @@ switch ($style) {
     <title><?= htmlspecialchars($embedPageTitle) ?></title>
     <link rel="stylesheet" href="/public/css/embed-widgets.css">
     <script src="/public/js/runway-label-layout.js"></script>
-    <script src="/public/js/embed-wind-compass.js"></script>
+    <script src="/public/js/wind-visual.js"></script>
     <style>
         /* Ensure full viewport usage for iframe */
         html, body {

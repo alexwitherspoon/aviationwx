@@ -679,7 +679,7 @@
             
             const scripts = [
                 `${BASE_URL}/public/js/runway-label-layout.js`,
-                `${BASE_URL}/public/js/embed-wind-compass.js`,
+                `${BASE_URL}/public/js/wind-visual.js`,
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
