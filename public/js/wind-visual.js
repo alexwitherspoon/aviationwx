@@ -23,6 +23,72 @@
 
     const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
 
+    // Canonical wind compass palettes. light/dark serve the embeds; night is
+    // cockpit night-vision used only by the dashboard. Exposed via
+    // getWindCompassColors so the dashboard legend and the canvas share one source.
+    const WIND_COMPASS_COLORS = {
+        light: {
+            circle: '#333',
+            runway: '#0066cc',
+            runwayLabel: '#0066cc',
+            runwayLabelStrokeWidth: 3,
+            labelOutline: '#ffffff',
+            compass: '#666',
+            windArrow: '#dc3545',
+            windRosePetal: 'rgba(220, 53, 69, 0.5)',
+            windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
+            calmText: '#333',
+            vrbText: '#dc3545',
+            trueNorth: '#4a7'
+        },
+        dark: {
+            circle: '#666',
+            runway: '#4a9eff',
+            runwayLabel: '#6bb3ff',
+            runwayLabelStrokeWidth: 2,
+            runwayLabelOutline: '#1a1a1a',
+            labelOutline: '#333',
+            compass: '#999',
+            windArrow: '#dc3545',
+            windRosePetal: 'rgba(220, 53, 69, 0.5)',
+            windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
+            calmText: '#ddd',
+            vrbText: '#dc3545',
+            trueNorth: '#6b9'
+        },
+        night: {
+            circle: '#660000',
+            runway: '#cc4444',
+            runwayLabel: '#ff5555',
+            runwayLabelStrokeWidth: 3,
+            labelOutline: '#330000',
+            compass: '#993333',
+            windArrow: '#ff4444',
+            windRosePetal: 'rgba(255, 68, 68, 0.5)',
+            windRosePetalStroke: 'rgba(255, 68, 68, 0.4)',
+            chevron: 'rgba(255, 100, 100, 0.9)',
+            calmText: '#cc4444',
+            vrbText: '#ff4444',
+            trueNorth: '#ff5555'
+        }
+    };
+
+    /**
+     * Resolve the wind compass palette for a theme.
+     *
+     * @param {Object} [opts] - { isDark: boolean, night: boolean }
+     * @returns {Object} Palette object (do not mutate)
+     */
+    function getWindCompassColors(opts) {
+        const o = opts || {};
+        if (o.night === true) {
+            return WIND_COMPASS_COLORS.night;
+        }
+        return o.isDark ? WIND_COMPASS_COLORS.dark : WIND_COMPASS_COLORS.light;
+    }
+
     /**
      * Check if a field is stale based on per-field observation time
      *
@@ -56,39 +122,11 @@
         const r = Math.min(width, height) / 2 - 20;
 
         const full = options.fullMode || {};
-        const isDark = options.isDark ?? false;
+        const isNight = options.night === true;
+        const isDark = !isNight && (options.isDark ?? false);
         const magneticDeclination = full.magneticDeclination || 0;
 
-        const colors = isDark ? {
-            circle: '#666',
-            runway: '#4a9eff',
-            runwayLabel: '#6bb3ff',
-            runwayLabelStrokeWidth: 2,
-            runwayLabelOutline: '#1a1a1a',
-            labelOutline: '#333',
-            compass: '#999',
-            windArrow: '#dc3545',
-            windRosePetal: 'rgba(220, 53, 69, 0.5)',
-            windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
-            chevron: 'rgba(220, 53, 69, 0.75)',
-            calmText: '#ddd',
-            vrbText: '#dc3545',
-            trueNorth: '#6b9'
-        } : {
-            circle: '#333',
-            runway: '#0066cc',
-            runwayLabel: '#0066cc',
-            runwayLabelStrokeWidth: 3,
-            labelOutline: '#ffffff',
-            compass: '#666',
-            windArrow: '#dc3545',
-            windRosePetal: 'rgba(220, 53, 69, 0.5)',
-            windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
-            chevron: 'rgba(220, 53, 69, 0.75)',
-            calmText: '#333',
-            vrbText: '#dc3545',
-            trueNorth: '#4a7'
-        };
+        const colors = getWindCompassColors({ isDark: isDark, night: isNight });
 
         ctx.clearRect(0, 0, width, height);
 
@@ -622,6 +660,7 @@
 
     window.AviationWX = window.AviationWX || {};
     window.AviationWX.drawWindCompass = drawWindCompass;
+    window.AviationWX.getWindCompassColors = getWindCompassColors;
     window.AviationWX.CALM_WIND_THRESHOLD = CALM_WIND_THRESHOLD;
 
 })(window);
