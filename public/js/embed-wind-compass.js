@@ -49,14 +49,27 @@
         }
     }
 
+    // If wind-visual.js cannot load (network error, blocked CSP, 404), surface
+    // it and stop queuing so a long-lived page does not grow the queue unbounded.
+    // The compass degrades gracefully (no draw) rather than failing silently.
+    function handleLoadError() {
+        queued.length = 0;
+        if (ns.drawWindCompass === stub) {
+            ns.drawWindCompass = function () {};
+        }
+        console.error('[AviationWX] Failed to load wind-visual.js; wind compass unavailable.');
+    }
+
     const existing = document.querySelector('script[src="' + target + '"]');
     if (existing) {
         existing.addEventListener('load', flushQueue);
+        existing.addEventListener('error', handleLoadError);
         return;
     }
 
     const script = document.createElement('script');
     script.src = target;
     script.addEventListener('load', flushQueue);
+    script.addEventListener('error', handleLoadError);
     document.head.appendChild(script);
 })();
