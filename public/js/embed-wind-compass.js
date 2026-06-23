@@ -6,12 +6,20 @@
  * third-party loader (for example a widget.js bundle cached before the rename)
  * keeps working. It loads wind-visual.js, which defines
  * window.AviationWX.drawWindCompass.
+ *
+ * Loading wind-visual.js is asynchronous, so a legacy caller that loaded this
+ * file as the implementation and calls drawWindCompass immediately would race
+ * the load. To preserve the original "callable once this script has loaded"
+ * contract, a temporary stub queues calls and replays them against the real
+ * renderer once wind-visual.js is ready.
  */
 (function () {
     'use strict';
 
-    // Already provided by wind-visual.js - nothing to do.
-    if (window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function') {
+    const ns = window.AviationWX = window.AviationWX || {};
+
+    // Real implementation already present - nothing to do.
+    if (typeof ns.drawWindCompass === 'function') {
         return;
     }
 
@@ -22,12 +30,32 @@
         ? thisSrc.replace(/embed-wind-compass\.js(\?.*)?$/, 'wind-visual.js')
         : '/public/js/wind-visual.js';
 
-    // Avoid loading twice if something else already requested it.
-    if (document.querySelector('script[src="' + target + '"]')) {
+    // Queue calls made before wind-visual.js finishes loading.
+    const queued = [];
+    const stub = function () {
+        queued.push(arguments);
+    };
+    ns.drawWindCompass = stub;
+
+    // wind-visual.js overwrites drawWindCompass with the real renderer on load;
+    // replay anything that was queued against it.
+    function flushQueue() {
+        if (ns.drawWindCompass === stub) {
+            return;
+        }
+        while (queued.length > 0) {
+            ns.drawWindCompass.apply(ns, queued.shift());
+        }
+    }
+
+    const existing = document.querySelector('script[src="' + target + '"]');
+    if (existing) {
+        existing.addEventListener('load', flushQueue);
         return;
     }
 
     const script = document.createElement('script');
     script.src = target;
+    script.addEventListener('load', flushQueue);
     document.head.appendChild(script);
 })();
