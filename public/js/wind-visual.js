@@ -277,7 +277,6 @@
         const arcColor = colors.trueNorth ?? '#4a7';
         const deg2rad = Math.PI / 180;
         const trueNorthAngle = -declination * deg2rad;
-        const magneticNorthAngle = 0;
         const canvasNorth = -Math.PI / 2 + trueNorthAngle;
         const canvasMagneticNorth = -Math.PI / 2;
 
