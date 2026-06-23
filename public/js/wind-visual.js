@@ -448,7 +448,6 @@
         const isVRB = options.isVRB ?? false;
         const runways = options.runways ?? [];
         const isDark = options.isDark ?? false;
-        const size = options.size ?? 'medium';
 
         ctx.clearRect(0, 0, width, height);
 
