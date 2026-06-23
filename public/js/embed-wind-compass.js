@@ -24,10 +24,11 @@
     }
 
     // Resolve wind-visual.js relative to this script so it works on any origin
-    // (production, staging, self-hosted deployments).
+    // (production, staging, self-hosted deployments). Preserve any query string
+    // (for example a ?v= cache-buster) so it propagates to wind-visual.js.
     const thisSrc = (document.currentScript && document.currentScript.src) || '';
     const target = thisSrc
-        ? thisSrc.replace(/embed-wind-compass\.js(\?.*)?$/, 'wind-visual.js')
+        ? thisSrc.replace(/embed-wind-compass\.js(\?.*)?$/, (_match, query) => 'wind-visual.js' + (query || ''))
         : '/public/js/wind-visual.js';
 
     // Queue calls made before wind-visual.js finishes loading.
