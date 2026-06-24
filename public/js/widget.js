@@ -736,6 +736,16 @@
                             resolve();
                             return;
                         }
+                        const readyState = existing.readyState;
+                        if (readyState === 'complete' || readyState === 'loaded') {
+                            if (isScriptReady(src)) {
+                                markScriptLoaded(existing);
+                                resolve();
+                            } else {
+                                reject(new Error(`Shared script did not initialize expected globals: ${src}`));
+                            }
+                            return;
+                        }
                         existing.addEventListener('load', () => {
                             markScriptLoaded(existing);
                             resolve();
