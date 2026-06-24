@@ -2,12 +2,15 @@
  * Shared Wind Compass Drawing for AviationWX (canonical module).
  *
  * Single source of truth for the runway wind compass. Exposes
- * window.AviationWX.drawWindCompass().
+ * window.AviationWX.drawWindCompass() and window.AviationWX.getWindCompassColors().
  *
  * Used by:
  * - iframe embeds (pages/embed.php)
  * - Web components (public/js/widget.js)
- * - (planned) the airport dashboard (public/js/airport-dashboard.js)
+ * - the airport dashboard (public/js/airport-dashboard.js)
+ *
+ * Themes: light/dark serve the embeds; the night (cockpit night-vision) palette
+ * is selected via the full-mode `night` option and used only by the dashboard.
  *
  * Backward compatibility: the previous filename public/js/embed-wind-compass.js
  * now ships as a thin shim that loads this file, so cached/legacy references keep
@@ -459,6 +462,7 @@
      * @param {boolean} options.isVRB - Whether wind is variable
      * @param {Array} options.runways - Array of runway objects with heading_1 (legacy)
      * @param {boolean} options.isDark - Whether to use dark theme colors
+     * @param {boolean} [options.night] - Full mode only: use the cockpit night-vision palette (dashboard); embeds do not set this
      * @param {string} options.size - Size variant: 'mini', 'small', 'medium', 'large', 'full'
      * @param {Object} [options.fullMode] - Full-mode options (runwaySegments, lastHourWind, periodLabel, etc.)
      */
