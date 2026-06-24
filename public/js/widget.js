@@ -618,33 +618,43 @@
                 const isDark = detectDarkMode();
                 
                 canvases.forEach((canvas) => {
-                    const width = canvas.width;
-                    let size = 'medium';
-                    if (width >= 100) size = 'large';
-                    else if (width >= 80) size = 'medium';
-                    else if (width >= 60) size = 'small';
-                    else size = 'mini';
-                    
-                    // Clear canvas first
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
                     const runways = airport.runways || [];
                     const fullMode = weather.wind_compass_full_mode || null;
-                    
-                    // Draw compass (full mode: runways + wind rose petals when available)
-                    const wd = weather.wind_direction;
-                    const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
-                    const isVRB = (wd && typeof wd === 'object') ? !!wd.variable : (weather.wind_direction_text || '') === 'VRB';
-                    window.AviationWX.drawWindCompass(canvas, {
-                        windSpeed: weather.wind_speed ?? null,
-                        windDirection: windDir,
-                        isVRB: isVRB,
-                        runways: runways,
-                        isDark: isDark,
-                        size: size,
-                        fullMode: fullMode
-                    });
+                    const isFullModeCanvas = !!fullMode || !!canvas.closest('.wind-viz-container');
+
+                    const drawOne = () => {
+                        const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
+                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, canvas.width || 240)
+                            : canvas.width;
+                        let size = 'medium';
+                        if (cssSize >= 240) size = 'full';
+                        else if (cssSize >= 100) size = 'large';
+                        else if (cssSize >= 80) size = 'medium';
+                        else if (cssSize >= 60) size = 'small';
+                        else size = 'mini';
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        const wd = weather.wind_direction;
+                        const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
+                        const isVRB = (wd && typeof wd === 'object') ? !!wd.variable : (weather.wind_direction_text || '') === 'VRB';
+                        window.AviationWX.drawWindCompass(canvas, {
+                            windSpeed: weather.wind_speed ?? null,
+                            windDirection: windDir,
+                            isVRB: isVRB,
+                            runways: runways,
+                            isDark: isDark,
+                            size: size,
+                            fullMode: fullMode
+                        });
+                    };
+
+                    if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
+                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne);
+                    } else {
+                        drawOne();
+                    }
                 });
             };
             
@@ -679,6 +689,7 @@
             
             const scripts = [
                 `${BASE_URL}/public/js/runway-label-layout.js`,
+                `${BASE_URL}/public/js/wind-compass-resize-utils.js`,
                 `${BASE_URL}/public/js/wind-visual.js`,
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];

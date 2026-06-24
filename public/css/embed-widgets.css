@@ -978,12 +978,15 @@ a {
     justify-content: center;
     align-items: center;
     padding: 0.75rem;
-    min-width: 160px;
+    flex: 1 1 52%;
+    min-width: 140px;
+    max-width: min(52%, 280px);
 }
 
 .style-full .wind-section .wind-details {
     padding: 0.4rem 0.5rem;
     border-left: 1px solid var(--border-color);
+    flex: 1 1 auto;
     min-width: 100px;
 }
 
@@ -1028,6 +1031,10 @@ a {
 
 .style-full .wind-viz-container canvas {
     display: block;
+    width: 100%;
+    height: auto;
+    max-width: 280px;
+    aspect-ratio: 1;
 }
 
 .style-full .metrics-section {
@@ -1166,11 +1173,14 @@ a {
     .style-full .wind-viz-container {
         padding: 0.5rem;
         min-width: unset;
+        max-width: none;
+        width: 100%;
+        align-items: center;
     }
     
     .style-full .wind-viz-container canvas {
-        width: 100px;
-        height: 100px;
+        width: min(100%, 240px);
+        max-width: 240px;
     }
     
     .style-full .wind-section .wind-details {

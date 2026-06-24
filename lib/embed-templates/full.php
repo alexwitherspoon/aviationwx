@@ -284,7 +284,7 @@ function buildFullWindSection(array $weather, array $options, ?array $fullModeOp
     return <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
+                    <canvas id="{$canvasId}" width="240" height="240"></canvas>
                 </div>
                 <div class="wind-details">
                     <div class="column-header">💨 Wind</div>

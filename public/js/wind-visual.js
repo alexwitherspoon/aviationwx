@@ -662,9 +662,83 @@
         ctx.fillText('CALM', cx, cy);
     }
 
+    const resizeUtils = (window.AviationWX && window.AviationWX.windCompassResize) || {};
+    const compassObservers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+
+    /**
+     * Resize a wind compass canvas backing store to match its displayed box.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @param {number} [fallbackCssSize=200]
+     * @returns {number} CSS pixel size used
+     */
+    function syncWindCompassCanvasPixels(canvas, fallbackCssSize) {
+        if (!canvas) {
+            return fallbackCssSize || 200;
+        }
+        const parent = canvas.parentElement;
+        const measured = parent ? parent.clientWidth : canvas.clientWidth;
+        const compute = resizeUtils.computeWindCompassPixelSize;
+        const resolved = typeof compute === 'function'
+            ? compute(measured, window.devicePixelRatio || 1)
+            : {
+                cssSize: Math.max(48, Math.round(measured || fallbackCssSize || 200)),
+                pixelSize: Math.max(48, Math.round(measured || fallbackCssSize || 200)),
+            };
+        if (canvas.width !== resolved.pixelSize || canvas.height !== resolved.pixelSize) {
+            canvas.width = resolved.pixelSize;
+            canvas.height = resolved.pixelSize;
+        }
+        canvas.style.width = resolved.cssSize + 'px';
+        canvas.style.height = resolved.cssSize + 'px';
+        return resolved.cssSize;
+    }
+
+    /**
+     * Observe container size and redraw a full-mode compass at the displayed size.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @param {Function} drawFn Callback that draws using the current canvas pixels
+     */
+    function observeWindCompassCanvas(canvas, drawFn) {
+        if (!canvas || typeof drawFn !== 'function') {
+            return;
+        }
+
+        const redraw = function() {
+            syncWindCompassCanvasPixels(canvas);
+            drawFn();
+        };
+
+        if (compassObservers && !compassObservers.has(canvas)) {
+            const target = canvas.parentElement || canvas;
+            if (typeof ResizeObserver !== 'undefined') {
+                const ro = new ResizeObserver(function() {
+                    redraw();
+                });
+                ro.observe(target);
+                compassObservers.set(canvas, ro);
+            } else {
+                const onResize = function() {
+                    redraw();
+                };
+                window.addEventListener('resize', onResize);
+                compassObservers.set(canvas, {
+                    disconnect: function() {
+                        window.removeEventListener('resize', onResize);
+                    },
+                });
+            }
+        }
+
+        redraw();
+    }
+
     window.AviationWX = window.AviationWX || {};
     window.AviationWX.drawWindCompass = drawWindCompass;
     window.AviationWX.getWindCompassColors = getWindCompassColors;
     window.AviationWX.CALM_WIND_THRESHOLD = CALM_WIND_THRESHOLD;
+    window.AviationWX.syncWindCompassCanvasPixels = syncWindCompassCanvasPixels;
+    window.AviationWX.observeWindCompassCanvas = observeWindCompassCanvas;
 
 })(window);
