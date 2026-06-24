@@ -276,7 +276,7 @@ HTML;
                         <span class="label">@ Time</span>
                         <span class="value">
 HTML;
-    if ($peakGustTime !== null && $peakGustToday !== null && $peakGustToday > 0) {
+    if ($peakGustTime > 0 && $peakGustToday !== null && $peakGustToday > 0) {
         try {
             $tz = new DateTimeZone($timezone);
             $dt = new DateTime('@' . $peakGustTime);
