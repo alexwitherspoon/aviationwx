@@ -25,6 +25,7 @@ if ! grep -q "@import url('aviationwx-tokens.css');" "$TARGET"; then
 fi
 
 TMP="${TARGET}.tokens-inline.$$"
+trap 'rm -f "$TMP"' EXIT HUP INT TERM
 
 perl -0777 -pe "
     my \$tokens = do { local \$/; open my \$fh, '<', '$TOKENS' or die \$!; <\$fh> };
