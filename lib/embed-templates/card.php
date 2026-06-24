@@ -331,6 +331,11 @@ function renderCardWidget($data, $options) {
         ? '<span><span class="lg-petal">&#9646;</span> last hr</span>'
         : '';
 
+    // Escape dynamic text before interpolating it into the HTML below
+    $windSummary = htmlspecialchars($windSummary);
+    $peakTimeValue = htmlspecialchars($peakTimeValue);
+    $trueNorthLabel = htmlspecialchars($trueNorthLabel);
+
     // Build HTML - wrap entire card in link to dashboard
     $html = '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="style-card style-card-wf"><div class="wf-header">';
