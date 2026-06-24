@@ -6,14 +6,14 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 
 ### Option 1: Web Component (Recommended for Modern Sites)
 
-Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code; it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy.
+Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code; it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy. For third-party sites, load `widget.js` from **`embed.aviationwx.org`** (not the main site) so API and CSS requests stay on the embed host with the correct CORS headers.
 
 ```html
-<!-- Include the widget script once per page -->
-<script src="https://aviationwx.org/public/js/widget.js"></script>
+<!-- Include the widget script once per page (use the versioned URL from the Embed Configurator) -->
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
 
-<!-- Add widgets anywhere -->
-<aviation-wx airport="kspb" style="card" theme="auto"></aviation-wx>
+<!-- Add widgets anywhere (set width="100%" to fill a column) -->
+<aviation-wx airport="kspb" style="card" theme="auto" width="100%"></aviation-wx>
 ```
 
 ### Option 2: iframe Embed (Universal Compatibility)
@@ -23,6 +23,75 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 4. Customize options (theme, cameras, units)
 5. Copy the embed code
 6. Paste into your website
+
+## Airport website embeds
+
+Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. Iframe embeds fill the column with `width="100%"`; `responsive=1` plus a parent resize listener handles auto-height only. Web components fill the column only when you set `width="100%"` (otherwise they use the style's default pixel width). Either way you can place widgets in a main content area or sidebar without custom CSS.
+
+Use the [Embed Configurator](https://embed.aviationwx.org) to pick an airport, style, and theme, then copy the generated code. The snippets below show the patterns we recommend for airport pages.
+
+### Recommended styles
+
+| Placement | Style | Why |
+|-----------|-------|-----|
+| Main weather section (webcam + full metrics) | `full-single` | Large webcam, dashboard-parity wind diagram, and four metric columns |
+| Two runway views + weather | `full-dual` | Side-by-side webcams with the same wind block and metrics |
+| Multiple cameras + weather | `full-multi` | Up to four webcams in a grid with full weather detail |
+| Sidebar or narrow column | `card` | Wind-forward compact card; compass is the hero, metrics reflow below |
+
+For most airport home pages, start with **`full-single`** when you have one primary webcam, or **`card`** when space is tight.
+
+### Theme: use `auto`
+
+Set **`theme=auto`** so the widget follows the visitor's system light/dark preference. That keeps the embed readable on both light municipal sites and dark OS settings without maintaining two embed codes.
+
+```html
+<aviation-wx airport="kspb" style="full-single" theme="auto" width="100%"></aviation-wx>
+```
+
+Use `theme=light` or `theme=dark` only when your page has a fixed background and you want the widget to match it exactly.
+
+### Sizing
+
+- **Web component:** Set `width="100%"` so the widget fills its container column; height follows content automatically. When `width="100%"` is set, a `height` attribute is ignored. For a fixed pixel box, omit `width="100%"` and set both `width` and `height`. Without `width="100%"`, the widget uses the style's default pixel width (for example 800px for `full-single`).
+- **iframe:** Use `width="100%"` and `responsive=1` (default) so the embed can post its measured height to the parent. The parent page still needs a resize listener (the [Embed Configurator](https://embed.aviationwx.org) iframe snippet includes one) to apply that height to the iframe element. Give the iframe a generous initial `height` (for example `800` for `full-single`).
+
+```html
+<iframe
+  src="https://embed.aviationwx.org/?render=1&airport=kspb&style=full-single&theme=auto&responsive=1&target=_blank"
+  width="100%"
+  height="800"
+  frameborder="0"
+  loading="lazy"
+  title="Airport weather - AviationWX">
+</iframe>
+```
+
+### Responsive reflow (what to expect)
+
+Embeds use **container queries** on the widget width, not the browser viewport. When the column narrows:
+
+- **`card`:** Below ~480px wide, the layout stacks (compass on top, wind facts and condition tiles below). Below ~360px, condition tiles become dense rows and secondary wind rows hide behind the compass summary line.
+- **`full-single` / `full-dual` / `full-multi`:** Below ~700px, metric columns wrap to two per row; below ~500px, metrics collapse to a single column, the wind block stacks above metrics, and dual/multi webcams stack vertically; below ~400px, the wind section stacks compass above wind facts.
+- **Footer:** Below ~450px, footer lines stack vertically.
+
+Test at the width of your actual content column (not only full-screen) so you know how the embed will look in a sidebar or mobile layout.
+
+### Copy-paste recipe (web component)
+
+Include the script once per page (use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org) for cache busting), then add one or more widgets with `width="100%"` for column-filling layouts:
+
+```html
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
+
+<!-- Primary airport weather block -->
+<aviation-wx airport="YOUR_AIRPORT_ID" style="full-single" theme="auto" width="100%" refresh="300000"></aviation-wx>
+
+<!-- Optional: compact card in a sidebar -->
+<aviation-wx airport="YOUR_AIRPORT_ID" style="card" theme="auto" width="100%"></aviation-wx>
+```
+
+Replace `YOUR_AIRPORT_ID` with your airport id (lowercase, e.g. `kspb` or `pdx`; not always an ICAO code). Generate a tailored snippet with camera indices and units in the [Embed Configurator](https://embed.aviationwx.org).
 
 ## Widget Styles
 
@@ -87,24 +156,25 @@ Choose whether dashboard links open in a new tab or the same tab.
 
 A JavaScript custom element that integrates directly with your page. Best for sites that support JavaScript.
 
-- **Direct rendering** - No iframe overhead, faster performance
+- **Script origin** - Load `widget.js` from `embed.aviationwx.org` on external sites so API/CSS fetches use the embed host (see [Embed host routing](#embed-api-json))
 - **Auto-refresh** - Configurable refresh intervals (default: 5 minutes)
 - **Theme support** - Light, dark, and auto (follows system preference)
 - **Unit conversion** - Temperature, distance, wind speed, barometer units
 - **Style isolation** - Shadow DOM prevents style conflicts
-- **Responsive sizing** - Fills container width by default; height adjusts automatically
+- **Responsive sizing** - Set `width="100%"` to fill the container column; height adjusts to content. Without it, the widget uses the style's default pixel dimensions.
 
 **Usage:**
 
 ```html
-<!-- Include the widget script once per page -->
-<script src="https://aviationwx.org/public/js/widget.js"></script>
+<!-- Include the widget script once per page (load from embed.aviationwx.org for third-party sites) -->
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
 
 <!-- Add widgets anywhere on your page -->
 <aviation-wx 
     airport="kspb" 
     style="card" 
     theme="auto"
+    width="100%"
     temp="F"
     wind="kt"
     refresh="300000">
@@ -147,10 +217,10 @@ Works on most platforms including:
 | `dist` | `ft`, `m` | Distance/altitude unit (default: `ft`) |
 | `wind` | `kt`, `mph`, `kmh` | Wind speed unit (default: `kt`) |
 | `baro` | `inHg`, `hPa`, `mmHg` | Barometer unit (default: `inHg`) |
-| `target` | `_blank`, `_self` | Link target (default: `_blank`) |
+| `target` | `_blank`, `_self`, `_parent`, `_top` | Link target (default: `_blank`) |
 | `refresh` | Number (ms) | Auto-refresh interval in milliseconds (default: `300000` = 5 min, minimum: `60000` = 1 min) |
-| `width` | Number (px) | Widget width in pixels (optional, uses style defaults) |
-| `height` | Number (px) | Widget height in pixels (optional, uses style defaults) |
+| `width` | Number (px) or `100%` | Widget width. Use `100%` to fill the container column; otherwise uses style default pixels. |
+| `height` | Number (px) | Widget height in pixels. Ignored when `width="100%"` (height follows content). |
 
 **Default Dimensions by Style:**
 
@@ -216,7 +286,7 @@ When embedding directly, you can customize the widget using URL parameters:
 | `responsive` | `1` (default), `0` | Iframe height auto-adjusts to content (postMessage to parent). Default is `1`; use `0` for fixed height. |
 | `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
-| `target` | `_blank`, `_self` | Link target |
+| `target` | `_blank`, `_self`, `_parent`, `_top` | Link target |
 | `temp` | `F`, `C` | Temperature unit |
 | `dist` | `ft`, `m` | Distance unit |
 | `wind` | `kt`, `mph`, `kmh` | Wind speed unit |
@@ -315,7 +385,7 @@ The widget script uses short cache headers (`max-age=300`, `stale-while-revalida
 
 ### Widget appears too small/large
 - **iframe:** Add `responsive=1` to the URL for auto-height; the iframe posts its height to the parent. Or set fixed `width` and `height` attributes.
-- **Web component:** Uses responsive sizing by default; set `width` and `height` attributes for fixed dimensions.
+- **Web component:** Set `width="100%"` for a column-filling layout (height follows content). For fixed dimensions, set explicit `width` and `height` in pixels (omit `width="100%"`).
 - Each widget style has recommended dimensions shown in the configurator.
 
 ## Security Considerations
