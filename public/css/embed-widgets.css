@@ -980,7 +980,8 @@ a {
     padding: 0.75rem;
     flex: 1 1 52%;
     min-width: 140px;
-    max-width: min(52%, 280px);
+    width: 52%;
+    max-width: 280px;
 }
 
 .style-full .wind-section .wind-details {
@@ -1179,7 +1180,7 @@ a {
     }
     
     .style-full .wind-viz-container canvas {
-        width: min(100%, 240px);
+        width: 100%;
         max-width: 240px;
     }
     
