@@ -713,6 +713,7 @@
      *
      * @param {HTMLCanvasElement} canvas
      * @param {Function} drawFn Callback that draws using the current canvas pixels
+     * @param {number} [fallbackCssSize=240] CSS-pixel size when layout is not ready
      */
     function observeWindCompassCanvas(canvas, drawFn, fallbackCssSize) {
         if (!canvas || typeof drawFn !== 'function') {
