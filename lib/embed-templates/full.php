@@ -207,6 +207,98 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
 }
 
 /**
+ * Build the shared wind section (compass + wind details) for full-* widgets.
+ *
+ * Shared by full-single, full-dual, and full-multi so the wind compass and
+ * facts render identically across them.
+ *
+ * @param string $canvasId Canvas element id for the compass
+ * @param string $windDir Formatted wind direction (e.g. "180°", "VRB", "---")
+ * @param float|string $windSpd Pre-formatted wind speed for the summary line (round() result, or "---")
+ * @param string $gustVal Formatted gust value for the summary line (e.g. "G12" or "")
+ * @param string $windUnitLabel Wind speed unit label (e.g. "kt")
+ * @param float|null $windSpeed Wind speed in knots (for the Speed row)
+ * @param string $windUnit Wind speed unit code (kt/mph/kmh)
+ * @param float|null $gustSpeed Gust speed in knots
+ * @param float|null $peakGustToday Today's peak gust in knots
+ * @param int|null $peakGustTime Peak gust observation time (Unix seconds)
+ * @param string $timezone Airport timezone for the peak gust time
+ * @return string Wind section HTML
+ */
+function buildFullWindSection(string $canvasId, string $windDir, float|string $windSpd, string $gustVal, string $windUnitLabel, ?float $windSpeed, string $windUnit, ?float $gustSpeed, ?float $peakGustToday, ?int $peakGustTime, string $timezone): string {
+    $html = <<<HTML
+            <div class="wind-section">
+                <div class="wind-viz-container">
+                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
+                    <div class="wind-summary">
+                        <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
+                    </div>
+                </div>
+                <div class="wind-details">
+                    <div class="column-header">💨 Wind</div>
+                    <div class="metric-item">
+                        <span class="label">Direction</span>
+                        <span class="value">{$windDir}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="label">Speed</span>
+                        <span class="value">
+HTML;
+    $html .= formatEmbedWindSpeed($windSpeed, $windUnit);
+    $html .= <<<HTML
+</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="label">Gusting</span>
+                        <span class="value">
+HTML;
+    if ($gustSpeed !== null && $gustSpeed > 0) {
+        $html .= formatEmbedWindSpeed($gustSpeed, $windUnit);
+    } else {
+        $html .= '--';
+    }
+    $html .= <<<HTML
+</span>
+                    </div>
+                    <div class="metric-item peak-item">
+                        <span class="label">Peak Gust</span>
+                        <span class="value">
+HTML;
+    if ($peakGustToday !== null && $peakGustToday > 0) {
+        $html .= formatEmbedWindSpeed($peakGustToday, $windUnit);
+    } else {
+        $html .= '--';
+    }
+    $html .= <<<HTML
+</span>
+                    </div>
+                    <div class="metric-item peak-time-item">
+                        <span class="label">@ Time</span>
+                        <span class="value">
+HTML;
+    if ($peakGustTime > 0 && $peakGustToday !== null && $peakGustToday > 0) {
+        try {
+            $tz = new DateTimeZone($timezone);
+            $dt = new DateTime('@' . $peakGustTime);
+            $dt->setTimezone($tz);
+            $peakTimeDisplay = $dt->format('g:ia');
+        } catch (Exception $e) {
+            $peakTimeDisplay = date('g:ia', $peakGustTime);
+        }
+        $html .= htmlspecialchars($peakTimeDisplay);
+    } else {
+        $html .= '--';
+    }
+    $html .= <<<HTML
+</span>
+                    </div>
+                </div>
+            </div>
+HTML;
+    return $html;
+}
+
+/**
  * Render full-single style widget (single webcam with detailed weather)
  * 
  * @param array $data Widget data
@@ -337,77 +429,8 @@ function renderFullSingleWidget($data, $options) {
     $html .= '</div></a>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
+    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
     $html .= <<<HTML
-            <div class="wind-section">
-                <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
-                    <div class="wind-summary">
-                        <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
-                    </div>
-                </div>
-                <div class="wind-details">
-                    <div class="column-header">💨 Wind</div>
-                    <div class="metric-item">
-                        <span class="label">Direction</span>
-                        <span class="value">{$windDir}</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Speed</span>
-                        <span class="value">
-HTML;
-    $html .= formatEmbedWindSpeed($windSpeed, $windUnit);
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Gusting</span>
-                        <span class="value">
-HTML;
-    // Always show Gusting field
-    if ($gustSpeed !== null && $gustSpeed > 0) {
-        $html .= formatEmbedWindSpeed($gustSpeed, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-item">
-                        <span class="label">Peak Gust</span>
-                        <span class="value">
-HTML;
-    // Always show Peak Gust field
-    if ($peakGustToday !== null && $peakGustToday > 0) {
-        $html .= formatEmbedWindSpeed($peakGustToday, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-time-item">
-                        <span class="label">@ Time</span>
-                        <span class="value">
-HTML;
-    // Always show @ Time field
-    if ($peakGustTime !== null && $peakGustToday !== null && $peakGustToday > 0) {
-        try {
-            $tz = new DateTimeZone($timezone);
-            $dt = new DateTime('@' . $peakGustTime);
-            $dt->setTimezone($tz);
-            $peakTimeDisplay = $dt->format('g:ia');
-        } catch (Exception $e) {
-            $peakTimeDisplay = date('g:ia', $peakGustTime);
-        }
-        $html .= htmlspecialchars($peakTimeDisplay);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                </div>
-            </div>
             <div class="metrics-section">
 HTML;
     $html .= buildFullWidgetMetrics($weather, $options, $hasMetarData);
@@ -579,77 +602,8 @@ function renderFullDualWidget($data, $options) {
     $html .= '</div></div>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
+    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
     $html .= <<<HTML
-            <div class="wind-section">
-                <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
-                    <div class="wind-summary">
-                        <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
-                    </div>
-                </div>
-                <div class="wind-details">
-                    <div class="column-header">💨 Wind</div>
-                    <div class="metric-item">
-                        <span class="label">Direction</span>
-                        <span class="value">{$windDir}</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Speed</span>
-                        <span class="value">
-HTML;
-    $html .= formatEmbedWindSpeed($windSpeed, $windUnit);
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Gusting</span>
-                        <span class="value">
-HTML;
-    // Always show Gusting field
-    if ($gustSpeed !== null && $gustSpeed > 0) {
-        $html .= formatEmbedWindSpeed($gustSpeed, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-item">
-                        <span class="label">Peak Gust</span>
-                        <span class="value">
-HTML;
-    // Always show Peak Gust field
-    if ($peakGustToday !== null && $peakGustToday > 0) {
-        $html .= formatEmbedWindSpeed($peakGustToday, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-time-item">
-                        <span class="label">@ Time</span>
-                        <span class="value">
-HTML;
-    // Always show @ Time field
-    if ($peakGustTime !== null && $peakGustToday !== null && $peakGustToday > 0) {
-        try {
-            $tz = new DateTimeZone($timezone);
-            $dt = new DateTime('@' . $peakGustTime);
-            $dt->setTimezone($tz);
-            $peakTimeDisplay = $dt->format('g:ia');
-        } catch (Exception $e) {
-            $peakTimeDisplay = date('g:ia', $peakGustTime);
-        }
-        $html .= htmlspecialchars($peakTimeDisplay);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                </div>
-            </div>
             <div class="metrics-section">
 HTML;
     $html .= buildFullWidgetMetrics($weather, $options, $hasMetarData);
@@ -823,77 +777,8 @@ function renderFullMultiWidget($data, $options) {
     $html .= '</div></div>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
+    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
     $html .= <<<HTML
-            <div class="wind-section">
-                <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
-                    <div class="wind-summary">
-                        <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
-                    </div>
-                </div>
-                <div class="wind-details">
-                    <div class="column-header">💨 Wind</div>
-                    <div class="metric-item">
-                        <span class="label">Direction</span>
-                        <span class="value">{$windDir}</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Speed</span>
-                        <span class="value">
-HTML;
-    $html .= formatEmbedWindSpeed($windSpeed, $windUnit);
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Gusting</span>
-                        <span class="value">
-HTML;
-    // Always show Gusting field
-    if ($gustSpeed !== null && $gustSpeed > 0) {
-        $html .= formatEmbedWindSpeed($gustSpeed, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-item">
-                        <span class="label">Peak Gust</span>
-                        <span class="value">
-HTML;
-    // Always show Peak Gust field
-    if ($peakGustToday !== null && $peakGustToday > 0) {
-        $html .= formatEmbedWindSpeed($peakGustToday, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-time-item">
-                        <span class="label">@ Time</span>
-                        <span class="value">
-HTML;
-    // Always show @ Time field
-    if ($peakGustTime !== null && $peakGustToday !== null && $peakGustToday > 0) {
-        try {
-            $tz = new DateTimeZone($timezone);
-            $dt = new DateTime('@' . $peakGustTime);
-            $dt->setTimezone($tz);
-            $peakTimeDisplay = $dt->format('g:ia');
-        } catch (Exception $e) {
-            $peakTimeDisplay = date('g:ia', $peakGustTime);
-        }
-        $html .= htmlspecialchars($peakTimeDisplay);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                </div>
-            </div>
             <div class="metrics-section">
 HTML;
     $html .= buildFullWidgetMetrics($weather, $options, $hasMetarData);
