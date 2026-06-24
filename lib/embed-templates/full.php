@@ -214,7 +214,7 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
  *
  * @param string $canvasId Canvas element id for the compass
  * @param string $windDir Formatted wind direction (e.g. "180°", "VRB", "---")
- * @param string $windSpd Formatted wind speed value for the summary line
+ * @param float|string $windSpd Pre-formatted wind speed for the summary line (round() result, or "---")
  * @param string $gustVal Formatted gust value for the summary line (e.g. "G12" or "")
  * @param string $windUnitLabel Wind speed unit label (e.g. "kt")
  * @param float|null $windSpeed Wind speed in knots (for the Speed row)
@@ -225,7 +225,7 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
  * @param string $timezone Airport timezone for the peak gust time
  * @return string Wind section HTML
  */
-function buildFullWindSection(string $canvasId, string $windDir, $windSpd, string $gustVal, string $windUnitLabel, $windSpeed, string $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, string $timezone): string {
+function buildFullWindSection(string $canvasId, string $windDir, $windSpd, string $gustVal, string $windUnitLabel, ?float $windSpeed, string $windUnit, ?float $gustSpeed, ?float $peakGustToday, ?int $peakGustTime, string $timezone): string {
     $html = <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
