@@ -26,7 +26,7 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 
 ## Airport website embeds
 
-Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. The widgets reflow to the width of your content column, so you can drop them into a main content area or a sidebar without custom CSS.
+Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. Iframe embeds can adapt to column width with `responsive=1` and a parent resize listener; web components fill the column only when you set `width="100%"` (otherwise they use the style's default pixel width). Either way you can place widgets in a main content area or sidebar without custom CSS.
 
 Use the [Embed Configurator](https://embed.aviationwx.org) to pick an airport, style, and theme, then copy the generated code. The snippets below show the patterns we recommend for airport pages.
 
