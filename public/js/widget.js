@@ -696,19 +696,40 @@
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
-            for (const src of scripts) {
-                await new Promise((resolve, reject) => {
-                    if (document.querySelector(`script[src="${src}"]`)) {
-                        setTimeout(resolve, 10);
+            const scriptLoads = window.__aviationwxScriptLoads = window.__aviationwxScriptLoads || {};
+
+            const loadOneScript = (src) => {
+                if (scriptLoads[src]) {
+                    return scriptLoads[src];
+                }
+
+                scriptLoads[src] = new Promise((resolve, reject) => {
+                    const existing = document.querySelector(`script[src="${src}"]`);
+                    if (existing) {
+                        if (existing.dataset.aviationwxLoaded === '1') {
+                            resolve();
+                            return;
+                        }
+                        existing.addEventListener('load', () => resolve(), { once: true });
+                        existing.addEventListener('error', reject, { once: true });
                         return;
                     }
 
                     const script = document.createElement('script');
                     script.src = src;
-                    script.onload = () => setTimeout(resolve, 10);
+                    script.onload = () => {
+                        script.dataset.aviationwxLoaded = '1';
+                        setTimeout(resolve, 10);
+                    };
                     script.onerror = reject;
                     document.head.appendChild(script);
                 });
+
+                return scriptLoads[src];
+            };
+
+            for (const src of scripts) {
+                await loadOneScript(src);
             }
         }
 
