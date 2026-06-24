@@ -19,7 +19,7 @@ if [ ! -f "$TOKENS" ]; then
     exit 1
 fi
 
-if ! grep -q "@import url('aviationwx-tokens.css');" "$TARGET"; then
+if ! grep -qE "@import[[:space:]]+url\\([[:space:]]*['\"]aviationwx-tokens\\.css['\"][[:space:]]*\\)" "$TARGET"; then
     echo "No aviationwx-tokens @import in $TARGET; skipping inline"
     exit 0
 fi
@@ -34,7 +34,8 @@ trap 'rm -f "$TMP"' EXIT HUP INT TERM
 
 perl -0777 -pe "
     my \$tokens = do { local \$/; open my \$fh, '<', '$TOKENS' or die \$!; <\$fh> };
-    s/\@import url\\('aviationwx-tokens.css'\\);\\s*/\$tokens/;
+    my \$count = () = s/\@import\s+url\s*\(\s*['\"]aviationwx-tokens\.css['\"]\s*\)\s*;\s*/\$tokens/g;
+    die \"ERROR: expected exactly one aviationwx-tokens @import, replaced \$count\\n\" if \$count != 1;
 " "$TARGET" > "$TMP"
 
 mv "$TMP" "$TARGET"
