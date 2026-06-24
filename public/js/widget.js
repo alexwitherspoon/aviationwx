@@ -694,24 +694,20 @@
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
-            const loadPromises = scripts.map(src => {
-                return new Promise((resolve, reject) => {
-                    // Check if already loaded
+            for (const src of scripts) {
+                await new Promise((resolve, reject) => {
                     if (document.querySelector(`script[src="${src}"]`)) {
-                        // Wait a bit for script to execute
                         setTimeout(resolve, 10);
                         return;
                     }
-                    
+
                     const script = document.createElement('script');
                     script.src = src;
-                    script.onload = () => setTimeout(resolve, 10); // Small delay for execution
+                    script.onload = () => setTimeout(resolve, 10);
                     script.onerror = reject;
                     document.head.appendChild(script);
                 });
-            });
-            
-            await Promise.all(loadPromises);
+            }
         }
 
 

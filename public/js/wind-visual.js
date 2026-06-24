@@ -662,8 +662,13 @@
         ctx.fillText('CALM', cx, cy);
     }
 
-    const resizeUtils = (window.AviationWX && window.AviationWX.windCompassResize) || {};
-    const compassObservers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+    const compassObservers = typeof WeakMap !== 'undefined'
+        ? new WeakMap()
+        : (typeof Map !== 'undefined' ? new Map() : null);
+
+    function getWindCompassResizeUtils() {
+        return (window.AviationWX && window.AviationWX.windCompassResize) || {};
+    }
 
     /**
      * Resize a wind compass canvas backing store to match its displayed box.
@@ -684,7 +689,7 @@
                 ? rect.width
                 : (canvas.offsetWidth || fallbackCssSize || 200));
         const dpr = window.devicePixelRatio || 1;
-        const compute = resizeUtils.computeWindCompassPixelSize;
+        const compute = getWindCompassResizeUtils().computeWindCompassPixelSize;
         const resolved = typeof compute === 'function'
             ? compute(measured, dpr)
             : {
@@ -745,6 +750,14 @@
                 compassObservers.set(canvas, ro);
             } else {
                 const onResize = function() {
+                    if (!canvas.isConnected) {
+                        window.removeEventListener('resize', onResize);
+                        if (compassObservers) {
+                            compassObservers.delete(canvas);
+                        }
+                        delete canvas._aviationwxWindCompassRedraw;
+                        return;
+                    }
                     redraw();
                 };
                 window.addEventListener('resize', onResize);
