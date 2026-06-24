@@ -304,13 +304,16 @@ function renderCardWidget($data, $options) {
     } elseif ($windSpeed < 3) {
         $windSummary = 'Calm';
     } else {
-        $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? round($windDirection) . '°' : '---');
-        $spdConv = $windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed);
+        // METAR-style wind group, no degree glyph: 3-digit direction + speed +
+        // optional gust + unit (e.g. 23015G20KT, VRB05KT). Direction is magnetic,
+        // consistent with the rest of the card.
+        $spd = round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed));
         $gustSpeedKt = $processed['gustSpeed'] ?? null;
         $gustPart = ($gustSpeedKt !== null && $gustSpeedKt > 0)
-            ? ' G' . round($windUnit === 'mph' ? knotsToMph($gustSpeedKt) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeedKt) : $gustSpeedKt))
+            ? 'G' . sprintf('%02d', round($windUnit === 'mph' ? knotsToMph($gustSpeedKt) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeedKt) : $gustSpeedKt)))
             : '';
-        $windSummary = $dirPart . '@' . round($spdConv) . $gustPart . ' ' . $windUnitLabel;
+        $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? sprintf('%03d', round($windDirection)) : '---');
+        $windSummary = $dirPart . sprintf('%02d', $spd) . $gustPart . strtoupper($windUnitLabel);
     }
 
     // Legend metadata (matches the compass: True North marker, wind arrow, runways, petals)
