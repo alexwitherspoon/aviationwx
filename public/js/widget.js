@@ -624,7 +624,7 @@
 
                     const drawOne = () => {
                         const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
-                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, canvas.width || 240)
+                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, 240)
                             : canvas.width;
                         let size = 'medium';
                         if (cssSize >= 240) size = 'full';
@@ -651,7 +651,7 @@
                     };
 
                     if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
-                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne, canvas.width || 240);
+                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne, 240);
                     } else {
                         drawOne();
                     }
