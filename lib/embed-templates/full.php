@@ -211,8 +211,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
  *
  * Shared by full-single, full-dual, and full-multi. Computes the displayed
  * wind facts from the airport weather so all three render identically, with
- * dashboard-parity fields (Gust Factor, Peak Gust + time), a METAR-style
- * compact summary, and a themed legend. Wind fields fail closed to "---".
+ * dashboard-parity fields (Gust Factor, Peak Gust + time) and a themed
+ * legend. Direction is suppressed to "---" when calm (matching the card and
+ * dashboard), and all wind fields fail closed to "---" when stale.
  *
  * @param array $weather Weather data for the airport
  * @param array $options Widget options (windUnit, etc.)
@@ -239,9 +240,16 @@ function buildFullWindSection(array $weather, array $options, ?array $fullModeOp
     $hasActivePetals = is_array($lastHourWind) && count($lastHourWind) === 16
         && count(array_filter($lastHourWind, function ($s) { return $s > 0; })) > 0;
 
-    // Detail-row direction keeps the degree label + Magnetic sublabel
-    $windDirDisplay = $isVRB ? 'VRB' : (is_numeric($windDirection) ? round($windDirection) . '°' : '---');
-    $magSub = ($windDirDisplay !== '---' && $windDirDisplay !== 'VRB') ? ' <span class="sub">Mag</span>' : '';
+    // Direction display, matching the card/dashboard: 'Variable' for VRB,
+    // a numeric magnetic bearing only when there is reportable wind (>= 3 kt),
+    // otherwise '---'. Direction is meaningless when calm, so it is suppressed.
+    $windDirDisplay = '---';
+    if ($isVRB) {
+        $windDirDisplay = 'Variable';
+    } elseif ($windDirection !== null && $windSpeed !== null && $windSpeed >= 3) {
+        $windDirDisplay = round($windDirection) . '°';
+    }
+    $magSub = ($windDirDisplay !== '---' && $windDirDisplay !== 'Variable') ? ' <span class="sub">Mag</span>' : '';
 
     // Field values (fail closed to '---')
     $speedValue = ($windSpeed === null) ? '---' : ($windSpeed < 3 ? 'Calm' : formatEmbedWindSpeed($windSpeed, $windUnit));

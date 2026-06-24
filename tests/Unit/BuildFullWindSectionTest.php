@@ -74,9 +74,11 @@ class BuildFullWindSectionTest extends TestCase
     }
 
     /**
-     * Calm wind shows "Calm" for speed and never a summary line.
+     * Calm wind shows "Calm" for speed, suppresses direction to "---" (a
+     * bearing is meaningless when calm), drops the "Mag" sublabel, and never
+     * renders a summary line - matching the card and dashboard.
      */
-    public function testCalmWind_ShowsCalm(): void
+    public function testCalmWind_ShowsCalmAndSuppressesDirection(): void
     {
         $html = $this->render([
             'wind_direction_magnetic' => 240,
@@ -84,7 +86,24 @@ class BuildFullWindSectionTest extends TestCase
         ]);
 
         $this->assertStringContainsString('Calm', $html);
+        $this->assertStringNotContainsString('240°', $html);
+        $this->assertStringNotContainsString('<span class="sub">Mag</span>', $html);
         $this->assertStringNotContainsString('wind-summary', $html);
+    }
+
+    /**
+     * Variable wind (VRB) shows "Variable" for direction with no "Mag" label.
+     */
+    public function testVariableWind_ShowsVariable(): void
+    {
+        $html = $this->render([
+            'wind_direction_magnetic' => null,
+            'wind_direction_text' => 'VRB',
+            'wind_speed' => 6,
+        ]);
+
+        $this->assertStringContainsString('Variable', $html);
+        $this->assertStringNotContainsString('<span class="sub">Mag</span>', $html);
     }
 
     /**
