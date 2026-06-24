@@ -652,9 +652,10 @@
                             renderCompass(canvas.clientWidth || 240);
                         }, 240);
                     } else {
+                        const fallbackCssSize = isFullModeCanvas ? 240 : canvas.width;
                         const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
-                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, 240)
-                            : canvas.width;
+                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, fallbackCssSize)
+                            : fallbackCssSize;
                         renderCompass(cssSize);
                     }
                 });
@@ -698,6 +699,30 @@
             
             const scriptLoads = window.__aviationwxScriptLoads = window.__aviationwxScriptLoads || {};
 
+            const scriptReadyChecks = {
+                [`${BASE_URL}/public/js/runway-label-layout.js`]: () => (
+                    window.AviationWX && window.AviationWX.runwayLabelLayout
+                ),
+                [`${BASE_URL}/public/js/wind-compass-resize-utils.js`]: () => (
+                    window.AviationWX && window.AviationWX.windCompassResize
+                ),
+                [`${BASE_URL}/public/js/wind-visual.js`]: () => (
+                    window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function'
+                ),
+                [`${BASE_URL}/public/js/embed-helpers.js`]: () => (
+                    window.AviationWX && window.AviationWX.helpers
+                ),
+            };
+
+            const markScriptLoaded = (el) => {
+                el.dataset.aviationwxLoaded = '1';
+            };
+
+            const isScriptReady = (src) => {
+                const check = scriptReadyChecks[src];
+                return check ? !!check() : false;
+            };
+
             const loadOneScript = (src) => {
                 if (scriptLoads[src]) {
                     return scriptLoads[src];
@@ -706,11 +731,15 @@
                 scriptLoads[src] = new Promise((resolve, reject) => {
                     const existing = document.querySelector(`script[src="${src}"]`);
                     if (existing) {
-                        if (existing.dataset.aviationwxLoaded === '1') {
+                        if (existing.dataset.aviationwxLoaded === '1' || isScriptReady(src)) {
+                            markScriptLoaded(existing);
                             resolve();
                             return;
                         }
-                        existing.addEventListener('load', () => resolve(), { once: true });
+                        existing.addEventListener('load', () => {
+                            markScriptLoaded(existing);
+                            resolve();
+                        }, { once: true });
                         existing.addEventListener('error', reject, { once: true });
                         return;
                     }
@@ -718,8 +747,8 @@
                     const script = document.createElement('script');
                     script.src = src;
                     script.onload = () => {
-                        script.dataset.aviationwxLoaded = '1';
-                        setTimeout(resolve, 10);
+                        markScriptLoaded(script);
+                        resolve();
                     };
                     script.onerror = reject;
                     document.head.appendChild(script);
