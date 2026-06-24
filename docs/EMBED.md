@@ -46,14 +46,14 @@ For most airport home pages, start with **`full-single`** when you have one prim
 Set **`theme=auto`** so the widget follows the visitor's system light/dark preference. That keeps the embed readable on both light municipal sites and dark OS settings without maintaining two embed codes.
 
 ```html
-<aviation-wx airport="kspb" style="full-single" theme="auto"></aviation-wx>
+<aviation-wx airport="kspb" style="full-single" theme="auto" width="100%"></aviation-wx>
 ```
 
 Use `theme=light` or `theme=dark` only when your page has a fixed background and you want the widget to match it exactly.
 
 ### Sizing
 
-- **Web component:** Omit `width` and `height` so the widget fills its container width; height adjusts to content. Set explicit dimensions only when you need a fixed box.
+- **Web component:** Set `width="100%"` so the widget fills its container column; height adjusts to content. Omit `height` unless you need a fixed box. Without `width="100%"`, the widget uses the style's default pixel width (for example 800px for `full-single`).
 - **iframe:** Use `width="100%"` and `responsive=1` (default) so height tracks content. Give the iframe a generous initial `height` (for example `800` for `full-single`); the embed posts its measured height to the parent.
 
 ```html
@@ -79,16 +79,16 @@ Test at the width of your actual content column (not only full-screen) so you kn
 
 ### Copy-paste recipe (web component)
 
-Include the script once per page, then add one or more widgets:
+Include the script once per page (use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org) for cache busting), then add one or more widgets with `width="100%"` for column-filling layouts:
 
 ```html
-<script src="https://aviationwx.org/public/js/widget.js"></script>
+<script src="https://aviationwx.org/public/js/widget.js?v=EXAMPLE"></script>
 
 <!-- Primary airport weather block -->
-<aviation-wx airport="YOUR_ICAO" style="full-single" theme="auto" refresh="300000"></aviation-wx>
+<aviation-wx airport="YOUR_ICAO" style="full-single" theme="auto" width="100%" refresh="300000"></aviation-wx>
 
 <!-- Optional: compact card in a sidebar -->
-<aviation-wx airport="YOUR_ICAO" style="card" theme="auto"></aviation-wx>
+<aviation-wx airport="YOUR_ICAO" style="card" theme="auto" width="100%"></aviation-wx>
 ```
 
 Replace `YOUR_ICAO` with your airport id (lowercase, e.g. `kspb`). Generate a tailored snippet with camera indices and units in the [Embed Configurator](https://embed.aviationwx.org).
