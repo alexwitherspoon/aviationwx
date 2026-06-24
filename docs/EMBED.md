@@ -26,7 +26,7 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 
 ## Airport website embeds
 
-Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. Iframe embeds can adapt to column width with `responsive=1` and a parent resize listener; web components fill the column only when you set `width="100%"` (otherwise they use the style's default pixel width). Either way you can place widgets in a main content area or sidebar without custom CSS.
+Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. Iframe embeds fill the column with `width="100%"`; `responsive=1` plus a parent resize listener handles auto-height only. Web components fill the column only when you set `width="100%"` (otherwise they use the style's default pixel width). Either way you can place widgets in a main content area or sidebar without custom CSS.
 
 Use the [Embed Configurator](https://embed.aviationwx.org) to pick an airport, style, and theme, then copy the generated code. The snippets below show the patterns we recommend for airport pages.
 
@@ -217,7 +217,7 @@ Works on most platforms including:
 | `dist` | `ft`, `m` | Distance/altitude unit (default: `ft`) |
 | `wind` | `kt`, `mph`, `kmh` | Wind speed unit (default: `kt`) |
 | `baro` | `inHg`, `hPa`, `mmHg` | Barometer unit (default: `inHg`) |
-| `target` | `_blank`, `_self` | Link target (default: `_blank`) |
+| `target` | `_blank`, `_self`, `_parent`, `_top` | Link target (default: `_blank`) |
 | `refresh` | Number (ms) | Auto-refresh interval in milliseconds (default: `300000` = 5 min, minimum: `60000` = 1 min) |
 | `width` | Number (px) or `100%` | Widget width. Use `100%` to fill the container column; otherwise uses style default pixels. |
 | `height` | Number (px) | Widget height in pixels. Ignored when `width="100%"` (height follows content). |
@@ -286,7 +286,7 @@ When embedding directly, you can customize the widget using URL parameters:
 | `responsive` | `1` (default), `0` | Iframe height auto-adjusts to content (postMessage to parent). Default is `1`; use `0` for fixed height. |
 | `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
-| `target` | `_blank`, `_self` | Link target |
+| `target` | `_blank`, `_self`, `_parent`, `_top` | Link target |
 | `temp` | `F`, `C` | Temperature unit |
 | `dist` | `ft`, `m` | Distance unit |
 | `wind` | `kt`, `mph`, `kmh` | Wind speed unit |
