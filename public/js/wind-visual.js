@@ -677,10 +677,11 @@
             return fallbackCssSize || 200;
         }
 
-        const rect = canvas.getBoundingClientRect();
-        const measured = rect.width > 0
-            ? rect.width
-            : (canvas.offsetWidth || fallbackCssSize || 200);
+        const measured = canvas.clientWidth > 0
+            ? canvas.clientWidth
+            : (rect.width > 0
+                ? rect.width
+                : (canvas.offsetWidth || fallbackCssSize || 200));
         const dpr = window.devicePixelRatio || 1;
         const compute = resizeUtils.computeWindCompassPixelSize;
         const resolved = typeof compute === 'function'
@@ -704,14 +705,34 @@
      * @param {HTMLCanvasElement} canvas
      * @param {Function} drawFn Callback that draws using the current canvas pixels
      */
-    function observeWindCompassCanvas(canvas, drawFn) {
+    function observeWindCompassCanvas(canvas, drawFn, fallbackCssSize) {
         if (!canvas || typeof drawFn !== 'function') {
             return;
         }
 
+        const fallback = fallbackCssSize || 240;
+        canvas._aviationwxWindCompassRedraw = drawFn;
+
         const redraw = function() {
-            syncWindCompassCanvasPixels(canvas);
-            drawFn();
+            if (!canvas.isConnected) {
+                const obs = compassObservers && compassObservers.get(canvas);
+                if (obs && typeof obs.disconnect === 'function') {
+                    obs.disconnect();
+                }
+                if (compassObservers) {
+                    compassObservers.delete(canvas);
+                }
+                delete canvas._aviationwxWindCompassRedraw;
+                return;
+            }
+
+            const latestDraw = canvas._aviationwxWindCompassRedraw;
+            if (typeof latestDraw !== 'function') {
+                return;
+            }
+
+            syncWindCompassCanvasPixels(canvas, fallback);
+            latestDraw();
         };
 
         if (compassObservers && !compassObservers.has(canvas)) {
@@ -729,6 +750,7 @@
                 compassObservers.set(canvas, {
                     disconnect: function() {
                         window.removeEventListener('resize', onResize);
+                        delete canvas._aviationwxWindCompassRedraw;
                     },
                 });
             }

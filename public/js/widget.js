@@ -651,7 +651,7 @@
                     };
 
                     if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
-                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne);
+                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne, canvas.width || 240);
                     } else {
                         drawOne();
                     }

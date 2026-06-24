@@ -990,7 +990,7 @@ function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, 
             }
 
             if (fullModeData && window.AviationWX.observeWindCompassCanvas) {
-                window.AviationWX.observeWindCompassCanvas(canvas, renderCompass);
+                window.AviationWX.observeWindCompassCanvas(canvas, renderCompass, {$size});
             } else {
                 renderCompass();
             }
