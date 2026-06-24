@@ -34,7 +34,6 @@ if ! command -v perl >/dev/null 2>&1; then
 fi
 
 perl -0777 -pe 's/\/\*.*?\*\///gs; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g; s/^\s+|\s+$//g' "$BUNDLE_SRC" > "$OUT"
-rm -f "$BUNDLE_SRC"
 
 # Verify structure survived minification: brace counts must match the
 # comment-stripped source (comments may legitimately contain braces),
@@ -52,7 +51,9 @@ verify=$(perl -e '
     if ($so != $mo || $sc != $mc) { print "brace mismatch: stripped src $so/$sc min $mo/$mc"; exit 0; }
     if ($co != 0 || $cc != 0) { print "comment markers remain in output: $co open, $cc close"; exit 0; }
     print "ok";
-' "$SRC" "$OUT")
+' "$BUNDLE_SRC" "$OUT")
+
+rm -f "$BUNDLE_SRC"
 
 if [ "$verify" != "ok" ]; then
     rm -f "$OUT"
