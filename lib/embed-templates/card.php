@@ -248,13 +248,6 @@ function renderCardWidget($data, $options) {
     $windSpeedValue = $processed['windSpeedValue'];
     $windDirValue = $processed['windDirValue'];
     $gustValue = $processed['gustValue'];
-    $tempDisplay = $processed['tempDisplay'];
-    $dewpointDisplay = $processed['dewpointDisplay'];
-    $densityAltitudeDisplay = $processed['densityAltitudeDisplay'];
-    $secondMetricLabel = $processed['secondMetricLabel'];
-    $secondMetricValue = $processed['secondMetricValue'];
-    $pressureDisplay = $processed['pressureDisplay'];
-    $visDisplay = $processed['visDisplay'];
     $lastUpdated = $processed['lastUpdated'];
     $timezone = $processed['timezone'];
     $dataSource = $processed['dataSource'];
@@ -347,6 +340,16 @@ function renderCardWidget($data, $options) {
         ? '<span><span class="lg-petal">&#9646;</span> last hr</span>'
         : '';
 
+    // Condition tiles: availability-priority selection so METAR airports show
+    // Visibility/Ceiling while non-METAR airports fill those slots with the next
+    // highest-value available fields (Dewpoint Spread, Humidity, etc.) instead of
+    // blank tiles. Shared with the compact webcam widgets.
+    $conditionTilesHtml = '';
+    foreach (getCompactWidgetMetrics($weather, $options, $hasMetarData) as $metric) {
+        $conditionTilesHtml .= '<div class="tile"><span class="tl">' . htmlspecialchars($metric['label'])
+            . '</span><span class="tv">' . htmlspecialchars($metric['value']) . '</span></div>';
+    }
+
     // Escape dynamic text before interpolating it into the HTML below
     $windSummary = htmlspecialchars($windSummary);
     $peakTimeValue = htmlspecialchars($peakTimeValue);
@@ -381,14 +384,7 @@ function renderCardWidget($data, $options) {
             </div>
             <div class="wf-metrics">
                 <div class="col-h">Conditions</div>
-                <div class="wf-tiles">
-                    <div class="tile"><span class="tl">Temp</span><span class="tv">{$tempDisplay}</span></div>
-                    <div class="tile"><span class="tl">Dewpt</span><span class="tv">{$dewpointDisplay}</span></div>
-                    <div class="tile"><span class="tl">DA</span><span class="tv">{$densityAltitudeDisplay}</span></div>
-                    <div class="tile"><span class="tl">{$secondMetricLabel}</span><span class="tv">{$secondMetricValue}</span></div>
-                    <div class="tile"><span class="tl">Press</span><span class="tv">{$pressureDisplay}</span></div>
-                    <div class="tile"><span class="tl">Vis</span><span class="tv">{$visDisplay}</span></div>
-                </div>
+                <div class="wf-tiles">{$conditionTilesHtml}</div>
             </div>
         </div>
     </div></div>
