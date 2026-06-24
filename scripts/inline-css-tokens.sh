@@ -24,6 +24,11 @@ if ! grep -q "@import url('aviationwx-tokens.css');" "$TARGET"; then
     exit 0
 fi
 
+if ! command -v perl >/dev/null 2>&1; then
+    echo "ERROR: perl is required for CSS token inlining" >&2
+    exit 1
+fi
+
 TMP="${TARGET}.tokens-inline.$$"
 trap 'rm -f "$TMP"' EXIT HUP INT TERM
 
