@@ -25,6 +25,7 @@ fi
 # Bundle shared tokens into the minified dashboard CSS so ?v= cache busting does
 # not leave an extra unversioned @import fetch in production.
 BUNDLE_SRC="${SRC}.bundle.$$"
+trap 'rm -f "$BUNDLE_SRC"' EXIT HUP INT TERM
 cp "$SRC" "$BUNDLE_SRC"
 sh scripts/inline-css-tokens.sh "$BUNDLE_SRC"
 
