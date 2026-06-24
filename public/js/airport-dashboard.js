@@ -2564,7 +2564,12 @@ function updateWindVisual(weather) {
     const isNightMode = hasNight;
     const isDarkMode = hasDark || isAutoDark;
 
-    const colors = AviationWX.getWindCompassColors({ isDark: isDarkMode, night: isNightMode });
+    // Palette for the legend below. Guard the shared module so a failed
+    // wind-visual.js load degrades to a usable legend instead of throwing and
+    // taking out the whole wind section (the canvas draw is guarded separately).
+    const colors = (window.AviationWX && typeof AviationWX.getWindCompassColors === 'function')
+        ? AviationWX.getWindCompassColors({ isDark: isDarkMode, night: isNightMode })
+        : { trueNorth: '#4a7', runway: '#0066cc', windArrow: '#dc3545', windRosePetal: 'rgba(220, 53, 69, 0.5)', windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', chevron: 'rgba(220, 53, 69, 0.75)' };
 
     // Wind fields (computed for the detail panel and passed to the shared renderer)
     const CALM_WIND_THRESHOLD = 3;
