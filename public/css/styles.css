@@ -1,5 +1,8 @@
 /* Aviation Weather - Responsive Styles */
 
+/* Dev/source: shared tokens live in aviationwx-tokens.css. Production Docker
+   build inlines them (scripts/inline-css-tokens.sh) so versioned ?v= loads do
+   not trigger a separate unversioned @import fetch. */
 @import url('aviationwx-tokens.css');
 
 /* Prevent mobile Safari from inflating text after viewport/orientation changes (e.g. after modals). */

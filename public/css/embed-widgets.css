@@ -8,6 +8,8 @@
  * This ensures visual consistency across all embed methods.
  */
 
+/* Dev/source @import; production Docker build inlines tokens into this file
+   (see scripts/inline-css-tokens.sh) so ?v= cache busting stays single-fetch. */
 @import url('aviationwx-tokens.css');
 
 /* ============================================
