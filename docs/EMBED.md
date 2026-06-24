@@ -6,11 +6,11 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 
 ### Option 1: Web Component (Recommended for Modern Sites)
 
-Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code; it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy.
+Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code; it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy. For third-party sites, load `widget.js` from **`embed.aviationwx.org`** (not the main site) so API and CSS requests stay on the embed host with the correct CORS headers.
 
 ```html
-<!-- Include the widget script once per page -->
-<script src="https://aviationwx.org/public/js/widget.js"></script>
+<!-- Include the widget script once per page (use the versioned URL from the Embed Configurator) -->
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
 
 <!-- Add widgets anywhere (set width="100%" to fill a column) -->
 <aviation-wx airport="kspb" style="card" theme="auto" width="100%"></aviation-wx>
@@ -26,7 +26,7 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 
 ## Airport website embeds
 
-Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page (for example a county aviation department site with a runway webcam and current conditions). The widgets reflow to the width of your content column, so you can drop them into a main content area or a sidebar without custom CSS.
+Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page. The motivating example for this pattern is [Emery County's Huntington Municipal Airport page](https://emery.utah.gov/home/department-directory/airport/) (`69v`): a county aviation department site with a runway webcam and current conditions in the main content column. The widgets reflow to the width of your content column, so you can drop them into a main content area or a sidebar without custom CSS.
 
 Use the [Embed Configurator](https://embed.aviationwx.org) to pick an airport, style, and theme, then copy the generated code. The snippets below show the patterns we recommend for airport pages.
 
@@ -82,7 +82,7 @@ Test at the width of your actual content column (not only full-screen) so you kn
 Include the script once per page (use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org) for cache busting), then add one or more widgets with `width="100%"` for column-filling layouts:
 
 ```html
-<script src="https://aviationwx.org/public/js/widget.js?v=EXAMPLE"></script>
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
 
 <!-- Primary airport weather block -->
 <aviation-wx airport="YOUR_AIRPORT_ID" style="full-single" theme="auto" width="100%" refresh="300000"></aviation-wx>
@@ -156,7 +156,7 @@ Choose whether dashboard links open in a new tab or the same tab.
 
 A JavaScript custom element that integrates directly with your page. Best for sites that support JavaScript.
 
-- **Direct rendering** - No iframe overhead, faster performance
+- **Script origin** - Load `widget.js` from `embed.aviationwx.org` on external sites so API/CSS fetches use the embed host (see [Embed host routing](#embed-api-json))
 - **Auto-refresh** - Configurable refresh intervals (default: 5 minutes)
 - **Theme support** - Light, dark, and auto (follows system preference)
 - **Unit conversion** - Temperature, distance, wind speed, barometer units
@@ -166,14 +166,15 @@ A JavaScript custom element that integrates directly with your page. Best for si
 **Usage:**
 
 ```html
-<!-- Include the widget script once per page -->
-<script src="https://aviationwx.org/public/js/widget.js"></script>
+<!-- Include the widget script once per page (load from embed.aviationwx.org for third-party sites) -->
+<script src="https://embed.aviationwx.org/widget.js?v=EXAMPLE"></script>
 
 <!-- Add widgets anywhere on your page -->
 <aviation-wx 
     airport="kspb" 
     style="card" 
     theme="auto"
+    width="100%"
     temp="F"
     wind="kt"
     refresh="300000">
