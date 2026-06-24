@@ -690,11 +690,14 @@
                 : (canvas.offsetWidth || fallbackCssSize || 200));
         const dpr = window.devicePixelRatio || 1;
         const compute = getWindCompassResizeUtils().computeWindCompassPixelSize;
+        const utils = getWindCompassResizeUtils();
+        const minCss = utils.MIN_CSS_SIZE || 48;
+        const maxCss = utils.MAX_CSS_SIZE || 300;
         const resolved = typeof compute === 'function'
             ? compute(measured, dpr)
             : {
-                cssSize: Math.max(48, Math.round(measured || fallbackCssSize || 200)),
-                pixelSize: Math.max(1, Math.round(Math.max(48, Math.round(measured || fallbackCssSize || 200)) * dpr)),
+                cssSize: Math.max(minCss, Math.min(maxCss, Math.round(measured || fallbackCssSize || 200))),
+                pixelSize: Math.max(1, Math.round(Math.max(minCss, Math.min(maxCss, Math.round(measured || fallbackCssSize || 200))) * dpr)),
             };
 
         if (canvas.width !== resolved.pixelSize || canvas.height !== resolved.pixelSize) {

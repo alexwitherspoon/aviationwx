@@ -622,10 +622,7 @@
                     const fullMode = weather.wind_compass_full_mode || null;
                     const isFullModeCanvas = !!fullMode || !!canvas.closest('.wind-viz-container');
 
-                    const drawOne = () => {
-                        const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
-                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, 240)
-                            : canvas.width;
+                    const renderCompass = (cssSize) => {
                         let size = 'medium';
                         if (cssSize >= 240) size = 'full';
                         else if (cssSize >= 100) size = 'large';
@@ -651,9 +648,14 @@
                     };
 
                     if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
-                        window.AviationWX.observeWindCompassCanvas(canvas, drawOne, 240);
+                        window.AviationWX.observeWindCompassCanvas(canvas, () => {
+                            renderCompass(canvas.clientWidth || 240);
+                        }, 240);
                     } else {
-                        drawOne();
+                        const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
+                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, 240)
+                            : canvas.width;
+                        renderCompass(cssSize);
                     }
                 });
             };
