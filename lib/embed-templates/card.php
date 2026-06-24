@@ -84,8 +84,15 @@ function processCardWidgetData($data, $options) {
     if ($pressureDisplay === '--') $pressureDisplay = '---';
     $windTextDisplay = formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit);
     
-    // Wind speed value
-    $windSpeedValue = ($windSpeed !== null && $windSpeed >= 3) ? formatEmbedWindSpeed($windSpeed, $windUnit) : 'Calm';
+    // Wind speed value. Wind fields fail closed to null when stale: show '---'
+    // (unavailable), not 'Calm', so missing data is never read as calm winds.
+    if ($windSpeed === null) {
+        $windSpeedValue = '---';
+    } elseif ($windSpeed >= 3) {
+        $windSpeedValue = formatEmbedWindSpeed($windSpeed, $windUnit);
+    } else {
+        $windSpeedValue = 'Calm';
+    }
     
     // Wind direction value (use wind_direction_magnetic; fail closed with ---)
     $windDirValue = '---';
