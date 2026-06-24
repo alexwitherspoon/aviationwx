@@ -740,7 +740,7 @@ a {
 /* ============================================
    WIND-FORWARD CARD
    Compass is the hero; surrounding weather data is compact.
-   Concept 2 (wide split) >= 480cqi, reflowing to Concept 3 (stacked) below.
+   Concept 2 (wide split) at container width >= 480px, reflowing to Concept 3 (stacked) below.
    ============================================ */
 
 .style-card-wf {
