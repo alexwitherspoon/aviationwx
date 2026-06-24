@@ -290,8 +290,11 @@ function renderCardWidget($data, $options) {
         }
     }
 
-    // Compact summary line (shown when stacked, where the facts rail is below the fold)
-    if ($windSpeed === null || $windSpeed < 3) {
+    // Compact summary line (shown when stacked, where the facts rail is below the fold).
+    // Wind fields fail closed to null when stale: show '---' (unavailable), not 'Calm'.
+    if ($windSpeed === null) {
+        $windSummary = '---';
+    } elseif ($windSpeed < 3) {
         $windSummary = 'Calm';
     } else {
         $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? round($windDirection) . '°' : '---');
