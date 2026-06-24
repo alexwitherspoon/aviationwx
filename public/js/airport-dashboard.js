@@ -2567,8 +2567,8 @@ function updateWindVisual(weather) {
     // Palette for the legend below. Guard the shared module so a failed
     // wind-visual.js load degrades to a usable legend instead of throwing and
     // taking out the whole wind section (the canvas draw is guarded separately).
-    const colors = (window.AviationWX && typeof AviationWX.getWindCompassColors === 'function')
-        ? AviationWX.getWindCompassColors({ isDark: isDarkMode, night: isNightMode })
+    const colors = (window.AviationWX && typeof window.AviationWX.getWindCompassColors === 'function')
+        ? window.AviationWX.getWindCompassColors({ isDark: isDarkMode, night: isNightMode })
         : { trueNorth: '#4a7', runway: '#0066cc', windArrow: '#dc3545', windRosePetal: 'rgba(220, 53, 69, 0.5)', windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', chevron: 'rgba(220, 53, 69, 0.75)' };
 
     // Wind fields (computed for the detail panel and passed to the shared renderer)
@@ -2595,8 +2595,8 @@ function updateWindVisual(weather) {
 
     // Draw the compass on the canvas via the shared renderer (single source of truth
     // with the embeds). The detail panel below is dashboard-specific and stays here.
-    if (window.AviationWX && typeof AviationWX.drawWindCompass === 'function') {
-        AviationWX.drawWindCompass(canvas, {
+    if (window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function') {
+        window.AviationWX.drawWindCompass(canvas, {
             windSpeed: ws,
             windDirection: windDirNumeric,
             isVRB: isVariableWind,
