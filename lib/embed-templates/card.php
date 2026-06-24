@@ -84,8 +84,15 @@ function processCardWidgetData($data, $options) {
     if ($pressureDisplay === '--') $pressureDisplay = '---';
     $windTextDisplay = formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit);
     
-    // Wind speed value
-    $windSpeedValue = ($windSpeed !== null && $windSpeed >= 3) ? formatEmbedWindSpeed($windSpeed, $windUnit) : 'Calm';
+    // Wind speed value. Wind fields fail closed to null when stale: show '---'
+    // (unavailable), not 'Calm', so missing data is never read as calm winds.
+    if ($windSpeed === null) {
+        $windSpeedValue = '---';
+    } elseif ($windSpeed >= 3) {
+        $windSpeedValue = formatEmbedWindSpeed($windSpeed, $windUnit);
+    } else {
+        $windSpeedValue = 'Calm';
+    }
     
     // Wind direction value (use wind_direction_magnetic; fail closed with ---)
     $windDirValue = '---';
@@ -265,116 +272,137 @@ function renderCardWidget($data, $options) {
     $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
     $canvasId = 'card-wind-canvas-' . uniqid();
 
-    // Build HTML - wrap entire card in link to dashboard
-    $html = '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
-    $html .= '<div class="style-card"><div class="card-header-v2">';
-    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $processed['airportName']);
-    
-    // Flight category badge with emojis (using processed data)
-    // Always show badge if we have METAR data or emojis
+    // Wind-forward layout values (compass is the hero; surrounding data is compact)
+    $weather = $data['weather'];
+    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
+
+    // Gust factor and today's peak gust (with time) for the wind facts rail
+    $gustFactorKt = $weather['gust_factor'] ?? null;
+    $gustFactorValue = ($gustFactorKt !== null && $gustFactorKt > 0) ? formatEmbedWindSpeed($gustFactorKt, $windUnit) : '---';
+
+    $peakGustKt = $weather['peak_gust_today'] ?? null;
+    $peakGustValue = ($peakGustKt !== null && $peakGustKt > 0) ? formatEmbedWindSpeed($peakGustKt, $windUnit) : '---';
+    $peakGustTime = $weather['peak_gust_time'] ?? null;
+    $peakTimeValue = '---';
+    if ($peakGustTime !== null && $peakGustKt !== null && $peakGustKt > 0) {
+        try {
+            $tz = new DateTimeZone($timezone);
+            $dt = new DateTime('@' . $peakGustTime);
+            $dt->setTimezone($tz);
+            $peakTimeValue = $dt->format('g:ia');
+        } catch (Exception $e) {
+            // Invalid airport timezone (config error): leave as '---' rather than
+            // rendering in the server timezone, which would vary by environment.
+            $peakTimeValue = '---';
+        }
+    }
+
+    // Compact summary line (shown when stacked, where the facts rail is below the fold).
+    // Wind fields fail closed to null when stale: show '---' (unavailable), not 'Calm'.
+    if ($windSpeed === null) {
+        $windSummary = '---';
+    } elseif ($windSpeed < 3) {
+        $windSummary = 'Calm';
+    } else {
+        // METAR-style wind group, no degree glyph: 3-digit direction + speed +
+        // optional gust + unit (e.g. 23015G20KT, VRB05KT). Direction is magnetic,
+        // consistent with the rest of the card.
+        $spd = round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed));
+        $gustSpeedKt = $processed['gustSpeed'] ?? null;
+        $gustPart = ($gustSpeedKt !== null && $gustSpeedKt > 0)
+            ? 'G' . sprintf('%02d', round($windUnit === 'mph' ? knotsToMph($gustSpeedKt) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeedKt) : $gustSpeedKt)))
+            : '';
+        $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? sprintf('%03d', round($windDirection)) : '---');
+        $windSummary = $dirPart . sprintf('%02d', $spd) . $gustPart . strtoupper($windUnitLabel);
+    }
+
+    // Legend metadata (matches the compass: True North marker, wind arrow, runways, petals)
+    $magDecl = $fullModeOptions['magneticDeclination'] ?? 0;
+    $magDeclRounded = (int) round($magDecl);
+    $magVarLabel = ($magDeclRounded !== 0) ? (abs($magDeclRounded) . '°' . ($magDeclRounded > 0 ? 'E' : 'W')) : '';
+    $trueNorthLabel = 'True N' . ($magVarLabel !== '' ? ' (' . $magVarLabel . ')' : '');
+    $lastHourWind = $fullModeOptions['lastHourWind'] ?? null;
+    $hasActivePetals = is_array($lastHourWind) && count($lastHourWind) === 16
+        && count(array_filter($lastHourWind, function ($s) { return $s > 0; })) > 0;
+
+    // Direction value + magnetic sub-label when numeric
+    $magSub = ($windDirValue !== '---' && $windDirValue !== 'Variable') ? ' <span class="sub">Mag</span>' : '';
+
+    // Header: airport title + flight category / conditions badge
+    $headerBadge = '';
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
-        $html .= "\n        <span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
+        $headerBadge = "<span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
     } else if ($hasMetarData && !$flightCategory) {
-        // METAR data but couldn't calculate category - show with emojis
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
-        $html .= "\n        <span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
+        $headerBadge = "<span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
     } else if (!$hasMetarData && $weatherEmojis) {
-        // For PWS sites, show emojis even without flight category
-        $html .= "\n        <span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
+        $headerBadge = "<span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
     }
-    
-    $html .= <<<HTML
 
-    </div>
-    
-    <div class="card-compass-section">
-        <div class="compass-side">
-            <canvas id="{$canvasId}" width="180" height="180"></canvas>
+    // Petal legend item only when there is recent wind-rose data
+    $petalLegend = $hasActivePetals
+        ? '<span><span class="lg-petal">&#9646;</span> last hr</span>'
+        : '';
+
+    // Escape dynamic text before interpolating it into the HTML below
+    $windSummary = htmlspecialchars($windSummary);
+    $peakTimeValue = htmlspecialchars($peakTimeValue);
+    $trueNorthLabel = htmlspecialchars($trueNorthLabel);
+
+    // Build HTML - wrap entire card in link to dashboard
+    $html = '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="style-card style-card-wf"><div class="wf-header">';
+    appendEmbedAirportTitleMarkup($html, $formalIdentifier, $processed['airportName']);
+    $html .= $headerBadge;
+    $html .= <<<HTML
+</div>
+    <div class="wf-body"><div class="wf-inner">
+        <div class="wf-compass">
+            <canvas id="{$canvasId}" width="300" height="300"></canvas>
+            <div class="wf-summary">{$windSummary}</div>
         </div>
-        <div class="wind-details-side">
-HTML;
-    
-    // Wind Speed row (using processed value)
-    $html .= <<<HTML
-
-            <div class="wind-detail-row">
-                <span class="wind-label">Wind Speed:</span>
-                <span class="wind-value">{$windSpeedValue}</span>
+        <div class="wf-side">
+            <div class="wf-wind">
+                <div class="col-h">Wind</div>
+                <div class="wf-row"><span class="k">Direction</span><span class="v">{$windDirValue}{$magSub}</span></div>
+                <div class="wf-row"><span class="k">Speed</span><span class="v">{$windSpeedValue}</span></div>
+                <div class="wf-row"><span class="k">Gusting</span><span class="v">{$gustValue}</span></div>
+                <div class="wf-row detail-extra"><span class="k">Gust Factor</span><span class="v">{$gustFactorValue}</span></div>
+                <div class="wf-row peak detail-extra"><span class="k">Peak Gust</span><span class="v">{$peakGustValue} <span class="sub">{$peakTimeValue}</span></span></div>
+                <div class="wf-legend detail-extra">
+                    <span><span class="lg-true">&#9733;</span> {$trueNorthLabel}</span>
+                    <span><span class="lg-wind">&#8594;</span> wind</span>
+                    <span><span class="lg-rwy">&#9644;</span> runways</span>
+                    {$petalLegend}
+                </div>
             </div>
-HTML;
-    
-    // Wind Direction row (using processed value)
-    $html .= <<<HTML
-
-            <div class="wind-detail-row">
-                <span class="wind-label">Wind Direction:</span>
-                <span class="wind-value">{$windDirValue}</span>
-            </div>
-HTML;
-    
-    // Gusting row (using processed value)
-    $html .= <<<HTML
-
-            <div class="wind-detail-row">
-                <span class="wind-label">Gusting:</span>
-                <span class="wind-value">{$gustValue}</span>
-            </div>
-HTML;
-    
-    $html .= <<<HTML
-
-        </div>
-    </div>
-    
-    <div class="card-metrics">
-        <div class="metric-row">
-            <div class="metric">
-                <span class="metric-label">Temp</span>
-                <span class="metric-value">{$tempDisplay}</span>
-            </div>
-            <div class="metric">
-                <span class="metric-label">Dewpt</span>
-                <span class="metric-value">{$dewpointDisplay}</span>
+            <div class="wf-metrics">
+                <div class="col-h">Conditions</div>
+                <div class="wf-tiles">
+                    <div class="tile"><span class="tl">Temp</span><span class="tv">{$tempDisplay}</span></div>
+                    <div class="tile"><span class="tl">Dewpt</span><span class="tv">{$dewpointDisplay}</span></div>
+                    <div class="tile"><span class="tl">DA</span><span class="tv">{$densityAltitudeDisplay}</span></div>
+                    <div class="tile"><span class="tl">{$secondMetricLabel}</span><span class="tv">{$secondMetricValue}</span></div>
+                    <div class="tile"><span class="tl">Press</span><span class="tv">{$pressureDisplay}</span></div>
+                    <div class="tile"><span class="tl">Vis</span><span class="tv">{$visDisplay}</span></div>
+                </div>
             </div>
         </div>
-        <div class="metric-row">
-            <div class="metric">
-                <span class="metric-label">DA</span>
-                <span class="metric-value">{$densityAltitudeDisplay}</span>
-            </div>
-            <div class="metric">
-                <span class="metric-label">{$secondMetricLabel}</span>
-                <span class="metric-value">{$secondMetricValue}</span>
-            </div>
-        </div>
-        <div class="metric-row">
-            <div class="metric">
-                <span class="metric-label">Press</span>
-                <span class="metric-value">{$pressureDisplay}</span>
-            </div>
-            <div class="metric">
-                <span class="metric-label">Vis</span>
-                <span class="metric-value">{$visDisplay}</span>
-            </div>
-        </div>
+    </div></div>
+
 HTML;
-    
-    // Removed humidity row to limit to maximum 6 cards
-    // Cards: Temp, Dewpt, DA, Ceiling/Spread, Press, Vis (6 total)
-    
-    $html .= "\n    </div>\n";
-    
+
     // Add footer
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
-    
+
     $html .= "\n</div>\n";
     $html .= '</a>';
 
-    // Add wind compass script (full mode: runway segments, petals, staleness, matching dashboard)
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 180, $fullModeOptions);
+    // Compass hero: draw at 300 (matches the dashboard) and let CSS scale it responsively
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 300, $fullModeOptions);
 
     return $html;
 }

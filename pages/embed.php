@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/version.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/webcam-metadata.php';
@@ -132,6 +133,9 @@ $options = [
 $embedPageTitle = formatAirportNameWithIdentifier($airport['name'] ?? 'Unknown Airport', $airport)
     . ' Weather Widget';
 
+// Cache-bust embed CSS/JS on deploy so widget updates reach embedded pages promptly
+$embedAssetVersion = getBuildVersionInfo()['hash_short'] ?? '';
+
 // Determine theme class
 // For auto mode, we'll let JavaScript handle it, but set initial class
 $themeClass = getThemeClass($theme);
@@ -182,9 +186,9 @@ switch ($style) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars($embedPageTitle) ?></title>
-    <link rel="stylesheet" href="/public/css/embed-widgets.css">
-    <script src="/public/js/runway-label-layout.js"></script>
-    <script src="/public/js/wind-visual.js"></script>
+    <link rel="stylesheet" href="/public/css/embed-widgets.css?v=<?= htmlspecialchars($embedAssetVersion) ?>">
+    <script src="/public/js/runway-label-layout.js?v=<?= htmlspecialchars($embedAssetVersion) ?>"></script>
+    <script src="/public/js/wind-visual.js?v=<?= htmlspecialchars($embedAssetVersion) ?>"></script>
     <style>
         /* Ensure full viewport usage for iframe */
         html, body {

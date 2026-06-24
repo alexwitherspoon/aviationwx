@@ -738,6 +738,222 @@ a {
 }
 
 /* ============================================
+   WIND-FORWARD CARD
+   Compass is the hero; surrounding weather data is compact.
+   Concept 2 (wide split) at container width >= 480px, reflowing to Concept 3 (stacked) below.
+   ============================================ */
+
+.style-card-wf {
+    min-height: 0;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Header */
+.style-card-wf .wf-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.style-card-wf .airport-title {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.style-card-wf .airport-title .identifier {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    letter-spacing: 0.5px;
+}
+
+.style-card-wf .airport-title .name {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Body is the reflow container */
+.style-card-wf .wf-body {
+    container-type: inline-size;
+    flex: 1;
+}
+
+.style-card-wf .wf-inner {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Compass hero: draws at 300, scales down responsively */
+.style-card-wf .wf-compass {
+    width: 100%;
+    background: var(--wind-compass-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.6rem;
+    gap: 0.25rem;
+}
+
+.style-card-wf .wf-compass canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 300px;
+}
+
+.style-card-wf .wf-summary {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+/* Side rail */
+.style-card-wf .wf-side {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Wind facts */
+.style-card-wf .wf-wind {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.style-card-wf .col-h {
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.style-card-wf .wf-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.12rem 0;
+    font-size: 0.8rem;
+}
+
+.style-card-wf .wf-row .k { color: var(--muted-color); }
+.style-card-wf .wf-row .v { font-weight: 700; color: var(--text-color); }
+.style-card-wf .wf-row .sub { font-size: 0.62rem; color: var(--muted-color); font-weight: 400; }
+.style-card-wf .wf-row.peak .v { color: #ff9500; }
+
+.style-card-wf .wf-legend {
+    margin-top: 0.4rem;
+    font-size: 0.6rem;
+    color: var(--muted-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.style-card-wf .wf-legend span { white-space: nowrap; }
+
+/* Legend markers match the compass palette per theme */
+.style-card-wf .lg-wind,
+.style-card-wf .lg-petal { color: #dc3545; }
+.style-card-wf .lg-true { color: #4a7; }
+.style-card-wf .lg-rwy { color: #0066cc; }
+.theme-dark .style-card-wf .lg-true { color: #6b9; }
+.theme-dark .style-card-wf .lg-rwy { color: #4a9eff; }
+
+@media (prefers-color-scheme: dark) {
+    .theme-auto .style-card-wf .lg-true { color: #6b9; }
+    .theme-auto .style-card-wf .lg-rwy { color: #4a9eff; }
+}
+
+/* Metrics - tight tiles by default */
+.style-card-wf .wf-metrics {
+    padding: 0.5rem 0.75rem;
+}
+
+.style-card-wf .wf-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+}
+
+.style-card-wf .tile {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 0.3rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.style-card-wf .tile .tl {
+    font-size: 0.58rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.style-card-wf .tile .tv {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+/* Wide split: compass left hero, compact rail right */
+@container (min-width: 480px) {
+    .style-card-wf .wf-inner {
+        flex-direction: row;
+        align-items: stretch;
+    }
+    .style-card-wf .wf-compass {
+        flex: 0 0 55%;
+        border-right: 1px solid var(--border-color);
+    }
+    .style-card-wf .wf-side {
+        flex: 1;
+        min-width: 0;
+    }
+    /* The facts rail covers the same data in wide mode */
+    .style-card-wf .wf-summary { display: none; }
+}
+
+/* Very small: dense key:value rows, hide secondary wind rows (keep the summary line) */
+@container (max-width: 360px) {
+    .style-card-wf .wf-tiles {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    .style-card-wf .tile {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.18rem 0;
+        border-radius: 0;
+    }
+    .style-card-wf .tile:last-child { border-bottom: none; }
+    .style-card-wf .wf-wind .detail-extra { display: none; }
+}
+
+/* ============================================
    WEBCAM STYLE (450x450)
    ============================================ */
 
