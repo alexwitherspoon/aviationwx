@@ -742,7 +742,12 @@
                                 markScriptLoaded(existing);
                                 resolve();
                             } else {
-                                reject(new Error(`Shared script did not initialize expected globals: ${src}`));
+                                console.warn(
+                                    'AviationWX: shared script finished loading but expected globals are missing:',
+                                    src
+                                );
+                                markScriptLoaded(existing);
+                                resolve();
                             }
                             return;
                         }
