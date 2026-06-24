@@ -20,8 +20,8 @@ if [ ! -f "$TOKENS" ]; then
 fi
 
 if ! grep -qE "@import[[:space:]]+url\\([[:space:]]*['\"]aviationwx-tokens\\.css['\"][[:space:]]*\\)" "$TARGET"; then
-    echo "No aviationwx-tokens @import in $TARGET; skipping inline"
-    exit 0
+    echo "ERROR: expected aviationwx-tokens @import in $TARGET" >&2
+    exit 1
 fi
 
 if ! command -v perl >/dev/null 2>&1; then
