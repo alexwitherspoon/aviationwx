@@ -122,7 +122,7 @@ COPY --chown=www-data:www-data . /var/www/html/
 # (e.g. local dev with the repo bind-mounted over the image).
 RUN sh scripts/minify-css.sh \
     && sh scripts/inline-css-tokens.sh public/css/embed-widgets.css \
-    && chown www-data:www-data public/css/styles.min.css
+    && chown www-data:www-data public/css/styles.min.css public/css/embed-widgets.css
 
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \

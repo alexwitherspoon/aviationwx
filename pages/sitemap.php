@@ -105,7 +105,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         .sitemap-section {
-            background: var(--card-bg, #fff);
+            background: #fff;
             border-radius: 12px;
             padding: 1.5rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -116,7 +116,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: var(--text-primary, #1a1a2e);
             margin: 0 0 1rem 0;
             padding-bottom: 0.75rem;
-            border-bottom: 2px solid var(--accent-color, #3b82f6);
+            border-bottom: 2px solid #3b82f6;
         }
         
         .sitemap-section ul {
