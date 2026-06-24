@@ -12,8 +12,8 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 <!-- Include the widget script once per page -->
 <script src="https://aviationwx.org/public/js/widget.js"></script>
 
-<!-- Add widgets anywhere -->
-<aviation-wx airport="kspb" style="card" theme="auto"></aviation-wx>
+<!-- Add widgets anywhere (set width="100%" to fill a column) -->
+<aviation-wx airport="kspb" style="card" theme="auto" width="100%"></aviation-wx>
 ```
 
 ### Option 2: iframe Embed (Universal Compatibility)
@@ -53,7 +53,7 @@ Use `theme=light` or `theme=dark` only when your page has a fixed background and
 
 ### Sizing
 
-- **Web component:** Set `width="100%"` so the widget fills its container column; height adjusts to content. Omit `height` unless you need a fixed box. Without `width="100%"`, the widget uses the style's default pixel width (for example 800px for `full-single`).
+- **Web component:** Set `width="100%"` so the widget fills its container column; height follows content automatically. When `width="100%"` is set, a `height` attribute is ignored. For a fixed pixel box, omit `width="100%"` and set both `width` and `height`. Without `width="100%"`, the widget uses the style's default pixel width (for example 800px for `full-single`).
 - **iframe:** Use `width="100%"` and `responsive=1` (default) so height tracks content. Give the iframe a generous initial `height` (for example `800` for `full-single`); the embed posts its measured height to the parent.
 
 ```html
@@ -85,13 +85,13 @@ Include the script once per page (use the versioned URL from the [Embed Configur
 <script src="https://aviationwx.org/public/js/widget.js?v=EXAMPLE"></script>
 
 <!-- Primary airport weather block -->
-<aviation-wx airport="YOUR_ICAO" style="full-single" theme="auto" width="100%" refresh="300000"></aviation-wx>
+<aviation-wx airport="YOUR_AIRPORT_ID" style="full-single" theme="auto" width="100%" refresh="300000"></aviation-wx>
 
 <!-- Optional: compact card in a sidebar -->
-<aviation-wx airport="YOUR_ICAO" style="card" theme="auto" width="100%"></aviation-wx>
+<aviation-wx airport="YOUR_AIRPORT_ID" style="card" theme="auto" width="100%"></aviation-wx>
 ```
 
-Replace `YOUR_ICAO` with your airport id (lowercase, e.g. `kspb`). Generate a tailored snippet with camera indices and units in the [Embed Configurator](https://embed.aviationwx.org).
+Replace `YOUR_AIRPORT_ID` with your airport id (lowercase, e.g. `kspb` or `pdx`; not always an ICAO code). Generate a tailored snippet with camera indices and units in the [Embed Configurator](https://embed.aviationwx.org).
 
 ## Widget Styles
 
@@ -161,7 +161,7 @@ A JavaScript custom element that integrates directly with your page. Best for si
 - **Theme support** - Light, dark, and auto (follows system preference)
 - **Unit conversion** - Temperature, distance, wind speed, barometer units
 - **Style isolation** - Shadow DOM prevents style conflicts
-- **Responsive sizing** - Fills container width by default; height adjusts automatically
+- **Responsive sizing** - Set `width="100%"` to fill the container column; height adjusts to content. Without it, the widget uses the style's default pixel dimensions.
 
 **Usage:**
 
@@ -218,8 +218,8 @@ Works on most platforms including:
 | `baro` | `inHg`, `hPa`, `mmHg` | Barometer unit (default: `inHg`) |
 | `target` | `_blank`, `_self` | Link target (default: `_blank`) |
 | `refresh` | Number (ms) | Auto-refresh interval in milliseconds (default: `300000` = 5 min, minimum: `60000` = 1 min) |
-| `width` | Number (px) | Widget width in pixels (optional, uses style defaults) |
-| `height` | Number (px) | Widget height in pixels (optional, uses style defaults) |
+| `width` | Number (px) or `100%` | Widget width. Use `100%` to fill the container column; otherwise uses style default pixels. |
+| `height` | Number (px) | Widget height in pixels. Ignored when `width="100%"` (height follows content). |
 
 **Default Dimensions by Style:**
 
@@ -384,7 +384,7 @@ The widget script uses short cache headers (`max-age=300`, `stale-while-revalida
 
 ### Widget appears too small/large
 - **iframe:** Add `responsive=1` to the URL for auto-height; the iframe posts its height to the parent. Or set fixed `width` and `height` attributes.
-- **Web component:** Uses responsive sizing by default; set `width` and `height` attributes for fixed dimensions.
+- **Web component:** Set `width="100%"` for a column-filling layout (height follows content). For fixed dimensions, set explicit `width` and `height` in pixels (omit `width="100%"`).
 - Each widget style has recommended dimensions shown in the configurator.
 
 ## Security Considerations
