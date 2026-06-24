@@ -284,7 +284,9 @@ function renderCardWidget($data, $options) {
             $dt->setTimezone($tz);
             $peakTimeValue = $dt->format('g:ia');
         } catch (Exception $e) {
-            $peakTimeValue = date('g:ia', $peakGustTime);
+            // Invalid airport timezone (config error): leave as '--' rather than
+            // rendering in the server timezone, which would vary by environment.
+            $peakTimeValue = '--';
         }
     }
 
