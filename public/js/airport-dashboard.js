@@ -2554,9 +2554,6 @@ function updateWindVisual(weather) {
         console.warn('[Weather] Wind canvas element not found: windCanvas');
         return;
     }
-    const ctx = canvas.getContext('2d');
-    const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
-    
     // Detect effective theme: check both html and body (body may not be synced yet on initial load),
     // and auto mode with system dark (no explicit class, but prefers-color-scheme: dark)
     const hasNight = document.documentElement.classList.contains('night-mode') || document.body.classList.contains('night-mode');
@@ -2567,71 +2564,14 @@ function updateWindVisual(weather) {
     const isNightMode = hasNight;
     const isDarkMode = hasDark || isAutoDark;
 
-    const colors = isNightMode ? {
-        circle: '#660000',
-        runway: '#cc4444',
-        runwayLabel: '#ff5555',
-        runwayLabelStrokeWidth: 3,
-        labelOutline: '#330000',
-        compass: '#993333',
-        windArrow: '#ff4444',
-        windFill: 'rgba(255, 68, 68, 0.2)',
-        windRosePetal: 'rgba(255, 68, 68, 0.5)',
-        windRosePetalStroke: 'rgba(255, 68, 68, 0.4)',
-        chevron: 'rgba(255, 100, 100, 0.9)',
-        calmText: '#cc4444',
-        vrbText: '#ff4444',
-        trueNorth: '#ff5555'
-    } : isDarkMode ? {
-        circle: '#666',
-        runway: '#4a9eff',
-        runwayLabel: '#6bb3ff',
-        runwayLabelStrokeWidth: 2,
-        runwayLabelOutline: '#1a1a1a',
-        labelOutline: '#333',
-        compass: '#999',
-        windArrow: '#dc3545',
-        windFill: 'rgba(220, 53, 69, 0.2)',
-        windRosePetal: 'rgba(220, 53, 69, 0.5)',
-        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
-        chevron: 'rgba(220, 53, 69, 0.75)',
-        calmText: '#ddd',
-        vrbText: '#dc3545',
-        trueNorth: '#6b9'
-    } : {
-        circle: '#333',
-        runway: '#0066cc',
-        runwayLabel: '#0066cc',
-        runwayLabelStrokeWidth: 3,
-        labelOutline: '#ffffff',
-        compass: '#666',
-        windArrow: '#dc3545',
-        windFill: 'rgba(220, 53, 69, 0.2)',
-        windRosePetal: 'rgba(220, 53, 69, 0.5)',
-        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
-        chevron: 'rgba(220, 53, 69, 0.75)',
-        calmText: '#333',
-        vrbText: '#dc3545',
-        trueNorth: '#4a7'
-    };
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Palette for the legend below. Guard the shared module so a failed
+    // wind-visual.js load degrades to a usable legend instead of throwing and
+    // taking out the whole wind section (the canvas draw is guarded separately).
+    const colors = (window.AviationWX && typeof window.AviationWX.getWindCompassColors === 'function')
+        ? window.AviationWX.getWindCompassColors({ isDark: isDarkMode, night: isNightMode })
+        : { trueNorth: '#4a7', runway: '#0066cc', windArrow: '#dc3545', windRosePetal: 'rgba(220, 53, 69, 0.5)', windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', chevron: 'rgba(220, 53, 69, 0.75)' };
 
-    const magDecl = MAGNETIC_DECLINATION || 0;
-    const deg2rad = Math.PI / 180;
-    // When declination !== 0: rotate so True North at physical top; magnetic frame shifts by decl
-    // rotate(+decl): True North (-decl in magnetic) moves to top; magnetic N moves to +decl
-    if (magDecl !== 0) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(magDecl * deg2rad);
-        ctx.translate(-cx, -cy);
-    }
-
-    // Draw outer circle
-    ctx.strokeStyle = colors.circle; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
-
-    // Wind fields (needed before runway labels: hub clearance when CALM/VRB is centered)
+    // Wind fields (computed for the detail panel and passed to the shared renderer)
     const CALM_WIND_THRESHOLD = 3;
     const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds 
@@ -2649,52 +2589,32 @@ function updateWindVisual(weather) {
     const isVariableWind = (wdObj && typeof wdObj === 'object') ? !!wdObj.variable : (wd === 'VRB' || wd === 'vrb' || (weather.wind_direction_text || '') === 'VRB');
     const windDirNumeric = typeof wd === 'number' && wd >= 0 && wd <= 360 ? wd : null;
     const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
-    const willShowCenterText = !windStale && (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD || isVariableWind);
-
-    // Runway segments are pre-rotated to magnetic north in PHP (lib/heading-conversion.php)
-    const runwayScale = 0.86;
-    const LABEL_POSITION = 0.93;
-
-    RUNWAY_SEGMENTS.forEach((seg) => {
-        const [sx, sy] = seg.start;
-        const [ex, ey] = seg.end;
-        const rw = r * runwayScale;
-        const startX = cx + rw * sx;
-        const startY = cy - rw * sy;
-        const endX = cx + rw * ex;
-        const endY = cy - rw * ey;
-        ctx.strokeStyle = colors.runway;
-        ctx.lineWidth = 8;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-    });
-
-    // On-segment label layout (overlap + hub when CALM/VRB); public/js/runway-label-layout.js
-    const layoutApi = window.AviationWX && window.AviationWX.runwayLabelLayout;
-    const labelPositions = (layoutApi && typeof layoutApi.computeRunwayLabelPositions === 'function')
-        ? layoutApi.computeRunwayLabelPositions({
-            cx: cx,
-            cy: cy,
-            r: r,
-            segments: RUNWAY_SEGMENTS,
-            willShowCenterText: willShowCenterText,
-            runwayScale: runwayScale,
-            labelPosition: LABEL_POSITION
-        })
-        : [];
-
-    // Draw wind rose petals (last hour) when available - before wind indicators
     const lhwRaw = weather.last_hour_wind;
     const lastHourWind = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.sectors) ? lhwRaw.sectors : lhwRaw;
     const lhwPeriodLabel = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.period_label) ? lhwRaw.period_label : 'last hour';
-    canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
-        ? 'Wind rose: Petals show ' + lhwPeriodLabel + ' distribution'
-        : '';
-    if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
-        drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
+
+    // Draw the compass on the canvas via the shared renderer (single source of truth
+    // with the embeds). The detail panel below is dashboard-specific and stays here.
+    if (window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function') {
+        window.AviationWX.drawWindCompass(canvas, {
+            windSpeed: ws,
+            windDirection: windDirNumeric,
+            isVRB: isVariableWind,
+            isDark: isDarkMode,
+            night: isNightMode,
+            size: 'full',
+            fullMode: {
+                runwaySegments: (typeof RUNWAY_SEGMENTS !== 'undefined' && RUNWAY_SEGMENTS) ? RUNWAY_SEGMENTS : [],
+                lastHourWind: lastHourWind,
+                periodLabel: lhwPeriodLabel,
+                windDirectionMagnetic: windDirNumeric,
+                magneticDeclination: MAGNETIC_DECLINATION || 0,
+                fieldObsTimeMap: weather._field_obs_time_map || {},
+                staleFailclosedSeconds: STALE_FAILCLOSED_SECONDS,
+                metarStaleFailclosedSeconds: METAR_STALE_FAILCLOSED_SECONDS,
+                isMetarOnly: isMetarOnly
+            }
+        });
     }
 
     // Get today's peak gust from server (daily tracking, never stale)
@@ -2773,254 +2693,6 @@ function updateWindVisual(weather) {
         })()}
     `;
     
-    // Only draw wind indicators if data is fresh (not stale)
-    if (!windStale) {
-        const wdMagApi = (weather.wind_direction && typeof weather.wind_direction === 'object') ? weather.wind_direction.magnetic_north : weather.wind_direction_magnetic;
-        const hasMagDir = wdMagApi !== null && wdMagApi !== undefined && typeof wdMagApi === 'number' && wdMagApi >= 0 && wdMagApi <= 360;
-        if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && hasMagDir) {
-            // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
-            const windDirToward = (wdMagApi + 180) % 360;
-            windDirection = (windDirToward * Math.PI) / 180;
-            windSpeed = ws;
-            
-            drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0, colors);
-        } else if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && isVariableWind) {
-            // Variable wind - draw "VRB" text (upright when canvas rotated)
-            ctx.font = 'bold 20px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.lineJoin = 'round';
-            if (magDecl !== 0) {
-                ctx.save();
-                ctx.translate(cx, cy);
-                ctx.rotate(-magDecl * deg2rad);
-                ctx.strokeText('VRB', 0, 0);
-                ctx.fillStyle = colors.vrbText;
-                ctx.fillText('VRB', 0, 0);
-                ctx.restore();
-            } else {
-                ctx.strokeText('VRB', cx, cy);
-                ctx.fillStyle = colors.vrbText;
-                ctx.fillText('VRB', cx, cy);
-            }
-        } else if (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) {
-            // Calm conditions (< 3 knots) - draw CALM text (upright when canvas rotated)
-            ctx.font = 'bold 20px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.lineJoin = 'round';
-            if (magDecl !== 0) {
-                ctx.save();
-                ctx.translate(cx, cy);
-                ctx.rotate(-magDecl * deg2rad);
-                ctx.strokeText('CALM', 0, 0);
-                ctx.fillStyle = colors.calmText;
-                ctx.fillText('CALM', 0, 0);
-                ctx.restore();
-            } else {
-                ctx.strokeText('CALM', cx, cy);
-                ctx.fillStyle = colors.calmText;
-                ctx.fillText('CALM', cx, cy);
-            }
-        }
-    }
-    // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
-
-    // Draw runway labels (after petals/arrow so labels sit on top)
-    // Baseline level with screen for readability (counter-rotate when canvas is rotated)
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    labelPositions.forEach((lp) => {
-        if (!lp.ident) return;
-        ctx.save();
-        ctx.translate(lp.x, lp.y);
-        if (magDecl !== 0) ctx.rotate(-magDecl * deg2rad);
-        const strokeW = colors.runwayLabelStrokeWidth ?? 3;
-        if (strokeW > 0) {
-            ctx.strokeStyle = colors.runwayLabelOutline ?? colors.labelOutline;
-            ctx.lineWidth = strokeW;
-            ctx.strokeText(lp.ident, 0, 0);
-        }
-        ctx.fillStyle = colors.runwayLabel;
-        ctx.fillText(lp.ident, 0, 0);
-        ctx.restore();
-    });
-    
-    // Draw cardinal directions: baseline perpendicular to radial (along tangent to circle)
-    ['N', 'E', 'S', 'W'].forEach((l, i) => {
-        const ang = (i * 90) * deg2rad;
-        const labelX = cx + Math.sin(ang) * (r + 10);
-        const labelY = cy - Math.cos(ang) * (r + 10);
-        const tangentAngle = Math.atan2(-Math.cos(ang), Math.sin(ang)) + Math.PI / 2;
-        ctx.fillStyle = colors.compass;
-        ctx.font = 'bold 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.save();
-        ctx.translate(labelX, labelY);
-        ctx.rotate(tangentAngle);
-        ctx.fillText(l, 0, 0);
-        ctx.restore();
-    });
-
-    drawTrueNorthMarker(ctx, cx, cy, r, magDecl, colors);
-
-    if (magDecl !== 0) {
-        ctx.restore();
-    }
-}
-
-function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
-    const absDecl = Math.abs(declination);
-    if (absDecl === 0) return;
-    const arcColor = colors.trueNorth ?? '#4a7';
-    const deg2rad = Math.PI / 180;
-    // Canvas rotated +decl so True North at physical top. In magnetic: True N at -decl, Mag N at 0.
-    const trueNorthAngle = -declination * deg2rad;
-    const magneticNorthAngle = 0;
-    const canvasNorth = -Math.PI / 2 + trueNorthAngle;
-    const canvasMagneticNorth = -Math.PI / 2;
-
-    ctx.strokeStyle = arcColor;
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    if (declination > 0) {
-        ctx.arc(cx, cy, r, canvasNorth, canvasMagneticNorth, false);
-    } else {
-        ctx.arc(cx, cy, r, canvasMagneticNorth, canvasNorth, false);
-    }
-    ctx.stroke();
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const starX = cx + Math.sin(trueNorthAngle) * r;
-    const starY = cy - Math.cos(trueNorthAngle) * r;
-    ctx.font = '14px sans-serif';
-    ctx.strokeStyle = colors.labelOutline || '#fff';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    ctx.save();
-    ctx.translate(starX, starY);
-    ctx.rotate(-declination * deg2rad);
-    ctx.strokeText('\u2605', 0, 0);
-    ctx.fillStyle = arcColor;
-    ctx.fillText('\u2605', 0, 0);
-    ctx.restore();
-
-    const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
-    const labelRadius = r - 12;
-    const midCanvasAngle = (canvasNorth + canvasMagneticNorth) / 2;
-    const labelX = cx + labelRadius * Math.cos(midCanvasAngle);
-    const labelY = cy + labelRadius * Math.sin(midCanvasAngle);
-    const tangentAngle = midCanvasAngle + Math.PI / 2;
-    ctx.font = '12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.translate(labelX, labelY);
-    ctx.rotate(tangentAngle);
-    ctx.strokeStyle = colors.labelOutline;
-    ctx.lineWidth = 2.5;
-    ctx.strokeText(declLabel, 0, 0);
-    ctx.fillStyle = arcColor;
-    ctx.fillText(declLabel, 0, 0);
-    ctx.restore();
-}
-
-function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
-    // petals: 16 sectors [N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW]
-    // Wind rose convention: petals extend in direction wind is FROM (0°=N, 90°=E)
-    // Chevrons point TOWARD center (wind blows toward = opposite of FROM) to teach the convention
-    const maxPetalLength = Math.min(45, r * 0.35);
-    const maxSpeed = Math.max(1, ...petals);
-    const deg2rad = Math.PI / 180;
-    const chevronColor = colors.chevron || 'rgba(220, 53, 69, 0.75)';
-
-    for (let i = 0; i < 16; i++) {
-        const speed = petals[i] || 0;
-        if (speed <= 0) continue;
-        const length = (speed / maxSpeed) * maxPetalLength;
-        if (length < 2) continue;
-
-        // Sector i: met angle = i*22.5° (from N). Canvas: angle = met - 90 (so N -> -90°)
-        const centerAngle = (i * 22.5 - 90) * deg2rad;
-        const halfWidth = (22.5 / 2) * deg2rad;
-        const a1 = centerAngle - halfWidth;
-        const a2 = centerAngle + halfWidth;
-
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, length, a1, a2);
-        ctx.closePath();
-        ctx.fillStyle = colors.windRosePetal || 'rgba(220, 53, 69, 0.5)';
-        ctx.fill();
-        ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Chevrons from outer edge inward; wide V touching petal edge; skip short petals
-        if (length < 18) continue;
-        const cosA = Math.cos(centerAngle);
-        const sinA = Math.sin(centerAngle);
-        const petalHalfAngle = (22.5 / 2) * deg2rad;
-        const chevronH = Math.max(2.5, length * 0.07);
-        const chevronSpacing = length * 0.22;
-        const chevronStroke = Math.max(1.2, length * 0.05);
-        const innerBound = length * 0.25 + chevronH;
-        let d = length - chevronH;
-        ctx.strokeStyle = chevronColor;
-        ctx.lineWidth = chevronStroke;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        while (d > innerBound) {
-            const chevronW = d * Math.tan(petalHalfAngle) * 0.95;
-            const tipX = cx + cosA * (d - chevronH);
-            const tipY = cy + sinA * (d - chevronH);
-            const baseX = cx + cosA * (d + chevronH);
-            const baseY = cy + sinA * (d + chevronH);
-            const perpX = -sinA * chevronW;
-            const perpY = cosA * chevronW;
-            ctx.beginPath();
-            ctx.moveTo(baseX + perpX, baseY + perpY);
-            ctx.lineTo(tipX, tipY);
-            ctx.lineTo(baseX - perpX, baseY - perpY);
-            ctx.stroke();
-            d -= chevronSpacing;
-        }
-    }
-}
-
-function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0, colors = null) {
-    // Use default colors if not provided (for backwards compatibility)
-    if (!colors) {
-        colors = {
-            windFill: 'rgba(220, 53, 69, 0.2)',
-            windArrow: '#dc3545'
-        };
-    }
-    
-    // Arrow points in direction wind is blowing TOWARD (windsock behavior)
-    // angle is already in TOWARD direction (caller converts FROM by adding 180°)
-    const arrowLength = Math.min(speed * 6, r - 30);
-    const arrowEndX = cx + Math.sin(angle) * arrowLength;
-    const arrowEndY = cy - Math.cos(angle) * arrowLength;
-    const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
-    const triangleBaseDist = 15 * Math.cos(Math.PI / 6);
-    const lineEndX = arrowEndX - triangleBaseDist * Math.cos(arrowAngle);
-    const lineEndY = arrowEndY - triangleBaseDist * Math.sin(arrowAngle);
-
-    ctx.strokeStyle = colors.windArrow; ctx.fillStyle = colors.windArrow; ctx.lineWidth = 4; ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(lineEndX, lineEndY); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(arrowEndX, arrowEndY);
-    ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle - Math.PI / 6));
-    ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle + Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle + Math.PI / 6));
-    ctx.closePath(); ctx.fill();
 }
 
 function openLiveStream(url) { window.open(url, '_blank'); }
