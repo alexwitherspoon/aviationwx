@@ -72,7 +72,7 @@ Use `theme=light` or `theme=dark` only when your page has a fixed background and
 Embeds use **container queries** on the widget width, not the browser viewport. When the column narrows:
 
 - **`card`:** Below ~480px wide, the layout stacks (compass on top, wind facts and condition tiles below). Below ~360px, condition tiles become dense rows and secondary wind rows hide behind the compass summary line.
-- **`full-single` / `full-dual` / `full-multi`:** Below ~700px, metric columns wrap to two per row; below ~500px, the wind block stacks above metrics and dual/multi webcams stack vertically; below ~400px, the wind section stacks compass above wind facts.
+- **`full-single` / `full-dual` / `full-multi`:** Below ~700px, metric columns wrap to two per row; below ~500px, metrics collapse to a single column, the wind block stacks above metrics, and dual/multi webcams stack vertically; below ~400px, the wind section stacks compass above wind facts.
 - **Footer:** Below ~450px, footer lines stack vertically.
 
 Test at the width of your actual content column (not only full-screen) so you know how the embed will look in a sidebar or mobile layout.
