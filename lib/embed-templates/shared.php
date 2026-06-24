@@ -972,6 +972,7 @@ function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, 
                 isDarkValue = detectDarkMode();
             }
             
+            var fullModeData = {$fullModeJson};
             var opts = {
                 windSpeed: {$windSpeedJson},
                 windDirection: {$windDirectionJson},
@@ -980,11 +981,19 @@ function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, 
                 isDark: isDarkValue,
                 size: {$sizeVariantJson}
             };
-            var fullModeData = {$fullModeJson};
             if (fullModeData) {
                 opts.fullMode = fullModeData;
             }
-            window.AviationWX.drawWindCompass(canvas, opts);
+
+            function renderCompass() {
+                window.AviationWX.drawWindCompass(canvas, opts);
+            }
+
+            if (fullModeData && window.AviationWX.observeWindCompassCanvas) {
+                window.AviationWX.observeWindCompassCanvas(canvas, renderCompass, {$size});
+            } else {
+                renderCompass();
+            }
         }
         
         // Draw compass immediately if ready

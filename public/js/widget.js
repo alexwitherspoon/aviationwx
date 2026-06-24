@@ -618,33 +618,46 @@
                 const isDark = detectDarkMode();
                 
                 canvases.forEach((canvas) => {
-                    const width = canvas.width;
-                    let size = 'medium';
-                    if (width >= 100) size = 'large';
-                    else if (width >= 80) size = 'medium';
-                    else if (width >= 60) size = 'small';
-                    else size = 'mini';
-                    
-                    // Clear canvas first
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
                     const runways = airport.runways || [];
                     const fullMode = weather.wind_compass_full_mode || null;
-                    
-                    // Draw compass (full mode: runways + wind rose petals when available)
-                    const wd = weather.wind_direction;
-                    const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
-                    const isVRB = (wd && typeof wd === 'object') ? !!wd.variable : (weather.wind_direction_text || '') === 'VRB';
-                    window.AviationWX.drawWindCompass(canvas, {
-                        windSpeed: weather.wind_speed ?? null,
-                        windDirection: windDir,
-                        isVRB: isVRB,
-                        runways: runways,
-                        isDark: isDark,
-                        size: size,
-                        fullMode: fullMode
-                    });
+                    const isFullModeCanvas = !!fullMode || !!canvas.closest('.wind-viz-container');
+
+                    const renderCompass = (cssSize) => {
+                        let size = 'medium';
+                        if (cssSize >= 240) size = 'full';
+                        else if (cssSize >= 100) size = 'large';
+                        else if (cssSize >= 80) size = 'medium';
+                        else if (cssSize >= 60) size = 'small';
+                        else size = 'mini';
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        const wd = weather.wind_direction;
+                        const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
+                        const isVRB = (wd && typeof wd === 'object') ? !!wd.variable : (weather.wind_direction_text || '') === 'VRB';
+                        window.AviationWX.drawWindCompass(canvas, {
+                            windSpeed: weather.wind_speed ?? null,
+                            windDirection: windDir,
+                            isVRB: isVRB,
+                            runways: runways,
+                            isDark: isDark,
+                            size: size,
+                            fullMode: fullMode
+                        });
+                    };
+
+                    if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
+                        window.AviationWX.observeWindCompassCanvas(canvas, () => {
+                            renderCompass(canvas.clientWidth || 240);
+                        }, 240);
+                    } else {
+                        const fallbackCssSize = isFullModeCanvas ? 240 : canvas.width;
+                        const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
+                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, fallbackCssSize)
+                            : fallbackCssSize;
+                        renderCompass(cssSize);
+                    }
                 });
             };
             
@@ -679,28 +692,105 @@
             
             const scripts = [
                 `${BASE_URL}/public/js/runway-label-layout.js`,
+                `${BASE_URL}/public/js/wind-compass-resize-utils.js`,
                 `${BASE_URL}/public/js/wind-visual.js`,
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
-            const loadPromises = scripts.map(src => {
-                return new Promise((resolve, reject) => {
-                    // Check if already loaded
-                    if (document.querySelector(`script[src="${src}"]`)) {
-                        // Wait a bit for script to execute
-                        setTimeout(resolve, 10);
+            const scriptLoads = window.__aviationwxScriptLoads = window.__aviationwxScriptLoads || {};
+
+            const scriptReadyChecks = {
+                [`${BASE_URL}/public/js/runway-label-layout.js`]: () => (
+                    window.AviationWX && window.AviationWX.runwayLabelLayout
+                ),
+                [`${BASE_URL}/public/js/wind-compass-resize-utils.js`]: () => (
+                    window.AviationWX && window.AviationWX.windCompassResize
+                ),
+                [`${BASE_URL}/public/js/wind-visual.js`]: () => (
+                    window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function'
+                ),
+                [`${BASE_URL}/public/js/embed-helpers.js`]: () => (
+                    window.AviationWX && window.AviationWX.helpers
+                ),
+            };
+
+            const markScriptLoaded = (el) => {
+                el.dataset.aviationwxLoaded = '1';
+            };
+
+            const isScriptReady = (src) => {
+                const check = scriptReadyChecks[src];
+                return check ? !!check() : false;
+            };
+
+            const loadOneScript = (src) => {
+                if (scriptLoads[src]) {
+                    return scriptLoads[src];
+                }
+
+                scriptLoads[src] = new Promise((resolve) => {
+                    const settle = (el) => {
+                        if (el) {
+                            markScriptLoaded(el);
+                        }
+                        resolve();
+                    };
+
+                    const existing = document.querySelector(`script[src="${src}"]`);
+                    if (existing) {
+                        if (existing.dataset.aviationwxLoaded === '1' || isScriptReady(src)) {
+                            settle(existing);
+                            return;
+                        }
+                        const readyState = existing.readyState;
+                        if (readyState === 'complete' || readyState === 'loaded') {
+                            if (!isScriptReady(src)) {
+                                console.warn(
+                                    'AviationWX: shared script finished loading but expected globals are missing:',
+                                    src
+                                );
+                            }
+                            settle(existing);
+                            return;
+                        }
+                        const timeoutMs = 10000;
+                        const timeoutId = setTimeout(() => {
+                            console.warn(
+                                'AviationWX: timed out waiting for shared script to load; continuing without it:',
+                                src
+                            );
+                            settle(existing);
+                        }, timeoutMs);
+                        existing.addEventListener('load', () => {
+                            clearTimeout(timeoutId);
+                            settle(existing);
+                        }, { once: true });
+                        existing.addEventListener('error', () => {
+                            clearTimeout(timeoutId);
+                            console.warn('AviationWX: shared script failed to load; continuing without it:', src);
+                            settle(existing);
+                        }, { once: true });
                         return;
                     }
-                    
+
                     const script = document.createElement('script');
                     script.src = src;
-                    script.onload = () => setTimeout(resolve, 10); // Small delay for execution
-                    script.onerror = reject;
+                    script.onload = () => {
+                        settle(script);
+                    };
+                    script.onerror = () => {
+                        console.warn('AviationWX: shared script failed to load; continuing without it:', src);
+                        settle(script);
+                    };
                     document.head.appendChild(script);
                 });
-            });
-            
-            await Promise.all(loadPromises);
+
+                return scriptLoads[src];
+            };
+
+            for (const src of scripts) {
+                await loadOneScript(src);
+            }
         }
 
 
