@@ -267,7 +267,6 @@ function renderCardWidget($data, $options) {
 
     // Wind-forward layout values (compass is the hero; surrounding data is compact)
     $weather = $data['weather'];
-    $windUnit = $options['windUnit'];
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
 
     // Gust factor and today's peak gust (with time) for the wind facts rail
