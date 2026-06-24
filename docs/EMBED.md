@@ -24,6 +24,75 @@ Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed cod
 5. Copy the embed code
 6. Paste into your website
 
+## Airport website embeds
+
+Airport and municipal sites often embed AviationWX weather and webcams on a dedicated airport page (for example a county aviation department site with a runway webcam and current conditions). The widgets reflow to the width of your content column, so you can drop them into a main content area or a sidebar without custom CSS.
+
+Use the [Embed Configurator](https://embed.aviationwx.org) to pick an airport, style, and theme, then copy the generated code. The snippets below show the patterns we recommend for airport pages.
+
+### Recommended styles
+
+| Placement | Style | Why |
+|-----------|-------|-----|
+| Main weather section (webcam + full metrics) | `full-single` | Large webcam, dashboard-parity wind diagram, and four metric columns |
+| Two runway views + weather | `full-dual` | Side-by-side webcams with the same wind block and metrics |
+| Multiple cameras + weather | `full-multi` | Up to four webcams in a grid with full weather detail |
+| Sidebar or narrow column | `card` | Wind-forward compact card; compass is the hero, metrics reflow below |
+
+For most airport home pages, start with **`full-single`** when you have one primary webcam, or **`card`** when space is tight.
+
+### Theme: use `auto`
+
+Set **`theme=auto`** so the widget follows the visitor's system light/dark preference. That keeps the embed readable on both light municipal sites and dark OS settings without maintaining two embed codes.
+
+```html
+<aviation-wx airport="kspb" style="full-single" theme="auto"></aviation-wx>
+```
+
+Use `theme=light` or `theme=dark` only when your page has a fixed background and you want the widget to match it exactly.
+
+### Sizing
+
+- **Web component:** Omit `width` and `height` so the widget fills its container width; height adjusts to content. Set explicit dimensions only when you need a fixed box.
+- **iframe:** Use `width="100%"` and `responsive=1` (default) so height tracks content. Give the iframe a generous initial `height` (for example `800` for `full-single`); the embed posts its measured height to the parent.
+
+```html
+<iframe
+  src="https://embed.aviationwx.org/?render=1&airport=kspb&style=full-single&theme=auto&responsive=1&target=_blank"
+  width="100%"
+  height="800"
+  frameborder="0"
+  loading="lazy"
+  title="Airport weather - AviationWX">
+</iframe>
+```
+
+### Responsive reflow (what to expect)
+
+Embeds use **container queries** on the widget width, not the browser viewport. When the column narrows:
+
+- **`card`:** Below ~480px wide, the layout stacks (compass on top, wind facts and condition tiles below). Below ~360px, condition tiles become dense rows and secondary wind rows hide behind the compass summary line.
+- **`full-single` / `full-dual` / `full-multi`:** Below ~700px, metric columns wrap to two per row; below ~500px, the wind block stacks above metrics and dual/multi webcams stack vertically; below ~400px, the wind section stacks compass above wind facts.
+- **Footer:** Below ~450px, footer lines stack vertically.
+
+Test at the width of your actual content column (not only full-screen) so you know how the embed will look in a sidebar or mobile layout.
+
+### Copy-paste recipe (web component)
+
+Include the script once per page, then add one or more widgets:
+
+```html
+<script src="https://aviationwx.org/public/js/widget.js"></script>
+
+<!-- Primary airport weather block -->
+<aviation-wx airport="YOUR_ICAO" style="full-single" theme="auto" refresh="300000"></aviation-wx>
+
+<!-- Optional: compact card in a sidebar -->
+<aviation-wx airport="YOUR_ICAO" style="card" theme="auto"></aviation-wx>
+```
+
+Replace `YOUR_ICAO` with your airport id (lowercase, e.g. `kspb`). Generate a tailored snippet with camera indices and units in the [Embed Configurator](https://embed.aviationwx.org).
+
 ## Widget Styles
 
 ### Weather Card (400×435)
