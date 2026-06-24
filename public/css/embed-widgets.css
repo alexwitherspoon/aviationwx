@@ -1449,17 +1449,6 @@ a {
     display: block;
 }
 
-.style-full .wind-summary {
-    text-align: center;
-    margin-top: 0.25rem;
-}
-
-.style-full .wind-summary .wind-value {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-color);
-}
-
 .style-full .metrics-section {
     flex: 1;
     background: var(--bg-color);
@@ -1607,10 +1596,6 @@ a {
         border-left: none;
         border-top: 1px solid var(--border-color);
         width: 100%;
-    }
-    
-    .style-full .wind-summary .wind-value {
-        font-size: 0.75rem;
     }
 }
 

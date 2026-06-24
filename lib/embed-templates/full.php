@@ -223,7 +223,6 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
  */
 function buildFullWindSection(array $weather, array $options, ?array $fullModeOptions, string $canvasId, string $timezone): string {
     $windUnit = $options['windUnit'];
-    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
 
     [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
@@ -243,20 +242,6 @@ function buildFullWindSection(array $weather, array $options, ?array $fullModeOp
     // Detail-row direction keeps the degree label + Magnetic sublabel
     $windDirDisplay = $isVRB ? 'VRB' : (is_numeric($windDirection) ? round($windDirection) . '°' : '---');
     $magSub = ($windDirDisplay !== '---' && $windDirDisplay !== 'VRB') ? ' <span class="sub">Mag</span>' : '';
-
-    // METAR-style compact summary (no degree glyph), consistent with the card.
-    // Only show it when there is actual wind to report: the compass already
-    // indicates Calm / no-data in its center, so a "CALM" or "---" line below
-    // it would be redundant.
-    $windSummary = '';
-    if ($windSpeed !== null && $windSpeed >= 3) {
-        $spd = round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed));
-        $gustPart = ($gustSpeed !== null && $gustSpeed > 0)
-            ? 'G' . sprintf('%02d', round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)))
-            : '';
-        $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? sprintf('%03d', round($windDirection)) : '---');
-        $windSummary = $dirPart . sprintf('%02d', $spd) . $gustPart . strtoupper($windUnitLabel);
-    }
 
     // Field values (fail closed to '---')
     $speedValue = ($windSpeed === null) ? '---' : ($windSpeed < 3 ? 'Calm' : formatEmbedWindSpeed($windSpeed, $windUnit));
@@ -288,16 +273,10 @@ function buildFullWindSection(array $weather, array $options, ?array $fullModeOp
     $peakTimeValue = htmlspecialchars($peakTimeValue);
     $trueNorthLabel = htmlspecialchars($trueNorthLabel);
 
-    // Only render the summary line below the compass when there is wind to show
-    $summaryHtml = $windSummary !== ''
-        ? '<div class="wind-summary"><span class="wind-value">' . htmlspecialchars($windSummary) . '</span></div>'
-        : '';
-
     return <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
                     <canvas id="{$canvasId}" width="200" height="200"></canvas>
-                    {$summaryHtml}
                 </div>
                 <div class="wind-details">
                     <div class="column-header">💨 Wind</div>
