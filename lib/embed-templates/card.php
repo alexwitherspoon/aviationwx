@@ -303,7 +303,8 @@ function renderCardWidget($data, $options) {
 
     // Legend metadata (matches the compass: True North marker, wind arrow, runways, petals)
     $magDecl = $fullModeOptions['magneticDeclination'] ?? 0;
-    $magVarLabel = ($magDecl != 0) ? (abs(round($magDecl)) . '°' . ($magDecl > 0 ? 'E' : 'W')) : '';
+    $magDeclRounded = (int) round($magDecl);
+    $magVarLabel = ($magDeclRounded !== 0) ? (abs($magDeclRounded) . '°' . ($magDeclRounded > 0 ? 'E' : 'W')) : '';
     $trueNorthLabel = 'True N' . ($magVarLabel !== '' ? ' (' . $magVarLabel . ')' : '');
     $lastHourWind = $fullModeOptions['lastHourWind'] ?? null;
     $hasActivePetals = is_array($lastHourWind) && count($lastHourWind) === 16
