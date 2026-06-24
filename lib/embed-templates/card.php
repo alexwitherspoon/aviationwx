@@ -271,12 +271,12 @@ function renderCardWidget($data, $options) {
 
     // Gust factor and today's peak gust (with time) for the wind facts rail
     $gustFactorKt = $weather['gust_factor'] ?? null;
-    $gustFactorValue = ($gustFactorKt !== null && $gustFactorKt > 0) ? formatEmbedWindSpeed($gustFactorKt, $windUnit) : '--';
+    $gustFactorValue = ($gustFactorKt !== null && $gustFactorKt > 0) ? formatEmbedWindSpeed($gustFactorKt, $windUnit) : '---';
 
     $peakGustKt = $weather['peak_gust_today'] ?? null;
-    $peakGustValue = ($peakGustKt !== null && $peakGustKt > 0) ? formatEmbedWindSpeed($peakGustKt, $windUnit) : '--';
+    $peakGustValue = ($peakGustKt !== null && $peakGustKt > 0) ? formatEmbedWindSpeed($peakGustKt, $windUnit) : '---';
     $peakGustTime = $weather['peak_gust_time'] ?? null;
-    $peakTimeValue = '--';
+    $peakTimeValue = '---';
     if ($peakGustTime !== null && $peakGustKt !== null && $peakGustKt > 0) {
         try {
             $tz = new DateTimeZone($timezone);
@@ -284,9 +284,9 @@ function renderCardWidget($data, $options) {
             $dt->setTimezone($tz);
             $peakTimeValue = $dt->format('g:ia');
         } catch (Exception $e) {
-            // Invalid airport timezone (config error): leave as '--' rather than
+            // Invalid airport timezone (config error): leave as '---' rather than
             // rendering in the server timezone, which would vary by environment.
-            $peakTimeValue = '--';
+            $peakTimeValue = '---';
         }
     }
 
