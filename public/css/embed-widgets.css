@@ -854,10 +854,13 @@ a {
 
 .style-card-wf .wf-row .k { color: var(--muted-color); }
 .style-card-wf .wf-row .v { font-weight: 700; color: var(--text-color); }
-.style-card-wf .wf-row .sub { font-size: 0.62rem; color: var(--muted-color); font-weight: 400; }
 .style-card-wf .wf-row.peak .v { color: #ff9500; }
 
-.style-card-wf .wf-legend {
+/* Inline sublabel (e.g. "Mag") - shared by the card and full-* wind facts */
+.embed-container .sub { font-size: 0.62rem; color: var(--muted-color); font-weight: 400; }
+
+/* Compass legend - shared by the wind-forward card and full-* wind sections */
+.embed-container .wf-legend {
     margin-top: 0.4rem;
     font-size: 0.6rem;
     color: var(--muted-color);
@@ -866,19 +869,19 @@ a {
     gap: 0.5rem;
 }
 
-.style-card-wf .wf-legend span { white-space: nowrap; }
+.embed-container .wf-legend span { white-space: nowrap; }
 
 /* Legend markers match the compass palette per theme */
-.style-card-wf .lg-wind,
-.style-card-wf .lg-petal { color: #dc3545; }
-.style-card-wf .lg-true { color: #4a7; }
-.style-card-wf .lg-rwy { color: #0066cc; }
-.theme-dark .style-card-wf .lg-true { color: #6b9; }
-.theme-dark .style-card-wf .lg-rwy { color: #4a9eff; }
+.embed-container .lg-wind,
+.embed-container .lg-petal { color: #dc3545; }
+.embed-container .lg-true { color: #4a7; }
+.embed-container .lg-rwy { color: #0066cc; }
+.theme-dark .lg-true { color: #6b9; }
+.theme-dark .lg-rwy { color: #4a9eff; }
 
 @media (prefers-color-scheme: dark) {
-    .theme-auto .style-card-wf .lg-true { color: #6b9; }
-    .theme-auto .style-card-wf .lg-rwy { color: #4a9eff; }
+    .theme-auto .lg-true { color: #6b9; }
+    .theme-auto .lg-rwy { color: #4a9eff; }
 }
 
 /* Metrics - tight tiles by default */

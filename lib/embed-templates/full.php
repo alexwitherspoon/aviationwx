@@ -207,95 +207,133 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
 }
 
 /**
- * Build the shared wind section (compass + wind details) for full-* widgets.
+ * Build the shared wind section (compass + wind facts) for full-* widgets.
  *
- * Shared by full-single, full-dual, and full-multi so the wind compass and
- * facts render identically across them.
+ * Shared by full-single, full-dual, and full-multi. Computes the displayed
+ * wind facts from the airport weather so all three render identically, with
+ * dashboard-parity fields (Gust Factor, Peak Gust + time), a METAR-style
+ * compact summary, and a themed legend. Wind fields fail closed to "---".
  *
+ * @param array $weather Weather data for the airport
+ * @param array $options Widget options (windUnit, etc.)
+ * @param array|null $fullModeOptions Compass full-mode options (magneticDeclination, lastHourWind)
  * @param string $canvasId Canvas element id for the compass
- * @param string $windDir Formatted wind direction (e.g. "180°", "VRB", "---")
- * @param float|string $windSpd Pre-formatted wind speed for the summary line (round() result, or "---")
- * @param string $gustVal Formatted gust value for the summary line (e.g. "G12" or "")
- * @param string $windUnitLabel Wind speed unit label (e.g. "kt")
- * @param float|null $windSpeed Wind speed in knots (for the Speed row)
- * @param string $windUnit Wind speed unit code (kt/mph/kmh)
- * @param float|null $gustSpeed Gust speed in knots
- * @param float|null $peakGustToday Today's peak gust in knots
- * @param int|null $peakGustTime Peak gust observation time (Unix seconds)
  * @param string $timezone Airport timezone for the peak gust time
  * @return string Wind section HTML
  */
-function buildFullWindSection(string $canvasId, string $windDir, float|string $windSpd, string $gustVal, string $windUnitLabel, ?float $windSpeed, string $windUnit, ?float $gustSpeed, ?float $peakGustToday, ?int $peakGustTime, string $timezone): string {
-    $html = <<<HTML
-            <div class="wind-section">
-                <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
-                    <div class="wind-summary">
-                        <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
-                    </div>
-                </div>
-                <div class="wind-details">
-                    <div class="column-header">💨 Wind</div>
-                    <div class="metric-item">
-                        <span class="label">Direction</span>
-                        <span class="value">{$windDir}</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Speed</span>
-                        <span class="value">
-HTML;
-    $html .= formatEmbedWindSpeed($windSpeed, $windUnit);
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="label">Gusting</span>
-                        <span class="value">
-HTML;
-    if ($gustSpeed !== null && $gustSpeed > 0) {
-        $html .= formatEmbedWindSpeed($gustSpeed, $windUnit);
-    } else {
-        $html .= '--';
+function buildFullWindSection(array $weather, array $options, ?array $fullModeOptions, string $canvasId, string $timezone): string {
+    $windUnit = $options['windUnit'];
+    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
+
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
+    $windSpeed = $weather['wind_speed'] ?? null;
+    $gustSpeed = $weather['gust_speed'] ?? null;
+    $gustFactor = $weather['gust_factor'] ?? null;
+    $peakGustToday = $weather['peak_gust_today'] ?? null;
+    $peakGustTime = $weather['peak_gust_time'] ?? null;
+
+    $fmo = $fullModeOptions ?? [];
+    $magDeclRounded = (int) round($fmo['magneticDeclination'] ?? 0);
+    $magVarLabel = ($magDeclRounded !== 0) ? (abs($magDeclRounded) . '°' . ($magDeclRounded > 0 ? 'E' : 'W')) : '';
+    $trueNorthLabel = 'True N' . ($magVarLabel !== '' ? ' (' . $magVarLabel . ')' : '');
+    $lastHourWind = $fmo['lastHourWind'] ?? null;
+    $hasActivePetals = is_array($lastHourWind) && count($lastHourWind) === 16
+        && count(array_filter($lastHourWind, function ($s) { return $s > 0; })) > 0;
+
+    // Detail-row direction keeps the degree label + Magnetic sublabel
+    $windDirDisplay = $isVRB ? 'VRB' : (is_numeric($windDirection) ? round($windDirection) . '°' : '---');
+    $magSub = ($windDirDisplay !== '---' && $windDirDisplay !== 'VRB') ? ' <span class="sub">Mag</span>' : '';
+
+    // METAR-style compact summary (no degree glyph), consistent with the card.
+    // Only show it when there is actual wind to report: the compass already
+    // indicates Calm / no-data in its center, so a "CALM" or "---" line below
+    // it would be redundant.
+    $windSummary = '';
+    if ($windSpeed !== null && $windSpeed >= 3) {
+        $spd = round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed));
+        $gustPart = ($gustSpeed !== null && $gustSpeed > 0)
+            ? 'G' . sprintf('%02d', round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)))
+            : '';
+        $dirPart = $isVRB ? 'VRB' : (is_numeric($windDirection) ? sprintf('%03d', round($windDirection)) : '---');
+        $windSummary = $dirPart . sprintf('%02d', $spd) . $gustPart . strtoupper($windUnitLabel);
     }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-item">
-                        <span class="label">Peak Gust</span>
-                        <span class="value">
-HTML;
-    if ($peakGustToday !== null && $peakGustToday > 0) {
-        $html .= formatEmbedWindSpeed($peakGustToday, $windUnit);
-    } else {
-        $html .= '--';
-    }
-    $html .= <<<HTML
-</span>
-                    </div>
-                    <div class="metric-item peak-time-item">
-                        <span class="label">@ Time</span>
-                        <span class="value">
-HTML;
+
+    // Field values (fail closed to '---')
+    $speedValue = ($windSpeed === null) ? '---' : ($windSpeed < 3 ? 'Calm' : formatEmbedWindSpeed($windSpeed, $windUnit));
+    $gustingValue = ($gustSpeed !== null && $gustSpeed > 0) ? formatEmbedWindSpeed($gustSpeed, $windUnit) : '---';
+    $gustFactorValue = ($gustFactor !== null && $gustFactor > 0) ? formatEmbedWindSpeed($gustFactor, $windUnit) : '---';
+    $peakGustValue = ($peakGustToday !== null && $peakGustToday > 0) ? formatEmbedWindSpeed($peakGustToday, $windUnit) : '---';
+    $peakTimeValue = '---';
     if ($peakGustTime > 0 && $peakGustToday !== null && $peakGustToday > 0) {
         try {
             $tz = new DateTimeZone($timezone);
             $dt = new DateTime('@' . $peakGustTime);
             $dt->setTimezone($tz);
-            $peakTimeDisplay = $dt->format('g:ia');
+            $peakTimeValue = $dt->format('g:ia');
         } catch (Exception $e) {
-            $peakTimeDisplay = date('g:ia', $peakGustTime);
+            // Invalid airport timezone (config error): leave as '---' rather than
+            // rendering in the server timezone, which would vary by environment.
+            $peakTimeValue = '---';
         }
-        $html .= htmlspecialchars($peakTimeDisplay);
-    } else {
-        $html .= '--';
     }
-    $html .= <<<HTML
-</span>
+
+    $petalLegend = $hasActivePetals ? '<span><span class="lg-petal">&#9646;</span> last hr</span>' : '';
+
+    // Escape dynamic text before interpolating into the HTML
+    $windDirDisplay = htmlspecialchars($windDirDisplay);
+    $speedValue = htmlspecialchars($speedValue);
+    $gustingValue = htmlspecialchars($gustingValue);
+    $gustFactorValue = htmlspecialchars($gustFactorValue);
+    $peakGustValue = htmlspecialchars($peakGustValue);
+    $peakTimeValue = htmlspecialchars($peakTimeValue);
+    $trueNorthLabel = htmlspecialchars($trueNorthLabel);
+
+    // Only render the summary line below the compass when there is wind to show
+    $summaryHtml = $windSummary !== ''
+        ? '<div class="wind-summary"><span class="wind-value">' . htmlspecialchars($windSummary) . '</span></div>'
+        : '';
+
+    return <<<HTML
+            <div class="wind-section">
+                <div class="wind-viz-container">
+                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
+                    {$summaryHtml}
+                </div>
+                <div class="wind-details">
+                    <div class="column-header">💨 Wind</div>
+                    <div class="metric-item">
+                        <span class="label">Direction</span>
+                        <span class="value">{$windDirDisplay}{$magSub}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="label">Speed</span>
+                        <span class="value">{$speedValue}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="label">Gusting</span>
+                        <span class="value">{$gustingValue}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="label">Gust Factor</span>
+                        <span class="value">{$gustFactorValue}</span>
+                    </div>
+                    <div class="metric-item peak-item">
+                        <span class="label">Peak Gust</span>
+                        <span class="value">{$peakGustValue}</span>
+                    </div>
+                    <div class="metric-item peak-time-item">
+                        <span class="label">@ Time</span>
+                        <span class="value">{$peakTimeValue}</span>
+                    </div>
+                    <div class="wf-legend">
+                        <span><span class="lg-true">&#9733;</span> {$trueNorthLabel}</span>
+                        <span><span class="lg-wind">&#8594;</span> wind</span>
+                        <span><span class="lg-rwy">&#9644;</span> runways</span>
+                        {$petalLegend}
                     </div>
                 </div>
             </div>
 HTML;
-    return $html;
 }
 
 /**
@@ -341,10 +379,6 @@ function renderFullSingleWidget($data, $options) {
     $humidity = $weather['humidity'] ?? null;
     $rainfallToday = $weather['rainfall_today'] ?? null;
     
-    // Peak wind data
-    $peakGustToday = $weather['peak_gust_today'] ?? null;
-    $peakGustTime = $weather['peak_gust_time'] ?? null;
-    
     // Temperature extremes
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
@@ -375,12 +409,6 @@ function renderFullSingleWidget($data, $options) {
     $canvasId = 'full-wind-canvas-' . uniqid();
     $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
 
-    // Format wind display parts (use wind_direction_magnetic; fail closed with ---)
-    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
-    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
-    
     // Weather emojis
     $weatherEmojis = '';
     if ($hasMetarData) {
@@ -429,7 +457,7 @@ function renderFullSingleWidget($data, $options) {
     $html .= '</div></a>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
-    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
+    $html .= buildFullWindSection($weather, $options, $fullModeOptions, $canvasId, $timezone);
     $html .= <<<HTML
             <div class="metrics-section">
 HTML;
@@ -499,8 +527,6 @@ function renderFullDualWidget($data, $options) {
     $ceiling = $weather['ceiling'] ?? null;
     $humidity = $weather['humidity'] ?? null;
     $rainfallToday = $weather['rainfall_today'] ?? null;
-    $peakGustToday = $weather['peak_gust_today'] ?? null;
-    $peakGustTime = $weather['peak_gust_time'] ?? null;
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
     
@@ -516,12 +542,6 @@ function renderFullDualWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
-    // Format wind display (use wind_direction_magnetic; fail closed with ---)
-    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
-    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
-    
     // Weather emojis
     $weatherEmojis = '';
     if ($hasMetarData) {
@@ -602,7 +622,7 @@ function renderFullDualWidget($data, $options) {
     $html .= '</div></div>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
-    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
+    $html .= buildFullWindSection($weather, $options, $fullModeOptions, $canvasId, $timezone);
     $html .= <<<HTML
             <div class="metrics-section">
 HTML;
@@ -672,8 +692,6 @@ function renderFullMultiWidget($data, $options) {
     $ceiling = $weather['ceiling'] ?? null;
     $humidity = $weather['humidity'] ?? null;
     $rainfallToday = $weather['rainfall_today'] ?? null;
-    $peakGustToday = $weather['peak_gust_today'] ?? null;
-    $peakGustTime = $weather['peak_gust_time'] ?? null;
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
     
@@ -689,12 +707,6 @@ function renderFullMultiWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
-    // Format wind display (use wind_direction_magnetic; fail closed with ---)
-    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
-    $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
-    
     // Weather emojis
     $weatherEmojis = '';
     if ($hasMetarData) {
@@ -777,7 +789,7 @@ function renderFullMultiWidget($data, $options) {
     $html .= '</div></div>';
     $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= '<div class="data-row">';
-    $html .= buildFullWindSection($canvasId, $windDir, $windSpd, $gustVal, $windUnitLabel, $windSpeed, $windUnit, $gustSpeed, $peakGustToday, $peakGustTime, $timezone);
+    $html .= buildFullWindSection($weather, $options, $fullModeOptions, $canvasId, $timezone);
     $html .= <<<HTML
             <div class="metrics-section">
 HTML;
