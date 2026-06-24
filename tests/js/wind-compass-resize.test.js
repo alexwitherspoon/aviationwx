@@ -36,7 +36,7 @@ console.log('\nWind Compass Resize Tests\n' + '='.repeat(50));
 
 test('resolveWindCompassCssSize clamps to min/max', () => {
     assertEqual(resolveWindCompassCssSize(20, 200), MIN_CSS_SIZE, 'min clamp');
-    assertEqual(resolveWindCompassCssSize(400, 200), 300, 'max clamp');
+    assertEqual(resolveWindCompassCssSize(400, 200), MAX_CSS_SIZE, 'max clamp');
     assertEqual(resolveWindCompassCssSize(180, 200), 180, 'in-range');
 });
 

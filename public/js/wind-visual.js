@@ -677,6 +677,7 @@
             return fallbackCssSize || 200;
         }
 
+        const rect = canvas.getBoundingClientRect();
         const measured = canvas.clientWidth > 0
             ? canvas.clientWidth
             : (rect.width > 0
