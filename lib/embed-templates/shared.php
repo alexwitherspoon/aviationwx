@@ -804,9 +804,22 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
         }
     }
     
-    // Take only the first 6 metrics
+    // Select the top 6 by priority (importance / availability)...
     $metrics = array_slice($availableMetrics, 0, 6);
-    
+
+    // ...then reorder the chosen metrics into related groups so they scan
+    // cleanly: temperature/moisture, then altitude/pressure, then
+    // visibility/ceiling, then daily trends. Selection is unchanged.
+    $displayOrder = [
+        'Temp' => 10, 'Dewpt' => 11, 'Spread' => 12, 'Humidity' => 13,
+        'DA' => 20, 'Press' => 21, 'Press Alt' => 22,
+        'Vis' => 30, 'Ceiling' => 31,
+        'High' => 40, 'Low' => 41, 'Rainfall' => 42,
+    ];
+    usort($metrics, function ($a, $b) use ($displayOrder) {
+        return ($displayOrder[$a['label']] ?? 999) <=> ($displayOrder[$b['label']] ?? 999);
+    });
+
     // Ensure we always have 6 metrics (fill with '---' if needed)
     while (count($metrics) < 6) {
         $metrics[] = ['label' => '---', 'value' => '---'];
