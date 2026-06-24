@@ -22,12 +22,19 @@ if [ ! -f "$SRC" ]; then
     exit 1
 fi
 
+# Bundle shared tokens into the minified dashboard CSS so ?v= cache busting does
+# not leave an extra unversioned @import fetch in production.
+BUNDLE_SRC="${SRC}.bundle.$$"
+trap 'rm -f "$BUNDLE_SRC"' EXIT HUP INT TERM
+cp "$SRC" "$BUNDLE_SRC"
+sh scripts/inline-css-tokens.sh "$BUNDLE_SRC"
+
 if ! command -v perl >/dev/null 2>&1; then
     echo "ERROR: perl is required for CSS minification" >&2
     exit 1
 fi
 
-perl -0777 -pe 's/\/\*.*?\*\///gs; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g; s/^\s+|\s+$//g' "$SRC" > "$OUT"
+perl -0777 -pe 's/\/\*.*?\*\///gs; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g; s/^\s+|\s+$//g' "$BUNDLE_SRC" > "$OUT"
 
 # Verify structure survived minification: brace counts must match the
 # comment-stripped source (comments may legitimately contain braces),
@@ -45,7 +52,9 @@ verify=$(perl -e '
     if ($so != $mo || $sc != $mc) { print "brace mismatch: stripped src $so/$sc min $mo/$mc"; exit 0; }
     if ($co != 0 || $cc != 0) { print "comment markers remain in output: $co open, $cc close"; exit 0; }
     print "ok";
-' "$SRC" "$OUT")
+' "$BUNDLE_SRC" "$OUT")
+
+rm -f "$BUNDLE_SRC"
 
 if [ "$verify" != "ok" ]; then
     rm -f "$OUT"

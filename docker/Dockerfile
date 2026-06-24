@@ -121,7 +121,9 @@ COPY --chown=www-data:www-data . /var/www/html/
 # The dashboard falls back to styles.css when the min file is absent
 # (e.g. local dev with the repo bind-mounted over the image).
 RUN sh scripts/minify-css.sh \
-    && chown www-data:www-data public/css/styles.min.css
+    && sh scripts/inline-css-tokens.sh public/css/styles.css \
+    && sh scripts/inline-css-tokens.sh public/css/embed-widgets.css \
+    && chown www-data:www-data public/css/styles.css public/css/styles.min.css public/css/embed-widgets.css
 
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
