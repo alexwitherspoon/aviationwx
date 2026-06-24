@@ -728,44 +728,60 @@
                     return scriptLoads[src];
                 }
 
-                scriptLoads[src] = new Promise((resolve, reject) => {
+                scriptLoads[src] = new Promise((resolve) => {
+                    const settle = (el) => {
+                        if (el) {
+                            markScriptLoaded(el);
+                        }
+                        resolve();
+                    };
+
                     const existing = document.querySelector(`script[src="${src}"]`);
                     if (existing) {
                         if (existing.dataset.aviationwxLoaded === '1' || isScriptReady(src)) {
-                            markScriptLoaded(existing);
-                            resolve();
+                            settle(existing);
                             return;
                         }
                         const readyState = existing.readyState;
                         if (readyState === 'complete' || readyState === 'loaded') {
-                            if (isScriptReady(src)) {
-                                markScriptLoaded(existing);
-                                resolve();
-                            } else {
+                            if (!isScriptReady(src)) {
                                 console.warn(
                                     'AviationWX: shared script finished loading but expected globals are missing:',
                                     src
                                 );
-                                markScriptLoaded(existing);
-                                resolve();
                             }
+                            settle(existing);
                             return;
                         }
+                        const timeoutMs = 10000;
+                        const timeoutId = setTimeout(() => {
+                            console.warn(
+                                'AviationWX: timed out waiting for shared script to load; continuing without it:',
+                                src
+                            );
+                            settle(existing);
+                        }, timeoutMs);
                         existing.addEventListener('load', () => {
-                            markScriptLoaded(existing);
-                            resolve();
+                            clearTimeout(timeoutId);
+                            settle(existing);
                         }, { once: true });
-                        existing.addEventListener('error', reject, { once: true });
+                        existing.addEventListener('error', () => {
+                            clearTimeout(timeoutId);
+                            console.warn('AviationWX: shared script failed to load; continuing without it:', src);
+                            settle(existing);
+                        }, { once: true });
                         return;
                     }
 
                     const script = document.createElement('script');
                     script.src = src;
                     script.onload = () => {
-                        markScriptLoaded(script);
-                        resolve();
+                        settle(script);
                     };
-                    script.onerror = reject;
+                    script.onerror = () => {
+                        console.warn('AviationWX: shared script failed to load; continuing without it:', src);
+                        settle(script);
+                    };
                     document.head.appendChild(script);
                 });
 
