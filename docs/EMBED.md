@@ -54,7 +54,7 @@ Use `theme=light` or `theme=dark` only when your page has a fixed background and
 ### Sizing
 
 - **Web component:** Set `width="100%"` so the widget fills its container column; height follows content automatically. When `width="100%"` is set, a `height` attribute is ignored. For a fixed pixel box, omit `width="100%"` and set both `width` and `height`. Without `width="100%"`, the widget uses the style's default pixel width (for example 800px for `full-single`).
-- **iframe:** Use `width="100%"` and `responsive=1` (default) so height tracks content. Give the iframe a generous initial `height` (for example `800` for `full-single`); the embed posts its measured height to the parent.
+- **iframe:** Use `width="100%"` and `responsive=1` (default) so the embed can post its measured height to the parent. The parent page still needs a resize listener (the [Embed Configurator](https://embed.aviationwx.org) iframe snippet includes one) to apply that height to the iframe element. Give the iframe a generous initial `height` (for example `800` for `full-single`).
 
 ```html
 <iframe
