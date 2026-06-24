@@ -225,7 +225,7 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
  * @param string $timezone Airport timezone for the peak gust time
  * @return string Wind section HTML
  */
-function buildFullWindSection(string $canvasId, string $windDir, $windSpd, string $gustVal, string $windUnitLabel, ?float $windSpeed, string $windUnit, ?float $gustSpeed, ?float $peakGustToday, ?int $peakGustTime, string $timezone): string {
+function buildFullWindSection(string $canvasId, string $windDir, float|string $windSpd, string $gustVal, string $windUnitLabel, ?float $windSpeed, string $windUnit, ?float $gustSpeed, ?float $peakGustToday, ?int $peakGustTime, string $timezone): string {
     $html = <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
