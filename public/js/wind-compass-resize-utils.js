@@ -10,7 +10,7 @@
     'use strict';
 
     const MIN_CSS_SIZE = 48;
-    const MAX_CSS_SIZE = 280;
+    const MAX_CSS_SIZE = 300;
 
     /**
      * Clamp and round the CSS box size used for a square wind compass.

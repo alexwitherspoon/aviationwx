@@ -676,21 +676,25 @@
         if (!canvas) {
             return fallbackCssSize || 200;
         }
-        const parent = canvas.parentElement;
-        const measured = parent ? parent.clientWidth : canvas.clientWidth;
+
+        const rect = canvas.getBoundingClientRect();
+        const measured = rect.width > 0
+            ? rect.width
+            : (canvas.offsetWidth || fallbackCssSize || 200);
+        const dpr = window.devicePixelRatio || 1;
         const compute = resizeUtils.computeWindCompassPixelSize;
         const resolved = typeof compute === 'function'
-            ? compute(measured, window.devicePixelRatio || 1)
+            ? compute(measured, dpr)
             : {
                 cssSize: Math.max(48, Math.round(measured || fallbackCssSize || 200)),
-                pixelSize: Math.max(48, Math.round(measured || fallbackCssSize || 200)),
+                pixelSize: Math.max(1, Math.round(Math.max(48, Math.round(measured || fallbackCssSize || 200)) * dpr)),
             };
+
         if (canvas.width !== resolved.pixelSize || canvas.height !== resolved.pixelSize) {
             canvas.width = resolved.pixelSize;
             canvas.height = resolved.pixelSize;
         }
-        canvas.style.width = resolved.cssSize + 'px';
-        canvas.style.height = resolved.cssSize + 'px';
+
         return resolved.cssSize;
     }
 
@@ -711,12 +715,11 @@
         };
 
         if (compassObservers && !compassObservers.has(canvas)) {
-            const target = canvas.parentElement || canvas;
             if (typeof ResizeObserver !== 'undefined') {
                 const ro = new ResizeObserver(function() {
                     redraw();
                 });
-                ro.observe(target);
+                ro.observe(canvas);
                 compassObservers.set(canvas, ro);
             } else {
                 const onResize = function() {
