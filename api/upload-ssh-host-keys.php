@@ -20,6 +20,7 @@ if ($requestMethod === 'OPTIONS') {
 }
 
 if ($requestMethod !== 'GET') {
+    header('Allow: GET, OPTIONS');
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed'], JSON_UNESCAPED_SLASHES);
     exit;
