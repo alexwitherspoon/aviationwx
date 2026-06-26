@@ -73,3 +73,37 @@ function sendCacheHeaders(int $refreshInterval, ?int $browserMaxAge = null, bool
     }
 }
 
+/**
+ * Cache headers for responses that must never be stored (e.g. live SSH host key roster).
+ *
+ * Belt-and-suspenders: no-store/no-cache plus explicit low max-age/s-maxage and Pragma/Expires
+ * so browsers, CDNs, and proxy defaults cannot serve a stale roster. Cached host key pins that
+ * lag a container rebuild would reject valid SFTP connections and cause upload outages.
+ *
+ * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 60)
+ * @return array<string, string>
+ */
+function getNoStoreCacheHeaders(int $maxAgeSeconds = 60): array
+{
+    $maxAgeSeconds = max(0, $maxAgeSeconds);
+
+    return [
+        'Cache-Control' => 'no-store, no-cache, must-revalidate, private, max-age='
+            . $maxAgeSeconds . ', s-maxage=' . $maxAgeSeconds,
+        'Pragma' => 'no-cache',
+        'Expires' => '0',
+    ];
+}
+
+/**
+ * Send no-store cache headers (see getNoStoreCacheHeaders()).
+ *
+ * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 60)
+ */
+function sendNoStoreCacheHeaders(int $maxAgeSeconds = 60): void
+{
+    foreach (getNoStoreCacheHeaders($maxAgeSeconds) as $name => $value) {
+        header($name . ': ' . $value);
+    }
+}
+

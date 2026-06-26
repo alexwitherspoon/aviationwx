@@ -894,6 +894,7 @@ For cameras that upload images to the server:
 **Connection details:**
 - SFTP: port from `config.network_ports.sftp` (default 2222), host from `upload_hostname` / `upload.{base_domain}`
 - FTP/FTPS: control port from `config.network_ports.ftp_control` (default 2121), same host as SFTP
+- **SSH host key roster:** `GET https://{upload_hostname}/.well-known/aviationwx-upload-ssh-host-keys.json` returns live SHA256 fingerprints from the container sshd host keys (`/etc/ssh/ssh_host_*_key.pub`). Responses use aggressive no-store cache headers (`max-age=60`, `s-maxage=60`). Clients can compare against `ssh-keyscan -p {sftp_port} {upload_hostname}`.
 - **Both protocols enabled**: Each push camera gets FTP and SFTP with the same credentials
 - Restricted client networks: set `config.network_ports.ftps_alt` for an extra inbound control port (NAT to `ftp_control`); `deploy-configure-firewall.sh` applies UFW and NAT on deploy. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 

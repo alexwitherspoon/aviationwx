@@ -586,6 +586,21 @@ function getUploadHostname(): string {
 }
 
 /**
+ * SFTP listener port from config.network_ports.sftp (container sshd).
+ *
+ * @return int TCP port (default 2222)
+ */
+function getSftpPort(): int
+{
+    $networkPorts = getGlobalConfig('network_ports');
+    if (is_array($networkPorts) && isset($networkPorts['sftp']) && is_int($networkPorts['sftp'])) {
+        return $networkPorts['sftp'];
+    }
+
+    return 2222;
+}
+
+/**
  * Get dynamic DNS refresh interval from global config
  * 
  * When set to a positive value, the system will periodically re-resolve

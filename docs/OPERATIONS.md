@@ -555,6 +555,15 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 
 **Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach vsftpd and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`.
 
+**SFTP host key roster (HTTPS):** Bridge and other SFTP clients can fetch live sshd host key fingerprints from the upload hostname:
+
+```bash
+curl -fsS "https://$(jq -r '.config.upload_hostname // empty' ~/airports.json)/.well-known/aviationwx-upload-ssh-host-keys.json" | jq .
+ssh-keyscan -p 2222 upload.aviationwx.org | ssh-keygen -lf -
+```
+
+Every `SHA256:` from `ssh-keyscan` must appear in the JSON `sha256[]` array. Fingerprints are computed at request time from `/etc/ssh/ssh_host_*_key.pub` in the web container (same container that runs sshd). After an image rebuild, re-run the comparison to confirm the roster tracks new keys.
+
 **Probe files:** Each run overwrites `aviationwx-probe-healthcheck.txt` on the probe account (no per-run timestamp filenames).
 
 ```bash
