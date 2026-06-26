@@ -558,8 +558,10 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 **SFTP host key roster (HTTPS):** Bridge and other SFTP clients can fetch live sshd host key fingerprints from the upload hostname:
 
 ```bash
-curl -fsS "https://$(jq -r '.config.upload_hostname // empty' ~/airports.json)/.well-known/aviationwx-upload-ssh-host-keys.json" | jq .
-ssh-keyscan -p 2222 upload.aviationwx.org | ssh-keygen -lf -
+UPLOAD_HOST=$(jq -r '.config.upload_hostname // empty' ~/airports.json)
+SFTP_PORT=$(jq -r '.config.network_ports.sftp // 2222' ~/airports.json)
+curl -fsS "https://${UPLOAD_HOST}/.well-known/aviationwx-upload-ssh-host-keys.json" | jq .
+ssh-keyscan -p "${SFTP_PORT}" "${UPLOAD_HOST}" | ssh-keygen -lf -
 ```
 
 Every `SHA256:` from `ssh-keyscan` must appear in the JSON `sha256[]` array. Fingerprints are computed at request time from `/etc/ssh/ssh_host_*_key.pub` in the web container (same container that runs sshd). After an image rebuild, re-run the comparison to confirm the roster tracks new keys.
