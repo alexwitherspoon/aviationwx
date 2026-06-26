@@ -95,6 +95,25 @@ class UploadSshHostKeysTest extends TestCase
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $document['updated_at']);
     }
 
+    public function testCollectSshHostKeySha256Fingerprints_ReturnsNullWhenHostKeyUnreadable(): void
+    {
+        $sourceKey = $this->tempSshDir . '/source_key';
+        exec(sprintf('ssh-keygen -t ed25519 -f %s -N %s -q 2>/dev/null', escapeshellarg($sourceKey), escapeshellarg('')), $unused, $exitCode);
+        if ($exitCode !== 0) {
+            $this->markTestSkipped('ssh-keygen unavailable');
+        }
+
+        $hostPub = $this->tempSshDir . '/ssh_host_ed25519_key.pub';
+        copy($sourceKey . '.pub', $hostPub);
+        chmod($hostPub, 0000);
+
+        try {
+            $this->assertNull(collectSshHostKeySha256Fingerprints($this->tempSshDir));
+        } finally {
+            chmod($hostPub, 0600);
+        }
+    }
+
     public function testBuildUploadSshHostKeysDocument_ReturnsNullWhenNoKeys(): void
     {
         $emptyDir = $this->tempSshDir . '_empty';

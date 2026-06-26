@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/logger.php';
 
 /** Default sshd host public key directory in the web/SFTP container. */
 const UPLOAD_SSH_HOST_KEYS_DIR = '/etc/ssh';
@@ -47,9 +48,9 @@ function sshPublicKeySha256Fingerprint(string $publicKeyLine): ?string
  * Collect SHA256 fingerprints from sshd host public keys in a directory.
  *
  * @param string $sshDir Directory containing ssh_host_*_key.pub files
- * @return list<string> Sorted unique fingerprints
+ * @return list<string>|null Sorted unique fingerprints, null when a matched file cannot be read
  */
-function collectSshHostKeySha256Fingerprints(string $sshDir = UPLOAD_SSH_HOST_KEYS_DIR): array
+function collectSshHostKeySha256Fingerprints(string $sshDir = UPLOAD_SSH_HOST_KEYS_DIR): ?array
 {
     $pattern = rtrim($sshDir, '/') . UPLOAD_SSH_HOST_PUBLIC_KEY_GLOB;
     $files = glob($pattern);
@@ -62,12 +63,20 @@ function collectSshHostKeySha256Fingerprints(string $sshDir = UPLOAD_SSH_HOST_KE
 
     foreach ($files as $path) {
         if (!is_readable($path)) {
-            continue;
+            aviationwx_log('error', 'upload ssh host key file unreadable', [
+                'path' => $path,
+            ], 'app');
+
+            return null;
         }
 
         $contents = file_get_contents($path);
         if ($contents === false) {
-            continue;
+            aviationwx_log('error', 'upload ssh host key file read failed', [
+                'path' => $path,
+            ], 'app');
+
+            return null;
         }
 
         foreach (preg_split('/\R/', $contents) ?: [] as $line) {
@@ -94,12 +103,12 @@ function collectSshHostKeySha256Fingerprints(string $sshDir = UPLOAD_SSH_HOST_KE
  *   port: int,
  *   sha256: list<string>,
  *   updated_at: string
- * }|null Null when no readable host keys were found
+ * }|null Null when no host keys were found or any matched file could not be read
  */
 function buildUploadSshHostKeysDocument(?string $sshDir = null): ?array
 {
     $fingerprints = collectSshHostKeySha256Fingerprints($sshDir ?? UPLOAD_SSH_HOST_KEYS_DIR);
-    if ($fingerprints === []) {
+    if ($fingerprints === null || $fingerprints === []) {
         return null;
     }
 
