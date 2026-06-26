@@ -61,6 +61,28 @@ class UploadSshHostKeysTest extends TestCase
         $this->assertSame($matches[0], $computed);
     }
 
+    public function testSshPublicKeySha256Fingerprint_HandlesOptionsAndHostnamePrefix(): void
+    {
+        $keyPath = $this->tempSshDir . '/prefixed_key';
+        exec(sprintf('ssh-keygen -t ed25519 -f %s -N %s -q 2>/dev/null', escapeshellarg($keyPath), escapeshellarg('')), $unused, $exitCode);
+        if ($exitCode !== 0) {
+            $this->markTestSkipped('ssh-keygen unavailable');
+        }
+
+        $pubLine = trim((string) file_get_contents($keyPath . '.pub'));
+        $parts = preg_split('/\s+/', $pubLine, 3);
+        $this->assertIsArray($parts);
+        $this->assertCount(3, $parts);
+
+        $withOptions = 'from="127.0.0.1",restrict ' . $parts[0] . ' ' . $parts[1];
+        $withHost = 'upload.example.org ' . $parts[0] . ' ' . $parts[1];
+
+        $expected = sshPublicKeySha256Fingerprint($pubLine);
+        $this->assertNotNull($expected);
+        $this->assertSame($expected, sshPublicKeySha256Fingerprint($withOptions));
+        $this->assertSame($expected, sshPublicKeySha256Fingerprint($withHost));
+    }
+
     public function testCollectSshHostKeySha256Fingerprints_ReadsHostKeyGlob(): void
     {
         $sourceKey = $this->tempSshDir . '/source_key';

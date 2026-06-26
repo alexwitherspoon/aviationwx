@@ -16,7 +16,10 @@ const UPLOAD_SSH_HOST_KEYS_DIR = '/etc/ssh';
 const UPLOAD_SSH_HOST_PUBLIC_KEY_GLOB = '/ssh_host_*_key.pub';
 
 /**
- * Compute OpenSSH SHA256 fingerprint for one authorized_keys-style public key line.
+ * Compute OpenSSH SHA256 fingerprint for one public key line.
+ *
+ * Accepts standard host key .pub lines and authorized_keys-style lines (optional
+ * options or hostname prefix before the key type token).
  *
  * @param string $publicKeyLine Single-line OpenSSH public key
  * @return string|null Fingerprint as SHA256:base64 or null when unparsable
@@ -28,12 +31,24 @@ function sshPublicKeySha256Fingerprint(string $publicKeyLine): ?string
         return null;
     }
 
-    $parts = preg_split('/\s+/', $trimmed, 3);
-    if (!is_array($parts) || count($parts) < 2 || $parts[1] === '') {
+    $parts = preg_split('/\s+/', $trimmed);
+    if (!is_array($parts) || count($parts) < 2) {
         return null;
     }
 
-    $keyBlob = base64_decode($parts[1], true);
+    $keyTypeIndex = null;
+    foreach ($parts as $index => $part) {
+        if (preg_match('/^(ssh-(rsa|dss|ed25519)|ecdsa-sha2-|sk-ecdsa-sha2-|sk-ssh-ed25519)/', $part) === 1) {
+            $keyTypeIndex = $index;
+            break;
+        }
+    }
+
+    if ($keyTypeIndex === null || !isset($parts[$keyTypeIndex + 1]) || $parts[$keyTypeIndex + 1] === '') {
+        return null;
+    }
+
+    $keyBlob = base64_decode($parts[$keyTypeIndex + 1], true);
     if ($keyBlob === false) {
         return null;
     }
