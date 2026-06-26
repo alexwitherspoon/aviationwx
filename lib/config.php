@@ -590,8 +590,7 @@ function getUploadHostname(): string {
  *
  * @return int TCP port (default 2222)
  */
-function getSftpPort(): int
-{
+function getSftpPort(): int {
     $networkPorts = getGlobalConfig('network_ports');
     if (is_array($networkPorts) && isset($networkPorts['sftp']) && is_int($networkPorts['sftp'])) {
         return $networkPorts['sftp'];
