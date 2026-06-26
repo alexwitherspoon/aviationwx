@@ -108,6 +108,10 @@ class UploadSshHostKeysTest extends TestCase
         chmod($hostPub, 0000);
 
         try {
+            if (is_readable($hostPub)) {
+                $this->markTestSkipped('Cannot simulate unreadable host key file (likely running as root)');
+            }
+
             $this->assertNull(collectSshHostKeySha256Fingerprints($this->tempSshDir));
         } finally {
             chmod($hostPub, 0600);
