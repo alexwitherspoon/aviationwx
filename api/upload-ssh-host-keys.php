@@ -10,7 +10,7 @@ require_once __DIR__ . '/../lib/cache-headers.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/upload-ssh-host-keys.php';
 
-sendNoStoreCacheHeaders(60);
+sendNoStoreCacheHeaders();
 header('Content-Type: application/json; charset=utf-8');
 
 $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';

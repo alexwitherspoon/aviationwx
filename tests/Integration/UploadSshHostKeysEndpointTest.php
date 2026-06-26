@@ -102,8 +102,8 @@ class UploadSshHostKeysEndpointTest extends TestCase
         $cacheControl = $response['headers']['cache-control'] ?? '';
         $this->assertStringContainsString('no-store', $cacheControl);
         $this->assertStringContainsString('no-cache', $cacheControl);
-        $this->assertStringContainsString('max-age=60', $cacheControl);
-        $this->assertStringContainsString('s-maxage=60', $cacheControl);
+        $this->assertStringContainsString('max-age=0', $cacheControl);
+        $this->assertStringContainsString('s-maxage=0', $cacheControl);
         $this->assertSame('no-cache', $response['headers']['pragma'] ?? '');
     }
 }

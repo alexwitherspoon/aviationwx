@@ -124,12 +124,12 @@ class UploadSshHostKeysTest extends TestCase
 
     public function testGetNoStoreCacheHeaders_AreAggressiveWithLowTtl(): void
     {
-        $headers = getNoStoreCacheHeaders(60);
+        $headers = getNoStoreCacheHeaders(0);
         $this->assertStringContainsString('no-store', $headers['Cache-Control']);
         $this->assertStringContainsString('no-cache', $headers['Cache-Control']);
         $this->assertStringContainsString('must-revalidate', $headers['Cache-Control']);
-        $this->assertStringContainsString('max-age=60', $headers['Cache-Control']);
-        $this->assertStringContainsString('s-maxage=60', $headers['Cache-Control']);
+        $this->assertStringContainsString('max-age=0', $headers['Cache-Control']);
+        $this->assertStringContainsString('s-maxage=0', $headers['Cache-Control']);
         $this->assertSame('no-cache', $headers['Pragma']);
         $this->assertSame('0', $headers['Expires']);
     }

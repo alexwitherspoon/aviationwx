@@ -76,14 +76,15 @@ function sendCacheHeaders(int $refreshInterval, ?int $browserMaxAge = null, bool
 /**
  * Cache headers for responses that must never be stored (e.g. live SSH host key roster).
  *
- * Belt-and-suspenders: no-store/no-cache plus explicit low max-age/s-maxage and Pragma/Expires
- * so browsers, CDNs, and proxy defaults cannot serve a stale roster. Cached host key pins that
+ * Belt-and-suspenders: no-store/no-cache plus explicit max-age=0/s-maxage=0 and Pragma/Expires
+ * so browsers, CDNs, and proxy defaults cannot serve a stale roster. A non-zero TTL would let
+ * intermediaries that ignore no-store but honor max-age cache briefly; cached host key pins that
  * lag a container rebuild would reject valid SFTP connections and cause upload outages.
  *
- * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 60)
+ * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 0)
  * @return array<string, string>
  */
-function getNoStoreCacheHeaders(int $maxAgeSeconds = 60): array
+function getNoStoreCacheHeaders(int $maxAgeSeconds = 0): array
 {
     $maxAgeSeconds = max(0, $maxAgeSeconds);
 
@@ -98,9 +99,9 @@ function getNoStoreCacheHeaders(int $maxAgeSeconds = 60): array
 /**
  * Send no-store cache headers (see getNoStoreCacheHeaders()).
  *
- * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 60)
+ * @param int $maxAgeSeconds Explicit max-age and s-maxage (default 0)
  */
-function sendNoStoreCacheHeaders(int $maxAgeSeconds = 60): void
+function sendNoStoreCacheHeaders(int $maxAgeSeconds = 0): void
 {
     foreach (getNoStoreCacheHeaders($maxAgeSeconds) as $name => $value) {
         header($name . ': ' . $value);
