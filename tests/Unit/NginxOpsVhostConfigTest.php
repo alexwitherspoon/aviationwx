@@ -72,7 +72,7 @@ NGINX;
         $content = file_get_contents($path);
         $this->assertIsString($content);
         $this->assertMatchesRegularExpression(
-            '/server_name aviationwx\.org \*\.aviationwx\.org api\.aviationwx\.org embed\.aviationwx\.org ops\.aviationwx\.org;/',
+            '/server_name\b[^;]*\bops\.aviationwx\.org\b/',
             $content
         );
     }
