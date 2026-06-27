@@ -71,9 +71,12 @@ NGINX;
         $path = self::nginxConfPath();
         $content = file_get_contents($path);
         $this->assertIsString($content);
-        $this->assertMatchesRegularExpression(
-            '/server_name\b[^;]*\bops\.aviationwx\.org\b/',
-            $content
+        $httpBlock = nginx_extract_server_block(
+            $content,
+            'server_name aviationwx.org *.aviationwx.org api.aviationwx.org embed.aviationwx.org ops.aviationwx.org;'
         );
+        $this->assertNotSame('', $httpBlock, 'HTTP ACME server block must exist');
+        $this->assertMatchesRegularExpression('/listen\s+80;/', $httpBlock);
+        $this->assertStringContainsString('ops.aviationwx.org', $httpBlock);
     }
 }
