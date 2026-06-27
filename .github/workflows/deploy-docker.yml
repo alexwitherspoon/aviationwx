@@ -474,6 +474,7 @@ jobs:
             "docker/Dockerfile"
             "docker/nginx.conf"
             "lib/nginx-embed-vhost-verify.php"
+            "lib/nginx-server-block-extract.php"
             "scripts/verify-embed-nginx-conf.php"
             "tests/Unit/NginxEmbedVhostConfigTest.php"
             "lib/nginx-ops-vhost-verify.php"
@@ -623,7 +624,7 @@ jobs:
             echo "⚠ Guides directory not found - skipping validation"
           fi
           
-          # Embed nginx routing is covered by tests/Unit/NginxEmbedVhostConfigTest.php (QA workflow)
+          # Embed and ops nginx routing: tests/Unit/NginxEmbedVhostConfigTest.php, NginxOpsVhostConfigTest.php (QA workflow)
           # and verified on the server inside the web container after image build (see Deploy via Docker Compose).
           
           # Final check

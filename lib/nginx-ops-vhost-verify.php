@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/nginx-server-block-extract.php';
+
 /**
  * Extract the server { ... } block for ops.aviationwx.org from raw nginx config.
  *
@@ -18,37 +20,7 @@ declare(strict_types=1);
  */
 function nginx_extract_ops_aviationwx_server_block(string $content): string
 {
-    $marker = 'server_name ops.aviationwx.org;';
-    $pos = strpos($content, $marker);
-    if ($pos === false) {
-        return '';
-    }
-    $slice = substr($content, 0, $pos);
-    $serverKw = strrpos($slice, 'server {');
-    if ($serverKw === false) {
-        return '';
-    }
-    $prefix = substr($content, $serverKw, 12);
-    $braceRel = strpos($prefix, '{');
-    if ($braceRel === false) {
-        return '';
-    }
-    $braceOpen = $serverKw + $braceRel;
-    $depth = 0;
-    $len = strlen($content);
-    for ($i = $braceOpen; $i < $len; $i++) {
-        $c = $content[$i];
-        if ($c === '{') {
-            $depth++;
-        } elseif ($c === '}') {
-            $depth--;
-            if ($depth === 0) {
-                return substr($content, $serverKw, $i - $serverKw + 1);
-            }
-        }
-    }
-
-    return '';
+    return nginx_extract_server_block($content, 'server_name ops.aviationwx.org;');
 }
 
 /**
@@ -73,8 +45,14 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     if (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091#', $block)) {
         $errors[] = 'ops server block must proxy_pass to http://127.0.0.1:8091 (aviationwx-ops web bind)';
     }
-    if (preg_match('#proxy_pass\s+http://localhost:8080#', $block)) {
+    if (preg_match('#proxy_pass\s+http://(localhost|127\.0\.0\.1):8080#', $block)) {
         $errors[] = 'ops server block must not proxy_pass to dashboard port 8080';
+    }
+    if (preg_match('#return\s+301\s+https?://[^;]*:8080/#', $block)) {
+        $errors[] = 'ops server block must not redirect to dashboard port 8080';
+    }
+    if (str_contains($block, 'airport=ops')) {
+        $errors[] = 'ops server block must not use airport-style routing';
     }
     if (str_contains($block, 'auth_request')) {
         $errors[] = 'ops vhost in main nginx must not use auth_request; keep Authelia in the ops stack';
