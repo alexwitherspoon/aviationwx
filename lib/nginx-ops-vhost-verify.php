@@ -42,7 +42,7 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     if (!str_contains($block, 'server_name ops.aviationwx.org;')) {
         $errors[] = 'ops server block must declare server_name ops.aviationwx.org';
     }
-    if (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091#', $block)) {
+    if (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091(?=[;/\s]|$)#', $block)) {
         $errors[] = 'ops server block must proxy_pass to http://127.0.0.1:8091 (aviationwx-ops web bind)';
     }
     if (preg_match('#proxy_pass\s+http://(localhost|127\.0\.0\.1):8080#', $block)) {
@@ -63,7 +63,7 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     $rootLocation = nginx_extract_location_block($block, 'location / {');
     if ($rootLocation === '') {
         $errors[] = 'ops vhost must define a location / block for proxy_pass';
-    } elseif (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091#', $rootLocation)) {
+    } elseif (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091(?=[;/\s]|$)#', $rootLocation)) {
         $errors[] = 'ops location / must proxy_pass to http://127.0.0.1:8091';
     } elseif (!preg_match('/add_header\s+X-Robots-Tag\s+"noindex,\s*nofollow"/', $rootLocation)) {
         $errors[] = 'ops location / must set X-Robots-Tag "noindex, nofollow" on proxied responses';
