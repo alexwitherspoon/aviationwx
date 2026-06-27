@@ -624,7 +624,7 @@ jobs:
             echo "⚠ Guides directory not found - skipping validation"
           fi
           
-          # Embed and ops nginx routing: tests/Unit/NginxEmbedVhostConfigTest.php, NginxOpsVhostConfigTest.php (QA workflow)
+          # Embed and ops nginx routing: tests/Unit/NginxEmbedVhostConfigTest.php, tests/Unit/NginxOpsVhostConfigTest.php (QA workflow)
           # and verified on the server inside the web container after image build (see Deploy via Docker Compose).
           
           # Final check
