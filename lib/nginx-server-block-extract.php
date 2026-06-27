@@ -47,3 +47,38 @@ function nginx_extract_server_block(string $content, string $serverNameMarker): 
 
     return '';
 }
+
+/**
+ * Extract a location { ... } block by its opening marker (e.g. "location / {").
+ *
+ * @param string $content Server block or larger nginx.conf slice
+ * @param string $locationMarker Unique marker at the start of the location block
+ * @return string Location block including outer braces, or empty string if not found
+ */
+function nginx_extract_location_block(string $content, string $locationMarker): string
+{
+    $pos = strpos($content, $locationMarker);
+    if ($pos === false) {
+        return '';
+    }
+    $braceOpen = strpos(substr($content, $pos), '{');
+    if ($braceOpen === false) {
+        return '';
+    }
+    $braceOpen += $pos;
+    $depth = 0;
+    $len = strlen($content);
+    for ($i = $braceOpen; $i < $len; $i++) {
+        $c = $content[$i];
+        if ($c === '{') {
+            $depth++;
+        } elseif ($c === '}') {
+            $depth--;
+            if ($depth === 0) {
+                return substr($content, $pos, $i - $pos + 1);
+            }
+        }
+    }
+
+    return '';
+}

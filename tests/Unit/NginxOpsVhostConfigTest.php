@@ -43,6 +43,27 @@ class NginxOpsVhostConfigTest extends TestCase
     }
 
     /**
+     * Verifier must require X-Robots-Tag on location /, not only /robots.txt.
+     */
+    public function testOpsVerifierRequiresRobotsHeaderOnLocationRoot(): void
+    {
+        $block = <<<'NGINX'
+server {
+    location = /robots.txt {
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+    location / {
+        proxy_pass http://127.0.0.1:8091;
+    }
+}
+NGINX;
+        $errors = nginx_verify_ops_server_block($block);
+        $this->assertNotSame([], $errors);
+        $this->assertStringContainsString('location / must set X-Robots-Tag', implode('; ', $errors));
+    }
+
+    /**
      * HTTP ACME server_name list must include ops alongside api and embed.
      */
     public function testHttpServerNameListIncludesOps(): void

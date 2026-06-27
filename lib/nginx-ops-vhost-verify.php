@@ -60,8 +60,11 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     if (str_contains($block, 'Content-Security-Policy')) {
         $errors[] = 'ops vhost must not copy dashboard CSP headers';
     }
-    if (!str_contains($block, 'X-Robots-Tag') || !str_contains($block, 'noindex')) {
-        $errors[] = 'ops vhost must set X-Robots-Tag noindex, nofollow';
+    $rootLocation = nginx_extract_location_block($block, 'location / {');
+    if ($rootLocation === '') {
+        $errors[] = 'ops vhost must define a location / block for proxy_pass';
+    } elseif (!preg_match('/add_header\s+X-Robots-Tag\s+"noindex,\s*nofollow"/', $rootLocation)) {
+        $errors[] = 'ops location / must set X-Robots-Tag "noindex, nofollow" on proxied responses';
     }
     if (!str_contains($block, 'location = /robots.txt')) {
         $errors[] = 'ops vhost must serve /robots.txt with Disallow: /';
