@@ -71,10 +71,12 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     }
 
     if ($fullContent !== '') {
-        $wildcardMarker = "server_name aviationwx.org *.aviationwx.org;\n";
         $opsPos = strpos($fullContent, 'server_name ops.aviationwx.org;');
-        $wildcardPos = strpos($fullContent, $wildcardMarker);
-        if ($opsPos === false || $wildcardPos === false || $opsPos > $wildcardPos) {
+        $wildcardPos = null;
+        if (preg_match('/^\s*server_name aviationwx\.org \*\.aviationwx\.org;/m', $fullContent, $m, PREG_OFFSET_CAPTURE)) {
+            $wildcardPos = $m[0][1];
+        }
+        if ($opsPos === false || $wildcardPos === null || $opsPos > $wildcardPos) {
             $errors[] = 'ops.aviationwx.org server block must appear before the *.aviationwx.org wildcard HTTPS block';
         }
     }
