@@ -523,7 +523,7 @@ CD **rsyncs** `docker/nginx.conf` to `~/aviationwx/` and bind-mounts it into the
 
 ### Nginx and `ops.aviationwx.org` (pass-through)
 
-The operator console runs in the separate **`aviationwx-ops`** compose project on **`127.0.0.1:8091`**. Main-site nginx exposes **`ops.aviationwx.org`** via a dedicated server block that **only** `proxy_pass`es to that loopback port. **Do not** add Authelia or `auth_request` to this vhost; authentication belongs in the ops stack (edge proxy + Authelia sidecar in `aviationwx-ops`). CI runs **`tests/Unit/NginxOpsVhostConfigTest.php`**; deploy runs **`scripts/verify-ops-nginx-conf.php`** in the web container after build.
+The operator console runs in the separate **`aviationwx-ops`** compose project on **`127.0.0.1:8091`**. Main-site nginx exposes **`ops.aviationwx.org`** via a dedicated server block that **only** `proxy_pass`es to that loopback port. The ops vhost also serves **`/robots.txt`** (`Disallow: /`) and **`X-Robots-Tag: noindex, nofollow`** on all proxied responses. **Do not** add Authelia or `auth_request` to this vhost; authentication belongs in the ops stack (edge proxy + Authelia sidecar in `aviationwx-ops`). CI runs **`tests/Unit/NginxOpsVhostConfigTest.php`**; deploy runs **`scripts/verify-ops-nginx-conf.php`** in the web container after build.
 
 ## Maintenance
 
