@@ -1,6 +1,8 @@
 # Weather, Webcam, and NOTAM Data Flow Documentation
 
-This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. It also summarizes the **airport country resolution** aggregate (geometry-only ISO hints merged at config load). This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
+This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. It also summarizes the **airport country resolution** aggregate (geometry-only ISO hints merged at config load).
+
+**Document role:** Checked-in reference for **required pipeline logic** - what the system must do, in present tense. It is not a project plan, rollout tracker, or implementation status log. Delivery gaps belong in GitHub issues and pull requests (see `CODE_STYLE.md`).
 
 ## Table of Contents
 
@@ -46,7 +48,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 **Purpose**: Provides redundancy when primary weather source becomes stale or fails.
 
-**Current Implementation**:
+**Behavior**:
 - Backup source is treated as another source in the unified aggregation system
 - Fetched in parallel with all other sources on every weather fetch
 - No special activation thresholds - always fetched if configured
@@ -158,8 +160,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
-- **Bulk cache (production, multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped so the install uses per-station METAR HTTP only (typical small or OSS single-site configs). Stale or missing slices fall back to the JSON endpoint above so behavior stays safe if the bulk job fails.
-- **Post-deploy validation (multi-airport):** After deploy, confirm `cache/metar-bulk/stations/{ICAO}.json` updates on the scheduler cadence, `app.log` shows `metar_bulk: refresh complete` without `bad_csv_header_schema`, and METAR still serves when slices are removed or aged past `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS` (per-station HTTP fallback).
+- **Bulk cache (multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped; per-station METAR HTTP is used. Stale or missing slices always fall back to the JSON endpoint above so METAR still serves when bulk ingest fails or a slice ages out.
 - **Data Provided**:
   - Temperature (Celsius)
   - Dewpoint (Celsius)
@@ -187,7 +188,7 @@ Remote supplemental data is not a substitute for on-field infrastructure.
 
 **Operator rule (configuration):** A remote source is added only when conditions at that location are **equivalent to the airport within VFR standards**, based on local geography, terrain, and climate. Examples of acceptable pairings: similar elevation, no intervening terrain or weather regimes that routinely diverge on ceiling height or visibility. If weather is not equivalent under VFR standards, do **not** configure a remote source for that airport.
 
-**Preference:** On-field sensor data always takes precedence over any remote source when both are available. Source attribution in the dashboard identifies which source supplied each field (see existing attribution UI; no additional copy required).
+**Preference:** On-field sensor data always takes precedence over any remote source when both are available. Source attribution in the dashboard identifies which source supplied each field.
 
 **Scope:** This policy applies to all weather source types. METAR is the most common supplemental source; the same rules apply to NWS, AWOSnet, and other remote sources that observe a location other than the field.
 
@@ -588,7 +589,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
    - Subtract 120 feet of density altitude for every degree Celsius below ISA
    - Result: Density altitude
 
-**Critical Implementation Details**:
+**Critical calculation requirements**:
 - Step 2 MUST use pressure altitude, not station elevation
 - The 120 coefficient is for Celsius, NOT Fahrenheit (using Fahrenheit overestimates by ~80%)
 - This matters most at high airports, on low-pressure days, and in hot conditions
@@ -615,7 +616,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **Testing**: 
 - Reference tests: `tests/Unit/SafetyCriticalReferenceTest.php` (23 tests with known-good values from E6B manuals)
-- Implementation tests: `tests/Unit/WeatherCalculationsTest.php` (real-world scenarios)
+- Unit tests: `tests/Unit/WeatherCalculationsTest.php` (real-world scenarios)
 
 **Sources**:
 - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C)
@@ -1354,7 +1355,7 @@ Safe Zone → Center-crop to 4:3 → 1368x1026
 Otherwise → Output 640x480 (FAA minimum)
 ```
 
-**Implementation**: `lib/image-transform.php` - `transformImageFaa()`, `getFaaTransformedImagePath()`
+**Module:** `lib/image-transform.php` - `transformImageFaa()`, `getFaaTransformedImagePath()`
 
 ### Webcam Metadata Caching
 
@@ -1732,9 +1733,9 @@ Production access is browser-only (`lib/notam/map-api-access.php`).
 **Two policies on purpose**:
 
 1. **Aggregate JSON `last_updated` / `last_updated_iso`**: PHP computes a **maximum** across observation and fetch candidates so the payload carries a single "freshest metadata" stamp for staleness and APIs. That max can be driven by fetch time when it is newer than observation metadata.
-2. **Human "Last updated" on the airport dashboard**: The browser uses `pickObservationUnixTimestamp` and `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`, which take the **maximum of observation candidates only**, then fall back to fetch times **only if** no observation metadata exists. Legacy `pickWeatherUnixTimestamp` remains max-of-all for backward compatibility and diagnostics.
+2. **Human "Last updated" on the airport dashboard**: The browser uses `pickObservationUnixTimestamp` and `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`, which take the **maximum of observation candidates only**, then fall back to fetch times **only if** no observation metadata exists. `pickWeatherUnixTimestamp` (max of all candidates) is for diagnostics only and must not drive the pilot-facing line.
 
-**Regression protection**: Node tests in `tests/js/weather-timestamp-utils.test.js` assert this split (including real-world-style payloads). Changing the UI to prefer fetch over observation without an explicit product decision would fail those tests.
+**Invariant:** When observation metadata exists, the dashboard must not show a fetch time that is newer than the underlying observation time. Automated tests in `tests/js/weather-timestamp-utils.test.js` enforce this split.
 
 ### Weather Data Display
 
@@ -2027,4 +2028,4 @@ This system provides a robust, fault-tolerant data pipeline that:
 7. **Fetches** webcam images from various protocols (MJPEG, RTSP, static)
 8. **Displays** all data with proper timestamps, units, and formatting
 
-The system prioritizes **safety** (accurate, timely data), **performance** (fast responses), and **reliability** (graceful degradation when sources fail).
+The system prioritizes **safety** (accurate, timely data), **performance** (fast responses), and **reliability** (graceful degradation when sources fail). Policy rules for supplemental remote weather, staleness, and outage detection are stated as required behavior throughout this document; they are not tracked here as a delivery checklist.
