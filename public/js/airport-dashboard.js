@@ -1950,11 +1950,8 @@ function refreshWeatherLastUpdatedFromCurrentData() {
     if (!currentWeatherData) {
         return;
     }
-    const updatedDate = resolveWeatherLastUpdatedDate(currentWeatherData);
-    if (updatedDate !== null) {
-        weatherLastUpdated = updatedDate;
-        updateWeatherTimestamp();
-    }
+    weatherLastUpdated = resolveWeatherLastUpdatedDate(currentWeatherData);
+    updateWeatherTimestamp();
 }
 
 /**
