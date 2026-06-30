@@ -189,7 +189,7 @@ Remote supplemental data is not a substitute for on-field infrastructure.
 
 **Preference:** On-field sensor data always takes precedence over any remote source when both are available. Source attribution in the dashboard identifies which source supplied each field (see existing attribution UI; no additional copy required).
 
-**Policy scope vs code:** This policy covers all weather source types. **METAR** is the primary case implemented today for aggregation locality, outage detection, and fail-closed hiding. Other remote source types should follow the same intent; per-source enforcement in code may lag until extended.
+**Scope:** This policy applies to all weather source types. METAR is the most common supplemental source; the same rules apply to NWS, AWOSnet, and other remote sources that observe a location other than the field.
 
 **Configuration shapes (METAR examples):**
 
@@ -222,7 +222,7 @@ Important distinctions:
 
 - **METAR station ICAO** is always present on the wire for a valid METAR product. AviationWX `station_id` values must be ICAO-format (see [CONFIGURATION.md](CONFIGURATION.md)).
 - **Airport identifier** (ICAO, FAA LID, etc.) is not always the same code as the METAR station. Many strips have no on-field METAR. US private-field AWOS may use an identifier unrelated to the airport LID (FAA Order JO 7350.9).
-- **Co-located** for AviationWX means the active METAR station ICAO matches `airport.icao` when that field is set. Airports without `icao` (for example FAA-only 7S9) treat any configured METAR as supplemental when on-site sensors or webcams are present. The same co-located vs supplemental distinction applies to other source types under [Supplemental remote weather policy](#supplemental-remote-weather-policy); METAR locality is the reference implementation.
+- **Co-located** for AviationWX means the active METAR station ICAO matches `airport.icao` when that field is set. Airports without `icao` (for example FAA-only 7S9) treat any configured METAR as supplemental when on-site sensors or webcams are present. The same co-located vs supplemental distinction applies to other source types under [Supplemental remote weather policy](#supplemental-remote-weather-policy); METAR locality is the reference pattern for classifying remote sources.
 
 ### METAR fetch and supplementation (technical)
 
@@ -390,12 +390,12 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 
 4. **Local vs supplemental remote weather** (Safety-Critical):
    - **On-site weather source (aggregation)**: On-site sensors (Tempest, Ambient, etc.) or **co-located** observations (e.g. KSPB METAR for KSPB). Webcams are on-field for [site health](#data-outage-detection) but are not weather aggregation inputs.
-   - **Supplemental (remote) source**: Observations from a different location (e.g. KUAO METAR for 7S9, or KVUO METAR fallback when KSPB primary fails). METAR is the primary implemented case; see [supplemental remote weather policy](#supplemental-remote-weather-policy)
+   - **Supplemental (remote) source**: Observations from a different location (e.g. KUAO METAR for 7S9, or KVUO METAR fallback when KSPB primary fails). See [supplemental remote weather policy](#supplemental-remote-weather-policy).
    - **Rule**: For LOCAL_FIELDS (wind, temperature, dewpoint, humidity, pressure, precip_accum), on-field measurements **always override** supplemental remote data when both have valid data, regardless of freshness
    - **Rationale**: Wind and temperature at the airport can differ significantly from nearby locations. Using supplemental remote data for these fields could mislead pilots
    - **Fill-in allowed**: Supplemental remote sources may fill in missing aviation fields (typically visibility, ceiling, cloud_cover from METAR) when on-field sensors are healthy but lack those measurements
    - **Fill-in forbidden during site outage**: When all on-field infrastructure is stale or unavailable, supplemental remote weather fields are hidden (fail closed) in addition to the outage banner
-   - **Implementation (METAR today)**: `WeatherSnapshot.metarStationId` and `_field_station_map` identify the METAR station; `localAirportIcao` from airport config distinguishes co-located vs supplemental for aggregation. Site-health and fail-closed rules use the same distinction for METAR (see [Data outage detection](#data-outage-detection)); extension to other source types is policy-aligned but not yet universal in code
+   - **Classification**: Co-located vs supplemental is determined from the active reporting identity (for METAR: station ICAO from aggregated weather data vs `airport.icao`). The same distinction governs aggregation, site health, and fail-closed display (see [Data outage detection](#data-outage-detection)).
 
 5. **Aggregation Process**:
    1. Fetch all configured sources in parallel using `curl_multi`
@@ -842,11 +842,11 @@ The system tracks daily extremes that reset at local midnight:
 - Webcams
 - **Co-located weather sources** only: sources that observe the airport itself (e.g. KSPB ASOS METAR while displaying KSPB; on-field Tempest; on-field AWOSnet). Co-located sources may use different power or internet than other on-site equipment; they still observe the field and are treated as local until they go stale.
 
-**Supplemental remote weather does not count toward site health.** A remote source (e.g. KUAO METAR for 7S9) may continue reporting while Tempest and webcams are down during a power outage. Fresh supplemental remote data must **not** suppress the outage banner. This applies to any remote weather source type under policy; METAR is the primary enforcement target in code.
+**Supplemental remote weather does not count toward site health.** A remote source (e.g. KUAO METAR for 7S9) may continue reporting while Tempest and webcams are down during a power outage. Fresh supplemental remote data must **not** suppress the outage banner. The same rule applies to all remote weather source types under [Supplemental remote weather policy](#supplemental-remote-weather-policy).
 
 **Outage threshold:** Default fail-closed staleness for on-field sources (`getStaleFailclosedSeconds()`, typically 3 hours). Airports with `limited_availability: true` use `getOutageBannerThresholdSeconds()` (default 30 minutes) and a different banner message.
 
-**Detection logic (target behavior):**
+**Detection logic:**
 
 1. Uses shared `getSourceTimestamps()` to read timestamps from weather cache and webcam metadata
 2. Builds the set of **on-field** sources (primary, backup, webcams, and co-located weather sources such as on-field METAR)
@@ -868,8 +868,6 @@ The system tracks daily extremes that reset at local midnight:
 | KSPB | Tempest + KSPB METAR stale | n/a | both stale | **Yes** |
 | METAR-only (co-located) | n/a | n/a | METAR stale | **Yes** |
 
-**Implementation status:** Co-located vs supplemental rules and supplemental fail-closed hiding are documented here as the target policy for all remote source types; code changes to match are tracked separately. **Current code:** `limited_availability` airports exclude all METAR from outage checks when on-field sources exist; normal airports such as 7S9 count supplemental METAR toward site health (the 7S9 gap). Enforcement for non-METAR remote sources is not yet systematic. **Target code:** distinguish co-located sources (count toward site health) from supplemental remote sources (excluded from site health; fields hidden during outage), starting with METAR. `nearby_stations` HTTP fallback is implemented in legacy `fetchMETAR()` but not yet in `UnifiedFetcher`.
-
 **Outage State File Persistence**:
 - Creates `cache/outage_{airport_id}.json` when outage is first detected
 - Preserves original outage start time across brief recoveries (grace period matches `getOutageBannerThresholdSeconds()` for the airport)
@@ -877,7 +875,7 @@ The system tracks daily extremes that reset at local midnight:
 - Automatically cleans up after full recovery (grace period expires)
 - Logs outage start and end events for operational visibility
 
-**Fallback Chain for Outage Start Time** (on-field sources only, target behavior):
+**Fallback Chain for Outage Start Time** (on-field sources only):
 1. Existing outage state file (preserves original start time)
 2. Newest timestamp from stale on-field sources (via `getSourceTimestamps()`)
 3. Webcam cache file modification times (if weather cache is lost)
@@ -886,7 +884,7 @@ The system tracks daily extremes that reset at local midnight:
 **Display Behavior**:
 - Red banner at top of page (similar to maintenance banner); standard local-outage copy unless `limited_availability` is set
 - Only shown when airport is **NOT** in maintenance mode and all on-field infrastructure is stale
-- Supplemental METAR fields hidden while banner is active (target behavior; policy extends to other remote source types)
+- Supplemental remote weather fields are hidden while the banner is active
 - Includes newest on-field stale timestamp to help identify when the local outage started
 
 **Frontend Updates**:
