@@ -1,6 +1,8 @@
 # Weather, Webcam, and NOTAM Data Flow Documentation
 
-This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. It also summarizes the **airport country resolution** aggregate (geometry-only ISO hints merged at config load). This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
+This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard.
+
+**Document role:** Checked-in reference for **required pipeline logic** - what the system must do, in present tense. It is not a project plan, rollout tracker, or implementation status log. Delivery gaps belong in GitHub issues and pull requests (see `CODE_STYLE.md`). Use this document to understand system intent, then verify in code that behavior matches. Logic stated here can be audited against the implementation to find safety or functional gaps.
 
 ## Table of Contents
 
@@ -46,7 +48,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 **Purpose**: Provides redundancy when primary weather source becomes stale or fails.
 
-**Current Implementation**:
+**Behavior**:
 - Backup source is treated as another source in the unified aggregation system
 - Fetched in parallel with all other sources on every weather fetch
 - No special activation thresholds - always fetched if configured
@@ -158,8 +160,7 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
-- **Bulk cache (production, multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped so the install uses per-station METAR HTTP only (typical small or OSS single-site configs). Stale or missing slices fall back to the JSON endpoint above so behavior stays safe if the bulk job fails.
-- **Post-deploy validation (multi-airport):** After deploy, confirm `cache/metar-bulk/stations/{ICAO}.json` updates on the scheduler cadence, `app.log` shows `metar_bulk: refresh complete` without `bad_csv_header_schema`, and METAR still serves when slices are removed or aged past `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS` (per-station HTTP fallback).
+- **Bulk cache (multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped; per-station METAR HTTP is used. Stale or missing slices always fall back to the JSON endpoint above so METAR still serves when bulk ingest fails or a slice ages out.
 - **Data Provided**:
   - Temperature (Celsius)
   - Dewpoint (Celsius)
@@ -171,12 +172,66 @@ All weather sources are configured in a unified `weather_sources` array. Each so
   - Precipitation (inches)
   - Observation timestamp (ISO 8601, parsed to Unix seconds)
 
-### METAR Supplementation
+### Supplemental remote weather policy
 
-When a primary source is configured, METAR data is fetched to supplement:
+**Guiding principle:** Pilot safety is the prime directive for weather sourcing. It takes precedence over filling coverage gaps. When safety and completeness conflict, fail closed: show less data, show an outage banner, or do not configure a remote source rather than display weather that could mislead pilots about conditions at the field.
+
+When an airport has on-field sensors but needs additional weather fields, a **remote** source may be configured to supplement on-site data. **METAR** is the most common case (ceiling, visibility, cloud cover), but the same policy applies to **any remote weather source** (for example NWS, AWOSnet, or federation data from another airport) when that source observes conditions away from the field.
+
+Remote supplemental data is not a substitute for on-field infrastructure.
+
+**Terminology:**
+
+- **On-field** and **on-site** mean equipment or observations at the airport (Tempest, webcams, co-located ASOS/METAR, on-field AWOSnet).
+- **Co-located source** observes the airport itself (for METAR: active station ICAO matches `airport.icao` when set; for other source types: configured to report conditions at this field).
+- **Supplemental (remote) source** observes a different location (for example KUAO METAR when displaying 7S9, or NWS data from a station that is not co-located with the airport).
+
+**Operator rule (configuration):** A remote source is added only when conditions at that location are **equivalent to the airport within VFR standards**, based on local geography, terrain, and climate. Examples of acceptable pairings: similar elevation, no intervening terrain or weather regimes that routinely diverge on ceiling height or visibility. If weather is not equivalent under VFR standards, do **not** configure a remote source for that airport.
+
+**Preference:** On-field sensor data always takes precedence over any remote source when both are available. Source attribution in the dashboard identifies which source supplied each field.
+
+**Scope:** This policy applies to all weather source types. METAR is the most common supplemental source; the same rules apply to NWS, AWOSnet, and other remote sources that observe a location other than the field.
+
+**Configuration shapes (METAR examples):**
+
+| Pattern | Example | Meaning |
+|---------|---------|---------|
+| Co-located METAR | KSPB: `station_id: "KSPB"` with `icao: "KSPB"` | On-field ASOS/METAR; counts as **local** infrastructure for site health |
+| Remote primary METAR | 7S9: Tempest + webcams + `station_id: "KUAO"` (no on-field METAR) | KUAO is the only METAR source; **supplemental** for aggregation and outage logic |
+| `nearby_stations` fallback | KSPB: primary `KSPB`, `nearby_stations: ["KVUO", "KHIO"]` | Fetch fallback when the primary METAR HTTP/bulk request fails; does not define supplemental vs co-located by itself |
+
+Whether a source is **co-located** or **supplemental** is determined at runtime from the **active reporting identity** (for METAR: station ICAO from aggregated weather data vs `airport.icao`), not by which config key (`station_id` vs `nearby_stations`) holds the code.
+
+**Fields supplemental remote sources may contribute** (when on-field sensors lack them and on-field infrastructure is healthy):
+
+- Visibility (flight category) - typically METAR
+- Ceiling (flight category) - typically METAR
+- Cloud cover - typically METAR
+- Other fields only when the remote source is operator-approved as equivalent and on-field sensors do not provide them
+
+**Fields that must come from on-field sources when available:** wind, temperature, dewpoint, humidity, pressure, precipitation (see [Data aggregation](#data-aggregation-unified-fetcher) and [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#local-vs-supplemental-remote-weather)).
+
+**When all on-field infrastructure is down:** Show the standard local-outage banner and **hide supplemental remote weather fields** in the API and dashboard. Without on-site sensors or webcams to corroborate conditions, remote data could mislead pilots (for example a power outage at 7S9 while KUAO METAR continues reporting). Co-located sources at airports such as KSPB remain **local**: they may use different power or internet than Tempest or webcams, but they observe the field and count toward site health until they go stale.
+
+See also [Data outage detection](#data-outage-detection) and [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#local-vs-supplemental-remote-weather).
+
+### METAR station identifiers (standards)
+
+Every METAR report identifies the **observing station** with a four-character **ICAO location indicator** in the identification group (WMO FM 15 / Annex 3; FAA AIM; NOAA AWC product documentation). The authoritative listing is **ICAO Doc 7910** (*Location Indicators*).
+
+Important distinctions:
+
+- **METAR station ICAO** is always present on the wire for a valid METAR product. AviationWX `station_id` values must be ICAO-format (see [CONFIGURATION.md](CONFIGURATION.md)).
+- **Airport identifier** (ICAO, FAA LID, etc.) is not always the same code as the METAR station. Many strips have no on-field METAR. US private-field AWOS may use an identifier unrelated to the airport LID (FAA Order JO 7350.9).
+- **Co-located** for AviationWX means the active METAR station ICAO matches `airport.icao` when that field is set. Airports without `icao` (for example FAA-only 7S9) treat any configured METAR as supplemental when on-site sensors or webcams are present. The same co-located vs supplemental distinction applies to other source types under [Supplemental remote weather policy](#supplemental-remote-weather-policy); METAR locality is the reference pattern for classifying remote sources.
+
+### METAR fetch and supplementation (technical)
+
+When a primary on-site source is configured, METAR data is fetched to supplement:
+
 - **Visibility**: Required for flight category calculation
 - **Ceiling**: Required for flight category calculation
-- **Cloud Cover**: Additional aviation context
+- **Cloud cover**: Additional aviation context
 
 METAR fetching logic (per station ID):
 1. **Test mode**: `getMockHttpResponse` supplies canned JSON so PHPUnit stays deterministic.
@@ -334,19 +389,20 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
    - **All Other Fields** (temperature, dewpoint, humidity, pressure, visibility, ceiling, cloud_cover, precip_accum): Selects the freshest non-stale observation from any source
    - METAR typically provides ceiling and cloud_cover (other sources do not provide these fields)
 
-4. **Local vs Neighboring METAR** (Safety-Critical):
-   - **Local source**: On-site sensors (Tempest, Ambient, etc.) or METAR from the same station as the airport (e.g., KSPB METAR for KSPB airport)
-   - **Neighboring METAR**: METAR from a different station (e.g., KVUO METAR when displaying KSPB airport)
-   - **Rule**: For LOCAL_FIELDS (wind, temperature, dewpoint, humidity, pressure, precip_accum), local measurements **always override** neighboring METAR when both have valid data, regardless of freshness
-   - **Rationale**: Wind and temperature at the airport can differ significantly from nearby airports. Using neighboring METAR for these fields could mislead pilots
-   - **Fill-in allowed**: Neighboring METAR may fill in missing fields (visibility, ceiling, cloud_cover) when local sources have no data
-   - **Implementation**: `WeatherSnapshot.metarStationId` identifies the METAR station; `localAirportIcao` from airport config enables the override logic
+4. **Local vs supplemental remote weather** (Safety-Critical):
+   - **On-site weather source (aggregation)**: On-site sensors (Tempest, Ambient, etc.) or **co-located** observations (e.g. KSPB METAR for KSPB). Webcams are on-field for [site health](#data-outage-detection) but are not weather aggregation inputs.
+   - **Supplemental (remote) source**: Observations from a different location (e.g. KUAO METAR for 7S9, or KVUO METAR fallback when KSPB primary fails). See [supplemental remote weather policy](#supplemental-remote-weather-policy).
+   - **Rule**: For LOCAL_FIELDS (wind, temperature, dewpoint, humidity, pressure, precip_accum), on-field measurements **always override** supplemental remote data when both have valid data, regardless of freshness
+   - **Rationale**: Wind and temperature at the airport can differ significantly from nearby locations. Using supplemental remote data for these fields could mislead pilots
+   - **Fill-in allowed**: Supplemental remote sources may fill in missing aviation fields (typically visibility, ceiling, cloud_cover from METAR) when on-field sensors are healthy but lack those measurements
+   - **Fill-in forbidden during site outage**: When all on-field infrastructure is stale or unavailable, supplemental remote weather fields are hidden (fail closed) in addition to the outage banner
+   - **Classification**: Co-located vs supplemental is determined from the active reporting identity (for METAR: station ICAO from aggregated weather data vs `airport.icao`). The same distinction governs aggregation, site health, and fail-closed display (see [Data outage detection](#data-outage-detection)).
 
 5. **Aggregation Process**:
    1. Fetch all configured sources in parallel using `curl_multi`
    2. Parse each response into `WeatherSnapshot` with per-field observation times (METAR adapter sets `metarStationId` from source config)
-   3. For wind group: Prefer local sources over neighboring METAR; among same type, select freshest complete wind data
-   4. For each other field: Prefer local over neighboring METAR when both have valid data; otherwise select freshest non-stale value
+   3. For wind group: Prefer on-field sources over supplemental remote data; among the same class, select freshest complete wind data
+   4. For each other field: Prefer on-field over supplemental remote data when both have valid data; otherwise select freshest non-stale value
    5. Build aggregated result with `_field_source_map` (which source provided each field) and `_field_obs_time_map` (observation time for each field)
    6. Validate all fields against climate bounds (catches unit errors, sensor malfunctions)
    7. Fix pressure unit issues automatically (values > 100 inHg divided by 100)
@@ -370,7 +426,7 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
    | wind_speed | 6 kts | 3 kts | **METAR** (fresher) |
    | temperature | -2°C | -2°C | **METAR** (fresher) |
 
-   **Note**: If METAR is from a neighboring station (different ICAO) and NWS/local source has data, local wins regardless of freshness.
+   **Note**: If a source is supplemental (remote, not co-located with the airport) and an on-field or co-located source has data, on-field wins regardless of freshness.
 
 7. **Data Classes**:
    - `WeatherSnapshot`: Complete weather state from one source; `metarStationId` set for METAR source (station ICAO)
@@ -533,7 +589,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
    - Subtract 120 feet of density altitude for every degree Celsius below ISA
    - Result: Density altitude
 
-**Critical Implementation Details**:
+**Critical calculation requirements**:
 - Step 2 MUST use pressure altitude, not station elevation
 - The 120 coefficient is for Celsius, NOT Fahrenheit (using Fahrenheit overestimates by ~80%)
 - This matters most at high airports, on low-pressure days, and in hot conditions
@@ -560,7 +616,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **Testing**: 
 - Reference tests: `tests/Unit/SafetyCriticalReferenceTest.php` (23 tests with known-good values from E6B manuals)
-- Implementation tests: `tests/Unit/WeatherCalculationsTest.php` (real-world scenarios)
+- Unit tests: `tests/Unit/WeatherCalculationsTest.php` (real-world scenarios)
 
 **Sources**:
 - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C)
@@ -779,35 +835,58 @@ The system tracks daily extremes that reset at local midnight:
 
 ### Data Outage Detection
 
-**Purpose**: Warn users when all data sources are offline (complete site outage)
+**Purpose**: Warn users when **on-field infrastructure** is offline (complete local site outage). This is distinct from `limited_availability` (off-grid/solar sites that expect periodic downtime; see [CONFIGURATION.md](CONFIGURATION.md)).
 
-**Outage Threshold**: 1.5 hours (configurable via `DATA_OUTAGE_BANNER_HOURS`)
+**On-field infrastructure** (sources that count toward site health):
 
-**Detection Logic**:
-- Uses shared `getSourceTimestamps()` function to extract timestamps from all configured sources
-- Checks all configured data sources (primary weather, METAR, webcams)
-- Banner appears only when **ALL** sources exceed the threshold
-- Banner shows newest timestamp among all stale sources to identify outage start time
-- Banner automatically hides when any source recovers
+- Non-METAR weather sources configured for the airport (Tempest, NWS, AWOSnet, etc.)
+- Webcams
+- **Co-located weather sources** only: sources that observe the airport itself (e.g. KSPB ASOS METAR while displaying KSPB; on-field Tempest; on-field AWOSnet). Co-located sources may use different power or internet than other on-site equipment; they still observe the field and are treated as local until they go stale.
+
+**Supplemental remote weather does not count toward site health.** A remote source (e.g. KUAO METAR for 7S9) may continue reporting while Tempest and webcams are down during a power outage. Fresh supplemental remote data must **not** suppress the outage banner. The same rule applies to all remote weather source types under [Supplemental remote weather policy](#supplemental-remote-weather-policy).
+
+**Outage threshold:** Default fail-closed staleness for on-field sources (`getStaleFailclosedSeconds()`, typically 3 hours). Airports with `limited_availability: true` use `getOutageBannerThresholdSeconds()` (default 30 minutes) and a different banner message.
+
+**Detection logic:**
+
+1. Uses shared `getSourceTimestamps()` to read timestamps from weather cache and webcam metadata
+2. Builds the set of **on-field** sources (primary, backup, webcams, and co-located weather sources such as on-field METAR)
+3. Site is **in outage** when **all** on-field sources exceed the outage threshold
+4. Banner shows the newest stale timestamp among on-field sources (not supplemental remote data)
+5. Banner clears when any on-field source recovers fresh data
+
+**Display when in outage:**
+
+- Standard banner copy: local data sources offline (not the `limited_availability` battery/solar message unless that flag is set)
+- **Fail closed on supplemental remote weather:** fields from supplemental remote sources (typically METAR visibility, ceiling, and cloud_cover) are nulled in cache serve and API responses while the site is in outage, so pilots do not see uncorroborated remote data
+
+**Examples:**
+
+| Airport | On-field down | Supplemental remote | Co-located weather | Outage banner? |
+|---------|---------------|---------------------|--------------------|----------------|
+| 7S9 | Tempest + webcams stale | KUAO METAR fresh | n/a | **Yes**; hide supplemental fields |
+| KSPB | Tempest stale | n/a | KSPB METAR fresh | **No** (on-field ASOS still up) |
+| KSPB | Tempest + KSPB METAR stale | n/a | both stale | **Yes** |
+| METAR-only (co-located) | n/a | n/a | METAR stale | **Yes** |
 
 **Outage State File Persistence**:
 - Creates `cache/outage_{airport_id}.json` when outage is first detected
-- Preserves original outage start time across brief recoveries (grace period: 1.5 hours)
+- Preserves original outage start time across brief recoveries (grace period matches `getOutageBannerThresholdSeconds()` for the airport)
 - Handles back-to-back outages as single continuous event
 - Automatically cleans up after full recovery (grace period expires)
 - Logs outage start and end events for operational visibility
 
-**Fallback Chain for Outage Start Time**:
+**Fallback Chain for Outage Start Time** (on-field sources only):
 1. Existing outage state file (preserves original start time)
-2. Newest timestamp from stale sources (via `getSourceTimestamps()`)
+2. Newest timestamp from stale on-field sources (via `getSourceTimestamps()`)
 3. Webcam cache file modification times (if weather cache is lost)
 4. Current time (final fallback)
 
 **Display Behavior**:
-- Red banner at top of page (similar to maintenance banner)
-- Only shown when airport is **NOT** in maintenance mode
-- Message indicates data is stale and cannot be trusted
-- Includes newest data timestamp to help identify when outage started
+- Red banner at top of page (similar to maintenance banner); standard local-outage copy unless `limited_availability` is set
+- Only shown when airport is **NOT** in maintenance mode and all on-field infrastructure is stale
+- Supplemental remote weather fields are hidden while the banner is active
+- Includes newest on-field stale timestamp to help identify when the local outage started
 
 **Frontend Updates**:
 - Client-side checks every 30 seconds for immediate feedback
@@ -1276,7 +1355,7 @@ Safe Zone → Center-crop to 4:3 → 1368x1026
 Otherwise → Output 640x480 (FAA minimum)
 ```
 
-**Implementation**: `lib/image-transform.php` - `transformImageFaa()`, `getFaaTransformedImagePath()`
+**Module:** `lib/image-transform.php` - `transformImageFaa()`, `getFaaTransformedImagePath()`
 
 ### Webcam Metadata Caching
 
@@ -1654,9 +1733,9 @@ Production access is browser-only (`lib/notam/map-api-access.php`).
 **Two policies on purpose**:
 
 1. **Aggregate JSON `last_updated` / `last_updated_iso`**: PHP computes a **maximum** across observation and fetch candidates so the payload carries a single "freshest metadata" stamp for staleness and APIs. That max can be driven by fetch time when it is newer than observation metadata.
-2. **Human "Last updated" on the airport dashboard**: The browser uses `pickObservationUnixTimestamp` and `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`, which take the **maximum of observation candidates only**, then fall back to fetch times **only if** no observation metadata exists. Legacy `pickWeatherUnixTimestamp` remains max-of-all for backward compatibility and diagnostics.
+2. **Human "Last updated" on the airport dashboard**: The browser uses `pickObservationUnixTimestamp` and `lastUpdatedDateFromWeather` in `public/js/weather-timestamp-utils.js`, which take the **maximum of observation candidates only**, then fall back to fetch times **only if** no observation metadata exists. `pickWeatherUnixTimestamp` (max of all candidates) is for diagnostics only and must not drive the pilot-facing line.
 
-**Regression protection**: Node tests in `tests/js/weather-timestamp-utils.test.js` assert this split (including real-world-style payloads). Changing the UI to prefer fetch over observation without an explicit product decision would fail those tests.
+**Invariant:** When observation metadata exists, the dashboard must not show a fetch time that is newer than the underlying observation time. Automated tests in `tests/js/weather-timestamp-utils.test.js` enforce this split.
 
 ### Weather Data Display
 
@@ -1949,4 +2028,4 @@ This system provides a robust, fault-tolerant data pipeline that:
 7. **Fetches** webcam images from various protocols (MJPEG, RTSP, static)
 8. **Displays** all data with proper timestamps, units, and formatting
 
-The system prioritizes **safety** (accurate, timely data), **performance** (fast responses), and **reliability** (graceful degradation when sources fail).
+The system prioritizes **safety** (accurate, timely data), **performance** (fast responses), and **reliability** (graceful degradation when sources fail). Policy rules for supplemental remote weather, staleness, and outage detection are stated as required behavior throughout this document; they are not tracked here as a delivery checklist.

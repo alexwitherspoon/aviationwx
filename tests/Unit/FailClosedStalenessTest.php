@@ -275,5 +275,64 @@ class FailClosedStalenessTest extends TestCase
         // Temperature should be preserved (under failclosed threshold)
         $this->assertEquals(15.0, $data['temperature']);
     }
+
+    /**
+     * Supplemental remote METAR fields are hidden during on-field outage (fail-closed).
+     */
+    public function testSupplementalMetarFieldsHiddenDuringOnFieldOutage(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
+        require_once __DIR__ . '/../../lib/weather/outage-detection.php';
+
+        $airportId = 'test-supplemental-failclosed';
+        $airport = [
+            'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+            'webcams' => [
+                ['name' => 'North', 'url' => 'http://example.com/north.jpg'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        $weatherData = [
+            'temperature' => 12.0,
+            'visibility' => 10.0,
+            'ceiling' => 5000,
+            'cloud_cover' => 'FEW',
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_station_map' => ['visibility' => 'KUAO', 'ceiling' => 'KUAO'],
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheSymlinkPath($airportId, 0, 'jpg');
+        $webcamDir = dirname($webcamFile);
+        if (!is_dir($webcamDir)) {
+            mkdir($webcamDir, 0755, true);
+        }
+        touch($webcamFile, $staleTimestamp);
+
+        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
+
+        $this->assertNull($weatherData['visibility']);
+        $this->assertNull($weatherData['ceiling']);
+        $this->assertNull($weatherData['cloud_cover']);
+        $this->assertNull($weatherData['temperature'], 'Stale on-field primary fields are fail-closed during outage');
+
+        @unlink($weatherCacheFile);
+        @unlink($webcamFile);
+        @unlink(getOutageCachePath($airportId));
+    }
 }
 
