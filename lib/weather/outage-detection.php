@@ -14,6 +14,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/source-timestamps.php';
+require_once __DIR__ . '/weather-locality.php';
 
 /**
  * Check if all configured data sources are stale (data outage condition)
@@ -112,26 +113,25 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         }
     }
     
-    // Check if ALL configured sources are stale
-    // For limited_availability (off-grid/solar/battery) airports: exclude METAR from the check
-    // when local sources (primary, webcams) exist. METAR comes from a nearby airport and stays
-    // fresh when the local site powers down; pilots need to know when local data is unavailable.
+    // Supplemental remote METAR must not clear outage when on-field infrastructure is down.
+    // Co-located METAR (e.g. KSPB) still counts as local site health.
     $sourcesToCheck = $sources;
     $newestTimestampLocal = $newestTimestamp;
-    $hasLocalSources = isset($sources['primary']) || isset($sources['webcams']);
-    if (isAirportLimitedAvailability($airport) && $hasLocalSources) {
-        unset($sourcesToCheck['metar']);
-        // Use newest from local sources only (primary, webcams) for banner timestamp
-        $newestTimestampLocal = 0;
-        if (isset($sources['primary']) && $sources['primary']['timestamp'] > 0) {
-            $newestTimestampLocal = max($newestTimestampLocal, $sources['primary']['timestamp']);
-        }
-        if (isset($sources['webcams'])) {
-            $webcamTs = $sourceTimestamps['webcams']['newest_timestamp'] ?? 0;
-            if ($webcamTs > 0) {
-                $newestTimestampLocal = max($newestTimestampLocal, $webcamTs);
+    $weatherDataForLocality = null;
+    if (isset($sources['metar']) && airportHasOnFieldInfrastructure($airport)) {
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        if (file_exists($weatherCacheFile)) {
+            $decoded = @json_decode(@file_get_contents($weatherCacheFile), true);
+            if (is_array($decoded)) {
+                $weatherDataForLocality = $decoded;
             }
         }
+    }
+    $excludeSupplementalMetar = isset($sources['metar'])
+        && isSupplementalMetarForOutage($airport, $weatherDataForLocality);
+    if ($excludeSupplementalMetar) {
+        unset($sourcesToCheck['metar']);
+        $newestTimestampLocal = newestOnFieldOutageTimestamp($sources, $sourceTimestamps);
     }
 
     $allStale = true;
@@ -174,9 +174,8 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
             }
         }
         
-        // If no existing outage start, use newest timestamp from stale sources
-        // For limited_availability, use local sources only (not METAR)
-        $tsForOutage = isAirportLimitedAvailability($airport) ? $newestTimestampLocal : $newestTimestamp;
+        // If no existing outage start, use newest timestamp from stale on-field sources
+        $tsForOutage = $excludeSupplementalMetar ? $newestTimestampLocal : $newestTimestamp;
         if ($outageStart === 0 && $tsForOutage > 0) {
             $outageStart = $tsForOutage;
         }

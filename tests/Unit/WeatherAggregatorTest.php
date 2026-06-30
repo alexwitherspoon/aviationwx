@@ -485,9 +485,9 @@ class WeatherAggregatorTest extends TestCase {
     }
 
     /**
-     * When localAirportIcao is null, preserve existing freshness-based behavior.
+     * METAR-only airport without on-field infrastructure: freshest observation wins.
      */
-    public function testNullLocalAirportIcao_PreservesFreshnessBehavior(): void {
+    public function testNullLocalAirportIcao_MetarOnly_FreshestWins(): void {
         $localTime = $this->now - 600;
         $local = $this->createSnapshot('tempest', [
             'wind_speed' => 8,
@@ -501,10 +501,33 @@ class WeatherAggregatorTest extends TestCase {
         ], $metarTime, 'KVUO');
 
         $aggregator = new WeatherAggregator($this->now);
-        $result = $aggregator->aggregate([$local, $metar], null, null);
+        $result = $aggregator->aggregate([$local, $metar], null, null, false);
 
-        $this->assertEquals(12, $result['wind_speed'], 'Without localAirportIcao, freshest wins');
+        $this->assertEquals(12, $result['wind_speed'], 'METAR-only config: freshest wins');
         $this->assertEquals('metar', $result['_field_source_map']['wind_speed']);
+    }
+
+    /**
+     * On-field sensors with no airport ICAO: supplemental METAR does not override local wind.
+     */
+    public function testNullLocalAirportIcao_OnFieldInfra_PrefersLocalSensors(): void {
+        $localTime = $this->now - 120;
+        $local = $this->createSnapshot('tempest', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+        ], $localTime);
+
+        $metarTime = $this->now - 60;
+        $metar = $this->createSnapshot('metar', [
+            'wind_speed' => 12,
+            'wind_direction' => 180,
+        ], $metarTime, 'KUAO');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$local, $metar], null, null, true);
+
+        $this->assertEquals(8, $result['wind_speed'], 'On-field Tempest overrides supplemental METAR');
+        $this->assertEquals('tempest', $result['_field_source_map']['wind_speed']);
     }
 
     /**

@@ -1846,6 +1846,50 @@ async function fetchOutageStatus() {
 }
 
 /**
+ * True when configured METAR is supplemental remote (does not count for site health).
+ */
+function isSupplementalMetarForOutageClient() {
+    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const hasPrimarySource = hasSources && !AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const hasWebcams = AIRPORT_DATA?.webcams?.length > 0;
+    const hasOnFieldInfrastructure = hasPrimarySource || hasWebcams;
+    if (!hasOnFieldInfrastructure) {
+        return false;
+    }
+    const hasMetar = hasSources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar');
+    if (!hasMetar) {
+        return false;
+    }
+    const airportIcao = AIRPORT_DATA?.icao ? String(AIRPORT_DATA.icao).toUpperCase() : '';
+    const stationMap = currentWeatherData?._field_station_map || {};
+    let activeStation = stationMap.visibility || stationMap.ceiling || stationMap.wind_speed || null;
+    if (!activeStation) {
+        const metarSource = AIRPORT_DATA.weather_sources.find(s => s.type === 'metar');
+        activeStation = metarSource?.station_id || null;
+    }
+    if (activeStation) {
+        activeStation = String(activeStation).toUpperCase();
+    }
+    if (airportIcao && activeStation && activeStation === airportIcao) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Hide supplemental METAR fields when on-field infrastructure is in outage.
+ */
+function hideSupplementalRemoteFieldsIfOutage(inOutage) {
+    if (!inOutage || !currentWeatherData || !isSupplementalMetarForOutageClient()) {
+        return;
+    }
+    currentWeatherData.visibility = null;
+    currentWeatherData.ceiling = null;
+    currentWeatherData.cloud_cover = null;
+    currentWeatherData.visibility_greater_than = false;
+}
+
+/**
  * Check if all configured data sources are stale and sync banner state
  * Called after weather data updates and webcam updates
  * Uses client-side data for immediate feedback
@@ -1923,10 +1967,9 @@ function checkAndUpdateOutageBanner() {
                 newestTimestamp = webcamNewestTimestamp;
             }
         }
-        // For limited_availability airports, exclude METAR from outage check when local sources exist
-        // (METAR from nearby airport stays fresh when local site powers down)
-        const hasLocalSources = hasPrimarySource || (AIRPORT_DATA?.webcams?.length > 0);
-        const sourcesToCheck = limitedAvailability && hasLocalSources
+        // Supplemental remote METAR must not clear outage when on-field infrastructure is down
+        const excludeSupplementalMetar = hasMetar && isSupplementalMetarForOutageClient();
+        const sourcesToCheck = excludeSupplementalMetar
             ? sources.filter(s => s.name !== 'metar')
             : sources;
         let allStale = sourcesToCheck.length > 0 && sourcesToCheck.every(s => s.stale);
@@ -1934,9 +1977,8 @@ function checkAndUpdateOutageBanner() {
             syncBannerState({ maintenance, in_outage: false, limited_availability: false, newest_timestamp: 0 });
             return;
         }
-        // For limited_availability outage, use newest from local sources only (not METAR)
         let tsForBanner = newestTimestamp;
-        if (limitedAvailability && allStale && hasLocalSources) {
+        if (excludeSupplementalMetar && allStale) {
             tsForBanner = 0;
             const primarySrc = sources.find(s => s.name === 'primary');
             if (primarySrc && primarySrc.timestamp) {
@@ -1947,10 +1989,11 @@ function checkAndUpdateOutageBanner() {
                 tsForBanner = Math.max(tsForBanner, webcamSrc.newestTimestamp);
             }
             if (tsForBanner === 0) {
-                tsForBanner = now; // Fallback so banner can display
+                tsForBanner = now;
             }
         }
         const inOutage = !maintenance && allStale && tsForBanner > 0;
+        hideSupplementalRemoteFieldsIfOutage(inOutage);
         syncBannerState({
             maintenance,
             in_outage: inOutage,

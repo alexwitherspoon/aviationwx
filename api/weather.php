@@ -367,7 +367,7 @@ function generateMockWeatherData($airportId, $airport) {
                     }
                 }
             }
-            applyFailclosedStaleness($cached, $airport, $isMetarOnly);
+            applyFailclosedStaleness($cached, $airport, $isMetarOnly, $airportId);
             
             // Set cache headers for cached responses
             // Browser cache uses remaining time until refresh, CDN uses half of refresh interval
@@ -435,7 +435,7 @@ function generateMockWeatherData($airportId, $airport) {
                     }
                 }
             }
-            applyFailclosedStaleness($staleData, $airport, $isMetarOnlyStale);
+            applyFailclosedStaleness($staleData, $airport, $isMetarOnlyStale, $airportId);
             
             $hasStaleCache = true;
             

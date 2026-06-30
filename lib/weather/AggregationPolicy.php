@@ -62,7 +62,7 @@ class AggregationPolicy {
      * on-site sensors when available. Neighboring METAR (different station)
      * may fill in missing fields but must not override local measurements.
      *
-     * @see docs/DATA_FLOW.md Local vs Neighboring METAR
+     * @see docs/DATA_FLOW.md Supplemental remote weather policy
      */
     public const LOCAL_FIELDS = [
         'wind_speed',

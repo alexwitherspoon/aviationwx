@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/weather-locality.php';
 
 /**
  * Null out stale weather fields in cached data (failclosed tier)
@@ -130,12 +131,51 @@ function nullStaleFieldsBySource(&$data, $failclosedSeconds, $failclosedSecondsM
  * @param array &$data Weather data array (modified in place)
  * @param array|null $airport Airport config for threshold override
  * @param bool $isMetarOnly True if this is a METAR-only source
+ * @param string|null $airportId Airport id for supplemental fail-closed during outage
  * @return void
  */
-function applyFailclosedStaleness(&$data, ?array $airport = null, bool $isMetarOnly = false): void {
+function applyFailclosedStaleness(&$data, ?array $airport = null, bool $isMetarOnly = false, ?string $airportId = null): void {
     $failclosedSeconds = getStaleFailclosedSeconds($airport);
     $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
     
     nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar, $isMetarOnly);
+
+    if ($airport !== null && $airportId !== null && $airportId !== '') {
+        hideSupplementalRemoteFieldsDuringOutage($data, $airport, $airportId);
+    }
+}
+
+/**
+ * Hide supplemental remote METAR fields when on-field infrastructure is in outage.
+ *
+ * @param array $data Weather payload (modified in place)
+ * @param array $airport Airport configuration
+ * @param string $airportId Airport identifier
+ * @return void
+ */
+function hideSupplementalRemoteFieldsDuringOutage(array &$data, array $airport, string $airportId): void
+{
+    if (!isSupplementalMetarForOutage($airport, $data)) {
+        return;
+    }
+
+    require_once __DIR__ . '/outage-detection.php';
+
+    $outageStatus = checkDataOutageStatus($airportId, $airport);
+    if ($outageStatus === null) {
+        return;
+    }
+
+    foreach (['visibility', 'ceiling', 'cloud_cover'] as $field) {
+        if (array_key_exists($field, $data)) {
+            $data[$field] = null;
+        }
+    }
+
+    $data['visibility_greater_than'] = false;
+
+    if (function_exists('calculateFlightCategory')) {
+        $data['flight_category'] = calculateFlightCategory($data);
+    }
 }
 

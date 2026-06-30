@@ -1432,11 +1432,6 @@ const INITIAL_WEATHER_DATA = <?php
             require_once __DIR__ . '/../lib/constants.php';
             require_once __DIR__ . '/../lib/weather/cache-utils.php';
             
-            // Get failclosed thresholds for staleness checks
-            $failclosedSeconds = getStaleFailclosedSeconds($airport);
-            $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
-            
-            // Null out stale fields before embedding (using failclosed threshold)
             // isMetarOnly = all configured sources are METAR type
             $isMetarOnly = true;
             if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
@@ -1447,7 +1442,7 @@ const INITIAL_WEATHER_DATA = <?php
                     }
                 }
             }
-            nullStaleFieldsBySource($cachedWeather, $failclosedSeconds, $failclosedSecondsMetar, $isMetarOnly);
+            applyFailclosedStaleness($cachedWeather, $airport, $isMetarOnly, $airportId);
             
             $initialWeatherData = $cachedWeather;
         }
