@@ -395,7 +395,7 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
    - **Rule**: For LOCAL_FIELDS (wind, temperature, dewpoint, humidity, pressure, precip_accum), on-field measurements **always override** supplemental remote data when both have valid data, regardless of freshness
    - **Rationale**: Wind and temperature at the airport can differ significantly from nearby locations. Using supplemental remote data for these fields could mislead pilots
    - **Fill-in allowed**: Supplemental remote sources may fill in missing aviation fields (typically visibility, ceiling, cloud_cover from METAR) when on-field sensors are healthy but lack those measurements
-   - **Fill-in forbidden during site outage**: When all on-field infrastructure is stale or unavailable, supplemental remote weather fields are hidden (fail closed) in addition to the outage banner
+   - **Fill-in forbidden during site outage**: When all on-field infrastructure is stale or unavailable, all supplemental remote weather fields are hidden (fail closed) in addition to the outage banner
    - **Classification**: Co-located vs supplemental is determined from the active reporting identity (for METAR: station ICAO from aggregated weather data vs `airport.icao`). The same distinction governs aggregation, site health, and fail-closed display (see [Data outage detection](#data-outage-detection)).
 
 5. **Aggregation Process**:
@@ -858,13 +858,13 @@ The system tracks daily extremes that reset at local midnight:
 **Display when in outage:**
 
 - Standard banner copy: local data sources offline (not the `limited_availability` battery/solar message unless that flag is set)
-- **Fail closed on supplemental remote weather:** fields from supplemental remote sources (typically METAR visibility, ceiling, and cloud_cover) are nulled in cache serve and API responses while the site is in outage, so pilots do not see uncorroborated remote data
+- **Fail closed on supplemental remote weather:** all fields from supplemental remote sources are nulled in cache serve and API responses while the site is in outage, so pilots do not see uncorroborated remote data (wind, temperature, visibility, ceiling, and derived values)
 
 **Examples:**
 
 | Airport | On-field down | Supplemental remote | Co-located weather | Outage banner? |
 |---------|---------------|---------------------|--------------------|----------------|
-| 7S9 | Tempest + webcams stale | KUAO METAR fresh | n/a | **Yes**; hide supplemental fields |
+| 7S9 | Tempest + webcams stale | KUAO METAR fresh | n/a | **Yes**; hide all supplemental fields |
 | KSPB | Tempest stale | n/a | KSPB METAR fresh | **No** (on-field ASOS still up) |
 | KSPB | Tempest + KSPB METAR stale | n/a | both stale | **Yes** |
 | METAR-only (co-located) | n/a | n/a | METAR stale | **Yes** |

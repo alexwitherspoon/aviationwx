@@ -146,7 +146,7 @@ function applyFailclosedStaleness(&$data, ?array $airport = null, bool $isMetarO
 }
 
 /**
- * Hide supplemental remote METAR fields when on-field infrastructure is in outage.
+ * Hide all supplemental remote weather display fields when on-field infrastructure is in outage.
  *
  * @param array $data Weather payload (modified in place)
  * @param array $airport Airport configuration
@@ -166,16 +166,6 @@ function hideSupplementalRemoteFieldsDuringOutage(array &$data, array $airport, 
         return;
     }
 
-    foreach (['visibility', 'ceiling', 'cloud_cover'] as $field) {
-        if (array_key_exists($field, $data)) {
-            $data[$field] = null;
-        }
-    }
-
-    $data['visibility_greater_than'] = false;
-
-    if (function_exists('calculateFlightCategory')) {
-        $data['flight_category'] = calculateFlightCategory($data);
-    }
+    nullSupplementalRemoteWeatherDisplayFields($data);
 }
 

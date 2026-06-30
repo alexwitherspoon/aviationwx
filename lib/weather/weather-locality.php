@@ -155,3 +155,41 @@ function newestOnFieldOutageTimestamp(array $sources, array $sourceTimestamps): 
 
     return $newest;
 }
+
+/**
+ * Null supplemental remote weather display fields during on-field outage (fail-closed).
+ *
+ * @param array $data Weather payload (modified in place)
+ * @return void
+ * @see \AviationWX\Weather\AggregationPolicy::ALL_FIELDS
+ * @see \AviationWX\Weather\AggregationPolicy::SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS
+ */
+function nullSupplementalRemoteWeatherDisplayFields(array &$data): void
+{
+    require_once __DIR__ . '/AggregationPolicy.php';
+    require_once __DIR__ . '/calculator.php';
+
+    $policy = \AviationWX\Weather\AggregationPolicy::class;
+
+    foreach ($policy::ALL_FIELDS as $field) {
+        if (array_key_exists($field, $data)) {
+            $data[$field] = null;
+        }
+    }
+
+    foreach ($policy::CALCULATED_FIELDS as $field) {
+        if (array_key_exists($field, $data)) {
+            $data[$field] = null;
+        }
+    }
+
+    foreach ($policy::SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS as $field) {
+        if (array_key_exists($field, $data)) {
+            $data[$field] = null;
+        }
+    }
+
+    $data['visibility_greater_than'] = false;
+
+    calculateAndSetFlightCategory($data);
+}
