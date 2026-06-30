@@ -1862,7 +1862,14 @@ function isSupplementalMetarForOutageClient() {
     }
     const airportIcao = AIRPORT_DATA?.icao ? String(AIRPORT_DATA.icao).toUpperCase() : '';
     const stationMap = currentWeatherData?._field_station_map || {};
-    let activeStation = stationMap.visibility || stationMap.ceiling || stationMap.wind_speed || null;
+    const stationFields = ['visibility', 'ceiling', 'cloud_cover', 'wind_speed', 'temperature'];
+    let activeStation = null;
+    for (const field of stationFields) {
+        if (stationMap[field]) {
+            activeStation = stationMap[field];
+            break;
+        }
+    }
     if (!activeStation) {
         const metarSource = AIRPORT_DATA.weather_sources.find(s => s.type === 'metar');
         activeStation = metarSource?.station_id || null;
