@@ -70,6 +70,17 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
 - Do not use the Unicode em dash (U+2014).
 - In prose, headings, and table cell text, use a **single ASCII hyphen** (`-`) for a break or aside. Avoid a **double hyphen** (`--`) in those places. Keep `--` (and `---`) where Markdown or tooling needs them (horizontal rules, CLI examples in fenced code, HTML comments, and similar).
 
+### Durable policy and architecture docs (`docs/`)
+
+Policy and data-flow guides (for example `docs/DATA_FLOW.md`, `docs/SAFETY_CRITICAL_CALCULATIONS.md`) describe **required behavior** as timeless statements: what the system must do and why, not what code has or has not shipped.
+
+- ✅ **DO** state rules, invariants, and safety rationale in present tense (for example "supplemental remote METAR does not count toward site health").
+- ✅ **DO** use examples (7S9, KSPB) to illustrate policy without tying them to a release or gap list.
+- ❌ **DON'T** include **implementation status**, **current code vs target code**, **not yet implemented**, or similar tracking in these docs.
+- ❌ **DON'T** label sections **target behavior** or mark policy as aspirational when the doc is meant to be the source of truth for logic.
+
+Track gaps, rollout, and migration in **GitHub issues and pull requests**, not in policy docs. When code catches up, update the doc only if the **required behavior** changed, not to check off delivery.
+
 ### Comment Philosophy
 
 **Keep comments concise and focused on critical logic.**
