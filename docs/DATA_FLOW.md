@@ -1,8 +1,8 @@
 # Weather, Webcam, and NOTAM Data Flow Documentation
 
-This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. It also summarizes the **airport country resolution** aggregate (geometry-only ISO hints merged at config load).
+This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard.
 
-**Document role:** Checked-in reference for **required pipeline logic** - what the system must do, in present tense. It is not a project plan, rollout tracker, or implementation status log. Delivery gaps belong in GitHub issues and pull requests (see `CODE_STYLE.md`).
+**Document role:** Checked-in reference for **required pipeline logic** - what the system must do, in present tense. It is not a project plan, rollout tracker, or implementation status log. Delivery gaps belong in GitHub issues and pull requests (see `CODE_STYLE.md`). Use this document to understand system intent, then verify in code that behavior matches. Logic stated here can be audited against the implementation to find safety or functional gaps.
 
 ## Table of Contents
 
