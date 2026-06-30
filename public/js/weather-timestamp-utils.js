@@ -149,6 +149,78 @@
     }
 
     /**
+     * Unix second for on-field infrastructure only (primary, backup, non-METAR field map).
+     * Does not use supplemental METAR obs/fetch metadata. Used after
+     * {@link stripSupplementalMetarTimestampMetadata} during supplemental outage fail-closed.
+     *
+     * @param {object|null|undefined} w Weather object from cache or API
+     * @returns {number|null} Unix seconds, or null if no valid on-field time
+     */
+    function pickOnFieldObservationUnixTimestamp(w) {
+        if (w === null || w === undefined || typeof w !== 'object') {
+            return null;
+        }
+        const nums = [];
+        ['obs_time_primary', 'last_updated_primary', 'obs_time_backup', 'last_updated_backup'].forEach(function (k) {
+            const t = toPositiveUnixSeconds(w[k]);
+            if (t !== null) {
+                nums.push(t);
+            }
+        });
+        const map = w._field_obs_time_map;
+        const sourceMap = w._field_source_map;
+        if (map && typeof map === 'object' && !Array.isArray(map) && sourceMap && typeof sourceMap === 'object') {
+            const keys = Object.keys(map);
+            for (let i = 0; i < keys.length; i++) {
+                const field = keys[i];
+                const source = sourceMap[field];
+                if (source === undefined || source === null || source === 'metar') {
+                    continue;
+                }
+                const t = toPositiveUnixSeconds(map[field]);
+                if (t !== null) {
+                    nums.push(t);
+                }
+            }
+        }
+        if (nums.length === 0) {
+            return null;
+        }
+        return Math.max.apply(null, nums);
+    }
+
+    /**
+     * Remove supplemental METAR timestamp metadata from a weather payload (in place).
+     *
+     * @param {object|null|undefined} w Weather object from cache or API
+     * @returns {void}
+     */
+    function stripSupplementalMetarTimestampMetadata(w) {
+        if (w === null || w === undefined || typeof w !== 'object') {
+            return;
+        }
+        w.obs_time_metar = null;
+        w.last_updated_metar = null;
+        const map = w._field_obs_time_map;
+        const sourceMap = w._field_source_map;
+        if (!map || typeof map !== 'object' || Array.isArray(map)) {
+            return;
+        }
+        if (!sourceMap || typeof sourceMap !== 'object' || Array.isArray(sourceMap)) {
+            w._field_obs_time_map = {};
+            return;
+        }
+        const keys = Object.keys(map);
+        for (let i = 0; i < keys.length; i++) {
+            const field = keys[i];
+            const source = sourceMap[field];
+            if (source === undefined || source === null || source === 'metar') {
+                delete map[field];
+            }
+        }
+    }
+
+    /**
      * Safe Date for airport "last updated" line: **observation** time when available.
      *
      * @param {object|null|undefined} w Weather object from cache or API
@@ -166,7 +238,9 @@
     const api = {
         pickFetchUnixTimestamp: pickFetchUnixTimestamp,
         pickObservationUnixTimestamp: pickObservationUnixTimestamp,
+        pickOnFieldObservationUnixTimestamp: pickOnFieldObservationUnixTimestamp,
         pickWeatherUnixTimestamp: pickWeatherUnixTimestamp,
+        stripSupplementalMetarTimestampMetadata: stripSupplementalMetarTimestampMetadata,
         lastUpdatedDateFromWeather: lastUpdatedDateFromWeather
     };
 

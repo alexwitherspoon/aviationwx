@@ -1920,6 +1920,41 @@ const SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS = [
 ];
 
 /**
+ * Anchor display timestamps to on-field infrastructure during supplemental outage fail-closed.
+ *
+ * @param {object} weather Weather payload (modified in place)
+ * @returns {void}
+ */
+function anchorSupplementalOutageDisplayTimestampsClient(weather) {
+    const wt = window.AviationWX && window.AviationWX.weatherTimestamp;
+    if (!wt || typeof wt.stripSupplementalMetarTimestampMetadata !== 'function') {
+        return;
+    }
+    wt.stripSupplementalMetarTimestampMetadata(weather);
+    const onFieldTs = typeof wt.pickOnFieldObservationUnixTimestamp === 'function'
+        ? wt.pickOnFieldObservationUnixTimestamp(weather)
+        : null;
+    if (onFieldTs === null) {
+        weather.last_updated = null;
+        weather.last_updated_iso = null;
+        return;
+    }
+    weather.last_updated = onFieldTs;
+    weather.last_updated_iso = new Date(onFieldTs * 1000).toISOString();
+}
+
+/**
+ * Refresh wind/weather "Last updated" from currentWeatherData after supplemental fail-closed.
+ */
+function refreshWeatherLastUpdatedFromCurrentData() {
+    if (!currentWeatherData) {
+        return;
+    }
+    weatherLastUpdated = resolveWeatherLastUpdatedDate(currentWeatherData);
+    updateWeatherTimestamp();
+}
+
+/**
  * Hide all supplemental remote weather fields when on-field infrastructure is in outage.
  */
 function hideSupplementalRemoteFieldsIfOutage(inOutage) {
@@ -1933,9 +1968,18 @@ function hideSupplementalRemoteFieldsIfOutage(inOutage) {
     }
     currentWeatherData.visibility_greater_than = false;
     currentWeatherData.flight_category_class = '';
+    anchorSupplementalOutageDisplayTimestampsClient(currentWeatherData);
     if (typeof displayWeather === 'function') {
         displayWeather(currentWeatherData);
     }
+    if (typeof updateWindVisual === 'function') {
+        try {
+            updateWindVisual(currentWeatherData);
+        } catch (e) {
+            console.error('[Weather] updateWindVisual failed (supplemental fail-closed):', e);
+        }
+    }
+    refreshWeatherLastUpdatedFromCurrentData();
 }
 
 /**

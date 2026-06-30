@@ -478,7 +478,7 @@ Outage detection considers **on-field infrastructure** only: non-METAR weather s
 
 - **Aggregation (METAR today)**: `lib/weather/WeatherAggregator.php`, `AggregationPolicy::LOCAL_FIELDS`
 - **Detection (METAR today)**: `WeatherSnapshot.metarStationId` and `_field_station_map` vs `localAirportIcao` (`airport.icao`)
-- **Outage / fail-closed (METAR target first)**: `lib/weather/outage-detection.php`, `lib/weather/cache-utils.php`, `lib/weather/weather-locality.php` (`nullSupplementalRemoteWeatherDisplayFields`)
+- **Outage / fail-closed (METAR target first)**: `lib/weather/outage-detection.php`, `lib/weather/cache-utils.php`, `lib/weather/weather-locality.php` (`nullSupplementalRemoteWeatherDisplayFields`, `anchorSupplementalOutageDisplayTimestamps`)
 - **Other source types**: Same policy intent; systematic code enforcement may follow per adapter
 - **Tests**: `tests/Unit/WeatherAggregatorTest.php` (on-field overrides supplemental when fresher)
 

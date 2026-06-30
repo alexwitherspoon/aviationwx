@@ -26,6 +26,16 @@
 
     const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
 
+    /**
+     * True when wind speed is a valid calm reading (not missing/unavailable).
+     *
+     * @param {number|null|undefined} windSpeed Wind speed in knots
+     * @returns {boolean}
+     */
+    function isCalmWindSpeed(windSpeed) {
+        return windSpeed !== null && windSpeed !== undefined && Number.isFinite(windSpeed) && windSpeed < CALM_WIND_THRESHOLD;
+    }
+
     // Canonical wind compass palettes. light/dark serve the embeds; night is
     // cockpit night-vision used only by the dashboard. Exposed via
     // getWindCompassColors so the dashboard legend and the canvas share one source.
@@ -162,7 +172,8 @@
 
         const windSpeed = options.windSpeed ?? null;
         const isVRB = options.isVRB ?? false;
-        const willShowCenterText = !windStale && (windSpeed === null || windSpeed === undefined || windSpeed < CALM_WIND_THRESHOLD || isVRB);
+        const willShowCenterText = !windStale && windSpeed !== null && windSpeed !== undefined
+            && (isCalmWindSpeed(windSpeed) || isVRB);
 
         segments.forEach(function(seg) {
             const sx = (seg.start && seg.start[0]) || 0;
@@ -244,7 +255,7 @@
                     ctx.fillStyle = colors.vrbText;
                     ctx.fillText('VRB', cx, cy);
                 }
-            } else if (ws === null || ws < CALM_WIND_THRESHOLD) {
+            } else if (isCalmWindSpeed(ws)) {
                 ctx.font = 'bold 20px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = colors.labelOutline;
@@ -562,7 +573,7 @@
             drawWindArrow(ctx, cx, cy, r, windSpeed, windDir, width, isDark);
         } else if (isVRB && windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD) {
             drawVRBIndicator(ctx, cx, cy, width, isDark);
-        } else {
+        } else if (isCalmWindSpeed(windSpeed)) {
             drawCalmIndicator(ctx, cx, cy, width, isDark);
         }
     }
@@ -781,7 +792,15 @@
     window.AviationWX.drawWindCompass = drawWindCompass;
     window.AviationWX.getWindCompassColors = getWindCompassColors;
     window.AviationWX.CALM_WIND_THRESHOLD = CALM_WIND_THRESHOLD;
+    window.AviationWX.isCalmWindSpeed = isCalmWindSpeed;
     window.AviationWX.syncWindCompassCanvasPixels = syncWindCompassCanvasPixels;
     window.AviationWX.observeWindCompassCanvas = observeWindCompassCanvas;
 
-})(window);
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            isCalmWindSpeed: isCalmWindSpeed,
+            CALM_WIND_THRESHOLD: CALM_WIND_THRESHOLD
+        };
+    }
+
+})(typeof window !== 'undefined' ? window : globalThis);
