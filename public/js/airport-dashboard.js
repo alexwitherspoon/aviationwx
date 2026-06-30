@@ -1884,16 +1884,55 @@ function isSupplementalMetarForOutageClient() {
 }
 
 /**
- * Hide supplemental METAR fields when on-field infrastructure is in outage.
+ * Fields nulled during supplemental remote outage fail-closed (dashboard client).
+ * Keep in sync with AggregationPolicy in lib/weather/AggregationPolicy.php.
+ */
+const SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS = [
+    'temperature',
+    'dewpoint',
+    'humidity',
+    'pressure',
+    'precip_accum',
+    'wind_speed',
+    'wind_direction',
+    'gust_speed',
+    'visibility',
+    'ceiling',
+    'cloud_cover',
+    'temperature_f',
+    'dewpoint_f',
+    'dewpoint_spread',
+    'gust_factor',
+    'pressure_altitude',
+    'density_altitude',
+    'flight_category',
+    'flight_category_class',
+    'wind_direction_magnetic',
+    'peak_gust_today',
+    'peak_gust_time',
+    'temp_high_today',
+    'temp_low_today',
+    'temp_high_ts',
+    'temp_low_ts',
+    'raw_metar',
+    'metar_visibility_reported',
+    'metar_ceiling_reported',
+];
+
+/**
+ * Hide all supplemental remote weather fields when on-field infrastructure is in outage.
  */
 function hideSupplementalRemoteFieldsIfOutage(inOutage) {
     if (!inOutage || !currentWeatherData || !isSupplementalMetarForOutageClient()) {
         return;
     }
-    currentWeatherData.visibility = null;
-    currentWeatherData.ceiling = null;
-    currentWeatherData.cloud_cover = null;
+    for (const field of SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(currentWeatherData, field)) {
+            currentWeatherData[field] = null;
+        }
+    }
     currentWeatherData.visibility_greater_than = false;
+    currentWeatherData.flight_category_class = '';
     if (typeof displayWeather === 'function') {
         displayWeather(currentWeatherData);
     }

@@ -313,6 +313,164 @@ class FailClosedStalenessTest extends TestCase
         ];
         file_put_contents($weatherCacheFile, json_encode($weatherData));
 
+        $this->seedStaleWebcamForOutage($airportId, $staleTimestamp);
+
+        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
+
+        $this->assertNull($weatherData['visibility']);
+        $this->assertNull($weatherData['ceiling']);
+        $this->assertNull($weatherData['cloud_cover']);
+        $this->assertNull($weatherData['temperature'], 'Stale on-field primary fields are fail-closed during outage');
+
+        $this->cleanupSupplementalOutageFixtures($airportId, $weatherCacheFile);
+    }
+
+    /**
+     * 7S9 production-shaped case: fresh supplemental METAR fills LOCAL_FIELDS during outage.
+     */
+    public function testSupplementalMetarAllFieldsHiddenWhenFreshMetarFillsLocalFieldsDuringOutage(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
+        require_once __DIR__ . '/../../lib/weather/outage-detection.php';
+
+        $airportId = 'test-supplemental-failclosed-all';
+        $airport = [
+            'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+            'webcams' => [
+                ['name' => 'East', 'url' => 'http://example.com/east.jpg'],
+                ['name' => 'West', 'url' => 'http://example.com/west.jpg'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        $fieldObsTimes = [
+            'wind_speed' => $freshMetarTimestamp,
+            'wind_direction' => $freshMetarTimestamp,
+            'visibility' => $freshMetarTimestamp,
+            'ceiling' => $freshMetarTimestamp,
+            'cloud_cover' => $freshMetarTimestamp,
+            'temperature' => $freshMetarTimestamp,
+            'dewpoint' => $freshMetarTimestamp,
+            'humidity' => $freshMetarTimestamp,
+            'pressure' => $freshMetarTimestamp,
+            'precip_accum' => $freshMetarTimestamp,
+        ];
+        $fieldStationMap = array_fill_keys(array_keys($fieldObsTimes), 'KUAO');
+        $fieldSourceMap = array_fill_keys(array_keys($fieldObsTimes), 'metar');
+        $weatherData = [
+            'wind_speed' => 4,
+            'wind_direction' => 0,
+            'visibility' => 10.0,
+            'ceiling' => 5500,
+            'cloud_cover' => 'OVC',
+            'temperature' => 18.3,
+            'dewpoint' => 8.3,
+            'humidity' => 52,
+            'pressure' => 30.1,
+            'precip_accum' => 0,
+            'temperature_f' => 64.9,
+            'dewpoint_f' => 46.9,
+            'dewpoint_spread' => 10,
+            'flight_category' => 'VFR',
+            'flight_category_class' => 'status-vfr',
+            'pressure_altitude' => -15,
+            'density_altitude' => 377,
+            'wind_direction_magnetic' => 346,
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_obs_time_map' => $fieldObsTimes,
+            '_field_source_map' => $fieldSourceMap,
+            '_field_station_map' => $fieldStationMap,
+            'raw_metar' => 'METAR KUAO 302153Z VRB04KT 10SM OVC055 18/08 A3010',
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $this->seedStaleWebcamForOutage($airportId, $staleTimestamp);
+
+        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
+
+        $this->assertNull($weatherData['wind_speed'], 'Supplemental wind must be hidden during outage');
+        $this->assertNull($weatherData['temperature'], 'Supplemental temperature must be hidden during outage');
+        $this->assertNull($weatherData['pressure'], 'Supplemental pressure must be hidden during outage');
+        $this->assertNull($weatherData['humidity'], 'Supplemental humidity must be hidden during outage');
+        $this->assertNull($weatherData['visibility']);
+        $this->assertNull($weatherData['ceiling']);
+        $this->assertNull($weatherData['cloud_cover']);
+        $this->assertNull($weatherData['temperature_f']);
+        $this->assertNull($weatherData['flight_category']);
+        $this->assertSame('', $weatherData['flight_category_class']);
+        $this->assertNull($weatherData['raw_metar']);
+
+        $this->cleanupSupplementalOutageFixtures($airportId, $weatherCacheFile);
+    }
+
+    /**
+     * KSPB-shaped: co-located METAR is local; supplemental fail-closed must not apply.
+     */
+    public function testCoLocatedMetarFieldsNotHiddenForSupplementalFailClosed(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
+        require_once __DIR__ . '/../../lib/weather/outage-detection.php';
+
+        $airportId = 'test-supplemental-failclosed-colocated';
+        $airport = [
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'metar', 'station_id' => 'KSPB'],
+            ],
+            'webcams' => [
+                ['name' => 'North', 'url' => 'http://example.com/north.jpg'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        $weatherData = [
+            'wind_speed' => 8,
+            'temperature' => 15.0,
+            'visibility' => 10.0,
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_station_map' => [
+                'wind_speed' => 'KSPB',
+                'temperature' => 'KSPB',
+                'visibility' => 'KSPB',
+            ],
+            '_field_obs_time_map' => [
+                'wind_speed' => $freshMetarTimestamp,
+                'temperature' => $freshMetarTimestamp,
+                'visibility' => $freshMetarTimestamp,
+            ],
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $this->seedStaleWebcamForOutage($airportId, $staleTimestamp);
+
+        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
+
+        $this->assertSame(8, $weatherData['wind_speed']);
+        $this->assertSame(15.0, $weatherData['temperature']);
+        $this->assertSame(10.0, $weatherData['visibility']);
+
+        $this->cleanupSupplementalOutageFixtures($airportId, $weatherCacheFile);
+    }
+
+    private function seedStaleWebcamForOutage(string $airportId, int $staleTimestamp): void
+    {
         $webcamDir = CACHE_WEBCAMS_DIR;
         ensureCacheDir($webcamDir);
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
@@ -322,16 +480,13 @@ class FailClosedStalenessTest extends TestCase
             mkdir($webcamDir, 0755, true);
         }
         touch($webcamFile, $staleTimestamp);
+    }
 
-        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
-
-        $this->assertNull($weatherData['visibility']);
-        $this->assertNull($weatherData['ceiling']);
-        $this->assertNull($weatherData['cloud_cover']);
-        $this->assertNull($weatherData['temperature'], 'Stale on-field primary fields are fail-closed during outage');
-
+    private function cleanupSupplementalOutageFixtures(string $airportId, string $weatherCacheFile): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         @unlink($weatherCacheFile);
-        @unlink($webcamFile);
+        @unlink(getCacheSymlinkPath($airportId, 0, 'jpg'));
         @unlink(getOutageCachePath($airportId));
     }
 }

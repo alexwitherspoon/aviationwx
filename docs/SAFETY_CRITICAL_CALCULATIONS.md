@@ -468,7 +468,7 @@ For LOCAL_FIELDS (wind_speed, wind_direction, gust_speed, temperature, dewpoint,
 - **On-site weather source (aggregation)**: On-site sensors (Tempest, Ambient, etc.) or **co-located** observations (e.g. KSPB METAR for KSPB)
 - **Supplemental (remote) source**: Observations from a different location (e.g. KUAO METAR for 7S9). Used only when configured under operator equivalence rules
 - **Fill-in allowed**: Supplemental remote sources may fill missing fields (typically METAR visibility, ceiling, cloud_cover) when on-field sensors are healthy but lack those fields
-- **Fill-in forbidden during site outage**: When all on-field infrastructure is down, supplemental remote weather fields are hidden (fail closed) and the local-outage banner is shown
+- **Fill-in forbidden during site outage**: When all on-field infrastructure is down, all supplemental remote weather fields are hidden (fail closed) and the local-outage banner is shown
 
 ### Site health rule
 
@@ -478,7 +478,7 @@ Outage detection considers **on-field infrastructure** only: non-METAR weather s
 
 - **Aggregation (METAR today)**: `lib/weather/WeatherAggregator.php`, `AggregationPolicy::LOCAL_FIELDS`
 - **Detection (METAR today)**: `WeatherSnapshot.metarStationId` and `_field_station_map` vs `localAirportIcao` (`airport.icao`)
-- **Outage / fail-closed (METAR target first)**: `lib/weather/outage-detection.php`, `lib/weather/cache-utils.php` (see [DATA_FLOW.md](DATA_FLOW.md#data-outage-detection))
+- **Outage / fail-closed (METAR target first)**: `lib/weather/outage-detection.php`, `lib/weather/cache-utils.php`, `lib/weather/weather-locality.php` (`nullSupplementalRemoteWeatherDisplayFields`)
 - **Other source types**: Same policy intent; systematic code enforcement may follow per adapter
 - **Tests**: `tests/Unit/WeatherAggregatorTest.php` (on-field overrides supplemental when fresher)
 
