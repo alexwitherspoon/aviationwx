@@ -29,9 +29,10 @@ require_once __DIR__ . '/weather-locality.php';
  * 
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
+ * @param array|null $cachedWeather Optional decoded weather cache (avoids re-read for locality checks)
  * @return array|null Returns array with 'newest_timestamp' if all sources are stale, null otherwise
  */
-function checkDataOutageStatus(string $airportId, array $airport): ?array {
+function checkDataOutageStatus(string $airportId, array $airport, ?array $cachedWeather = null): ?array {
     // Don't show outage banner if airport is in maintenance mode
     if (isAirportInMaintenance($airport)) {
         return null;
@@ -119,11 +120,15 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
     $newestTimestampLocal = $newestTimestamp;
     $weatherDataForLocality = null;
     if (isset($sources['metar']) && airportHasOnFieldInfrastructure($airport)) {
-        $weatherCacheFile = getWeatherCachePath($airportId);
-        if (file_exists($weatherCacheFile)) {
-            $decoded = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($decoded)) {
-                $weatherDataForLocality = $decoded;
+        if (is_array($cachedWeather)) {
+            $weatherDataForLocality = $cachedWeather;
+        } else {
+            $weatherCacheFile = getWeatherCachePath($airportId);
+            if (file_exists($weatherCacheFile)) {
+                $decoded = @json_decode(@file_get_contents($weatherCacheFile), true);
+                if (is_array($decoded)) {
+                    $weatherDataForLocality = $decoded;
+                }
             }
         }
     }

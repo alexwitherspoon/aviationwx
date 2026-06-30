@@ -328,7 +328,7 @@ class FailClosedStalenessTest extends TestCase
         $this->assertNull($weatherData['visibility']);
         $this->assertNull($weatherData['ceiling']);
         $this->assertNull($weatherData['cloud_cover']);
-        $this->assertEquals(12.0, $weatherData['temperature'], 'On-field fields follow normal fail-closed rules');
+        $this->assertNull($weatherData['temperature'], 'Stale on-field primary fields are fail-closed during outage');
 
         @unlink($weatherCacheFile);
         @unlink($webcamFile);

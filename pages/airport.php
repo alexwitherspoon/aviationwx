@@ -1411,7 +1411,15 @@ const AIRPORT_DATA = <?php
 
 // Initial banner state for status banners (maintenance, outage, limited-availability)
 const INITIAL_BANNER_STATE = <?php
-    $outageStatus = checkDataOutageStatus($airportId, $airport);
+    $initialCachedWeatherForBanner = null;
+    $weatherCacheFileForPage = getWeatherCachePath($airportId);
+    if (file_exists($weatherCacheFileForPage)) {
+        $decodedWeatherForPage = @json_decode(@file_get_contents($weatherCacheFileForPage), true);
+        if (is_array($decodedWeatherForPage)) {
+            $initialCachedWeatherForBanner = $decodedWeatherForPage;
+        }
+    }
+    $outageStatus = checkDataOutageStatus($airportId, $airport, $initialCachedWeatherForBanner);
     echo json_encode([
         'maintenance' => isAirportInMaintenance($airport),
         'in_outage' => $outageStatus !== null,
@@ -1422,30 +1430,26 @@ const INITIAL_BANNER_STATE = <?php
 
 // Initial weather data (embedded from cache for immediate display)
 const INITIAL_WEATHER_DATA = <?php
-    // Load cached weather data for immediate display
-    $weatherCacheFile = getWeatherCachePath($airportId);
     $initialWeatherData = null;
-    if (file_exists($weatherCacheFile)) {
-        $cachedWeather = @json_decode(@file_get_contents($weatherCacheFile), true);
-        if (is_array($cachedWeather)) {
-            // Apply staleness checks to ensure we don't show stale data
-            require_once __DIR__ . '/../lib/constants.php';
-            require_once __DIR__ . '/../lib/weather/cache-utils.php';
-            
-            // isMetarOnly = all configured sources are METAR type
-            $isMetarOnly = true;
-            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
-                foreach ($airport['weather_sources'] as $source) {
-                    if (!empty($source['type']) && $source['type'] !== 'metar') {
-                        $isMetarOnly = false;
-                        break;
-                    }
+    if (is_array($initialCachedWeatherForBanner ?? null)) {
+        $cachedWeather = $initialCachedWeatherForBanner;
+        // Apply staleness checks to ensure we don't show stale data
+        require_once __DIR__ . '/../lib/constants.php';
+        require_once __DIR__ . '/../lib/weather/cache-utils.php';
+
+        // isMetarOnly = all configured sources are METAR type
+        $isMetarOnly = true;
+        if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+            foreach ($airport['weather_sources'] as $source) {
+                if (!empty($source['type']) && $source['type'] !== 'metar') {
+                    $isMetarOnly = false;
+                    break;
                 }
             }
-            applyFailclosedStaleness($cachedWeather, $airport, $isMetarOnly, $airportId);
-            
-            $initialWeatherData = $cachedWeather;
         }
+        applyFailclosedStaleness($cachedWeather, $airport, $isMetarOnly, $airportId);
+
+        $initialWeatherData = $cachedWeather;
     }
     
     // Defensive JSON encoding with error handling

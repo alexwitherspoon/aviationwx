@@ -161,7 +161,7 @@ function hideSupplementalRemoteFieldsDuringOutage(array &$data, array $airport, 
 
     require_once __DIR__ . '/outage-detection.php';
 
-    $outageStatus = checkDataOutageStatus($airportId, $airport);
+    $outageStatus = checkDataOutageStatus($airportId, $airport, $data);
     if ($outageStatus === null) {
         return;
     }
