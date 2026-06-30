@@ -101,4 +101,18 @@ class WeatherLocalityTest extends TestCase
 
         $this->assertSame('KUAO', getActiveMetarStationId($weatherData, null));
     }
+
+    public function testNewestOnFieldOutageTimestamp_IncludesBackupSource(): void
+    {
+        $sources = [
+            'primary' => ['timestamp' => 1000],
+            'backup' => ['timestamp' => 2000],
+        ];
+        $sourceTimestamps = [
+            'backup' => ['timestamp' => 2500],
+            'webcams' => ['newest_timestamp' => 1500],
+        ];
+
+        $this->assertSame(2500, newestOnFieldOutageTimestamp($sources, $sourceTimestamps));
+    }
 }

@@ -137,6 +137,15 @@ function newestOnFieldOutageTimestamp(array $sources, array $sourceTimestamps): 
         $newest = max($newest, (int) $sources['primary']['timestamp']);
     }
 
+    if (isset($sources['backup']) && $sources['backup']['timestamp'] > 0) {
+        $newest = max($newest, (int) $sources['backup']['timestamp']);
+    }
+
+    $backupTimestamp = (int) ($sourceTimestamps['backup']['timestamp'] ?? 0);
+    if ($backupTimestamp > 0) {
+        $newest = max($newest, $backupTimestamp);
+    }
+
     if (isset($sources['webcams'])) {
         $webcamTs = (int) ($sourceTimestamps['webcams']['newest_timestamp'] ?? 0);
         if ($webcamTs > 0) {
