@@ -192,4 +192,63 @@ function nullSupplementalRemoteWeatherDisplayFields(array &$data): void
     $data['visibility_greater_than'] = false;
 
     calculateAndSetFlightCategory($data);
+
+    anchorSupplementalOutageDisplayTimestamps($data);
+}
+
+/**
+ * Anchor display timestamps to on-field infrastructure during supplemental outage fail-closed.
+ *
+ * Fresh supplemental METAR metadata must not drive the airport "Last updated" line when fields
+ * are hidden because on-field sensors and webcams are down.
+ *
+ * @param array $data Weather payload (modified in place)
+ * @return void
+ */
+function anchorSupplementalOutageDisplayTimestamps(array &$data): void
+{
+    require_once __DIR__ . '/aggregate-timestamps.php';
+
+    $data['obs_time_metar'] = null;
+    $data['last_updated_metar'] = null;
+
+    $sourceMap = $data['_field_source_map'] ?? [];
+    if (isset($data['_field_obs_time_map']) && is_array($data['_field_obs_time_map'])) {
+        foreach (array_keys($data['_field_obs_time_map']) as $field) {
+            if (($sourceMap[$field] ?? null) === 'metar') {
+                unset($data['_field_obs_time_map'][$field]);
+            }
+        }
+    }
+
+    $onFieldCandidates = [];
+    foreach (['obs_time_primary', 'last_updated_primary', 'obs_time_backup', 'last_updated_backup'] as $key) {
+        if (!array_key_exists($key, $data)) {
+            continue;
+        }
+        $ts = weather_positive_aggregate_timestamp($data[$key]);
+        if ($ts !== null) {
+            $onFieldCandidates[] = $ts;
+        }
+    }
+
+    if (isset($data['_field_obs_time_map']) && is_array($data['_field_obs_time_map'])) {
+        foreach ($data['_field_obs_time_map'] as $field => $value) {
+            $ts = weather_positive_aggregate_timestamp($value);
+            if ($ts !== null) {
+                $onFieldCandidates[] = $ts;
+            }
+        }
+    }
+
+    if ($onFieldCandidates === []) {
+        $data['last_updated'] = null;
+        unset($data['last_updated_iso']);
+
+        return;
+    }
+
+    $onFieldTs = max($onFieldCandidates);
+    $data['last_updated'] = $onFieldTs;
+    $data['last_updated_iso'] = date('c', $onFieldTs);
 }

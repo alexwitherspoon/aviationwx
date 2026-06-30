@@ -1737,6 +1737,8 @@ Production access is browser-only (`lib/notam/map-api-access.php`).
 
 **Invariant:** When observation metadata exists, the dashboard must not show a fetch time that is newer than the underlying observation time. Automated tests in `tests/js/weather-timestamp-utils.test.js` enforce this split.
 
+3. **Supplemental remote outage fail-closed**: When on-field infrastructure is in outage and supplemental METAR fields are hidden, display timestamps are anchored to **on-field** observation and fetch metadata only (`obs_time_primary`, `last_updated_primary`, backup, and non-METAR `_field_obs_time_map` entries). Supplemental METAR obs/fetch times are stripped so a fresh remote station cannot make local sensors look current.
+
 ### Weather Data Display
 
 #### Flight Category Display

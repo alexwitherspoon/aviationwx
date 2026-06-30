@@ -409,8 +409,36 @@ class FailClosedStalenessTest extends TestCase
         $this->assertNull($weatherData['flight_category']);
         $this->assertSame('', $weatherData['flight_category_class']);
         $this->assertNull($weatherData['raw_metar']);
+        $this->assertNull($weatherData['obs_time_metar'], 'Display timestamps must not use supplemental METAR obs time');
+        $this->assertNull($weatherData['last_updated_metar']);
+        $this->assertSame($staleTimestamp, $weatherData['last_updated'], 'Last updated must anchor to on-field primary time');
+        $this->assertArrayNotHasKey('wind_speed', $weatherData['_field_obs_time_map'] ?? []);
 
         $this->cleanupSupplementalOutageFixtures($airportId, $weatherCacheFile);
+    }
+
+    /**
+     * When no on-field timestamp exists, aggregate last_updated must not retain supplemental freshness.
+     */
+    public function testSupplementalOutageDisplayTimestampsFailClosedWithoutOnFieldMetadata(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/weather-locality.php';
+
+        $freshMetarTimestamp = time() - 60;
+        $weatherData = [
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            'last_updated' => $freshMetarTimestamp,
+            'last_updated_iso' => date('c', $freshMetarTimestamp),
+            '_field_obs_time_map' => ['wind_speed' => $freshMetarTimestamp],
+            '_field_source_map' => ['wind_speed' => 'metar'],
+        ];
+
+        anchorSupplementalOutageDisplayTimestamps($weatherData);
+
+        $this->assertNull($weatherData['obs_time_metar']);
+        $this->assertNull($weatherData['last_updated']);
+        $this->assertArrayNotHasKey('last_updated_iso', $weatherData);
     }
 
     /**
