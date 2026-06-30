@@ -308,6 +308,48 @@ function runTests() {
         assertNull(payload.last_updated_metar, 'metar fetch stripped');
     });
 
+    test('stripSupplementalMetarTimestampMetadata fail-closed when _field_source_map is missing', () => {
+        const supplemental = 1_700_000_900;
+        const payload = {
+            obs_time_metar: supplemental,
+            last_updated_metar: supplemental,
+            _field_obs_time_map: { wind_speed: supplemental },
+        };
+        stripSupplementalMetarTimestampMetadata(payload);
+        assertStrictEqual(
+            Object.keys(payload._field_obs_time_map).length,
+            0,
+            'per-field map cleared when sources unknown'
+        );
+        assertNull(payload.obs_time_metar, 'metar obs stripped');
+        assertStrictEqual(
+            pickObservationUnixTimestamp(payload),
+            null,
+            'scrubbed payload must not use supplemental per-field time'
+        );
+    });
+
+    test('stripSupplementalMetarTimestampMetadata drops fields with missing source attribution', () => {
+        const supplemental = 1_700_000_900;
+        const onField = 1_700_000_000;
+        const payload = {
+            obs_time_primary: onField,
+            _field_obs_time_map: { wind_speed: supplemental, temperature: onField },
+            _field_source_map: { temperature: 'tempest' },
+        };
+        stripSupplementalMetarTimestampMetadata(payload);
+        assertStrictEqual(
+            pickOnFieldObservationUnixTimestamp(payload),
+            onField,
+            'only attributed on-field entries remain'
+        );
+        assertStrictEqual(
+            Object.keys(payload._field_obs_time_map).length,
+            1,
+            'unattributed field removed'
+        );
+    });
+
     test('pickObservationUnixTimestamp uses on-field time when supplemental METAR metadata is scrubbed', () => {
         const onField = 1_700_000_000;
         const supplemental = 1_700_000_900;

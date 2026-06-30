@@ -173,7 +173,8 @@
             const keys = Object.keys(map);
             for (let i = 0; i < keys.length; i++) {
                 const field = keys[i];
-                if (sourceMap[field] === 'metar') {
+                const source = sourceMap[field];
+                if (source === undefined || source === null || source === 'metar') {
                     continue;
                 }
                 const t = toPositiveUnixSeconds(map[field]);
@@ -202,13 +203,18 @@
         w.last_updated_metar = null;
         const map = w._field_obs_time_map;
         const sourceMap = w._field_source_map;
-        if (!map || typeof map !== 'object' || Array.isArray(map) || !sourceMap || typeof sourceMap !== 'object') {
+        if (!map || typeof map !== 'object' || Array.isArray(map)) {
+            return;
+        }
+        if (!sourceMap || typeof sourceMap !== 'object' || Array.isArray(sourceMap)) {
+            w._field_obs_time_map = {};
             return;
         }
         const keys = Object.keys(map);
         for (let i = 0; i < keys.length; i++) {
             const field = keys[i];
-            if (sourceMap[field] === 'metar') {
+            const source = sourceMap[field];
+            if (source === undefined || source === null || source === 'metar') {
                 delete map[field];
             }
         }
