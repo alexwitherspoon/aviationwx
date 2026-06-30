@@ -1887,6 +1887,9 @@ function hideSupplementalRemoteFieldsIfOutage(inOutage) {
     currentWeatherData.ceiling = null;
     currentWeatherData.cloud_cover = null;
     currentWeatherData.visibility_greater_than = false;
+    if (typeof displayWeather === 'function') {
+        displayWeather(currentWeatherData);
+    }
 }
 
 /**
