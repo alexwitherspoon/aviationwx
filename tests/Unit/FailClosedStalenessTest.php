@@ -442,6 +442,52 @@ class FailClosedStalenessTest extends TestCase
     }
 
     /**
+     * Unknown per-field source attribution must not anchor last_updated during fail-closed scrub.
+     */
+    public function testSupplementalOutageDisplayTimestampsFailClosedWithMissingSourceMap(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/weather-locality.php';
+
+        $freshMetarTimestamp = time() - 60;
+        $weatherData = [
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            'last_updated' => $freshMetarTimestamp,
+            'last_updated_iso' => date('c', $freshMetarTimestamp),
+            '_field_obs_time_map' => ['wind_speed' => $freshMetarTimestamp],
+        ];
+
+        anchorSupplementalOutageDisplayTimestamps($weatherData);
+
+        $this->assertNull($weatherData['obs_time_metar']);
+        $this->assertSame([], $weatherData['_field_obs_time_map']);
+        $this->assertNull($weatherData['last_updated']);
+        $this->assertArrayNotHasKey('last_updated_iso', $weatherData);
+    }
+
+    /**
+     * Per-field entries with missing source keys must not anchor last_updated.
+     */
+    public function testSupplementalOutageDisplayTimestampsFailClosedWithMissingFieldSource(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/weather-locality.php';
+
+        $freshMetarTimestamp = time() - 60;
+        $weatherData = [
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            'last_updated' => $freshMetarTimestamp,
+            '_field_obs_time_map' => ['wind_speed' => $freshMetarTimestamp],
+            '_field_source_map' => ['temperature' => 'tempest'],
+        ];
+
+        anchorSupplementalOutageDisplayTimestamps($weatherData);
+
+        $this->assertArrayNotHasKey('wind_speed', $weatherData['_field_obs_time_map']);
+        $this->assertNull($weatherData['last_updated']);
+    }
+
+    /**
      * KSPB-shaped: co-located METAR is local; supplemental fail-closed must not apply.
      */
     public function testCoLocatedMetarFieldsNotHiddenForSupplementalFailClosed(): void

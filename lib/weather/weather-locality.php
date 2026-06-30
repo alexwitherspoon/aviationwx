@@ -212,11 +212,16 @@ function anchorSupplementalOutageDisplayTimestamps(array &$data): void
     $data['obs_time_metar'] = null;
     $data['last_updated_metar'] = null;
 
-    $sourceMap = $data['_field_source_map'] ?? [];
+    $sourceMap = $data['_field_source_map'] ?? null;
     if (isset($data['_field_obs_time_map']) && is_array($data['_field_obs_time_map'])) {
-        foreach (array_keys($data['_field_obs_time_map']) as $field) {
-            if (($sourceMap[$field] ?? null) === 'metar') {
-                unset($data['_field_obs_time_map'][$field]);
+        if (!is_array($sourceMap)) {
+            $data['_field_obs_time_map'] = [];
+        } else {
+            foreach (array_keys($data['_field_obs_time_map']) as $field) {
+                $source = $sourceMap[$field] ?? null;
+                if ($source === null || $source === 'metar') {
+                    unset($data['_field_obs_time_map'][$field]);
+                }
             }
         }
     }
