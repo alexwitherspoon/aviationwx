@@ -1972,6 +1972,13 @@ function hideSupplementalRemoteFieldsIfOutage(inOutage) {
     if (typeof displayWeather === 'function') {
         displayWeather(currentWeatherData);
     }
+    if (typeof updateWindVisual === 'function') {
+        try {
+            updateWindVisual(currentWeatherData);
+        } catch (e) {
+            console.error('[Weather] updateWindVisual failed (supplemental fail-closed):', e);
+        }
+    }
     refreshWeatherLastUpdatedFromCurrentData();
 }
 
