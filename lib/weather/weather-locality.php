@@ -257,3 +257,86 @@ function anchorSupplementalOutageDisplayTimestamps(array &$data): void
     $data['last_updated'] = $onFieldTs;
     $data['last_updated_iso'] = date('c', $onFieldTs);
 }
+
+/**
+ * Build dashboard "Weather data at this airport from" attribution entries.
+ *
+ * Credits only sources with non-null displayed fields after fail-closed processing.
+ * Supplemental remote METAR metadata stripped during outage does not appear.
+ *
+ * @param array $airport Airport configuration
+ * @param array|null $weatherData Weather payload (post applyFailclosedStaleness)
+ * @return array<int, array{name: string, url: string}>
+ */
+function buildDashboardWeatherSourceAttribution(array $airport, ?array $weatherData): array
+{
+    if ($weatherData === null || !is_array($weatherData)) {
+        return [];
+    }
+
+    require_once __DIR__ . '/utils.php';
+
+    $weatherSources = [];
+    $addedKeys = [];
+    $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
+    $fieldStationMap = $weatherData['_field_station_map'] ?? [];
+
+    $sourceHasDisplayedField = static function (string $sourceType) use ($weatherData, $fieldSourceMap): bool {
+        foreach ($fieldSourceMap as $field => $src) {
+            if ($src !== $sourceType) {
+                continue;
+            }
+            if (array_key_exists($field, $weatherData) && $weatherData[$field] !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    $addSource = static function (string $sourceType, ?string $stationId = null) use (
+        &$weatherSources,
+        &$addedKeys
+    ): void {
+        $key = $sourceType . ':' . ($stationId ?? '');
+        if (in_array($key, $addedKeys, true)) {
+            return;
+        }
+        $sourceInfo = getWeatherSourceInfo($sourceType);
+        if ($sourceInfo === null) {
+            return;
+        }
+        $weatherSources[] = [
+            'name' => getWeatherSourceDisplayName($sourceType, $stationId),
+            'url' => $sourceInfo['url'],
+        ];
+        $addedKeys[] = $key;
+    };
+
+    $seenTypes = [];
+    foreach ($fieldSourceMap as $field => $sourceType) {
+        if ($sourceType === 'metar' || isset($seenTypes[$sourceType])) {
+            continue;
+        }
+        if (!$sourceHasDisplayedField($sourceType)) {
+            continue;
+        }
+        $addSource($sourceType, $fieldStationMap[$field] ?? null);
+        $seenTypes[$sourceType] = true;
+    }
+
+    $hasMetarMetadata = (($weatherData['obs_time_metar'] ?? 0) > 0)
+        || (($weatherData['last_updated_metar'] ?? 0) > 0);
+    if ($hasMetarMetadata && $sourceHasDisplayedField('metar')) {
+        $metarStationId = null;
+        foreach ($fieldSourceMap as $field => $src) {
+            if ($src === 'metar') {
+                $metarStationId = $fieldStationMap[$field] ?? null;
+                break;
+            }
+        }
+        $addSource('metar', $metarStationId);
+    }
+
+    return $weatherSources;
+}
