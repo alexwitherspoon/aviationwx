@@ -116,10 +116,28 @@ class WeatherLocalityTest extends TestCase
         $this->assertSame(2500, newestOnFieldOutageTimestamp($sources, $sourceTimestamps));
     }
 
-    public function testBuildDashboardWeatherSourceAttribution_OmitsHiddenSupplementalMetar(): void
+    public function testGetSupplementalOutageClientConfig_7S9Shaped(): void
     {
         $airport = [
             'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+            'webcams' => [['name' => 'North', 'url' => 'http://example.com/n.jpg']],
+        ];
+
+        $config = getSupplementalOutageClientConfig($airport, ['_field_station_map' => ['visibility' => 'KUAO']]);
+
+        $this->assertTrue($config['is_supplemental_metar']);
+        $this->assertFalse($config['is_metar_only']);
+        $this->assertContains('wind_speed', $config['hidden_fields']);
+        $this->assertContains('flight_category_class', $config['hidden_fields']);
+    }
+
+    public function testBuildDashboardWeatherSourceAttribution_OmitsHiddenSupplementalMetar(): void
+    {
+        $airport = [
             'weather_sources' => [
                 ['type' => 'tempest', 'station_id' => '216638'],
                 ['type' => 'metar', 'station_id' => 'KUAO'],

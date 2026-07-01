@@ -291,6 +291,27 @@ function hasWeatherSources(array $airport): bool {
 }
 
 /**
+ * True when every configured weather source is METAR type.
+ *
+ * @param array $airport Airport configuration
+ * @return bool
+ */
+function airportIsMetarOnly(array $airport): bool
+{
+    if (!hasWeatherSources($airport)) {
+        return false;
+    }
+
+    foreach ($airport['weather_sources'] as $source) {
+        if (!empty($source['type']) && $source['type'] !== 'metar') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Get primary weather source type for an airport
  * 
  * Returns the type of the first non-backup source, or the first source if all are backups.

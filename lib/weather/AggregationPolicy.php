@@ -122,6 +122,23 @@ class AggregationPolicy {
         'metar_visibility_reported',
         'metar_ceiling_reported',
     ];
+
+    /**
+     * Fields nulled on the dashboard client during supplemental outage fail-closed.
+     *
+     * Single source of truth for PHP nulling and embedded SUPPLEMENTAL_OUTAGE_CONFIG.
+     *
+     * @return list<string>
+     */
+    public static function supplementalOutageHiddenFields(): array
+    {
+        return array_merge(
+            self::ALL_FIELDS,
+            self::CALCULATED_FIELDS,
+            self::SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS,
+            ['flight_category_class']
+        );
+    }
     
     /**
      * Recovery cycles threshold

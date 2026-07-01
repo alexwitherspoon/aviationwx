@@ -1392,6 +1392,14 @@ const INITIAL_BANNER_STATE = <?php
         'newest_timestamp' => $outageStatus !== null ? $outageStatus['newest_timestamp'] : 0
     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
+const SUPPLEMENTAL_OUTAGE_CONFIG = <?php
+    require_once __DIR__ . '/../lib/weather/weather-locality.php';
+    $supplementalOutageConfigJson = json_encode(
+        getSupplementalOutageClientConfig($airport, $initialCachedWeatherForBanner ?? null),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    );
+    echo $supplementalOutageConfigJson !== false ? $supplementalOutageConfigJson : '{}';
+?>;
 
 // Initial weather data (embedded from cache for immediate display)
 const INITIAL_WEATHER_DATA = <?php
@@ -1402,15 +1410,7 @@ const INITIAL_WEATHER_DATA = <?php
         $cachedWeather = $initialCachedWeatherForBanner;
         require_once __DIR__ . '/../lib/weather/cache-utils.php';
 
-        $isMetarOnly = true;
-        if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
-            foreach ($airport['weather_sources'] as $source) {
-                if (!empty($source['type']) && $source['type'] !== 'metar') {
-                    $isMetarOnly = false;
-                    break;
-                }
-            }
-        }
+        $isMetarOnly = airportIsMetarOnly($airport);
         applyFailclosedStaleness($cachedWeather, $airport, $isMetarOnly, $airportId);
 
         $initialWeatherData = $cachedWeather;

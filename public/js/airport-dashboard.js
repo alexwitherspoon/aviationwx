@@ -1679,8 +1679,7 @@ function updateWeatherTimestamp() {
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
     
     // Determine if using METAR-only source (all sources are METAR type)
-    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_sources && 
-                        AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const isMetarOnly = airportIsMetarOnlyClient();
     
     // Get weather refresh interval (default to 60 seconds if not configured)
     // Ensure minimum value to prevent invalid thresholds
@@ -1868,6 +1867,16 @@ async function fetchOutageStatus() {
  * True when configured METAR is supplemental remote (does not count for site health).
  */
 function isSupplementalMetarForOutageClient() {
+    const hasRuntimeAttribution = currentWeatherData
+        && currentWeatherData._field_station_map
+        && typeof currentWeatherData._field_station_map === 'object'
+        && Object.keys(currentWeatherData._field_station_map).length > 0;
+    if (!hasRuntimeAttribution
+        && typeof SUPPLEMENTAL_OUTAGE_CONFIG !== 'undefined'
+        && SUPPLEMENTAL_OUTAGE_CONFIG
+        && typeof SUPPLEMENTAL_OUTAGE_CONFIG.is_supplemental_metar === 'boolean') {
+        return SUPPLEMENTAL_OUTAGE_CONFIG.is_supplemental_metar;
+    }
     const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
     const hasPrimarySource = hasSources && !AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
     const hasWebcams = AIRPORT_DATA?.webcams?.length > 0;
@@ -1903,10 +1912,10 @@ function isSupplementalMetarForOutageClient() {
 }
 
 /**
- * Fields nulled during supplemental remote outage fail-closed (dashboard client).
- * Keep in sync with AggregationPolicy in lib/weather/AggregationPolicy.php.
+ * Fallback when SUPPLEMENTAL_OUTAGE_CONFIG is missing (stale HTML shell).
+ * Keep aligned with AggregationPolicy::supplementalOutageHiddenFields().
  */
-const SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS = [
+const SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS_FALLBACK = [
     'temperature',
     'dewpoint',
     'humidity',
@@ -1937,6 +1946,36 @@ const SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS = [
     'metar_visibility_reported',
     'metar_ceiling_reported',
 ];
+
+/**
+ * @returns {string[]}
+ */
+function getSupplementalOutageHiddenFields() {
+    if (typeof SUPPLEMENTAL_OUTAGE_CONFIG !== 'undefined'
+        && SUPPLEMENTAL_OUTAGE_CONFIG
+        && Array.isArray(SUPPLEMENTAL_OUTAGE_CONFIG.hidden_fields)) {
+        return SUPPLEMENTAL_OUTAGE_CONFIG.hidden_fields;
+    }
+    return SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS_FALLBACK;
+}
+
+/**
+ * @returns {boolean}
+ */
+function airportIsMetarOnlyClient() {
+    if (typeof SUPPLEMENTAL_OUTAGE_CONFIG !== 'undefined'
+        && SUPPLEMENTAL_OUTAGE_CONFIG
+        && typeof SUPPLEMENTAL_OUTAGE_CONFIG.is_metar_only === 'boolean') {
+        return SUPPLEMENTAL_OUTAGE_CONFIG.is_metar_only;
+    }
+    if (!AIRPORT_DATA || !AIRPORT_DATA.weather_sources || !Array.isArray(AIRPORT_DATA.weather_sources)) {
+        return false;
+    }
+    if (AIRPORT_DATA.weather_sources.length === 0) {
+        return false;
+    }
+    return AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+}
 
 /**
  * Anchor display timestamps to on-field infrastructure during supplemental outage fail-closed.
@@ -1981,7 +2020,7 @@ function hideSupplementalRemoteFieldsIfOutage(inOutage) {
         updateWeatherSourceAttributionVisibility(false);
         return;
     }
-    for (const field of SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS) {
+    for (const field of getSupplementalOutageHiddenFields()) {
         if (Object.prototype.hasOwnProperty.call(currentWeatherData, field)) {
             currentWeatherData[field] = null;
         }
@@ -2389,7 +2428,7 @@ function shouldPreserveExistingWeatherData(reason) {
     // Determine failclosed threshold based on source type
     // METAR-only sources use METAR threshold, others use general threshold
     const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const isMetarOnly = airportIsMetarOnlyClient();
     const failclosedThreshold = isMetarOnly ? METAR_STALE_FAILCLOSED_SECONDS : STALE_FAILCLOSED_SECONDS;
     
     if (ageSeconds < failclosedThreshold) {
@@ -2466,7 +2505,7 @@ function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
     
     // Determine if this is a METAR-only source (all configured sources are METAR)
     const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const isMetarOnly = airportIsMetarOnlyClient();
     
     // METAR fields (use hour-based threshold)
     const metarFields = ['visibility', 'ceiling', 'cloud_cover'];
@@ -2746,7 +2785,7 @@ function updateWindVisual(weather) {
         ? AIRPORT_DATA.weather_refresh_seconds 
         : 60;
     const sourcesConfigured = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    const isMetarOnly = sourcesConfigured && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const isMetarOnly = sourcesConfigured && airportIsMetarOnlyClient();
     const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
                       isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
     const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly);
