@@ -177,4 +177,39 @@ class WeatherLocalityTest extends TestCase
         $this->assertCount(1, $sources);
         $this->assertStringContainsString('KSPB', $sources[0]['name']);
     }
+
+    public function testBuildDashboardWeatherSourceAttribution_CreditsEachDisplayedStationPerSourceType(): void
+    {
+        $airport = ['weather_sources' => [['type' => 'tempest', 'station_id' => '111']]];
+        $weatherData = [
+            'temperature' => 10.0,
+            'humidity' => 50.0,
+            '_field_source_map' => ['temperature' => 'tempest', 'humidity' => 'tempest'],
+            '_field_station_map' => ['temperature' => '111', 'humidity' => '222'],
+        ];
+
+        $sources = buildDashboardWeatherSourceAttribution($airport, $weatherData);
+
+        $this->assertCount(2, $sources);
+        $names = array_column($sources, 'name');
+        $this->assertTrue(
+            count(array_filter($names, static fn ($n) => str_contains($n, '111'))) === 1
+        );
+        $this->assertTrue(
+            count(array_filter($names, static fn ($n) => str_contains($n, '222'))) === 1
+        );
+    }
+
+    public function testBuildDashboardWeatherSourceAttribution_ToleratesNonArrayFieldMaps(): void
+    {
+        $airport = ['weather_sources' => [['type' => 'metar', 'station_id' => 'KUAO']]];
+        $weatherData = [
+            'visibility' => 10.0,
+            'obs_time_metar' => time() - 300,
+            '_field_source_map' => 'invalid',
+            '_field_station_map' => null,
+        ];
+
+        $this->assertSame([], buildDashboardWeatherSourceAttribution($airport, $weatherData));
+    }
 }

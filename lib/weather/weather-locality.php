@@ -266,7 +266,7 @@ function anchorSupplementalOutageDisplayTimestamps(array &$data): void
  *
  * @param array $airport Airport configuration
  * @param array|null $weatherData Weather payload (post applyFailclosedStaleness)
- * @return array<int, array{name: string, url: string}>
+ * @return array<int, array{name: string, url: ?string}>
  */
 function buildDashboardWeatherSourceAttribution(array $airport, ?array $weatherData): array
 {
@@ -278,21 +278,14 @@ function buildDashboardWeatherSourceAttribution(array $airport, ?array $weatherD
 
     $weatherSources = [];
     $addedKeys = [];
-    $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
-    $fieldStationMap = $weatherData['_field_station_map'] ?? [];
-
-    $sourceHasDisplayedField = static function (string $sourceType) use ($weatherData, $fieldSourceMap): bool {
-        foreach ($fieldSourceMap as $field => $src) {
-            if ($src !== $sourceType) {
-                continue;
-            }
-            if (array_key_exists($field, $weatherData) && $weatherData[$field] !== null) {
-                return true;
-            }
-        }
-
-        return false;
-    };
+    $fieldSourceMap = $weatherData['_field_source_map'] ?? null;
+    $fieldStationMap = $weatherData['_field_station_map'] ?? null;
+    if (!is_array($fieldSourceMap)) {
+        $fieldSourceMap = [];
+    }
+    if (!is_array($fieldStationMap)) {
+        $fieldStationMap = [];
+    }
 
     $addSource = static function (string $sourceType, ?string $stationId = null) use (
         &$weatherSources,
@@ -313,21 +306,29 @@ function buildDashboardWeatherSourceAttribution(array $airport, ?array $weatherD
         $addedKeys[] = $key;
     };
 
-    $seenTypes = [];
     foreach ($fieldSourceMap as $field => $sourceType) {
-        if ($sourceType === 'metar' || isset($seenTypes[$sourceType])) {
+        if ($sourceType === 'metar') {
             continue;
         }
-        if (!$sourceHasDisplayedField($sourceType)) {
+        if (!array_key_exists($field, $weatherData) || $weatherData[$field] === null) {
             continue;
         }
         $addSource($sourceType, $fieldStationMap[$field] ?? null);
-        $seenTypes[$sourceType] = true;
     }
 
     $hasMetarMetadata = (($weatherData['obs_time_metar'] ?? 0) > 0)
         || (($weatherData['last_updated_metar'] ?? 0) > 0);
-    if ($hasMetarMetadata && $sourceHasDisplayedField('metar')) {
+    $metarHasDisplayedField = false;
+    foreach ($fieldSourceMap as $field => $src) {
+        if ($src !== 'metar') {
+            continue;
+        }
+        if (array_key_exists($field, $weatherData) && $weatherData[$field] !== null) {
+            $metarHasDisplayedField = true;
+            break;
+        }
+    }
+    if ($hasMetarMetadata && $metarHasDisplayedField) {
         $metarStationId = null;
         foreach ($fieldSourceMap as $field => $src) {
             if ($src === 'metar') {
