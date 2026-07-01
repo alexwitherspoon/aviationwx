@@ -50,7 +50,7 @@ test('applyOutageDisplayState syncs banner and supplemental hide when in outage'
     assert(calls.hide === true, 'supplemental hide called with in_outage true');
 });
 
-test('applyOutageDisplayState clears supplemental hide when not in outage', () => {
+test('applyOutageDisplayState forwards in_outage false to supplemental hide hook', () => {
     let hideArg = undefined;
     applyOutageDisplayState(
         {
