@@ -115,4 +115,66 @@ class WeatherLocalityTest extends TestCase
 
         $this->assertSame(2500, newestOnFieldOutageTimestamp($sources, $sourceTimestamps));
     }
+
+    public function testBuildDashboardWeatherSourceAttribution_OmitsHiddenSupplementalMetar(): void
+    {
+        $airport = [
+            'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+        ];
+        $weatherData = [
+            'wind_speed' => null,
+            'visibility' => null,
+            'obs_time_metar' => null,
+            'last_updated_metar' => null,
+            '_field_source_map' => ['wind_speed' => 'metar', 'temperature' => 'tempest'],
+            '_field_station_map' => ['wind_speed' => 'KUAO', 'temperature' => '216638'],
+        ];
+
+        $this->assertSame([], buildDashboardWeatherSourceAttribution($airport, $weatherData));
+    }
+
+    public function testBuildDashboardWeatherSourceAttribution_CreditsDisplayedOnFieldSource(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+            ],
+        ];
+        $weatherData = [
+            'temperature' => 15.0,
+            '_field_source_map' => ['temperature' => 'tempest'],
+            '_field_station_map' => ['temperature' => '216638'],
+        ];
+
+        $sources = buildDashboardWeatherSourceAttribution($airport, $weatherData);
+
+        $this->assertCount(1, $sources);
+        $this->assertStringContainsString('Tempest', $sources[0]['name']);
+    }
+
+    public function testBuildDashboardWeatherSourceAttribution_CreditsCoLocatedMetarWhenDisplayed(): void
+    {
+        $airport = [
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KSPB'],
+            ],
+        ];
+        $weatherData = [
+            'visibility' => 10.0,
+            'obs_time_metar' => time() - 300,
+            'last_updated_metar' => time() - 300,
+            '_field_source_map' => ['visibility' => 'metar'],
+            '_field_station_map' => ['visibility' => 'KSPB'],
+        ];
+
+        $sources = buildDashboardWeatherSourceAttribution($airport, $weatherData);
+
+        $this->assertCount(1, $sources);
+        $this->assertStringContainsString('KSPB', $sources[0]['name']);
+    }
 }
