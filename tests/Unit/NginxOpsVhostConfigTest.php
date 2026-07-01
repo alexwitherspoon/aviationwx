@@ -27,7 +27,7 @@ class NginxOpsVhostConfigTest extends TestCase
     /**
      * Ops vhost must proxy to 127.0.0.1:8091 without main-site auth or CSP.
      */
-    public function testOpsVhostProxiesToOpsStackPort(): void
+    public function testNginxVerifyOpsServerBlock_DockerNginxConf_ReturnsNoErrors(): void
     {
         $path = self::nginxConfPath();
         $this->assertFileExists($path, 'docker/nginx.conf must exist');
