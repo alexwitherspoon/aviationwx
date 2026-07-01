@@ -1358,6 +1358,7 @@ if ($themeCookie === 'dark') {
     <script src="/public/js/webcam-player-utils.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/webcam-player-scroll-lock.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/weather-timestamp-utils.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/outage-display-sync.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/runway-label-layout.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/wind-visual.js?v=<?= $buildHashShort ?>"></script>
     <?php
