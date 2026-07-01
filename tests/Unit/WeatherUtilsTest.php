@@ -169,5 +169,12 @@ class WeatherUtilsTest extends TestCase
 
         $this->assertTrue(airportIsMetarOnly($airport));
     }
+
+    public function testAirportIsMetarOnly_EmptySources_ReturnsFalse(): void
+    {
+        $airport = ['weather_sources' => []];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
 }
 

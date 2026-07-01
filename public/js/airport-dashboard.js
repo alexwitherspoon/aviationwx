@@ -1950,10 +1950,10 @@ function airportIsMetarOnlyClient() {
         return SUPPLEMENTAL_OUTAGE_CONFIG.is_metar_only;
     }
     if (!AIRPORT_DATA || !AIRPORT_DATA.weather_sources || !Array.isArray(AIRPORT_DATA.weather_sources)) {
-        return true;
+        return false;
     }
     if (AIRPORT_DATA.weather_sources.length === 0) {
-        return true;
+        return false;
     }
     return AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
 }

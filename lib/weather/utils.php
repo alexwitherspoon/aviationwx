@@ -298,8 +298,8 @@ function hasWeatherSources(array $airport): bool {
  */
 function airportIsMetarOnly(array $airport): bool
 {
-    if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
-        return true;
+    if (!hasWeatherSources($airport)) {
+        return false;
     }
 
     foreach ($airport['weather_sources'] as $source) {
