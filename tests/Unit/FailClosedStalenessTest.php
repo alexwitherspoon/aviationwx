@@ -418,6 +418,64 @@ class FailClosedStalenessTest extends TestCase
     }
 
     /**
+     * Source attribution must not credit supplemental remote METAR when fail-closed hides all fields.
+     */
+    public function testSupplementalOutageFailClosedOmitsSourceAttribution(): void
+    {
+        require_once __DIR__ . '/../../lib/cache-paths.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
+        require_once __DIR__ . '/../../lib/weather/outage-detection.php';
+        require_once __DIR__ . '/../../lib/weather/weather-locality.php';
+
+        $airportId = 'test-supplemental-attribution-outage';
+        $airport = [
+            'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+            'webcams' => [
+                ['name' => 'East', 'url' => 'http://example.com/east.jpg'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        $weatherData = [
+            'wind_speed' => 4,
+            'visibility' => 10.0,
+            'temperature' => 18.0,
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_source_map' => [
+                'wind_speed' => 'metar',
+                'visibility' => 'metar',
+                'temperature' => 'metar',
+            ],
+            '_field_station_map' => [
+                'wind_speed' => 'KUAO',
+                'visibility' => 'KUAO',
+                'temperature' => 'KUAO',
+            ],
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $this->seedStaleWebcamForOutage($airportId, $staleTimestamp);
+
+        applyFailclosedStaleness($weatherData, $airport, false, $airportId);
+
+        $attribution = buildDashboardWeatherSourceAttribution($airport, $weatherData);
+
+        $this->assertSame([], $attribution, 'No source credited when supplemental fields are fail-closed hidden');
+        $this->assertNull($weatherData['wind_speed']);
+
+        $this->cleanupSupplementalOutageFixtures($airportId, $weatherCacheFile);
+    }
+
+    /**
      * When no on-field timestamp exists, aggregate last_updated must not retain supplemental freshness.
      */
     public function testSupplementalOutageDisplayTimestampsFailClosedWithoutOnFieldMetadata(): void
