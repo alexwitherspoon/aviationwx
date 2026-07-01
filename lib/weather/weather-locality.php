@@ -169,24 +169,15 @@ function nullSupplementalRemoteWeatherDisplayFields(array &$data): void
     require_once __DIR__ . '/AggregationPolicy.php';
     require_once __DIR__ . '/calculator.php';
 
-    $policy = \AviationWX\Weather\AggregationPolicy::class;
-
-    foreach ($policy::ALL_FIELDS as $field) {
-        if (array_key_exists($field, $data)) {
-            $data[$field] = null;
+    foreach (\AviationWX\Weather\AggregationPolicy::supplementalOutageHiddenFields() as $field) {
+        if (!array_key_exists($field, $data)) {
+            continue;
         }
-    }
-
-    foreach ($policy::CALCULATED_FIELDS as $field) {
-        if (array_key_exists($field, $data)) {
-            $data[$field] = null;
+        if ($field === 'flight_category_class') {
+            $data[$field] = '';
+            continue;
         }
-    }
-
-    foreach ($policy::SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS as $field) {
-        if (array_key_exists($field, $data)) {
-            $data[$field] = null;
-        }
+        $data[$field] = null;
     }
 
     $data['visibility_greater_than'] = false;
@@ -256,4 +247,22 @@ function anchorSupplementalOutageDisplayTimestamps(array &$data): void
     $onFieldTs = max($onFieldCandidates);
     $data['last_updated'] = $onFieldTs;
     $data['last_updated_iso'] = date('c', $onFieldTs);
+}
+
+/**
+ * Client bootstrap for supplemental outage fail-closed (embedded in airport page).
+ *
+ * @param array $airport Airport configuration
+ * @param array|null $weatherData Raw cached weather for active METAR station attribution
+ * @return array{is_supplemental_metar: bool, hidden_fields: list<string>, is_metar_only: bool}
+ */
+function getSupplementalOutageClientConfig(array $airport, ?array $weatherData = null): array
+{
+    require_once __DIR__ . '/AggregationPolicy.php';
+
+    return [
+        'is_supplemental_metar' => isSupplementalMetarForOutage($airport, $weatherData),
+        'hidden_fields' => \AviationWX\Weather\AggregationPolicy::supplementalOutageHiddenFields(),
+        'is_metar_only' => airportIsMetarOnly($airport),
+    ];
 }
