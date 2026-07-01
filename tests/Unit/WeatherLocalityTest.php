@@ -116,7 +116,7 @@ class WeatherLocalityTest extends TestCase
         $this->assertSame(2500, newestOnFieldOutageTimestamp($sources, $sourceTimestamps));
     }
 
-    public function testGetSupplementalOutageClientConfig_7S9Shaped(): void
+    public function testGetSupplementalOutageClientConfig_7S9SupplementalMetar_ReturnsExpectedBootstrap(): void
     {
         $airport = [
             'faa' => '7S9',
