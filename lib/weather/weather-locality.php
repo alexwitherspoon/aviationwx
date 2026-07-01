@@ -259,6 +259,7 @@ function anchorSupplementalOutageDisplayTimestamps(array &$data): void
 function getSupplementalOutageClientConfig(array $airport, ?array $weatherData = null): array
 {
     require_once __DIR__ . '/AggregationPolicy.php';
+    require_once __DIR__ . '/utils.php';
 
     return [
         'is_supplemental_metar' => isSupplementalMetarForOutage($airport, $weatherData),
