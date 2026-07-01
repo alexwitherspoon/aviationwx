@@ -65,8 +65,8 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
         $errors[] = 'ops vhost must define a location / block for proxy_pass';
     } elseif (!preg_match('#proxy_pass\s+http://127\.0\.0\.1:8091(?=[;/\s]|$)#', $rootLocation)) {
         $errors[] = 'ops location / must proxy_pass to http://127.0.0.1:8091';
-    } elseif (!preg_match('/add_header\s+X-Robots-Tag\s+"noindex,\s*nofollow"/', $rootLocation)) {
-        $errors[] = 'ops location / must set X-Robots-Tag "noindex, nofollow" on proxied responses';
+    } elseif (!preg_match('/add_header\s+X-Robots-Tag\s+"noindex,\s*nofollow"\s+always;/', $rootLocation)) {
+        $errors[] = 'ops location / must set X-Robots-Tag "noindex, nofollow" always on proxied responses';
     }
     $robotsLocation = nginx_extract_location_block($block, 'location = /robots.txt');
     if ($robotsLocation === '') {
