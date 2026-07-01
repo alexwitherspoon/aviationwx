@@ -188,5 +188,17 @@ class WeatherUtilsTest extends TestCase
 
         $this->assertFalse(airportIsMetarOnly($airport));
     }
+
+    public function testAirportIsMetarOnly_MissingSourceType_ReturnsFalse(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+                ['station_id' => 'orphan'],
+            ],
+        ];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
 }
 
