@@ -1978,6 +1978,7 @@ function refreshWeatherLastUpdatedFromCurrentData() {
  */
 function hideSupplementalRemoteFieldsIfOutage(inOutage) {
     if (!inOutage || !currentWeatherData || !isSupplementalMetarForOutageClient()) {
+        updateWeatherSourceAttributionVisibility(false);
         return;
     }
     for (const field of SUPPLEMENTAL_OUTAGE_HIDDEN_FIELDS) {
@@ -1998,7 +1999,21 @@ function hideSupplementalRemoteFieldsIfOutage(inOutage) {
             console.error('[Weather] updateWindVisual failed (supplemental fail-closed):', e);
         }
     }
+    updateWeatherSourceAttributionVisibility(true);
     refreshWeatherLastUpdatedFromCurrentData();
+}
+
+/**
+ * Hide weather source attribution when supplemental remote data is fail-closed hidden.
+ *
+ * @param {boolean} hide When true, hide attribution block
+ */
+function updateWeatherSourceAttributionVisibility(hide) {
+    const el = document.getElementById('weather-source-attribution');
+    if (!el) {
+        return;
+    }
+    el.style.display = hide ? 'none' : '';
 }
 
 /**
@@ -5295,9 +5310,7 @@ if (hasWeatherSources) {
         }
 
         console.log('[Weather] Initial data displayed from cache');
-        if (typeof INITIAL_BANNER_STATE !== 'undefined' && INITIAL_BANNER_STATE) {
-            syncOutageDisplayState(INITIAL_BANNER_STATE);
-        }
+        checkAndUpdateOutageBanner();
     } else {
         // No initial weather data available - show empty fields
         displayEmptyWeather();

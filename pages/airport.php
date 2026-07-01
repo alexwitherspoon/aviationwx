@@ -863,67 +863,31 @@ if ($themeCookie === 'dark') {
         </section>
         <?php endif; ?>
 
-        <!-- Build weather sources for attribution -->
+        <!-- Build weather sources for attribution (post fail-closed weather) -->
         <?php
-        // Credit any source that is actively providing data, with "Source Name (ICAO)" for ICAO-keyed sources
-        $weatherSources = [];
-        $addedKeys = []; // Track (sourceType, stationId) to avoid duplicates
-        
-        // Load weather cache to check which sources have fresh data
-        $weatherCacheFile = getWeatherCachePath($airportId);
-        $weatherData = null;
-        if (file_exists($weatherCacheFile)) {
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-        }
-        
-        require_once __DIR__ . '/../lib/constants.php';
-        
-        // Use a generous threshold for attribution - we want to credit sources providing data
-        $staleThreshold = getStaleWarningSeconds($airport);
-        
-        // Helper to add source with optional station ICAO for "Source Name (ICAO)" format
-        $addSource = function($sourceType, $stationId = null) use (&$weatherSources, &$addedKeys) {
-            $key = $sourceType . ':' . ($stationId ?? '');
-            if (in_array($key, $addedKeys)) {
-                return;
-            }
-            $sourceInfo = getWeatherSourceInfo($sourceType);
-            if ($sourceInfo !== null) {
-                $displayName = getWeatherSourceDisplayName($sourceType, $stationId);
-                $weatherSources[] = [
-                    'name' => $displayName,
-                    'url' => $sourceInfo['url']
-                ];
-                $addedKeys[] = $key;
-            }
-        };
-        
-        // Build attribution from field source map (includes station for ICAO-keyed sources)
-        $fieldSourceMap = is_array($weatherData) ? ($weatherData['_field_source_map'] ?? []) : [];
-        $fieldStationMap = is_array($weatherData) ? ($weatherData['_field_station_map'] ?? []) : [];
-        
-        foreach ($fieldSourceMap as $field => $sourceType) {
-            $stationId = $fieldStationMap[$field] ?? null;
-            if ($sourceType !== 'metar') {
-                $addSource($sourceType, $stationId);
-            }
-        }
-        
-        // METAR attribution: use station only from a METAR-sourced field (wind_speed etc. may be swob_auto)
-        if (is_array($weatherData) && isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
-            $metarStaleThreshold = 7200; // 2 hours - METAR updates hourly with specials
-            $metarAge = time() - $weatherData['last_updated_metar'];
-            if ($metarAge < $metarStaleThreshold) {
-                $metarStationId = null;
-                foreach ($fieldSourceMap as $f => $src) {
-                    if ($src === 'metar') {
-                        $metarStationId = $fieldStationMap[$f] ?? null;
-                        break;
+        $pageWeatherDataForDisplay = null;
+        if (hasWeatherSources($airport)) {
+            $weatherCacheFile = getWeatherCachePath($airportId);
+            if (file_exists($weatherCacheFile)) {
+                $decodedPageWeather = @json_decode(@file_get_contents($weatherCacheFile), true);
+                if (is_array($decodedPageWeather)) {
+                    require_once __DIR__ . '/../lib/weather/cache-utils.php';
+                    $isMetarOnlyForPage = true;
+                    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+                        foreach ($airport['weather_sources'] as $source) {
+                            if (!empty($source['type']) && $source['type'] !== 'metar') {
+                                $isMetarOnlyForPage = false;
+                                break;
+                            }
+                        }
                     }
+                    applyFailclosedStaleness($decodedPageWeather, $airport, $isMetarOnlyForPage, $airportId);
+                    $pageWeatherDataForDisplay = $decodedPageWeather;
                 }
-                $addSource('metar', $metarStationId);
             }
         }
+        require_once __DIR__ . '/../lib/weather/weather-locality.php';
+        $weatherSources = buildDashboardWeatherSourceAttribution($airport, $pageWeatherDataForDisplay);
         ?>
 
         <?php 
@@ -950,7 +914,7 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
             <?php if (!empty($weatherSources)): ?>
-            <div class="data-sources-content" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+            <div id="weather-source-attribution" class="data-sources-content" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
                 <div class="data-sources-list" style="text-align: center; font-size: 0.85rem; color: #555;">
                     <span class="data-sources-label">Weather data at this airport from </span>
                     <?php foreach ($weatherSources as $index => $source): ?>
@@ -1432,13 +1396,12 @@ const INITIAL_BANNER_STATE = <?php
 // Initial weather data (embedded from cache for immediate display)
 const INITIAL_WEATHER_DATA = <?php
     $initialWeatherData = null;
-    if (is_array($initialCachedWeatherForBanner ?? null)) {
+    if (is_array($pageWeatherDataForDisplay ?? null)) {
+        $initialWeatherData = $pageWeatherDataForDisplay;
+    } elseif (is_array($initialCachedWeatherForBanner ?? null)) {
         $cachedWeather = $initialCachedWeatherForBanner;
-        // Apply staleness checks to ensure we don't show stale data
-        require_once __DIR__ . '/../lib/constants.php';
         require_once __DIR__ . '/../lib/weather/cache-utils.php';
 
-        // isMetarOnly = all configured sources are METAR type
         $isMetarOnly = true;
         if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
             foreach ($airport['weather_sources'] as $source) {
