@@ -1810,6 +1810,25 @@ function syncBannerState(state) {
 }
 
 /**
+ * Apply outage banner and supplemental fail-closed weather display on one path.
+ *
+ * @param {Object} state Banner and outage state (same shape as syncBannerState)
+ * @returns {void}
+ */
+function syncOutageDisplayState(state) {
+    const apply = window.AviationWX && window.AviationWX.applyOutageDisplayState;
+    if (typeof apply === 'function') {
+        apply(state, {
+            syncBannerState: syncBannerState,
+            hideSupplementalRemoteFieldsIfOutage: hideSupplementalRemoteFieldsIfOutage,
+        });
+        return;
+    }
+    syncBannerState(state);
+    hideSupplementalRemoteFieldsIfOutage(!!state.in_outage);
+}
+
+/**
  * Fetch outage status from server and sync banners
  * Called periodically to sync with server state
  */
@@ -1834,7 +1853,7 @@ async function fetchOutageStatus() {
             console.warn('[OutageBanner] Server returned error:', data.error);
             return;
         }
-        syncBannerState({
+        syncOutageDisplayState({
             maintenance: data.maintenance || false,
             in_outage: data.in_outage || false,
             limited_availability: data.limited_availability || false,
@@ -2082,7 +2101,7 @@ function checkAndUpdateOutageBanner() {
             : sources;
         let allStale = sourcesToCheck.length > 0 && sourcesToCheck.every(s => s.stale);
         if (sources.length === 0) {
-            syncBannerState({ maintenance, in_outage: false, limited_availability: false, newest_timestamp: 0 });
+            syncOutageDisplayState({ maintenance, in_outage: false, limited_availability: false, newest_timestamp: 0 });
             return;
         }
         let tsForBanner = newestTimestamp;
@@ -2101,8 +2120,7 @@ function checkAndUpdateOutageBanner() {
             }
         }
         const inOutage = !maintenance && allStale && tsForBanner > 0;
-        hideSupplementalRemoteFieldsIfOutage(inOutage);
-        syncBannerState({
+        syncOutageDisplayState({
             maintenance,
             in_outage: inOutage,
             limited_availability: inOutage && limitedAvailability,
