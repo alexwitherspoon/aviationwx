@@ -303,7 +303,7 @@ function airportIsMetarOnly(array $airport): bool
     }
 
     foreach ($airport['weather_sources'] as $source) {
-        if (!empty($source['type']) && $source['type'] !== 'metar') {
+        if (($source['type'] ?? '') !== 'metar') {
             return false;
         }
     }
