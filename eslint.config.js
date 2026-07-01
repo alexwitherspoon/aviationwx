@@ -34,6 +34,7 @@ module.exports = defineConfig([
                 "CLIENT_CLOCK_SKEW_SECONDS": "readonly",
                 "clientClockSkewDetected": "writable",
                 "INITIAL_BANNER_STATE": "readonly",
+                "SUPPLEMENTAL_OUTAGE_CONFIG": "readonly",
                 "INITIAL_WEATHER_DATA": "readonly",
                 "INITIAL_TIMEZONE_DISPLAY": "readonly",
                 "DEFAULT_PREFERENCES": "readonly",

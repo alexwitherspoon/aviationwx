@@ -1848,7 +1848,12 @@ async function fetchOutageStatus() {
  * True when configured METAR is supplemental remote (does not count for site health).
  */
 function isSupplementalMetarForOutageClient() {
-    if (typeof SUPPLEMENTAL_OUTAGE_CONFIG !== 'undefined'
+    const hasRuntimeAttribution = currentWeatherData
+        && currentWeatherData._field_station_map
+        && typeof currentWeatherData._field_station_map === 'object'
+        && Object.keys(currentWeatherData._field_station_map).length > 0;
+    if (!hasRuntimeAttribution
+        && typeof SUPPLEMENTAL_OUTAGE_CONFIG !== 'undefined'
         && SUPPLEMENTAL_OUTAGE_CONFIG
         && typeof SUPPLEMENTAL_OUTAGE_CONFIG.is_supplemental_metar === 'boolean') {
         return SUPPLEMENTAL_OUTAGE_CONFIG.is_supplemental_metar;
@@ -1944,8 +1949,13 @@ function airportIsMetarOnlyClient() {
         && typeof SUPPLEMENTAL_OUTAGE_CONFIG.is_metar_only === 'boolean') {
         return SUPPLEMENTAL_OUTAGE_CONFIG.is_metar_only;
     }
-    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    return hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    if (!AIRPORT_DATA || !AIRPORT_DATA.weather_sources || !Array.isArray(AIRPORT_DATA.weather_sources)) {
+        return true;
+    }
+    if (AIRPORT_DATA.weather_sources.length === 0) {
+        return true;
+    }
+    return AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
 }
 
 /**
