@@ -4946,7 +4946,7 @@ if (typeof HAS_STATION_POWER_UI !== 'undefined' && HAS_STATION_POWER_UI && STATI
 // Initialize and update outage banner
 function initializeOutageBanner() {
     if (!AIRPORT_ID) return;
-    syncOutageDisplayState(typeof INITIAL_BANNER_STATE !== 'undefined' ? INITIAL_BANNER_STATE : { maintenance: false, in_outage: false, limited_availability: false, newest_timestamp: 0 });
+    syncBannerState(typeof INITIAL_BANNER_STATE !== 'undefined' ? INITIAL_BANNER_STATE : { maintenance: false, in_outage: false, limited_availability: false, newest_timestamp: 0 });
     setInterval(updateOutageBannerTimestamp, 60000);
     setInterval(checkAndUpdateOutageBanner, 30000);
     fetchOutageStatus();
@@ -5295,6 +5295,9 @@ if (hasWeatherSources) {
         }
 
         console.log('[Weather] Initial data displayed from cache');
+        if (typeof INITIAL_BANNER_STATE !== 'undefined' && INITIAL_BANNER_STATE) {
+            syncOutageDisplayState(INITIAL_BANNER_STATE);
+        }
     } else {
         // No initial weather data available - show empty fields
         displayEmptyWeather();
