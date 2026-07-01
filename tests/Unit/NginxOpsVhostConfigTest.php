@@ -45,7 +45,7 @@ class NginxOpsVhostConfigTest extends TestCase
     /**
      * Verifier must require X-Robots-Tag on location /, not only /robots.txt.
      */
-    public function testOpsVerifierRequiresRobotsHeaderOnLocationRoot(): void
+    public function testNginxVerifyOpsServerBlock_MissingRobotsHeaderOnLocationRoot_ReturnsError(): void
     {
         $block = <<<'NGINX'
 server {
@@ -66,7 +66,7 @@ NGINX;
     /**
      * Verifier must require Disallow: / in location = /robots.txt, not only the location marker.
      */
-    public function testOpsVerifierRequiresRobotsDisallowInRobotsTxtLocation(): void
+    public function testNginxVerifyOpsServerBlock_RobotsTxtAllowsCrawl_ReturnsError(): void
     {
         $block = <<<'NGINX'
 server {
@@ -88,9 +88,10 @@ NGINX;
     /**
      * HTTP ACME server_name list must include ops alongside api and embed.
      */
-    public function testHttpServerNameListIncludesOps(): void
+    public function testHttpAcmeServerName_IncludesOpsHost_MatchesOpsPattern(): void
     {
         $path = self::nginxConfPath();
+        $this->assertFileExists($path, 'docker/nginx.conf must exist');
         $content = file_get_contents($path);
         $this->assertIsString($content);
         $httpBlock = nginx_extract_server_block_containing(
