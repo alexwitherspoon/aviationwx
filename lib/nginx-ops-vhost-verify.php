@@ -68,8 +68,11 @@ function nginx_verify_ops_server_block(string $block, string $fullContent = ''):
     } elseif (!preg_match('/add_header\s+X-Robots-Tag\s+"noindex,\s*nofollow"/', $rootLocation)) {
         $errors[] = 'ops location / must set X-Robots-Tag "noindex, nofollow" on proxied responses';
     }
-    if (!str_contains($block, 'location = /robots.txt')) {
+    $robotsLocation = nginx_extract_location_block($block, 'location = /robots.txt');
+    if ($robotsLocation === '') {
         $errors[] = 'ops vhost must serve /robots.txt with Disallow: /';
+    } elseif (!preg_match('/Disallow:\s*\//', $robotsLocation)) {
+        $errors[] = 'ops location = /robots.txt must return Disallow: /';
     }
 
     if ($fullContent !== '') {

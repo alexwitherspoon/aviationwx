@@ -64,6 +64,28 @@ NGINX;
     }
 
     /**
+     * Verifier must require Disallow: / in location = /robots.txt, not only the location marker.
+     */
+    public function testOpsVerifierRequiresRobotsDisallowInRobotsTxtLocation(): void
+    {
+        $block = <<<'NGINX'
+server {
+    location = /robots.txt {
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        return 200 "User-agent: *\nAllow: /\n";
+    }
+    location / {
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        proxy_pass http://127.0.0.1:8091;
+    }
+}
+NGINX;
+        $errors = nginx_verify_ops_server_block($block);
+        $this->assertNotSame([], $errors);
+        $this->assertStringContainsString('Disallow: /', implode('; ', $errors));
+    }
+
+    /**
      * HTTP ACME server_name list must include ops alongside api and embed.
      */
     public function testHttpServerNameListIncludesOps(): void
