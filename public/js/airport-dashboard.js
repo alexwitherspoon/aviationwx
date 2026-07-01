@@ -5292,12 +5292,11 @@ if (hasWeatherSources) {
         }
 
         console.log('[Weather] Initial data displayed from cache');
+        checkAndUpdateOutageBanner();
     } else {
         // No initial weather data available - show empty fields
         displayEmptyWeather();
     }
-
-    checkAndUpdateOutageBanner();
     
     // First fetch: the weather API serves the same server-side cache the page
     // just embedded, so when the embedded observation is provably fresher than
