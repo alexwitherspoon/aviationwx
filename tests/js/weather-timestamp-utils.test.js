@@ -12,7 +12,9 @@
 const {
     pickFetchUnixTimestamp,
     pickObservationUnixTimestamp,
+    pickOnFieldObservationUnixTimestamp,
     pickWeatherUnixTimestamp,
+    stripSupplementalMetarTimestampMetadata,
     lastUpdatedDateFromWeather
 } = require('../../public/js/weather-timestamp-utils.js');
 
@@ -283,6 +285,97 @@ function runTests() {
         if (d === null || typeof d.getTime !== 'function' || !Number.isFinite(d.getTime())) {
             throw new Error('expected finite Date');
         }
+    });
+
+    test('pickOnFieldObservationUnixTimestamp ignores supplemental METAR metadata', () => {
+        const onField = 1_700_000_000;
+        const supplemental = 1_700_000_900;
+        const payload = {
+            obs_time_primary: onField,
+            last_updated_primary: onField,
+            obs_time_metar: supplemental,
+            last_updated_metar: supplemental,
+            _field_obs_time_map: { wind_speed: supplemental, temperature: onField },
+            _field_source_map: { wind_speed: 'metar', temperature: 'tempest' },
+        };
+        stripSupplementalMetarTimestampMetadata(payload);
+        assertStrictEqual(
+            pickOnFieldObservationUnixTimestamp(payload),
+            onField,
+            'max on-field after strip'
+        );
+        assertNull(payload.obs_time_metar, 'metar obs stripped');
+        assertNull(payload.last_updated_metar, 'metar fetch stripped');
+    });
+
+    test('stripSupplementalMetarTimestampMetadata fail-closed when _field_source_map is missing', () => {
+        const supplemental = 1_700_000_900;
+        const payload = {
+            obs_time_metar: supplemental,
+            last_updated_metar: supplemental,
+            _field_obs_time_map: { wind_speed: supplemental },
+        };
+        stripSupplementalMetarTimestampMetadata(payload);
+        assertStrictEqual(
+            Object.keys(payload._field_obs_time_map).length,
+            0,
+            'per-field map cleared when sources unknown'
+        );
+        assertNull(payload.obs_time_metar, 'metar obs stripped');
+        assertStrictEqual(
+            pickObservationUnixTimestamp(payload),
+            null,
+            'scrubbed payload must not use supplemental per-field time'
+        );
+    });
+
+    test('stripSupplementalMetarTimestampMetadata drops fields with missing source attribution', () => {
+        const supplemental = 1_700_000_900;
+        const onField = 1_700_000_000;
+        const payload = {
+            obs_time_primary: onField,
+            _field_obs_time_map: { wind_speed: supplemental, temperature: onField },
+            _field_source_map: { temperature: 'tempest' },
+        };
+        stripSupplementalMetarTimestampMetadata(payload);
+        assertStrictEqual(
+            pickOnFieldObservationUnixTimestamp(payload),
+            onField,
+            'only attributed on-field entries remain'
+        );
+        assertStrictEqual(
+            Object.keys(payload._field_obs_time_map).length,
+            1,
+            'unattributed field removed'
+        );
+    });
+
+    test('pickObservationUnixTimestamp uses on-field time when supplemental METAR metadata is scrubbed', () => {
+        const onField = 1_700_000_000;
+        const supplemental = 1_700_000_900;
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                obs_time_primary: onField,
+                last_updated_primary: onField,
+                last_updated: onField,
+                obs_time_metar: null,
+                last_updated_metar: null,
+                _field_obs_time_map: {},
+            }),
+            onField,
+            'on-field only after supplemental scrub'
+        );
+        assertStrictEqual(
+            pickObservationUnixTimestamp({
+                obs_time_primary: onField,
+                last_updated_primary: onField,
+                obs_time_metar: supplemental,
+                _field_obs_time_map: { wind_speed: supplemental },
+                _field_source_map: { wind_speed: 'metar' },
+            }),
+            supplemental,
+            'unscrubbed still prefers supplemental obs'
+        );
     });
 
     console.log('\n' + '='.repeat(50));

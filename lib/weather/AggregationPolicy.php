@@ -62,7 +62,7 @@ class AggregationPolicy {
      * on-site sensors when available. Neighboring METAR (different station)
      * may fill in missing fields but must not override local measurements.
      *
-     * @see docs/DATA_FLOW.md Local vs Neighboring METAR
+     * @see docs/DATA_FLOW.md Supplemental remote weather policy
      */
     public const LOCAL_FIELDS = [
         'wind_speed',
@@ -104,6 +104,41 @@ class AggregationPolicy {
         'density_altitude',   // Calculated from pressure + temp + elevation
         'flight_category',    // VFR/MVFR/IFR/LIFR from ceiling + visibility
     ];
+
+    /**
+     * Additional display fields nulled during supplemental remote outage fail-closed.
+     *
+     * @see nullSupplementalRemoteWeatherDisplayFields() in weather-locality.php
+     */
+    public const SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS = [
+        'wind_direction_magnetic',
+        'peak_gust_today',
+        'peak_gust_time',
+        'temp_high_today',
+        'temp_low_today',
+        'temp_high_ts',
+        'temp_low_ts',
+        'raw_metar',
+        'metar_visibility_reported',
+        'metar_ceiling_reported',
+    ];
+
+    /**
+     * Fields nulled on the dashboard client during supplemental outage fail-closed.
+     *
+     * Single source of truth for PHP nulling and embedded SUPPLEMENTAL_OUTAGE_CONFIG.
+     *
+     * @return list<string>
+     */
+    public static function supplementalOutageHiddenFields(): array
+    {
+        return array_merge(
+            self::ALL_FIELDS,
+            self::CALCULATED_FIELDS,
+            self::SUPPLEMENTAL_OUTAGE_DISPLAY_EXTRAS,
+            ['flight_category_class']
+        );
+    }
     
     /**
      * Recovery cycles threshold

@@ -708,7 +708,7 @@ METAR data from NOAA Aviation Weather provides aviation-specific observations in
 ]
 ```
 
-`nearby_stations` provides fallback stations if the primary METAR station is unavailable.
+`nearby_stations` provides fallback stations if the primary METAR station is unavailable. Whether a METAR source is co-located or supplemental for site health and display is determined at runtime (active station ICAO vs `airport.icao`), not by config key placement. The same co-located vs supplemental principles apply to other remote weather source types; see [Supplemental remote weather policy](DATA_FLOW.md#supplemental-remote-weather-policy).
 
 The scheduler also refreshes the shared AWC METAR bulk gzip when **more than one airport is enabled** (`scripts/refresh-metar-bulk.php`, interval `METAR_BULK_REFRESH_INTERVAL_SECONDS` in `lib/constants.php`) and writes per-ICAO JSON slices under `cache/metar-bulk/stations/`. A successful refresh also writes `cache/metar-bulk/meta.json` with `fetched_at`, `written`, and `scanned` row counts; logs include `metar_bulk_age_seconds` (seconds since that snapshot). Failed refreshes log the last known age when meta is present. Weather workers read a fresh slice before calling the per-station HTTP API in that mode (`metarResolveStationResponse()` from `UnifiedFetcher` and `fetchMETARFromStation()`). Bulk ingest requires the gzip CSV header to match the canonical AWC column list in `lib/metar-bulk-csv-schema.php` (tests fail on drift). A **single enabled airport** uses per-station HTTP only (no national gzip download).
 

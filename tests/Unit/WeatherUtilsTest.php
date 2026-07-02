@@ -146,5 +146,59 @@ class WeatherUtilsTest extends TestCase
         $this->assertNotNull($swobMan);
         $this->assertEquals('Nav Canada Weather', $swobMan['name']);
     }
+
+    public function testAirportIsMetarOnly_TempestAndMetar_ReturnsFalse(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+        ];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
+
+    public function testAirportIsMetarOnly_MetarSourcesOnly_ReturnsTrue(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+        ];
+
+        $this->assertTrue(airportIsMetarOnly($airport));
+    }
+
+    public function testAirportIsMetarOnly_EmptySources_ReturnsFalse(): void
+    {
+        $airport = ['weather_sources' => []];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
+
+    public function testAirportIsMetarOnly_MalformedSourceType_ReturnsFalse(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+                ['type' => ''],
+            ],
+        ];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
+
+    public function testAirportIsMetarOnly_MissingSourceType_ReturnsFalse(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+                ['station_id' => 'orphan'],
+            ],
+        ];
+
+        $this->assertFalse(airportIsMetarOnly($airport));
+    }
 }
 

@@ -21,6 +21,7 @@ require_once __DIR__ . '/data/WeatherSnapshot.php';
 require_once __DIR__ . '/AggregationPolicy.php';
 require_once __DIR__ . '/aggregate-timestamps.php';
 require_once __DIR__ . '/WeatherAggregator.php';
+require_once __DIR__ . '/weather-locality.php';
 require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/synopticdata-v1.php';
@@ -94,7 +95,8 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
         $localAirportIcao = null;
     }
     $aggregator = new WeatherAggregator();
-    $result = $aggregator->aggregate($snapshots, null, $localAirportIcao);
+    $hasOnFieldInfrastructure = airportHasOnFieldInfrastructure($airport);
+    $result = $aggregator->aggregate($snapshots, null, $localAirportIcao, $hasOnFieldInfrastructure);
 
     // METAR ICAO completeness flags: copy from the METAR snapshot that contributed each field
     applyMetarCompletenessFlagsFromAggregation($result, $snapshots);

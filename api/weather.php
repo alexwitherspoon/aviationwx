@@ -357,17 +357,8 @@ function generateMockWeatherData($airportId, $airport) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
             // Safety check: Apply failclosed staleness (hide data too old to display)
-            // isMetarOnly = all configured sources are METAR type
-            $isMetarOnly = true;
-            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
-                foreach ($airport['weather_sources'] as $src) {
-                    if (!empty($src['type']) && $src['type'] !== 'metar') {
-                        $isMetarOnly = false;
-                        break;
-                    }
-                }
-            }
-            applyFailclosedStaleness($cached, $airport, $isMetarOnly);
+            $isMetarOnly = airportIsMetarOnly($airport);
+            applyFailclosedStaleness($cached, $airport, $isMetarOnly, $airportId);
             
             // Set cache headers for cached responses
             // Browser cache uses remaining time until refresh, CDN uses half of refresh interval
@@ -425,17 +416,8 @@ function generateMockWeatherData($airportId, $airport) {
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
             // Safety check: Apply failclosed staleness (hide data too old to display)
-            // isMetarOnly = all configured sources are METAR type
-            $isMetarOnlyStale = true;
-            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
-                foreach ($airport['weather_sources'] as $src) {
-                    if (!empty($src['type']) && $src['type'] !== 'metar') {
-                        $isMetarOnlyStale = false;
-                        break;
-                    }
-                }
-            }
-            applyFailclosedStaleness($staleData, $airport, $isMetarOnlyStale);
+            $isMetarOnlyStale = airportIsMetarOnly($airport);
+            applyFailclosedStaleness($staleData, $airport, $isMetarOnlyStale, $airportId);
             
             $hasStaleCache = true;
             

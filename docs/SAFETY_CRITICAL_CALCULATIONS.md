@@ -17,7 +17,7 @@ This document provides a comprehensive reference for all safety-critical weather
 6. [Wind Calculations](#wind-calculations)
 7. [Wind Direction: True North](#wind-direction-true-north)
 8. [METAR Visibility Parsing](#metar-visibility-parsing)
-9. [Local vs Neighboring METAR Aggregation](#local-vs-neighboring-metar-aggregation)
+9. [Local vs Supplemental Remote Weather](#local-vs-supplemental-remote-weather)
 
 ---
 
@@ -451,28 +451,40 @@ Per **ICAO METAR format, visibility group**:
 
 ---
 
-## Local vs Neighboring METAR Aggregation
+## Local vs Supplemental Remote Weather
 
-**⚠️ SAFETY CRITICAL**: Wind and temperature at an airport can differ significantly from nearby airports. Using neighboring METAR data for local measurements could mislead pilots about actual conditions at the field.
+**Guiding principle:** Pilot safety is the prime directive for weather sourcing. It takes precedence over filling coverage gaps. See [Supplemental remote weather policy](DATA_FLOW.md#supplemental-remote-weather-policy) in DATA_FLOW.md.
 
-### Rule
+**⚠️ SAFETY CRITICAL**: Wind and temperature at an airport can differ significantly from nearby locations. Using supplemental (remote) weather data for local measurements could mislead pilots about actual conditions at the field. Supplemental remote data must not imply the on-site installation is operational when local sensors and webcams are down.
 
-For LOCAL_FIELDS (wind_speed, wind_direction, gust_speed, temperature, dewpoint, humidity, pressure, precip_accum), **local sources always override neighboring METAR** when both have valid data, regardless of observation freshness.
+This applies to **any remote weather source** (METAR, NWS, AWOSnet, federation from another airport, etc.). METAR is the most common case and the primary reference implementation in code today.
 
-- **Local source**: On-site sensors (Tempest, Ambient, etc.) or METAR from the same station as the airport (e.g., KSPB METAR for KSPB airport)
-- **Neighboring METAR**: METAR from a different station (e.g., KVUO when displaying KSPB)
-- **Fill-in allowed**: Neighboring METAR may fill in missing fields (visibility, ceiling, cloud_cover) when local has no data
+Operator policy (when to configure remote sources, equivalence within VFR standards, and configuration examples) is in [DATA_FLOW.md](DATA_FLOW.md#supplemental-remote-weather-policy).
+
+### Aggregation rule
+
+For LOCAL_FIELDS (wind_speed, wind_direction, gust_speed, temperature, dewpoint, humidity, pressure, precip_accum), **on-field and co-located sources always override supplemental remote data** when both have valid data, regardless of observation freshness.
+
+- **On-site weather source (aggregation)**: On-site sensors (Tempest, Ambient, etc.) or **co-located** observations (e.g. KSPB METAR for KSPB)
+- **Supplemental (remote) source**: Observations from a different location (e.g. KUAO METAR for 7S9). Used only when configured under operator equivalence rules
+- **Fill-in allowed**: Supplemental remote sources may fill missing fields (typically METAR visibility, ceiling, cloud_cover) when on-field sensors are healthy but lack those fields
+- **Fill-in forbidden during site outage**: When all on-field infrastructure is down, all supplemental remote weather fields are hidden (fail closed) and the local-outage banner is shown
+
+### Site health rule
+
+Outage detection considers **on-field infrastructure** only: non-METAR weather sources that observe the field, webcams, and co-located weather sources (e.g. on-field METAR). Supplemental remote weather freshness does not clear an outage. Co-located sources (e.g. KSPB ASOS) may use separate power or internet from Tempest or webcams but still count as local until stale.
 
 ### Implementation
 
-- **File**: `lib/weather/WeatherAggregator.php`
-- **Policy**: `AggregationPolicy::LOCAL_FIELDS`
-- **Detection**: `WeatherSnapshot.metarStationId` vs `localAirportIcao` (from airport config)
-- **Tests**: `tests/Unit/WeatherAggregatorTest.php` (testLocalWindOverridesNeighboringMetar_EvenWhenMetarFresher, etc.)
+- **Aggregation (METAR today)**: `lib/weather/WeatherAggregator.php`, `AggregationPolicy::LOCAL_FIELDS`
+- **Detection (METAR today)**: `WeatherSnapshot.metarStationId` and `_field_station_map` vs `localAirportIcao` (`airport.icao`)
+- **Outage / fail-closed (METAR target first)**: `lib/weather/outage-detection.php`, `lib/weather/cache-utils.php`, `lib/weather/weather-locality.php` (`nullSupplementalRemoteWeatherDisplayFields`, `anchorSupplementalOutageDisplayTimestamps`)
+- **Other source types**: Same policy intent; systematic code enforcement may follow per adapter
+- **Tests**: `tests/Unit/WeatherAggregatorTest.php` (on-field overrides supplemental when fresher)
 
 ### Rationale
 
-Wind and temperature vary with local terrain, elevation, and microclimate. A METAR from an airport 10 nm away may report different conditions. Pilots need accurate local data for takeoff/landing decisions.
+Wind and temperature vary with local terrain, elevation, and microclimate. Observations from a remote source even a short distance away may report different conditions. Ceiling and visibility from a supplemental source without corroborating on-site data during a local outage could imply the field is observable when cameras and sensors are offline.
 
 ---
 

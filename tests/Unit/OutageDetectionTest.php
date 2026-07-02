@@ -440,6 +440,86 @@ class OutageDetectionTest extends TestCase
     }
     
     /**
+     * 7S9-shaped airport: fresh supplemental METAR must not clear outage when on-field infra is down.
+     */
+    public function testCheckDataOutageStatus_SupplementalMetarFresh_OnFieldStale_ReturnsOutage(): void
+    {
+        $airport = [
+            'faa' => '7S9',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '216638'],
+                ['type' => 'metar', 'station_id' => 'KUAO'],
+            ],
+            'webcams' => [
+                ['name' => 'North', 'url' => 'http://example.com/north.jpg'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $weatherData = [
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_station_map' => ['visibility' => 'KUAO'],
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
+        $webcamDir = dirname($webcamFile);
+        if (!is_dir($webcamDir)) {
+            mkdir($webcamDir, 0755, true);
+        }
+        touch($webcamFile, $staleTimestamp);
+
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+
+        $this->assertNotNull(
+            $result,
+            'Supplemental METAR must not mask on-field outage (7S9 fail-closed)'
+        );
+        $this->assertGreaterThan(0, $result['newest_timestamp']);
+    }
+
+    /**
+     * KSPB-shaped airport: co-located METAR is local infrastructure and clears outage.
+     */
+    public function testCheckDataOutageStatus_CoLocatedMetarFresh_PrimaryStale_NoOutage(): void
+    {
+        $airport = [
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'metar', 'station_id' => 'KSPB'],
+            ],
+        ];
+
+        $staleTimestamp = time() - (4 * 3600);
+        $freshMetarTimestamp = time() - 60;
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $weatherData = [
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp,
+            '_field_station_map' => ['visibility' => 'KSPB'],
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+
+        $this->assertNull(
+            $result,
+            'Co-located METAR should count as healthy local infrastructure'
+        );
+    }
+
+    /**
      * Test that no banner is shown when some sources are fresh
      */
     public function testCheckDataOutageStatus_SomeSourcesFresh_ReturnsNull(): void

@@ -27,6 +27,9 @@ class WeatherAggregator {
     
     /** @var int Current timestamp (injectable for testing) */
     private int $now;
+
+    /** @var bool When true, METAR without matching airport ICAO is supplemental remote */
+    private bool $hasOnFieldInfrastructure = false;
     
     /**
      * Create a new aggregator
@@ -55,13 +58,21 @@ class WeatherAggregator {
      * @param array<WeatherSnapshot> $snapshots Snapshots in preference order
      * @param array<string, int>|null $maxAges Optional per-source max age overrides (source => seconds)
      * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB) for local vs neighboring METAR detection
+     * @param bool $hasOnFieldInfrastructure True when non-METAR sources or webcams are configured
      * @return array<string, mixed> Aggregated weather data with field attribution. Includes
      *         `last_updated` / `last_updated_iso` from normalizeAggregateLastUpdatedTimes() (max of
      *         observation and fetch candidates for API/staleness). The airport dashboard uses
      *         observation-first display for the human "Last updated" line; see
      *         docs/DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time.
      */
-    public function aggregate(array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
+    public function aggregate(
+        array $snapshots,
+        ?array $maxAges = null,
+        ?string $localAirportIcao = null,
+        bool $hasOnFieldInfrastructure = false
+    ): array {
+        $this->hasOnFieldInfrastructure = $hasOnFieldInfrastructure;
+
         if (empty($snapshots)) {
             return $this->emptyResult();
         }
@@ -158,19 +169,22 @@ class WeatherAggregator {
      *
      * @param WeatherSnapshot $snapshot
      * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB)
-     * @return bool True if local; when localAirportIcao is null, all sources are treated as local
+     * @return bool True if local on-site or co-located METAR
      */
     private function isLocalSource(WeatherSnapshot $snapshot, ?string $localAirportIcao): bool {
-        if ($localAirportIcao === null || $localAirportIcao === '') {
-            return true;
-        }
         if ($snapshot->source !== 'metar') {
             return true;
         }
         if ($snapshot->metarStationId === null) {
-            return true;
+            return !$this->hasOnFieldInfrastructure;
         }
-        return strcasecmp($snapshot->metarStationId, $localAirportIcao) === 0;
+        if ($localAirportIcao !== null && $localAirportIcao !== '') {
+            return strcasecmp($snapshot->metarStationId, $localAirportIcao) === 0;
+        }
+        if ($this->hasOnFieldInfrastructure) {
+            return false;
+        }
+        return true;
     }
 
     /**
