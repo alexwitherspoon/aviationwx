@@ -521,6 +521,10 @@ See `.github/workflows/deploy-docker.yml` for workflow details.
 
 CD **rsyncs** `docker/nginx.conf` to `~/aviationwx/` and bind-mounts it into the nginx container (`docker/docker-compose.prod.yml`). **`embed.aviationwx.org`** routing ships with application commits; nginx does not read `airports.json`. **Quality Assurance** CI runs **`tests/Unit/NginxEmbedVhostConfigTest.php`** against `docker/nginx.conf`. Deploy runs **`scripts/verify-embed-nginx-conf.php`** **inside the `web` container** after `docker compose up --build` (same pattern as **`docker compose exec` PHP** for `sync-push-config.php`), against **`/var/www/html/docker/nginx.conf`** in the built image. The embed server block keeps Public API v1 on-host (rewrite + `location /v1/`) so browsers get CORS on the first hop for `/api/v1/...` requests.
 
+### Nginx and `ops.aviationwx.org` (pass-through)
+
+The operator console runs in the separate **`aviationwx-ops`** compose project on **`127.0.0.1:8091`**. Main-site nginx exposes **`ops.aviationwx.org`** via a dedicated server block that **only** `proxy_pass`es to that loopback port. The ops vhost also serves **`/robots.txt`** (`Disallow: /`) and **`X-Robots-Tag: noindex, nofollow`** on all proxied responses. **Do not** add Authelia or `auth_request` to this vhost; authentication belongs in the ops stack (edge proxy + Authelia sidecar in `aviationwx-ops`). CI runs **`tests/Unit/NginxOpsVhostConfigTest.php`**; deploy runs **`scripts/verify-ops-nginx-conf.php`** in the web container after build.
+
 ## Maintenance
 
 ### Update Application

@@ -1,0 +1,125 @@
+<?php
+/**
+ * Extract nginx server { ... } blocks from docker/nginx.conf by server_name marker.
+ *
+ * @package AviationWX
+ */
+
+declare(strict_types=1);
+
+/**
+ * Extract a server block that contains the given server_name line.
+ *
+ * @param string $content Full nginx.conf contents
+ * @param string $serverNameMarker Unique marker inside the block (e.g. "server_name embed.aviationwx.org;")
+ * @return string Server block including outer braces, or empty string if not found
+ */
+function nginx_extract_server_block(string $content, string $serverNameMarker): string
+{
+    $pos = strpos($content, $serverNameMarker);
+    if ($pos === false) {
+        return '';
+    }
+    $slice = substr($content, 0, $pos);
+    $serverKw = strrpos($slice, 'server {');
+    if ($serverKw === false) {
+        return '';
+    }
+    $prefix = substr($content, $serverKw, 12);
+    $braceRel = strpos($prefix, '{');
+    if ($braceRel === false) {
+        return '';
+    }
+    $braceOpen = $serverKw + $braceRel;
+    $depth = 0;
+    $len = strlen($content);
+    for ($i = $braceOpen; $i < $len; $i++) {
+        $c = $content[$i];
+        if ($c === '{') {
+            $depth++;
+        } elseif ($c === '}') {
+            $depth--;
+            if ($depth === 0) {
+                return substr($content, $serverKw, $i - $serverKw + 1);
+            }
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Extract a location { ... } block by its opening marker (e.g. "location / {").
+ *
+ * @param string $content Server block or larger nginx.conf slice
+ * @param string $locationMarker Unique marker at the start of the location block
+ * @return string Location block including outer braces, or empty string if not found
+ */
+function nginx_extract_location_block(string $content, string $locationMarker): string
+{
+    $pos = strpos($content, $locationMarker);
+    if ($pos === false) {
+        return '';
+    }
+    $braceOpen = strpos(substr($content, $pos), '{');
+    if ($braceOpen === false) {
+        return '';
+    }
+    $braceOpen += $pos;
+    $depth = 0;
+    $len = strlen($content);
+    for ($i = $braceOpen; $i < $len; $i++) {
+        $c = $content[$i];
+        if ($c === '{') {
+            $depth++;
+        } elseif ($c === '}') {
+            $depth--;
+            if ($depth === 0) {
+                return substr($content, $pos, $i - $pos + 1);
+            }
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Extract the server { ... } block that contains an inner marker (e.g. a location).
+ *
+ * @param string $content Full nginx.conf contents
+ * @param string $innerMarker Unique substring inside the target server block
+ * @return string Server block including outer braces, or empty string if not found
+ */
+function nginx_extract_server_block_containing(string $content, string $innerMarker): string
+{
+    $pos = strpos($content, $innerMarker);
+    if ($pos === false) {
+        return '';
+    }
+    $slice = substr($content, 0, $pos);
+    $serverKw = strrpos($slice, 'server {');
+    if ($serverKw === false) {
+        return '';
+    }
+    $prefix = substr($content, $serverKw, 12);
+    $braceRel = strpos($prefix, '{');
+    if ($braceRel === false) {
+        return '';
+    }
+    $braceOpen = $serverKw + $braceRel;
+    $depth = 0;
+    $len = strlen($content);
+    for ($i = $braceOpen; $i < $len; $i++) {
+        $c = $content[$i];
+        if ($c === '{') {
+            $depth++;
+        } elseif ($c === '}') {
+            $depth--;
+            if ($depth === 0) {
+                return substr($content, $serverKw, $i - $serverKw + 1);
+            }
+        }
+    }
+
+    return '';
+}

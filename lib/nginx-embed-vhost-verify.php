@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/nginx-server-block-extract.php';
+
 /**
  * Extract the server { ... } block for embed.aviationwx.org from raw nginx config.
  *
@@ -18,37 +20,7 @@ declare(strict_types=1);
  */
 function nginx_extract_embed_aviationwx_server_block(string $content): string
 {
-    $marker = 'server_name embed.aviationwx.org;';
-    $pos = strpos($content, $marker);
-    if ($pos === false) {
-        return '';
-    }
-    $slice = substr($content, 0, $pos);
-    $serverKw = strrpos($slice, 'server {');
-    if ($serverKw === false) {
-        return '';
-    }
-    $prefix = substr($content, $serverKw, 12);
-    $braceRel = strpos($prefix, '{');
-    if ($braceRel === false) {
-        return '';
-    }
-    $braceOpen = $serverKw + $braceRel;
-    $depth = 0;
-    $len = strlen($content);
-    for ($i = $braceOpen; $i < $len; $i++) {
-        $c = $content[$i];
-        if ($c === '{') {
-            $depth++;
-        } elseif ($c === '}') {
-            $depth--;
-            if ($depth === 0) {
-                return substr($content, $serverKw, $i - $serverKw + 1);
-            }
-        }
-    }
-
-    return '';
+    return nginx_extract_server_block($content, 'server_name embed.aviationwx.org;');
 }
 
 /**
