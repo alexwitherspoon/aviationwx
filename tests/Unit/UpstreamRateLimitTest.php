@@ -90,6 +90,36 @@ final class UpstreamRateLimitTest extends TestCase
         $this->assertSame($a, $b);
     }
 
+    public function testFingerprint_Dyaconlive_UsesUsernamePasswordAndStationId(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $base = [
+            'username' => 'user@example.com',
+            'password' => 'secret',
+            'station_id' => 130114,
+        ];
+        $a = upstreamRateFingerprint('dyaconlive', $base);
+        $b = upstreamRateFingerprint('dyaconlive', $base);
+        $this->assertSame($a, $b);
+
+        $differentStation = upstreamRateFingerprint('dyaconlive', array_merge($base, ['station_id' => 130115]));
+        $this->assertNotSame($a, $differentStation);
+
+        $differentPassword = upstreamRateFingerprint('dyaconlive', array_merge($base, ['password' => 'other']));
+        $this->assertNotSame($a, $differentPassword);
+    }
+
+    public function testRateLimitPolicy_Dyaconlive_UsesDefaultRpmAndSmallBurst(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+        require_once __DIR__ . '/../../lib/constants.php';
+
+        $policy = upstreamRateLimitPolicyForProvider('dyaconlive');
+        $this->assertSame(UPSTREAM_RATE_LIMIT_DEFAULT_RPM, $policy['rpm']);
+        $this->assertSame(2, $policy['burst']);
+    }
+
     public function testTokenBucketCompute_AllowsBurstThenDenies(): void
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';

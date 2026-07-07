@@ -72,10 +72,17 @@ function upstreamRateFingerprint(string $provider, array $sourceConfig): string
 {
     $material = [];
     foreach (upstreamRateLimitFingerprintFieldNames($provider) as $field) {
-        if (!isset($sourceConfig[$field]) || !is_string($sourceConfig[$field])) {
+        if (!array_key_exists($field, $sourceConfig)) {
             continue;
         }
-        $value = trim($sourceConfig[$field]);
+        $raw = $sourceConfig[$field];
+        if (is_int($raw) || is_float($raw)) {
+            $value = trim((string) $raw);
+        } elseif (is_string($raw)) {
+            $value = trim($raw);
+        } else {
+            continue;
+        }
         if ($value === '') {
             continue;
         }
