@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../logger.php';
+require_once __DIR__ . '/../test-mocks.php';
 
 /**
  * Obtain bearer token for DyaconLive API (APCu-cached per username).
@@ -26,6 +27,19 @@ function dyaconliveGetBearerToken(string $username, string $password): ?string
     if ($username === '' || $password === '') {
         aviationwx_log('error', 'dyaconlive auth: missing credentials', [], 'app');
         return null;
+    }
+
+    $url = rtrim(DYACONLIVE_API_BASE_URL, '/') . '/token';
+    if (function_exists('isTestMode') && isTestMode() && function_exists('getMockHttpResponse')
+        && !isset($GLOBALS['dyaconliveTestBearerToken'])
+    ) {
+        $mockBody = getMockHttpResponse($url);
+        if (is_string($mockBody) && $mockBody !== '') {
+            $data = json_decode($mockBody, true);
+            if (is_array($data) && !empty($data['access_token']) && is_string($data['access_token'])) {
+                return $data['access_token'];
+            }
+        }
     }
 
     $cacheKey = 'dyaconlive_token_' . md5($username);

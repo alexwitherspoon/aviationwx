@@ -51,6 +51,12 @@ class DyaconLiveAuthTest extends TestCase
         $this->assertNull(dyaconliveGetBearerToken('user@example.com', ''));
     }
 
+    public function testGetBearerToken_TestMode_UsesMockTokenEndpoint(): void
+    {
+        unset($GLOBALS['dyaconliveTestBearerToken']);
+        $this->assertSame('test_dyaconlive_bearer_token', dyaconliveGetBearerToken('user@example.com', 'secret'));
+    }
+
     public function testBearerTokenCacheKey_IsStablePerUsername(): void
     {
         $this->assertSame(
