@@ -45,6 +45,18 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertStringContainsString('variable=wind10m_speed%7Cmph', $url);
     }
 
+    public function testBuildUrl_InvalidTimezone_FallsBackToUtcInQueryParam(): void
+    {
+        $url = DyaconLiveAdapter::buildUrl([
+            'station_id' => 130114,
+            'username' => 'user',
+            'password' => 'pass',
+        ], 'Not/A_Real_Timezone');
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('timezone=UTC', $url);
+        $this->assertStringNotContainsString('Not%2FA_Real_Timezone', $url);
+    }
+
     public function testBuildUrl_ValidConfig_IncludesYesterdayAndTodayDateRange(): void
     {
         $url = DyaconLiveAdapter::buildUrl([

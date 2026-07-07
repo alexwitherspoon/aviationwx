@@ -97,10 +97,12 @@ class DyaconLiveAdapter
             return null;
         }
 
+        $resolvedTimezone = $timezone;
         try {
             $tz = new DateTimeZone($timezone);
         } catch (Exception $e) {
             $tz = new DateTimeZone('UTC');
+            $resolvedTimezone = 'UTC';
         }
 
         $today = new DateTimeImmutable('now', $tz);
@@ -109,7 +111,7 @@ class DyaconLiveAdapter
         $params = [
             'startdate' => $startDate,
             'enddate' => $endDate,
-            'timezone' => $timezone,
+            'timezone' => $resolvedTimezone,
         ];
 
         $query = [];
