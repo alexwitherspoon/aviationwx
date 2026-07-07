@@ -158,6 +158,22 @@ All weather sources are configured in a unified `weather_sources` array. Each so
   - Visibility: meters → statute miles (`SM = m / 1609.344`) if value > 10
 - **Note**: SynopticData provides access to over 170,000 weather stations worldwide. Typically used selectively on airports where other primary sources (Tempest, Ambient, WeatherLink, PWSWeather) aren't available. Supports async fetching. Pressure may be provided as altimeter (inHg, no conversion) or sea_level_pressure/pressure (mb/hPa, requires conversion).
 
+#### DyaconLive API (advisory aviation stations)
+- **Authentication**: `POST https://api.dyacon.net/token` (DyaconLive web login); bearer token on data endpoints. Requires DyaconLive+.
+- **Data endpoint**: `GET https://api.dyacon.net/data/{station_id}` with `startdate`, `enddate`, `timezone`, and repeated `variable` params. The adapter requests yesterday through today in station timezone so the latest bucket remains available across local midnight.
+- **Fetch path**: DyaconLive uses a dedicated fetcher (`lib/weather/dyaconlive-fetch.php`), not `curl_multi`, so token refresh on HTTP 401 can retry once after APCu cache invalidation.
+- **10-minute bucket schedule**: Dyacon publishes on clock-aligned 10-minute boundaries in station timezone. The global scheduler still runs every 60 seconds; per-source state under `cache/weather/dyaconlive/` stores the last ingested bucket and snapshot. When local state already has the expected latest bucket (90-second grace after each boundary), upstream HTTP is skipped and the cached snapshot is reused.
+- **Data provided** (sensor API fields only):
+  - Temperature (Fahrenheit, converted to Celsius)
+  - Humidity (%)
+  - Wind speed and direction (10-minute averages; mph to knots)
+  - Gust speed (mph to knots; zero treated as missing)
+  - Station pressure (inHg at field elevation, converted to sea-level altimeter using airport `elevation_ft`)
+  - Precipitation day cumulative (inches, when rain gauge equipped)
+  - Observation timestamp from the anchor bucket ISO datetime
+- **Not provided**: ceiling, visibility, or cloud cover (advisory Dyacon hardware is not METAR-class). Pair with `metar` or another aviation source when those fields are required.
+- **Parsing rule**: All sensor values are read at the anchor bucket timestamp (matched by ISO datetime across series), not by independent trailing array indices.
+
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
 - **Bulk cache (multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped; per-station METAR HTTP is used. Stale or missing slices always fall back to the JSON endpoint above so METAR still serves when bulk ingest fails or a slice ages out.
