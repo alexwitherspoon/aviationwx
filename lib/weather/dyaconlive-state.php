@@ -78,7 +78,17 @@ function dyaconliveWriteSourceState(
         'written_at' => time(),
     ];
 
-    $json = json_encode($payload, JSON_THROW_ON_ERROR);
+    try {
+        $json = json_encode($payload, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        aviationwx_log('error', 'dyaconlive state encode failed', [
+            'path' => $path,
+            'error' => $e->getMessage(),
+        ], 'app');
+
+        return false;
+    }
+
     $tmp = $path . '.tmp.' . getmypid();
     if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
         return false;
