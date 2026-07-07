@@ -4853,6 +4853,9 @@ function validateAirportsJsonStructure(array $config): array {
                         if (!isset($ws['password']) || !is_string($ws['password']) || $ws['password'] === '') {
                             $errors[] = "Airport '{$airportCode}' {$label} (dyaconlive) missing 'password'";
                         }
+                        if (!isset($airport['elevation_ft']) || !is_numeric($airport['elevation_ft'])) {
+                            $warnings[] = "Airport '{$airportCode}' {$label} (dyaconlive): missing airport elevation_ft; pressure will be omitted";
+                        }
                     }
                     // metar: station_id optional (nearby_stations can provide fallback)
                 }

@@ -2066,6 +2066,32 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('invalid \'station_id\'', implode(' ', $result['errors']));
     }
 
+    public function testWeatherSource_DyaconliveMissingElevationFt_WarnsButRemainsValid()
+    {
+        $config = [
+            'airports' => [
+                'kaoc' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'weather_sources' => [[
+                        'type' => 'dyaconlive',
+                        'station_id' => 130114,
+                        'username' => 'user@example.com',
+                        'password' => 'secret',
+                    ]]
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid']);
+        $this->assertNotEmpty($result['warnings'] ?? []);
+        $this->assertStringContainsString('elevation_ft', implode(' ', $result['warnings']));
+    }
+
     public function testWeatherSource_ValidMetar()
     {
         $config = [
