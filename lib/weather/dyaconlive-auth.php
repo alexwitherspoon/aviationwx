@@ -42,7 +42,7 @@ function dyaconliveGetBearerToken(string $username, string $password): ?string
         }
     }
 
-    $cacheKey = 'dyaconlive_token_' . md5($username);
+    $cacheKey = dyaconliveBearerTokenCacheKey($username);
     if (function_exists('apcu_fetch')) {
         $cached = @apcu_fetch($cacheKey);
         if ($cached !== false && is_array($cached)) {
@@ -54,7 +54,6 @@ function dyaconliveGetBearerToken(string $username, string $password): ?string
         }
     }
 
-    $url = rtrim(DYACONLIVE_API_BASE_URL, '/') . '/token';
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
@@ -142,14 +141,14 @@ function dyaconliveInvalidateBearerTokenCache(string $username): void
         return;
     }
 
-    $cacheKey = 'dyaconlive_token_' . md5($username);
+    $cacheKey = dyaconliveBearerTokenCacheKey($username);
     if (function_exists('apcu_delete')) {
         @apcu_delete($cacheKey);
     }
 }
 
 /**
- * Cache key fingerprint for tests.
+ * APCu cache key for a DyaconLive username.
  */
 function dyaconliveBearerTokenCacheKey(string $username): string
 {

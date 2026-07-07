@@ -14,7 +14,6 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
-require_once __DIR__ . '/../dyaconlive-auth.php';
 require_once __DIR__ . '/../dyaconlive-bucket.php';
 require_once __DIR__ . '/../calculator.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
@@ -124,25 +123,6 @@ class DyaconLiveAdapter
         $base = rtrim(DYACONLIVE_API_BASE_URL, '/');
 
         return $base . '/data/' . $stationId . '?' . implode('&', $query);
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     * @return list<string>
-     */
-    public static function getHeaders(array $config): array
-    {
-        $username = isset($config['username']) && is_string($config['username']) ? trim($config['username']) : '';
-        $password = isset($config['password']) && is_string($config['password']) ? $config['password'] : '';
-        $token = dyaconliveGetBearerToken($username, $password);
-        if ($token === null) {
-            return ['Accept: application/json'];
-        }
-
-        return [
-            'Accept: application/json',
-            'Authorization: Bearer ' . $token,
-        ];
     }
 
     /**
