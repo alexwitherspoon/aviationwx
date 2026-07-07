@@ -323,14 +323,14 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
         ? dyaconliveParseBucketIsoToUnix($lastBucketIso, $seriesTimezone)
         : null;
 
-    $tempF = dyaconliveSeriesLastValue($byName['air_temp'] ?? null);
+    $tempF = dyaconliveSeriesValueAtBucket($byName['air_temp'] ?? null, $lastIndex, $lastBucketIso);
     $temperature = $tempF !== null ? ((float) $tempF - 32.0) / 1.8 : null;
-    $humidity = dyaconliveSeriesLastValue($byName['humidity'] ?? null);
-    $pressure = dyaconliveSeriesLastValue($byName['air_pressure'] ?? null);
-    $windMph = dyaconliveSeriesLastValue($byName['wind10m_speed'] ?? null);
-    $windDir = dyaconliveSeriesLastValue($byName['wind10m_direction'] ?? null);
-    $gustMph = dyaconliveSeriesLastValue($byName['wind_gust'] ?? null);
-    $precip = dyaconliveSeriesLastValue($byName['rainday_cumul'] ?? null);
+    $humidity = dyaconliveSeriesValueAtBucket($byName['humidity'] ?? null, $lastIndex, $lastBucketIso);
+    $pressure = dyaconliveSeriesValueAtBucket($byName['air_pressure'] ?? null, $lastIndex, $lastBucketIso);
+    $windMph = dyaconliveSeriesValueAtBucket($byName['wind10m_speed'] ?? null, $lastIndex, $lastBucketIso);
+    $windDir = dyaconliveSeriesValueAtBucket($byName['wind10m_direction'] ?? null, $lastIndex, $lastBucketIso);
+    $gustMph = dyaconliveSeriesValueAtBucket($byName['wind_gust'] ?? null, $lastIndex, $lastBucketIso);
+    $precip = dyaconliveSeriesValueAtBucket($byName['rainday_cumul'] ?? null, $lastIndex, $lastBucketIso);
 
     $windKt = $windMph !== null ? round((float) $windMph * 0.868976, 0) : null;
     $gustKt = ($gustMph !== null && (float) $gustMph > 0)
@@ -351,21 +351,32 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
 }
 
 /**
+ * Read a numeric value from a Dyacon series at the anchor bucket (ISO match, then index).
+ *
  * @param array<string, mixed>|null $series
  */
-function dyaconliveSeriesLastValue(?array $series): ?float
+function dyaconliveSeriesValueAtBucket(?array $series, int $anchorIndex, ?string $bucketIso): ?float
 {
     if (!is_array($series)) {
         return null;
     }
+
+    $datetimes = $series['datetimes'] ?? null;
     $values = $series['values'] ?? null;
-    if (!is_array($values) || count($values) === 0) {
-        return null;
-    }
-    $last = $values[count($values) - 1];
-    if (!is_numeric($last)) {
+    if (!is_array($datetimes) || !is_array($values) || count($values) === 0) {
         return null;
     }
 
-    return (float) $last;
+    if ($bucketIso !== null && $bucketIso !== '') {
+        $matchedIndex = array_search($bucketIso, $datetimes, true);
+        if ($matchedIndex !== false && isset($values[$matchedIndex]) && is_numeric($values[$matchedIndex])) {
+            return (float) $values[$matchedIndex];
+        }
+    }
+
+    if ($anchorIndex >= 0 && $anchorIndex < count($values) && is_numeric($values[$anchorIndex])) {
+        return (float) $values[$anchorIndex];
+    }
+
+    return null;
 }

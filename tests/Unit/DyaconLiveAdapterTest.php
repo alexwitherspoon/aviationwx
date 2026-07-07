@@ -135,4 +135,46 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertNotNull($snapshot);
         $this->assertFalse($snapshot->wind->gust->hasValue());
     }
+
+    public function testParseToSnapshot_MisalignedSeries_UsesAnchorBucketNotTrailingIndex(): void
+    {
+        $response = json_encode([
+            [
+                'variable_name' => 'air_temp',
+                'units' => 'F',
+                'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+                'values' => [71.0, 72.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'humidity',
+                'units' => '%',
+                'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00', '2026-07-07T09:50:00'],
+                'values' => [52.0, 48.0, 99.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'wind10m_speed',
+                'units' => 'mph',
+                'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+                'values' => [3.0, 4.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'wind10m_direction',
+                'units' => 'degrees',
+                'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+                'values' => [180.0, 190.0],
+                'timezone' => 'America/Boise',
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $snapshot = DyaconLiveAdapter::parseToSnapshot($response, [
+            'timezone' => 'America/Boise',
+            'elevation_ft' => 100,
+        ]);
+        $this->assertNotNull($snapshot);
+        $this->assertTrue($snapshot->isValid);
+        $this->assertEqualsWithDelta(48.0, $snapshot->humidity->value, 0.1);
+    }
 }
