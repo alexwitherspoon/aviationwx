@@ -45,6 +45,21 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertStringContainsString('variable=wind10m_speed%7Cmph', $url);
     }
 
+    public function testBuildUrl_ValidConfig_IncludesYesterdayAndTodayDateRange(): void
+    {
+        $url = DyaconLiveAdapter::buildUrl([
+            'station_id' => 130114,
+            'username' => 'user',
+            'password' => 'pass',
+        ], 'America/Boise');
+        $this->assertNotNull($url);
+        $tz = new DateTimeZone('America/Boise');
+        $today = (new DateTimeImmutable('now', $tz))->format('Y-m-d');
+        $yesterday = (new DateTimeImmutable('now', $tz))->modify('-1 day')->format('Y-m-d');
+        $this->assertStringContainsString('startdate=' . rawurlencode($yesterday), $url);
+        $this->assertStringContainsString('enddate=' . rawurlencode($today), $url);
+    }
+
     public function testParseToSnapshot_MockResponse_MapsFieldsAndObservationTime(): void
     {
         $response = getMockDyaconLiveDataResponse();

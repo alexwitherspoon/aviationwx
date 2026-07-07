@@ -104,10 +104,12 @@ class DyaconLiveAdapter
             $tz = new DateTimeZone('UTC');
         }
 
-        $today = (new DateTimeImmutable('now', $tz))->format('Y-m-d');
+        $today = new DateTimeImmutable('now', $tz);
+        $startDate = $today->modify('-1 day')->format('Y-m-d');
+        $endDate = $today->format('Y-m-d');
         $params = [
-            'startdate' => $today,
-            'enddate' => $today,
+            'startdate' => $startDate,
+            'enddate' => $endDate,
             'timezone' => $timezone,
         ];
 
