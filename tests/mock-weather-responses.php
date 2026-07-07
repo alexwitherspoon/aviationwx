@@ -218,6 +218,64 @@ function getMockWeatherLinkResponse() {
 }
 
 /**
+ * Mock DyaconLive GET /data/{stationid} response (KAOC-shaped fixture).
+ */
+function getMockDyaconLiveDataResponse(): string
+{
+    return json_encode([
+        [
+            'variable_name' => 'air_temp',
+            'units' => 'F',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [71.0, 72.356],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'humidity',
+            'units' => '%',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [52.0, 50.9],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'air_pressure',
+            'units' => 'inHg',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [24.74, 24.75586096108245],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'wind10m_speed',
+            'units' => 'mph',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [3.5, 3.8029],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'wind10m_direction',
+            'units' => 'degrees',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [185.0, 187.7],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'wind_gust',
+            'units' => 'mph',
+            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'values' => [0.0, 0.0],
+            'timezone' => 'America/Boise',
+        ],
+        [
+            'variable_name' => 'rainday_cumul',
+            'units' => 'in',
+            'datetimes' => [],
+            'values' => [],
+            'timezone' => 'America/Boise',
+        ],
+    ], JSON_THROW_ON_ERROR);
+}
+
+/**
  * Get a mock AerisWeather API response (for PWSWeather.com stations)
  * Based on actual API structure: { "success": true, "response": { "id": "...", "ob": { ... } } }
  * 

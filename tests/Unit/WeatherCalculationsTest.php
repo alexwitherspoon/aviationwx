@@ -341,6 +341,21 @@ class WeatherCalculationsTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function testStationPressureToAltimeterSetting_KaocFixture_WithinAviationRange(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/calculator.php';
+        $altimeter = stationPressureToAltimeterSettingInHg(24.75586096108245, 5335.0);
+        $this->assertNotNull($altimeter);
+        $this->assertEqualsWithDelta(30.1285, $altimeter, 0.01);
+    }
+
+    public function testStationPressureToAltimeterSetting_InvalidInput_ReturnsNull(): void
+    {
+        require_once __DIR__ . '/../../lib/weather/calculator.php';
+        $this->assertNull(stationPressureToAltimeterSettingInHg(0.0, 1000.0));
+        $this->assertNull(stationPressureToAltimeterSettingInHg(29.92, -1.0));
+    }
+
     /**
      * Ensures pressure altitude is calculated correctly for altimeter settings
      */

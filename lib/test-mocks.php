@@ -43,6 +43,19 @@ function getMockHttpResponse(string $url): ?string {
         require_once __DIR__ . '/../tests/mock-weather-responses.php';
         return getMockWeatherLinkResponse();
     }
+
+    if (strpos($url, 'api.dyacon.net') !== false) {
+        require_once __DIR__ . '/../tests/mock-weather-responses.php';
+        if (strpos($url, '/token') !== false) {
+            return json_encode([
+                'access_token' => 'test_dyaconlive_bearer_token',
+                'token_type' => 'bearer',
+            ]);
+        }
+        if (strpos($url, '/data/') !== false) {
+            return getMockDyaconLiveDataResponse();
+        }
+    }
     
     if (strpos($url, 'aviationweather.gov') !== false) {
         // METAR API (PHPUnit may disable via metarBulkTestSetSkipMetarHttpMock to exercise bulk slices)

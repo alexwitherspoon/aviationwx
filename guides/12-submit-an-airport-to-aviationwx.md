@@ -142,6 +142,32 @@ For Canadian airports, AviationWX can use Nav Canada weather data via the SWOB-M
 
 Updates approximately every 5 minutes. See [Guide 09](09-weather-station-configuration.md#nav-canada-weather-canadian-airports) for details.
 
+### Option G - DyaconLive (Dyacon stations)
+If your airport has a [Dyacon](https://dyacon.com/) station on [DyaconLive](https://dyacon.com/dyaconlive/):
+
+Please send:
+- **DyaconLive login email** (`username`)
+- **DyaconLive password**
+- **Numeric station ID** (if you have it / can find it)
+
+How to find/create these:
+- **DyaconLive+** and API access are required (`support@dyacon.net`). There is no separate API key - we use your DyaconLive web login.
+- The API station ID is not the public widget `pid`. We can look up the station ID if you provide your login.
+- Airport **field elevation** (`elevation_ft`) is needed for altimeter conversion.
+
+Updates approximately every 10 minutes. Ceiling and visibility are not available from Dyacon - tell us if you also have METAR or AWOS to pair.
+
+See [Guide 09](09-weather-station-configuration.md#dyaconlive---what-we-need) for details.
+
+References:
+```text
+Dyacon aviation stations:
+https://dyacon.com/aviation-weather-station/
+
+DyaconLive API:
+https://api.dyacon.net/docs
+```
+
 ---
 
 ## Step 3 - Camera connection (choose one path)
@@ -221,8 +247,8 @@ Body:
 - Target update cadence:
 
 **Weather source**
-- Type: Tempest / Davis / Ambient / ASOS-AWOS / AWOSnet
-- Details (token/key/etc):
+- Type: Tempest / Davis / Ambient / DyaconLive / ASOS-AWOS / AWOSnet / Nav Canada SWOB
+- Details (token/key/login/etc):
 
 **Cameras**
 - Number of cameras:

@@ -123,6 +123,34 @@ function calculateHumidityFromDewpoint($tempC, $dewpointC) {
 }
 
 /**
+ * Convert station barometric pressure to sea-level altimeter setting (inHg).
+ *
+ * Sensors such as Dyacon report station pressure at field elevation. The aggregator,
+ * validation, and density-altitude math expect METAR-style altimeter setting (sea-level
+ * equivalent in inHg), per calculatePressureAltitude().
+ *
+ * Inverse of the US standard barometric reduction:
+ *   P_station = P_sea_level × (1 - 0.0000068753 × elevation_ft)^5.2559
+ *
+ * @param float $stationPressureInHg Measured pressure at field elevation (inHg)
+ * @param float $elevationFt Field elevation (feet MSL)
+ * @return float|null Altimeter setting in inHg, or null when inputs are invalid
+ */
+function stationPressureToAltimeterSettingInHg(float $stationPressureInHg, float $elevationFt): ?float
+{
+    if ($stationPressureInHg <= 0.0 || $elevationFt < 0.0) {
+        return null;
+    }
+
+    $factor = 1.0 - 0.0000068753 * $elevationFt;
+    if ($factor <= 0.0) {
+        return null;
+    }
+
+    return $stationPressureInHg / pow($factor, 5.2559);
+}
+
+/**
  * Calculate pressure altitude using FAA-approved formula
  * 
  * Calculates pressure altitude in feet based on station elevation and altimeter setting.

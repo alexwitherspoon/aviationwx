@@ -65,9 +65,21 @@ An NWS climate-focused overview notes that, for primary climate sensors, tempera
 
 ---
 
+## Industrial advisory aviation (Dyacon MS-100 series)
+
+[Dyacon](https://dyacon.com/) manufactures MS-100 series stations (MS-120 through MS-135) for commercial, industrial, and **advisory aviation** use. The [MS-130](https://dyacon.com/Ms-130/) is a common small-airport configuration: solar-powered, cellular upload to [DyaconLive](https://dyacon.com/dyaconlive/), optional SMS METAR-style text reports, and Modbus for local systems. Dyacon describes these as advisory stations - a practical middle ground between consumer hardware and FAA-certified AWOS, not a substitute for type-certified automated observing programs.
+
+Strengths: industrial build, documented [airport siting guidance](https://dyacon.com/wp-content/uploads/57-6040-DOC-Quick-start%20Guide-MS-100.pdf), autonomous remote operation, DyaconLive Aviation Mode for local flight planning (altimeter, density altitude, estimated cloud base in the portal).
+
+Limitations: **not** FAA-certified AWOS/ASOS; standard package measures wind, temperature, humidity, and barometric pressure (rain gauge optional). DyaconLive portal and SMS outputs may include **estimated** cloud base in METAR-style text, but there are no ceiling or visibility **instruments**. AviationWX's DyaconLive integration reads API sensor fields only - treat ceiling/visibility on the dashboard as coming from METAR or another source, not from Dyacon. Update cadence is about 10 minutes on clock-aligned buckets, slower than ASOS engineering streams.
+
+Calibration and care: follow Dyacon maintenance features in DyaconLive+ when enabled; inspect mount, cables, and rain funnel on the same quarterly rhythm as other field stations; compare wind and pressure trends to nearby official METAR during benign weather. Product hub: [Dyacon aviation weather stations](https://dyacon.com/aviation-weather-station/).
+
+---
+
 ## Consumer-grade examples (common, and especially limitation-heavy)
 
-Official AWOS/ASOS programs combine type-certified sensors, controlled siting, redundancy, and scheduled maintenance. Any field sensor you attach to AviationWX still inherits the same physics and exposure problems: wind shadow, radiation heating, wetting losses in precipitation, drift, and cabling faults. Higher-grade gear may add better shields, faster sampling, serviceable modules, or documented calibration procedures, but it is **never** a substitute for good siting, periodic checks, and honest labeling when a channel is weak. The Tempest, Davis, and Ambient examples below are common consumer or prosumer paths from this guide series, not an exhaustive list of supported hardware; we spell out vendor limits there most often because pilots can mistake a slick dashboard for AWOS-class data.
+Official AWOS/ASOS programs combine type-certified sensors, controlled siting, redundancy, and scheduled maintenance. Any field sensor you attach to AviationWX still inherits the same physics and exposure problems: wind shadow, radiation heating, wetting losses in precipitation, drift, and cabling faults. Higher-grade gear may add better shields, faster sampling, serviceable modules, or documented calibration procedures, but it is **never** a substitute for good siting, periodic checks, and honest labeling when a channel is weak. The Dyacon, Tempest, Davis, and Ambient examples below cover common supported paths; we spell out vendor limits most often where pilots can mistake a slick dashboard for AWOS-class data.
 
 Consumer and compact integrated stations usually optimize for cost, ease of install, and home use, with accuracy statements that assume controlled or ideal conditions and good siting. Expect wider real-world error than a national automated station when mounts are improvised.
 
@@ -155,6 +167,7 @@ If your country is not listed, a practical search pattern is: `"(your CAA name)"
 | Basic VFR weather minimums | [14 CFR 91.155 (eCFR)](https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-91/subpart-B/section-91.155) |
 | ICAO Annex 3 publication | [ICAO Annex 3 store listing](https://store.icao.int/en/annexes/annex-3) |
 | Tempest engineering specs | [Tempest spec sheet PDF](https://tempest.earth/wp-content/uploads/2016/05/Tempest_Spec-Sheet_220301-web-view.pdf) |
+| Dyacon advisory aviation stations | [Dyacon aviation weather stations](https://dyacon.com/aviation-weather-station/) |
 | WMO instruments guide (global) | [WMO-No. 8 hub](https://community.wmo.int/guide-instruments-and-methods-of-observation-wmo-no-8) |
 
 For EASA, UK CAA, and Canada starting points, see the international table above.

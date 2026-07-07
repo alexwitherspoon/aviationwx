@@ -35,6 +35,7 @@ If you can't get good wind exposure, it is usually better to:
 - If you're installing **Tempest** → go to **Tempest setup**
 - If you're installing **Davis Vantage Pro2** → go to **Davis setup**
 - If you're installing **Ambient WS‑2902** → go to **Ambient setup**
+- If you have a **Dyacon** station on DyaconLive → go to **DyaconLive setup**
 - If you're integrating an existing station → go to **Existing station integration checklist**
 
 ---
@@ -92,6 +93,30 @@ You don't need to configure update cadence or push settings. We pull data from y
 - **That's it** - AviationWX handles polling automatically
 
 Davis installs tend to reward careful mounting and cable hygiene. If your airport or community is already familiar with Davis, lean into that expertise.
+
+---
+
+## DyaconLive setup (existing Dyacon stations)
+
+Good for airports that already operate a [Dyacon](https://dyacon.com/) MS-100 series station on [DyaconLive](https://dyacon.com/dyaconlive/). For how advisory Dyacon hardware compares to certified AWOS/ASOS, see [Guide 15](15-weather-sensor-standards-and-maintenance.md).
+
+### Why Dyacon fits some airports
+- common at small airports and remote strips when Dyacon is already installed
+- durable industrial sensors (wind, temperature, humidity, pressure; optional rain)
+- DyaconLive portal included with cellular or Wi-Fi equipped models
+
+### Install checklist (Dyacon)
+- ☐ Mount for unobstructed wind exposure (top of approved structure preferred; see Dyacon's MS-100 quick-start guide for airport siting)
+- ☐ Confirm the station reports consistently in DyaconLive
+- ☐ Confirm airport field elevation is documented (`elevation_ft` in airport config)
+- ☐ Validate "looks reasonable" readings for 24-72 hours
+
+### What you need to do
+- **Set up your station** following Dyacon's instructions and confirm DyaconLive+ with API access (`support@dyacon.net`)
+- **Provide AviationWX with your DyaconLive login and station ID** (see "DyaconLive - What We Need" below)
+- **That's it** - AviationWX handles polling automatically
+
+Dyacon updates about every 10 minutes. Ceiling and visibility are not available from the API; pair with METAR or another aviation source if pilots need those fields.
 
 ---
 
@@ -168,6 +193,7 @@ First, verify your station is working by checking its native app or website:
 - **Tempest**: Check the Tempest app or [tempestwx.com](https://tempestwx.com)
 - **Ambient**: Check [ambientweather.net](https://ambientweather.net)
 - **Davis WeatherLink**: Check [weatherlink.com](https://www.weatherlink.com)
+- **DyaconLive**: Check [dyacon.com/dyaconlive](https://dyacon.com/dyaconlive/)
 - **PWSWeather**: Check [pwsweather.com](https://www.pwsweather.com)
 
 If you can see valid, current data there, the station itself is working.
@@ -208,13 +234,14 @@ When you connect your station to AviationWX, your data doesn't just help pilots 
 
 ### Supported Weather Sources
 
-AviationWX supports six weather station platforms plus METAR-only configuration:
+AviationWX supports the weather station platforms below, plus METAR-only configuration:
 
 | Source | Best For | Update Speed | Cost |
 |--------|----------|--------------|------|
 | **Tempest** | New installs, community deployments | ~1 minute | Free API |
 | **Ambient Weather** | Budget stations, existing installs | ~1 minute | Free API |
 | **Davis WeatherLink** | Professional/long-term installs | 15 min (Basic/free), 5 min (Pro), ~1 min (Pro+) | Free API (Basic); paid for 5 min / 1 min |
+| **DyaconLive** | Existing Dyacon stations at small airports | ~10 minutes | DyaconLive+ required for API |
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
 | **SynopticData** | Backup source, aggregated networks | 5-10 minutes | Free tier available |
 | **AWOSnet** | Airports with AWOSnet-hosted AWOS | ~10 minutes | No API key needed |
@@ -442,6 +469,64 @@ The DID looks like: `001D0A12345678` (12-16 alphanumeric characters)
 
 - [WeatherLink v2 API Documentation](https://weatherlink.github.io/v2-api/)
 - [WeatherLink v1 API Documentation (PDF)](https://www.weatherlink.com/static/docs/APIdocumentation.pdf)
+
+---
+
+## DyaconLive - What We Need
+
+Good for airports with an existing [Dyacon](https://dyacon.com/) station on [DyaconLive](https://dyacon.com/dyaconlive/). Requires **DyaconLive+** and API access from Dyacon (`support@dyacon.net`).
+
+### Required Information
+
+| Field | Description | Where to Find It |
+|-------|-------------|------------------|
+| `station_id` | Numeric API station ID | `GET /stations` after token auth |
+| `username` | DyaconLive login email | Your DyaconLive account |
+| `password` | DyaconLive password | Your DyaconLive account |
+
+### How to Get Your Credentials
+
+1. **Confirm DyaconLive+ and API access** with Dyacon (`support@dyacon.net`) if you have not already
+2. **Log into DyaconLive** at [dyacon.com/dyaconlive](https://dyacon.com/dyaconlive/)
+3. **Use your DyaconLive email and password** - there is no separate API key in the portal
+
+> **Note**: DyaconLive (included with many stations) covers the web portal. **DyaconLive+** is required for API access to AviationWX.
+
+### How to Find Your Station ID
+
+The numeric `station_id` for the API is not the public widget `pid` used in embed URLs.
+
+1. Authenticate: `POST https://api.dyacon.net/token` with `username`, `password`, and `grant_type=password`
+2. List stations: `GET https://api.dyacon.net/stations` with the bearer token
+3. Note the numeric **`id`** for your station
+
+**Don't worry! We can look it up for you.** Provide your DyaconLive login when you submit your airport and we can discover the station ID.
+
+### Configuration Example
+
+```json
+"weather_source": {
+  "type": "dyaconlive",
+  "station_id": 130114,
+  "username": "your-dyaconlive-email",
+  "password": "your-dyaconlive-password"
+}
+```
+
+### How AviationWX reads DyaconLive data
+
+AviationWX pulls sensor fields from the DyaconLive API: temperature, humidity, wind (10-minute averages), station pressure, and rain when equipped. Station pressure is converted to sea-level altimeter using airport `elevation_ft`. **Ceiling and visibility are not available** from Dyacon sensor data. Details: [CONFIGURATION.md](../docs/CONFIGURATION.md#dyaconlive).
+
+### DyaconLive Limitations
+
+- Updates approximately every 10 minutes (not real-time like personal weather stations)
+- Advisory station data - not FAA-certified AWOS; no ceiling or visibility from the API
+- DyaconLive+ required for API access
+
+### API Documentation
+
+- [Dyacon aviation weather stations](https://dyacon.com/aviation-weather-station/)
+- [DyaconLive API](https://api.dyacon.net/docs)
 
 ---
 
@@ -697,7 +782,7 @@ Once you have gathered all the required information, send it to the AviationWX t
 1. **Email**: [Contact info in Guide 12]
 2. **Include**:
    - Airport identifier (ICAO, FAA, or IATA code)
-   - Weather source type (Tempest, Ambient, etc.)
+   - Weather source type (Tempest, Ambient, DyaconLive, etc.)
    - All required credentials for your source type
    - Station location description and mount details
    - Your contact information for maintenance coordination
@@ -713,6 +798,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | **Tempest** | `station_id`, `api_key` |
 | **Ambient** | `api_key`, `application_key`,  `mac_address` |
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
+| **DyaconLive** | `station_id`, `username`, `password` (DyaconLive+ required) |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
 | **SynopticData** | `station_id` + permission (we have a central API key) |
 | **AWOSnet** | `station_id` (e.g., `ks40`) |

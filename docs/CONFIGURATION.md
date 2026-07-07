@@ -526,6 +526,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `swob_auto` | Nav Canada Weather (automated stations) | ~5 minutes |
 | `swob_man` | Nav Canada Weather (manned stations) | ~5 minutes |
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
+| `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
 
@@ -557,6 +558,36 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 ```
 
 `mac_address` is optional and uses the first device if omitted.
+
+### DyaconLive
+
+[Dyacon](https://dyacon.com/) MS-100 series **advisory aviation** weather stations on [DyaconLive](https://dyacon.com/dyaconlive/). Product overview: [Dyacon aviation weather stations](https://dyacon.com/aviation-weather-station/). Requires **DyaconLive+** and API access from Dyacon (`support@dyacon.net`). Authentication uses your DyaconLive web login (no separate API key in the portal).
+
+Dyacon hardware measures wind, temperature, humidity, and barometric pressure (rain when a gauge is installed). DyaconLive Aviation Mode can display derived values such as estimated cloud base in the portal, but the API exposes sensor time series only. AviationWX does **not** populate ceiling or visibility from Dyacon. Pair with `metar` or another aviation source if you need those fields.
+
+```json
+"weather_sources": [
+  {
+    "type": "dyaconlive",
+    "station_id": 130114,
+    "username": "your-dyaconlive-email",
+    "password": "your-dyaconlive-password"
+  }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `station_id` | Numeric station ID from `GET https://api.dyacon.net/stations` after token auth (not the public widget `pid`) |
+| `username` | DyaconLive login email |
+| `password` | DyaconLive password |
+| `timezone` | Optional IANA timezone for `/data` date boundaries (defaults to airport `timezone`) |
+
+**Pressure:** Dyacon reports station pressure at field elevation. The adapter converts to sea-level altimeter setting (inHg) using airport `elevation_ft`, matching METAR and other sources. If `elevation_ft` is missing on the airport, pressure is omitted.
+
+**Polling:** The global scheduler still runs every 60 seconds. The adapter skips upstream HTTP when the latest 10-minute bucket is already in local state, and fetches when behind or catching up after a miss. Wind uses 10-minute averages (`wind10m_*`).
+
+API docs: https://api.dyacon.net/docs
 
 ### Davis WeatherLink v2 (Newer Devices)
 

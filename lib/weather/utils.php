@@ -408,6 +408,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Nav Canada Weather',
                 'url' => 'https://www.navcanada.ca/'
             ];
+        case 'dyaconlive':
+            return [
+                'name' => 'DyaconLive',
+                'url' => 'https://dyacon.net/'
+            ];
         default:
             return null;
     }

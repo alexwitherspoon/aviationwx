@@ -4750,7 +4750,7 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['weather_sources'])) {
                 $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive'];
                 foreach ($airport['weather_sources'] as $idx => $ws) {
                     $label = "weather_sources[{$idx}]";
                     if (!is_array($ws)) {
@@ -4835,6 +4835,23 @@ function validateAirportsJsonStructure(array $config): array {
                             $errors[] = "Airport '{$airportCode}' {$label} ({$wsType}) missing 'station_id'";
                         } elseif (!preg_match('/^[A-Za-z]{4}$/', trim($ws['station_id']))) {
                             $errors[] = "Airport '{$airportCode}' {$label} ({$wsType}) invalid 'station_id' format (4-letter ICAO code)";
+                        }
+                    } elseif ($wsType === 'dyaconlive') {
+                        if (!isset($ws['station_id']) || $ws['station_id'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (dyaconlive) missing 'station_id'";
+                        } else {
+                            $stationId = $ws['station_id'];
+                            $validStationId = (is_int($stationId) && $stationId > 0)
+                                || (is_string($stationId) && ctype_digit(trim($stationId)) && (int) trim($stationId) > 0);
+                            if (!$validStationId) {
+                                $errors[] = "Airport '{$airportCode}' {$label} (dyaconlive) invalid 'station_id' (positive integer required)";
+                            }
+                        }
+                        if (!isset($ws['username']) || !is_string($ws['username']) || trim($ws['username']) === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (dyaconlive) missing 'username'";
+                        }
+                        if (!isset($ws['password']) || !is_string($ws['password']) || $ws['password'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (dyaconlive) missing 'password'";
                         }
                     }
                     // metar: station_id optional (nearby_stations can provide fallback)
