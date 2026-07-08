@@ -167,7 +167,7 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
 }
 
 /**
- * Set peak_gust from Dyacon wind_gust history when the latest bucket is calm.
+ * Set peak_gust_historical from Dyacon wind_gust history when the latest bucket is calm.
  *
  * @param array<string, mixed> $result Aggregated weather (mutated)
  * @param array<string, array<string, mixed>> $sources Source list from buildSourceList()
@@ -196,8 +196,8 @@ function applyDyaconLivePeakGustFromResponses(
             continue;
         }
 
-        $result['peak_gust'] = (float) $peak['value'];
-        $result['peak_gust_obs_time'] = (int) $peak['obs_time'];
+        $result['peak_gust_historical'] = (float) $peak['value'];
+        $result['peak_gust_historical_obs_time'] = (int) $peak['obs_time'];
         return;
     }
 }
