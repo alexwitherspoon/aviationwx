@@ -133,7 +133,7 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertNull(DyaconLiveAdapter::parseToSnapshot('not-json', ['station_id' => 1]));
     }
 
-    public function testParseToSnapshot_ZeroGust_TreatedAsMissing(): void
+    public function testParseToSnapshot_ZeroGust_TreatedAsCalm(): void
     {
         $response = json_encode([
             [
@@ -162,6 +162,44 @@ class DyaconLiveAdapterTest extends TestCase
                 'units' => 'mph',
                 'datetimes' => ['2026-07-07T09:40:00'],
                 'values' => [0.0],
+                'timezone' => 'America/Boise',
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $snapshot = DyaconLiveAdapter::parseToSnapshot($response, ['timezone' => 'America/Boise', 'elevation_ft' => 100]);
+        $this->assertNotNull($snapshot);
+        $this->assertTrue($snapshot->wind->gust->hasValue());
+        $this->assertSame(0.0, $snapshot->wind->gust->value);
+    }
+
+    public function testParseToSnapshot_EmptyGustSeries_TreatedAsMissing(): void
+    {
+        $response = json_encode([
+            [
+                'variable_name' => 'air_temp',
+                'units' => 'F',
+                'datetimes' => ['2026-07-07T09:40:00'],
+                'values' => [72.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'wind10m_speed',
+                'units' => 'mph',
+                'datetimes' => ['2026-07-07T09:40:00'],
+                'values' => [5.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'wind10m_direction',
+                'units' => 'degrees',
+                'datetimes' => ['2026-07-07T09:40:00'],
+                'values' => [180.0],
+                'timezone' => 'America/Boise',
+            ],
+            [
+                'variable_name' => 'wind_gust',
+                'units' => 'mph',
+                'datetimes' => [],
+                'values' => [],
                 'timezone' => 'America/Boise',
             ],
         ], JSON_THROW_ON_ERROR);
