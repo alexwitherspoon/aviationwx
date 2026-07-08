@@ -15,8 +15,11 @@ require_once __DIR__ . '/../constants.php';
  * @param int $intervalMinutes Report interval (default 10)
  * @return int Bucket start as Unix timestamp (UTC)
  */
-function dyaconliveFloorToBucketUnix(int $nowUnix, string $timezone, int $intervalMinutes = 10): int
-{
+function dyaconliveFloorToBucketUnix(
+    int $nowUnix,
+    string $timezone,
+    int $intervalMinutes = DYACONLIVE_REPORT_INTERVAL_MINUTES
+): int {
     $intervalMinutes = max(1, $intervalMinutes);
     try {
         $dt = (new DateTimeImmutable('@' . $nowUnix))->setTimezone(new DateTimeZone($timezone));
@@ -43,7 +46,7 @@ function dyaconliveFloorToBucketUnix(int $nowUnix, string $timezone, int $interv
 function dyaconliveExpectedLatestBucketUnix(
     int $nowUnix,
     string $timezone,
-    int $intervalMinutes = 10,
+    int $intervalMinutes = DYACONLIVE_REPORT_INTERVAL_MINUTES,
     int $graceSeconds = DYACONLIVE_BUCKET_GRACE_SECONDS
 ): int {
     $intervalSeconds = max(60, $intervalMinutes * 60);
