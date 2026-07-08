@@ -658,12 +658,12 @@ function generateMockWeatherData($airportId, $airport) {
     );
     $peakGustInfo = getPeakGust($airportId, $trackingSeed, $airport);
     if (is_array($peakGustInfo)) {
-    $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $trackingSeed;
-    $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
+        $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $trackingSeed;
+        $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
     } else {
-    // Backward compatibility with older scalar cache files
-    $weatherData['peak_gust_today'] = $peakGustInfo;
-    $weatherData['peak_gust_time'] = null;
+        // Backward compatibility with older scalar cache files
+        $weatherData['peak_gust_today'] = $peakGustInfo;
+        $weatherData['peak_gust_time'] = null;
     }
 
     // Track and update today's high and low temperatures
