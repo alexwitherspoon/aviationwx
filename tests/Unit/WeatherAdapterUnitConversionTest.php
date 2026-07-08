@@ -278,11 +278,54 @@ class WeatherAdapterUnitConversionTest extends TestCase
             'last_updated' => time(),
             'last_updated_iso' => date('c'),
         ];
+        $tempObs = time() - 120;
+        $humObs = time() - 300;
+        $data['_field_obs_time_map'] = [
+            'temperature' => $tempObs,
+            'humidity' => $humObs,
+        ];
+
         $out = addCalculatedFields($data, $airport);
         $expectedTd = calculateDewpoint(20.0, 50.0);
         $this->assertNotNull($expectedTd, 'Fixture inputs must be valid for calculateDewpoint()');
         $this->assertNotNull($out['dewpoint'], 'addCalculatedFields should set dewpoint from humidity');
         $this->assertEqualsWithDelta($expectedTd, (float) $out['dewpoint'], 0.001);
+        $this->assertSame(
+            min($tempObs, $humObs),
+            $out['_field_obs_time_map']['dewpoint'] ?? null,
+            'Derived dewpoint obs time should use the stalest T/RH input'
+        );
+    }
+
+    /**
+     * Sensor-provided dewpoint keeps its existing obs time entry.
+     */
+    public function testAddCalculatedFields_SensorDewpoint_DoesNotOverwriteObsTimeMap(): void
+    {
+        $airport = createTestAirport(['elevation_ft' => 1000]);
+        $sensorObs = time() - 60;
+        $data = [
+            'temperature' => 20.0,
+            'humidity' => 50.0,
+            'dewpoint' => 10.0,
+            'pressure' => 29.92,
+            'wind_speed' => null,
+            'wind_direction' => null,
+            'visibility' => 10,
+            'ceiling' => null,
+            'cloud_cover' => null,
+            'gust_speed' => null,
+            'last_updated' => time(),
+            'last_updated_iso' => date('c'),
+            '_field_obs_time_map' => [
+                'temperature' => time() - 600,
+                'humidity' => time() - 600,
+                'dewpoint' => $sensorObs,
+            ],
+        ];
+
+        $out = addCalculatedFields($data, $airport);
+        $this->assertSame($sensorObs, $out['_field_obs_time_map']['dewpoint'] ?? null);
     }
 
     /**
