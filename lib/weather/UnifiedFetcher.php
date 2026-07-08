@@ -580,11 +580,17 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
  * @return array<string, mixed> Weather data with calculated fields and normalized display timestamps
  */
 function addCalculatedFields(array $data, array $airport): array {
+    $dewpointDerivedFromRh = false;
+
     // Dewpoint from RH when sources omit Td but report humidity (e.g. some PWS JSON paths)
-    if (($data['dewpoint'] ?? null) === null && 
-        ($data['temperature'] ?? null) !== null && 
+    if (($data['dewpoint'] ?? null) === null &&
+        ($data['temperature'] ?? null) !== null &&
         ($data['humidity'] ?? null) !== null) {
-        $data['dewpoint'] = calculateDewpoint($data['temperature'], $data['humidity']);
+        $computedDewpoint = calculateDewpoint($data['temperature'], $data['humidity']);
+        if ($computedDewpoint !== null) {
+            $data['dewpoint'] = $computedDewpoint;
+            $dewpointDerivedFromRh = true;
+        }
     }
     
     // RH from dewpoint when humidity is omitted but Td is present
@@ -625,11 +631,45 @@ function addCalculatedFields(array $data, array $airport): array {
     // Sunrise/sunset times
     $data['sunrise'] = getSunriseTime($airport);
     $data['sunset'] = getSunsetTime($airport);
-    
+
+    assignCalculatedDewpointObsTime($data, $dewpointDerivedFromRh);
+
     // Same aggregate last_updated policy as WeatherAggregator; airport UI uses pickObservationUnixTimestamp (JS) for display.
     normalizeAggregateLastUpdatedTimes($data, time());
-    
+
     return $data;
+}
+
+/**
+ * Stalest input wins: derived dewpoint is only as fresh as the older of temp and humidity.
+ *
+ * @param array<string, mixed> $data Weather payload (mutated)
+ * @param bool $dewpointDerivedFromRh True when dewpoint was just computed from T/RH
+ */
+function assignCalculatedDewpointObsTime(array &$data, bool $dewpointDerivedFromRh): void
+{
+    if (!$dewpointDerivedFromRh || ($data['dewpoint'] ?? null) === null) {
+        return;
+    }
+
+    $obsMap = $data['_field_obs_time_map'] ?? null;
+    if (!is_array($obsMap) || isset($obsMap['dewpoint'])) {
+        return;
+    }
+
+    $tempObs = $obsMap['temperature'] ?? null;
+    $humObs = $obsMap['humidity'] ?? null;
+    if (!is_numeric($tempObs) || !is_numeric($humObs)) {
+        return;
+    }
+
+    $tempObs = (int) $tempObs;
+    $humObs = (int) $humObs;
+    if ($tempObs <= 0 || $humObs <= 0) {
+        return;
+    }
+
+    $data['_field_obs_time_map']['dewpoint'] = min($tempObs, $humObs);
 }
 
 /**
