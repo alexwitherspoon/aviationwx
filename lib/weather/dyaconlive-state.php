@@ -218,7 +218,7 @@ function dyaconliveResolveSkippedSnapshot(
         return null;
     }
 
-    aviationwx_log('info', 'dyaconlive upstream skip', [
+    aviationwx_log('debug', 'dyaconlive upstream skip', [
         'airport_id' => $airportId,
         'last_bucket_iso' => $state['last_bucket_iso'] ?? null,
         'station_id' => $source['station_id'] ?? null,
