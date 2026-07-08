@@ -122,7 +122,7 @@ function dyaconliveTokenExpiresInSeconds(string $accessToken, array $tokenBody):
 
     $parts = explode('.', $accessToken);
     if (count($parts) >= 2) {
-        $payloadJson = base64_decode(strtr($parts[1], '-_', '+/'), true);
+        $payloadJson = dyaconliveBase64UrlDecode($parts[1]);
         if (is_string($payloadJson)) {
             $payload = json_decode($payloadJson, true);
             if (is_array($payload) && isset($payload['exp']) && is_numeric($payload['exp'])) {
@@ -135,6 +135,22 @@ function dyaconliveTokenExpiresInSeconds(string $accessToken, array $tokenBody):
     }
 
     return DYACONLIVE_TOKEN_DEFAULT_TTL_SECONDS;
+}
+
+/**
+ * Decode a JWT base64url segment (adds padding for strict base64_decode).
+ */
+function dyaconliveBase64UrlDecode(string $segment): ?string
+{
+    $segment = strtr($segment, '-_', '+/');
+    $remainder = strlen($segment) % 4;
+    if ($remainder > 0) {
+        $segment .= str_repeat('=', 4 - $remainder);
+    }
+
+    $decoded = base64_decode($segment, true);
+
+    return is_string($decoded) ? $decoded : null;
 }
 
 /**
