@@ -339,7 +339,7 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
 }
 
 /**
- * Read a numeric value from a Dyacon series at the anchor bucket (ISO match, then index).
+ * Read a numeric value from a Dyacon series at the anchor bucket (ISO match only when bucket ISO is known).
  *
  * @param array<string, mixed>|null $series
  */
@@ -360,6 +360,8 @@ function dyaconliveSeriesValueAtBucket(?array $series, int $anchorIndex, ?string
         if ($matchedIndex !== false && isset($values[$matchedIndex]) && is_numeric($values[$matchedIndex])) {
             return (float) $values[$matchedIndex];
         }
+
+        return null;
     }
 
     if ($anchorIndex >= 0 && $anchorIndex < count($values) && is_numeric($values[$anchorIndex])) {
