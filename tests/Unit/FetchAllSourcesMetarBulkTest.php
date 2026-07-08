@@ -74,9 +74,9 @@ final class FetchAllSourcesMetarBulkTest extends TestCase
         $responses = fetchAllSources($sources, 'kzzz');
         @unlink($path);
 
-        $this->assertArrayHasKey('source_0', $responses);
-        $this->assertIsString($responses['source_0']);
-        $this->assertStringContainsString('"temp":42', $responses['source_0']);
+        $this->assertArrayHasKey('source_0', $responses['responses']);
+        $this->assertIsString($responses['responses']['source_0']);
+        $this->assertStringContainsString('"temp":42', $responses['responses']['source_0']);
     }
 
     public function testFetchAllSources_MetarThrottled_DoesNotRecordCircuitFailure(): void
@@ -121,7 +121,7 @@ final class FetchAllSourcesMetarBulkTest extends TestCase
 
         $responses = fetchAllSources($sources, 'kthr');
 
-        $this->assertArrayNotHasKey('source_0', $responses);
+        $this->assertArrayNotHasKey('source_0', $responses['responses']);
         if (is_file(CACHE_BACKOFF_FILE)) {
             $data = json_decode((string) file_get_contents(CACHE_BACKOFF_FILE), true);
             $this->assertIsArray($data);

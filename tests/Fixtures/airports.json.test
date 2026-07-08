@@ -294,6 +294,29 @@
           "station_id": "KSPFX"
         }
       ]
+    },
+    "kaoc": {
+      "name": "Afton Municipal Airport",
+      "enabled": true,
+      "maintenance": false,
+      "icao": "KAOC",
+      "iata": null,
+      "faa": "AOC",
+      "address": "Afton, Wyoming",
+      "lat": 42.7111,
+      "lon": -110.9422,
+      "elevation_ft": 5335,
+      "timezone": "America/Boise",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "weather_sources": [
+        {
+          "type": "dyaconlive",
+          "station_id": 130114,
+          "username": "test_dyaconlive_user_demo",
+          "password": "test_dyaconlive_password_demo"
+        }
+      ]
     }
   }
 }

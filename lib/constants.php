@@ -201,6 +201,21 @@ if (!defined('NOTAM_CACHE_TTL_DEFAULT')) {
 if (!defined('NOTAM_TOKEN_EXPIRY_BUFFER')) {
     define('NOTAM_TOKEN_EXPIRY_BUFFER', 60); // Refresh token 1 min before expiry
 }
+if (!defined('DYACONLIVE_API_BASE_URL')) {
+    define('DYACONLIVE_API_BASE_URL', 'https://api.dyacon.net');
+}
+if (!defined('DYACONLIVE_REPORT_INTERVAL_MINUTES')) {
+    define('DYACONLIVE_REPORT_INTERVAL_MINUTES', 10);
+}
+if (!defined('DYACONLIVE_BUCKET_GRACE_SECONDS')) {
+    define('DYACONLIVE_BUCKET_GRACE_SECONDS', 90);
+}
+if (!defined('DYACONLIVE_TOKEN_DEFAULT_TTL_SECONDS')) {
+    define('DYACONLIVE_TOKEN_DEFAULT_TTL_SECONDS', 1800);
+}
+if (!defined('DYACONLIVE_TOKEN_EXPIRY_BUFFER')) {
+    define('DYACONLIVE_TOKEN_EXPIRY_BUFFER', 60);
+}
 // NOTAM staleness thresholds (global only, 3-tier model)
 if (!defined('DEFAULT_NOTAM_STALE_WARNING_SECONDS')) {
     define('DEFAULT_NOTAM_STALE_WARNING_SECONDS', 900); // 15 minutes

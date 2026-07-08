@@ -61,6 +61,7 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 |      |   Tempest    |      |  ASOS/AWOS   |      |   Density    |           |
 |      |   Davis      |      |   via FAA    |      |   Altitude   |           |
 |      |   Ambient    |      |              |      |   Crosswind  |           |
+|      |   DyaconLive |      |              |      |              |           |
 |      +------+-------+      +------+-------+      +------+-------+           |
 |             |                     |                     |                   |
 |             +---------------------+---------------------+                   |
@@ -77,10 +78,11 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 ```
 
 **What this means for you:**
-- Some airports have **on-site weather stations** (updated every 1-5 minutes)
+- Some airports have **on-site weather stations** (often every 1-5 minutes; Dyacon advisory stations on DyaconLive update about every 10 minutes)
 - Some airports use **official METAR data** from nearby ASOS/AWOS
 - Many airports show **both** - you get hyper-local conditions AND official aviation weather
 - Values like density altitude and crosswind components are calculated automatically
+- **DyaconLive** feeds are advisory surface weather; ceiling and visibility usually come from METAR or another official source when shown
 
 ### Flight Category Colors
 

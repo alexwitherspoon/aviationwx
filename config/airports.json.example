@@ -204,6 +204,13 @@
           "api_key": "test_ambient_api_key_demo",
           "application_key": "test_ambient_app_key_demo",
           "backup": true
+        },
+        {
+          "type": "dyaconlive",
+          "station_id": 130114,
+          "username": "test_dyaconlive_user_demo",
+          "password": "test_dyaconlive_password_demo",
+          "_comment": "DyaconLive+ API credentials; station_id from GET /stations after token auth"
         }
       ],
       "webcams": [

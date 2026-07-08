@@ -35,6 +35,9 @@ require_once __DIR__ . '/adapter/awosnet-v1.php';
 require_once __DIR__ . '/adapter/swob-helper.php';
 require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
+require_once __DIR__ . '/adapter/dyaconlive-v1.php';
+require_once __DIR__ . '/dyaconlive-state.php';
+require_once __DIR__ . '/dyaconlive-fetch.php';
 require_once __DIR__ . '/wind-normalizer.php';
 require_once __DIR__ . '/metar-completeness-aggregate.php';
 require_once __DIR__ . '/calculator.php';
@@ -66,12 +69,24 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     }
     
     // Fetch all sources in parallel using curl_multi
-    $responses = fetchAllSources($sources, $airportId);
+    $fetchResult = fetchAllSources($sources, $airportId, $airport);
+    $responses = $fetchResult['responses'];
+    $skippedSnapshots = $fetchResult['skipped_snapshots'];
     
     // Parse responses into snapshots
     $snapshots = [];
     
     foreach ($sources as $sourceKey => $source) {
+        if (isset($skippedSnapshots[$sourceKey])) {
+            $snapshot = $skippedSnapshots[$sourceKey];
+            if ($snapshot->isValid) {
+                $sourceType = $source['type'] ?? '';
+                $snapshot = normalizeWindToTrueNorth($snapshot, $airport, $sourceType);
+                $snapshots[] = $snapshot;
+            }
+            continue;
+        }
+
         if (!isset($responses[$sourceKey]) || $responses[$sourceKey] === null) {
             continue;
         }
@@ -79,6 +94,24 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
         $snapshot = parseSourceResponse($source, $responses[$sourceKey], $airport);
         if ($snapshot !== null && $snapshot->isValid) {
             $sourceType = $source['type'] ?? '';
+            if ($sourceType === 'dyaconlive') {
+                $sourceForParse = $source;
+                $sourceForParse['timezone'] = dyaconliveResolveTimezone($source, $airport);
+                $lastBucketIso = DyaconLiveAdapter::extractLastBucketIso(
+                    $responses[$sourceKey],
+                    $sourceForParse
+                );
+                if ($lastBucketIso !== null) {
+                    dyaconlivePersistSourceStateAfterParse(
+                        $airportId,
+                        $source,
+                        $airport,
+                        extractWeatherSourceIndexFromKey($sourceKey),
+                        $snapshot,
+                        $lastBucketIso
+                    );
+                }
+            }
             $snapshot = normalizeWindToTrueNorth($snapshot, $airport, $sourceType);
             $snapshots[] = $snapshot;
         }
@@ -162,16 +195,69 @@ function buildSourceList(array $airport): array {
  * 
  * @param array $sources Source configurations
  * @param string $airportId Airport ID for logging
- * @return array Responses keyed by source identifier
+ * @param array $airport Airport configuration (timezone for dyaconlive)
+ * @return array{responses: array<string, string|null>, skipped_snapshots: array<string, WeatherSnapshot>}
  */
-function fetchAllSources(array $sources, string $airportId): array {
+function fetchAllSources(array $sources, string $airportId, array $airport = []): array {
     $mh = curl_multi_init();
     $handles = [];
     $responseHeadersByKey = [];
     $responses = [];
+    $skippedSnapshots = [];
 
     foreach ($sources as $sourceKey => $source) {
         $sourceType = $source['type'];
+
+        if ($sourceType === 'dyaconlive') {
+            $skipped = dyaconliveResolveSkippedSnapshot(
+                $airportId,
+                $source,
+                $airport,
+                extractWeatherSourceIndexFromKey($sourceKey)
+            );
+            if ($skipped !== null && $skipped->isValid) {
+                $skippedSnapshots[$sourceKey] = $skipped;
+                continue;
+            }
+
+            $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType, $source);
+            if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
+                weatherHealthTrackCircuitOpen($airportId, $sourceType);
+                continue;
+            }
+
+            $rateLimit = upstreamRateLimitConsumeForSource($source);
+            if (!$rateLimit['allowed']) {
+                aviationwx_log('info', 'upstream rate limit skip', [
+                    'airport_id' => $airportId,
+                    'provider' => $sourceType,
+                    'fingerprint_prefix' => $rateLimit['fingerprint_prefix'],
+                ], 'app');
+                weatherHealthTrackUpstreamThrottleSkip($airportId, $sourceType);
+                continue;
+            }
+
+            $fetch = dyaconliveFetchDataResponse($source, $airport);
+            $httpCode = $fetch['http_code'];
+            if (is_int($httpCode) && $httpCode >= 200 && $httpCode < 300 && is_string($fetch['body'])) {
+                $responses[$sourceKey] = $fetch['body'];
+                recordWeatherSuccess($airportId, $sourceType, $source);
+                weatherHealthTrackFetch($airportId, $sourceType, true, $httpCode);
+            } else {
+                $responses[$sourceKey] = null;
+                recordWeatherFailure(
+                    $airportId,
+                    $sourceType,
+                    $httpCode === 401 ? 'permanent' : 'transient',
+                    $httpCode,
+                    $httpCode === 401 ? 'DyaconLive authentication failed (HTTP 401)' : null,
+                    $source,
+                    $fetch['response_headers']
+                );
+                weatherHealthTrackFetch($airportId, $sourceType, false, $httpCode);
+            }
+            continue;
+        }
 
         // METAR: mock/bulk/HTTP via metarResolveStationResponse (no curl_multi; bulk before HTTP circuit)
         if ($sourceType === 'metar') {
@@ -222,7 +308,7 @@ function fetchAllSources(array $sources, string $airportId): array {
         }
 
         // Build URL
-        $url = buildSourceUrl($source);
+        $url = buildSourceUrl($source, $airport);
         if ($url === null) {
             continue;
         }
@@ -241,6 +327,16 @@ function fetchAllSources(array $sources, string $airportId): array {
         
         // Get headers for this source
         $headers = buildSourceHeaders($source);
+
+        if (function_exists('isTestMode') && isTestMode() && function_exists('getMockHttpResponse')) {
+            $mockBody = getMockHttpResponse($url);
+            if (is_string($mockBody) && $mockBody !== '') {
+                $responses[$sourceKey] = $mockBody;
+                recordWeatherSuccess($airportId, $sourceType, $source);
+                weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+                continue;
+            }
+        }
         
         $responseHeadersByKey[$sourceKey] = [];
         $headerCollector = function ($ch, string $line) use (&$responseHeadersByKey, $sourceKey): int {
@@ -377,16 +473,32 @@ function fetchAllSources(array $sources, string $airportId): array {
         }
     }
     
-    return $responses;
+    return [
+        'responses' => $responses,
+        'skipped_snapshots' => $skippedSnapshots,
+    ];
+}
+
+/**
+ * Extract weather_sources array index from fetcher source key (source_0, backup_1, ...).
+ */
+function extractWeatherSourceIndexFromKey(string $sourceKey): int
+{
+    if (preg_match('/_(\d+)$/', $sourceKey, $matches)) {
+        return (int) $matches[1];
+    }
+
+    return 0;
 }
 
 /**
  * Build URL for a source
  * 
  * @param array $source Source configuration
+ * @param array $airport Airport configuration
  * @return string|null URL or null if invalid
  */
-function buildSourceUrl(array $source): ?string {
+function buildSourceUrl(array $source, array $airport = []): ?string {
     $type = $source['type'] ?? null;
     
     return match($type) {
@@ -402,6 +514,7 @@ function buildSourceUrl(array $source): ?string {
         'awosnet' => AwosnetAdapter::buildUrl($source),
         'swob_auto' => SwobAutoAdapter::buildUrl($source),
         'swob_man' => SwobManAdapter::buildUrl($source),
+        'dyaconlive' => DyaconLiveAdapter::buildUrl($source, dyaconliveResolveTimezone($source, $airport)),
         default => null,
     };
 }
@@ -448,6 +561,10 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'awosnet' => AwosnetAdapter::parseToSnapshot($response, $source),
         'swob_auto' => SwobAutoAdapter::parseToSnapshot($response, $source),
         'swob_man' => SwobManAdapter::parseToSnapshot($response, $source),
+        'dyaconlive' => DyaconLiveAdapter::parseToSnapshot($response, array_merge($source, [
+            'timezone' => dyaconliveResolveTimezone($source, $airport),
+            'elevation_ft' => $airport['elevation_ft'] ?? null,
+        ])),
         default => null,
     };
 }

@@ -27,6 +27,7 @@ function upstreamRateLimitCredentialFieldNames(string $provider): array
         'weatherlink_v1' => ['api_token'],
         'synopticdata' => ['api_token'],
         'aviationwx_api' => ['api_key'],
+        'dyaconlive' => ['username', 'password'],
         default => [],
     };
 }
@@ -41,6 +42,7 @@ function upstreamRateLimitIdentityFieldNames(string $provider): array
 {
     return match ($provider) {
         'metar', 'awosnet', 'swob_auto', 'swob_man', 'nws' => ['station_id'],
+        'dyaconlive' => ['station_id'],
         'aviationwx_api' => ['base_url', 'airport_id'],
         default => [],
     };
@@ -70,10 +72,17 @@ function upstreamRateFingerprint(string $provider, array $sourceConfig): string
 {
     $material = [];
     foreach (upstreamRateLimitFingerprintFieldNames($provider) as $field) {
-        if (!isset($sourceConfig[$field]) || !is_string($sourceConfig[$field])) {
+        if (!array_key_exists($field, $sourceConfig)) {
             continue;
         }
-        $value = trim($sourceConfig[$field]);
+        $raw = $sourceConfig[$field];
+        if (is_int($raw) || is_float($raw)) {
+            $value = trim((string) $raw);
+        } elseif (is_string($raw)) {
+            $value = trim($raw);
+        } else {
+            continue;
+        }
         if ($value === '') {
             continue;
         }
@@ -216,6 +225,10 @@ function upstreamRateLimitPolicyForProvider(string $provider): array
         'synopticdata' => [
             'rpm' => UPSTREAM_RATE_LIMIT_SYNOPTIC_RPM,
             'burst' => UPSTREAM_RATE_LIMIT_SYNOPTIC_BURST,
+        ],
+        'dyaconlive' => [
+            'rpm' => UPSTREAM_RATE_LIMIT_DEFAULT_RPM,
+            'burst' => 2,
         ],
         'metar' => [
             'rpm' => UPSTREAM_RATE_LIMIT_METAR_HTTP_RPM,
