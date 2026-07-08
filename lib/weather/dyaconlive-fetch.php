@@ -78,14 +78,20 @@ function dyaconliveHttpGet(string $url, string $token): array
     };
 
     $ch = curl_init($url);
+    if ($ch === false) {
+        return [
+            'body' => null,
+            'http_code' => null,
+            'response_headers' => [],
+        ];
+    }
+
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => defined('CURL_TIMEOUT') ? CURL_TIMEOUT : 30,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_USERAGENT => 'AviationWX/2.0',
         CURLOPT_FAILONERROR => false,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
         CURLOPT_HTTPHEADER => [
             'Accept: application/json',
             'Authorization: Bearer ' . $token,
@@ -95,6 +101,7 @@ function dyaconliveHttpGet(string $url, string $token): array
 
     $body = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     return [
         'body' => is_string($body) ? $body : null,
