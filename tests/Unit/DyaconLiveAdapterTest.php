@@ -253,4 +253,64 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertTrue($snapshot->isValid);
         $this->assertFalse($snapshot->humidity->hasValue());
     }
+
+    public function testDyaconlivePeakGustTodayFromResponse_ReturnsLocalDayMax(): void
+    {
+        $tz = 'America/Boise';
+        $today = (new DateTimeImmutable('now', new DateTimeZone($tz)))->format('Y-m-d');
+        $yesterday = (new DateTimeImmutable('now', new DateTimeZone($tz)))->modify('-1 day')->format('Y-m-d');
+        $response = json_encode([
+            [
+                'variable_name' => 'wind_gust',
+                'units' => 'mph',
+                'datetimes' => [
+                    $yesterday . 'T23:50:00',
+                    $today . 'T10:00:00',
+                    $today . 'T10:10:00',
+                ],
+                'values' => [40.0, 0.0, 28.6336],
+                'timezone' => $tz,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $peak = dyaconlivePeakGustTodayFromResponse($response, $tz);
+        $this->assertNotNull($peak);
+        $this->assertSame(25.0, $peak['value']);
+        $this->assertSame(
+            dyaconliveParseBucketIsoToUnix($today . 'T10:10:00', $tz),
+            $peak['obs_time']
+        );
+    }
+
+    public function testDyaconlivePeakGustTodayFromResponse_EmptySeries_ReturnsNull(): void
+    {
+        $response = json_encode([
+            [
+                'variable_name' => 'wind_gust',
+                'units' => 'mph',
+                'datetimes' => [],
+                'values' => [],
+                'timezone' => 'America/Boise',
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $this->assertNull(dyaconlivePeakGustTodayFromResponse($response, 'America/Boise'));
+    }
+
+    public function testDyaconlivePeakGustTodayFromResponse_OnlyZeroToday_ReturnsNull(): void
+    {
+        $tz = 'America/Boise';
+        $today = (new DateTimeImmutable('now', new DateTimeZone($tz)))->format('Y-m-d');
+        $response = json_encode([
+            [
+                'variable_name' => 'wind_gust',
+                'units' => 'mph',
+                'datetimes' => [$today . 'T09:00:00', $today . 'T09:10:00'],
+                'values' => [0.0, 0.0],
+                'timezone' => $tz,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $this->assertNull(dyaconlivePeakGustTodayFromResponse($response, $tz));
+    }
 }

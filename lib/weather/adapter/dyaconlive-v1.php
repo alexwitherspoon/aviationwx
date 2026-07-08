@@ -370,3 +370,89 @@ function dyaconliveSeriesValueAtBucket(?array $series, int $anchorIndex, ?string
 
     return null;
 }
+
+/**
+ * Daily peak gust from wind_gust series for the station local calendar day.
+ *
+ * @return array{value: float, obs_time: int}|null Peak in knots and bucket obs time, or null
+ */
+function dyaconlivePeakGustTodayFromResponse(string $response, string $timezone): ?array
+{
+    if ($response === '') {
+        return null;
+    }
+
+    $seriesList = json_decode($response, true);
+    if (!is_array($seriesList)) {
+        return null;
+    }
+
+    $gustSeries = null;
+    foreach ($seriesList as $series) {
+        if (is_array($series) && ($series['variable_name'] ?? '') === 'wind_gust') {
+            $gustSeries = $series;
+            break;
+        }
+    }
+
+    if (!is_array($gustSeries)) {
+        return null;
+    }
+
+    $datetimes = $gustSeries['datetimes'] ?? [];
+    $values = $gustSeries['values'] ?? [];
+    if (!is_array($datetimes) || !is_array($values) || count($values) === 0) {
+        return null;
+    }
+
+    $seriesTimezone = is_string($gustSeries['timezone'] ?? null) && $gustSeries['timezone'] !== ''
+        ? $gustSeries['timezone']
+        : $timezone;
+
+    try {
+        $todayKey = (new DateTimeImmutable('now', new DateTimeZone($seriesTimezone)))->format('Y-m-d');
+    } catch (Exception $e) {
+        return null;
+    }
+
+    $peakMph = null;
+    $peakObsTime = null;
+    $count = min(count($datetimes), count($values));
+
+    for ($i = 0; $i < $count; $i++) {
+        $iso = $datetimes[$i] ?? null;
+        $rawValue = $values[$i] ?? null;
+        if (!is_string($iso) || !is_numeric($rawValue)) {
+            continue;
+        }
+
+        try {
+            $bucketLocal = new DateTimeImmutable($iso, new DateTimeZone($seriesTimezone));
+        } catch (Exception $e) {
+            continue;
+        }
+
+        if ($bucketLocal->format('Y-m-d') !== $todayKey) {
+            continue;
+        }
+
+        $mph = (float) $rawValue;
+        if ($mph <= 0) {
+            continue;
+        }
+
+        if ($peakMph === null || $mph > $peakMph) {
+            $peakMph = $mph;
+            $peakObsTime = dyaconliveParseBucketIsoToUnix($iso, $seriesTimezone);
+        }
+    }
+
+    if ($peakMph === null || $peakObsTime === null || $peakObsTime <= 0) {
+        return null;
+    }
+
+    return [
+        'value' => (float) round(mphToKnots($peakMph), 0),
+        'obs_time' => $peakObsTime,
+    ];
+}
