@@ -636,25 +636,34 @@ function generateMockWeatherData($airportId, $airport) {
 
     // Daily tracking (side effects - updates cache files)
     // Track and update today's peak gust (store value and timestamp)
-    // Use peak_gust field if available (set by adapters), otherwise gust_speed, otherwise 0
-    // peak_gust is set by adapters and might survive merge better than gust_speed
     $currentGust = $weatherData['peak_gust'] ?? $weatherData['gust_speed'] ?? 0;
-    // Use explicit observation time from primary source (when weather was actually observed)
-    // This is critical for pilot safety - must show accurate observation times
-    // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
     $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
-    // Only update if we have a valid gust value (> 0)
-    if ($currentGust > 0) {
-        updatePeakGust($airportId, $currentGust, $airport, $obsTimestamp);
+
+    if (is_numeric($currentGust) && (float) $currentGust > 0) {
+        updatePeakGust($airportId, (float) $currentGust, $airport, $obsTimestamp);
     }
-    $peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
+
+    $historicalPeak = $weatherData['peak_gust_historical'] ?? null;
+    if (is_numeric($historicalPeak) && (float) $historicalPeak > 0) {
+        $historicalObs = isset($weatherData['peak_gust_historical_obs_time'])
+            && is_numeric($weatherData['peak_gust_historical_obs_time'])
+            ? (int) $weatherData['peak_gust_historical_obs_time']
+            : $obsTimestamp;
+        updatePeakGust($airportId, (float) $historicalPeak, $airport, $historicalObs);
+    }
+
+    $trackingSeed = max(
+        is_numeric($currentGust) ? (float) $currentGust : 0.0,
+        is_numeric($historicalPeak) ? (float) $historicalPeak : 0.0
+    );
+    $peakGustInfo = getPeakGust($airportId, $trackingSeed, $airport);
     if (is_array($peakGustInfo)) {
-    $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
-    $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
+        $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $trackingSeed;
+        $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
     } else {
-    // Backward compatibility with older scalar cache files
-    $weatherData['peak_gust_today'] = $peakGustInfo;
-    $weatherData['peak_gust_time'] = null;
+        // Backward compatibility with older scalar cache files
+        $weatherData['peak_gust_today'] = $peakGustInfo;
+        $weatherData['peak_gust_time'] = null;
     }
 
     // Track and update today's high and low temperatures

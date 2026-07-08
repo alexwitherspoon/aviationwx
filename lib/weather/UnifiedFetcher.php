@@ -150,7 +150,9 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     // Validate all weather fields against climate bounds
     // This catches unit conversion errors, API format changes, and sensor malfunctions
     $result = validateWeatherData($result, $airportId);
-    
+
+    applyDyaconLivePeakGustFromResponses($result, $sources, $responses, $airport);
+
     // Add calculated fields
     $result = addCalculatedFields($result, $airport);
     
@@ -162,6 +164,50 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     $result['_sources_succeeded'] = count($snapshots);
     
     return $result;
+}
+
+/**
+ * Set peak_gust_historical from the Dyacon wind_gust series for the local calendar day.
+ *
+ * @param array<string, mixed> $result Aggregated weather (mutated)
+ * @param array<string, array<string, mixed>> $sources Source list from buildSourceList()
+ * @param array<string, string|null> $responses Raw HTTP bodies by source key
+ * @param array<string, mixed> $airport Airport configuration
+ */
+function applyDyaconLivePeakGustFromResponses(
+    array &$result,
+    array $sources,
+    array $responses,
+    array $airport
+): void {
+    foreach ($sources as $sourceKey => $source) {
+        if (($source['type'] ?? '') !== 'dyaconlive') {
+            continue;
+        }
+
+        $body = $responses[$sourceKey] ?? null;
+        if (!is_string($body) || $body === '') {
+            continue;
+        }
+
+        $timezone = dyaconliveResolveTimezone($source, $airport);
+        $peak = dyaconlivePeakGustTodayFromResponse($body, $timezone);
+        if ($peak === null || !isset($peak['value'], $peak['obs_time']) || (float) $peak['value'] <= 0) {
+            continue;
+        }
+
+        $peakValue = (float) $peak['value'];
+        $validation = validateWeatherField('peak_gust', $peakValue, null, [
+            'wind_speed' => $result['wind_speed'] ?? null,
+        ]);
+        if (!($validation['valid'] ?? false)) {
+            continue;
+        }
+
+        $result['peak_gust_historical'] = $peakValue;
+        $result['peak_gust_historical_obs_time'] = (int) $peak['obs_time'];
+        return;
+    }
 }
 
 /**
