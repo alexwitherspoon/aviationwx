@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../dyaconlive-bucket.php';
 require_once __DIR__ . '/../calculator.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
@@ -311,7 +312,7 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
         : null;
 
     $tempF = dyaconliveSeriesValueAtBucket($byName['air_temp'] ?? null, $lastIndex, $lastBucketIso);
-    $temperature = $tempF !== null ? ((float) $tempF - 32.0) / 1.8 : null;
+    $temperature = $tempF !== null ? fahrenheitToCelsius((float) $tempF) : null;
     $humidity = dyaconliveSeriesValueAtBucket($byName['humidity'] ?? null, $lastIndex, $lastBucketIso);
     $pressure = dyaconliveSeriesValueAtBucket($byName['air_pressure'] ?? null, $lastIndex, $lastBucketIso);
     $windMph = dyaconliveSeriesValueAtBucket($byName['wind10m_speed'] ?? null, $lastIndex, $lastBucketIso);
@@ -319,9 +320,9 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
     $gustMph = dyaconliveSeriesValueAtBucket($byName['wind_gust'] ?? null, $lastIndex, $lastBucketIso);
     $precip = dyaconliveSeriesValueAtBucket($byName['rainday_cumul'] ?? null, $lastIndex, $lastBucketIso);
 
-    $windKt = $windMph !== null ? round((float) $windMph * 0.868976, 0) : null;
+    $windKt = $windMph !== null ? round(mphToKnots((float) $windMph), 0) : null;
     $gustKt = ($gustMph !== null && (float) $gustMph > 0)
-        ? round((float) $gustMph * 0.868976, 0)
+        ? round(mphToKnots((float) $gustMph), 0)
         : null;
 
     return [
