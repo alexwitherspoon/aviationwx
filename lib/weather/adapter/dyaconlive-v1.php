@@ -434,7 +434,7 @@ function dyaconlivePeakGustTodayFromResponse(
         }
 
         try {
-            $bucketLocal = new DateTimeImmutable($iso, new DateTimeZone($seriesTimezone));
+            $bucketLocal = new DateTimeImmutable($iso, $tzObj);
         } catch (Exception $e) {
             continue;
         }
