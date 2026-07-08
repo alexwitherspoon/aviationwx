@@ -217,8 +217,6 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
             );
             if ($skipped !== null && $skipped->isValid) {
                 $skippedSnapshots[$sourceKey] = $skipped;
-                recordWeatherSuccess($airportId, $sourceType, $source);
-                weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
                 continue;
             }
 
