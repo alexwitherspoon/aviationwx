@@ -250,9 +250,9 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
                 recordWeatherFailure(
                     $airportId,
                     $sourceType,
-                    $httpCode === 401 ? 'auth' : 'transient',
+                    $httpCode === 401 ? 'permanent' : 'transient',
                     $httpCode,
-                    null,
+                    $httpCode === 401 ? 'DyaconLive authentication failed (HTTP 401)' : null,
                     $source,
                     $fetch['response_headers']
                 );
