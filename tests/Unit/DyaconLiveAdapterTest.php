@@ -257,8 +257,9 @@ class DyaconLiveAdapterTest extends TestCase
     public function testDyaconlivePeakGustTodayFromResponse_ReturnsLocalDayMax(): void
     {
         $tz = 'America/Boise';
-        $today = (new DateTimeImmutable('now', new DateTimeZone($tz)))->format('Y-m-d');
-        $yesterday = (new DateTimeImmutable('now', new DateTimeZone($tz)))->modify('-1 day')->format('Y-m-d');
+        $today = '2026-07-07';
+        $yesterday = '2026-07-06';
+        $reference = new DateTimeImmutable($today . 'T12:00:00', new DateTimeZone($tz));
         $response = json_encode([
             [
                 'variable_name' => 'wind_gust',
@@ -273,7 +274,7 @@ class DyaconLiveAdapterTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR);
 
-        $peak = dyaconlivePeakGustTodayFromResponse($response, $tz);
+        $peak = dyaconlivePeakGustTodayFromResponse($response, $tz, $reference);
         $this->assertNotNull($peak);
         $this->assertSame(25.0, $peak['value']);
         $this->assertSame(
@@ -300,7 +301,8 @@ class DyaconLiveAdapterTest extends TestCase
     public function testDyaconlivePeakGustTodayFromResponse_OnlyZeroToday_ReturnsNull(): void
     {
         $tz = 'America/Boise';
-        $today = (new DateTimeImmutable('now', new DateTimeZone($tz)))->format('Y-m-d');
+        $today = '2026-07-07';
+        $reference = new DateTimeImmutable($today . 'T12:00:00', new DateTimeZone($tz));
         $response = json_encode([
             [
                 'variable_name' => 'wind_gust',
@@ -311,6 +313,6 @@ class DyaconLiveAdapterTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR);
 
-        $this->assertNull(dyaconlivePeakGustTodayFromResponse($response, $tz));
+        $this->assertNull(dyaconlivePeakGustTodayFromResponse($response, $tz, $reference));
     }
 }

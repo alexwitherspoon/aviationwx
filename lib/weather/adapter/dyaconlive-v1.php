@@ -376,7 +376,11 @@ function dyaconliveSeriesValueAtBucket(?array $series, int $anchorIndex, ?string
  *
  * @return array{value: float, obs_time: int}|null Peak in knots and bucket obs time, or null
  */
-function dyaconlivePeakGustTodayFromResponse(string $response, string $timezone): ?array
+function dyaconlivePeakGustTodayFromResponse(
+    string $response,
+    string $timezone,
+    ?DateTimeImmutable $now = null
+): ?array
 {
     if ($response === '') {
         return null;
@@ -410,10 +414,13 @@ function dyaconlivePeakGustTodayFromResponse(string $response, string $timezone)
         : $timezone;
 
     try {
-        $todayKey = (new DateTimeImmutable('now', new DateTimeZone($seriesTimezone)))->format('Y-m-d');
+        $tzObj = new DateTimeZone($seriesTimezone);
     } catch (Exception $e) {
         return null;
     }
+
+    $reference = ($now ?? new DateTimeImmutable('now', $tzObj))->setTimezone($tzObj);
+    $todayKey = $reference->format('Y-m-d');
 
     $peakMph = null;
     $peakObsTime = null;
