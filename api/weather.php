@@ -645,7 +645,10 @@ function generateMockWeatherData($airportId, $airport) {
     $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
     // Only update if we have a valid gust value (> 0)
     if ($currentGust > 0) {
-        updatePeakGust($airportId, $currentGust, $airport, $obsTimestamp);
+        $gustObsTimestamp = isset($weatherData['peak_gust_obs_time']) && is_numeric($weatherData['peak_gust_obs_time'])
+            ? (int) $weatherData['peak_gust_obs_time']
+            : $obsTimestamp;
+        updatePeakGust($airportId, $currentGust, $airport, $gustObsTimestamp);
     }
     $peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
     if (is_array($peakGustInfo)) {
