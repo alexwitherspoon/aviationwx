@@ -55,6 +55,11 @@ function dyaconliveGetBearerToken(string $username, string $password): ?string
     }
 
     $ch = curl_init($url);
+    if ($ch === false) {
+        aviationwx_log('error', 'dyaconlive auth: curl_init failed', [], 'app');
+        return null;
+    }
+
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => http_build_query([
@@ -74,6 +79,7 @@ function dyaconliveGetBearerToken(string $username, string $password): ?string
     $response = curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
+    curl_close($ch);
 
     if ($httpCode !== 200 || !is_string($response)) {
         aviationwx_log('error', 'dyaconlive auth: token request failed', [
