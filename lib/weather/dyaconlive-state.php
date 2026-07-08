@@ -91,6 +91,7 @@ function dyaconliveWriteSourceState(
 
     $tmp = $path . '.tmp.' . getmypid();
     if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
+        @unlink($tmp);
         return false;
     }
 
