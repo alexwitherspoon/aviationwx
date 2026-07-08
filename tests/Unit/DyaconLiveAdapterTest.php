@@ -121,6 +121,13 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertFalse($snapshot->isValid);
     }
 
+    public function testExtractLastBucketIso_InvalidJson_ReturnsNull(): void
+    {
+        $this->assertNull(DyaconLiveAdapter::extractLastBucketIso('not-json', [
+            'timezone' => 'America/Boise',
+        ]));
+    }
+
     public function testParseToSnapshot_InvalidJson_ReturnsNull(): void
     {
         $this->assertNull(DyaconLiveAdapter::parseToSnapshot('not-json', ['station_id' => 1]));

@@ -195,6 +195,9 @@ class DyaconLiveAdapter
             : 'UTC';
 
         $parsed = parseDyaconLiveDataResponse($response, $timezone);
+        if (!is_array($parsed)) {
+            return null;
+        }
 
         return $parsed['last_bucket_iso'] ?? null;
     }
