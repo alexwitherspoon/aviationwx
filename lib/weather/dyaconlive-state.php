@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../cache-paths.php';
 require_once __DIR__ . '/../logger.php';
+require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/data/WeatherReading.php';
 require_once __DIR__ . '/data/WindGroup.php';
 require_once __DIR__ . '/data/WeatherSnapshot.php';
@@ -205,7 +206,6 @@ function dyaconliveResolveSkippedSnapshot(
     int $sourceIndex
 ): ?WeatherSnapshot {
     require_once __DIR__ . '/dyaconlive-bucket.php';
-    require_once __DIR__ . '/../config.php';
 
     $timezone = dyaconliveResolveTimezone($source, $airport);
     $statePath = getDyaconLiveSourceStatePath($airportId, $sourceIndex);
