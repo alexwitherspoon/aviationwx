@@ -254,7 +254,7 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertFalse($snapshot->humidity->hasValue());
     }
 
-    public function testDyaconlivePeakGustTodayFromResponse_ReturnsLocalDayMax(): void
+    public function testDyaconLivePeakGustTodayFromResponse_ReturnsLocalDayMax(): void
     {
         $tz = 'America/Boise';
         $today = '2026-07-07';
@@ -283,7 +283,7 @@ class DyaconLiveAdapterTest extends TestCase
         );
     }
 
-    public function testDyaconlivePeakGustTodayFromResponse_EmptySeries_ReturnsNull(): void
+    public function testDyaconLivePeakGustTodayFromResponse_EmptySeries_ReturnsNull(): void
     {
         $response = json_encode([
             [
@@ -298,7 +298,7 @@ class DyaconLiveAdapterTest extends TestCase
         $this->assertNull(dyaconlivePeakGustTodayFromResponse($response, 'America/Boise'));
     }
 
-    public function testDyaconlivePeakGustTodayFromResponse_OnlyZeroToday_ReturnsNull(): void
+    public function testDyaconLivePeakGustTodayFromResponse_OnlyZeroToday_ReturnsNull(): void
     {
         $tz = 'America/Boise';
         $today = '2026-07-07';
