@@ -228,7 +228,7 @@ class DyaconLiveAdapter
         }
 
         if (!isset($config['elevation_ft']) || !is_numeric($config['elevation_ft'])) {
-            aviationwx_log('warning', 'dyaconlive pressure skipped: missing elevation_ft for sea-level conversion', [
+            aviationwx_log('debug', 'dyaconlive pressure skipped: missing elevation_ft for sea-level conversion', [
                 'station_id' => $config['station_id'] ?? null,
             ], 'app');
             return null;
