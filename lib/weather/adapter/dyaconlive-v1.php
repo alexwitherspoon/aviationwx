@@ -321,9 +321,7 @@ function parseDyaconLiveDataResponse(string $response, string $timezone): ?array
     $precip = dyaconliveSeriesValueAtBucket($byName['rainday_cumul'] ?? null, $lastIndex, $lastBucketIso);
 
     $windKt = $windMph !== null ? round(mphToKnots((float) $windMph), 0) : null;
-    $gustKt = ($gustMph !== null && (float) $gustMph > 0)
-        ? round(mphToKnots((float) $gustMph), 0)
-        : null;
+    $gustKt = $gustMph !== null ? round(mphToKnots((float) $gustMph), 0) : null;
 
     return [
         'temperature' => $temperature,
