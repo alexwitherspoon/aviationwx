@@ -196,7 +196,15 @@ function applyDyaconLivePeakGustFromResponses(
             continue;
         }
 
-        $result['peak_gust_historical'] = (float) $peak['value'];
+        $peakValue = (float) $peak['value'];
+        $validation = validateWeatherField('peak_gust', $peakValue, null, [
+            'wind_speed' => $result['wind_speed'] ?? null,
+        ]);
+        if (!($validation['valid'] ?? false)) {
+            continue;
+        }
+
+        $result['peak_gust_historical'] = $peakValue;
         $result['peak_gust_historical_obs_time'] = (int) $peak['obs_time'];
         return;
     }
