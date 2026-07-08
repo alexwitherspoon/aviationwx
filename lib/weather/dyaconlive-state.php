@@ -135,9 +135,13 @@ function dyaconliveSnapshotFromStateArray(array $data): ?WeatherSnapshot
     $source = DyaconLiveAdapter::SOURCE_TYPE;
     $obsTime = isset($data['obs_time']) ? (int) $data['obs_time'] : time();
     $fetchTime = isset($data['fetch_time']) ? (int) $data['fetch_time'] : time();
-    $hasWind = isset($data['wind_speed_kt'], $data['wind_direction'])
-        && $data['wind_speed_kt'] !== null
-        && $data['wind_direction'] !== null;
+    $windSpeedKt = isset($data['wind_speed_kt']) && is_numeric($data['wind_speed_kt'])
+        ? (float) $data['wind_speed_kt']
+        : null;
+    $windDirection = isset($data['wind_direction']) && is_numeric($data['wind_direction'])
+        ? (float) $data['wind_direction']
+        : null;
+    $hasWind = $windSpeedKt !== null && $windDirection !== null;
 
     return new WeatherSnapshot(
         source: $source,
@@ -165,9 +169,11 @@ function dyaconliveSnapshotFromStateArray(array $data): ?WeatherSnapshot
         ),
         wind: $hasWind
             ? WindGroup::from(
-                (float) $data['wind_speed_kt'],
-                $data['wind_direction'],
-                isset($data['gust_speed_kt']) ? (float) $data['gust_speed_kt'] : null,
+                $windSpeedKt,
+                $windDirection,
+                isset($data['gust_speed_kt']) && is_numeric($data['gust_speed_kt'])
+                    ? (float) $data['gust_speed_kt']
+                    : null,
                 $source,
                 $obsTime
             )

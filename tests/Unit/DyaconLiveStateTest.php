@@ -62,6 +62,23 @@ class DyaconLiveStateTest extends TestCase
         $this->assertNull(dyaconliveReadSourceState($this->stateDir . '/missing.json'));
     }
 
+    public function testSnapshotFromStateArray_InvalidWindDirection_UsesEmptyWind(): void
+    {
+        $response = getMockDyaconLiveDataResponse();
+        $snapshot = DyaconLiveAdapter::parseToSnapshot($response, [
+            'timezone' => 'America/Boise',
+            'elevation_ft' => 5335,
+        ]);
+        $this->assertNotNull($snapshot);
+        $state = dyaconliveSnapshotToStateArray($snapshot);
+        $state['wind_direction'] = 'not-a-number';
+
+        $rebuilt = dyaconliveSnapshotFromStateArray($state);
+        $this->assertNotNull($rebuilt);
+        $this->assertFalse($rebuilt->wind->speed->hasValue());
+        $this->assertFalse($rebuilt->wind->direction->hasValue());
+    }
+
     public function testReadSourceState_CorruptJson_ReturnsNull(): void
     {
         $path = $this->stateDir . '/bad.json';
