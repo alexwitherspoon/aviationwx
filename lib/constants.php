@@ -410,12 +410,12 @@ if (!defined('NASR_APT_MIN_AIRPORT_COUNT')) {
     define('NASR_APT_MIN_AIRPORT_COUNT', 10000);
 }
 
-// Density altitude performance attention (reference AFM models, not a go/no-go judgment)
-if (!defined('PERFORMANCE_ATTENTION_TIER_CAUTION')) {
-    define('PERFORMANCE_ATTENTION_TIER_CAUTION', 1.20);
+// Density altitude performance (reference AFM models, not a go/no-go judgment)
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION')) {
+    define('DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION', 1.20);
 }
-if (!defined('PERFORMANCE_ATTENTION_TIER_STRONG')) {
-    define('PERFORMANCE_ATTENTION_TIER_STRONG', 2.40);
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG')) {
+    define('DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG', 2.40);
 }
 if (!defined('PERFORMANCE_STRESS_LOW')) {
     define('PERFORMANCE_STRESS_LOW', 0.67);
@@ -423,15 +423,15 @@ if (!defined('PERFORMANCE_STRESS_LOW')) {
 if (!defined('PERFORMANCE_STRESS_HIGH')) {
     define('PERFORMANCE_STRESS_HIGH', 1.33);
 }
-if (!defined('PERFORMANCE_OBST_MAX_MULT')) {
-    define('PERFORMANCE_OBST_MAX_MULT', 3.0);
+if (!defined('POH_OBSTACLE_REFERENCE_HEIGHT_FT')) {
+    define('POH_OBSTACLE_REFERENCE_HEIGHT_FT', 50);
 }
 if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
     define('POH_GRASS_GROUND_ROLL_FACTOR', 0.15);
 }
-if (!defined('PERFORMANCE_ATTENTION_REFERENCE')) {
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE')) {
     define(
-        'PERFORMANCE_ATTENTION_REFERENCE',
+        'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE',
         'Cessna 152/172/182 AFM at max gross; 0 wind assumed'
     );
 }

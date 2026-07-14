@@ -133,6 +133,66 @@ function pohApplyGrassCorrection(int $chartTotalFt, int $groundRollFt): int
 }
 
 /**
+ * Chart total distance (with grass correction when applicable) for PA/temp.
+ *
+ * @param array $table POH fixture table
+ */
+function pohChartSurfaceTotalFt(
+    array $table,
+    float $pressureAltitudeFt,
+    float $tempC,
+    bool $nonPavedSurface
+): int {
+    $chartTotal = pohLookupChartTotalFt($table, $pressureAltitudeFt, $tempC);
+    if ($nonPavedSurface) {
+        $groundRoll = pohLookupChartGroundRollFt($table, $pressureAltitudeFt, $tempC);
+        $chartTotal = pohApplyGrassCorrection($chartTotal, $groundRoll);
+    }
+
+    return $chartTotal;
+}
+
+/**
+ * Takeoff stress from POH chart distance vs runway and departure obstruction.
+ *
+ * Chart total is distance to clear a 50 ft obstacle (POH standard). When a departure
+ * obstruction lies at dist_ft with hgt_ft, required distance scales linearly by
+ * hgt/50 and is compared to dist_ft. Overall stress is the worse of runway-length
+ * stress and obstacle clearance stress.
+ *
+ * @param array $table POH fixture table
+ */
+function pohComputeDepartureEndStress(
+    array $table,
+    float $pressureAltitudeFt,
+    float $tempC,
+    bool $nonPavedSurface,
+    int $runwayLengthFt,
+    ?float $obstHgtFt,
+    ?float $obstDistFt
+): float {
+    if ($runwayLengthFt <= 0) {
+        return 1.0;
+    }
+
+    $chartTotal = pohChartSurfaceTotalFt($table, $pressureAltitudeFt, $tempC, $nonPavedSurface);
+    $stressRunway = $chartTotal / $runwayLengthFt;
+
+    if ($obstHgtFt === null || $obstDistFt === null || $obstHgtFt <= 0 || $obstDistFt <= 0) {
+        return $stressRunway;
+    }
+    if ($obstDistFt > $runwayLengthFt) {
+        return $stressRunway;
+    }
+
+    $heightRatio = max(1.0, $obstHgtFt / (float) POH_OBSTACLE_REFERENCE_HEIGHT_FT);
+    $requiredToClearObstacle = $chartTotal * $heightRatio;
+    $stressObstacle = $requiredToClearObstacle / $obstDistFt;
+
+    return max($stressRunway, $stressObstacle);
+}
+
+/**
  * Required takeoff distance for one reference model at PA/temp with surface and obstruction.
  *
  * @param array $table POH fixture table
@@ -142,13 +202,21 @@ function pohRequiredTakeoffDistanceFt(
     float $pressureAltitudeFt,
     float $tempC,
     bool $nonPavedSurface,
-    float $obstructionMultiplier
+    ?float $obstHgtFt = null,
+    ?float $obstDistFt = null,
+    int $runwayLengthFt = 0
 ): int {
-    $chartTotal = pohLookupChartTotalFt($table, $pressureAltitudeFt, $tempC);
-    if ($nonPavedSurface) {
-        $groundRoll = pohLookupChartGroundRollFt($table, $pressureAltitudeFt, $tempC);
-        $chartTotal = pohApplyGrassCorrection($chartTotal, $groundRoll);
-    }
+    $stress = pohComputeDepartureEndStress(
+        $table,
+        $pressureAltitudeFt,
+        $tempC,
+        $nonPavedSurface,
+        $runwayLengthFt > 0 ? $runwayLengthFt : 1,
+        $obstHgtFt,
+        $obstDistFt
+    );
 
-    return (int) round($chartTotal * max(1.0, $obstructionMultiplier));
+    $available = $runwayLengthFt > 0 ? $runwayLengthFt : 1;
+
+    return (int) round($stress * $available);
 }

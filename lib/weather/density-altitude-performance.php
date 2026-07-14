@@ -1,6 +1,6 @@
 <?php
 /**
- * Density altitude performance attention assessment.
+ * Density altitude performance assessment from reference AFM takeoff charts.
  */
 
 require_once __DIR__ . '/../constants.php';
@@ -9,25 +9,7 @@ require_once __DIR__ . '/../nasr/runway-selection.php';
 require_once __DIR__ . '/poh-takeoff.php';
 
 /**
- * Departure obstruction multiplier from NASR runway-end data.
- */
-function calculateDepartureObstructionMultiplier(?float $hgtFt, ?float $distFt, int $availableFt): float
-{
-    if ($hgtFt === null || $distFt === null || $hgtFt <= 0 || $distFt <= 0 || $availableFt <= 0) {
-        return 1.0;
-    }
-    if ($distFt > $availableFt || $hgtFt <= 50) {
-        return 1.0;
-    }
-
-    $heightFactor = $hgtFt / 50.0;
-    $distanceFactor = min(max(1000.0 / max($distFt, 200.0), 1.0), 2.5);
-
-    return min($heightFactor * $distanceFactor, PERFORMANCE_OBST_MAX_MULT);
-}
-
-/**
- * Map required/available runway stress to 0-1 profile risk.
+ * Map runway stress ratio to 0-1 profile risk.
  */
 function calculatePerformanceProfileRisk(float $requiredFt, int $availableFt): float
 {
@@ -36,12 +18,22 @@ function calculatePerformanceProfileRisk(float $requiredFt, int $availableFt): f
     }
 
     $stress = $requiredFt / $availableFt;
+
+    return calculatePerformanceProfileRiskFromStress($stress);
+}
+
+/**
+ * Map stress ratio directly to 0-1 profile risk.
+ */
+function calculatePerformanceProfileRiskFromStress(float $stress): float
+{
     $span = PERFORMANCE_STRESS_HIGH - PERFORMANCE_STRESS_LOW;
     if ($span <= 0) {
         return 1.0;
     }
 
     $risk = ($stress - PERFORMANCE_STRESS_LOW) / $span;
+
     return max(0.0, min(1.0, $risk));
 }
 
@@ -64,31 +56,47 @@ function calculateCompositePerformanceRisk(float $risk152, float $risk172, float
 }
 
 /**
- * Map summed profile risk to attention tier (single-end / legacy helper).
+ * Map summed profile risk to tier (single-end / legacy helper).
+ */
+function densityAltitudePerformanceTierForRisk(float $totalRisk): string
+{
+    return densityAltitudePerformanceTierFromEndRisks($totalRisk, $totalRisk);
+}
+
+/**
+ * @deprecated Use densityAltitudePerformanceTierForRisk()
  */
 function performanceAttentionTierForRisk(float $totalRisk): string
 {
-    return performanceAttentionTierFromEndRisks($totalRisk, $totalRisk);
+    return densityAltitudePerformanceTierForRisk($totalRisk);
 }
 
 /**
  * Asymmetric tier: conservative caution on worst end, optimistic strong on best end.
  */
-function performanceAttentionTierFromEndRisks(float $worstTotalRisk, float $bestTotalRisk): string
+function densityAltitudePerformanceTierFromEndRisks(float $worstTotalRisk, float $bestTotalRisk): string
 {
-    if ($bestTotalRisk >= PERFORMANCE_ATTENTION_TIER_STRONG) {
+    if ($bestTotalRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG) {
         return 'strong';
     }
-    if ($worstTotalRisk >= PERFORMANCE_ATTENTION_TIER_CAUTION) {
+    if ($worstTotalRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION) {
         return 'caution';
     }
     return 'none';
 }
 
 /**
+ * @deprecated Use densityAltitudePerformanceTierFromEndRisks()
+ */
+function performanceAttentionTierFromEndRisks(float $worstTotalRisk, float $bestTotalRisk): string
+{
+    return densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
+}
+
+/**
  * Risk factor reported with tier: best-end sum for strong, worst-end sum for caution.
  */
-function performanceAttentionRiskFactorForTier(string $tier, float $worstTotalRisk, float $bestTotalRisk): float
+function densityAltitudePerformanceRiskFactorForTier(string $tier, float $worstTotalRisk, float $bestTotalRisk): float
 {
     if ($tier === 'strong') {
         return $bestTotalRisk;
@@ -101,7 +109,7 @@ function performanceAttentionRiskFactorForTier(string $tier, float $worstTotalRi
 }
 
 /**
- * Score one runway departure end.
+ * Score one runway departure end using POH chart distances.
  *
  * @param array $end Runway end with optional obstruction[]
  * @param array{c152: array, c172: array, c182: array} $tables
@@ -116,19 +124,36 @@ function evaluateSingleRunwayEndPerformance(
     array $tables
 ): array {
     $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-    $mult = calculateDepartureObstructionMultiplier(
-        isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null,
-        isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null,
-        $availableFt
-    );
+    $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
+    $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
 
-    $req152 = pohRequiredTakeoffDistanceFt($tables['c152'], $pressureAltitudeFt, $tempC, $nonPaved, $mult);
-    $req172 = pohRequiredTakeoffDistanceFt($tables['c172'], $pressureAltitudeFt, $tempC, $nonPaved, $mult);
-    $req182 = pohRequiredTakeoffDistanceFt($tables['c182'], $pressureAltitudeFt, $tempC, $nonPaved, $mult);
-
-    $risk152 = calculatePerformanceProfileRisk((float) $req152, $availableFt);
-    $risk172 = calculatePerformanceProfileRisk((float) $req172, $availableFt);
-    $risk182 = calculatePerformanceProfileRisk((float) $req182, $availableFt);
+    $risk152 = calculatePerformanceProfileRiskFromStress(pohComputeDepartureEndStress(
+        $tables['c152'],
+        $pressureAltitudeFt,
+        $tempC,
+        $nonPaved,
+        $availableFt,
+        $obstHgt,
+        $obstDist
+    ));
+    $risk172 = calculatePerformanceProfileRiskFromStress(pohComputeDepartureEndStress(
+        $tables['c172'],
+        $pressureAltitudeFt,
+        $tempC,
+        $nonPaved,
+        $availableFt,
+        $obstHgt,
+        $obstDist
+    ));
+    $risk182 = calculatePerformanceProfileRiskFromStress(pohComputeDepartureEndStress(
+        $tables['c182'],
+        $pressureAltitudeFt,
+        $tempC,
+        $nonPaved,
+        $availableFt,
+        $obstHgt,
+        $obstDist
+    ));
 
     return [
         'total_risk' => calculateSummedPerformanceRisk($risk152, $risk172, $risk182),
@@ -211,7 +236,7 @@ function evaluateRunwayEndPerformanceRange(
  *
  * @return array{tier: string, risk_factor: null, fallback: true, reason: string, reference: string}|null
  */
-function assessFallbackPerformanceAttention(?int $densityAltitudeFt, ?int $fieldElevationFt): ?array
+function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int $fieldElevationFt): ?array
 {
     if ($densityAltitudeFt === null || $fieldElevationFt === null) {
         return null;
@@ -243,7 +268,7 @@ function assessFallbackPerformanceAttention(?int $densityAltitudeFt, ?int $field
         'risk_factor' => null,
         'fallback' => true,
         'reason' => 'density_altitude_only',
-        'reference' => PERFORMANCE_ATTENTION_REFERENCE,
+        'reference' => DENSITY_ALTITUDE_PERFORMANCE_REFERENCE,
     ];
 }
 
@@ -269,7 +294,7 @@ function evaluateWorstRunwayEndPerformance(
 }
 
 /**
- * Build performance attention payload for weather API consumers.
+ * Build density_altitude_performance payload for weather API consumers.
  *
  * Returns null when DA is missing/stale-suppressed or tier is none.
  *
@@ -277,19 +302,13 @@ function evaluateWorstRunwayEndPerformance(
  * @param array $airport Airport configuration
  * @return array<string, mixed>|null
  */
-function buildPerformanceAttention(array $weather, array $airport): ?array
+function buildDensityAltitudePerformance(array $weather, array $airport): ?array
 {
     $densityAltitude = $weather['density_altitude'] ?? null;
     if (!is_numeric($densityAltitude)) {
         return null;
     }
     $densityAltitudeFt = (int) round((float) $densityAltitude);
-
-    $pressureAltitude = $weather['pressure_altitude'] ?? null;
-    $temperature = $weather['temperature'] ?? null;
-    if (!is_numeric($pressureAltitude) || !is_numeric($temperature)) {
-        return null;
-    }
 
     $nasrRecord = getNasrAirportForConfig($airport);
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
@@ -309,7 +328,13 @@ function buildPerformanceAttention(array $weather, array $airport): ?array
     }
 
     if ($selectedRunway === null) {
-        return assessFallbackPerformanceAttention($densityAltitudeFt, $fieldElevationFt);
+        return assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);
+    }
+
+    $pressureAltitude = $weather['pressure_altitude'] ?? null;
+    $temperature = $weather['temperature'] ?? null;
+    if (!is_numeric($pressureAltitude) || !is_numeric($temperature)) {
+        return null;
     }
 
     $tables = loadPohTakeoffTables();
@@ -322,34 +347,36 @@ function buildPerformanceAttention(array $weather, array $airport): ?array
 
     $worstTotalRisk = $evaluation['worst']['total_risk'];
     $bestTotalRisk = $evaluation['best']['total_risk'];
-    $tier = performanceAttentionTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
+    $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
     if ($tier === 'none') {
         return null;
     }
 
-    $riskFactor = performanceAttentionRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
+    $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
 
     return [
         'tier' => $tier,
         'risk_factor' => round($riskFactor, 3),
+        'worst_end_risk' => round($worstTotalRisk, 3),
+        'best_end_risk' => round($bestTotalRisk, 3),
         'fallback' => false,
         'reason' => 'reference_models',
-        'reference' => PERFORMANCE_ATTENTION_REFERENCE,
+        'reference' => DENSITY_ALTITUDE_PERFORMANCE_REFERENCE,
     ];
 }
 
 /**
- * Attach performance_attention when tier is caution or strong.
+ * Attach density_altitude_performance when tier is caution or strong.
  *
  * @param array $weather Weather array (not modified)
  * @param array $airport Airport configuration
- * @return array Weather array with optional performance_attention
+ * @return array Weather array with optional density_altitude_performance
  */
-function attachPerformanceAttention(array $weather, array $airport): array
+function attachDensityAltitudePerformance(array $weather, array $airport): array
 {
-    $attention = buildPerformanceAttention($weather, $airport);
-    if ($attention !== null) {
-        $weather['performance_attention'] = $attention;
+    $performance = buildDensityAltitudePerformance($weather, $airport);
+    if ($performance !== null) {
+        $weather['density_altitude_performance'] = $performance;
     }
     return $weather;
 }
