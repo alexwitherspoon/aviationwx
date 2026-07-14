@@ -13,6 +13,25 @@ require_once __DIR__ . '/../../lib/public-api/weather-format.php';
 
 class FormatWeatherResponseTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+        require_once __DIR__ . '/../../lib/weather/poh-takeoff.php';
+
+        resetNasrAptCacheMemo();
+        resetPohTakeoffTables();
+        setNasrAptCacheForTesting([
+            'schema_version' => 1,
+            'airports' => [],
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        resetNasrAptCacheMemo();
+        resetPohTakeoffTables();
+    }
+
     /**
      * Numeric wind: wind_direction object with true_north, magnetic_north, variable
      */
@@ -246,7 +265,7 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertSame(17, $result['daily']['peak_gust']);
     }
 
-    public function testPerformanceAttentionIncludedWhenTierSet(): void
+    public function testDensityAltitudePerformanceIncludedWhenTierSet(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
 
@@ -269,9 +288,9 @@ class FormatWeatherResponseTest extends TestCase
 
         $result = formatWeatherResponse($weather, $airport);
 
-        $this->assertArrayHasKey('performance_attention', $result);
-        $this->assertSame('strong', $result['performance_attention']['tier']);
-        $this->assertFalse($result['performance_attention']['fallback']);
+        $this->assertArrayHasKey('density_altitude_performance', $result);
+        $this->assertSame('strong', $result['density_altitude_performance']['tier']);
+        $this->assertFalse($result['density_altitude_performance']['fallback']);
 
         resetNasrAptCacheMemo();
     }

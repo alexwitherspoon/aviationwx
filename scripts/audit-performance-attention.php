@@ -19,7 +19,7 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/runway-selection.php';
-require_once __DIR__ . '/../lib/weather/performance-attention.php';
+require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
 require_once __DIR__ . '/../lib/weather/poh-takeoff.php';
 
 /**
@@ -58,7 +58,7 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
         $runwaySource = $selectedRunway !== null ? 'nasr' : 'nasr_no_runway';
     }
 
-    $fallback = assessFallbackPerformanceAttention($densityAltitudeFt, $fieldElevationFt);
+    $fallback = assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);
     $fallbackTier = $fallback['tier'] ?? 'none';
 
     if ($selectedRunway === null) {
@@ -94,12 +94,13 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
 
     $worstTotalRisk = $evaluation['worst']['total_risk'];
     $bestTotalRisk = $evaluation['best']['total_risk'];
-    $tier = performanceAttentionTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-    $riskFactor = performanceAttentionRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
+    $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
+    $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
 
     $worstEnd = [
         'end_id' => $evaluation['worst']['end_id'],
-        'obst_mult' => null,
+        'obst_hgt_ft' => null,
+        'obst_dist_ft' => null,
         'risk172' => round($evaluation['worst']['risk172'], 3),
         'total_risk' => round($worstTotalRisk, 3),
     ];
@@ -117,19 +118,19 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
             continue;
         }
         $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-        $mult = calculateDepartureObstructionMultiplier(
-            isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null,
-            isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null,
-            $availableFt
-        );
+        $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
+        $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
         $req172 = pohRequiredTakeoffDistanceFt(
             $tables['c172'],
             (float) $pressureAltitude,
             (float) $temperature,
             $nonPaved,
-            $mult
+            $obstHgt,
+            $obstDist,
+            $availableFt
         );
-        $worstEnd['obst_mult'] = round($mult, 2);
+        $worstEnd['obst_hgt_ft'] = $obstHgt;
+        $worstEnd['obst_dist_ft'] = $obstDist;
         $worstEnd['req172'] = $req172;
     }
 
@@ -151,7 +152,8 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
         'non_paved' => $nonPaved,
         'worst_end_id' => $evaluation['worst']['end_id'],
         'best_end_id' => $evaluation['best']['end_id'],
-        'worst_obst_mult' => $worstEnd['obst_mult'] ?? null,
+        'worst_obst_hgt_ft' => $worstEnd['obst_hgt_ft'] ?? null,
+        'worst_obst_dist_ft' => $worstEnd['obst_dist_ft'] ?? null,
         'risk152' => round($evaluation['worst']['risk152'], 3),
         'risk172' => $worstEnd['risk172'] ?? null,
         'risk182' => round($evaluation['worst']['risk182'], 3),
@@ -192,7 +194,7 @@ function fetchProductionWeather(string $baseUrl, string $airportId): array
     if (isset($weather['temperature_f']) && !isset($weather['temperature']) && is_numeric($weather['temperature_f'])) {
         $weather['temperature'] = ((float) $weather['temperature_f'] - 32) * 5 / 9;
     }
-    $weather['_prod_attention'] = $weather['performance_attention'] ?? null;
+    $weather['_prod_attention'] = $weather['density_altitude_performance'] ?? null;
     $weather['_last_updated_iso'] = $weather['last_updated_iso'] ?? null;
 
     return ['ok' => true, 'weather' => $weather, 'error' => null, 'http_code' => $httpCode];

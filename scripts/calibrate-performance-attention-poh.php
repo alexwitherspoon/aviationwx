@@ -13,7 +13,7 @@ define('CACHE_BASE_DIR', getenv('CACHE_BASE_DIR') ?: dirname(__DIR__) . '/cache'
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
-require_once __DIR__ . '/../lib/weather/performance-attention.php';
+require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
 require_once __DIR__ . '/../lib/weather/poh-takeoff.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/runway-selection.php';
@@ -28,17 +28,28 @@ function pohCalibrationRow(
     float $tempC,
     int $runwayFt,
     bool $nonPaved,
-    float $obstructionMult
+    ?float $obstHgtFt = null,
+    ?float $obstDistFt = null
 ): array {
     $chartTotal = pohLookupChartTotalFt($table, $pressureAltitudeFt, $tempC);
     $groundRoll = pohLookupChartGroundRollFt($table, $pressureAltitudeFt, $tempC);
-    $pavedTotal = $chartTotal;
-    $surfaceTotal = $nonPaved ? pohApplyGrassCorrection($chartTotal, $groundRoll) : $chartTotal;
-    $requiredTotal = (int) round($surfaceTotal * max(1.0, $obstructionMult));
-    $stress = $runwayFt > 0 ? $requiredTotal / $runwayFt : null;
-    $risk = $stress !== null ? calculatePerformanceProfileRisk((float) $requiredTotal, $runwayFt) : null;
-    $marginFt = $runwayFt > 0 ? $runwayFt - $requiredTotal : null;
-    $marginPct = ($runwayFt > 0) ? round(100.0 * $marginFt / $runwayFt, 1) : null;
+    $surfaceTotal = pohChartSurfaceTotalFt($table, $pressureAltitudeFt, $tempC, $nonPaved);
+    $stress = pohComputeDepartureEndStress(
+        $table,
+        $pressureAltitudeFt,
+        $tempC,
+        $nonPaved,
+        $runwayFt,
+        $obstHgtFt,
+        $obstDistFt
+    );
+    $requiredTotal = $runwayFt > 0 ? (int) round($stress * $runwayFt) : null;
+    $risk = $runwayFt > 0 ? calculatePerformanceProfileRiskFromStress($stress) : null;
+    $marginFt = ($runwayFt > 0 && $requiredTotal !== null) ? $runwayFt - $requiredTotal : null;
+    $marginPct = ($runwayFt > 0 && $marginFt !== null) ? round(100.0 * $marginFt / $runwayFt, 1) : null;
+    $heightRatio = ($obstHgtFt !== null && $obstHgtFt > 0)
+        ? max(1.0, $obstHgtFt / (float) POH_OBSTACLE_REFERENCE_HEIGHT_FT)
+        : null;
 
     return [
         'label' => $label,
@@ -46,7 +57,9 @@ function pohCalibrationRow(
         'ground_roll_ft' => $groundRoll,
         'grass_add_ft' => $nonPaved ? (int) round($groundRoll * POH_GRASS_GROUND_ROLL_FACTOR) : 0,
         'surface_total_ft' => $surfaceTotal,
-        'obst_mult' => $obstructionMult,
+        'obst_hgt_ft' => $obstHgtFt,
+        'obst_dist_ft' => $obstDistFt,
+        'obst_height_ratio' => $heightRatio !== null ? round($heightRatio, 3) : null,
         'required_total_ft' => $requiredTotal,
         'runway_ft' => $runwayFt,
         'stress' => $stress !== null ? round($stress, 3) : null,
@@ -128,21 +141,17 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
             continue;
         }
         $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-        $mult = calculateDepartureObstructionMultiplier(
-            isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null,
-            isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null,
-            $runwayFt
-        );
+        $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
+        $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
         $endDetail = [
             'end_id' => $end['end_id'] ?? null,
-            'obst_hgt_ft' => $obst['hgt_ft'] ?? null,
-            'obst_dist_ft' => $obst['dist_ft'] ?? null,
-            'obst_mult' => round($mult, 2),
+            'obst_hgt_ft' => $obstHgt,
+            'obst_dist_ft' => $obstDist,
             'models' => [],
         ];
         $r152 = $r172 = $r182 = 0.0;
         foreach (['c152' => 'C152M', 'c172' => 'C172N', 'c182' => 'C182T'] as $key => $modelLabel) {
-            $row = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, $nonPaved, $mult);
+            $row = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, $nonPaved, $obstHgt, $obstDist);
             $endDetail['models'][$key] = $row;
             if ($key === 'c152') {
                 $r152 = (float) $row['risk'];
@@ -154,7 +163,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         }
         $totalRisk = calculateSummedPerformanceRisk($r152, $r172, $r182);
         $endDetail['total_risk'] = round($totalRisk, 3);
-        $endDetail['tier'] = performanceAttentionTierForRisk($totalRisk);
+        $endDetail['tier'] = densityAltitudePerformanceTierForRisk($totalRisk);
         $endRows[] = $endDetail;
         $worstTotalRisk = max($worstTotalRisk, $totalRisk);
         $bestTotalRisk = min($bestTotalRisk, $totalRisk);
@@ -162,7 +171,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
 
     $noObst = [];
     foreach (['c152' => 'C152M', 'c172' => 'C172N', 'c182' => 'C182T'] as $key => $modelLabel) {
-        $noObst[$key] = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, $nonPaved, 1.0);
+        $noObst[$key] = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, $nonPaved);
     }
     $noObstTotalRisk = calculateSummedPerformanceRisk(
         (float) $noObst['c152']['risk'],
@@ -173,12 +182,12 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
     $pavedNoGrass = [];
     if ($nonPaved) {
         foreach (['c152' => 'C152M', 'c172' => 'C172N', 'c182' => 'C182T'] as $key => $modelLabel) {
-            $pavedNoGrass[$key] = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, false, 1.0);
+            $pavedNoGrass[$key] = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, false);
         }
     }
 
-    $built = buildPerformanceAttention($weather, $airport);
-    $fallback = assessFallbackPerformanceAttention($da, $elev);
+    $built = buildDensityAltitudePerformance($weather, $airport);
+    $fallback = assessFallbackDensityAltitudePerformance($da, $elev);
 
     return [
         'id' => $airportId,
@@ -235,7 +244,7 @@ function sweepStressCurve(callable $riskFromStress): array
     $rows = [];
     foreach ([0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.2, 1.33, 1.5, 1.7, 2.0] as $stress) {
         $risk = $riskFromStress($stress);
-        $tier = performanceAttentionTierForRisk($risk);
+        $tier = densityAltitudePerformanceTierForRisk($risk);
         $rows[] = ['stress' => $stress, 'risk' => round($risk, 3), 'tier' => $tier];
     }
     return $rows;
