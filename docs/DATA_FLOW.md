@@ -658,6 +658,8 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed runway surface condition (`COND=FAILED`) and water surfaces are excluded from longest-runway selection.
 
+**NASR cycle discovery**: The fetcher tracks the active cycle (`tracked_current_cycle_date`) and the next preview cycle (`tracked_next_cycle_date`) in `nasr_meta.json`. It downloads only the active cycle (largest effective date on or before today). When the next cycle date passes, or when no tracked cycles exist, discovery re-runs via the FAA subscription index; if the index is unreachable, NFDC is probed in a narrow window around the expected next cycle. Failed fetches retain the last-good cache and record `last_fetch_error` for the status page.
+
 **Full model** (runway data available):
 
 1. Select longest active land runway (exclude `WATER`, exclude `COND=FAILED`).

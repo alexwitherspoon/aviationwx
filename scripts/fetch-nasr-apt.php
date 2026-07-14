@@ -5,7 +5,7 @@
  * Downloads FAA 28-day NASR APT CSV group, parses runway performance fields,
  * and writes cache/nasr/nasr_apt.json plus nasr_meta.json.
  *
- * Usage: php scripts/fetch-nasr-apt.php
+ * Usage: php scripts/fetch-nasr-apt.php [--force]
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -14,8 +14,9 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/nasr/parse.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
+require_once __DIR__ . '/../lib/nasr/discovery.php';
 
-@ini_set('memory_limit', '512M');
+@ini_set('memory_limit', '1024M');
 
 /**
  * Acquire fetch lock; return handle or false.
@@ -49,87 +50,41 @@ function acquireNasrAptFetchLock()
 }
 
 /**
- * Download URL to string.
+ * Download APT zip bytes from NFDC (with retry via nasrHttpGet).
  */
-function nasrDownloadUrl(string $url): ?string
+function nasrDownloadBinary(string $url): ?string
 {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 180,
-        CURLOPT_CONNECTTIMEOUT => 20,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_USERAGENT => 'AviationWX NASR Fetcher/1.0',
-    ]);
-    $content = curl_exec($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($content === false || $httpCode !== 200) {
-        return null;
-    }
-    return $content;
-}
-
-/**
- * Build NASR APT zip URL for an effective date (YYYY-MM-DD).
- */
-function buildNasrAptZipUrl(string $dateYmd): string
-{
-    return 'https://nfdc.faa.gov/webContent/28DaySub/extra/' . $dateYmd . '_APT_CSV.zip';
-}
-
-/**
- * Candidate effective dates to try (newest first).
- *
- * @return list<string>
- */
-function nasrAptZipCandidateDates(): array
-{
-    $dates = [];
-    $meta = null;
-    if (is_readable(CACHE_NASR_APT_META_FILE)) {
-        $decoded = json_decode((string) file_get_contents(CACHE_NASR_APT_META_FILE), true);
-        if (is_array($decoded) && !empty($decoded['effective_date'])) {
-            $meta = (string) $decoded['effective_date'];
-        }
-    }
-
-    if ($meta !== null) {
-        $dates[] = $meta;
-    }
-    $dates[] = NASR_APT_ZIP_FALLBACK_DATE;
-
-    $now = time();
-    for ($offsetDays = 0; $offsetDays <= 84; $offsetDays += 28) {
-        $dates[] = gmdate('Y-m-d', $now - ($offsetDays * 86400));
-    }
-
-    $unique = [];
-    foreach ($dates as $date) {
-        if (!in_array($date, $unique, true)) {
-            $unique[] = $date;
-        }
-    }
-    return $unique;
+    return nasrHttpGet($url);
 }
 
 /**
  * Download and extract APT CSV group to a temp directory.
  *
- * @return array{dir: string, source_url: string, effective_date: ?string}|null
+ * @return array{
+ *   dir: string,
+ *   source_url: string,
+ *   effective_date: ?string,
+ *   discovery_source: string,
+ *   tracked_next_cycle_date: ?string,
+ *   known_cycle_dates: list<string>
+ * }|null
  */
 function downloadNasrAptCsvDirectory(): ?array
 {
+    $cachedMeta = loadNasrAptMeta();
+    $plans = buildNasrAptDownloadPlans(null, $cachedMeta);
+    if ($plans === []) {
+        return null;
+    }
+
     $tmpRoot = sys_get_temp_dir() . '/aviationwx-nasr-apt-' . getmypid() . '-' . bin2hex(random_bytes(4));
     if (!@mkdir($tmpRoot, 0700, true) && !is_dir($tmpRoot)) {
         return null;
     }
 
-    foreach (nasrAptZipCandidateDates() as $dateYmd) {
-        $url = buildNasrAptZipUrl($dateYmd);
-        $zipBytes = nasrDownloadUrl($url);
+    foreach ($plans as $plan) {
+        $url = $plan['source_url'];
+        $zipBytes = nasrDownloadBinary($url);
         if ($zipBytes === null) {
             continue;
         }
@@ -159,7 +114,10 @@ function downloadNasrAptCsvDirectory(): ?array
         return [
             'dir' => $extractDir,
             'source_url' => $url,
-            'effective_date' => $dateYmd,
+            'effective_date' => $plan['effective_date'],
+            'discovery_source' => $plan['discovery_source'] ?? 'unknown',
+            'tracked_next_cycle_date' => $plan['tracked_next_cycle_date'] ?? null,
+            'known_cycle_dates' => $plan['known_cycle_dates'] ?? [],
         ];
     }
 
@@ -215,36 +173,89 @@ function fetchNasrAptIfNeeded(bool $force = false): bool
             return true;
         }
 
+        updateNasrAptMetaFields([
+            'last_fetch_attempt_at' => gmdate('c'),
+        ]);
+
         $download = downloadNasrAptCsvDirectory();
         if ($download === null) {
+            $errorMessage = 'NASR APT download failed, retaining previous cache';
+            updateNasrAptMetaFields([
+                'last_fetch_error' => $errorMessage,
+                'last_fetch_error_at' => gmdate('c'),
+            ]);
             aviationwx_log('error', 'nasr_apt: download failed, retaining previous cache', [], 'app');
             return is_readable(CACHE_NASR_APT_DATA_FILE);
         }
 
-        $parsed = nasrParseAptCsvDirectory($download['dir']);
+        $extractRoot = dirname($download['dir']);
+        try {
+            $parsed = nasrParseAptCsvDirectory($download['dir']);
+        } catch (Throwable $e) {
+            $errorMessage = 'NASR APT parse failed, retaining previous cache';
+            updateNasrAptMetaFields([
+                'last_fetch_error' => $errorMessage,
+                'last_fetch_error_at' => gmdate('c'),
+            ]);
+            aviationwx_log('error', 'nasr_apt: parse failed, retaining previous cache', [
+                'error' => $e->getMessage(),
+                'source_url' => $download['source_url'],
+            ], 'app');
+            nasrCleanupDirectory($extractRoot);
+            return is_readable(CACHE_NASR_APT_DATA_FILE);
+        }
+
+        $airportCount = count($parsed['airports']);
+        if ($airportCount < NASR_APT_MIN_AIRPORT_COUNT) {
+            $errorMessage = 'NASR APT parse produced too few airports, retaining previous cache';
+            updateNasrAptMetaFields([
+                'last_fetch_error' => $errorMessage,
+                'last_fetch_error_at' => gmdate('c'),
+            ]);
+            aviationwx_log('error', 'nasr_apt: airport count below minimum, retaining previous cache', [
+                'airport_count' => $airportCount,
+                'minimum' => NASR_APT_MIN_AIRPORT_COUNT,
+                'source_url' => $download['source_url'],
+            ], 'app');
+            nasrCleanupDirectory($extractRoot);
+            return is_readable(CACHE_NASR_APT_DATA_FILE);
+        }
+
         $effectiveDate = $parsed['effective_date'] ?? $download['effective_date'];
+        $trackedNext = $download['tracked_next_cycle_date'] ?? nasrEstimateNextCycleDate($effectiveDate);
 
         $meta = [
             'effective_date' => $effectiveDate,
+            'tracked_current_cycle_date' => $effectiveDate,
+            'tracked_next_cycle_date' => $trackedNext,
+            'known_cycle_dates' => $download['known_cycle_dates'],
+            'discovery_source' => $download['discovery_source'],
+            'last_discovery_at' => gmdate('c'),
             'source_urls' => [$download['source_url']],
             'fetched_at' => gmdate('c'),
+            'last_fetch_error' => null,
+            'last_fetch_error_at' => null,
             'row_counts' => [
-                'airports' => count($parsed['airports']),
+                'airports' => $airportCount,
             ],
         ];
 
         $saved = saveNasrAptCache($parsed['airports'], $meta);
         if (!$saved) {
             aviationwx_log('error', 'nasr_apt: failed to write cache', [], 'app');
+            nasrCleanupDirectory($extractRoot);
             return is_readable(CACHE_NASR_APT_DATA_FILE);
         }
 
         aviationwx_log('info', 'nasr_apt: cache updated', [
-            'airport_count' => count($parsed['airports']),
+            'airport_count' => $airportCount,
             'effective_date' => $effectiveDate,
+            'source_url' => $download['source_url'],
+            'discovery_source' => $download['discovery_source'],
+            'tracked_next_cycle_date' => $trackedNext,
         ], 'app');
 
-        nasrCleanupDirectory(dirname($download['dir']));
+        nasrCleanupDirectory($extractRoot);
         return true;
     } finally {
         @flock($lock, LOCK_UN);

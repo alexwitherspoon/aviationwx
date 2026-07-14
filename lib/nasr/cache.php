@@ -7,6 +7,7 @@ require_once __DIR__ . '/../cache-paths.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/identifiers.php';
 require_once __DIR__ . '/parse.php';
+require_once __DIR__ . '/discovery.php';
 
 /**
  * @var array|null In-request memo for parsed NASR cache
@@ -96,6 +97,55 @@ function saveNasrAptCache(array $airports, array $meta): bool
 }
 
 /**
+ * Load NASR APT metadata file.
+ *
+ * @return array<string, mixed>|null
+ */
+function loadNasrAptMeta(): ?array
+{
+    $path = CACHE_NASR_APT_META_FILE;
+    if (!is_readable($path)) {
+        return null;
+    }
+
+    $decoded = json_decode((string) file_get_contents($path), true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Merge fields into NASR meta without touching airport data cache.
+ *
+ * @param array<string, mixed> $fields
+ * @return bool True on success
+ */
+function updateNasrAptMetaFields(array $fields): bool
+{
+    ensureCacheDir(CACHE_NASR_DIR);
+
+    $meta = loadNasrAptMeta() ?? [];
+    $meta = array_merge($meta, $fields);
+    $meta['schema_version'] = NASR_APT_SCHEMA_VERSION;
+
+    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
+    if ($metaJson === false) {
+        return false;
+    }
+
+    $tmpMeta = CACHE_NASR_APT_META_FILE . '.tmp.' . getmypid();
+    if (file_put_contents($tmpMeta, $metaJson, LOCK_EX) === false) {
+        @unlink($tmpMeta);
+        return false;
+    }
+
+    if (!@rename($tmpMeta, CACHE_NASR_APT_META_FILE)) {
+        @unlink($tmpMeta);
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Whether NASR APT cache should be refreshed.
  */
 function nasrAptCacheNeedsRefresh(): bool
@@ -103,8 +153,18 @@ function nasrAptCacheNeedsRefresh(): bool
     if (!is_readable(CACHE_NASR_APT_DATA_FILE)) {
         return true;
     }
+
     $age = time() - (int) filemtime(CACHE_NASR_APT_DATA_FILE);
-    return $age > NASR_CACHE_MAX_AGE;
+    if ($age > NASR_CACHE_MAX_AGE) {
+        return true;
+    }
+
+    $meta = loadNasrAptMeta();
+    if ($meta !== null && nasrCycleRediscoveryNeeded($meta)) {
+        return true;
+    }
+
+    return false;
 }
 
 /**

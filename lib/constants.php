@@ -388,16 +388,34 @@ if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
 if (!defined('NASR_CACHE_MAX_AGE')) {
     define('NASR_CACHE_MAX_AGE', 3024000); // 35 days (28-day cycle + buffer)
 }
-if (!defined('NASR_APT_ZIP_FALLBACK_DATE')) {
-    define('NASR_APT_ZIP_FALLBACK_DATE', '2025-05-15');
+if (!defined('NASR_CYCLE_PERIOD_DAYS')) {
+    define('NASR_CYCLE_PERIOD_DAYS', 28);
+}
+if (!defined('NASR_PROBE_DAYS_BEFORE')) {
+    define('NASR_PROBE_DAYS_BEFORE', 14);
+}
+if (!defined('NASR_PROBE_DAYS_AFTER')) {
+    define('NASR_PROBE_DAYS_AFTER', 14);
+}
+if (!defined('NASR_HTTP_MAX_ATTEMPTS')) {
+    define('NASR_HTTP_MAX_ATTEMPTS', 3);
+}
+if (!defined('NASR_HTTP_RETRY_DELAYS_SECONDS')) {
+    define('NASR_HTTP_RETRY_DELAYS_SECONDS', [5, 30]);
+}
+if (!defined('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS')) {
+    define('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS', 120);
+}
+if (!defined('NASR_APT_MIN_AIRPORT_COUNT')) {
+    define('NASR_APT_MIN_AIRPORT_COUNT', 10000);
 }
 
 // Density altitude performance attention (reference AFM models, not a go/no-go judgment)
 if (!defined('PERFORMANCE_ATTENTION_TIER_CAUTION')) {
-    define('PERFORMANCE_ATTENTION_TIER_CAUTION', 0.30);
+    define('PERFORMANCE_ATTENTION_TIER_CAUTION', 1.20);
 }
 if (!defined('PERFORMANCE_ATTENTION_TIER_STRONG')) {
-    define('PERFORMANCE_ATTENTION_TIER_STRONG', 0.70);
+    define('PERFORMANCE_ATTENTION_TIER_STRONG', 2.40);
 }
 if (!defined('PERFORMANCE_STRESS_LOW')) {
     define('PERFORMANCE_STRESS_LOW', 0.67);
