@@ -89,7 +89,10 @@ function saveNasrAptCache(array $airports, array $meta): bool
         return false;
     }
     if (!@rename($tmpMeta, CACHE_NASR_APT_META_FILE)) {
-        return false;
+        @unlink($tmpMeta);
+        if (!updateNasrAptMetaFields($meta)) {
+            return false;
+        }
     }
 
     $GLOBALS['_nasr_apt_cache_memo'] = $payload;
