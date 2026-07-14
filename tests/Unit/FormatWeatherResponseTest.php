@@ -245,4 +245,34 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertSame(711, $result['pressure_altitude']);
         $this->assertSame(17, $result['daily']['peak_gust']);
     }
+
+    public function testPerformanceAttentionIncludedWhenTierSet(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+
+        $built = nasrBuildCacheFromCsvDirectory(__DIR__ . '/../Fixtures/nasr');
+        setNasrAptCacheForTesting([
+            'schema_version' => 1,
+            'airports' => $built['airports'],
+        ]);
+
+        $weather = [
+            'density_altitude' => 6280,
+            'pressure_altitude' => 4570,
+            'temperature' => 20.1,
+        ];
+        $airport = [
+            'id' => 'id76',
+            'faa' => 'ID76',
+            'elevation_ft' => 4925,
+        ];
+
+        $result = formatWeatherResponse($weather, $airport);
+
+        $this->assertArrayHasKey('performance_attention', $result);
+        $this->assertSame('strong', $result['performance_attention']['tier']);
+        $this->assertFalse($result['performance_attention']['fallback']);
+
+        resetNasrAptCacheMemo();
+    }
 }

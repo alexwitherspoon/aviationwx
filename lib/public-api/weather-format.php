@@ -6,6 +6,8 @@
  * Ensures explicit values for safety-critical data in all API responses.
  */
 
+require_once __DIR__ . '/../weather/performance-attention.php';
+
 /** Sector labels for 16-point wind rose (N, NNE, NE, ... NNW) */
 const WIND_ROSE_SECTOR_LABELS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
@@ -153,6 +155,13 @@ function formatWeatherResponse(array $weather, array $airport): array
         'metar_visibility_reported' => $weather['metar_visibility_reported'] ?? null,
         'metar_ceiling_reported' => $weather['metar_ceiling_reported'] ?? null,
     ];
+
+    $withAttention = attachPerformanceAttention($weather, $airport);
+    if (isset($withAttention['performance_attention'])) {
+        $formatted['performance_attention'] = $withAttention['performance_attention'];
+    }
+
+    return $formatted;
 }
 
 /**

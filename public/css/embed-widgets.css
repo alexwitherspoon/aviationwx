@@ -97,6 +97,11 @@ a {
     color: #fff;
 }
 
+.density-altitude-strong {
+    color: #e67e22 !important;
+    font-weight: 600;
+}
+
 .flight-category.unknown {
     background: var(--unknown-bg);
     color: #fff;

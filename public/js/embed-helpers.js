@@ -221,6 +221,45 @@
         }
     }
     
+    function performanceAttentionTooltip(tier) {
+        if (tier === 'strong') {
+            return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
+        }
+        if (tier === 'caution') {
+            return 'Density altitude is higher than normal. Verify performance numbers before flight.';
+        }
+        return '';
+    }
+
+    function performanceAttentionEmoji(tier) {
+        if (tier === 'strong') return '🚩';
+        if (tier === 'caution') return '⚠️';
+        return '';
+    }
+
+    function formatDensityAltitudeAttentionDisplay(densityAltitudeFt, attention, distUnit) {
+        const base = formatEmbedDist(densityAltitudeFt, distUnit, true);
+        if (base === '--') {
+            return { text: base, className: '', title: '', ariaLabel: 'Density altitude unavailable' };
+        }
+        const tier = attention && attention.tier ? attention.tier : 'none';
+        const emoji = performanceAttentionEmoji(tier);
+        const text = emoji ? `${base} ${emoji}` : base;
+        const feet = Math.round(Number(densityAltitudeFt));
+        let ariaLabel = `Density altitude ${feet.toLocaleString()} feet`;
+        if (tier === 'strong') {
+            ariaLabel += '. Strong caution: dangerously high for average GA aircraft; verify performance numbers before flight.';
+        } else if (tier === 'caution') {
+            ariaLabel += '. Caution: higher than normal; verify performance numbers before flight.';
+        }
+        return {
+            text,
+            className: tier === 'strong' ? 'density-altitude-strong' : '',
+            title: performanceAttentionTooltip(tier),
+            ariaLabel,
+        };
+    }
+
     /**
      * Escape HTML to prevent XSS
      */
@@ -239,6 +278,8 @@
         formatEmbedWindSpeed,
         formatEmbedPressure,
         formatEmbedVisibility,
+        formatDensityAltitudeAttentionDisplay,
+        performanceAttentionTooltip,
         getWeatherEmojis,
         getFlightCategoryData,
         formatLocalTimeEmbed,

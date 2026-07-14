@@ -9,6 +9,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../runways.php';
+require_once __DIR__ . '/../performance-attention-display.php';
 
 /**
  * Resolve formal identifier for embed headers (ICAO/IATA/FAA only).
@@ -715,9 +716,26 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     
     // 2. Density Altitude (always show if available)
     if ($densityAltitude !== null) {
-        $daDisplay = formatEmbedDist($densityAltitude, $distUnit, true);
+        $attention = is_array($weather['performance_attention'] ?? null)
+            ? $weather['performance_attention']
+            : null;
+        $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
+        $daDisplay = formatDensityAltitudeAttentionDisplay($densityAltitude, $daBase, $attention);
         if ($daDisplay !== '--') {
-            $availableMetrics[] = ['label' => 'DA', 'value' => $daDisplay];
+            $tier = is_array($attention) ? (string) ($attention['tier'] ?? 'none') : 'none';
+            $daClass = performanceAttentionValueClass($tier);
+            $daTooltip = performanceAttentionTooltip($tier);
+            $daAria = performanceAttentionAriaLabel($densityAltitude, $tier);
+            $classAttr = $daClass !== '' ? ' class="' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') . '"' : '';
+            $titleAttr = $daTooltip !== ''
+                ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
+                : '';
+            $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
+            $availableMetrics[] = [
+                'label' => 'DA',
+                'value' => $daDisplay,
+                'value_attrs' => $classAttr . $titleAttr . $ariaAttr,
+            ];
         }
     }
     

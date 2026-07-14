@@ -3623,3 +3623,16 @@ body.dark-mode .weather-value.status-ifr {
 body.dark-mode .weather-value.status-lifr {
     color: #ff4dff !important; /* Brighter magenta for dark mode */
 }
+
+.weather-value.density-altitude-strong,
+.density-altitude-strong {
+    color: #e67e22 !important;
+    font-weight: 600;
+}
+
+body.dark-mode .weather-value.density-altitude-strong,
+body.dark-mode .density-altitude-strong,
+body.night-mode .weather-value.density-altitude-strong,
+body.night-mode .density-altitude-strong {
+    color: #f39c12 !important;
+}

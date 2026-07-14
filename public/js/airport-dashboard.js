@@ -791,6 +791,50 @@ function formatAltitude(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
+function performanceAttentionTooltip(tier) {
+    if (tier === 'strong') {
+        return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
+    }
+    if (tier === 'caution') {
+        return 'Density altitude is higher than normal. Verify performance numbers before flight.';
+    }
+    return '';
+}
+
+function performanceAttentionEmoji(tier) {
+    if (tier === 'strong') return '🚩';
+    if (tier === 'caution') return '⚠️';
+    return '';
+}
+
+function performanceAttentionAriaLabel(densityAltitudeFt, tier) {
+    if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
+        return 'Density altitude unavailable';
+    }
+    const feet = Math.round(Number(densityAltitudeFt));
+    const base = `Density altitude ${feet.toLocaleString()} feet`;
+    if (tier === 'strong') {
+        return `${base}. Strong caution: dangerously high for average GA aircraft; verify performance numbers before flight.`;
+    }
+    if (tier === 'caution') {
+        return `${base}. Caution: higher than normal; verify performance numbers before flight.`;
+    }
+    return base;
+}
+
+function formatDensityAltitudeAttentionDisplay(densityAltitudeFt, attention) {
+    const base = formatAltitude(densityAltitudeFt);
+    const tier = attention && attention.tier ? attention.tier : 'none';
+    const emoji = performanceAttentionEmoji(tier);
+    const text = emoji ? `${base} ${emoji}` : base;
+    return {
+        text,
+        className: tier === 'strong' ? 'density-altitude-strong' : '',
+        title: performanceAttentionTooltip(tier),
+        ariaLabel: performanceAttentionAriaLabel(densityAltitudeFt, tier),
+    };
+}
+
 // Format rainfall (inches) based on current unit preference
 function formatRainfall(inches) {
     if (inches === null || inches === undefined) return '--';
@@ -2610,6 +2654,10 @@ function displayWeather(weather) {
     }
     
     const weatherEmojis = getWeatherEmojis(sanitizedWeather);
+    const densityAltitudeDisplay = formatDensityAltitudeAttentionDisplay(
+        sanitizedWeather.density_altitude,
+        sanitizedWeather.performance_attention
+    );
     
     const container = document.getElementById('weather-data');
     if (!container) {
@@ -2650,7 +2698,7 @@ function displayWeather(weather) {
         
         <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value ${densityAltitudeDisplay.className}" title="${densityAltitudeDisplay.title}" aria-label="${densityAltitudeDisplay.ariaLabel}">${densityAltitudeDisplay.text}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
             <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
             <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>
