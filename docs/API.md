@@ -66,7 +66,7 @@ Returns weather data for the specified airport.
     "density_altitude": 1234,
     "performance_attention": {
       "tier": "caution",
-      "risk_factor": 0.42,
+      "risk_factor": 1.85,
       "fallback": false,
       "reason": "reference_models",
       "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"

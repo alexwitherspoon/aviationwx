@@ -666,9 +666,9 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 2. For each runway end, lookup AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (0 wind).
 3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
 4. Apply departure obstruction multiplier from NASR `OBSTN_HGT` / `DIST_FROM_THR` (cap 3.0).
-5. Profile risk per model: `stress = required / available`; map stress 0.67-1.33 to 0-1.
-6. Composite: `0.6 × (0.45×r152 + 0.40×r172 + 0.15×r182) + 0.4 × max(r152,r172,r182)`.
-7. Tier: caution ≥ 0.30, strong ≥ 0.70. Omit `performance_attention` when tier is `none`.
+5. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end.
+6. Asymmetric tiers: **strong** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not strong). `risk_factor` uses best-end sum for strong, worst-end sum for caution.
+7. Omit `performance_attention` when tier is `none`.
 
 **Fallback model** (no runway data): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score).
 
@@ -677,7 +677,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 ```json
 {
   "tier": "caution",
-  "risk_factor": 0.42,
+  "risk_factor": 1.85,
   "fallback": false,
   "reason": "reference_models",
   "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
