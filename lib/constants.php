@@ -378,6 +378,46 @@ if (!defined('RUNWAYS_APCU_TTL')) {
     define('RUNWAYS_APCU_TTL', 2592000); // 30 days (match cache max age)
 }
 
+// NASR APT subscription (runway length, surface, departure obstructions for US airports)
+if (!defined('NASR_APT_SCHEMA_VERSION')) {
+    define('NASR_APT_SCHEMA_VERSION', 1);
+}
+if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
+    define('NASR_FETCH_CHECK_INTERVAL', 604800); // 7 days
+}
+if (!defined('NASR_CACHE_MAX_AGE')) {
+    define('NASR_CACHE_MAX_AGE', 3024000); // 35 days (28-day cycle + buffer)
+}
+if (!defined('NASR_APT_ZIP_FALLBACK_DATE')) {
+    define('NASR_APT_ZIP_FALLBACK_DATE', '2025-05-15');
+}
+
+// Density altitude performance attention (reference AFM models, not a go/no-go judgment)
+if (!defined('PERFORMANCE_ATTENTION_TIER_CAUTION')) {
+    define('PERFORMANCE_ATTENTION_TIER_CAUTION', 0.30);
+}
+if (!defined('PERFORMANCE_ATTENTION_TIER_STRONG')) {
+    define('PERFORMANCE_ATTENTION_TIER_STRONG', 0.70);
+}
+if (!defined('PERFORMANCE_STRESS_LOW')) {
+    define('PERFORMANCE_STRESS_LOW', 0.67);
+}
+if (!defined('PERFORMANCE_STRESS_HIGH')) {
+    define('PERFORMANCE_STRESS_HIGH', 1.33);
+}
+if (!defined('PERFORMANCE_OBST_MAX_MULT')) {
+    define('PERFORMANCE_OBST_MAX_MULT', 3.0);
+}
+if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
+    define('POH_GRASS_GROUND_ROLL_FACTOR', 0.15);
+}
+if (!defined('PERFORMANCE_ATTENTION_REFERENCE')) {
+    define(
+        'PERFORMANCE_ATTENTION_REFERENCE',
+        'Cessna 152/172/182 AFM at max gross; 0 wind assumed'
+    );
+}
+
 // Airport country resolution (geometry aggregate under CACHE_BASE_DIR; see scripts/refresh-airport-country-resolution.php)
 if (!defined('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION')) {
     define('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION', 1);
