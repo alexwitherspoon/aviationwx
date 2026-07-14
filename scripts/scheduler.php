@@ -33,7 +33,7 @@ require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
-require_once __DIR__ . '/../lib/runways.php';
+require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
@@ -56,6 +56,7 @@ $lastWeeklyAggregation = '';
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastRunwaysFetch = 0;
+$lastNasrAptFetch = 0;
 $lastCountryResolutionSchedulerCheck = 0;
 $countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
@@ -65,6 +66,7 @@ $lastMetarBulkRefresh = 0;
 $lastNwsPointsRefresh = 0;
 $lastNwsPointsMissingLog = 0;
 $runwaysFetchOnStartupDone = false;
+$nasrAptFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -713,6 +715,25 @@ while ($running) {
                         'output' => implode("\n", $output)
                     ], 'app');
                 }
+            }
+        }
+
+        // 8a. NASR APT cache fetch (weekly check; startup if missing)
+        if (!$nasrAptFetchOnStartupDone && nasrAptCacheNeedsRefresh()) {
+            require_once __DIR__ . '/fetch-nasr-apt.php';
+            $nasrAptFetchOnStartupDone = true;
+            if (fetchNasrAptIfNeeded()) {
+                aviationwx_log('info', 'scheduler: nasr apt fetch complete (startup)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: nasr apt fetch failed at startup', [], 'app');
+            }
+        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptCacheNeedsRefresh()) {
+            require_once __DIR__ . '/fetch-nasr-apt.php';
+            $lastNasrAptFetch = $now;
+            if (fetchNasrAptIfNeeded()) {
+                aviationwx_log('info', 'scheduler: nasr apt fetch complete (weekly)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: nasr apt fetch failed', [], 'app');
             }
         }
 

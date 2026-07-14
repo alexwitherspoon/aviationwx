@@ -10,14 +10,15 @@ This document provides a comprehensive reference for all safety-critical weather
 ## Table of Contents
 
 1. [Density Altitude](#density-altitude)
-2. [Pressure Altitude](#pressure-altitude)
-3. [Flight Category](#flight-category)
-4. [Dewpoint Calculations](#dewpoint-calculations)
-5. [Temperature Conversions](#temperature-conversions)
-6. [Wind Calculations](#wind-calculations)
-7. [Wind Direction: True North](#wind-direction-true-north)
-8. [METAR Visibility Parsing](#metar-visibility-parsing)
-9. [Local vs Supplemental Remote Weather](#local-vs-supplemental-remote-weather)
+2. [Density Altitude Performance Attention](#density-altitude-performance-attention)
+3. [Pressure Altitude](#pressure-altitude)
+4. [Flight Category](#flight-category)
+5. [Dewpoint Calculations](#dewpoint-calculations)
+6. [Temperature Conversions](#temperature-conversions)
+7. [Wind Calculations](#wind-calculations)
+8. [Wind Direction: True North](#wind-direction-true-north)
+9. [METAR Visibility Parsing](#metar-visibility-parsing)
+10. [Local vs Supplemental Remote Weather](#local-vs-supplemental-remote-weather)
 
 ---
 
@@ -116,6 +117,47 @@ All safety-critical calculations use TDD methodology:
 3. **FAA-H-8083-15B**: Instrument Flying Handbook
 4. **ICAO Doc 7488**: Standard Atmosphere
 5. **E6B Flight Computer**: Manual examples and documented calculations
+
+---
+
+## Density Altitude Performance Attention
+
+**Purpose**: Provide a server-computed attention cue when density altitude and runway context suggest verifying AFM takeoff performance. This is **not** a go/no-go decision.
+
+**When suppressed**: Missing or fail-closed null density altitude; missing pressure altitude or temperature for full model; composite tier `none`.
+
+### Full model (reference AFM tables + NASR runway)
+
+**Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied in v1 (0 kt assumed).
+
+**Runway selection**: Longest active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Operator `runway_length_ft` in config overrides NASR length.
+
+**Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
+
+**Obstruction multiplier** (departure end): Based on NASR `OBSTN_HGT` and `DIST_FROM_THR`; capped at 3.0; no multiplier when obstacle beyond runway length or height ≤ 50 ft.
+
+**Profile risk**: `stress = required_ft / available_ft`; `risk = clamp((stress - 0.67) / 0.66, 0, 1)`.
+
+**Composite risk**: `0.6 × (0.45×r152 + 0.40×r172 + 0.15×r182) + 0.4 × max(r152,r172,r182)`.
+
+**Tiers**: caution ≥ 0.30, strong ≥ 0.70.
+
+### Fallback model (weather only)
+
+When no runway data: elevation-banded thresholds on density altitude and delta (DA minus field elevation). Returns tier only; `risk_factor` is **null**; `fallback: true`.
+
+### Implementation
+
+- `lib/weather/performance-attention.php` - assessment and API payload
+- `lib/weather/poh-takeoff.php` - AFM table lookup
+- `lib/nasr/*` - NASR cache and runway selection
+- `scripts/fetch-nasr-apt.php` - NASR ingest
+
+### Tests
+
+- `tests/Unit/PerformanceAttentionTest.php`
+- `tests/Unit/PohTakeoffTest.php`
+- `tests/Unit/NasrParseTest.php`
 
 ---
 

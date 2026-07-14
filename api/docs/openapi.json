@@ -1047,6 +1047,35 @@
             "description": "Density altitude in feet",
             "nullable": true
           },
+          "performance_attention": {
+            "type": "object",
+            "description": "Density altitude performance attention cue (omitted when tier is none). Not a go/no-go judgment.",
+            "nullable": true,
+            "properties": {
+              "tier": {
+                "type": "string",
+                "enum": ["caution", "strong"],
+                "description": "Attention tier"
+              },
+              "risk_factor": {
+                "type": "number",
+                "description": "Composite risk 0-1 when full model used; null when fallback",
+                "nullable": true
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "True when runway data unavailable and elevation-banded thresholds used"
+              },
+              "reason": {
+                "type": "string",
+                "enum": ["reference_models", "density_altitude_only"]
+              },
+              "reference": {
+                "type": "string",
+                "description": "Reference AFM models and assumptions"
+              }
+            }
+          },
           "pressure_altitude": {
             "type": "integer",
             "description": "Pressure altitude in feet",

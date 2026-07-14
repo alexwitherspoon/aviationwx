@@ -64,6 +64,13 @@ Returns weather data for the specified airport.
     "flight_category": "VFR",
     "flight_category_class": "status-vfr",
     "density_altitude": 1234,
+    "performance_attention": {
+      "tier": "caution",
+      "risk_factor": 0.42,
+      "fallback": false,
+      "reason": "reference_models",
+      "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
+    },
     "pressure_altitude": 456,
     "temp_high_today": 18.5,
     "temp_low_today": 10.0,

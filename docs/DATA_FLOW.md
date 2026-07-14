@@ -18,6 +18,7 @@ This document describes how weather, webcam, and NOTAM data is fetched, processe
 10. [Data Display on Dashboard](#data-display-on-dashboard)
 11. [Airport country resolution (geometry aggregate)](#airport-country-resolution-geometry-aggregate)
 12. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
+13. [Density Altitude Performance Attention](#density-altitude-performance-attention) (under [Weather Data Calculations](#weather-data-calculations))
 
 ---
 
@@ -638,6 +639,56 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C)
 - FAA Aviation Weather Handbook (FAA-H-8083-28)
 - ICAO Standard Atmosphere (Doc 7488)
+
+### Density Altitude Performance Attention
+
+**SAFETY CRITICAL**: This cue reminds pilots to verify AFM performance numbers when density altitude and runway context suggest extra planning. It is **not** a go/no-go judgment.
+
+**When it runs**: On each weather API response (Internal API, Public API, embeds) after density altitude is present and not fail-closed null. Computation is server-side at format time so NASR cache updates apply without re-fetching weather.
+
+**Data inputs**:
+
+| Input | Source | Notes |
+|-------|--------|-------|
+| Pressure altitude, temperature | Weather cache | Required for full model |
+| Density altitude | Weather cache | Required; null suppresses attention |
+| Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
+| Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports; config `runway_length_ft` overrides |
+| AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
+
+**NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed runway surface condition (`COND=FAILED`) and water surfaces are excluded from longest-runway selection.
+
+**Full model** (runway data available):
+
+1. Select longest active land runway (exclude `WATER`, exclude `COND=FAILED`).
+2. For each runway end, lookup AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (0 wind).
+3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
+4. Apply departure obstruction multiplier from NASR `OBSTN_HGT` / `DIST_FROM_THR` (cap 3.0).
+5. Profile risk per model: `stress = required / available`; map stress 0.67-1.33 to 0-1.
+6. Composite: `0.6 × (0.45×r152 + 0.40×r172 + 0.15×r182) + 0.4 × max(r152,r172,r182)`.
+7. Tier: caution ≥ 0.30, strong ≥ 0.70. Omit `performance_attention` when tier is `none`.
+
+**Fallback model** (no runway data): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score).
+
+**API field** `performance_attention`:
+
+```json
+{
+  "tier": "caution",
+  "risk_factor": 0.42,
+  "fallback": false,
+  "reason": "reference_models",
+  "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
+}
+```
+
+**Display**: ⚠️ (caution) or 🚩 (strong) adjacent to the density altitude value; strong tier uses amber styling. Tooltips use AFM wording.
+
+**Implementation**: `lib/weather/performance-attention.php`, `lib/nasr/*`, `lib/weather/poh-takeoff.php`
+
+**Tests**: `tests/Unit/PerformanceAttentionTest.php`, `tests/Unit/PohTakeoffTest.php`, `tests/Unit/NasrParseTest.php`
+
+**See also**: [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance-attention)
 
 ### Flight Category Calculation
 
