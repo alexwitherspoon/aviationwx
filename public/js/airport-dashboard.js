@@ -2656,7 +2656,7 @@ function displayWeather(weather) {
     const weatherEmojis = getWeatherEmojis(sanitizedWeather);
     const densityAltitudeDisplay = formatDensityAltitudeAttentionDisplay(
         sanitizedWeather.density_altitude,
-        sanitizedWeather.performance_attention
+        sanitizedWeather.density_altitude_performance
     );
     
     const container = document.getElementById('weather-data');

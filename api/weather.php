@@ -28,7 +28,7 @@ require_once __DIR__ . '/../lib/cors.php';
 require_once __DIR__ . '/../lib/heading-conversion.php';
 require_once __DIR__ . '/../lib/http-integrity.php';
 require_once __DIR__ . '/../lib/public-api/weather-format.php';
-require_once __DIR__ . '/../lib/weather/performance-attention.php';
+require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -38,7 +38,7 @@ require_once __DIR__ . '/../lib/weather/performance-attention.php';
  * Normalizes integer fields per OpenAPI spec (wind_speed, gust_speed, ceiling, etc.).
  *
  * @param array $weather Raw weather from cache
- * @param array|null $airport Airport config for performance_attention enrichment
+ * @param array|null $airport Airport config for density_altitude_performance enrichment
  * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit, period_label)
  */
 function formatInternalApiWeatherResponse(array $weather, ?array $airport = null): array
@@ -59,7 +59,7 @@ function formatInternalApiWeatherResponse(array $weather, ?array $airport = null
     }
 
     if ($airport !== null) {
-        $out = attachPerformanceAttention($out, $airport);
+        $out = attachDensityAltitudePerformance($out, $airport);
     }
 
     return $out;

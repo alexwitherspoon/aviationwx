@@ -191,8 +191,8 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     
     // Density Altitude
     if ($densityAltitude !== null) {
-        $attention = is_array($weather['performance_attention'] ?? null)
-            ? $weather['performance_attention']
+        $attention = is_array($weather['density_altitude_performance'] ?? null)
+            ? $weather['density_altitude_performance']
             : null;
         $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
         $daDisplay = formatDensityAltitudeAttentionDisplay($densityAltitude, $daBase, $attention);
