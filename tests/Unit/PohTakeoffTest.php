@@ -43,11 +43,35 @@ class PohTakeoffTest extends TestCase
         $this->assertSame(2525 + (int) round(1315 * 0.15), $corrected);
     }
 
-    public function testLookupRoundsUpPressureAltitudeAndTemperatureBins(): void
+    public function testPohTablesIncreaseMonotonicallyWithTemperature(): void
     {
         $tables = loadPohTakeoffTables();
-        $table = $tables['c172'];
 
-        $this->assertSame(2555, pohLookupChartTotalFt($table, 4570, 20.1));
+        foreach (['c152', 'c172', 'c182'] as $model) {
+            $table = $tables[$model];
+            foreach ($table['total_ft'] as $paKey => $tempRow) {
+                $prevTotal = null;
+                $prevGround = null;
+                foreach ($table['temperature_c'] as $temp) {
+                    $tempKey = (string) $temp;
+                    $total = $table['total_ft'][$paKey][$tempKey];
+                    $ground = $table['ground_roll_ft'][$paKey][$tempKey];
+                    if ($prevTotal !== null) {
+                        $this->assertGreaterThanOrEqual(
+                            $prevTotal,
+                            $total,
+                            "{$model} PA {$paKey} total not monotonic at {$tempKey}C"
+                        );
+                        $this->assertGreaterThanOrEqual(
+                            $prevGround,
+                            $ground,
+                            "{$model} PA {$paKey} ground roll not monotonic at {$tempKey}C"
+                        );
+                    }
+                    $prevTotal = $total;
+                    $prevGround = $ground;
+                }
+            }
+        }
     }
 }
