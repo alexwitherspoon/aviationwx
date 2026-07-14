@@ -10,7 +10,7 @@ This document provides a comprehensive reference for all safety-critical weather
 ## Table of Contents
 
 1. [Density Altitude](#density-altitude)
-2. [Density Altitude Performance Attention](#density-altitude-performance-attention)
+2. [Density Altitude Performance](#density-altitude-performance)
 3. [Pressure Altitude](#pressure-altitude)
 4. [Flight Category](#flight-category)
 5. [Dewpoint Calculations](#dewpoint-calculations)
@@ -120,9 +120,9 @@ All safety-critical calculations use TDD methodology:
 
 ---
 
-## Density Altitude Performance Attention
+## Density Altitude Performance
 
-**Purpose**: Provide a server-computed attention cue when density altitude and runway context suggest verifying AFM takeoff performance. This is **not** a go/no-go decision.
+**Purpose**: Provide a server-computed cue when density altitude and runway context suggest verifying AFM takeoff performance. This is **not** a go/no-go decision.
 
 **When suppressed**: Missing or fail-closed null density altitude; missing pressure altitude or temperature for full model; asymmetric tier `none`.
 
@@ -134,9 +134,9 @@ All safety-critical calculations use TDD methodology:
 
 **Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
 
-**Obstruction multiplier** (departure end): Based on NASR `OBSTN_HGT` and `DIST_FROM_THR`; capped at 3.0; no multiplier when obstacle beyond runway length or height ≤ 50 ft.
+**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance by `max(1, obst_hgt / 50)` and compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / runway_length` and use the higher value. No obstruction stress when obstacle is beyond runway length or height/distance are missing.
 
-**Profile risk**: `stress = required_ft / available_ft`; `risk = clamp((stress - 0.67) / 0.66, 0, 1)`.
+**Profile risk**: `stress = max(runway_stress, obstruction_stress)`; `risk = clamp((stress - 0.67) / 0.66, 0, 1)`.
 
 **Per-end total risk**: Unweighted sum `r152 + r172 + r182` (range 0-3) for each departure end.
 
@@ -152,8 +152,8 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 
 ### Implementation
 
-- `lib/weather/performance-attention.php` - assessment and API payload
-- `lib/weather/poh-takeoff.php` - AFM table lookup
+- `lib/weather/density-altitude-performance.php` - assessment and API payload
+- `lib/weather/poh-takeoff.php` - AFM table lookup and obstruction stress
 - `lib/nasr/*` - NASR cache and runway selection
 - `scripts/fetch-nasr-apt.php` - NASR ingest
 

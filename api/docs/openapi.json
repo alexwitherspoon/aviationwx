@@ -1047,9 +1047,9 @@
             "description": "Density altitude in feet",
             "nullable": true
           },
-          "performance_attention": {
+          "density_altitude_performance": {
             "type": "object",
-            "description": "Density altitude performance attention cue (omitted when tier is none). Not a go/no-go judgment.",
+            "description": "Density altitude performance cue (omitted when tier is none). Not a go/no-go judgment.",
             "nullable": true,
             "properties": {
               "tier": {
@@ -1059,8 +1059,16 @@
               },
               "risk_factor": {
                 "type": "number",
-                "description": "Composite risk 0-1 when full model used; null when fallback",
+                "description": "Summed profile risk 0-3 when full model used (best-end sum for strong, worst-end sum for caution); null when fallback",
                 "nullable": true
+              },
+              "worst_end_risk": {
+                "type": "number",
+                "description": "Worst departure-end summed profile risk (0-3) when full model used"
+              },
+              "best_end_risk": {
+                "type": "number",
+                "description": "Best departure-end summed profile risk (0-3) when full model used"
               },
               "fallback": {
                 "type": "boolean",

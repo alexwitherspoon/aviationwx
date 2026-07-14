@@ -18,7 +18,7 @@ This document describes how weather, webcam, and NOTAM data is fetched, processe
 10. [Data Display on Dashboard](#data-display-on-dashboard)
 11. [Airport country resolution (geometry aggregate)](#airport-country-resolution-geometry-aggregate)
 12. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
-13. [Density Altitude Performance Attention](#density-altitude-performance-attention) (under [Weather Data Calculations](#weather-data-calculations))
+13. [Density Altitude Performance](#density-altitude-performance) (under [Weather Data Calculations](#weather-data-calculations))
 
 ---
 
@@ -640,7 +640,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 - FAA Aviation Weather Handbook (FAA-H-8083-28)
 - ICAO Standard Atmosphere (Doc 7488)
 
-### Density Altitude Performance Attention
+### Density Altitude Performance
 
 **SAFETY CRITICAL**: This cue reminds pilots to verify AFM performance numbers when density altitude and runway context suggest extra planning. It is **not** a go/no-go judgment.
 
@@ -651,7 +651,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 | Input | Source | Notes |
 |-------|--------|-------|
 | Pressure altitude, temperature | Weather cache | Required for full model |
-| Density altitude | Weather cache | Required; null suppresses attention |
+| Density altitude | Weather cache | Required; null suppresses cue |
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
 | Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports; config `runway_length_ft` overrides |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
@@ -665,19 +665,21 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 1. Select longest active land runway (exclude `WATER`, exclude `COND=FAILED`).
 2. For each runway end, lookup AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (0 wind).
 3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
-4. Apply departure obstruction multiplier from NASR `OBSTN_HGT` / `DIST_FROM_THR` (cap 3.0).
+4. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For taller NASR departure obstacles within runway length, scale required distance by `max(1, obst_hgt / 50)` and compare clearance stress `required / obst_dist` against runway stress `chart_total / runway_length`; use the higher stress per model.
 5. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end.
 6. Asymmetric tiers: **strong** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not strong). `risk_factor` uses best-end sum for strong, worst-end sum for caution.
-7. Omit `performance_attention` when tier is `none`.
+7. Omit `density_altitude_performance` when tier is `none`.
 
 **Fallback model** (no runway data): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score).
 
-**API field** `performance_attention`:
+**API field** `density_altitude_performance`:
 
 ```json
 {
   "tier": "caution",
   "risk_factor": 1.85,
+  "worst_end_risk": 1.85,
+  "best_end_risk": 0.92,
   "fallback": false,
   "reason": "reference_models",
   "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
@@ -686,11 +688,11 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **Display**: ⚠️ (caution) or 🚩 (strong) adjacent to the density altitude value; strong tier uses amber styling. Tooltips use AFM wording.
 
-**Implementation**: `lib/weather/performance-attention.php`, `lib/nasr/*`, `lib/weather/poh-takeoff.php`
+**Implementation**: `lib/weather/density-altitude-performance.php`, `lib/nasr/*`, `lib/weather/poh-takeoff.php`
 
 **Tests**: `tests/Unit/PerformanceAttentionTest.php`, `tests/Unit/PohTakeoffTest.php`, `tests/Unit/NasrParseTest.php`
 
-**See also**: [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance-attention)
+**See also**: [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance)
 
 ### Flight Category Calculation
 
