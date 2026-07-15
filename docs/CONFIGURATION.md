@@ -140,9 +140,18 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 
 ### Density altitude performance overrides
 
-The weather API `density_altitude_performance` cue compares AFM takeoff charts to runway context. By default it uses the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
+The weather API `density_altitude_performance` cue compares AFM takeoff charts to runway context.
 
-When `runway_length_ft` is set on an airport, that length replaces NASR runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
+**Runway source precedence** (first match wins):
+
+1. `runway_length_ft` / `runway_surface` in `airports.json` (operator override)
+2. FAA NASR longest active land runway (US)
+3. OurAirports longest active land runway when NASR has no row (non-US and private strips without NASR)
+4. Weather-only elevation bands (`fallback: true`)
+
+By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
+
+When `runway_length_ft` is set on an airport, that length replaces NASR and OurAirports runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
 
 **Operator-provided length caveat:** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even when NASR lists them for the airport. Only runway-length stress is evaluated. Set this when NASR runway length is wrong or missing; the cue can **under-alert** when departure obstacles matter on that strip. Pilots remain responsible for obstacle clearance and runway selection.
 
