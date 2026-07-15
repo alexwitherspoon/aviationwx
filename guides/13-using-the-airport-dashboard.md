@@ -9,7 +9,7 @@ This guide helps you get the most out of an AviationWX airport dashboard. Think 
 
 AviationWX dashboards focus on **essential, at-a-glance information** - the stuff you actually need when checking conditions before a flight. We keep it simple and fast.
 
-For deeper research, every dashboard includes links to trusted external resources like **AirNav** and **FAA Weather Cams** (plus regional camera links where they apply). We're not trying to replace these great tools - we're giving you a quick visual check and then connecting you to the experts when you need more.
+For deeper research, every dashboard includes links to external airport and weather resources (including **FAA Weather Cams** when available). We're not trying to replace these tools - we're giving you a quick visual check and then connecting you to the experts when you need more.
 
 > ⚠️ **Important**: AviationWX is a **supplemental** information source. Always obtain official weather briefings and NOTAMs before flight.
 
@@ -55,13 +55,12 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 |                          WEATHER DATA SOURCES                               |
 |                                                                             |
 |      +--------------+      +--------------+      +--------------+           |
-|      |   On-Site    |      |   Official   |      |  Calculated  |           |
-|      |    Sensor    |      |    METAR     |      |    Values    |           |
+|      |   On-site    |      |   Official   |      |  Calculated  |           |
+|      |   sensors    |      |    METAR     |      |    Values    |           |
 |      |              |      |              |      |              |           |
-|      |   Tempest    |      |  ASOS/AWOS   |      |   Density    |           |
-|      |   Davis      |      |   via FAA    |      |   Altitude   |           |
-|      |   Ambient    |      |              |      |   Crosswind  |           |
-|      |   DyaconLive |      |              |      |              |           |
+|      |  (per field) |      |  ASOS/AWOS   |      |   Density    |           |
+|      |              |      |   via FAA    |      |   Altitude   |           |
+|      |              |      |              |      |   Crosswind  |           |
 |      +------+-------+      +------+-------+      +------+-------+           |
 |             |                     |                     |                   |
 |             +---------------------+---------------------+                   |
@@ -78,11 +77,10 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 ```
 
 **What this means for you:**
-- Some airports have **on-site weather stations** (often every 1-5 minutes; Dyacon advisory stations on DyaconLive update about every 10 minutes)
+- Some airports have **on-site weather stations** (update interval varies by installation, often every few minutes)
 - Some airports use **official METAR data** from nearby ASOS/AWOS
 - Many airports show **both** - you get hyper-local conditions AND official aviation weather
 - Values like density altitude and crosswind components are calculated automatically
-- **DyaconLive** feeds are advisory surface weather; ceiling and visibility usually come from METAR or another official source when shown
 
 ### Flight Category Colors
 
@@ -125,6 +123,14 @@ The dashboard uses **standard aviation weather colors**:
 ```
 
 **Hover over any toggle button** to see what it does.
+
+### Density Altitude Performance Cue
+
+Some dashboards add **⚠️** (caution) or **🚩** (warning) next to density altitude when conditions look limiting for typical light GA aircraft on the runways we have on file. It is a heads-up to check your takeoff numbers - not a go/no-go for your flight.
+
+Hover the row for a short explanation. When runway information is limited, the tooltip will say so.
+
+No emoji means we did not flag a concern against that reference, or we could not run the full runway check. Either way, use your AFM or POH to confirm aircraft performance.
 
 ---
 
@@ -366,7 +372,7 @@ Each airport dashboard includes quick links to external resources:
 ```
 +-----------------------------------------------------------------------------+
 |                                                                             |
-|         [ AirNav ]                    [ FAA Weather ]                       |
+|         [ Airport ]                   [ FAA Weather ]                       |
 |              |                              |                             |
 |              v                              v                             |
 |       Airport info                   FAA weather cams                     |
@@ -375,7 +381,7 @@ Each airport dashboard includes quick links to external resources:
 +-----------------------------------------------------------------------------+
 ```
 
-On mobile devices, you'll also see a **ForeFlight** link that opens the airport directly in the ForeFlight app.
+On mobile devices, you may also see a link that opens the airport in a supported charting app.
 
 ---
 
