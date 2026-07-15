@@ -405,113 +405,113 @@ if (php_sapi_name() === 'cli') {
         return;
     }
 
-$fp = acquireRunwaysFetchLock();
-if ($fp === false) {
-    aviationwx_log('info', 'runways fetch: another instance running, skipping', [], 'app');
-    exit(0);
-}
+    $fp = acquireRunwaysFetchLock();
+    if ($fp === false) {
+        aviationwx_log('info', 'runways fetch: another instance running, skipping', [], 'app');
+        exit(0);
+    }
 
-if (!runwaysCacheNeedsRefresh()) {
-    flock($fp, LOCK_UN);
-    fclose($fp);
-    aviationwx_log('info', 'runways fetch: cache fresh, skipping', [], 'app');
-    exit(0);
-}
+    if (!runwaysCacheNeedsRefresh()) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        aviationwx_log('info', 'runways fetch: cache fresh, skipping', [], 'app');
+        exit(0);
+    }
 
-aviationwx_log('info', 'runways fetch: starting download', [], 'app');
+    aviationwx_log('info', 'runways fetch: starting download', [], 'app');
 
-$ourairportsCsv = downloadUrl($OURAIRPORTS_RUNWAYS_URL);
-$faaCsv = downloadUrl($FAA_RUNWAYS_URL);
+    $ourairportsCsv = downloadUrl($OURAIRPORTS_RUNWAYS_URL);
+    $faaCsv = downloadUrl($FAA_RUNWAYS_URL);
 
-if ($ourairportsCsv === null && $faaCsv === null) {
-    aviationwx_log('error', 'runways fetch: both downloads failed', [], 'app', true);
-    flock($fp, LOCK_UN);
-    fclose($fp);
-    exit(1);
-}
+    if ($ourairportsCsv === null && $faaCsv === null) {
+        aviationwx_log('error', 'runways fetch: both downloads failed', [], 'app', true);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        exit(1);
+    }
 
-$ourairports = $ourairportsCsv !== null ? parseOurAirportsRunways($ourairportsCsv) : [];
-$faa = $faaCsv !== null ? parseFaaRunways($faaCsv) : [];
+    $ourairports = $ourairportsCsv !== null ? parseOurAirportsRunways($ourairportsCsv) : [];
+    $faa = $faaCsv !== null ? parseFaaRunways($faaCsv) : [];
 
-$airportCenters = [];
-$faaToIcao = [];
-if ($ourairportsCsv !== null) {
-    $airportsCsv = downloadUrl('https://davidmegginson.github.io/ourairports-data/airports.csv');
-    if ($airportsCsv !== null) {
-        $lines = str_getcsv($airportsCsv, "\n", '"', '\\');
-        $header = str_getcsv(array_shift($lines), ',', '"', '\\');
-        $idx = array_flip(array_map('trim', $header));
-        $identIdx = $idx['ident'] ?? null;
-        $latIdx = $idx['latitude_deg'] ?? null;
-        $lonIdx = $idx['longitude_deg'] ?? null;
-        $gpsIdx = $idx['gps_code'] ?? null;
-        $icaoIdx = $idx['icao_code'] ?? null;
-        $iataIdx = $idx['iata_code'] ?? null;
-        $localIdx = $idx['local_code'] ?? null;
-        $countryIdx = $idx['iso_country'] ?? null;
-        if ($identIdx !== null && $latIdx !== null && $lonIdx !== null) {
-            foreach ($lines as $line) {
-                $row = str_getcsv($line, ',', '"', '\\');
-                if (count($row) <= max($identIdx, $latIdx, $lonIdx)) {
-                    continue;
-                }
-                $id = strtoupper(trim($row[$identIdx] ?? ''));
-                $lat = $row[$latIdx] ?? '';
-                $lon = $row[$lonIdx] ?? '';
-                if ($id !== '' && $lat !== '' && $lon !== '') {
-                    $airportCenters[$id] = ['lat' => (float) $lat, 'lon' => (float) $lon];
-                }
-                if ($icaoIdx === null || $countryIdx === null || trim($row[$countryIdx] ?? '') !== 'US') {
-                    continue;
-                }
-                $icao = strtoupper(trim($row[$icaoIdx] ?? ''));
-                if ($icao === '') {
-                    continue;
-                }
-                foreach ([$gpsIdx, $iataIdx, $localIdx] as $altIdx) {
-                    if ($altIdx === null) {
+    $airportCenters = [];
+    $faaToIcao = [];
+    if ($ourairportsCsv !== null) {
+        $airportsCsv = downloadUrl('https://davidmegginson.github.io/ourairports-data/airports.csv');
+        if ($airportsCsv !== null) {
+            $lines = str_getcsv($airportsCsv, "\n", '"', '\\');
+            $header = str_getcsv(array_shift($lines), ',', '"', '\\');
+            $idx = array_flip(array_map('trim', $header));
+            $identIdx = $idx['ident'] ?? null;
+            $latIdx = $idx['latitude_deg'] ?? null;
+            $lonIdx = $idx['longitude_deg'] ?? null;
+            $gpsIdx = $idx['gps_code'] ?? null;
+            $icaoIdx = $idx['icao_code'] ?? null;
+            $iataIdx = $idx['iata_code'] ?? null;
+            $localIdx = $idx['local_code'] ?? null;
+            $countryIdx = $idx['iso_country'] ?? null;
+            if ($identIdx !== null && $latIdx !== null && $lonIdx !== null) {
+                foreach ($lines as $line) {
+                    $row = str_getcsv($line, ',', '"', '\\');
+                    if (count($row) <= max($identIdx, $latIdx, $lonIdx)) {
                         continue;
                     }
-                    $alt = strtoupper(trim($row[$altIdx] ?? ''));
-                    if ($alt !== '' && $alt !== $icao) {
-                        $faaToIcao[$alt] = $icao;
+                    $id = strtoupper(trim($row[$identIdx] ?? ''));
+                    $lat = $row[$latIdx] ?? '';
+                    $lon = $row[$lonIdx] ?? '';
+                    if ($id !== '' && $lat !== '' && $lon !== '') {
+                        $airportCenters[$id] = ['lat' => (float) $lat, 'lon' => (float) $lon];
+                    }
+                    if ($icaoIdx === null || $countryIdx === null || trim($row[$countryIdx] ?? '') !== 'US') {
+                        continue;
+                    }
+                    $icao = strtoupper(trim($row[$icaoIdx] ?? ''));
+                    if ($icao === '') {
+                        continue;
+                    }
+                    foreach ([$gpsIdx, $iataIdx, $localIdx] as $altIdx) {
+                        if ($altIdx === null) {
+                            continue;
+                        }
+                        $alt = strtoupper(trim($row[$altIdx] ?? ''));
+                        if ($alt !== '' && $alt !== $icao) {
+                            $faaToIcao[$alt] = $icao;
+                        }
                     }
                 }
             }
         }
     }
-}
 
-$merged = mergeRunwaySources($faa, $ourairports, $airportCenters, $faaToIcao);
+    $merged = mergeRunwaySources($faa, $ourairports, $airportCenters, $faaToIcao);
 
-$output = [
-    'fetched_at' => time(),
-    'airports' => $merged,
-];
+    $output = [
+        'fetched_at' => time(),
+        'airports' => $merged,
+    ];
 
-ensureCacheDir(CACHE_RUNWAYS_DIR);
-$tmpPath = CACHE_RUNWAYS_DATA_FILE . '.tmp.' . getmypid();
-$written = @file_put_contents($tmpPath, json_encode($output, JSON_UNESCAPED_SLASHES));
-if ($written === false || !@rename($tmpPath, CACHE_RUNWAYS_DATA_FILE)) {
-    @unlink($tmpPath);
-    aviationwx_log('error', 'runways fetch: failed to write cache', [], 'app', true);
+    ensureCacheDir(CACHE_RUNWAYS_DIR);
+    $tmpPath = CACHE_RUNWAYS_DATA_FILE . '.tmp.' . getmypid();
+    $written = @file_put_contents($tmpPath, json_encode($output, JSON_UNESCAPED_SLASHES));
+    if ($written === false || !@rename($tmpPath, CACHE_RUNWAYS_DATA_FILE)) {
+        @unlink($tmpPath);
+        aviationwx_log('error', 'runways fetch: failed to write cache', [], 'app', true);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        exit(1);
+    }
+
+    $config = loadConfig(false);
+    $airports = $config['airports'] ?? [];
+    $warmed = warmRunwaysApcuCache($airports);
+
     flock($fp, LOCK_UN);
     fclose($fp);
-    exit(1);
-}
+    @unlink(getRunwaysFetchLockPath());
 
-$config = loadConfig(false);
-$airports = $config['airports'] ?? [];
-$warmed = warmRunwaysApcuCache($airports);
+    aviationwx_log('info', 'runways fetch: complete', [
+        'airports' => count($merged),
+        'apcu_warmed' => $warmed,
+    ], 'app');
 
-flock($fp, LOCK_UN);
-fclose($fp);
-@unlink(getRunwaysFetchLockPath());
-
-aviationwx_log('info', 'runways fetch: complete', [
-    'airports' => count($merged),
-    'apcu_warmed' => $warmed,
-], 'app');
-
-exit(0);
+    exit(0);
 }
