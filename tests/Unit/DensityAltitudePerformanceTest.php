@@ -231,6 +231,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('reference_models', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG, $result['reference']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+        $this->assertSame($result['worst_end_risk'], $result['risk_factor']);
     }
 
     public function testOurAirportsPathCapsWarningAtCaution(): void
@@ -249,6 +250,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('reference_models_ourairports', $result['reason']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+        $this->assertSame($result['worst_end_risk'], $result['risk_factor']);
     }
 
     public function testOurAirportsSelectsLongestNonWaterRunway(): void

@@ -499,18 +499,23 @@ function buildDensityAltitudePerformance(array $weather, array $airport, ?string
 
     if ($selection['selection_basis'] === 'both_ends') {
         $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-        $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
     } else {
         $scoredRisk = (float) ($selection['scored_end']['total_risk'] ?? 0.0);
         $tier = densityAltitudePerformanceTierFromScoredEnd($scoredRisk);
+    }
+
+    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+        $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
+    }
+
+    if ($selection['selection_basis'] === 'both_ends') {
+        $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
+    } else {
         $riskFactor = $scoredRisk;
     }
 
     $reason = 'reference_models';
     $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE;
-    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
-        $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
-    }
     if ($runwaySource === 'config') {
         $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG;
     } elseif ($runwaySource === 'ourairports') {
