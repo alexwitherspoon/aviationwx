@@ -272,6 +272,26 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS, $result['reference']);
     }
 
+    public function testConfigRunwayOverrideCapsWarningAtCaution(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 5000,
+            'pressure_altitude' => 3441,
+            'temperature' => 28.3,
+        ], [
+            'id' => 'zzcfg',
+            'icao' => 'ZZCFG',
+            'elevation_ft' => 3647,
+            'runway_length_ft' => 2000,
+            'runway_surface' => 'TURF',
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertSame('reference_models', $result['reason']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+    }
+
     public function testOurAirportsPathCapsWarningAtCaution(): void
     {
         $result = buildDensityAltitudePerformance([

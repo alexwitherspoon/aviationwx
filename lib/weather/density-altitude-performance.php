@@ -326,8 +326,10 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
 
     $reason = 'reference_models';
     $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE;
-    if ($runwaySource === 'ourairports') {
+    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
+    }
+    if ($runwaySource === 'ourairports') {
         $reason = 'reference_models_ourairports';
         $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS;
     }
