@@ -96,6 +96,8 @@ function densityAltitudePerformanceTierFromScoredEnd(float $scoredRisk): string
  * @param array $evaluation Result from evaluateRunwayEndPerformanceRange()
  * @param array $end Runway end row
  * @param array $runway Selected runway
+ * @param float $pressureAltitudeFt Pressure altitude in feet
+ * @param float $tempC Temperature Celsius
  * @param array{c152: array, c172: array, c182: array} $tables
  * @return array{total_risk: float, end_id: ?string, risk152: float, risk172: float, risk182: float}
  */
