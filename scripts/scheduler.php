@@ -723,6 +723,7 @@ while ($running) {
         if (!$nasrAptFetchOnStartupDone && nasrAptCacheNeedsRefresh()) {
             require_once __DIR__ . '/fetch-nasr-apt.php';
             $nasrAptFetchOnStartupDone = true;
+            $lastNasrAptFetch = $now;
             if (fetchNasrAptIfNeeded()) {
                 aviationwx_log('info', 'scheduler: nasr apt fetch complete (startup)', [], 'app');
             } else {
