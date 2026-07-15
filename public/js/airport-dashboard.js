@@ -2698,7 +2698,7 @@ function displayWeather(weather) {
         
         <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value ${densityAltitudeDisplay.className}" title="${densityAltitudeDisplay.title}" aria-label="${densityAltitudeDisplay.ariaLabel}">${densityAltitudeDisplay.value}${densityAltitudeDisplay.emoji ? ` ${densityAltitudeDisplay.emoji}` : ''}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item${densityAltitudeDisplay.className ? ` ${densityAltitudeDisplay.className}` : ''}" data-mobile-priority="3"${densityAltitudeDisplay.title ? ` title="${densityAltitudeDisplay.title}"` : ''} aria-label="${densityAltitudeDisplay.ariaLabel}"><span class="label">Density Altitude</span><span class="weather-value">${densityAltitudeDisplay.value}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span>${densityAltitudeDisplay.emoji ? ` ${densityAltitudeDisplay.emoji}` : ''}</div>
             <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
             <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>

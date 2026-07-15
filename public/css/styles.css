@@ -3625,14 +3625,17 @@ body.dark-mode .weather-value.status-lifr {
 }
 
 .weather-value.density-altitude-warning,
+.weather-item.density-altitude-warning .weather-value,
 .density-altitude-warning {
     color: #e67e22 !important;
     font-weight: 600;
 }
 
 body.dark-mode .weather-value.density-altitude-warning,
+body.dark-mode .weather-item.density-altitude-warning .weather-value,
 body.dark-mode .density-altitude-warning,
 body.night-mode .weather-value.density-altitude-warning,
+body.night-mode .weather-item.density-altitude-warning .weather-value,
 body.night-mode .density-altitude-warning {
     color: #f39c12 !important;
 }
