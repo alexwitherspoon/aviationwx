@@ -34,6 +34,7 @@ require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
+require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
