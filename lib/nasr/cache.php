@@ -154,6 +154,20 @@ function nasrConfiguredSliceIsCurrent(array $meta, string $configSha): bool
 }
 
 /**
+ * Whether a decoded NASR APT cache payload matches the supported on-disk schema.
+ *
+ * @param mixed $decoded JSON-decoded cache body
+ */
+function nasrAptCachePayloadIsValid($decoded): bool
+{
+    return is_array($decoded)
+        && isset($decoded['schema_version'])
+        && (int) $decoded['schema_version'] === NASR_APT_SCHEMA_VERSION
+        && isset($decoded['airports'])
+        && is_array($decoded['airports']);
+}
+
+/**
  * Read full NASR APT cache from disk (all US airports).
  *
  * @return array|null Decoded cache payload
@@ -165,7 +179,7 @@ function nasrReadFullAptCacheFromDisk(): ?array
     }
 
     $decoded = json_decode((string) file_get_contents(CACHE_NASR_APT_DATA_FILE), true);
-    if (!is_array($decoded) || !isset($decoded['airports']) || !is_array($decoded['airports'])) {
+    if (!nasrAptCachePayloadIsValid($decoded)) {
         return null;
     }
 
@@ -184,7 +198,7 @@ function nasrReadConfiguredAptCacheFromDisk(): ?array
     }
 
     $decoded = json_decode((string) file_get_contents(CACHE_NASR_APT_CONFIGURED_FILE), true);
-    if (!is_array($decoded) || !isset($decoded['airports']) || !is_array($decoded['airports'])) {
+    if (!nasrAptCachePayloadIsValid($decoded)) {
         return null;
     }
 
