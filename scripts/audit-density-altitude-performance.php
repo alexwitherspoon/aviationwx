@@ -194,6 +194,7 @@ function fetchProductionWeather(string $baseUrl, string $airportId): array
     ]);
     $body = curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     if ($body === false || $httpCode !== 200) {
         return ['ok' => false, 'weather' => null, 'error' => 'HTTP ' . $httpCode, 'http_code' => $httpCode];
