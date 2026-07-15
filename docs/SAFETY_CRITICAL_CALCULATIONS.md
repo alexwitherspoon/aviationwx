@@ -128,13 +128,19 @@ All safety-critical calculations use TDD methodology:
 
 ### Full model (reference AFM tables + NASR runway)
 
-**Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied in v1 (0 kt assumed).
+**Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied in v1: **0 kt wind** is assumed as a generalized neutral conservative case (neither headwind credit nor tailwind penalty). Charts are at max gross; lighter loading is not modeled.
 
-**Runway selection**: Longest active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Operator `runway_length_ft` in config overrides NASR length.
+**Runway selection**: **Longest** active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Multi-runway airports often have shorter strips; evaluating only the longest runway avoids over-triggering when a pilot might use a longer departure surface. Shorter-runway operations remain pilot judgment and ADM. Operator `runway_length_ft` in config overrides NASR length (see below).
+
+**Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config` and **empty `ends`**. NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even if NASR lists them for the airport. Only runway-length stress is computed. Use when NASR runway data is wrong or missing; be aware this can **under-alert** if departure obstacles matter on that strip. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
 **Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
 
-**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance by `obst_hgt / 50` and compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value. No obstruction stress when obstacle is beyond runway length or height/distance are missing.
+**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance **linearly** by `obst_hgt / 50` (including obstacles taller than 50 ft; there is no cap at the chart reference height). Compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value.
+
+When NASR publishes **`OBSTN_CLNC_SLOPE`** (horizontal feet per vertical foot, e.g. 40 = 40:1), compute allowed height at the obstacle distance as `dist / slope`. If `obst_hgt` is on or below that surface, obstacle clearance stress is omitted (runway-length stress only). If the obstacle penetrates the surface, use full `obst_hgt` for linear scaling. Missing or zero slope retains linear scaling without a clearance-surface check.
+
+No obstruction stress when obstacle is beyond runway length or height/distance are missing.
 
 **Effective departure length** (per runway end): `min(runway_length - displaced_thr_len, tkof_dist_avbl)` when NASR publishes those fields; otherwise published runway length.
 

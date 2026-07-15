@@ -71,7 +71,7 @@ Returns weather data for the specified airport.
       "best_end_risk": 0.92,
       "fallback": false,
       "reason": "reference_models",
-      "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
+      "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
     },
     "pressure_altitude": 456,
     "temp_high_today": 18.5,

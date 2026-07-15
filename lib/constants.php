@@ -432,7 +432,7 @@ if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE',
-        'Cessna 152/172/182 AFM at max gross; 0 wind assumed'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway'
     );
 }
 

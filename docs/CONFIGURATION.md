@@ -116,6 +116,9 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_history_default_hours` | global default | Default period shown in UI |
 | `webcam_history_preset_hours` | global default | Period options in UI |
 | `default_preferences` | global default | Override unit toggle defaults for this airport |
+| **Density altitude performance** |||
+| `runway_length_ft` | NASR longest runway | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
+| `runway_surface` | `ASPH` when length override is set | NASR-style surface code when `runway_length_ft` is set (e.g. `TURF`, `ASPH`). Drives POH grass correction on non-paved surfaces. |
 | **Data Sources** |||
 | `weather_sources` | `[]` | Array of weather source configurations (see Weather Sources section) |
 | `webcams` | `[]` | Array of webcam configurations |
@@ -134,6 +137,16 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `foreflight_url` | auto | Override ForeFlight link |
 
 **Regional link behavior:** Built-in external links use a **data-driven profile** per link region derived from effective country (ISO 3166-1 alpha-2): optional `iso_country` → `inferIso3166Alpha2FromIcaoPrefix()` (K/C/Y-style ICAO hints) → FAA LID (implies US) → merged geometry aggregate in `airport_country_resolution.json` when `config_sha256` matches (otherwise merge skipped) → US or Canada from `address` parsing. First-pass regions include **us** (built-in rows: AirNav, FAA Weather, ForeFlight; no SkyVector row in that profile), **ca**, **au**, **nz**, **gb**, **eu** (EU members, EEA, CH, and listed microstates), **mx**, **br**, **jp**, with US territories grouped under **us**. When the region is **unknown**, only explicit overrides (`airnav_url`, `faa_weather_url`, `regional_weather_url`, `foreflight_url`) produce built-ins; use custom `links` for anything else. The scheduler rebuilds the geometry aggregate when `airports.json` changes, the aggregate is missing or invalid, or it is older than the configured max age (30 days by default).
+
+### Density altitude performance overrides
+
+The weather API `density_altitude_performance` cue compares AFM takeoff charts to runway context. By default it uses the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
+
+When `runway_length_ft` is set on an airport, that length replaces NASR runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
+
+**Operator-provided length caveat:** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even when NASR lists them for the airport. Only runway-length stress is evaluated. Set this when NASR runway length is wrong or missing; the cue can **under-alert** when departure obstacles matter on that strip. Pilots remain responsible for obstacle clearance and runway selection.
+
+Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performance) and `docs/DATA_FLOW.md`.
 
 ### Radio frequencies
 

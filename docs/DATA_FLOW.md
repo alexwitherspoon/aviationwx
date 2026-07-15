@@ -653,7 +653,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 | Pressure altitude, temperature | Weather cache | Required for full model |
 | Density altitude | Weather cache | Required; null suppresses cue |
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
-| Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports; config `runway_length_ft` overrides |
+| Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports; config `runway_length_ft` overrides length only (obstructions dropped) |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
 
 **NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed runway surface condition (`COND=FAILED`) and water surfaces are excluded from longest-runway selection.
@@ -664,14 +664,16 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **Full model** (runway data available):
 
-1. Select longest active land runway (exclude `WATER`, exclude `COND=FAILED`).
-2. For each runway end, lookup AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (0 wind).
+1. Select **longest** active land runway (exclude `WATER`, exclude `COND=FAILED`). Shorter runways at the same airport are not evaluated, to avoid over-alerting when the longest strip is available; pilots choosing a shorter runway must apply their own ADM.
+2. For each runway end, lookup AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (**0 kt wind** - neutral conservative case; no headwind/tailwind adjustment).
 3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
 4. Use per-end effective departure length from NASR (`TKOF_DIST_AVBL`, displaced threshold) when published.
-5. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For NASR departure obstacles within runway length, scale required distance by `obst_hgt / 50` and compare clearance stress `required / obst_dist` against runway stress `chart_total / effective_departure_length`; use the higher stress per model.
+5. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For NASR departure obstacles within runway length, scale required distance **linearly** by `obst_hgt / 50` (including above 50 ft). When `OBSTN_CLNC_SLOPE` is published, obstacles on or below the NASR clearance surface at that distance add no obstacle stress; penetrating obstacles use full height. Compare clearance stress `required / obst_dist` against runway stress `chart_total / effective_departure_length`; use the higher stress per model.
 6. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end.
 7. Asymmetric tiers: **strong** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not strong). `risk_factor` uses best-end sum for strong, worst-end sum for caution.
 8. Omit `density_altitude_performance` when tier is `none`.
+
+**Config `runway_length_ft`**: Operator override replaces NASR runway length (optional `runway_surface`) with synthetic runway `config` and **empty ends**. NASR departure obstructions, displaced thresholds, and `TKOF_DIST_AVBL` are not applied. Use when NASR length is wrong; can under-alert if obstacles matter. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
 **Fallback model** (no runway data): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score).
 
@@ -685,7 +687,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
   "best_end_risk": 0.92,
   "fallback": false,
   "reason": "reference_models",
-  "reference": "Cessna 152/172/182 AFM at max gross; 0 wind assumed"
+  "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
 }
 ```
 
