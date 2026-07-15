@@ -669,7 +669,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 - **Source**: `scripts/fetch-runways.php` downloads OurAirports `runways.csv` weekly for wind-compass geometry; DA performance consumes `length_ft`, `surface`, and displaced-threshold fields from the same cache slice (not lat/lon segments alone).
 - **Selection**: Longest non-closed land runway; exclude water/heli-only surfaces using OurAirports surface codes.
-- **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Synthetic runway with **empty `ends`** (no departure obstructions, displaced threshold, or TODA from AIS).
+- **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
 - **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
 - **Tier cap**: When obstruction data is absent, tier may be capped at **caution** (never **warning**) so the strongest alarm requires NASR-grade obstruction context or explicit maintainer config.
 
