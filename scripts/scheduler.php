@@ -721,22 +721,24 @@ while ($running) {
 
         // 8a. NASR APT cache fetch (weekly check; startup if missing)
         if (!$nasrAptFetchOnStartupDone && nasrAptCacheNeedsRefresh()) {
-            require_once __DIR__ . '/fetch-nasr-apt.php';
+            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+            if (file_exists($nasrScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
+            }
             $nasrAptFetchOnStartupDone = true;
             $lastNasrAptFetch = $now;
-            if (fetchNasrAptIfNeeded()) {
-                aviationwx_log('info', 'scheduler: nasr apt fetch complete (startup)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: nasr apt fetch failed at startup', [], 'app');
-            }
         } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptCacheNeedsRefresh()) {
-            require_once __DIR__ . '/fetch-nasr-apt.php';
-            $lastNasrAptFetch = $now;
-            if (fetchNasrAptIfNeeded()) {
-                aviationwx_log('info', 'scheduler: nasr apt fetch complete (weekly)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: nasr apt fetch failed', [], 'app');
+            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+            if (file_exists($nasrScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: nasr apt fetch started (weekly)', [], 'app');
             }
+            $lastNasrAptFetch = $now;
         }
 
         // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
