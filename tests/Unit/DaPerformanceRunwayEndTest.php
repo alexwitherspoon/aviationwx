@@ -62,6 +62,13 @@ class DaPerformanceRunwayEndTest extends TestCase
         $this->assertSame(260.0, $heading);
     }
 
+    public function testResolveRunwayEndMagneticHeadingReturnsNullForMalformedIdent(): void
+    {
+        $end = ['end_id' => 'XX'];
+        $runway = ['rwy_id' => '08/26', 'length_ft' => 4000, 'surface' => 'ASPH'];
+        $this->assertNull(resolveRunwayEndMagneticHeading($end, $runway, []));
+    }
+
     public function testPickDepartureEndByWindFromMagneticSelectsIntoWindEnd(): void
     {
         $nasrRecord = getNasrAirportForConfig(['faa' => '69V']);
