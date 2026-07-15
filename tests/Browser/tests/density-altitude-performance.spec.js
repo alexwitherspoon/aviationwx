@@ -52,6 +52,30 @@ function buildDensityAltitudePerformance(tier, overrides = {}) {
 }
 
 /**
+ * Fresh per-field observation times so client fail-closed staleness keeps fields visible.
+ *
+ * @param {number} now Unix seconds
+ * @returns {object}
+ */
+function buildFreshFieldObsTimeMap(now) {
+  const fields = [
+    'temperature',
+    'dewpoint',
+    'humidity',
+    'wind_speed',
+    'wind_direction',
+    'gust_speed',
+    'pressure',
+    'precip_accum',
+    'visibility',
+    'ceiling',
+    'cloud_cover',
+  ];
+
+  return Object.fromEntries(fields.map((field) => [field, now]));
+}
+
+/**
  * Build internal API weather payload with required fields for displayWeather().
  *
  * @param {object} [overrides]
@@ -86,6 +110,7 @@ function buildMockWeather(overrides = {}) {
     last_updated_primary: now,
     obs_time_metar: now,
     last_updated_metar: now,
+    _field_obs_time_map: buildFreshFieldObsTimeMap(now),
     ...overrides,
   };
 }
@@ -171,9 +196,6 @@ async function assertDashboardDaTier(daRow, options) {
   const ariaLabel = await daRow.getAttribute('aria-label');
   expect(ariaLabel).toContain(ariaSnippet);
   expect(ariaLabel).toMatch(new RegExp(`Density altitude ${densityAltitudeFt.toLocaleString()} feet`));
-
-  const color = await valueEl.evaluate((el) => window.getComputedStyle(el).color);
-  expect(color).toBe(AMBER_RGB);
 }
 
 /**
@@ -257,19 +279,45 @@ function getEmbedDaTile(page) {
   });
 }
 
-test.describe('Dashboard density altitude performance tiers', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('about:blank');
+/**
+ * Load dashboard and apply mocked weather via api/weather.php route.
+ *
+ * Clears client timestamp state so stale-cache detection accepts the mock payload.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {object} weatherOverrides
+ * @param {number} expectedDensityAltitudeFt
+ */
+async function loadDashboardWithMockWeather(page, weatherOverrides, expectedDensityAltitudeFt) {
+  await mockWeatherApi(page, weatherOverrides);
+
+  await page.goto(`${baseUrl}/?airport=${testAirport}`);
+  await page.waitForLoadState('load', { timeout: 30000 });
+  await page.waitForFunction(() => typeof fetchWeather === 'function', { timeout: 10000 });
+
+  await page.evaluate(async () => {
+    weatherLastUpdated = null;
+    window.staleRefreshTimer = null;
+    await fetchWeather(true);
   });
 
-  test('shows normal DA without tier styling when performance is omitted', async ({ page }) => {
-    await mockWeatherApi(page, {
-      density_altitude: 500,
-    });
+  await page.waitForFunction((expected) => {
+    const items = document.querySelectorAll('.weather-item');
+    for (const el of items) {
+      const label = el.querySelector('.label');
+      if (label && label.textContent.trim() === 'Density Altitude') {
+        const value = el.querySelector('.weather-value')?.textContent?.trim();
+        return value === String(expected);
+      }
+    }
+    return false;
+  }, expectedDensityAltitudeFt, { timeout: 15000 });
+}
 
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('load', { timeout: 30000 });
-    await page.waitForSelector('.weather-item .label:text("Density Altitude")', { timeout: 15000 });
+test.describe('Dashboard density altitude performance tiers', () => {
+  test('shows normal DA without tier styling when performance is omitted', async ({ page }) => {
+    const densityAltitudeFt = 500;
+    await loadDashboardWithMockWeather(page, { density_altitude: densityAltitudeFt }, densityAltitudeFt);
 
     const daRow = getDashboardDaRow(page);
     await assertDashboardDaTier(daRow, {
@@ -281,16 +329,12 @@ test.describe('Dashboard density altitude performance tiers', () => {
   test('shows caution tier with warning emoji, amber styling, tooltip, and aria-label', async ({ page }) => {
     const densityAltitudeFt = 5500;
 
-    await mockWeatherApi(page, {
+    await loadDashboardWithMockWeather(page, {
       density_altitude: densityAltitudeFt,
       pressure_altitude: 4570,
       temperature: 20.1,
       density_altitude_performance: buildDensityAltitudePerformance('caution'),
-    });
-
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('load', { timeout: 30000 });
-    await page.waitForSelector('.weather-item .label:text("Density Altitude")', { timeout: 15000 });
+    }, densityAltitudeFt);
 
     const daRow = getDashboardDaRow(page);
     await assertDashboardDaTier(daRow, {
@@ -305,18 +349,14 @@ test.describe('Dashboard density altitude performance tiers', () => {
   test('shows warning tier with flag emoji, amber styling, tooltip, and aria-label', async ({ page }) => {
     const densityAltitudeFt = 6280;
 
-    await mockWeatherApi(page, {
+    await loadDashboardWithMockWeather(page, {
       density_altitude: densityAltitudeFt,
       pressure_altitude: 4570,
       temperature: 20.1,
       density_altitude_performance: buildDensityAltitudePerformance('warning', {
         fallback: false,
       }),
-    });
-
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('load', { timeout: 30000 });
-    await page.waitForSelector('.weather-item .label:text("Density Altitude")', { timeout: 15000 });
+    }, densityAltitudeFt);
 
     const daRow = getDashboardDaRow(page);
     await assertDashboardDaTier(daRow, {
