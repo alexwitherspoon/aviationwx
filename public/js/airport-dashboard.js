@@ -811,8 +811,12 @@ function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier) {
     if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
         return 'Density altitude unavailable';
     }
-    const feet = Math.round(Number(densityAltitudeFt));
-    const base = `Density altitude ${feet.toLocaleString()} feet`;
+    const unit = getDistanceUnit();
+    const value = unit === 'm'
+        ? Math.round(ftToM(Number(densityAltitudeFt)))
+        : Math.round(Number(densityAltitudeFt));
+    const unitLabel = unit === 'm' ? 'meters' : 'feet';
+    const base = `Density altitude ${value.toLocaleString()} ${unitLabel}`;
     if (tier === 'warning') {
         return `${base}. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.`;
     }
