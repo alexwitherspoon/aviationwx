@@ -403,6 +403,10 @@ if (!defined('NASR_HTTP_MAX_ATTEMPTS')) {
 if (!defined('NASR_HTTP_RETRY_DELAYS_SECONDS')) {
     define('NASR_HTTP_RETRY_DELAYS_SECONDS', [5, 30]);
 }
+if (!defined('NASR_APT_FETCH_LOCK_STALE_SECONDS')) {
+    // NASR zip download + parse can exceed generic FILE_LOCK_STALE_SECONDS (5 min)
+    define('NASR_APT_FETCH_LOCK_STALE_SECONDS', 1200);
+}
 if (!defined('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS')) {
     define('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS', 120);
 }

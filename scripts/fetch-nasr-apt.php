@@ -33,7 +33,7 @@ function acquireNasrAptFetchLock()
 
     if (file_exists($lockPath)) {
         $age = time() - filemtime($lockPath);
-        if ($age > FILE_LOCK_STALE_SECONDS) {
+        if ($age > NASR_APT_FETCH_LOCK_STALE_SECONDS) {
             @unlink($lockPath);
         }
     }
