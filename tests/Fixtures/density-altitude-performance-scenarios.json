@@ -1,0 +1,143 @@
+[
+  {
+    "airport_id": "khio",
+    "faa": "HIO",
+    "icao": "KHIO",
+    "elevation_ft": 208,
+    "density_altitude_ft": 1792,
+    "pressure_altitude_ft": 90,
+    "temperature_c": 29,
+    "expected_tier": "normal",
+    "note": "Long NASR runway; clearance slope suppresses tree stress on 31L."
+  },
+  {
+    "airport_id": "id76",
+    "faa": "ID76",
+    "elevation_ft": 4925,
+    "density_altitude_ft": 6280,
+    "pressure_altitude_ft": 4570,
+    "temperature_c": 20.1,
+    "expected_tier": "warning",
+    "expected_risk_factor": 2.652,
+    "expected_worst_end_risk": 2.652,
+    "expected_best_end_risk": 2.652,
+    "note": "High DA turf-gravel; both ends constrained."
+  },
+  {
+    "airport_id": "12id",
+    "faa": "12ID",
+    "elevation_ft": 3647,
+    "density_altitude_ft": 5342,
+    "pressure_altitude_ft": 3408,
+    "temperature_c": 24.3,
+    "expected_tier": "warning",
+    "expected_risk_factor": 2.727,
+    "expected_worst_end_risk": 2.727,
+    "expected_best_end_risk": 2.727,
+    "note": "Short turf strip at moderate pressure altitude."
+  },
+  {
+    "airport_id": "69v",
+    "faa": "69V",
+    "elevation_ft": 5915,
+    "density_altitude_ft": 9399,
+    "pressure_altitude_ft": 5673,
+    "temperature_c": 34.7,
+    "expected_tier": "caution",
+    "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 0.812,
+    "note": "Longest asphalt 08/26; hot high-elevation afternoon."
+  },
+  {
+    "airport_id": "56s",
+    "faa": "56S",
+    "elevation_ft": 12,
+    "density_altitude_ft": -211,
+    "pressure_altitude_ft": -238,
+    "temperature_c": 15.7,
+    "expected_tier": "normal",
+    "note": "Sea-level cool day; low obstruction stress."
+  },
+  {
+    "airport_id": "s81",
+    "faa": "S81",
+    "elevation_ft": 4718,
+    "density_altitude_ft": 12120,
+    "pressure_altitude_ft": 9145,
+    "temperature_c": 21.5,
+    "expected_tier": "caution",
+    "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 0.908,
+    "note": "Extreme DA with close tree on 04; asymmetric tier caps at caution."
+  },
+  {
+    "airport_id": "42b",
+    "faa": "42B",
+    "elevation_ft": 9,
+    "density_altitude_ft": 2017,
+    "pressure_altitude_ft": 49,
+    "temperature_c": 31.3,
+    "expected_tier": "normal",
+    "note": "Water runway excluded; paved 14/32 asymmetric ends below caution."
+  },
+  {
+    "airport_id": "c53",
+    "faa": "C53",
+    "elevation_ft": 4200,
+    "density_altitude_ft": 6045,
+    "pressure_altitude_ft": 3946,
+    "temperature_c": 24.6,
+    "expected_tier": "warning",
+    "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 3.0,
+    "note": "Short turf-dirt 1200 ft runway at high DA."
+  },
+  {
+    "airport_id": "2u7",
+    "faa": "2U7",
+    "elevation_ft": 6403,
+    "density_altitude_ft": 7789,
+    "pressure_altitude_ft": 5943,
+    "temperature_c": 18.5,
+    "expected_tier": "normal",
+    "note": "High elevation but moderate temperature; low summed risk."
+  },
+  {
+    "airport_id": "kspb",
+    "faa": "SPB",
+    "icao": "KSPB",
+    "elevation_ft": 58,
+    "density_altitude_ft": 1426,
+    "pressure_altitude_ft": -60,
+    "temperature_c": 27.5,
+    "expected_tier": "normal",
+    "note": "Coastal; tree obstruction on 15 with long runway."
+  },
+  {
+    "airport_id": "keul",
+    "faa": "EUL",
+    "icao": "KEUL",
+    "elevation_ft": 2431,
+    "density_altitude_ft": 4434,
+    "pressure_altitude_ft": 2221,
+    "temperature_c": 29,
+    "expected_tier": "normal",
+    "note": "Mild obstruction stress on 12; long runway."
+  },
+  {
+    "airport_id": "03S",
+    "faa": "03S",
+    "elevation_ft": 704,
+    "density_altitude_ft": 2000,
+    "pressure_altitude_ft": 800,
+    "temperature_c": 30,
+    "expected_tier": "caution",
+    "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 1.076,
+    "note": "Synthetic hot afternoon; asymmetric ends (08 constrained, 26 moderate)."
+  }
+]

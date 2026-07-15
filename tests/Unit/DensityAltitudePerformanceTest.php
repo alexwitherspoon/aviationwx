@@ -5,32 +5,23 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../lib/nasr/cache.php';
+require_once __DIR__ . '/../Helpers/LoadsNasrAptFixtureCacheTrait.php';
 require_once __DIR__ . '/../../lib/runways.php';
 require_once __DIR__ . '/../../lib/density-altitude-performance-display.php';
 require_once __DIR__ . '/../../lib/weather/density-altitude-performance.php';
 
 class DensityAltitudePerformanceTest extends TestCase
 {
-    private string $nasrFixtureDir;
+    use LoadsNasrAptFixtureCacheTrait;
 
     protected function setUp(): void
     {
-        $this->nasrFixtureDir = __DIR__ . '/../Fixtures/nasr';
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
-
-        $built = nasrBuildCacheFromCsvDirectory($this->nasrFixtureDir);
-        setNasrAptCacheForTesting([
-            'schema_version' => NASR_APT_SCHEMA_VERSION,
-            'airports' => $built['airports'],
-        ]);
+        $this->loadNasrAptFixtureCache();
     }
 
     protected function tearDown(): void
     {
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
+        $this->tearDownNasrAptFixtureCache();
     }
 
     public function testReturnsNullWhenDensityAltitudeMissing(): void
@@ -76,25 +67,6 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertTrue($result['fallback']);
     }
 
-    public function testId76AfternoonScenarioFlagsWarningTier(): void
-    {
-        $result = buildDensityAltitudePerformance([
-            'density_altitude' => 6280,
-            'pressure_altitude' => 4570,
-            'temperature' => 20.1,
-        ], [
-            'id' => 'id76',
-            'faa' => 'ID76',
-            'elevation_ft' => 4925,
-        ]);
-
-        $this->assertNotNull($result);
-        $this->assertSame('warning', $result['tier']);
-        $this->assertFalse($result['fallback']);
-        $this->assertIsFloat($result['risk_factor']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['risk_factor']);
-    }
-
     public function testFallbackWhenPressureAltitudeMissingButRunwayPresent(): void
     {
         $result = buildDensityAltitudePerformance([
@@ -110,40 +82,6 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('density_altitude_only', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
         $this->assertNull($result['risk_factor']);
-    }
-
-    public function test03STurfRunwayTierUsesRoadObstacleOnOppositeEnd(): void
-    {
-        $result = buildDensityAltitudePerformance([
-            'density_altitude' => 2000,
-            'pressure_altitude' => 800,
-            'temperature' => 30,
-        ], [
-            'id' => '03S',
-            'faa' => '03S',
-            'elevation_ft' => 704,
-        ]);
-
-        $this->assertNotNull($result);
-        $this->assertSame('caution', $result['tier']);
-        $this->assertFalse($result['fallback']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['risk_factor']);
-    }
-
-    public function testKhioClearanceSlopeSuppressesPublishedTreeObstacle(): void
-    {
-        $result = buildDensityAltitudePerformance([
-            'density_altitude' => 1792,
-            'pressure_altitude' => 90,
-            'temperature' => 29,
-        ], [
-            'id' => 'khio',
-            'faa' => 'HIO',
-            'icao' => 'KHIO',
-            'elevation_ft' => 208,
-        ]);
-
-        $this->assertNull($result);
     }
 
     public function testPohObstructionStressUsesChartDistanceToClearObstacle(): void
