@@ -671,7 +671,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 - **Selection**: Longest non-closed land runway; exclude water surfaces using OurAirports surface codes.
 - **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
 - **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
-- **Tier cap**: When obstruction data is absent, tier may be capped at **caution** (never **warning**) so the strongest alarm requires NASR-grade obstruction context or explicit maintainer config.
+- **Tier cap**: When obstruction data is absent (OurAirports or operator config override), tier is capped at **caution** (never **warning**). The strongest alarm requires NASR-grade departure-end obstruction context.
 
 OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
