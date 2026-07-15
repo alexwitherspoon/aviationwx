@@ -216,8 +216,7 @@ function resolveDensityAltitudePerformanceEndSelection(
     }
 
     $spread = $worst['total_risk'] - $best['total_risk'];
-    if ($spread >= DA_PERF_ASYMMETRIC_SPREAD
-        && $best['total_risk'] < DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION) {
+    if ($spread >= DA_PERF_ASYMMETRIC_SPREAD) {
         return [
             'selection_basis' => 'asymmetric_heuristic',
             'operational_end_id' => $best['end_id'],

@@ -151,7 +151,7 @@ No obstruction stress when obstacle is beyond runway length or height/distance a
 **Operational departure end selection** (before tier mapping):
 
 1. **Window mean wind** (primary): Vector mean from weather history over `wind_rose_window_hours` (default 1 hour). Same non-calm rules as the wind rose. Requires at least `DA_PERF_WIND_MIN_OBS` (3) observations, mean speed ≥ `DA_PERF_WIND_MIN_MEAN_KTS` (5 kt), and dispersion ratio ≤ `DA_PERF_VARIABLE_WIND_RATIO` (2.0). Score only the into-wind departure end (magnetic).
-2. **Asymmetric spread heuristic**: When wind is light, variable, or history is insufficient: if `worst_end_risk - best_end_risk ≥ DA_PERF_ASYMMETRIC_SPREAD` (1.5) and `best_end_risk < 1.20`, tier from the **best** end only.
+2. **Asymmetric spread heuristic**: When wind is light, variable, or history is insufficient: if `worst_end_risk - best_end_risk ≥ DA_PERF_ASYMMETRIC_SPREAD` (1.5), tier from the **best** end only (one-way strip geometry).
 3. **Both ends** (fallback): When both directions are similarly constrained, use worst/best asymmetric tier rules below. Config `runway_length_ft` override (empty ends), missing headings, or insufficient data also use this path (fail-closed).
 
 **Tier mapping**:

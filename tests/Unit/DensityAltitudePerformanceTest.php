@@ -312,6 +312,96 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function testOr81WarmDayScoresFavorableEndWhenSpreadHigh(): void
+    {
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'OR81' => [
+                    'runways' => [[
+                        'rwy_id' => '07/25',
+                        'length_ft' => 2000,
+                        'surface' => 'TURF-GRVL',
+                        'condition' => '',
+                        'ends' => [
+                            ['end_id' => '07', 'true_alignment' => 70, 'obstruction' => []],
+                            [
+                                'end_id' => '25',
+                                'true_alignment' => 250,
+                                'obstruction' => ['type' => 'TREES', 'hgt_ft' => 100.0, 'dist_ft' => 2000.0],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 1531,
+            'pressure_altitude' => 85,
+            'temperature' => 26.0,
+        ], [
+            'id' => 'or81',
+            'faa' => 'OR81',
+            'elevation_ft' => 185,
+            'magnetic_declination' => 13,
+            'runways' => [
+                ['name' => '07/25', 'heading_1' => 70, 'heading_2' => 250],
+            ],
+        ], 'or81');
+
+        $this->assertIsArray($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertSame('asymmetric_heuristic', $result['selection_basis']);
+        $this->assertSame('07', $result['operational_end_id']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['scored_end_risk']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['scored_end_risk']);
+        $this->assertSame(3.0, $result['worst_end_risk']);
+    }
+
+    public function testOr81CoolDayNormalOnFavorableEnd(): void
+    {
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'OR81' => [
+                    'runways' => [[
+                        'rwy_id' => '07/25',
+                        'length_ft' => 2000,
+                        'surface' => 'TURF-GRVL',
+                        'condition' => '',
+                        'ends' => [
+                            ['end_id' => '07', 'true_alignment' => 70, 'obstruction' => []],
+                            [
+                                'end_id' => '25',
+                                'true_alignment' => 250,
+                                'obstruction' => ['type' => 'TREES', 'hgt_ft' => 100.0, 'dist_ft' => 2000.0],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 126,
+            'pressure_altitude' => 75,
+            'temperature' => 15.0,
+        ], [
+            'id' => 'or81',
+            'faa' => 'OR81',
+            'elevation_ft' => 185,
+            'magnetic_declination' => 13,
+            'runways' => [
+                ['name' => '07/25', 'heading_1' => 70, 'heading_2' => 250],
+            ],
+        ], 'or81');
+
+        $this->assertNull($result);
+    }
+
     public function testKpfcLikeAsymmetricStripUsesBestEndHeuristic(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
@@ -374,10 +464,6 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('asymmetric_heuristic', $selection['selection_basis']);
         $this->assertSame('32', $selection['operational_end_id']);
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $selection['scored_end']['total_risk']);
-        $this->assertGreaterThanOrEqual(
-            DA_PERF_ASYMMETRIC_SPREAD,
-            $evaluation['worst']['total_risk'] - $evaluation['best']['total_risk']
-        );
     }
 
     public function testSelectionBasisTooltipMentionsScoredDepartureEnd(): void
