@@ -108,7 +108,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNull($result['risk_factor']);
     }
 
-    public function test03STurfRunwayTierAfterObstacleHeightScaling(): void
+    public function test03STurfRunwayTierUsesRoadObstacleOnOppositeEnd(): void
     {
         $result = buildDensityAltitudePerformance([
             'density_altitude' => 2000,
@@ -121,12 +121,12 @@ class DensityAltitudePerformanceTest extends TestCase
         ]);
 
         $this->assertNotNull($result);
-        $this->assertSame('strong', $result['tier']);
+        $this->assertSame('caution', $result['tier']);
         $this->assertFalse($result['fallback']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG, $result['risk_factor']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['risk_factor']);
     }
 
-    public function testKhioOneConstrainedEndFlagsCaution(): void
+    public function testKhioClearanceSlopeSuppressesPublishedTreeObstacle(): void
     {
         $result = buildDensityAltitudePerformance([
             'density_altitude' => 1792,
@@ -139,11 +139,7 @@ class DensityAltitudePerformanceTest extends TestCase
             'elevation_ft' => 208,
         ]);
 
-        $this->assertNotNull($result);
-        $this->assertSame('caution', $result['tier']);
-        $this->assertFalse($result['fallback']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['risk_factor']);
-        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG, $result['best_end_risk']);
+        $this->assertNull($result);
     }
 
     public function testPohObstructionStressUsesChartDistanceToClearObstacle(): void

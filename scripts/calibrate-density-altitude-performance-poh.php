@@ -29,7 +29,8 @@ function pohCalibrationRow(
     int $runwayFt,
     bool $nonPaved,
     ?float $obstHgtFt = null,
-    ?float $obstDistFt = null
+    ?float $obstDistFt = null,
+    ?float $obstClncSlope = null
 ): array {
     $chartTotal = pohLookupChartTotalFt($table, $pressureAltitudeFt, $tempC);
     $groundRoll = pohLookupChartGroundRollFt($table, $pressureAltitudeFt, $tempC);
@@ -41,14 +42,18 @@ function pohCalibrationRow(
         $nonPaved,
         $runwayFt,
         $obstHgtFt,
-        $obstDistFt
+        $obstDistFt,
+        $obstClncSlope
     );
     $requiredTotal = $runwayFt > 0 ? (int) round($stress * $runwayFt) : null;
     $risk = $runwayFt > 0 ? calculatePerformanceProfileRiskFromStress($stress) : null;
     $marginFt = ($runwayFt > 0 && $requiredTotal !== null) ? $runwayFt - $requiredTotal : null;
     $marginPct = ($runwayFt > 0 && $marginFt !== null) ? round(100.0 * $marginFt / $runwayFt, 1) : null;
-        $heightRatio = ($obstHgtFt !== null && $obstHgtFt > 0)
-        ? pohObstacleHeightRatio($obstHgtFt)
+    $effectiveObstHgt = ($obstHgtFt !== null && $obstDistFt !== null)
+        ? pohEffectiveObstacleHeightForChart($obstHgtFt, $obstDistFt, $obstClncSlope)
+        : null;
+    $heightRatio = ($effectiveObstHgt !== null && $effectiveObstHgt > 0)
+        ? pohObstacleHeightRatio($effectiveObstHgt)
         : null;
 
     return [
@@ -59,6 +64,8 @@ function pohCalibrationRow(
         'surface_total_ft' => $surfaceTotal,
         'obst_hgt_ft' => $obstHgtFt,
         'obst_dist_ft' => $obstDistFt,
+        'obst_clnc_slope' => $obstClncSlope,
+        'obst_effective_hgt_ft' => $effectiveObstHgt,
         'obst_height_ratio' => $heightRatio !== null ? round($heightRatio, 3) : null,
         'required_total_ft' => $requiredTotal,
         'runway_ft' => $runwayFt,
@@ -143,15 +150,29 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
         $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
         $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
+        $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
+            ? (float) $obst['slope']
+            : null;
         $endDetail = [
             'end_id' => $end['end_id'] ?? null,
             'obst_hgt_ft' => $obstHgt,
             'obst_dist_ft' => $obstDist,
+            'obst_clnc_slope' => $obstSlope,
             'models' => [],
         ];
         $r152 = $r172 = $r182 = 0.0;
         foreach (['c152' => 'C152M', 'c172' => 'C172N', 'c182' => 'C182T'] as $key => $modelLabel) {
-            $row = pohCalibrationRow($modelLabel, $tables[$key], $pa, $tempC, $runwayFt, $nonPaved, $obstHgt, $obstDist);
+            $row = pohCalibrationRow(
+                $modelLabel,
+                $tables[$key],
+                $pa,
+                $tempC,
+                $runwayFt,
+                $nonPaved,
+                $obstHgt,
+                $obstDist,
+                $obstSlope
+            );
             $endDetail['models'][$key] = $row;
             if ($key === 'c152') {
                 $r152 = (float) $row['risk'];

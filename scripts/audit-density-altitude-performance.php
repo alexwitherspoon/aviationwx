@@ -120,6 +120,9 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
         $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
         $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
         $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
+        $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
+            ? (float) $obst['slope']
+            : null;
         $req172 = pohRequiredTakeoffDistanceFt(
             $tables['c172'],
             (float) $pressureAltitude,
@@ -127,7 +130,8 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
             $nonPaved,
             $obstHgt,
             $obstDist,
-            $availableFt
+            $availableFt,
+            $obstSlope
         );
         $worstEnd['obst_hgt_ft'] = $obstHgt;
         $worstEnd['obst_dist_ft'] = $obstDist;

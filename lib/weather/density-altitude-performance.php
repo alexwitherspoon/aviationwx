@@ -91,6 +91,9 @@ function evaluateSingleRunwayEndPerformance(
     $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
     $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
     $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
+    $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
+        ? (float) $obst['slope']
+        : null;
 
     $risk152 = 0.0;
     $risk172 = 0.0;
@@ -104,7 +107,8 @@ function evaluateSingleRunwayEndPerformance(
             $nonPaved,
             $availableFt,
             $obstHgt,
-            $obstDist
+            $obstDist,
+            $obstSlope
         );
         $risk = calculatePerformanceProfileRiskFromStress($stress);
         if ($modelKey === 'c152') {
@@ -238,6 +242,10 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
  * Build density_altitude_performance payload for weather API consumers.
  *
  * Returns null when DA is missing/stale-suppressed or tier is none.
+ *
+ * Runway selection: longest NASR land runway unless `runway_length_ft` is set in
+ * airport config. That override uses operator length only (empty ends); NASR
+ * departure obstructions and per-end effective length are not applied.
  *
  * @param array $weather Cached weather row
  * @param array $airport Airport configuration

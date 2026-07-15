@@ -112,4 +112,48 @@ class PohTakeoffTest extends TestCase
         $this->assertEqualsWithDelta($expected, $stress, 0.01);
         $this->assertGreaterThan($chartTotal / 2800.0, $stress);
     }
+
+    public function testNasrClearanceSlopeSuppressesObstacleOnPublishedSurface(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+        $chartTotal = pohChartSurfaceTotalFt($table, 90.0, 29.0, false);
+
+        $stressWithSlope = pohComputeDepartureEndStress(
+            $table,
+            90.0,
+            29.0,
+            false,
+            6600,
+            135.0,
+            2800.0,
+            19.0
+        );
+        $stressRunwayOnly = $chartTotal / 6600.0;
+
+        $this->assertEqualsWithDelta($stressRunwayOnly, $stressWithSlope, 0.01);
+        $this->assertSame(0.0, pohEffectiveObstacleHeightForChart(135.0, 2800.0, 19.0));
+    }
+
+    public function testNasrClearanceSlopeUsesFullHeightWhenPenetrating(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+        $chartTotal = pohChartSurfaceTotalFt($table, 90.0, 29.0, false);
+
+        $stress = pohComputeDepartureEndStress(
+            $table,
+            90.0,
+            29.0,
+            false,
+            6600,
+            150.0,
+            2800.0,
+            19.0
+        );
+        $expected = ($chartTotal * pohObstacleHeightRatio(150.0)) / 2800.0;
+
+        $this->assertEqualsWithDelta($expected, $stress, 0.01);
+        $this->assertSame(150.0, pohEffectiveObstacleHeightForChart(150.0, 2800.0, 19.0));
+    }
 }

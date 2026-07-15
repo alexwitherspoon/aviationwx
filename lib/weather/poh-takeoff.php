@@ -154,6 +154,8 @@ function pohChartSurfaceTotalFt(
 
 /**
  * Scale POH 50 ft obstacle chart distance for a departure obstacle height.
+ *
+ * Linear for all heights: chart distance scales by obst_hgt / 50 (including above 50 ft).
  */
 function pohObstacleHeightRatio(float $obstHgtFt): float
 {
@@ -161,14 +163,46 @@ function pohObstacleHeightRatio(float $obstHgtFt): float
 }
 
 /**
+ * Obstacle height used for POH linear scaling after NASR clearance-surface check.
+ *
+ * NASR OBSTN_CLNC_SLOPE is horizontal feet per vertical foot (e.g. 40 = 40:1).
+ * When the obstacle lies on or below the published surface at its distance, only
+ * runway-length stress applies. When it penetrates, use full obstacle height.
+ *
+ * @param float $obstHgtFt NASR OBSTN_HGT
+ * @param float $obstDistFt NASR DIST_FROM_THR
+ * @param float|null $obstClncSlope NASR OBSTN_CLNC_SLOPE when published and positive
+ * @return float Effective height for linear scaling (0 when on clearance surface)
+ */
+function pohEffectiveObstacleHeightForChart(
+    float $obstHgtFt,
+    float $obstDistFt,
+    ?float $obstClncSlope
+): float {
+    if ($obstClncSlope === null || $obstClncSlope <= 0) {
+        return $obstHgtFt;
+    }
+
+    $allowedHgtAtDist = $obstDistFt / $obstClncSlope;
+    if ($obstHgtFt <= $allowedHgtAtDist) {
+        return 0.0;
+    }
+
+    return $obstHgtFt;
+}
+
+/**
  * Takeoff stress from POH chart distance vs runway and departure obstruction.
  *
  * Chart total is distance to clear a 50 ft obstacle (POH standard). When a departure
  * obstruction lies at dist_ft with hgt_ft, required distance scales linearly by
- * hgt/50 and is compared to dist_ft. Overall stress is the worse of runway-length
- * stress and obstacle clearance stress.
+ * obst_hgt/50 (including above 50 ft). When NASR publishes OBSTN_CLNC_SLOPE, obstacles
+ * on or below that clearance surface do not add obstacle stress beyond runway roll.
  *
  * @param array $table POH fixture table
+ * @param float|null $obstHgtFt NASR OBSTN_HGT
+ * @param float|null $obstDistFt NASR DIST_FROM_THR
+ * @param float|null $obstClncSlope NASR OBSTN_CLNC_SLOPE when published and positive
  */
 function pohComputeDepartureEndStress(
     array $table,
@@ -177,7 +211,8 @@ function pohComputeDepartureEndStress(
     bool $nonPavedSurface,
     int $runwayLengthFt,
     ?float $obstHgtFt,
-    ?float $obstDistFt
+    ?float $obstDistFt,
+    ?float $obstClncSlope = null
 ): float {
     if ($runwayLengthFt <= 0) {
         return 1.0;
@@ -193,7 +228,12 @@ function pohComputeDepartureEndStress(
         return $stressRunway;
     }
 
-    $heightRatio = pohObstacleHeightRatio($obstHgtFt);
+    $effectiveObstHgt = pohEffectiveObstacleHeightForChart($obstHgtFt, $obstDistFt, $obstClncSlope);
+    if ($effectiveObstHgt <= 0) {
+        return $stressRunway;
+    }
+
+    $heightRatio = pohObstacleHeightRatio($effectiveObstHgt);
     $requiredToClearObstacle = $chartTotal * $heightRatio;
     $stressObstacle = $requiredToClearObstacle / $obstDistFt;
 
@@ -212,7 +252,8 @@ function pohRequiredTakeoffDistanceFt(
     bool $nonPavedSurface,
     ?float $obstHgtFt = null,
     ?float $obstDistFt = null,
-    int $runwayLengthFt = 0
+    int $runwayLengthFt = 0,
+    ?float $obstClncSlope = null
 ): int {
     $stress = pohComputeDepartureEndStress(
         $table,
@@ -221,7 +262,8 @@ function pohRequiredTakeoffDistanceFt(
         $nonPavedSurface,
         $runwayLengthFt > 0 ? $runwayLengthFt : 1,
         $obstHgtFt,
-        $obstDistFt
+        $obstDistFt,
+        $obstClncSlope
     );
 
     $available = $runwayLengthFt > 0 ? $runwayLengthFt : 1;
