@@ -258,7 +258,7 @@ function rankNasrCycleDatesByProximityToToday(array $datesYmd, ?int $referenceTi
             return $distanceA <=> $distanceB;
         }
 
-        return $tb <=> $ta;
+        return $ta <=> $tb;
     });
 
     return $unique;
