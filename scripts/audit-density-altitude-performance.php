@@ -5,6 +5,10 @@
  * Usage:
  *   CONFIG_PATH=/path/to/airports.json CACHE_BASE_DIR=/path/to/cache \
  *     php scripts/audit-density-altitude-performance.php [--base-url=https://aviationwx.org]
+ *
+ *   php scripts/audit-density-altitude-performance.php --spot-check=KLXV,KASE,KSTS,KICT
+ *   php scripts/audit-density-altitude-performance.php --configured-only --format=table
+ *   php scripts/audit-density-altitude-performance.php --no-configured --spot-check=KLXV,KASE
  */
 
 declare(strict_types=1);
@@ -21,6 +25,9 @@ require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/runway-selection.php';
 require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
 require_once __DIR__ . '/../lib/weather/poh-takeoff.php';
+require_once __DIR__ . '/../lib/weather/calculator.php';
+require_once __DIR__ . '/../lib/weather/adapter/metar-v1.php';
+require_once __DIR__ . '/../lib/nasr/identifiers.php';
 
 /**
  * @return array<string, mixed>|null
@@ -40,6 +47,9 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
     }
 
     $nasrRecord = getNasrAirportForConfig($airport);
+    if ($nasrRecord === null) {
+        $nasrRecord = auditLookupNasrFromFullCache($airport);
+    }
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
     $configLength = getConfigRunwayLengthOverrideFt($airport);
     $selectedRunway = null;
@@ -204,72 +214,113 @@ function fetchProductionWeather(string $baseUrl, string $airportId): array
     return ['ok' => true, 'weather' => $weather, 'error' => null, 'http_code' => $httpCode];
 }
 
-$baseUrl = 'https://aviationwx.org';
-foreach ($argv as $arg) {
-    if (str_starts_with($arg, '--base-url=')) {
-        $baseUrl = substr($arg, strlen('--base-url='));
+/**
+ * Lookup NASR record from full APT cache (not configured slice only).
+ *
+ * @return array<string, mixed>|null
+ */
+function auditLookupNasrFromFullCache(array $airport): ?array
+{
+    $cache = nasrReadFullAptCacheFromDisk();
+    if ($cache === null) {
+        return null;
     }
+    $airports = $cache['airports'] ?? [];
+    if (!is_array($airports)) {
+        return null;
+    }
+    foreach (nasrCandidateArptIds($airport) as $candidate) {
+        if (isset($airports[$candidate]) && is_array($airports[$candidate])) {
+            return $airports[$candidate];
+        }
+    }
+
+    return null;
 }
 
-$config = loadConfig();
-if ($config === null) {
-    fwrite(STDERR, "Config load failed\n");
-    exit(1);
+/**
+ * Build minimal airport config for METAR spot-check by ICAO.
+ *
+ * @return array<string, mixed>
+ */
+function auditSpotCheckAirportStub(string $icao): array
+{
+    $icao = strtoupper(trim($icao));
+    $stub = [
+        'id' => strtolower($icao),
+        'icao' => $icao,
+        'name' => $icao,
+        'enabled' => true,
+        'weather_sources' => [
+            ['type' => 'metar', 'station' => $icao],
+        ],
+    ];
+    $nasr = auditLookupNasrFromFullCache($stub);
+    if ($nasr !== null && isset($nasr['elev_ft']) && is_numeric($nasr['elev_ft'])) {
+        $stub['elevation_ft'] = (int) $nasr['elev_ft'];
+    }
+
+    return $stub;
 }
 
-$airports = $config['airports'] ?? [];
-$rows = [];
-$summary = [
-    'base_url' => $baseUrl,
-    'audited_at' => gmdate('c'),
-    'total' => 0,
-    'fetch_failed' => 0,
-    'no_da' => 0,
-    'normal' => 0,
-    'caution' => 0,
-    'warning' => 0,
-    'full' => 0,
-    'fallback' => 0,
-    'fallback_would_differ' => 0,
-    'prod_mismatch' => 0,
-];
-
-foreach ($airports as $airportId => $airport) {
-    if (!is_array($airport) || empty($airport['enabled'])) {
-        continue;
+/**
+ * Fetch live METAR and compute PA/DA for spot-check airports.
+ *
+ * @return array{ok: bool, weather: ?array, error: ?string}
+ */
+function fetchSpotCheckWeather(array $airport): array
+{
+    $icao = strtoupper(trim((string) ($airport['icao'] ?? '')));
+    if ($icao === '') {
+        return ['ok' => false, 'weather' => null, 'error' => 'missing_icao'];
     }
 
-    $summary['total']++;
-    $fetch = fetchProductionWeather($baseUrl, (string) $airportId);
-    if (!$fetch['ok']) {
-        $summary['fetch_failed']++;
-        $rows[] = [
-            'id' => $airportId,
-            'name' => $airport['name'] ?? '',
-            'status' => 'fetch_failed',
-            'error' => $fetch['error'],
-        ];
-        usleep(150000);
-        continue;
+    $metar = fetchMETARFromStation($icao, $airport);
+    if (!is_array($metar)) {
+        return ['ok' => false, 'weather' => null, 'error' => 'metar_failed'];
     }
 
-    $weather = $fetch['weather'];
+    $weather = $metar;
+    if (!isset($weather['temperature']) || !isset($weather['pressure'])) {
+        return ['ok' => false, 'weather' => null, 'error' => 'metar_incomplete'];
+    }
+
+    $nasr = auditLookupNasrFromFullCache($airport);
+    $elev = getEffectiveFieldElevationFt($airport, $nasr);
+    if ($elev === null) {
+        return ['ok' => false, 'weather' => null, 'error' => 'missing_elevation'];
+    }
+    $airport['elevation_ft'] = $elev;
+
+    $weather['pressure_altitude'] = calculatePressureAltitude($weather, $airport);
+    $weather['density_altitude'] = calculateDensityAltitude($weather, $airport);
+    $weather['_metar_obs_time'] = $metar['obs_time'] ?? null;
+    $weather['_metar_raw'] = $metar['raw_metar'] ?? ($metar['rawOb'] ?? null);
+
+    return ['ok' => true, 'weather' => $weather, 'error' => null];
+}
+
+/**
+ * @param array<string, mixed> $summary
+ */
+function auditRecordRow(array &$summary, array &$rows, string $id, array $airport, array $weather, ?string $source): void
+{
     if (!isset($weather['density_altitude']) || !is_numeric($weather['density_altitude'])) {
         $summary['no_da']++;
         $rows[] = [
-            'id' => $airportId,
+            'id' => $id,
             'name' => $airport['name'] ?? '',
             'status' => 'no_da',
+            'source' => $source,
             'last_updated_iso' => $weather['_last_updated_iso'] ?? null,
         ];
-        usleep(150000);
-        continue;
+        return;
     }
 
     $detail = auditBuildPerformanceDetail($weather, $airport);
     if ($detail === null) {
         $summary['no_da']++;
-        continue;
+        return;
     }
 
     $tier = $detail['tier'] ?? 'normal';
@@ -299,14 +350,186 @@ foreach ($airports as $airportId => $airport) {
         $summary['prod_mismatch']++;
     }
 
+    $apiPayload = buildDensityAltitudePerformance($weather, $airport);
     $rows[] = array_merge([
-        'id' => $airportId,
+        'id' => $id,
         'name' => $airport['name'] ?? '',
+        'source' => $source,
         'last_updated_iso' => $weather['_last_updated_iso'] ?? null,
         'prod_tier' => $prodTier,
+        'api_tier' => is_array($apiPayload) ? (string) ($apiPayload['tier'] ?? 'normal') : 'normal',
     ], $detail);
+}
 
-    usleep(150000);
+/**
+ * @param array<string, mixed> $summary
+ * @param list<array<string, mixed>> $rows
+ */
+function auditPrintTable(array $summary, array $rows): void
+{
+    echo "Density altitude performance audit @ {$summary['audited_at']}\n";
+    echo "Base URL: {$summary['base_url']}\n";
+    echo "Total: {$summary['total']} | warning: {$summary['warning']} | caution: {$summary['caution']} | normal: {$summary['normal']}";
+    echo " | full model: {$summary['full']} | fallback: {$summary['fallback']}";
+    if (($summary['prod_mismatch'] ?? 0) > 0) {
+        echo " | prod mismatch: {$summary['prod_mismatch']}";
+    }
+    echo "\n\n";
+
+    printf(
+        "%-12s %-28s %-8s %-8s %-6s %5s %5s %4s %5s %-6s %4s %s\n",
+        'ID',
+        'Name',
+        'Tier',
+        'Prod',
+        'Path',
+        'DA',
+        'Elev',
+        'PA',
+        'TempC',
+        'RwyFt',
+        'Surf',
+        'Worst end / risks'
+    );
+    echo str_repeat('-', 120) . "\n";
+
+    foreach ($rows as $row) {
+        if (($row['status'] ?? '') === 'fetch_failed') {
+            printf("%-12s %-28s FETCH FAILED (%s)\n", $row['id'] ?? '', $row['name'] ?? '', $row['error'] ?? '');
+            continue;
+        }
+        if (($row['status'] ?? '') === 'no_da') {
+            printf("%-12s %-28s NO DA\n", $row['id'] ?? '', $row['name'] ?? '');
+            continue;
+        }
+
+        $risk = sprintf(
+            'w=%.2f b=%.2f',
+            (float) ($row['worst_total_risk'] ?? 0),
+            (float) ($row['best_total_risk'] ?? 0)
+        );
+        $end = $row['worst_end_id'] ?? '';
+        if ($end !== '') {
+            $risk = $end . ' ' . $risk;
+        }
+
+        printf(
+            "%-12s %-28s %-8s %-8s %-6s %5s %5s %4s %5s %-6s %4s %s\n",
+            (string) ($row['id'] ?? ''),
+            mb_strimwidth((string) ($row['name'] ?? ''), 0, 28, '…'),
+            (string) ($row['tier'] ?? 'normal'),
+            (string) ($row['prod_tier'] ?? '-'),
+            (string) ($row['path'] ?? ''),
+            isset($row['da_ft']) ? (string) $row['da_ft'] : '-',
+            isset($row['field_elev_ft']) ? (string) $row['field_elev_ft'] : '-',
+            isset($row['pa_ft']) ? (string) $row['pa_ft'] : '-',
+            isset($row['temp_c']) ? (string) $row['temp_c'] : '-',
+            isset($row['runway_length_ft']) ? (string) $row['runway_length_ft'] : '-',
+            isset($row['runway_surface']) ? mb_strimwidth((string) $row['runway_surface'], 0, 4, '') : '-',
+            $risk
+        );
+    }
+}
+
+$baseUrl = 'https://aviationwx.org';
+$format = 'json';
+$runConfigured = true;
+$spotChecks = [];
+foreach ($argv as $arg) {
+    if (str_starts_with($arg, '--base-url=')) {
+        $baseUrl = substr($arg, strlen('--base-url='));
+    } elseif (str_starts_with($arg, '--format=')) {
+        $format = substr($arg, strlen('--format='));
+    } elseif (str_starts_with($arg, '--spot-check=')) {
+        $raw = substr($arg, strlen('--spot-check='));
+        foreach (explode(',', $raw) as $icao) {
+            $icao = strtoupper(trim($icao));
+            if ($icao !== '') {
+                $spotChecks[] = $icao;
+            }
+        }
+    } elseif ($arg === '--configured-only') {
+        $runConfigured = true;
+        $spotChecks = [];
+    } elseif ($arg === '--no-configured') {
+        $runConfigured = false;
+    }
+}
+
+$config = loadConfig();
+if ($config === null) {
+    fwrite(STDERR, "Config load failed\n");
+    exit(1);
+}
+
+$airports = $config['airports'] ?? [];
+$rows = [];
+$summary = [
+    'base_url' => $baseUrl,
+    'audited_at' => gmdate('c'),
+    'total' => 0,
+    'fetch_failed' => 0,
+    'no_da' => 0,
+    'normal' => 0,
+    'caution' => 0,
+    'warning' => 0,
+    'full' => 0,
+    'fallback' => 0,
+    'fallback_would_differ' => 0,
+    'prod_mismatch' => 0,
+    'spot_check' => count($spotChecks),
+];
+
+if ($runConfigured) {
+    foreach ($airports as $airportId => $airport) {
+        if (!is_array($airport) || empty($airport['enabled'])) {
+            continue;
+        }
+
+        $summary['total']++;
+        $fetch = fetchProductionWeather($baseUrl, (string) $airportId);
+        if (!$fetch['ok']) {
+            $summary['fetch_failed']++;
+            $rows[] = [
+                'id' => $airportId,
+                'name' => $airport['name'] ?? '',
+                'status' => 'fetch_failed',
+                'error' => $fetch['error'],
+                'source' => 'configured',
+            ];
+            usleep(150000);
+            continue;
+        }
+
+        auditRecordRow($summary, $rows, (string) $airportId, $airport, $fetch['weather'], 'configured');
+        usleep(150000);
+    }
+}
+
+foreach ($spotChecks as $icao) {
+    $summary['total']++;
+    $airport = auditSpotCheckAirportStub($icao);
+    $fetch = fetchSpotCheckWeather($airport);
+    if (!$fetch['ok']) {
+        $summary['fetch_failed']++;
+        $rows[] = [
+            'id' => strtolower($icao),
+            'name' => $icao,
+            'status' => 'fetch_failed',
+            'error' => $fetch['error'],
+            'source' => 'spot_check',
+        ];
+        usleep(200000);
+        continue;
+    }
+
+    auditRecordRow($summary, $rows, strtolower($icao), $airport, $fetch['weather'], 'spot_check');
+    usleep(200000);
+}
+
+if ($summary['total'] === 0) {
+    fwrite(STDERR, "No airports to audit. Use default configured scan or --spot-check=KASE,KLXV\n");
+    exit(1);
 }
 
 usort($rows, static function (array $a, array $b): int {
@@ -318,5 +541,10 @@ usort($rows, static function (array $a, array $b): int {
     }
     return strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
 });
+
+if ($format === 'table' || $format === 'text') {
+    auditPrintTable($summary, $rows);
+    exit(0);
+}
 
 echo json_encode(['summary' => $summary, 'airports' => $rows], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

@@ -38,5 +38,15 @@ function nasrCandidateArptIds(array $airport): array
         }
     }
 
+    // US ICAO (K + 3-char LID) often maps to NASR ARPT_ID without the K prefix.
+    foreach ($unique as $id) {
+        if (strlen($id) === 4 && $id[0] === 'K') {
+            $lid = substr($id, 1);
+            if ($lid !== '' && !in_array($lid, $unique, true)) {
+                $unique[] = $lid;
+            }
+        }
+    }
+
     return $unique;
 }
