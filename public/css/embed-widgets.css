@@ -97,6 +97,13 @@ a {
     color: #fff;
 }
 
+.style-card-wf .tile.density-altitude-warning .tv,
+.style-full .metric-item.density-altitude-warning .value,
+.density-altitude-warning {
+    color: #e67e22 !important;
+    font-weight: 600;
+}
+
 .flight-category.unknown {
     background: var(--unknown-bg);
     color: #fff;

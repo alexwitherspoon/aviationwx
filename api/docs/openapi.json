@@ -1047,6 +1047,43 @@
             "description": "Density altitude in feet",
             "nullable": true
           },
+          "density_altitude_performance": {
+            "type": "object",
+            "description": "Density altitude performance cue (omitted when tier is normal). Not a go/no-go judgment.",
+            "nullable": true,
+            "properties": {
+              "tier": {
+                "type": "string",
+                "enum": ["caution", "warning"],
+                "description": "Density altitude performance tier (normal is omitted from API responses)"
+              },
+              "risk_factor": {
+                "type": "number",
+                "description": "Summed profile risk 0-3 when full model used (best-end sum for warning, worst-end sum for caution); null when fallback",
+                "nullable": true
+              },
+              "worst_end_risk": {
+                "type": "number",
+                "description": "Worst departure-end summed profile risk (0-3) when full model used"
+              },
+              "best_end_risk": {
+                "type": "number",
+                "description": "Best departure-end summed profile risk (0-3) when full model used"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "True when runway data unavailable and elevation-banded thresholds used"
+              },
+              "reason": {
+                "type": "string",
+                "enum": ["reference_models", "density_altitude_only"]
+              },
+              "reference": {
+                "type": "string",
+                "description": "Reference AFM models and assumptions"
+              }
+            }
+          },
           "pressure_altitude": {
             "type": "integer",
             "description": "Pressure altitude in feet",

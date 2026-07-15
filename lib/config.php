@@ -2508,6 +2508,33 @@ function loadConfig(bool $useCache = true): ?array {
 }
 
 /**
+ * SHA-256 of airports.json content (reuses loadConfig APCu SHA when warm).
+ */
+function getConfigFileSha256(): ?string
+{
+    loadConfig();
+
+    if (function_exists('apcu_fetch')) {
+        $cachedSha = apcu_fetch('aviationwx_config_sha');
+        if (is_string($cachedSha) && $cachedSha !== '') {
+            return $cachedSha;
+        }
+    }
+
+    $configFile = getConfigFilePath();
+    if ($configFile === null || !is_readable($configFile)) {
+        return null;
+    }
+
+    $content = @file_get_contents($configFile);
+    if ($content === false) {
+        return null;
+    }
+
+    return hash('sha256', $content);
+}
+
+/**
  * Clear configuration cache
  * 
  * Removes the config data and SHA hash from APCu.

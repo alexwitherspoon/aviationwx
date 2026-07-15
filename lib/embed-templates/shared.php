@@ -9,6 +9,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../runways.php';
+require_once __DIR__ . '/../density-altitude-performance-display.php';
 
 /**
  * Resolve formal identifier for embed headers (ICAO/IATA/FAA only).
@@ -715,9 +716,28 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     
     // 2. Density Altitude (always show if available)
     if ($densityAltitude !== null) {
-        $daDisplay = formatEmbedDist($densityAltitude, $distUnit, true);
+        $daPerformance = is_array($weather['density_altitude_performance'] ?? null)
+            ? $weather['density_altitude_performance']
+            : null;
+        $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
+        $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitude, $daBase, $daPerformance);
         if ($daDisplay !== '--') {
-            $availableMetrics[] = ['label' => 'DA', 'value' => $daDisplay];
+            $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
+            $daClass = densityAltitudePerformanceValueClass($tier);
+            $daTooltip = densityAltitudePerformanceTooltip($tier);
+            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit);
+            $classSuffix = $daClass !== '' ? ' ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') : '';
+            $titleAttr = $daTooltip !== ''
+                ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
+                : '';
+            $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
+            $availableMetrics[] = [
+                'label' => 'DA',
+                'value' => $daDisplay,
+                'value_class_suffix' => $classSuffix,
+                'tile_class_suffix' => $classSuffix,
+                'tile_attrs' => $titleAttr . $ariaAttr,
+            ];
         }
     }
     

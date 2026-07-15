@@ -10,14 +10,15 @@ This document provides a comprehensive reference for all safety-critical weather
 ## Table of Contents
 
 1. [Density Altitude](#density-altitude)
-2. [Pressure Altitude](#pressure-altitude)
-3. [Flight Category](#flight-category)
-4. [Dewpoint Calculations](#dewpoint-calculations)
-5. [Temperature Conversions](#temperature-conversions)
-6. [Wind Calculations](#wind-calculations)
-7. [Wind Direction: True North](#wind-direction-true-north)
-8. [METAR Visibility Parsing](#metar-visibility-parsing)
-9. [Local vs Supplemental Remote Weather](#local-vs-supplemental-remote-weather)
+2. [Density Altitude Performance](#density-altitude-performance)
+3. [Pressure Altitude](#pressure-altitude)
+4. [Flight Category](#flight-category)
+5. [Dewpoint Calculations](#dewpoint-calculations)
+6. [Temperature Conversions](#temperature-conversions)
+7. [Wind Calculations](#wind-calculations)
+8. [Wind Direction: True North](#wind-direction-true-north)
+9. [METAR Visibility Parsing](#metar-visibility-parsing)
+10. [Local vs Supplemental Remote Weather](#local-vs-supplemental-remote-weather)
 
 ---
 
@@ -116,6 +117,60 @@ All safety-critical calculations use TDD methodology:
 3. **FAA-H-8083-15B**: Instrument Flying Handbook
 4. **ICAO Doc 7488**: Standard Atmosphere
 5. **E6B Flight Computer**: Manual examples and documented calculations
+
+---
+
+## Density Altitude Performance
+
+**Purpose**: Provide a server-computed cue when density altitude and runway context suggest verifying AFM takeoff performance. This is **not** a go/no-go decision.
+
+**When suppressed**: Missing or fail-closed null density altitude; missing pressure altitude or temperature for full model; asymmetric tier `normal` (no cue shown).
+
+### Full model (reference AFM tables + NASR runway)
+
+**Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied in v1: **0 kt wind** is assumed as a generalized neutral conservative case (neither headwind credit nor tailwind penalty). Charts are at max gross; lighter loading is not modeled.
+
+**Runway selection**: **Longest** active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Multi-runway airports often have shorter strips; evaluating only the longest runway avoids over-triggering when a pilot might use a longer departure surface. Shorter-runway operations remain pilot judgment and ADM. Operator `runway_length_ft` in config overrides NASR length (see below).
+
+**Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config` and **empty `ends`**. NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even if NASR lists them for the airport. Only runway-length stress is computed. Use when NASR runway data is wrong or missing; be aware this can **under-alert** if departure obstacles matter on that strip. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
+
+**Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
+
+**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance **linearly** by `obst_hgt / 50` (including obstacles taller than 50 ft; there is no cap at the chart reference height). Compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value.
+
+When NASR publishes **`OBSTN_CLNC_SLOPE`** (horizontal feet per vertical foot, e.g. 40 = 40:1), compute allowed height at the obstacle distance as `dist / slope`. If `obst_hgt` is on or below that surface, obstacle clearance stress is omitted (runway-length stress only). If the obstacle penetrates the surface, use full `obst_hgt` for linear scaling. Missing or zero slope retains linear scaling without a clearance-surface check.
+
+No obstruction stress when obstacle is beyond runway length or height/distance are missing.
+
+**Effective departure length** (per runway end): `min(runway_length - displaced_thr_len, tkof_dist_avbl)` when NASR publishes those fields; otherwise published runway length.
+
+**Profile risk**: `stress = max(runway_stress, obstruction_stress)`; `risk = clamp((stress - 0.67) / 0.66, 0, 1)`.
+
+**Per-end total risk**: Unweighted sum `r152 + r172 + r182` (range 0-3) for each departure end.
+
+**Asymmetric tiers** (evaluate best and worst ends on the selected runway):
+
+- **Normal** when neither threshold applies (`density_altitude_performance` omitted from API).
+- **Warning** when **best** end sum ≥ 2.40 (optimistic: favorable departure direction still constrained).
+- **Caution** when **worst** end sum ≥ 1.20 and warning did not apply (conservative: at least one direction warrants verification).
+- `risk_factor`: best-end sum for warning; worst-end sum for caution.
+
+### Fallback model (weather only)
+
+When no runway data: elevation-banded thresholds on density altitude and delta (DA minus field elevation). Returns tier only; `risk_factor` is **null**; `fallback: true`.
+
+### Implementation
+
+- `lib/weather/density-altitude-performance.php` - assessment and API payload
+- `lib/weather/poh-takeoff.php` - AFM table lookup and obstruction stress
+- `lib/nasr/*` - NASR cache and runway selection
+- `scripts/fetch-nasr-apt.php` - NASR ingest
+
+### Tests
+
+- `tests/Unit/DensityAltitudePerformanceTest.php`
+- `tests/Unit/PohTakeoffTest.php`
+- `tests/Unit/NasrParseTest.php`
 
 ---
 

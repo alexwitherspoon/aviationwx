@@ -378,6 +378,64 @@ if (!defined('RUNWAYS_APCU_TTL')) {
     define('RUNWAYS_APCU_TTL', 2592000); // 30 days (match cache max age)
 }
 
+// NASR APT subscription (runway length, surface, departure obstructions for US airports)
+if (!defined('NASR_APT_SCHEMA_VERSION')) {
+    define('NASR_APT_SCHEMA_VERSION', 1);
+}
+if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
+    define('NASR_FETCH_CHECK_INTERVAL', 604800); // 7 days
+}
+if (!defined('NASR_CACHE_MAX_AGE')) {
+    define('NASR_CACHE_MAX_AGE', 3024000); // 35 days (28-day cycle + buffer)
+}
+if (!defined('NASR_CYCLE_PERIOD_DAYS')) {
+    define('NASR_CYCLE_PERIOD_DAYS', 28);
+}
+if (!defined('NASR_PROBE_DAYS_BEFORE')) {
+    define('NASR_PROBE_DAYS_BEFORE', 14);
+}
+if (!defined('NASR_PROBE_DAYS_AFTER')) {
+    define('NASR_PROBE_DAYS_AFTER', 14);
+}
+if (!defined('NASR_HTTP_MAX_ATTEMPTS')) {
+    define('NASR_HTTP_MAX_ATTEMPTS', 3);
+}
+if (!defined('NASR_HTTP_RETRY_DELAYS_SECONDS')) {
+    define('NASR_HTTP_RETRY_DELAYS_SECONDS', [5, 30]);
+}
+if (!defined('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS')) {
+    define('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS', 120);
+}
+if (!defined('NASR_APT_MIN_AIRPORT_COUNT')) {
+    define('NASR_APT_MIN_AIRPORT_COUNT', 10000);
+}
+
+// Density altitude performance (reference AFM models, not a go/no-go judgment)
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION')) {
+    define('DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION', 1.20);
+}
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING')) {
+    define('DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING', 2.40);
+}
+if (!defined('PERFORMANCE_STRESS_LOW')) {
+    define('PERFORMANCE_STRESS_LOW', 0.67);
+}
+if (!defined('PERFORMANCE_STRESS_HIGH')) {
+    define('PERFORMANCE_STRESS_HIGH', 1.33);
+}
+if (!defined('POH_OBSTACLE_REFERENCE_HEIGHT_FT')) {
+    define('POH_OBSTACLE_REFERENCE_HEIGHT_FT', 50);
+}
+if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
+    define('POH_GRASS_GROUND_ROLL_FACTOR', 0.15);
+}
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE')) {
+    define(
+        'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE',
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway'
+    );
+}
+
 // Airport country resolution (geometry aggregate under CACHE_BASE_DIR; see scripts/refresh-airport-country-resolution.php)
 if (!defined('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION')) {
     define('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION', 1);

@@ -791,6 +791,54 @@ function formatAltitude(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
+function densityAltitudePerformanceTooltip(tier) {
+    if (tier === 'warning') {
+        return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
+    }
+    if (tier === 'caution') {
+        return 'Density altitude is higher than normal. Verify performance numbers before flight.';
+    }
+    return '';
+}
+
+function densityAltitudePerformanceEmoji(tier) {
+    if (tier === 'warning') return '🚩';
+    if (tier === 'caution') return '⚠️';
+    return '';
+}
+
+function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier) {
+    if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
+        return 'Density altitude unavailable';
+    }
+    const unit = getDistanceUnit();
+    const value = unit === 'm'
+        ? Math.round(ftToM(Number(densityAltitudeFt)))
+        : Math.round(Number(densityAltitudeFt));
+    const unitLabel = unit === 'm' ? 'meters' : 'feet';
+    const base = `Density altitude ${value.toLocaleString()} ${unitLabel}`;
+    if (tier === 'warning') {
+        return `${base}. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.`;
+    }
+    if (tier === 'caution') {
+        return `${base}. Caution: higher than normal; verify performance numbers before flight.`;
+    }
+    return base;
+}
+
+function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance) {
+    const value = formatAltitude(densityAltitudeFt);
+    const tier = performance && performance.tier ? performance.tier : 'normal';
+    const emoji = densityAltitudePerformanceEmoji(tier);
+    return {
+        value,
+        emoji,
+        className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
+        title: densityAltitudePerformanceTooltip(tier),
+        ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier),
+    };
+}
+
 // Format rainfall (inches) based on current unit preference
 function formatRainfall(inches) {
     if (inches === null || inches === undefined) return '--';
@@ -2610,6 +2658,10 @@ function displayWeather(weather) {
     }
     
     const weatherEmojis = getWeatherEmojis(sanitizedWeather);
+    const densityAltitudeDisplay = formatDensityAltitudePerformanceDisplay(
+        sanitizedWeather.density_altitude,
+        sanitizedWeather.density_altitude_performance
+    );
     
     const container = document.getElementById('weather-data');
     if (!container) {
@@ -2650,7 +2702,7 @@ function displayWeather(weather) {
         
         <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item" data-mobile-priority="3"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item${densityAltitudeDisplay.className ? ` ${densityAltitudeDisplay.className}` : ''}" data-mobile-priority="3"${densityAltitudeDisplay.title ? ` title="${densityAltitudeDisplay.title}"` : ''} aria-label="${densityAltitudeDisplay.ariaLabel}"><span class="label">Density Altitude</span><span class="weather-value">${densityAltitudeDisplay.value}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span>${densityAltitudeDisplay.emoji ? ` ${densityAltitudeDisplay.emoji}` : ''}</div>
             <div class="weather-item" data-mobile-priority="4"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
             <div class="weather-item" data-mobile-priority="12"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>

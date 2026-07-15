@@ -346,8 +346,11 @@ function renderCardWidget($data, $options) {
     // blank tiles. Shared with the compact webcam widgets.
     $conditionTilesHtml = '';
     foreach (getCompactWidgetMetrics($weather, $options, $hasMetarData) as $metric) {
-        $conditionTilesHtml .= '<div class="tile"><span class="tl">' . htmlspecialchars($metric['label'])
-            . '</span><span class="tv">' . htmlspecialchars($metric['value']) . '</span></div>';
+        $tileClassSuffix = $metric['tile_class_suffix'] ?? '';
+        $tileAttrs = $metric['tile_attrs'] ?? '';
+        $valueClassSuffix = $metric['value_class_suffix'] ?? '';
+        $conditionTilesHtml .= '<div class="tile' . $tileClassSuffix . '"' . $tileAttrs . '><span class="tl">' . htmlspecialchars($metric['label'])
+            . '</span><span class="tv' . $valueClassSuffix . '">' . htmlspecialchars($metric['value']) . '</span></div>';
     }
 
     // Escape dynamic text before interpolating it into the HTML below

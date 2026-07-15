@@ -325,7 +325,89 @@ function checkSystemHealth(): array {
 
     $health['components']['magnetic_declination'] = checkMagneticDeclinationHealth();
 
+    $health['components']['nasr_apt_cache'] = checkNasrAptCacheHealth();
+
     return $health;
+}
+
+/**
+ * Check NASR APT cache health (runway performance fields for US airports).
+ *
+ * @return array Component health array
+ */
+function checkNasrAptCacheHealth(): array
+{
+    require_once __DIR__ . '/nasr/cache.php';
+
+    $dataPath = CACHE_NASR_APT_DATA_FILE;
+    $meta = loadNasrAptMeta();
+
+    if (!is_readable($dataPath)) {
+        return [
+            'name' => 'NASR APT Cache',
+            'status' => 'down',
+            'message' => 'NASR APT cache missing (run fetch-nasr-apt.php)',
+            'lastChanged' => 0,
+        ];
+    }
+
+    $mtime = (int) filemtime($dataPath);
+    $ageDays = (int) round((time() - $mtime) / 86400);
+    $effectiveDate = is_array($meta) ? ($meta['effective_date'] ?? null) : null;
+    $nextCycle = is_array($meta) ? ($meta['tracked_next_cycle_date'] ?? null) : null;
+    $lastError = is_array($meta) ? ($meta['last_fetch_error'] ?? null) : null;
+    $airportCount = is_array($meta) ? (int) ($meta['airport_count'] ?? 0) : 0;
+    $needsRefresh = nasrAptCacheNeedsRefresh();
+
+    $status = 'operational';
+    $messages = [];
+
+    if ($needsRefresh) {
+        $status = 'degraded';
+        $messages[] = 'Refresh recommended';
+    }
+
+    if (is_string($lastError) && $lastError !== '') {
+        $status = 'degraded';
+        $messages[] = 'Last fetch failed';
+    }
+
+    if (is_string($effectiveDate) && $effectiveDate !== '') {
+        $effectiveTs = strtotime($effectiveDate . ' UTC');
+        if ($effectiveTs !== false) {
+            $effectiveAgeDays = (int) floor((time() - $effectiveTs) / 86400);
+            if ($effectiveAgeDays > (int) round(NASR_CACHE_MAX_AGE / 86400)) {
+                $status = 'degraded';
+                $messages[] = 'Effective cycle date is stale';
+            }
+        }
+    }
+
+    $message = $airportCount > 0
+        ? "{$airportCount} US airports in cache"
+        : 'NASR APT cache present';
+    if (is_string($effectiveDate) && $effectiveDate !== '') {
+        $message .= " • Cycle {$effectiveDate}";
+    }
+    if ($messages !== []) {
+        $message .= ' • ' . implode(' • ', $messages);
+    } elseif (!$needsRefresh) {
+        $message .= ' • Up to date';
+    }
+
+    return [
+        'name' => 'NASR APT Cache',
+        'status' => $status,
+        'message' => $message,
+        'lastChanged' => $mtime,
+        'details' => [
+            'effective_date' => $effectiveDate,
+            'tracked_next_cycle_date' => $nextCycle,
+            'age_days' => $ageDays,
+            'needs_refresh' => $needsRefresh,
+            'last_fetch_error' => $lastError,
+        ],
+    ];
 }
 
 /**

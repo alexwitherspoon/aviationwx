@@ -191,11 +191,30 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     
     // Density Altitude
     if ($densityAltitude !== null) {
-        $daDisplay = formatEmbedDist($densityAltitude, $distUnit, true);
+        $daPerformance = is_array($weather['density_altitude_performance'] ?? null)
+            ? $weather['density_altitude_performance']
+            : null;
+        $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
+        $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitude, $daBase, $daPerformance);
         if ($daDisplay !== '--') {
-            $html .= "\n                        <div class=\"metric-item\">";
+            $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
+            $daClass = densityAltitudePerformanceValueClass($tier);
+            $daTooltip = densityAltitudePerformanceTooltip($tier);
+            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit);
+            $itemClasses = 'metric-item';
+            if ($daClass !== '') {
+                $itemClasses .= ' ' . $daClass;
+            }
+            $titleAttr = $daTooltip !== ''
+                ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
+                : '';
+            $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
+            $valueClassAttr = $daClass !== ''
+                ? ' class="value ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') . '"'
+                : ' class="value"';
+            $html .= "\n                        <div class=\"" . htmlspecialchars($itemClasses, ENT_QUOTES, 'UTF-8') . "\"{$titleAttr}{$ariaAttr}>";
             $html .= "\n                            <span class=\"label\">Density Alt</span>";
-            $html .= "\n                            <span class=\"value\">{$daDisplay}</span>";
+            $html .= "\n                            <span{$valueClassAttr}>{$daDisplay}</span>";
             $html .= "\n                        </div>";
         }
     }

@@ -6,6 +6,8 @@
  * Ensures explicit values for safety-critical data in all API responses.
  */
 
+require_once __DIR__ . '/../weather/density-altitude-performance.php';
+
 /** Sector labels for 16-point wind rose (N, NNE, NE, ... NNW) */
 const WIND_ROSE_SECTOR_LABELS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
@@ -105,7 +107,7 @@ function formatWindDirectionForApi(array $weather): array
  */
 function formatWeatherResponse(array $weather, array $airport): array
 {
-    return [
+    $formatted = [
         'flight_category' => $weather['flight_category'] ?? null,
         'temperature' => $weather['temperature'] ?? null,
         'temperature_f' => $weather['temperature_f'] ?? null,
@@ -153,6 +155,13 @@ function formatWeatherResponse(array $weather, array $airport): array
         'metar_visibility_reported' => $weather['metar_visibility_reported'] ?? null,
         'metar_ceiling_reported' => $weather['metar_ceiling_reported'] ?? null,
     ];
+
+    $withPerformance = attachDensityAltitudePerformance($weather, $airport);
+    if (isset($withPerformance['density_altitude_performance'])) {
+        $formatted['density_altitude_performance'] = $withPerformance['density_altitude_performance'];
+    }
+
+    return $formatted;
 }
 
 /**

@@ -13,6 +13,25 @@ require_once __DIR__ . '/../../lib/public-api/weather-format.php';
 
 class FormatWeatherResponseTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+        require_once __DIR__ . '/../../lib/weather/poh-takeoff.php';
+
+        resetNasrAptCacheMemo();
+        resetPohTakeoffTables();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [],
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        resetNasrAptCacheMemo();
+        resetPohTakeoffTables();
+    }
+
     /**
      * Numeric wind: wind_direction object with true_north, magnetic_north, variable
      */
@@ -244,5 +263,35 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertSame(-1844, $result['density_altitude']);
         $this->assertSame(711, $result['pressure_altitude']);
         $this->assertSame(17, $result['daily']['peak_gust']);
+    }
+
+    public function testDensityAltitudePerformanceIncludedWhenTierSet(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+
+        $built = nasrBuildCacheFromCsvDirectory(__DIR__ . '/../Fixtures/nasr');
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => $built['airports'],
+        ]);
+
+        $weather = [
+            'density_altitude' => 6280,
+            'pressure_altitude' => 4570,
+            'temperature' => 20.1,
+        ];
+        $airport = [
+            'id' => 'id76',
+            'faa' => 'ID76',
+            'elevation_ft' => 4925,
+        ];
+
+        $result = formatWeatherResponse($weather, $airport);
+
+        $this->assertArrayHasKey('density_altitude_performance', $result);
+        $this->assertSame('warning', $result['density_altitude_performance']['tier']);
+        $this->assertFalse($result['density_altitude_performance']['fallback']);
+
+        resetNasrAptCacheMemo();
     }
 }

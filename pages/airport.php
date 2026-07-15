@@ -1415,6 +1415,11 @@ const INITIAL_WEATHER_DATA = <?php
 
         $initialWeatherData = $cachedWeather;
     }
+
+    if (is_array($initialWeatherData)) {
+        require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
+        $initialWeatherData = attachDensityAltitudePerformance($initialWeatherData, $airport);
+    }
     
     // Defensive JSON encoding with error handling
     if ($initialWeatherData === null) {

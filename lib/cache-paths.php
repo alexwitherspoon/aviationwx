@@ -56,6 +56,10 @@
  * │   ├── stations/{ICAO}.json     # One-element JSON array per station (METAR API shape)
  * │   └── tmp/                     # Download scratch (deleted after ingest)
  * ├── airport_country_resolution.json  # Geometry-derived ISO per airport (scheduler)
+ * ├── nasr/
+ * │   ├── nasr_apt.json                # FAA NASR APT runway performance cache (full US set)
+ * │   ├── nasr_apt_configured.json     # Slice for airports.json only (runtime load)
+ * │   └── nasr_meta.json               # NASR fetch metadata
  * └── memory_history.json          # Memory usage tracking
  * 
  * Note: Webcam history is stored directly in the camera directory (unified storage).
@@ -972,6 +976,40 @@ function getRunwaysFetchLockPath(): string {
 }
 
 // =============================================================================
+// NASR APT CACHE (FAA 28-day subscription - runway performance fields)
+// =============================================================================
+
+if (!defined('CACHE_NASR_DIR')) {
+    define('CACHE_NASR_DIR', CACHE_BASE_DIR . '/nasr');
+}
+
+if (!defined('CACHE_NASR_APT_DATA_FILE')) {
+    define('CACHE_NASR_APT_DATA_FILE', CACHE_NASR_DIR . '/nasr_apt.json');
+}
+
+if (!defined('CACHE_NASR_APT_META_FILE')) {
+    define('CACHE_NASR_APT_META_FILE', CACHE_NASR_DIR . '/nasr_meta.json');
+}
+
+if (!defined('CACHE_NASR_APT_CONFIGURED_FILE')) {
+    define('CACHE_NASR_APT_CONFIGURED_FILE', CACHE_NASR_DIR . '/nasr_apt_configured.json');
+}
+
+if (!defined('CACHE_NASR_APT_FETCH_LOCK')) {
+    define('CACHE_NASR_APT_FETCH_LOCK', CACHE_NASR_DIR . '/.fetch.lock');
+}
+
+/**
+ * Get path to NASR APT fetch lock file
+ *
+ * @return string Full path to lock file
+ */
+function getNasrAptFetchLockPath(): string
+{
+    return CACHE_NASR_APT_FETCH_LOCK;
+}
+
+// =============================================================================
 // MAP TILES CACHE (OpenWeatherMap Proxy)
 // =============================================================================
 
@@ -1041,6 +1079,7 @@ function ensureAllCacheDirs(): array {
         CACHE_PEAK_GUSTS_DIR,
         CACHE_TEMP_EXTREMES_DIR,
         CACHE_RUNWAYS_DIR,
+        CACHE_NASR_DIR,
         CACHE_WEATHER_DIR,
         CACHE_WEATHER_HISTORY_DIR,
         CACHE_WEBCAMS_DIR,
