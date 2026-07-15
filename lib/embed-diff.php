@@ -48,7 +48,7 @@ function buildEmbedPayloadByTopic(string $airportId, ?array $weatherData, array 
 {
     $weatherDataMerged = [];
     if ($weatherData !== null && !empty($weatherData)) {
-        $weatherDataMerged = formatWeatherResponse($weatherData, $airport);
+        $weatherDataMerged = formatWeatherResponse($weatherData, $airport, $airportId);
     }
     $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weatherDataMerged);
     $hasFullMode = ($fullModeOptions['runwaySegments'] ?? []) !== []
