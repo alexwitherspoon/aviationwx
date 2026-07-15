@@ -159,7 +159,7 @@ No obstruction stress when obstacle is beyond runway length or height/distance a
 
 When FAA NASR has no airport row (typical for non-US fields such as Canadian ICAOs), select the **longest** active land runway from the OurAirports cache. Exclude closed runways and water surfaces.
 
-**Stress model**: Same POH reference tables and grass correction as the NASR full model, but the runway has **empty `ends`**. No departure obstructions, displaced thresholds, or `TKOF_DIST_AVBL` (OurAirports does not publish NASR-style per-end obstacle fields).
+**Stress model**: Same POH reference tables and grass correction as the NASR full model. Per-end records carry **displaced-threshold length** when OurAirports publishes it; there are **no departure obstructions** and no `TKOF_DIST_AVBL` (OurAirports does not publish NASR-style obstacle or TODA fields).
 
 **Tier policy without obstruction data**: Cap at **caution** when only OurAirports length/surface is available (do not emit **warning** without obstruction or NASR-grade departure-end context). This avoids the strongest alarm on incomplete AIS.
 
