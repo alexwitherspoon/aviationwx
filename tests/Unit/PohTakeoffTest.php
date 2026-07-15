@@ -156,4 +156,14 @@ class PohTakeoffTest extends TestCase
         $this->assertEqualsWithDelta($expected, $stress, 0.01);
         $this->assertSame(150.0, pohEffectiveObstacleHeightForChart(150.0, 2800.0, 19.0));
     }
+
+    public function testZeroRunwayLengthMapsToMaximumStress(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+
+        $stress = pohComputeDepartureEndStress($table, 5000.0, 30.0, false, 0, null, null);
+
+        $this->assertSame((float) PERFORMANCE_STRESS_HIGH, $stress);
+    }
 }

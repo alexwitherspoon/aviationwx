@@ -215,7 +215,7 @@ function pohComputeDepartureEndStress(
     ?float $obstClncSlope = null
 ): float {
     if ($runwayLengthFt <= 0) {
-        return 1.0;
+        return (float) PERFORMANCE_STRESS_HIGH;
     }
 
     $chartTotal = pohChartSurfaceTotalFt($table, $pressureAltitudeFt, $tempC, $nonPavedSurface);
