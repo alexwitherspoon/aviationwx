@@ -27,6 +27,7 @@ trait LoadsNasrAptFixtureCacheTrait
 
     protected function tearDownNasrAptFixtureCache(): void
     {
+        require_once dirname(__DIR__, 2) . '/lib/nasr/cache.php';
         require_once dirname(__DIR__, 2) . '/lib/weather/poh-takeoff.php';
 
         resetNasrAptCacheMemo();
