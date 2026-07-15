@@ -339,7 +339,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testFallbackAriaLabelMentionsMissingRunwayData(): void
     {
-        $aria = densityAltitudePerformanceAriaLabel(9500, 'warning', [
+        $aria = densityAltitudePerformanceAriaLabel(9500, 'warning', 'ft', [
             'tier' => 'warning',
             'fallback' => true,
             'reason' => 'density_altitude_only',
