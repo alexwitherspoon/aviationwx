@@ -31,13 +31,6 @@ function acquireNasrAptFetchLock()
         @mkdir($dir, 0755, true);
     }
 
-    if (file_exists($lockPath)) {
-        $age = time() - filemtime($lockPath);
-        if ($age > NASR_APT_FETCH_LOCK_STALE_SECONDS) {
-            @unlink($lockPath);
-        }
-    }
-
     $fp = @fopen($lockPath, 'c+');
     if (!$fp) {
         return false;
