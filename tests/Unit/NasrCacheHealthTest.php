@@ -17,7 +17,7 @@ class NasrCacheHealthTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE] as $path) {
+        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE] as $path) {
             if (file_exists($path)) {
                 $this->backupFiles[$path] = file_get_contents($path);
                 @unlink($path);
@@ -27,7 +27,7 @@ class NasrCacheHealthTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE] as $path) {
+        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE] as $path) {
             if (isset($this->backupFiles[$path])) {
                 $dir = dirname($path);
                 if (!is_dir($dir)) {

@@ -10,35 +10,273 @@ require_once __DIR__ . '/parse.php';
 require_once __DIR__ . '/discovery.php';
 
 /**
- * @var array|null In-request memo for parsed NASR cache
+ * @var array|null In-request memo for configured NASR slice
  */
 $GLOBALS['_nasr_apt_cache_memo'] = null;
 
 /**
- * Load parsed NASR APT cache (memoized per request).
+ * @var string|null Config SHA tied to in-request memo (invalidates when airports.json changes)
+ */
+$GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
+
+/**
+ * Load parsed NASR APT cache for platform airports only (memoized per request).
+ *
+ * Reads {@see CACHE_NASR_APT_CONFIGURED_FILE}, a slice of the full NASR file limited to
+ * identifiers referenced in airports.json. Rebuilds the slice when config or full cache changes.
  *
  * @return array|null Cache payload or null when missing/unreadable
  */
 function loadNasrAptCache(): ?array
 {
-    if (is_array($GLOBALS['_nasr_apt_cache_memo'])) {
+    $configSha = nasrGetConfigShaForSlice();
+    if (is_array($GLOBALS['_nasr_apt_cache_memo'])
+        && ($GLOBALS['_nasr_apt_cache_memo_config_sha'] ?? null) === $configSha) {
         return $GLOBALS['_nasr_apt_cache_memo'];
     }
 
-    $path = CACHE_NASR_APT_DATA_FILE;
-    if (!is_readable($path)) {
+    if ($configSha === null) {
         $GLOBALS['_nasr_apt_cache_memo'] = null;
+        $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
         return null;
     }
 
-    $decoded = json_decode((string) file_get_contents($path), true);
+    if (!is_readable(CACHE_NASR_APT_DATA_FILE)) {
+        $GLOBALS['_nasr_apt_cache_memo'] = null;
+        $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
+        return null;
+    }
+
+    $meta = loadNasrAptMeta() ?? [];
+    if (!nasrConfiguredSliceIsCurrent($meta, $configSha)) {
+        if (nasrRebuildConfiguredAptSlice() === null) {
+            $GLOBALS['_nasr_apt_cache_memo'] = null;
+            $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
+            return null;
+        }
+        $meta = loadNasrAptMeta() ?? [];
+    }
+
+    $payload = nasrReadConfiguredAptCacheFromDisk();
+    if ($payload === null) {
+        $GLOBALS['_nasr_apt_cache_memo'] = null;
+        $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
+        return null;
+    }
+
+    $GLOBALS['_nasr_apt_cache_memo'] = $payload;
+    $GLOBALS['_nasr_apt_cache_memo_config_sha'] = $configSha;
+
+    return $payload;
+}
+
+/**
+ * SHA-256 of airports.json for configured-slice invalidation.
+ */
+function nasrGetConfigShaForSlice(): ?string
+{
+    require_once __DIR__ . '/../config.php';
+
+    $configFile = getConfigFilePath();
+    if ($configFile === null || !is_readable($configFile)) {
+        return null;
+    }
+
+    $content = @file_get_contents($configFile);
+    if ($content === false) {
+        return null;
+    }
+
+    return hash('sha256', $content);
+}
+
+/**
+ * Collect NASR ARPT_ID values referenced by airports.json rows.
+ *
+ * @param array|null $config Loaded config from {@see loadConfig()}
+ * @return list<string>
+ */
+function nasrCollectArptIdsForPlatformAirports(?array $config): array
+{
+    if ($config === null) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($config['airports'] ?? [] as $airportKey => $airport) {
+        if (!is_array($airport)) {
+            continue;
+        }
+
+        $row = $airport;
+        if (empty($row['id']) && is_string($airportKey) && $airportKey !== '') {
+            $row['id'] = $airportKey;
+        }
+
+        foreach (nasrCandidateArptIds($row) as $candidate) {
+            $ids[$candidate] = true;
+        }
+    }
+
+    return array_keys($ids);
+}
+
+/**
+ * Build a configured airport map from the full NASR index.
+ *
+ * @param array<string, array> $fullAirports Full NASR airports keyed by ARPT_ID
+ * @param list<string> $arptIds Candidate identifiers from platform config
+ * @return array<string, array>
+ */
+function nasrBuildConfiguredAirportsFromFull(array $fullAirports, array $arptIds): array
+{
+    $slice = [];
+    foreach ($arptIds as $arptId) {
+        if (isset($fullAirports[$arptId])) {
+            $slice[$arptId] = $fullAirports[$arptId];
+        }
+    }
+
+    return $slice;
+}
+
+/**
+ * Whether the on-disk configured slice matches current config and full NASR source.
+ *
+ * @param array<string, mixed> $meta NASR meta payload
+ */
+function nasrConfiguredSliceIsCurrent(array $meta, string $configSha): bool
+{
+    if (($meta['configured_config_sha'] ?? null) !== $configSha) {
+        return false;
+    }
+
+    if (!is_readable(CACHE_NASR_APT_CONFIGURED_FILE)) {
+        return false;
+    }
+
+    $sourceMtime = @filemtime(CACHE_NASR_APT_DATA_FILE);
+    if ($sourceMtime === false) {
+        return false;
+    }
+
+    return (int) ($meta['configured_source_mtime'] ?? 0) === (int) $sourceMtime;
+}
+
+/**
+ * Read full NASR APT cache from disk (all US airports).
+ *
+ * @return array|null Decoded cache payload
+ */
+function nasrReadFullAptCacheFromDisk(): ?array
+{
+    if (!is_readable(CACHE_NASR_APT_DATA_FILE)) {
+        return null;
+    }
+
+    $decoded = json_decode((string) file_get_contents(CACHE_NASR_APT_DATA_FILE), true);
     if (!is_array($decoded) || !isset($decoded['airports']) || !is_array($decoded['airports'])) {
-        $GLOBALS['_nasr_apt_cache_memo'] = null;
         return null;
     }
 
-    $GLOBALS['_nasr_apt_cache_memo'] = $decoded;
     return $decoded;
+}
+
+/**
+ * Read configured NASR slice from disk.
+ *
+ * @return array|null Decoded cache payload
+ */
+function nasrReadConfiguredAptCacheFromDisk(): ?array
+{
+    if (!is_readable(CACHE_NASR_APT_CONFIGURED_FILE)) {
+        return null;
+    }
+
+    $decoded = json_decode((string) file_get_contents(CACHE_NASR_APT_CONFIGURED_FILE), true);
+    if (!is_array($decoded) || !isset($decoded['airports']) || !is_array($decoded['airports'])) {
+        return null;
+    }
+
+    return $decoded;
+}
+
+/**
+ * Rebuild configured NASR slice from full cache and airports.json.
+ *
+ * @param array|null $configOverride Optional config for tests (defaults to {@see loadConfig()})
+ * @return array|null Configured cache payload on success
+ */
+function nasrRebuildConfiguredAptSlice(?array $configOverride = null): ?array
+{
+    require_once __DIR__ . '/../config.php';
+
+    $configSha = nasrGetConfigShaForSlice();
+    if ($configSha === null) {
+        return null;
+    }
+
+    $full = nasrReadFullAptCacheFromDisk();
+    if ($full === null) {
+        return null;
+    }
+
+    $config = $configOverride ?? loadConfig();
+    if ($config === null) {
+        return null;
+    }
+
+    $arptIds = nasrCollectArptIdsForPlatformAirports($config);
+    $airports = nasrBuildConfiguredAirportsFromFull($full['airports'], $arptIds);
+
+    $payload = [
+        'schema_version' => NASR_APT_SCHEMA_VERSION,
+        'airports' => $airports,
+    ];
+
+    if (!nasrWriteConfiguredAptCache($payload, $configSha)) {
+        return null;
+    }
+
+    return $payload;
+}
+
+/**
+ * Persist configured NASR slice and update meta invalidation fields.
+ *
+ * @param array<string, mixed> $payload Configured cache body
+ */
+function nasrWriteConfiguredAptCache(array $payload, string $configSha): bool
+{
+    ensureCacheDir(CACHE_NASR_DIR);
+
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    $tmp = CACHE_NASR_APT_CONFIGURED_FILE . '.tmp.' . getmypid();
+    if (file_put_contents($tmp, $json, LOCK_EX) === false) {
+        @unlink($tmp);
+        return false;
+    }
+
+    if (!@rename($tmp, CACHE_NASR_APT_CONFIGURED_FILE)) {
+        @unlink($tmp);
+        return false;
+    }
+
+    $sourceMtime = @filemtime(CACHE_NASR_APT_DATA_FILE);
+    if ($sourceMtime === false) {
+        return false;
+    }
+
+    return updateNasrAptMetaFields([
+        'configured_config_sha' => $configSha,
+        'configured_source_mtime' => (int) $sourceMtime,
+        'configured_arpt_count' => count($payload['airports'] ?? []),
+        'configured_built_at' => gmdate('c'),
+    ]);
 }
 
 /**
@@ -95,7 +333,9 @@ function saveNasrAptCache(array $airports, array $meta): bool
         }
     }
 
-    $GLOBALS['_nasr_apt_cache_memo'] = $payload;
+    resetNasrAptCacheMemo();
+    nasrRebuildConfiguredAptSlice();
+
     return true;
 }
 
@@ -240,6 +480,7 @@ function getConfigRunwaySurfaceOverride(array $airport): ?string
 function resetNasrAptCacheMemo(): void
 {
     $GLOBALS['_nasr_apt_cache_memo'] = null;
+    $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
 }
 
 /**
@@ -250,6 +491,7 @@ function resetNasrAptCacheMemo(): void
 function setNasrAptCacheForTesting(?array $payload): void
 {
     $GLOBALS['_nasr_apt_cache_memo'] = $payload;
+    $GLOBALS['_nasr_apt_cache_memo_config_sha'] = nasrGetConfigShaForSlice();
 }
 
 /**

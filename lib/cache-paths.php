@@ -57,7 +57,8 @@
  * │   └── tmp/                     # Download scratch (deleted after ingest)
  * ├── airport_country_resolution.json  # Geometry-derived ISO per airport (scheduler)
  * ├── nasr/
- * │   ├── nasr_apt.json                # FAA NASR APT runway performance cache
+ * │   ├── nasr_apt.json                # FAA NASR APT runway performance cache (full US set)
+ * │   ├── nasr_apt_configured.json     # Slice for airports.json only (runtime load)
  * │   └── nasr_meta.json               # NASR fetch metadata
  * └── memory_history.json          # Memory usage tracking
  * 
@@ -988,6 +989,10 @@ if (!defined('CACHE_NASR_APT_DATA_FILE')) {
 
 if (!defined('CACHE_NASR_APT_META_FILE')) {
     define('CACHE_NASR_APT_META_FILE', CACHE_NASR_DIR . '/nasr_meta.json');
+}
+
+if (!defined('CACHE_NASR_APT_CONFIGURED_FILE')) {
+    define('CACHE_NASR_APT_CONFIGURED_FILE', CACHE_NASR_DIR . '/nasr_apt_configured.json');
 }
 
 if (!defined('CACHE_NASR_APT_FETCH_LOCK')) {
