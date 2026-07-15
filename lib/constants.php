@@ -441,6 +441,18 @@ if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS')) {
         'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest OurAirports runway (no obstruction data)'
     );
 }
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG')) {
+    define(
+        'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG',
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); operator runway_length_ft override (no obstruction data)'
+    );
+}
+if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK')) {
+    define(
+        'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK',
+        'Elevation-banded density altitude thresholds; no runway data'
+    );
+}
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP',

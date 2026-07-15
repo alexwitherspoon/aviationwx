@@ -247,7 +247,7 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
         'risk_factor' => null,
         'fallback' => true,
         'reason' => 'density_altitude_only',
-        'reference' => DENSITY_ALTITUDE_PERFORMANCE_REFERENCE,
+        'reference' => DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK,
     ];
 }
 
@@ -330,7 +330,9 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
     if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
     }
-    if ($runwaySource === 'ourairports') {
+    if ($runwaySource === 'config') {
+        $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG;
+    } elseif ($runwaySource === 'ourairports') {
         $reason = 'reference_models_ourairports';
         $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS;
     }

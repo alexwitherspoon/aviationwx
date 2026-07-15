@@ -59,6 +59,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertTrue($result['fallback']);
         $this->assertNull($result['risk_factor']);
         $this->assertSame('density_altitude_only', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
     }
 
     public function testFallbackRunsWhenRunwayMissingEvenWithoutPressureAltitude(): void
@@ -107,6 +108,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertTrue($result['fallback']);
         $this->assertSame('density_altitude_only', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
         $this->assertNull($result['risk_factor']);
     }
 
@@ -289,6 +291,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('reference_models', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG, $result['reference']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
     }
 
