@@ -153,6 +153,14 @@ function pohChartSurfaceTotalFt(
 }
 
 /**
+ * Scale POH 50 ft obstacle chart distance for a departure obstacle height.
+ */
+function pohObstacleHeightRatio(float $obstHgtFt): float
+{
+    return $obstHgtFt / (float) POH_OBSTACLE_REFERENCE_HEIGHT_FT;
+}
+
+/**
  * Takeoff stress from POH chart distance vs runway and departure obstruction.
  *
  * Chart total is distance to clear a 50 ft obstacle (POH standard). When a departure
@@ -185,7 +193,7 @@ function pohComputeDepartureEndStress(
         return $stressRunway;
     }
 
-    $heightRatio = max(1.0, $obstHgtFt / (float) POH_OBSTACLE_REFERENCE_HEIGHT_FT);
+    $heightRatio = pohObstacleHeightRatio($obstHgtFt);
     $requiredToClearObstacle = $chartTotal * $heightRatio;
     $stressObstacle = $requiredToClearObstacle / $obstDistFt;
 

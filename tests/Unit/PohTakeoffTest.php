@@ -74,4 +74,42 @@ class PohTakeoffTest extends TestCase
             }
         }
     }
+
+    public function testObstacleHeightRatioScalesBelowFiftyFeet(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+        $chartTotal = pohChartSurfaceTotalFt($table, 800.0, 30.0, true);
+
+        $stressFourFt = pohComputeDepartureEndStress($table, 800.0, 30.0, true, 2115, 4.0, 142.0);
+        $expectedFourFt = ($chartTotal * pohObstacleHeightRatio(4.0)) / 142.0;
+
+        $this->assertEqualsWithDelta($expectedFourFt, $stressFourFt, 0.01);
+        $this->assertLessThan($chartTotal / 142.0, $stressFourFt);
+    }
+
+    public function testFiftyFootObstacleUsesFullChartDistance(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+        $chartTotal = pohChartSurfaceTotalFt($table, 800.0, 30.0, false);
+
+        $stress = pohComputeDepartureEndStress($table, 800.0, 30.0, false, 3000, 50.0, 2000.0);
+        $expected = $chartTotal / 2000.0;
+
+        $this->assertEqualsWithDelta($expected, $stress, 0.01);
+    }
+
+    public function testTallObstacleScalesAboveFiftyFootChartReference(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $table = $tables['c172'];
+        $chartTotal = pohChartSurfaceTotalFt($table, 90.0, 29.0, false);
+
+        $stress = pohComputeDepartureEndStress($table, 90.0, 29.0, false, 6600, 135.0, 2800.0);
+        $expected = ($chartTotal * pohObstacleHeightRatio(135.0)) / 2800.0;
+
+        $this->assertEqualsWithDelta($expected, $stress, 0.01);
+        $this->assertGreaterThan($chartTotal / 2800.0, $stress);
+    }
 }
