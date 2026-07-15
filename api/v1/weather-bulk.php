@@ -104,7 +104,7 @@ function handleGetWeatherBulk(array $params, array $context): void
         metrics_track_weather_request($airportId);
         
         // Format weather response
-        $weatherData[$airportId] = formatWeatherResponse($weather, $airport);
+        $weatherData[$airportId] = formatWeatherResponse($weather, $airport, $airportId);
         $returned++;
     }
     

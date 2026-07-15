@@ -71,7 +71,7 @@ function handleGetWeather(array $params, array $context): void
     }
     
     // Format weather for response
-    $formatted = formatWeatherResponse($weatherData, $airport);
+    $formatted = formatWeatherResponse($weatherData, $airport, $airportId);
     
     // Build metadata
     $meta = [
