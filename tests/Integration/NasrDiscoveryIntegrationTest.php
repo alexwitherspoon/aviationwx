@@ -1,6 +1,9 @@
 <?php
 /**
  * Live NASR/FAA discovery integration tests (network-dependent).
+ *
+ * Not part of the default Integration suite (see phpunit.xml exclude).
+ * Opt-in via RUN_EXTERNAL_UPSTREAM_TESTS=1 (make test-external-apis).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -10,6 +13,15 @@ require_once __DIR__ . '/../../lib/nasr/cache.php';
 
 class NasrDiscoveryIntegrationTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (getenv('RUN_EXTERNAL_UPSTREAM_TESTS') !== '1') {
+            $this->markTestSkipped(
+                'Live NASR/FAA discovery checks are opt-in. Run: make test-external-apis (see docs/TESTING.md).'
+            );
+        }
+    }
+
     public function testBuildNasrDownloadPlansResolvesCurrentCycle(): void
     {
         $reference = strtotime('2026-07-14 UTC');
