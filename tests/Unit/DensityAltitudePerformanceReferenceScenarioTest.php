@@ -161,9 +161,14 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
                 $nasrRecord,
                 $airportId . ': normal scenario requires NASR airport record'
             );
+            $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
             $this->assertNotNull(
-                nasrSelectLongestActiveLandRunway($nasrRecord),
+                $selectedRunway,
                 $airportId . ': normal scenario requires selectable NASR land runway'
+            );
+            $this->assertNotEmpty(
+                $selectedRunway['ends'] ?? [],
+                $airportId . ': normal scenario requires NASR runway end rows for selected runway'
             );
             $this->assertNull(
                 $result,
