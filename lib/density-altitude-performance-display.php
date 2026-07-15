@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/units.php';
 
 /**
  * Primary tooltip copy for density altitude performance tiers (pilot-facing uses AFM).
@@ -46,14 +47,20 @@ function densityAltitudePerformanceValueClass(string $tier): string
  * Accessible label for density altitude cell.
  *
  * @param int|float|null $densityAltitudeFt
+ * @param string $distUnit Embed distance unit (`f` or `m`)
  */
-function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier): string
+function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, string $distUnit = 'f'): string
 {
     if (!is_numeric($densityAltitudeFt)) {
         return 'Density altitude unavailable';
     }
-    $feet = (int) round((float) $densityAltitudeFt);
-    $base = 'Density altitude ' . number_format($feet) . ' feet';
+    if ($distUnit === 'm') {
+        $value = (int) round(feetToMeters((float) $densityAltitudeFt));
+        $base = 'Density altitude ' . number_format($value) . ' meters';
+    } else {
+        $feet = (int) round((float) $densityAltitudeFt);
+        $base = 'Density altitude ' . number_format($feet) . ' feet';
+    }
     if ($tier === 'warning') {
         return $base . '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
     }

@@ -725,7 +725,7 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
             $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
             $daClass = densityAltitudePerformanceValueClass($tier);
             $daTooltip = densityAltitudePerformanceTooltip($tier);
-            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier);
+            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit);
             $classSuffix = $daClass !== '' ? ' ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') : '';
             $titleAttr = $daTooltip !== ''
                 ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
