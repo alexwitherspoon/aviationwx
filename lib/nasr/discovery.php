@@ -58,12 +58,15 @@ function nasrHttpRequestOnce(string $url, array $options = []): array
 
     $retryable = $curlErrno !== 0 || in_array($httpCode, nasrRetryableHttpStatusCodes(), true);
 
-    return [
+    $result = [
         'ok' => $ok,
         'http_code' => $httpCode,
         'body' => ($body === false) ? null : $body,
         'retryable' => $retryable,
     ];
+    curl_close($ch);
+
+    return $result;
 }
 
 /**
