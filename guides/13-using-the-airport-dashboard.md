@@ -130,7 +130,7 @@ Some dashboards add **⚠️** (caution) or **🚩** (warning) next to density a
 
 Hover the row for departure-end context and any runway-data fallback note.
 
-No emoji means we did not flag a concern against that reference, or we could not run the full runway check. Either way, use your AFM or POH to confirm aircraft performance.
+No emoji means no caution or warning was flagged, or density altitude is unavailable. Either way, use your AFM or POH to confirm aircraft performance.
 
 ---
 
