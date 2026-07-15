@@ -345,6 +345,14 @@ function getRunwaySegmentsFromParsedCache(array $data, string $airportId, array 
  */
 function loadRunwaysCacheDataFromDisk(): ?array
 {
+    static $memoized = null;
+    static $resolved = false;
+
+    if ($resolved) {
+        return $memoized;
+    }
+
+    $resolved = true;
     $cachePath = CACHE_RUNWAYS_DATA_FILE;
     $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
 
@@ -365,7 +373,9 @@ function loadRunwaysCacheDataFromDisk(): ?array
         return null;
     }
 
-    return $data;
+    $memoized = $data;
+
+    return $memoized;
 }
 
 /**
