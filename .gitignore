@@ -125,6 +125,7 @@ docs/*SUMMARY*.md
 # Optional local tooling and config (keep local only; do not commit)
 .cursorrules
 .cursor/
+.planning/
 *.cursorrules
 .cursorrc
 .cursor-settings.json
