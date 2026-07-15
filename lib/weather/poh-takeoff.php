@@ -119,6 +119,10 @@ function pohLookupChartGroundRollFt(array $table, float $pressureAltitudeFt, flo
 {
     $paBins = $table['pressure_altitude_ft'] ?? [];
     $tempBins = $table['temperature_c'] ?? [];
+    if ($paBins === [] || $tempBins === []) {
+        throw new InvalidArgumentException('POH table missing altitude or temperature bins');
+    }
+
     $paKey = (string) pohRoundUpBin($pressureAltitudeFt, $paBins);
     $tempKey = (string) pohRoundUpBin($tempC, $tempBins);
 
