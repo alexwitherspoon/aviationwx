@@ -46,6 +46,23 @@ class NasrParseTest extends TestCase
         $this->assertTrue(nasrIsNonPavedSurface($selected['surface']));
     }
 
+    public function testEffectiveDepartureLengthUsesDisplacedThresholdAndTkofDist(): void
+    {
+        $this->assertSame(4800, nasrEffectiveDepartureLengthFt([
+            'displaced_thr_len' => 500,
+            'tkof_dist_avbl' => 4800,
+        ], 5500));
+        $this->assertSame(4500, nasrEffectiveDepartureLengthFt([
+            'displaced_thr_len' => 1000,
+            'tkof_dist_avbl' => null,
+        ], 5500));
+        $this->assertSame(3000, nasrEffectiveDepartureLengthFt([
+            'displaced_thr_len' => null,
+            'tkof_dist_avbl' => 3000,
+        ], 5500));
+        $this->assertSame(0, nasrEffectiveDepartureLengthFt([], 0));
+    }
+
     public function testBuildNasrAptZipUrlUsesFaaFilenameFormat(): void
     {
         $this->assertSame(

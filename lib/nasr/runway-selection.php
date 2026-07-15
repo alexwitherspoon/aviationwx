@@ -1,6 +1,6 @@
 <?php
 /**
- * Longest active land runway selection for performance attention.
+ * Longest active land runway selection for density altitude performance.
  */
 
 /**
@@ -61,4 +61,37 @@ function nasrSelectLongestActiveLandRunway(array $airportRecord): ?array
     }
 
     return $best;
+}
+
+/**
+ * Effective departure roll available from a runway end (NASR TKOF_DIST_AVBL and displaced threshold).
+ *
+ * Uses the shorter of physical runway minus displacement and declared takeoff distance available.
+ *
+ * @param array $end Parsed runway end row
+ * @param int $runwayLengthFt Published runway length in feet
+ */
+function nasrEffectiveDepartureLengthFt(array $end, int $runwayLengthFt): int
+{
+    if ($runwayLengthFt <= 0) {
+        return 0;
+    }
+
+    $available = $runwayLengthFt;
+
+    $displaced = isset($end['displaced_thr_len']) && is_numeric($end['displaced_thr_len'])
+        ? (int) $end['displaced_thr_len']
+        : 0;
+    if ($displaced > 0) {
+        $available = max(0, $available - $displaced);
+    }
+
+    $tkofDistAvbl = isset($end['tkof_dist_avbl']) && is_numeric($end['tkof_dist_avbl'])
+        ? (int) $end['tkof_dist_avbl']
+        : null;
+    if ($tkofDistAvbl !== null && $tkofDistAvbl > 0) {
+        $available = min($available, $tkofDistAvbl);
+    }
+
+    return max(0, $available);
 }
