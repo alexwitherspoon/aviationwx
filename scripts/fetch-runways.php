@@ -358,6 +358,8 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
             'center_lat' => $center['lat'],
             'center_lon' => $center['lon'],
         ];
+        // FAA segments stay authoritative for wind compass; attach OurAirports length/surface
+        // separately so DA performance can fall back when NASR has no airport row.
         $oaRunways = resolveOurAirportsRunwaysForCacheIdent($faaId, $ourairports, $faaToIcao);
         if ($oaRunways !== null) {
             $entry['performance_runways'] = buildOurAirportsPerformanceRunways($oaRunways);
