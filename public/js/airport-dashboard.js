@@ -791,7 +791,7 @@ function formatAltitude(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
-function performanceAttentionTooltip(tier) {
+function densityAltitudePerformanceTooltip(tier) {
     if (tier === 'strong') {
         return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
     }
@@ -801,13 +801,13 @@ function performanceAttentionTooltip(tier) {
     return '';
 }
 
-function performanceAttentionEmoji(tier) {
+function densityAltitudePerformanceEmoji(tier) {
     if (tier === 'strong') return '🚩';
     if (tier === 'caution') return '⚠️';
     return '';
 }
 
-function performanceAttentionAriaLabel(densityAltitudeFt, tier) {
+function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier) {
     if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
         return 'Density altitude unavailable';
     }
@@ -822,16 +822,16 @@ function performanceAttentionAriaLabel(densityAltitudeFt, tier) {
     return base;
 }
 
-function formatDensityAltitudeAttentionDisplay(densityAltitudeFt, attention) {
+function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance) {
     const value = formatAltitude(densityAltitudeFt);
-    const tier = attention && attention.tier ? attention.tier : 'none';
-    const emoji = performanceAttentionEmoji(tier);
+    const tier = performance && performance.tier ? performance.tier : 'none';
+    const emoji = densityAltitudePerformanceEmoji(tier);
     return {
         value,
         emoji,
         className: tier === 'strong' ? 'density-altitude-strong' : '',
-        title: performanceAttentionTooltip(tier),
-        ariaLabel: performanceAttentionAriaLabel(densityAltitudeFt, tier),
+        title: densityAltitudePerformanceTooltip(tier),
+        ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier),
     };
 }
 
@@ -2654,7 +2654,7 @@ function displayWeather(weather) {
     }
     
     const weatherEmojis = getWeatherEmojis(sanitizedWeather);
-    const densityAltitudeDisplay = formatDensityAltitudeAttentionDisplay(
+    const densityAltitudeDisplay = formatDensityAltitudePerformanceDisplay(
         sanitizedWeather.density_altitude,
         sanitizedWeather.density_altitude_performance
     );

@@ -1,14 +1,14 @@
 <?php
 /**
- * Shared display helpers for density altitude performance attention.
+ * Shared display helpers for density altitude performance tiers.
  */
 
 require_once __DIR__ . '/constants.php';
 
 /**
- * Primary tooltip copy for performance attention tiers (pilot-facing uses AFM).
+ * Primary tooltip copy for density altitude performance tiers (pilot-facing uses AFM).
  */
-function performanceAttentionTooltip(string $tier): string
+function densityAltitudePerformanceTooltip(string $tier): string
 {
     if ($tier === 'strong') {
         return 'Density altitude is dangerously high for average GA aircraft. '
@@ -23,7 +23,7 @@ function performanceAttentionTooltip(string $tier): string
 /**
  * Emoji indicator for tier (none returns empty string).
  */
-function performanceAttentionEmoji(string $tier): string
+function densityAltitudePerformanceEmoji(string $tier): string
 {
     if ($tier === 'strong') {
         return '🚩';
@@ -37,7 +37,7 @@ function performanceAttentionEmoji(string $tier): string
 /**
  * CSS class for strong-tier DA value styling.
  */
-function performanceAttentionValueClass(string $tier): string
+function densityAltitudePerformanceValueClass(string $tier): string
 {
     return $tier === 'strong' ? 'density-altitude-strong' : '';
 }
@@ -47,7 +47,7 @@ function performanceAttentionValueClass(string $tier): string
  *
  * @param int|float|null $densityAltitudeFt
  */
-function performanceAttentionAriaLabel($densityAltitudeFt, string $tier): string
+function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier): string
 {
     if (!is_numeric($densityAltitudeFt)) {
         return 'Density altitude unavailable';
@@ -64,21 +64,21 @@ function performanceAttentionAriaLabel($densityAltitudeFt, string $tier): string
 }
 
 /**
- * Format density altitude display value with optional attention emoji.
+ * Format density altitude display value with optional performance emoji.
  *
  * @param int|float|null $densityAltitudeFt
  * @param string $formattedDistance Pre-formatted distance string (with unit if desired)
  */
-function formatDensityAltitudeAttentionDisplay($densityAltitudeFt, string $formattedDistance, ?array $attention): string
+function formatDensityAltitudePerformanceDisplay($densityAltitudeFt, string $formattedDistance, ?array $performance): string
 {
     if ($formattedDistance === '--' || $formattedDistance === '---') {
         return $formattedDistance;
     }
-    if (!is_array($attention) || empty($attention['tier']) || $attention['tier'] === 'none') {
+    if (!is_array($performance) || empty($performance['tier']) || $performance['tier'] === 'none') {
         return $formattedDistance;
     }
 
-    $emoji = performanceAttentionEmoji((string) $attention['tier']);
+    $emoji = densityAltitudePerformanceEmoji((string) $performance['tier']);
     if ($emoji === '') {
         return $formattedDistance;
     }

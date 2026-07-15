@@ -1,6 +1,6 @@
 <?php
 /**
- * POH-grounded calibration of performance attention thresholds.
+ * POH-grounded calibration of density altitude performance thresholds.
  *
  * Uses production weather snapshot + NASR to compare chart distances,
  * stress curve, and tier mapping against pilot-meaningful margins.
@@ -47,8 +47,8 @@ function pohCalibrationRow(
     $risk = $runwayFt > 0 ? calculatePerformanceProfileRiskFromStress($stress) : null;
     $marginFt = ($runwayFt > 0 && $requiredTotal !== null) ? $runwayFt - $requiredTotal : null;
     $marginPct = ($runwayFt > 0 && $marginFt !== null) ? round(100.0 * $marginFt / $runwayFt, 1) : null;
-    $heightRatio = ($obstHgtFt !== null && $obstHgtFt > 0)
-        ? max(1.0, $obstHgtFt / (float) POH_OBSTACLE_REFERENCE_HEIGHT_FT)
+        $heightRatio = ($obstHgtFt !== null && $obstHgtFt > 0)
+        ? pohObstacleHeightRatio($obstHgtFt)
         : null;
 
     return [

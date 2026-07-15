@@ -1,10 +1,10 @@
 <?php
 /**
- * Audit performance attention tiers using live weather from production API.
+ * Audit density_altitude_performance tiers using live weather from production API.
  *
  * Usage:
  *   CONFIG_PATH=/path/to/airports.json CACHE_BASE_DIR=/path/to/cache \
- *     php scripts/audit-performance-attention.php [--base-url=https://aviationwx.org]
+ *     php scripts/audit-density-altitude-performance.php [--base-url=https://aviationwx.org]
  */
 
 declare(strict_types=1);

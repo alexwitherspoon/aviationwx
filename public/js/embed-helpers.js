@@ -221,7 +221,7 @@
         }
     }
     
-    function performanceAttentionTooltip(tier) {
+    function densityAltitudePerformanceTooltip(tier) {
         if (tier === 'strong') {
             return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
         }
@@ -231,19 +231,19 @@
         return '';
     }
 
-    function performanceAttentionEmoji(tier) {
+    function densityAltitudePerformanceEmoji(tier) {
         if (tier === 'strong') return '🚩';
         if (tier === 'caution') return '⚠️';
         return '';
     }
 
-    function formatDensityAltitudeAttentionDisplay(densityAltitudeFt, attention, distUnit) {
+    function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance, distUnit) {
         const base = formatEmbedDist(densityAltitudeFt, distUnit, true);
         if (base === '--') {
             return { text: base, className: '', title: '', ariaLabel: 'Density altitude unavailable' };
         }
-        const tier = attention && attention.tier ? attention.tier : 'none';
-        const emoji = performanceAttentionEmoji(tier);
+        const tier = performance && performance.tier ? performance.tier : 'none';
+        const emoji = densityAltitudePerformanceEmoji(tier);
         const text = emoji ? `${base} ${emoji}` : base;
         const feet = Math.round(Number(densityAltitudeFt));
         let ariaLabel = `Density altitude ${feet.toLocaleString()} feet`;
@@ -255,7 +255,7 @@
         return {
             text,
             className: tier === 'strong' ? 'density-altitude-strong' : '',
-            title: performanceAttentionTooltip(tier),
+            title: densityAltitudePerformanceTooltip(tier),
             ariaLabel,
         };
     }
@@ -278,8 +278,8 @@
         formatEmbedWindSpeed,
         formatEmbedPressure,
         formatEmbedVisibility,
-        formatDensityAltitudeAttentionDisplay,
-        performanceAttentionTooltip,
+        formatDensityAltitudePerformanceDisplay,
+        densityAltitudePerformanceTooltip,
         getWeatherEmojis,
         getFlightCategoryData,
         formatLocalTimeEmbed,
