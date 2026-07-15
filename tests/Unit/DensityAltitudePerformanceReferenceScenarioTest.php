@@ -37,6 +37,14 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         'expected_best_end_risk',
     ];
 
+    /** @var list<string> */
+    private const REQUIRED_NUMERIC_KEYS = [
+        'elevation_ft',
+        'density_altitude_ft',
+        'pressure_altitude_ft',
+        'temperature_c',
+    ];
+
     protected function setUp(): void
     {
         $this->loadNasrAptFixtureCache();
@@ -72,6 +80,14 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
                 if (!array_key_exists($key, $row) || $row[$key] === '' || $row[$key] === null) {
                     throw new \RuntimeException(
                         'Scenario fixture row ' . $index . ' missing required key: ' . $key
+                    );
+                }
+            }
+
+            foreach (self::REQUIRED_NUMERIC_KEYS as $key) {
+                if (!is_numeric($row[$key])) {
+                    throw new \RuntimeException(
+                        'Scenario fixture row ' . $index . ' has non-numeric value for: ' . $key
                     );
                 }
             }
