@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../nasr/cache.php';
 require_once __DIR__ . '/../nasr/runway-selection.php';
+require_once __DIR__ . '/../runways.php';
 require_once __DIR__ . '/poh-takeoff.php';
 
 /** @var list<string> */
@@ -198,6 +199,18 @@ function evaluateRunwayEndPerformanceRange(
 }
 
 /**
+ * Cap tier when departure obstruction data is absent (OurAirports / config override).
+ */
+function densityAltitudePerformanceCapTierWithoutObstructions(string $tier): string
+{
+    if ($tier === 'warning') {
+        return 'caution';
+    }
+
+    return $tier;
+}
+
+/**
  * Weather-only fallback tier when runway data is unavailable.
  *
  * @return array{tier: string, risk_factor: null, fallback: true, reason: string, reference: string}|null
@@ -243,9 +256,11 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
  *
  * Returns null when DA is missing/stale-suppressed or tier is normal.
  *
- * Runway selection: longest NASR land runway unless `runway_length_ft` is set in
- * airport config. That override uses operator length only (empty ends); NASR
- * departure obstructions and per-end effective length are not applied.
+ * Runway selection precedence:
+ * 1. `runway_length_ft` / `runway_surface` in airport config (synthetic runway, empty ends)
+ * 2. NASR longest active land runway (full obstruction model)
+ * 3. OurAirports longest land runway when NASR absent (length/surface only; empty ends)
+ * 4. Weather-only fallback (`assessFallbackDensityAltitudePerformance`)
  *
  * @param array $weather Cached weather row
  * @param array $airport Airport configuration
@@ -264,6 +279,7 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
 
     $configLength = getConfigRunwayLengthOverrideFt($airport);
     $selectedRunway = null;
+    $runwaySource = null;
 
     if ($configLength !== null) {
         $selectedRunway = [
@@ -272,8 +288,18 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
             'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
             'ends' => [],
         ];
+        $runwaySource = 'config';
     } elseif ($nasrRecord !== null) {
         $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
+        if ($selectedRunway !== null) {
+            $runwaySource = 'nasr';
+        }
+    } else {
+        $airportId = (string) ($airport['id'] ?? $airport['icao'] ?? '');
+        $selectedRunway = getOurAirportsPerformanceRunwayForAirport($airportId, $airport);
+        if ($selectedRunway !== null) {
+            $runwaySource = 'ourairports';
+        }
     }
 
     if ($selectedRunway === null) {
@@ -297,6 +323,15 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
     $worstTotalRisk = $evaluation['worst']['total_risk'];
     $bestTotalRisk = $evaluation['best']['total_risk'];
     $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
+
+    $reason = 'reference_models';
+    $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE;
+    if ($runwaySource === 'ourairports') {
+        $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
+        $reason = 'reference_models_ourairports';
+        $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS;
+    }
+
     if ($tier === 'normal') {
         return null;
     }
@@ -309,8 +344,8 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
         'worst_end_risk' => round($worstTotalRisk, 3),
         'best_end_risk' => round($bestTotalRisk, 3),
         'fallback' => false,
-        'reason' => 'reference_models',
-        'reference' => DENSITY_ALTITUDE_PERFORMANCE_REFERENCE,
+        'reason' => $reason,
+        'reference' => $reference,
     ];
 }
 
