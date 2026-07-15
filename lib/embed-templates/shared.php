@@ -726,7 +726,7 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
             $daClass = densityAltitudePerformanceValueClass($tier);
             $daTooltip = densityAltitudePerformanceTooltip($tier);
             $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier);
-            $classAttr = $daClass !== '' ? ' class="' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') . '"' : '';
+            $classSuffix = $daClass !== '' ? ' ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') : '';
             $titleAttr = $daTooltip !== ''
                 ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
                 : '';
@@ -734,7 +734,9 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
             $availableMetrics[] = [
                 'label' => 'DA',
                 'value' => $daDisplay,
-                'value_attrs' => $classAttr . $titleAttr . $ariaAttr,
+                'value_class_suffix' => $classSuffix,
+                'tile_class_suffix' => $classSuffix,
+                'tile_attrs' => $titleAttr . $ariaAttr,
             ];
         }
     }

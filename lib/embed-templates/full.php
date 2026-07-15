@@ -201,14 +201,20 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
             $daClass = densityAltitudePerformanceValueClass($tier);
             $daTooltip = densityAltitudePerformanceTooltip($tier);
             $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier);
-            $classAttr = $daClass !== '' ? ' class="value ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') . '"' : ' class="value"';
+            $itemClasses = 'metric-item';
+            if ($daClass !== '') {
+                $itemClasses .= ' ' . $daClass;
+            }
             $titleAttr = $daTooltip !== ''
                 ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
                 : '';
             $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
-            $html .= "\n                        <div class=\"metric-item\">";
+            $valueClassAttr = $daClass !== ''
+                ? ' class="value ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') . '"'
+                : ' class="value"';
+            $html .= "\n                        <div class=\"" . htmlspecialchars($itemClasses, ENT_QUOTES, 'UTF-8') . "\"{$titleAttr}{$ariaAttr}>";
             $html .= "\n                            <span class=\"label\">Density Alt</span>";
-            $html .= "\n                            <span{$classAttr}{$titleAttr}{$ariaAttr}>{$daDisplay}</span>";
+            $html .= "\n                            <span{$valueClassAttr}>{$daDisplay}</span>";
             $html .= "\n                        </div>";
         }
     }
