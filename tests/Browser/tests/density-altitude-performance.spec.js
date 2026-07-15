@@ -300,7 +300,10 @@ async function loadDashboardWithMockWeather(page, weatherOverrides, expectedDens
 
   await page.evaluate(async () => {
     weatherLastUpdated = null;
-    window.staleRefreshTimer = null;
+    if (window.staleRefreshTimer) {
+      clearTimeout(window.staleRefreshTimer);
+      window.staleRefreshTimer = null;
+    }
     await fetchWeather(true);
   });
 
