@@ -525,6 +525,32 @@ function ourAirportsRunwayIsSelectable(array $runway): bool
 }
 
 /**
+ * Resolve OurAirports parsed runway rows for a cache airport ident.
+ *
+ * Tries the ident directly, then a mapped ICAO when FAA LID aliases are known.
+ *
+ * @param array<string, list<array>> $ourairports Runways keyed by airport ident
+ * @param array<string, string> $faaToIcao FAA LID to ICAO mapping
+ * @return list<array>|null Parsed OurAirports rows or null when unavailable
+ */
+function resolveOurAirportsRunwaysForCacheIdent(string $ident, array $ourairports, array $faaToIcao = []): ?array
+{
+    $candidates = [strtoupper($ident)];
+    $icao = $faaToIcao[$candidates[0]] ?? null;
+    if (is_string($icao) && $icao !== '' && strtoupper($icao) !== $candidates[0]) {
+        $candidates[] = strtoupper($icao);
+    }
+
+    foreach ($candidates as $candidate) {
+        if (isset($ourairports[$candidate]) && !empty($ourairports[$candidate])) {
+            return $ourairports[$candidate];
+        }
+    }
+
+    return null;
+}
+
+/**
  * Build NASR-shaped performance runway records from OurAirports parse rows.
  *
  * @param list<array> $runways Parsed OurAirports runway rows

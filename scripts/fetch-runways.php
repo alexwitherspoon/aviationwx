@@ -358,6 +358,10 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
             'center_lat' => $center['lat'],
             'center_lon' => $center['lon'],
         ];
+        $oaRunways = resolveOurAirportsRunwaysForCacheIdent($faaId, $ourairports, $faaToIcao);
+        if ($oaRunways !== null) {
+            $entry['performance_runways'] = buildOurAirportsPerformanceRunways($oaRunways);
+        }
         $result[$faaId] = $entry;
         $coveredByIdent[$faaId] = true;
         if (isset($faaToIcao[$faaId])) {
@@ -392,9 +396,11 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
 }
 
 // CLI entry
-if (php_sapi_name() !== 'cli') {
-    exit(1);
-}
+if (php_sapi_name() === 'cli') {
+    $scriptName = $_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '';
+    if (basename($scriptName) !== basename(__FILE__) && $scriptName !== __FILE__) {
+        return;
+    }
 
 $fp = acquireRunwaysFetchLock();
 if ($fp === false) {
@@ -505,3 +511,4 @@ aviationwx_log('info', 'runways fetch: complete', [
 ], 'app');
 
 exit(0);
+}
