@@ -26,6 +26,7 @@ class NasrParseTest extends TestCase
         $this->assertArrayHasKey('03S', $parsed['airports']);
         $this->assertArrayHasKey('ID76', $parsed['airports']);
         $this->assertArrayHasKey('C80', $parsed['airports']);
+        $this->assertSame('RIU', $parsed['airports']['C80']['notam_id']);
     }
 
     public function testSelectLongestRunwayExcludesFailedSurface(): void

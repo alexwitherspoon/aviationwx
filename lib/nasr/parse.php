@@ -37,7 +37,7 @@ function nasrParseAptCsvDirectory(string $csvDir): array
         $airports[$arptId] = [
             'arpt_id' => $arptId,
             'icao_id' => nasrNullableUpper($row['ICAO_ID'] ?? null),
-            'notam_id' => nasrNullableUpper($row['ARPT_ID'] ?? null),
+            'notam_id' => nasrNullableUpper($row['NOTAM_ID'] ?? null) ?? $arptId,
             'elev_ft' => nasrParseInt($row['ELEV'] ?? null),
             'lat' => nasrParseFloat($row['LAT_DECIMAL'] ?? null),
             'lon' => nasrParseFloat($row['LONG_DECIMAL'] ?? null),
