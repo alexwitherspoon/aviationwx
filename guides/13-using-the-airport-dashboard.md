@@ -128,7 +128,7 @@ The dashboard uses **standard aviation weather colors**:
 
 Some dashboards add **⚠️** (caution) or **🚩** (warning) next to density altitude when conditions look limiting for typical light GA aircraft on the runways we have on file. It is a heads-up to check your takeoff numbers - not a go/no-go for your flight.
 
-Hover the row for a short explanation. When runway information is limited, the tooltip will say so.
+Hover the row for a short explanation, including the reference assumptions behind the cue (typical light GA, max gross, no wind credit). When runway information is limited, the tooltip will say so.
 
 No emoji means we did not flag a concern against that reference, or we could not run the full runway check. Either way, use your AFM or POH to confirm aircraft performance.
 
