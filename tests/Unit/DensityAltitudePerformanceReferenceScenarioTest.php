@@ -156,6 +156,15 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         $expectedTier = (string) $scenario['expected_tier'];
 
         if ($expectedTier === 'normal') {
+            $nasrRecord = getNasrAirportForConfig($airport);
+            $this->assertNotNull(
+                $nasrRecord,
+                $airportId . ': normal scenario requires NASR airport record'
+            );
+            $this->assertNotNull(
+                nasrSelectLongestActiveLandRunway($nasrRecord),
+                $airportId . ': normal scenario requires selectable NASR land runway'
+            );
             $this->assertNull(
                 $result,
                 $airportId . ': normal tier must omit density_altitude_performance'
