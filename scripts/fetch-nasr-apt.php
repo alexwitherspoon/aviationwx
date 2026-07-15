@@ -101,13 +101,15 @@ function downloadNasrAptCsvDirectory(): ?array
 
         $extractDir = $tmpRoot . '/csv';
         @mkdir($extractDir, 0700, true);
-        if (!$zip->extractTo($extractDir)) {
+        if (!nasrExtractAllowlistedAptCsvFromZip($zip, $extractDir)) {
             $zip->close();
             continue;
         }
         $zip->close();
 
-        if (!is_readable($extractDir . '/APT_RWY.csv') || !is_readable($extractDir . '/APT_RWY_END.csv')) {
+        if (!is_readable($extractDir . '/APT_BASE.csv')
+            || !is_readable($extractDir . '/APT_RWY.csv')
+            || !is_readable($extractDir . '/APT_RWY_END.csv')) {
             continue;
         }
 
@@ -123,6 +125,51 @@ function downloadNasrAptCsvDirectory(): ?array
 
     nasrCleanupDirectory($tmpRoot);
     return null;
+}
+
+/**
+ * Extract only NASR APT CSV files from a zip, rejecting path traversal entries.
+ *
+ * @param ZipArchive $zip Open archive
+ * @param string $extractDir Destination directory (flat; no subpaths)
+ */
+function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir): bool
+{
+    $allowed = ['APT_BASE.csv', 'APT_RWY.csv', 'APT_RWY_END.csv'];
+    $written = [];
+
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        if (!is_string($entry) || $entry === '') {
+            continue;
+        }
+        $normalized = str_replace('\\', '/', $entry);
+        if (str_starts_with($normalized, '/') || preg_match('#(^|/)\.\.(/|$)#', $normalized) === 1) {
+            continue;
+        }
+        $base = basename($normalized);
+        if (!in_array($base, $allowed, true)) {
+            continue;
+        }
+
+        $contents = $zip->getFromIndex($i);
+        if ($contents === false) {
+            return false;
+        }
+        $dest = $extractDir . '/' . $base;
+        if (file_put_contents($dest, $contents) === false) {
+            return false;
+        }
+        $written[$base] = true;
+    }
+
+    foreach ($allowed as $name) {
+        if (empty($written[$name])) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
