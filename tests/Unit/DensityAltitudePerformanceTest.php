@@ -6,6 +6,8 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/nasr/cache.php';
+require_once __DIR__ . '/../../lib/runways.php';
+require_once __DIR__ . '/../../lib/density-altitude-performance-display.php';
 require_once __DIR__ . '/../../lib/weather/density-altitude-performance.php';
 
 class DensityAltitudePerformanceTest extends TestCase
@@ -57,6 +59,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertTrue($result['fallback']);
         $this->assertNull($result['risk_factor']);
         $this->assertSame('density_altitude_only', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
     }
 
     public function testFallbackRunsWhenRunwayMissingEvenWithoutPressureAltitude(): void
@@ -105,6 +108,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertTrue($result['fallback']);
         $this->assertSame('density_altitude_only', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
         $this->assertNull($result['risk_factor']);
     }
 
@@ -249,5 +253,109 @@ class DensityAltitudePerformanceTest extends TestCase
         );
 
         $this->assertSame('warning', $tier);
+    }
+
+    public function testCyavUsesOurAirportsLongestRunwayWhenNasrAbsent(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 5000,
+            'pressure_altitude' => 4500,
+            'temperature' => 35,
+        ], [
+            'id' => 'cyav',
+            'icao' => 'CYAV',
+            'elevation_ft' => 759,
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertFalse($result['fallback']);
+        $this->assertSame('reference_models_ourairports', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS, $result['reference']);
+    }
+
+    public function testConfigRunwayOverrideCapsWarningAtCaution(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 5000,
+            'pressure_altitude' => 3441,
+            'temperature' => 28.3,
+        ], [
+            'id' => 'zzcfg',
+            'icao' => 'ZZCFG',
+            'elevation_ft' => 3647,
+            'runway_length_ft' => 2000,
+            'runway_surface' => 'TURF',
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertSame('reference_models', $result['reason']);
+        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG, $result['reference']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+    }
+
+    public function testOurAirportsPathCapsWarningAtCaution(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 5000,
+            'pressure_altitude' => 3441,
+            'temperature' => 28.3,
+        ], [
+            'id' => 'zzoa',
+            'icao' => 'ZZOA',
+            'elevation_ft' => 3647,
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertSame('reference_models_ourairports', $result['reason']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+    }
+
+    public function testOurAirportsSelectsLongestNonWaterRunway(): void
+    {
+        $runways = [
+            ['length_ft' => 2850, 'surface' => 'ASPH', 'le_ident' => '04', 'he_ident' => '22'],
+            ['length_ft' => 3000, 'surface' => 'ASPH', 'le_ident' => '13', 'he_ident' => '31'],
+            ['length_ft' => 4500, 'surface' => 'WATER', 'le_ident' => '01', 'he_ident' => '19'],
+        ];
+
+        $selected = ourAirportsSelectLongestActiveLandRunway(buildOurAirportsPerformanceRunways($runways));
+
+        $this->assertNotNull($selected);
+        $this->assertSame(3000, $selected['length_ft']);
+        $this->assertSame('13/31', $selected['rwy_id']);
+    }
+
+    public function testFallbackTooltipMentionsMissingRunwayData(): void
+    {
+        $tooltip = densityAltitudePerformanceTooltip('warning', [
+            'tier' => 'warning',
+            'fallback' => true,
+            'reason' => 'density_altitude_only',
+        ]);
+
+        $this->assertStringContainsString('Runway data unavailable', $tooltip);
+        $this->assertStringContainsString('field elevation only', $tooltip);
+    }
+
+    public function testFallbackAriaLabelMentionsMissingRunwayData(): void
+    {
+        $aria = densityAltitudePerformanceAriaLabel(9500, 'warning', 'ft', [
+            'tier' => 'warning',
+            'fallback' => true,
+            'reason' => 'density_altitude_only',
+        ]);
+
+        $this->assertStringContainsString('Runway data unavailable', $aria);
+        $this->assertStringContainsString('field elevation only', $aria);
+    }
+
+    public function testCapTierWithoutObstructionsDowngradesWarning(): void
+    {
+        $this->assertSame('caution', densityAltitudePerformanceCapTierWithoutObstructions('warning'));
+        $this->assertSame('caution', densityAltitudePerformanceCapTierWithoutObstructions('caution'));
+        $this->assertSame('normal', densityAltitudePerformanceCapTierWithoutObstructions('normal'));
     }
 }

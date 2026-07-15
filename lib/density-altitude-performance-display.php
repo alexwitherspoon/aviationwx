@@ -8,9 +8,15 @@ require_once __DIR__ . '/units.php';
 
 /**
  * Primary tooltip copy for density altitude performance tiers (pilot-facing uses AFM).
+ *
+ * @param array<string, mixed>|null $performance Optional API payload with fallback flag
  */
-function densityAltitudePerformanceTooltip(string $tier): string
+function densityAltitudePerformanceTooltip(string $tier, ?array $performance = null): string
 {
+    if (is_array($performance) && !empty($performance['fallback'])) {
+        return DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP;
+    }
+
     if ($tier === 'warning') {
         return 'Density altitude is dangerously high for average GA aircraft. '
             . 'Verify performance numbers before flight.';
@@ -48,8 +54,14 @@ function densityAltitudePerformanceValueClass(string $tier): string
  *
  * @param int|float|null $densityAltitudeFt
  * @param string $distUnit Embed distance unit (`ft` or `m`)
+ * @param array<string, mixed>|null $performance Optional API payload with fallback flag
  */
-function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, string $distUnit = 'ft'): string
+function densityAltitudePerformanceAriaLabel(
+    $densityAltitudeFt,
+    string $tier,
+    string $distUnit = 'ft',
+    ?array $performance = null
+): string
 {
     if (!is_numeric($densityAltitudeFt)) {
         return 'Density altitude unavailable';
@@ -60,6 +72,10 @@ function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, s
     } else {
         $feet = (int) round((float) $densityAltitudeFt);
         $base = 'Density altitude ' . number_format($feet) . ' feet';
+    }
+    if (is_array($performance) && !empty($performance['fallback'])) {
+        return $base . '. Runway data unavailable; indicator based on density altitude relative to field elevation only. '
+            . 'Verify all performance calculations using your AFM.';
     }
     if ($tier === 'warning') {
         return $base . '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
@@ -75,6 +91,7 @@ function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, s
  *
  * @param int|float|null $densityAltitudeFt
  * @param string $formattedDistance Pre-formatted distance string (with unit if desired)
+ * @param array<string, mixed>|null $performance Optional API payload
  */
 function formatDensityAltitudePerformanceDisplay($densityAltitudeFt, string $formattedDistance, ?array $performance): string
 {

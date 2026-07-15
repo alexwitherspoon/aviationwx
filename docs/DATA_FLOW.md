@@ -653,8 +653,27 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 | Pressure altitude, temperature | Weather cache | Required for full model |
 | Density altitude | Weather cache | Required; null suppresses cue |
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
-| Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports; config `runway_length_ft` overrides length only (obstructions dropped) |
+| Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports with a NASR match |
+| Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; longest non-closed land runway (exclude water surfaces). Same POH length/surface stress as config override; per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
+| Operator runway override | `airports.json` `runway_length_ft` / `runway_surface` | Replaces NASR and OurAirports selection; obstructions dropped |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
+
+**Runway context precedence** (first match wins):
+
+1. `runway_length_ft` in `airports.json` (optional `runway_surface`)
+2. NASR longest active land runway (US AIS)
+3. OurAirports longest active land runway when NASR has no row
+4. Weather-only fallback (elevation-banded DA thresholds; `fallback: true`)
+
+**OurAirports runway model** (when NASR is unavailable):
+
+- **Source**: `scripts/fetch-runways.php` downloads OurAirports `runways.csv` weekly for wind-compass geometry; DA performance consumes `length_ft`, `surface`, and displaced-threshold fields from the same cache slice (not lat/lon segments alone).
+- **Selection**: Longest non-closed land runway; exclude water surfaces using OurAirports surface codes.
+- **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
+- **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
+- **Tier cap**: When obstruction data is absent (OurAirports or operator config override), tier is capped at **caution** (never **warning**). The strongest alarm requires NASR-grade departure-end obstruction context.
+
+OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
 **NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed runway surface condition (`COND=FAILED`) and water surfaces are excluded from longest-runway selection.
 
@@ -675,7 +694,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **Config `runway_length_ft`**: Operator override replaces NASR runway length (optional `runway_surface`) with synthetic runway `config` and **empty ends**. NASR departure obstructions, displaced thresholds, and `TKOF_DIST_AVBL` are not applied. Use when NASR length is wrong; can under-alert if obstacles matter. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
-**Fallback model** (no runway data): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score).
+**Fallback model** (no runway data from config, NASR, or OurAirports): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score). UI copy must state that runway context was unavailable.
 
 **API field** `density_altitude_performance`:
 

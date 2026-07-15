@@ -155,6 +155,16 @@ No obstruction stress when obstacle is beyond runway length or height/distance a
 - **Caution** when **worst** end sum ≥ 1.20 and warning did not apply (conservative: at least one direction warrants verification).
 - `risk_factor`: best-end sum for warning; worst-end sum for caution.
 
+### OurAirports runway model (when NASR unavailable)
+
+When FAA NASR has no airport row (typical for non-US fields such as Canadian ICAOs), select the **longest** active land runway from the OurAirports cache. Exclude closed runways and water surfaces.
+
+**Stress model**: Same POH reference tables and grass correction as the NASR full model. Per-end records carry **displaced-threshold length** when OurAirports publishes it; there are **no departure obstructions** and no `TKOF_DIST_AVBL` (OurAirports does not publish NASR-style obstacle or TODA fields).
+
+**Tier policy without obstruction data**: Cap at **caution** when only OurAirports length/surface is available (do not emit **warning** without obstruction or NASR-grade departure-end context). This avoids the strongest alarm on incomplete AIS.
+
+**Precedence**: Operator `runway_length_ft` overrides OurAirports. When both NASR and OurAirports exist for a US airport, **NASR wins**.
+
 ### Fallback model (weather only)
 
 When no runway data: elevation-banded thresholds on density altitude and delta (DA minus field elevation). Returns tier only; `risk_factor` is **null**; `fallback: true`.

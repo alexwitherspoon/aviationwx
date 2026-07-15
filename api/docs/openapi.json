@@ -1076,7 +1076,7 @@
               },
               "reason": {
                 "type": "string",
-                "enum": ["reference_models", "density_altitude_only"]
+                "enum": ["reference_models", "reference_models_ourairports", "density_altitude_only"]
               },
               "reference": {
                 "type": "string",
