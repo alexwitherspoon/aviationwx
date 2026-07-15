@@ -19,6 +19,8 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
 
     private const SCENARIO_FIXTURE_PATH = __DIR__ . '/../Fixtures/density-altitude-performance-scenarios.json';
 
+    private const EXPECTED_SCENARIO_COUNT = 12;
+
     /** @var list<string> */
     private const REQUIRED_SCENARIO_KEYS = [
         'airport_id',
@@ -68,6 +70,11 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         $decoded = json_decode((string) file_get_contents($path), true);
         if (!is_array($decoded) || $decoded === []) {
             throw new \RuntimeException('Invalid or empty density altitude performance scenario fixture JSON');
+        }
+        if (count($decoded) !== self::EXPECTED_SCENARIO_COUNT) {
+            throw new \RuntimeException(
+                'Expected ' . self::EXPECTED_SCENARIO_COUNT . ' reference scenarios, found ' . count($decoded)
+            );
         }
 
         $cases = [];
