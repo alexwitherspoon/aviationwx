@@ -689,8 +689,9 @@ OurAirports is community-maintained; length and surface can disagree with nation
 4. Use per-end effective departure length from NASR (`TKOF_DIST_AVBL`, displaced threshold) when published.
 5. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For NASR departure obstacles within runway length, scale required distance **linearly** by `obst_hgt / 50` (including above 50 ft). When `OBSTN_CLNC_SLOPE` is published, obstacles on or below the NASR clearance surface at that distance add no obstacle stress; penetrating obstacles use full height. Compare clearance stress `required / obst_dist` against runway stress `chart_total / effective_departure_length`; use the higher stress per model.
 6. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end.
-7. Asymmetric tiers: **normal** when neither threshold applies (field omitted); **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution.
-8. Omit `density_altitude_performance` when tier is `normal` (reference-model margin is adequate).
+7. Operational end selection: window mean wind (primary), asymmetric spread heuristic, or both-ends fallback (see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance)).
+8. Tier mapping: single-end scoring uses scored end risk; both-ends uses worst/best asymmetric rules.
+9. Omit `density_altitude_performance` when tier is `normal` (reference-model margin is adequate).
 
 **Config `runway_length_ft`**: Operator override replaces NASR runway length (optional `runway_surface`) with synthetic runway `config` and **empty ends**. NASR departure obstructions, displaced thresholds, and `TKOF_DIST_AVBL` are not applied. Use when NASR length is wrong; can under-alert if obstacles matter. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
@@ -704,6 +705,16 @@ OurAirports is community-maintained; length and surface can disagree with nation
   "risk_factor": 1.85,
   "worst_end_risk": 1.85,
   "best_end_risk": 0.92,
+  "scored_end_risk": 1.85,
+  "operational_end_id": "26",
+  "selection_basis": "window_mean_wind",
+  "wind_basis": {
+    "direction_magnetic": 260.0,
+    "speed_kts": 8.5,
+    "observation_count": 4,
+    "window_hours": 1,
+    "dispersion_ratio": 1.12
+  },
   "fallback": false,
   "reason": "reference_models",
   "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"

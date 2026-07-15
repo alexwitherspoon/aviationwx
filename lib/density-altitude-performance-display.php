@@ -19,11 +19,45 @@ function densityAltitudePerformanceTooltip(string $tier, ?array $performance = n
 
     if ($tier === 'warning') {
         return 'Density altitude is dangerously high for average GA aircraft. '
-            . 'Verify performance numbers before flight.';
+            . 'Verify performance numbers before flight.'
+            . densityAltitudePerformanceSelectionBasisNote($performance);
     }
     if ($tier === 'caution') {
-        return 'Density altitude is higher than normal. Verify performance numbers before flight.';
+        return 'Density altitude is higher than normal. Verify performance numbers before flight.'
+            . densityAltitudePerformanceSelectionBasisNote($performance);
     }
+    return '';
+}
+
+/**
+ * Tooltip suffix explaining which departure direction was scored.
+ *
+ * @param array<string, mixed>|null $performance Optional API payload with selection_basis
+ */
+function densityAltitudePerformanceSelectionBasisNote(?array $performance): string
+{
+    if (!is_array($performance) || empty($performance['selection_basis'])) {
+        return '';
+    }
+
+    $basis = (string) $performance['selection_basis'];
+    $endId = isset($performance['operational_end_id'])
+        ? trim((string) $performance['operational_end_id'])
+        : '';
+
+    if ($basis === 'window_mean_wind') {
+        $end = $endId !== '' ? 'RWY ' . $endId : 'the wind-aligned runway end';
+        return ' Cue reflects reference takeoff performance for ' . $end . ' using recent mean wind.';
+    }
+    if ($basis === 'asymmetric_heuristic') {
+        $end = $endId !== '' ? 'RWY ' . $endId : 'the less-constrained runway end';
+        return ' Cue reflects reference takeoff performance for ' . $end
+            . '; the opposite direction is more constrained.';
+    }
+    if ($basis === 'both_ends') {
+        return ' Cue reflects reference takeoff performance for both departure directions on the longest runway.';
+    }
+
     return '';
 }
 
@@ -78,10 +112,12 @@ function densityAltitudePerformanceAriaLabel(
             . 'Verify all performance calculations using your AFM.';
     }
     if ($tier === 'warning') {
-        return $base . '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
+        return $base . '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.'
+            . densityAltitudePerformanceSelectionBasisNote($performance);
     }
     if ($tier === 'caution') {
-        return $base . '. Caution: higher than normal; verify performance numbers before flight.';
+        return $base . '. Caution: higher than normal; verify performance numbers before flight.'
+            . densityAltitudePerformanceSelectionBasisNote($performance);
     }
     return $base;
 }

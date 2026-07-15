@@ -148,12 +148,18 @@ No obstruction stress when obstacle is beyond runway length or height/distance a
 
 **Per-end total risk**: Unweighted sum `r152 + r172 + r182` (range 0-3) for each departure end.
 
-**Asymmetric tiers** (evaluate best and worst ends on the selected runway):
+**Operational departure end selection** (before tier mapping):
 
-- **Normal** when neither threshold applies (`density_altitude_performance` omitted from API).
-- **Warning** when **best** end sum ≥ 2.40 (optimistic: favorable departure direction still constrained).
-- **Caution** when **worst** end sum ≥ 1.20 and warning did not apply (conservative: at least one direction warrants verification).
-- `risk_factor`: best-end sum for warning; worst-end sum for caution.
+1. **Window mean wind** (primary): Vector mean from weather history over `wind_rose_window_hours` (default 1 hour). Same non-calm rules as the wind rose. Requires at least `DA_PERF_WIND_MIN_OBS` (3) observations, mean speed ≥ `DA_PERF_WIND_MIN_MEAN_KTS` (5 kt), and dispersion ratio ≤ `DA_PERF_VARIABLE_WIND_RATIO` (2.0). Score only the into-wind departure end (magnetic).
+2. **Asymmetric spread heuristic**: When wind is light, variable, or history is insufficient: if `worst_end_risk - best_end_risk ≥ DA_PERF_ASYMMETRIC_SPREAD` (1.5) and `best_end_risk < 1.20`, tier from the **best** end only.
+3. **Both ends** (fallback): When both directions are similarly constrained, use worst/best asymmetric tier rules below. Config `runway_length_ft` override (empty ends), missing headings, or insufficient data also use this path (fail-closed).
+
+**Tier mapping**:
+
+- **Single-end** (`window_mean_wind` or `asymmetric_heuristic`): **warning** when scored end sum ≥ 2.40; **caution** when scored end sum ≥ 1.20; **normal** otherwise. `risk_factor` and `scored_end_risk` use the scored end sum.
+- **Both ends** (`both_ends`): **warning** when **best** end sum ≥ 2.40; **caution** when **worst** end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution.
+
+**Normal** tier omits `density_altitude_performance` from API responses.
 
 ### OurAirports runway model (when NASR unavailable)
 

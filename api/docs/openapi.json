@@ -1070,6 +1070,32 @@
                 "type": "number",
                 "description": "Best departure-end summed profile risk (0-3) when full model used"
               },
+              "scored_end_risk": {
+                "type": "number",
+                "description": "Summed profile risk (0-3) for the operational departure end used for tier when selection_basis is window_mean_wind or asymmetric_heuristic"
+              },
+              "operational_end_id": {
+                "type": "string",
+                "description": "Runway end ident scored for tier (e.g. 14, 32L); omitted when selection_basis is both_ends",
+                "nullable": true
+              },
+              "selection_basis": {
+                "type": "string",
+                "enum": ["window_mean_wind", "asymmetric_heuristic", "both_ends"],
+                "description": "How the operational departure end was chosen for tier scoring"
+              },
+              "wind_basis": {
+                "type": "object",
+                "description": "Window mean wind used when selection_basis is window_mean_wind",
+                "nullable": true,
+                "properties": {
+                  "direction_magnetic": { "type": "number" },
+                  "speed_kts": { "type": "number" },
+                  "observation_count": { "type": "integer" },
+                  "window_hours": { "type": "integer" },
+                  "dispersion_ratio": { "type": "number" }
+                }
+              },
               "fallback": {
                 "type": "boolean",
                 "description": "True when runway data unavailable and elevation-banded thresholds used"

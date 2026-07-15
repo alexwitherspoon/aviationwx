@@ -69,6 +69,16 @@ Returns weather data for the specified airport.
       "risk_factor": 1.85,
       "worst_end_risk": 1.85,
       "best_end_risk": 0.92,
+      "scored_end_risk": 1.85,
+      "operational_end_id": "26",
+      "selection_basis": "window_mean_wind",
+      "wind_basis": {
+        "direction_magnetic": 260.0,
+        "speed_kts": 8.5,
+        "observation_count": 4,
+        "window_hours": 1,
+        "dispersion_ratio": 1.12
+      },
       "fallback": false,
       "reason": "reference_models",
       "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
