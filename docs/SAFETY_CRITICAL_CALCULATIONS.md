@@ -134,7 +134,9 @@ All safety-critical calculations use TDD methodology:
 
 **Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
 
-**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance by `max(1, obst_hgt / 50)` and compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / runway_length` and use the higher value. No obstruction stress when obstacle is beyond runway length or height/distance are missing.
+**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance by `obst_hgt / 50` and compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value. No obstruction stress when obstacle is beyond runway length or height/distance are missing.
+
+**Effective departure length** (per runway end): `min(runway_length - displaced_thr_len, tkof_dist_avbl)` when NASR publishes those fields; otherwise published runway length.
 
 **Profile risk**: `stress = max(runway_stress, obstruction_stress)`; `risk = clamp((stress - 0.67) / 0.66, 0, 1)`.
 
@@ -159,7 +161,7 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 
 ### Tests
 
-- `tests/Unit/PerformanceAttentionTest.php`
+- `tests/Unit/DensityAltitudePerformanceTest.php`
 - `tests/Unit/PohTakeoffTest.php`
 - `tests/Unit/NasrParseTest.php`
 
