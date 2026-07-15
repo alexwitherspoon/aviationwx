@@ -196,6 +196,9 @@ async function assertDashboardDaTier(daRow, options) {
   const ariaLabel = await daRow.getAttribute('aria-label');
   expect(ariaLabel).toContain(ariaSnippet);
   expect(ariaLabel).toMatch(new RegExp(`Density altitude ${densityAltitudeFt.toLocaleString()} feet`));
+
+  const color = await valueEl.evaluate((el) => window.getComputedStyle(el).color);
+  expect(color).toBe(AMBER_RGB);
 }
 
 /**
