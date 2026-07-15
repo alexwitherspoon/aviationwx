@@ -5,7 +5,7 @@
  *
  * Usage:
  *   CONFIG_PATH=/path/to/airports.json php scripts/fleet-da-constants-audit.php
- *   php scripts/fleet-da-constants-audit.php --variant shipped|wind3|spread_best|both
+ *   php scripts/fleet-da-constants-audit.php --variant legacy|shipped|wind3|spread_best|both
  */
 
 declare(strict_types=1);
@@ -312,7 +312,7 @@ function fleetDaAuditBuildPerformance(
 $options = getopt('', ['variant:', 'help']);
 if (isset($options['help'])) {
     echo "Fleet DA constants audit\n\n";
-    echo "Usage: CONFIG_PATH=... php scripts/fleet-da-constants-audit.php [--variant shipped]\n";
+    echo "Usage: CONFIG_PATH=... php scripts/fleet-da-constants-audit.php [--variant legacy|shipped|wind3|spread_best|both]\n";
     exit(0);
 }
 
