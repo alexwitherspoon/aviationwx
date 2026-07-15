@@ -155,6 +155,8 @@ When `runway_length_ft` is set on an airport, that length replaces NASR and OurA
 
 **Operator-provided length caveat:** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even when NASR lists them for the airport. Only runway-length stress is evaluated. Set this when NASR runway length is wrong or missing; the cue can **under-alert** when departure obstacles matter on that strip. Pilots remain responsible for obstacle clearance and runway selection.
 
+**Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. The same cap applies to OurAirports-only runway context.
+
 Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performance) and `docs/DATA_FLOW.md`.
 
 ### Radio frequencies
