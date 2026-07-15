@@ -47,9 +47,9 @@ function densityAltitudePerformanceValueClass(string $tier): string
  * Accessible label for density altitude cell.
  *
  * @param int|float|null $densityAltitudeFt
- * @param string $distUnit Embed distance unit (`f` or `m`)
+ * @param string $distUnit Embed distance unit (`ft` or `m`)
  */
-function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, string $distUnit = 'f'): string
+function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier, string $distUnit = 'ft'): string
 {
     if (!is_numeric($densityAltitudeFt)) {
         return 'Density altitude unavailable';
