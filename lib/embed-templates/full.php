@@ -191,13 +191,13 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     
     // Density Altitude
     if ($densityAltitude !== null) {
-        $attention = is_array($weather['density_altitude_performance'] ?? null)
+        $daPerformance = is_array($weather['density_altitude_performance'] ?? null)
             ? $weather['density_altitude_performance']
             : null;
         $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
-        $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitude, $daBase, $attention);
+        $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitude, $daBase, $daPerformance);
         if ($daDisplay !== '--') {
-            $tier = is_array($attention) ? (string) ($attention['tier'] ?? 'none') : 'none';
+            $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
             $daClass = densityAltitudePerformanceValueClass($tier);
             $daTooltip = densityAltitudePerformanceTooltip($tier);
             $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier);

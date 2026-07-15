@@ -97,7 +97,7 @@ a {
     color: #fff;
 }
 
-.density-altitude-strong {
+.density-altitude-warning {
     color: #e67e22 !important;
     font-weight: 600;
 }

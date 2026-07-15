@@ -222,7 +222,7 @@
     }
     
     function densityAltitudePerformanceTooltip(tier) {
-        if (tier === 'strong') {
+        if (tier === 'warning') {
             return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
         }
         if (tier === 'caution') {
@@ -232,7 +232,7 @@
     }
 
     function densityAltitudePerformanceEmoji(tier) {
-        if (tier === 'strong') return '🚩';
+        if (tier === 'warning') return '🚩';
         if (tier === 'caution') return '⚠️';
         return '';
     }
@@ -242,19 +242,19 @@
         if (base === '--') {
             return { text: base, className: '', title: '', ariaLabel: 'Density altitude unavailable' };
         }
-        const tier = performance && performance.tier ? performance.tier : 'none';
+        const tier = performance && performance.tier ? performance.tier : 'normal';
         const emoji = densityAltitudePerformanceEmoji(tier);
         const text = emoji ? `${base} ${emoji}` : base;
         const feet = Math.round(Number(densityAltitudeFt));
         let ariaLabel = `Density altitude ${feet.toLocaleString()} feet`;
-        if (tier === 'strong') {
-            ariaLabel += '. Strong caution: dangerously high for average GA aircraft; verify performance numbers before flight.';
+        if (tier === 'warning') {
+            ariaLabel += '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
         } else if (tier === 'caution') {
             ariaLabel += '. Caution: higher than normal; verify performance numbers before flight.';
         }
         return {
             text,
-            className: tier === 'strong' ? 'density-altitude-strong' : '',
+            className: tier === 'warning' ? 'density-altitude-warning' : '',
             title: densityAltitudePerformanceTooltip(tier),
             ariaLabel,
         };
