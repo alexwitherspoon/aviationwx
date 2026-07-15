@@ -22,6 +22,18 @@ function loadPohTakeoffTables(): array
     }
 
     $base = dirname(__DIR__, 2) . '/data/poh';
+    $GLOBALS['_poh_takeoff_tables'] = pohReadTakeoffTablesFromDirectory($base);
+    return $GLOBALS['_poh_takeoff_tables'];
+}
+
+/**
+ * Load POH takeoff JSON tables from a directory.
+ *
+ * @return array<string, array>
+ */
+function pohReadTakeoffTablesFromDirectory(string $directory): array
+{
+    $base = rtrim($directory, '/');
     $files = [
         'c152' => $base . '/c152m-takeoff.json',
         'c172' => $base . '/c172n-takeoff.json',
@@ -40,7 +52,6 @@ function loadPohTakeoffTables(): array
         $tables[$key] = $decoded;
     }
 
-    $GLOBALS['_poh_takeoff_tables'] = $tables;
     return $tables;
 }
 
@@ -49,12 +60,7 @@ function loadPohTakeoffTables(): array
  */
 function setPohTakeoffFixtureDirectory(string $directory): void
 {
-    $base = rtrim($directory, '/');
-    $GLOBALS['_poh_takeoff_tables'] = [
-        'c152' => json_decode((string) file_get_contents($base . '/c152m-takeoff.json'), true),
-        'c172' => json_decode((string) file_get_contents($base . '/c172n-takeoff.json'), true),
-        'c182' => json_decode((string) file_get_contents($base . '/c182t-takeoff.json'), true),
-    ];
+    $GLOBALS['_poh_takeoff_tables'] = pohReadTakeoffTablesFromDirectory($directory);
 }
 
 /**
