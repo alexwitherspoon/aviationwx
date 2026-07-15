@@ -245,8 +245,11 @@
         const tier = performance && performance.tier ? performance.tier : 'normal';
         const emoji = densityAltitudePerformanceEmoji(tier);
         const text = emoji ? `${base} ${emoji}` : base;
-        const feet = Math.round(Number(densityAltitudeFt));
-        let ariaLabel = `Density altitude ${feet.toLocaleString()} feet`;
+        const ariaValue = distUnit === 'm'
+            ? Math.round(Number(densityAltitudeFt) * 0.3048)
+            : Math.round(Number(densityAltitudeFt));
+        const unitLabel = distUnit === 'm' ? 'meters' : 'feet';
+        let ariaLabel = `Density altitude ${ariaValue.toLocaleString()} ${unitLabel}`;
         if (tier === 'warning') {
             ariaLabel += '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
         } else if (tier === 'caution') {
