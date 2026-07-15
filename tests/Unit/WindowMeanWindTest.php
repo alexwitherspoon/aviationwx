@@ -175,4 +175,36 @@ class WindowMeanWindTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame(3, $result['observation_count']);
     }
+
+    public function testIgnoresMalformedHistoryObservations(): void
+    {
+        $baseTime = time();
+        $history = [
+            'airport_id' => $this->testAirportId,
+            'observations' => [
+                'not-an-array',
+                ['obs_time' => 'bad', 'wind_speed' => 10.0, 'wind_direction' => 270.0],
+                [
+                    'obs_time' => $baseTime - 900,
+                    'wind_speed' => 10.0,
+                    'wind_direction' => 270.0,
+                ],
+                [
+                    'obs_time' => $baseTime - 600,
+                    'wind_speed' => 10.0,
+                    'wind_direction' => 270.0,
+                ],
+                [
+                    'obs_time' => $baseTime - 300,
+                    'wind_speed' => 10.0,
+                    'wind_direction' => 270.0,
+                ],
+            ],
+        ];
+        saveWeatherHistory($this->testAirportId, $history);
+
+        $result = computeWindowMeanWind($this->testAirportId);
+        $this->assertNotNull($result);
+        $this->assertSame(3, $result['observation_count']);
+    }
 }

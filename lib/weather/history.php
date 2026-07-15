@@ -377,6 +377,17 @@ function computeDailyExtremesFromHistory(string $airportId, string $dateKey, str
 }
 
 /**
+ * Whether a cached history observation is an array with a numeric obs_time in window.
+ */
+function weatherHistoryObservationInWindow($observation, int $cutoff): bool
+{
+    return is_array($observation)
+        && isset($observation['obs_time'])
+        && is_numeric($observation['obs_time'])
+        && (int) $observation['obs_time'] >= $cutoff;
+}
+
+/**
  * Compute wind rose data for petal visualization
  *
  * Returns 16 sectors (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
@@ -404,8 +415,8 @@ function computeWindRose(string $airportId, ?array $airport = null): ?array
         return null;
     }
 
-    $windowObs = array_filter($observations, function ($obs) use ($cutoff) {
-        return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
+    $windowObs = array_filter($observations, static function ($obs) use ($cutoff) {
+        return weatherHistoryObservationInWindow($obs, $cutoff);
     });
     if (empty($windowObs)) {
         return null;
@@ -537,7 +548,7 @@ function computeWindowMeanWind(string $airportId, ?array $airport = null): ?arra
     }
 
     $windowObs = array_filter($observations, static function ($obs) use ($cutoff) {
-        return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
+        return weatherHistoryObservationInWindow($obs, $cutoff);
     });
     if ($windowObs === []) {
         return null;
