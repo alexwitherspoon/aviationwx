@@ -77,17 +77,7 @@ function nasrGetConfigShaForSlice(): ?string
 {
     require_once __DIR__ . '/../config.php';
 
-    $configFile = getConfigFilePath();
-    if ($configFile === null || !is_readable($configFile)) {
-        return null;
-    }
-
-    $content = @file_get_contents($configFile);
-    if ($content === false) {
-        return null;
-    }
-
-    return hash('sha256', $content);
+    return getConfigFileSha256();
 }
 
 /**
