@@ -10,9 +10,12 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/public-api/weather-format.php';
+require_once __DIR__ . '/../Helpers/LoadsNasrAptFixtureCacheTrait.php';
 
 class FormatWeatherResponseTest extends TestCase
 {
+    use LoadsNasrAptFixtureCacheTrait;
+
     protected function setUp(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
@@ -267,13 +270,7 @@ class FormatWeatherResponseTest extends TestCase
 
     public function testDensityAltitudePerformanceIncludedWhenTierSet(): void
     {
-        require_once __DIR__ . '/../../lib/nasr/cache.php';
-
-        $built = nasrBuildCacheFromCsvDirectory(__DIR__ . '/../Fixtures/nasr');
-        setNasrAptCacheForTesting([
-            'schema_version' => NASR_APT_SCHEMA_VERSION,
-            'airports' => $built['airports'],
-        ]);
+        $this->loadNasrAptFixtureCache();
 
         $weather = [
             'density_altitude' => 6280,
@@ -291,7 +288,5 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertArrayHasKey('density_altitude_performance', $result);
         $this->assertSame('warning', $result['density_altitude_performance']['tier']);
         $this->assertFalse($result['density_altitude_performance']['fallback']);
-
-        resetNasrAptCacheMemo();
     }
 }

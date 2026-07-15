@@ -5,32 +5,23 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../lib/nasr/cache.php';
+require_once __DIR__ . '/../Helpers/LoadsNasrAptFixtureCacheTrait.php';
 require_once __DIR__ . '/../../lib/runways.php';
 require_once __DIR__ . '/../../lib/density-altitude-performance-display.php';
 require_once __DIR__ . '/../../lib/weather/density-altitude-performance.php';
 
 class DensityAltitudePerformanceTest extends TestCase
 {
-    private string $nasrFixtureDir;
+    use LoadsNasrAptFixtureCacheTrait;
 
     protected function setUp(): void
     {
-        $this->nasrFixtureDir = __DIR__ . '/../Fixtures/nasr';
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
-
-        $built = nasrBuildCacheFromCsvDirectory($this->nasrFixtureDir);
-        setNasrAptCacheForTesting([
-            'schema_version' => NASR_APT_SCHEMA_VERSION,
-            'airports' => $built['airports'],
-        ]);
+        $this->loadNasrAptFixtureCache();
     }
 
     protected function tearDown(): void
     {
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
+        $this->tearDownNasrAptFixtureCache();
     }
 
     public function testReturnsNullWhenDensityAltitudeMissing(): void
