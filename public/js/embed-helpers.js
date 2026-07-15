@@ -37,11 +37,12 @@
         if (valueFt === null || valueFt === undefined) return '--';
         
         if (unit === 'm') {
-            const valueM = valueFt * 0.3048;
-            return (useCommas ? valueM.toLocaleString() : Math.round(valueM)) + ' m';
+            const roundedM = Math.round(valueFt * 0.3048);
+            return (useCommas ? roundedM.toLocaleString() : String(roundedM)) + ' m';
         }
-        
-        return (useCommas ? valueFt.toLocaleString() : Math.round(valueFt)) + ' ft';
+
+        const roundedFt = Math.round(valueFt);
+        return (useCommas ? roundedFt.toLocaleString() : String(roundedFt)) + ' ft';
     }
     
     /**
