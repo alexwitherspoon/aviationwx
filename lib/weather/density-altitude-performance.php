@@ -326,6 +326,8 @@ function attachDensityAltitudePerformance(array $weather, array $airport): array
     $performance = buildDensityAltitudePerformance($weather, $airport);
     if ($performance !== null) {
         $weather['density_altitude_performance'] = $performance;
+    } else {
+        unset($weather['density_altitude_performance']);
     }
     return $weather;
 }
