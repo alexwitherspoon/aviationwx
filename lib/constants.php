@@ -460,6 +460,18 @@ if (!defined('DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP')) {
         . 'Verify all performance calculations using your AFM.'
     );
 }
+if (!defined('DA_PERF_WIND_MIN_OBS')) {
+    define('DA_PERF_WIND_MIN_OBS', 3);
+}
+if (!defined('DA_PERF_WIND_MIN_MEAN_KTS')) {
+    define('DA_PERF_WIND_MIN_MEAN_KTS', 5.0);
+}
+if (!defined('DA_PERF_VARIABLE_WIND_RATIO')) {
+    define('DA_PERF_VARIABLE_WIND_RATIO', 2.0);
+}
+if (!defined('DA_PERF_ASYMMETRIC_SPREAD')) {
+    define('DA_PERF_ASYMMETRIC_SPREAD', 1.5);
+}
 
 // Airport country resolution (geometry aggregate under CACHE_BASE_DIR; see scripts/refresh-airport-country-resolution.php)
 if (!defined('COUNTRY_RESOLUTION_AGGREGATE_SCHEMA_VERSION')) {
