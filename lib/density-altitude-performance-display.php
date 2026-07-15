@@ -61,7 +61,8 @@ function densityAltitudePerformanceAriaLabel(
     string $tier,
     string $distUnit = 'ft',
     ?array $performance = null
-): string {
+): string
+{
     if (!is_numeric($densityAltitudeFt)) {
         return 'Density altitude unavailable';
     }
