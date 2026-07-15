@@ -670,8 +670,8 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 4. Use per-end effective departure length from NASR (`TKOF_DIST_AVBL`, displaced threshold) when published.
 5. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For NASR departure obstacles within runway length, scale required distance **linearly** by `obst_hgt / 50` (including above 50 ft). When `OBSTN_CLNC_SLOPE` is published, obstacles on or below the NASR clearance surface at that distance add no obstacle stress; penetrating obstacles use full height. Compare clearance stress `required / obst_dist` against runway stress `chart_total / effective_departure_length`; use the higher stress per model.
 6. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end.
-7. Asymmetric tiers: **strong** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not strong). `risk_factor` uses best-end sum for strong, worst-end sum for caution.
-8. Omit `density_altitude_performance` when tier is `none`.
+7. Asymmetric tiers: **normal** when neither threshold applies (field omitted); **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution.
+8. Omit `density_altitude_performance` when tier is `normal` (reference-model margin is adequate).
 
 **Config `runway_length_ft`**: Operator override replaces NASR runway length (optional `runway_surface`) with synthetic runway `config` and **empty ends**. NASR departure obstructions, displaced thresholds, and `TKOF_DIST_AVBL` are not applied. Use when NASR length is wrong; can under-alert if obstacles matter. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
@@ -691,7 +691,7 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 }
 ```
 
-**Display**: ⚠️ (caution) or 🚩 (strong) adjacent to the density altitude value; strong tier uses amber styling. Tooltips use AFM wording.
+**Display**: ⚠️ (caution) or 🚩 (warning) adjacent to the density altitude value; warning tier uses amber styling. Tooltips use AFM wording.
 
 **Implementation**: `lib/weather/density-altitude-performance.php`, `lib/nasr/*`, `lib/weather/poh-takeoff.php`
 

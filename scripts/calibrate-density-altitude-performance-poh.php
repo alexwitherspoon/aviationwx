@@ -221,9 +221,9 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         'runway_ft' => $runwayFt,
         'runway_surface' => $runway['surface'] ?? '',
         'non_paved' => $nonPaved,
-        'current_tier' => $built['tier'] ?? 'none',
+        'current_tier' => $built['tier'] ?? 'normal',
         'current_risk' => $built['risk_factor'] ?? null,
-        'fallback_tier' => $fallback['tier'] ?? 'none',
+        'fallback_tier' => $fallback['tier'] ?? 'normal',
         'best_end_total_risk' => round($bestTotalRisk, 3),
         'worst_end_total_risk' => round($worstTotalRisk, 3),
         'no_obstruction' => $noObst,
@@ -238,23 +238,23 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
  *
  * @param list<float> $risks
  */
-function tierFromRisks(array $risks, float $cautionAt, float $strongAt, bool $use152172Only = false): string
+function tierFromRisks(array $risks, float $cautionAt, float $warningAt, bool $use152172Only = false): string
 {
     if ($risks === []) {
-        return 'none';
+        return 'normal';
     }
     if ($use152172Only) {
         $score = $risks[0] + $risks[1];
     } else {
         $score = calculateSummedPerformanceRisk($risks[0], $risks[1], $risks[2] ?? 0.0);
     }
-    if ($score >= $strongAt) {
-        return 'strong';
+    if ($score >= $warningAt) {
+        return 'warning';
     }
     if ($score >= $cautionAt) {
         return 'caution';
     }
-    return 'none';
+    return 'normal';
 }
 
 /**
@@ -278,7 +278,7 @@ if ($config === null) {
 }
 
 $focusIds = [
-  // Intended strong
+  // Intended warning
   '12id', '7or0', 'id76', 'c53', '02id', 's81',
   // Obstruction false positives
   '4s9', '42b', 'kvkx', 's68', '7s9',

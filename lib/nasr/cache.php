@@ -434,7 +434,7 @@ function getNasrAirportForConfig(array $airport): ?array
 }
 
 /**
- * Field elevation for performance attention (config overrides NASR).
+ * Field elevation for density altitude performance (config overrides NASR).
  *
  * @param array $airport Airport configuration
  * @param array|null $nasrRecord Matched NASR record

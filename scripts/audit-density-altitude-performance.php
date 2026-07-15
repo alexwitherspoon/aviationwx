@@ -59,7 +59,7 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
     }
 
     $fallback = assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);
-    $fallbackTier = $fallback['tier'] ?? 'none';
+    $fallbackTier = $fallback['tier'] ?? 'normal';
 
     if ($selectedRunway === null) {
         return [
@@ -67,7 +67,7 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
             'tier' => $fallbackTier,
             'risk_factor' => null,
             'fallback_tier' => $fallbackTier,
-            'prod_attention' => $weather['_prod_attention'] ?? null,
+            'prod_density_altitude_performance' => $weather['_prod_density_altitude_performance'] ?? null,
             'field_elev_ft' => $fieldElevationFt,
             'da_ft' => $densityAltitudeFt,
             'da_delta_ft' => $fieldElevationFt !== null ? $densityAltitudeFt - $fieldElevationFt : null,
@@ -143,7 +143,7 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
         'tier' => $tier,
         'risk_factor' => round($riskFactor, 3),
         'fallback_tier' => $fallbackTier,
-        'prod_attention' => $weather['_prod_attention'] ?? null,
+        'prod_density_altitude_performance' => $weather['_prod_density_altitude_performance'] ?? null,
         'field_elev_ft' => $fieldElevationFt,
         'da_ft' => $densityAltitudeFt,
         'da_delta_ft' => $fieldElevationFt !== null ? $densityAltitudeFt - $fieldElevationFt : null,
@@ -198,7 +198,7 @@ function fetchProductionWeather(string $baseUrl, string $airportId): array
     if (isset($weather['temperature_f']) && !isset($weather['temperature']) && is_numeric($weather['temperature_f'])) {
         $weather['temperature'] = ((float) $weather['temperature_f'] - 32) * 5 / 9;
     }
-    $weather['_prod_attention'] = $weather['density_altitude_performance'] ?? null;
+    $weather['_prod_density_altitude_performance'] = $weather['density_altitude_performance'] ?? null;
     $weather['_last_updated_iso'] = $weather['last_updated_iso'] ?? null;
 
     return ['ok' => true, 'weather' => $weather, 'error' => null, 'http_code' => $httpCode];
@@ -225,9 +225,9 @@ $summary = [
     'total' => 0,
     'fetch_failed' => 0,
     'no_da' => 0,
-    'none' => 0,
+    'normal' => 0,
     'caution' => 0,
-    'strong' => 0,
+    'warning' => 0,
     'full' => 0,
     'fallback' => 0,
     'fallback_would_differ' => 0,
@@ -272,13 +272,13 @@ foreach ($airports as $airportId => $airport) {
         continue;
     }
 
-    $tier = $detail['tier'] ?? 'none';
-    if ($tier === 'none') {
-        $summary['none']++;
+    $tier = $detail['tier'] ?? 'normal';
+    if ($tier === 'normal') {
+        $summary['normal']++;
     } elseif ($tier === 'caution') {
         $summary['caution']++;
-    } elseif ($tier === 'strong') {
-        $summary['strong']++;
+    } elseif ($tier === 'warning') {
+        $summary['warning']++;
     }
 
     if (($detail['path'] ?? '') === 'full') {
@@ -287,14 +287,14 @@ foreach ($airports as $airportId => $airport) {
         $summary['fallback']++;
     }
 
-    $fb = $detail['fallback_tier'] ?? 'none';
-    if ($fb !== $tier && ($fb !== 'none' || $tier !== 'none')) {
+    $fb = $detail['fallback_tier'] ?? 'normal';
+    if ($fb !== $tier && ($fb !== 'normal' || $tier !== 'normal')) {
         $summary['fallback_would_differ']++;
     }
 
-    $prodTier = is_array($detail['prod_attention'] ?? null)
-        ? ($detail['prod_attention']['tier'] ?? 'none')
-        : 'none';
+    $prodTier = is_array($detail['prod_density_altitude_performance'] ?? null)
+        ? ($detail['prod_density_altitude_performance']['tier'] ?? 'normal')
+        : 'normal';
     if ($prodTier !== $tier) {
         $summary['prod_mismatch']++;
     }
@@ -310,9 +310,9 @@ foreach ($airports as $airportId => $airport) {
 }
 
 usort($rows, static function (array $a, array $b): int {
-    $tierOrder = ['strong' => 0, 'caution' => 1, 'none' => 2];
-    $ta = $tierOrder[$a['tier'] ?? 'none'] ?? 3;
-    $tb = $tierOrder[$b['tier'] ?? 'none'] ?? 3;
+    $tierOrder = ['warning' => 0, 'caution' => 1, 'normal' => 2];
+    $ta = $tierOrder[$a['tier'] ?? 'normal'] ?? 3;
+    $tb = $tierOrder[$b['tier'] ?? 'normal'] ?? 3;
     if ($ta !== $tb) {
         return $ta <=> $tb;
     }

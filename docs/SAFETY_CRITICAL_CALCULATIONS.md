@@ -124,7 +124,7 @@ All safety-critical calculations use TDD methodology:
 
 **Purpose**: Provide a server-computed cue when density altitude and runway context suggest verifying AFM takeoff performance. This is **not** a go/no-go decision.
 
-**When suppressed**: Missing or fail-closed null density altitude; missing pressure altitude or temperature for full model; asymmetric tier `none`.
+**When suppressed**: Missing or fail-closed null density altitude; missing pressure altitude or temperature for full model; asymmetric tier `normal` (no cue shown).
 
 ### Full model (reference AFM tables + NASR runway)
 
@@ -150,9 +150,10 @@ No obstruction stress when obstacle is beyond runway length or height/distance a
 
 **Asymmetric tiers** (evaluate best and worst ends on the selected runway):
 
-- **Strong** when **best** end sum ≥ 2.40 (optimistic: favorable departure direction still constrained).
-- **Caution** when **worst** end sum ≥ 1.20 and strong did not apply (conservative: at least one direction warrants verification).
-- `risk_factor`: best-end sum for strong; worst-end sum for caution.
+- **Normal** when neither threshold applies (`density_altitude_performance` omitted from API).
+- **Warning** when **best** end sum ≥ 2.40 (optimistic: favorable departure direction still constrained).
+- **Caution** when **worst** end sum ≥ 1.20 and warning did not apply (conservative: at least one direction warrants verification).
+- `risk_factor`: best-end sum for warning; worst-end sum for caution.
 
 ### Fallback model (weather only)
 

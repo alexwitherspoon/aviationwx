@@ -1049,17 +1049,17 @@
           },
           "density_altitude_performance": {
             "type": "object",
-            "description": "Density altitude performance cue (omitted when tier is none). Not a go/no-go judgment.",
+            "description": "Density altitude performance cue (omitted when tier is normal). Not a go/no-go judgment.",
             "nullable": true,
             "properties": {
               "tier": {
                 "type": "string",
-                "enum": ["caution", "strong"],
-                "description": "Attention tier"
+                "enum": ["caution", "warning"],
+                "description": "Density altitude performance tier (normal is omitted from API responses)"
               },
               "risk_factor": {
                 "type": "number",
-                "description": "Summed profile risk 0-3 when full model used (best-end sum for strong, worst-end sum for caution); null when fallback",
+                "description": "Summed profile risk 0-3 when full model used (best-end sum for warning, worst-end sum for caution); null when fallback",
                 "nullable": true
               },
               "worst_end_risk": {
