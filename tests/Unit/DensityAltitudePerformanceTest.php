@@ -20,7 +20,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $built = nasrBuildCacheFromCsvDirectory($this->nasrFixtureDir);
         setNasrAptCacheForTesting([
-            'schema_version' => 1,
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
             'airports' => $built['airports'],
         ]);
     }

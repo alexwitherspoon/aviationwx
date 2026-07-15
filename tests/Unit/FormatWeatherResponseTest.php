@@ -21,7 +21,7 @@ class FormatWeatherResponseTest extends TestCase
         resetNasrAptCacheMemo();
         resetPohTakeoffTables();
         setNasrAptCacheForTesting([
-            'schema_version' => 1,
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
             'airports' => [],
         ]);
     }
@@ -271,7 +271,7 @@ class FormatWeatherResponseTest extends TestCase
 
         $built = nasrBuildCacheFromCsvDirectory(__DIR__ . '/../Fixtures/nasr');
         setNasrAptCacheForTesting([
-            'schema_version' => 1,
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
             'airports' => $built['airports'],
         ]);
 
