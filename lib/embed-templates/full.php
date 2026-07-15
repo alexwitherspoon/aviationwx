@@ -199,8 +199,8 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         if ($daDisplay !== '--') {
             $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
             $daClass = densityAltitudePerformanceValueClass($tier);
-            $daTooltip = densityAltitudePerformanceTooltip($tier);
-            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit);
+            $daTooltip = densityAltitudePerformanceTooltip($tier, $daPerformance);
+            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit, $daPerformance);
             $itemClasses = 'metric-item';
             if ($daClass !== '') {
                 $itemClasses .= ' ' . $daClass;

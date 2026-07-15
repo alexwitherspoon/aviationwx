@@ -222,7 +222,10 @@
         }
     }
     
-    function densityAltitudePerformanceTooltip(tier) {
+    function densityAltitudePerformanceTooltip(tier, performance) {
+        if (performance && performance.fallback) {
+            return 'Runway data unavailable. Indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.';
+        }
         if (tier === 'warning') {
             return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
         }
@@ -251,7 +254,9 @@
             : Math.round(Number(densityAltitudeFt));
         const unitLabel = distUnit === 'm' ? 'meters' : 'feet';
         let ariaLabel = `Density altitude ${ariaValue.toLocaleString()} ${unitLabel}`;
-        if (tier === 'warning') {
+        if (performance && performance.fallback) {
+            ariaLabel += '. Runway data unavailable; indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.';
+        } else if (tier === 'warning') {
             ariaLabel += '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
         } else if (tier === 'caution') {
             ariaLabel += '. Caution: higher than normal; verify performance numbers before flight.';
@@ -259,7 +264,7 @@
         return {
             text,
             className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
-            title: densityAltitudePerformanceTooltip(tier),
+            title: densityAltitudePerformanceTooltip(tier, performance),
             ariaLabel,
         };
     }

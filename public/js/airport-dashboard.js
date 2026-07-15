@@ -791,7 +791,10 @@ function formatAltitude(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
-function densityAltitudePerformanceTooltip(tier) {
+function densityAltitudePerformanceTooltip(tier, performance) {
+    if (performance && performance.fallback) {
+        return 'Runway data unavailable. Indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.';
+    }
     if (tier === 'warning') {
         return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.';
     }
@@ -807,7 +810,7 @@ function densityAltitudePerformanceEmoji(tier) {
     return '';
 }
 
-function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier) {
+function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier, performance) {
     if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
         return 'Density altitude unavailable';
     }
@@ -817,6 +820,9 @@ function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier) {
         : Math.round(Number(densityAltitudeFt));
     const unitLabel = unit === 'm' ? 'meters' : 'feet';
     const base = `Density altitude ${value.toLocaleString()} ${unitLabel}`;
+    if (performance && performance.fallback) {
+        return `${base}. Runway data unavailable; indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.`;
+    }
     if (tier === 'warning') {
         return `${base}. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.`;
     }
@@ -834,8 +840,8 @@ function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance)
         value,
         emoji,
         className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
-        title: densityAltitudePerformanceTooltip(tier),
-        ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier),
+        title: densityAltitudePerformanceTooltip(tier, performance),
+        ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier, performance),
     };
 }
 
