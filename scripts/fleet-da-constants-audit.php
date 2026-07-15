@@ -22,7 +22,7 @@ require_once __DIR__ . '/../lib/heading-conversion.php';
 require_once __DIR__ . '/../lib/public-api/config.php';
 
 /**
- * @return array<string, array{min_mean_kts: float, asymmetric_best_always: bool, label: string}>
+ * @return array<string, array{min_mean_kts: float, asymmetric_best_always: bool, use_legacy_tier: bool, label: string}>
  */
 function fleetDaAuditVariants(): array
 {
