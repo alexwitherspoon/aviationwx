@@ -727,6 +727,10 @@ while ($running) {
                 exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
                 reapZombies();
                 aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+                    'path' => $nasrScript,
+                ], 'app');
             }
             $nasrAptFetchOnStartupDone = true;
             $lastNasrAptFetch = $now;
@@ -737,6 +741,10 @@ while ($running) {
                 exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
                 reapZombies();
                 aviationwx_log('info', 'scheduler: nasr apt fetch started (weekly)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+                    'path' => $nasrScript,
+                ], 'app');
             }
             $lastNasrAptFetch = $now;
         }
