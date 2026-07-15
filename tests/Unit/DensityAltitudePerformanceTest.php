@@ -53,7 +53,7 @@ class DensityAltitudePerformanceTest extends TestCase
         ]);
 
         $this->assertNotNull($result);
-        $this->assertSame('strong', $result['tier']);
+        $this->assertSame('warning', $result['tier']);
         $this->assertTrue($result['fallback']);
         $this->assertNull($result['risk_factor']);
         $this->assertSame('density_altitude_only', $result['reason']);
@@ -69,11 +69,11 @@ class DensityAltitudePerformanceTest extends TestCase
         ]);
 
         $this->assertNotNull($result);
-        $this->assertSame('strong', $result['tier']);
+        $this->assertSame('warning', $result['tier']);
         $this->assertTrue($result['fallback']);
     }
 
-    public function testId76AfternoonScenarioFlagsStrongTier(): void
+    public function testId76AfternoonScenarioFlagsWarningTier(): void
     {
         $result = buildDensityAltitudePerformance([
             'density_altitude' => 6280,
@@ -86,10 +86,10 @@ class DensityAltitudePerformanceTest extends TestCase
         ]);
 
         $this->assertNotNull($result);
-        $this->assertSame('strong', $result['tier']);
+        $this->assertSame('warning', $result['tier']);
         $this->assertFalse($result['fallback']);
         $this->assertIsFloat($result['risk_factor']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG, $result['risk_factor']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['risk_factor']);
     }
 
     public function testFallbackWhenPressureAltitudeMissingButRunwayPresent(): void
@@ -163,17 +163,17 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testDensityAltitudePerformanceTierThresholdsOnSummedRisk(): void
     {
-        $this->assertSame('none', densityAltitudePerformanceTierForRisk(1.19));
+        $this->assertSame('normal', densityAltitudePerformanceTierForRisk(1.19));
         $this->assertSame('caution', densityAltitudePerformanceTierForRisk(1.20));
         $this->assertSame('caution', densityAltitudePerformanceTierForRisk(2.39));
-        $this->assertSame('strong', densityAltitudePerformanceTierForRisk(2.40));
+        $this->assertSame('warning', densityAltitudePerformanceTierForRisk(2.40));
     }
 
-    public function testAsymmetricTierStrongRequiresBestEndAboveThreshold(): void
+    public function testAsymmetricTierWarningRequiresBestEndAboveThreshold(): void
     {
         $this->assertSame('caution', densityAltitudePerformanceTierFromEndRisks(3.0, 1.0));
-        $this->assertSame('strong', densityAltitudePerformanceTierFromEndRisks(3.0, 2.4));
-        $this->assertSame('none', densityAltitudePerformanceTierFromEndRisks(1.19, 1.0));
+        $this->assertSame('warning', densityAltitudePerformanceTierFromEndRisks(3.0, 2.4));
+        $this->assertSame('normal', densityAltitudePerformanceTierFromEndRisks(1.19, 1.0));
     }
 
     public function testRunwayEndPerformanceRangeSelectsBestAndWorstEnds(): void
@@ -227,10 +227,10 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $this->assertSame('caution', $tier);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['worst']['total_risk']);
-        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG, $range['best']['total_risk']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $range['best']['total_risk']);
     }
 
-    public function testSyntheticShortTurfRunwayRemainsStrongOnBothEnds(): void
+    public function testSyntheticShortTurfRunwayRemainsWarningOnBothEnds(): void
     {
         $tables = loadPohTakeoffTables();
         $runway = [
@@ -248,6 +248,6 @@ class DensityAltitudePerformanceTest extends TestCase
             $range['best']['total_risk']
         );
 
-        $this->assertSame('strong', $tier);
+        $this->assertSame('warning', $tier);
     }
 }

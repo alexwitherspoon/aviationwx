@@ -10,7 +10,7 @@ require_once __DIR__ . '/constants.php';
  */
 function densityAltitudePerformanceTooltip(string $tier): string
 {
-    if ($tier === 'strong') {
+    if ($tier === 'warning') {
         return 'Density altitude is dangerously high for average GA aircraft. '
             . 'Verify performance numbers before flight.';
     }
@@ -21,11 +21,11 @@ function densityAltitudePerformanceTooltip(string $tier): string
 }
 
 /**
- * Emoji indicator for tier (none returns empty string).
+ * Emoji indicator for tier (normal returns empty string).
  */
 function densityAltitudePerformanceEmoji(string $tier): string
 {
-    if ($tier === 'strong') {
+    if ($tier === 'warning') {
         return '🚩';
     }
     if ($tier === 'caution') {
@@ -35,11 +35,11 @@ function densityAltitudePerformanceEmoji(string $tier): string
 }
 
 /**
- * CSS class for strong-tier DA value styling.
+ * CSS class for warning-tier DA value styling.
  */
 function densityAltitudePerformanceValueClass(string $tier): string
 {
-    return $tier === 'strong' ? 'density-altitude-strong' : '';
+    return $tier === 'warning' ? 'density-altitude-warning' : '';
 }
 
 /**
@@ -54,8 +54,8 @@ function densityAltitudePerformanceAriaLabel($densityAltitudeFt, string $tier): 
     }
     $feet = (int) round((float) $densityAltitudeFt);
     $base = 'Density altitude ' . number_format($feet) . ' feet';
-    if ($tier === 'strong') {
-        return $base . '. Strong caution: dangerously high for average GA aircraft; verify performance numbers before flight.';
+    if ($tier === 'warning') {
+        return $base . '. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.';
     }
     if ($tier === 'caution') {
         return $base . '. Caution: higher than normal; verify performance numbers before flight.';
@@ -74,7 +74,7 @@ function formatDensityAltitudePerformanceDisplay($densityAltitudeFt, string $for
     if ($formattedDistance === '--' || $formattedDistance === '---') {
         return $formattedDistance;
     }
-    if (!is_array($performance) || empty($performance['tier']) || $performance['tier'] === 'none') {
+    if (!is_array($performance) || empty($performance['tier']) || $performance['tier'] === 'normal') {
         return $formattedDistance;
     }
 

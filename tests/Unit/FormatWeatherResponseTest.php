@@ -289,7 +289,7 @@ class FormatWeatherResponseTest extends TestCase
         $result = formatWeatherResponse($weather, $airport);
 
         $this->assertArrayHasKey('density_altitude_performance', $result);
-        $this->assertSame('strong', $result['density_altitude_performance']['tier']);
+        $this->assertSame('warning', $result['density_altitude_performance']['tier']);
         $this->assertFalse($result['density_altitude_performance']['fallback']);
 
         resetNasrAptCacheMemo();

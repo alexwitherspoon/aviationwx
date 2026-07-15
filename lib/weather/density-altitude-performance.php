@@ -45,25 +45,25 @@ function densityAltitudePerformanceTierForRisk(float $totalRisk): string
 }
 
 /**
- * Asymmetric tier: conservative caution on worst end, optimistic strong on best end.
+ * Asymmetric tier: conservative caution on worst end, optimistic warning on best end.
  */
 function densityAltitudePerformanceTierFromEndRisks(float $worstTotalRisk, float $bestTotalRisk): string
 {
-    if ($bestTotalRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_STRONG) {
-        return 'strong';
+    if ($bestTotalRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING) {
+        return 'warning';
     }
     if ($worstTotalRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION) {
         return 'caution';
     }
-    return 'none';
+    return 'normal';
 }
 
 /**
- * Risk factor reported with tier: best-end sum for strong, worst-end sum for caution.
+ * Risk factor reported with tier: best-end sum for warning, worst-end sum for caution.
  */
 function densityAltitudePerformanceRiskFactorForTier(string $tier, float $worstTotalRisk, float $bestTotalRisk): float
 {
-    if ($tier === 'strong') {
+    if ($tier === 'warning') {
         return $bestTotalRisk;
     }
     if ($tier === 'caution') {
@@ -209,10 +209,10 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
     }
 
     $delta = $densityAltitudeFt - $fieldElevationFt;
-    $tier = 'none';
+    $tier = 'normal';
 
     if ($densityAltitudeFt >= 9000 || $delta >= 3500) {
-        $tier = 'strong';
+        $tier = 'warning';
     } elseif ($fieldElevationFt < 2500) {
         if ($delta >= 2000) {
             $tier = 'caution';
@@ -225,7 +225,7 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
         $tier = 'caution';
     }
 
-    if ($tier === 'none') {
+    if ($tier === 'normal') {
         return null;
     }
 
@@ -241,7 +241,7 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
 /**
  * Build density_altitude_performance payload for weather API consumers.
  *
- * Returns null when DA is missing/stale-suppressed or tier is none.
+ * Returns null when DA is missing/stale-suppressed or tier is normal.
  *
  * Runway selection: longest NASR land runway unless `runway_length_ft` is set in
  * airport config. That override uses operator length only (empty ends); NASR
@@ -297,7 +297,7 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
     $worstTotalRisk = $evaluation['worst']['total_risk'];
     $bestTotalRisk = $evaluation['best']['total_risk'];
     $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-    if ($tier === 'none') {
+    if ($tier === 'normal') {
         return null;
     }
 
@@ -315,7 +315,7 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
 }
 
 /**
- * Attach density_altitude_performance when tier is caution or strong.
+ * Attach density_altitude_performance when tier is caution or warning.
  *
  * @param array $weather Weather array (not modified)
  * @param array $airport Airport configuration
