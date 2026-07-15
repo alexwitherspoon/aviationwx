@@ -113,6 +113,10 @@ function parseOurAirportsRunways(string $csv): array {
         $heLon = $idx['he_longitude_deg'] ?? null;
         $leIdent = $idx['le_ident'] ?? null;
         $heIdent = $idx['he_ident'] ?? null;
+        $lengthIdx = $idx['length_ft'] ?? null;
+        $surfaceIdx = $idx['surface'] ?? null;
+        $leDisplacedIdx = $idx['le_displaced_threshold_ft'] ?? null;
+        $heDisplacedIdx = $idx['he_displaced_threshold_ft'] ?? null;
 
         if ($ident === null) {
             continue;
@@ -122,6 +126,17 @@ function parseOurAirportsRunways(string $csv): array {
         if ($airportId === '') {
             continue;
         }
+
+        $lengthFt = $lengthIdx !== null && isset($row[$lengthIdx]) && is_numeric($row[$lengthIdx])
+            ? (int) round((float) $row[$lengthIdx])
+            : 0;
+        $surface = $surfaceIdx !== null ? trim((string) ($row[$surfaceIdx] ?? '')) : '';
+        $leDisplaced = $leDisplacedIdx !== null && isset($row[$leDisplacedIdx]) && is_numeric($row[$leDisplacedIdx])
+            ? (int) round((float) $row[$leDisplacedIdx])
+            : 0;
+        $heDisplaced = $heDisplacedIdx !== null && isset($row[$heDisplacedIdx]) && is_numeric($row[$heDisplacedIdx])
+            ? (int) round((float) $row[$heDisplacedIdx])
+            : 0;
 
         $lat1 = $leLat !== null && isset($row[$leLat]) && $row[$leLat] !== '' ? (float) $row[$leLat] : null;
         $lon1 = $leLon !== null && isset($row[$leLon]) && $row[$leLon] !== '' ? (float) $row[$leLon] : null;
@@ -142,6 +157,10 @@ function parseOurAirportsRunways(string $csv): array {
             'lon2' => $lon2,
             'le_ident' => $leIdent !== null ? trim($row[$leIdent] ?? '') : '',
             'he_ident' => $heIdent !== null ? trim($row[$heIdent] ?? '') : '',
+            'length_ft' => $lengthFt,
+            'surface' => $surface,
+            'le_displaced_threshold_ft' => $leDisplaced,
+            'he_displaced_threshold_ft' => $heDisplaced,
             'source' => 'ourairports',
         ];
     }
@@ -366,6 +385,7 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
             'segments' => $segments,
             'center_lat' => $center['lat'],
             'center_lon' => $center['lon'],
+            'performance_runways' => buildOurAirportsPerformanceRunways($runways),
         ];
     }
     return $result;

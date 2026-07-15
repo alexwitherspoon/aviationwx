@@ -339,17 +339,15 @@ function getRunwaySegmentsFromParsedCache(array $data, string $airportId, array 
 }
 
 /**
- * Load runway segments from file cache for an airport
+ * Load parsed runway cache JSON from disk (live cache or test fixture).
  *
- * @param string $airportId Airport identifier
- * @param array $airport Airport config with lat, lon
- * @return array|null Segments or null if not found
+ * @return array<string, mixed>|null
  */
-function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?array {
+function loadRunwaysCacheDataFromDisk(): ?array
+{
     $cachePath = CACHE_RUNWAYS_DATA_FILE;
     $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
 
-    // In test mode, prefer fixture for deterministic results
     if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
         && file_exists($fixturePath)) {
         $cachePath = $fixturePath;
@@ -357,7 +355,6 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
         return null;
     }
 
-    // @ suppresses read errors; we handle failure explicitly below
     $content = @file_get_contents($cachePath);
     if ($content === false) {
         return null;
@@ -365,6 +362,22 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
 
     $data = json_decode($content, true);
     if (!is_array($data) || !isset($data['airports'])) {
+        return null;
+    }
+
+    return $data;
+}
+
+/**
+ * Load runway segments from file cache for an airport
+ *
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config with lat, lon
+ * @return array|null Segments or null if not found
+ */
+function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?array {
+    $data = loadRunwaysCacheDataFromDisk();
+    if ($data === null) {
         return null;
     }
 
@@ -381,25 +394,8 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
  * @return int Number of airports warmed
  */
 function warmRunwaysApcuCache(array $airports): int {
-    $cachePath = CACHE_RUNWAYS_DATA_FILE;
-    $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
-
-    // In test mode, prefer fixture for deterministic results
-    if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
-        && file_exists($fixturePath)) {
-        $cachePath = $fixturePath;
-    } elseif (!file_exists($cachePath)) {
-        return 0;
-    }
-
-    // @ suppresses read errors; we handle failure explicitly below
-    $content = @file_get_contents($cachePath);
-    if ($content === false) {
-        return 0;
-    }
-
-    $data = json_decode($content, true);
-    if (!is_array($data) || !isset($data['airports'])) {
+    $data = loadRunwaysCacheDataFromDisk();
+    if ($data === null) {
         return 0;
     }
 
@@ -433,4 +429,260 @@ function runwaysCacheNeedsRefresh(): bool {
     }
     $age = time() - filemtime($path);
     return $age >= RUNWAYS_CACHE_MAX_AGE;
+}
+
+/**
+ * Whether an OurAirports surface code represents water (excluded from DA runway selection).
+ */
+function ourAirportsIsWaterSurface(string $surface): bool
+{
+    return str_contains(strtoupper(trim($surface)), 'WATER');
+}
+
+/**
+ * Whether an OurAirports surface code is non-paved for POH grass correction.
+ */
+function ourAirportsIsNonPavedSurface(string $surface): bool
+{
+    $surface = strtoupper(trim($surface));
+    if ($surface === '') {
+        return false;
+    }
+
+    foreach (['TURF', 'GRS', 'GRE', 'GVL', 'GRASS', 'GRAVEL', 'GRVL', 'DIRT', 'SOD', 'CLAY', 'EARTH'] as $code) {
+        if (str_contains($surface, $code)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Normalize OurAirports surface text to NASR-style codes for POH lookup.
+ */
+function ourAirportsNormalizeSurfaceCode(string $surface): string
+{
+    $surface = strtoupper(trim($surface));
+    if ($surface === '' || ourAirportsIsWaterSurface($surface)) {
+        return $surface;
+    }
+    if (ourAirportsIsNonPavedSurface($surface)) {
+        return 'TURF';
+    }
+
+    return 'ASPH';
+}
+
+/**
+ * Build a runway id from OurAirports low/high end idents.
+ */
+function ourAirportsRunwayIdFromIdents(string $leIdent, string $heIdent): string
+{
+    $leIdent = trim($leIdent);
+    $heIdent = trim($heIdent);
+    if ($leIdent !== '' && $heIdent !== '') {
+        return $leIdent . '/' . $heIdent;
+    }
+    if ($leIdent !== '') {
+        return $leIdent;
+    }
+    if ($heIdent !== '') {
+        return $heIdent;
+    }
+
+    return 'unknown';
+}
+
+/**
+ * Whether a parsed OurAirports runway row is eligible for performance selection.
+ *
+ * @param array $runway Parsed runway with length_ft and surface
+ */
+function ourAirportsRunwayIsSelectable(array $runway): bool
+{
+    $lengthFt = (int) ($runway['length_ft'] ?? 0);
+    if ($lengthFt <= 0) {
+        return false;
+    }
+
+    $surface = (string) ($runway['surface'] ?? '');
+    if ($surface !== '' && ourAirportsIsWaterSurface($surface)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Build NASR-shaped performance runway records from OurAirports parse rows.
+ *
+ * @param list<array> $runways Parsed OurAirports runway rows
+ * @return list<array>
+ */
+function buildOurAirportsPerformanceRunways(array $runways): array
+{
+    $performance = [];
+    foreach ($runways as $runway) {
+        if (!is_array($runway) || !ourAirportsRunwayIsSelectable($runway)) {
+            continue;
+        }
+
+        $performance[] = [
+            'rwy_id' => ourAirportsRunwayIdFromIdents(
+                (string) ($runway['le_ident'] ?? ''),
+                (string) ($runway['he_ident'] ?? '')
+            ),
+            'length_ft' => (int) $runway['length_ft'],
+            'surface' => ourAirportsNormalizeSurfaceCode((string) ($runway['surface'] ?? '')),
+            'ends' => [],
+            'le_displaced_threshold_ft' => isset($runway['le_displaced_threshold_ft'])
+                ? (int) $runway['le_displaced_threshold_ft']
+                : 0,
+            'he_displaced_threshold_ft' => isset($runway['he_displaced_threshold_ft'])
+                ? (int) $runway['he_displaced_threshold_ft']
+                : 0,
+        ];
+    }
+
+    return $performance;
+}
+
+/**
+ * Select the longest selectable OurAirports performance runway.
+ *
+ * @param list<array> $runways Performance runway records
+ * @return array|null Selected runway or null when none qualify
+ */
+function ourAirportsSelectLongestActiveLandRunway(array $runways): ?array
+{
+    $best = null;
+    $bestLen = 0;
+
+    foreach ($runways as $runway) {
+        if (!is_array($runway) || !ourAirportsRunwayIsSelectable($runway)) {
+            continue;
+        }
+        $len = (int) ($runway['length_ft'] ?? 0);
+        if ($len > $bestLen) {
+            $bestLen = $len;
+            $best = $runway;
+        }
+    }
+
+    return $best;
+}
+
+/**
+ * Extract performance runways for an airport from parsed runway cache data.
+ *
+ * @param array $data Parsed runways cache (must have 'airports' key)
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config with icao, faa (optional)
+ * @return list<array>|null Performance runways or null when not found
+ */
+function getOurAirportsPerformanceRunwaysFromParsedCache(array $data, string $airportId, array $airport): ?array
+{
+    if (!isset($data['airports']) || !is_array($data['airports'])) {
+        return null;
+    }
+    $airports = $data['airports'];
+    $identsToTry = array_filter([
+        strtoupper($airportId),
+        isset($airport['icao']) ? strtoupper((string) $airport['icao']) : null,
+        isset($airport['faa']) ? strtoupper((string) $airport['faa']) : null,
+    ]);
+    foreach ($identsToTry as $ident) {
+        if (!isset($airports[$ident]) || !is_array($airports[$ident])) {
+            continue;
+        }
+        $runways = $airports[$ident]['performance_runways'] ?? null;
+        if (is_array($runways) && $runways !== []) {
+            return $runways;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Load OurAirports performance runways from file cache for an airport.
+ *
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config
+ * @return list<array>|null Performance runways or null when not found
+ */
+function loadOurAirportsPerformanceRunwaysFromFileCache(string $airportId, array $airport): ?array
+{
+    $data = loadRunwaysCacheDataFromDisk();
+    if ($data === null) {
+        return null;
+    }
+
+    return getOurAirportsPerformanceRunwaysFromParsedCache($data, $airportId, $airport);
+}
+
+/**
+ * Select the longest OurAirports performance runway for density altitude performance.
+ *
+ * @param string $airportId Airport identifier (config key or ICAO)
+ * @param array $airport Airport configuration
+ * @return array|null Selected runway with empty ends or null when unavailable
+ */
+function getOurAirportsPerformanceRunwayForAirport(string $airportId, array $airport): ?array
+{
+    $runways = loadOurAirportsPerformanceRunwaysFromFileCache($airportId, $airport);
+    if ($runways === null) {
+        return null;
+    }
+
+    $selected = ourAirportsSelectLongestActiveLandRunway($runways);
+    if ($selected === null) {
+        return null;
+    }
+
+    return ourAirportsPerformanceRunwayForEvaluation($selected);
+}
+
+/**
+ * Build a runway record for POH evaluation from a cached OurAirports performance row.
+ *
+ * @param array $selected Performance runway from cache
+ * @return array Runway with ends for displaced-threshold roll limits
+ */
+function ourAirportsPerformanceRunwayForEvaluation(array $selected): array
+{
+    $rwyId = (string) ($selected['rwy_id'] ?? 'ourairports');
+    $idents = explode('/', $rwyId, 2);
+    $leIdent = $idents[0] ?? '';
+    $heIdent = $idents[1] ?? $leIdent;
+    $leDisplaced = isset($selected['le_displaced_threshold_ft'])
+        ? (int) $selected['le_displaced_threshold_ft']
+        : 0;
+    $heDisplaced = isset($selected['he_displaced_threshold_ft'])
+        ? (int) $selected['he_displaced_threshold_ft']
+        : 0;
+
+    $ends = [];
+    if ($leIdent !== '') {
+        $ends[] = [
+            'end_id' => $leIdent,
+            'displaced_thr_len' => $leDisplaced,
+            'obstruction' => [],
+        ];
+    }
+    if ($heIdent !== '' && $heIdent !== $leIdent) {
+        $ends[] = [
+            'end_id' => $heIdent,
+            'displaced_thr_len' => $heDisplaced,
+            'obstruction' => [],
+        ];
+    }
+
+    return [
+        'rwy_id' => $rwyId,
+        'length_ft' => (int) ($selected['length_ft'] ?? 0),
+        'surface' => (string) ($selected['surface'] ?? 'ASPH'),
+        'ends' => $ends,
+    ];
 }
