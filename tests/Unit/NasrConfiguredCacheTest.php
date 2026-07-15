@@ -125,6 +125,27 @@ class NasrConfiguredCacheTest extends TestCase
         $this->assertSame(['ID76'], array_keys($loaded['airports']));
     }
 
+    public function testLoadNasrAptCacheUsesConfiguredSliceWhenFullMissing(): void
+    {
+        $this->writeFullNasrCache([
+            'ID76' => ['arpt_id' => 'ID76', 'runways' => []],
+        ]);
+
+        $config = [
+            'airports' => [
+                'id76' => ['id' => 'id76', 'faa' => 'ID76'],
+            ],
+        ];
+
+        nasrRebuildConfiguredAptSlice($config);
+        @unlink(CACHE_NASR_APT_DATA_FILE);
+        resetNasrAptCacheMemo();
+
+        $loaded = loadNasrAptCache();
+        $this->assertNotNull($loaded);
+        $this->assertSame(['ID76'], array_keys($loaded['airports']));
+    }
+
     public function testSaveNasrAptCacheRebuildsConfiguredSlice(): void
     {
         $fullAirports = [

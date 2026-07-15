@@ -42,6 +42,17 @@ function loadNasrAptCache(): ?array
     }
 
     if (!is_readable(CACHE_NASR_APT_DATA_FILE)) {
+        $meta = loadNasrAptMeta() ?? [];
+        if (($meta['configured_config_sha'] ?? null) === $configSha) {
+            $payload = nasrReadConfiguredAptCacheFromDisk();
+            if ($payload !== null) {
+                $GLOBALS['_nasr_apt_cache_memo'] = $payload;
+                $GLOBALS['_nasr_apt_cache_memo_config_sha'] = $configSha;
+
+                return $payload;
+            }
+        }
+
         $GLOBALS['_nasr_apt_cache_memo'] = null;
         $GLOBALS['_nasr_apt_cache_memo_config_sha'] = null;
         return null;
