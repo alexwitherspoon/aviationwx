@@ -348,7 +348,7 @@ function renderCardWidget($data, $options) {
     foreach (getCompactWidgetMetrics($weather, $options, $hasMetarData) as $metric) {
         $tileClassSuffix = $metric['tile_class_suffix'] ?? '';
         $tileAttrs = $metric['tile_attrs'] ?? '';
-        $valueClassSuffix = $metric['value_class_suffix'] ?? ($metric['value_attrs'] ?? '');
+        $valueClassSuffix = $metric['value_class_suffix'] ?? '';
         $conditionTilesHtml .= '<div class="tile' . $tileClassSuffix . '"' . $tileAttrs . '><span class="tl">' . htmlspecialchars($metric['label'])
             . '</span><span class="tv' . $valueClassSuffix . '">' . htmlspecialchars($metric['value']) . '</span></div>';
     }
