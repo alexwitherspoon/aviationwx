@@ -322,11 +322,12 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
 }
 
 /**
- * Merge FAA and OurAirports; FAA-only for FAA airports, OurAirports for the rest
+ * Merge FAA and OurAirports; FAA segments for FAA airports, OurAirports for the rest
  *
- * For airports in the FAA dataset: use FAA data only, output under both FAA ID and ICAO
- * (when mapped via OurAirports airports.csv). For airports not in FAA: use OurAirports.
- * Never mix both sources for the same airport.
+ * For airports in the FAA dataset: segment geometry comes from FAA only, output under both
+ * FAA ID and ICAO (when mapped via OurAirports airports.csv). When OurAirports has matching
+ * runway rows, attach them as performance_runways for DA fallback without replacing FAA
+ * segments. For airports not in FAA: use OurAirports for both segments and performance_runways.
  *
  * @param array $faa Runways by airport from FAA (keyed by ARPT_ID e.g. HIO)
  * @param array $ourairports Runways by airport from OurAirports (keyed by airport_ident e.g. KHIO)
