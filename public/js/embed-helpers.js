@@ -258,7 +258,7 @@
         }
         return {
             text,
-            className: tier === 'warning' ? 'density-altitude-warning' : '',
+            className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
             title: densityAltitudePerformanceTooltip(tier),
             ariaLabel,
         };

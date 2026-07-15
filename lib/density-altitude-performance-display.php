@@ -36,11 +36,11 @@ function densityAltitudePerformanceEmoji(string $tier): string
 }
 
 /**
- * CSS class for warning-tier DA value styling.
+ * CSS class for non-normal DA value styling (caution and warning).
  */
 function densityAltitudePerformanceValueClass(string $tier): string
 {
-    return $tier === 'warning' ? 'density-altitude-warning' : '';
+    return ($tier === 'caution' || $tier === 'warning') ? 'density-altitude-warning' : '';
 }
 
 /**

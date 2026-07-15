@@ -833,7 +833,7 @@ function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance)
     return {
         value,
         emoji,
-        className: tier === 'warning' ? 'density-altitude-warning' : '',
+        className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
         title: densityAltitudePerformanceTooltip(tier),
         ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier),
     };
