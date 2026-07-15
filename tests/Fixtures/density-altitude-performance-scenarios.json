@@ -19,6 +19,8 @@
     "temperature_c": 20.1,
     "expected_tier": "warning",
     "expected_risk_factor": 2.652,
+    "expected_worst_end_risk": 2.652,
+    "expected_best_end_risk": 2.652,
     "note": "High DA turf-gravel; both ends constrained."
   },
   {
@@ -30,6 +32,8 @@
     "temperature_c": 24.3,
     "expected_tier": "warning",
     "expected_risk_factor": 2.727,
+    "expected_worst_end_risk": 2.727,
+    "expected_best_end_risk": 2.727,
     "note": "Short turf strip at moderate pressure altitude."
   },
   {
@@ -41,6 +45,8 @@
     "temperature_c": 34.7,
     "expected_tier": "caution",
     "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 0.812,
     "note": "Longest asphalt 08/26; hot high-elevation afternoon."
   },
   {
@@ -62,6 +68,8 @@
     "temperature_c": 21.5,
     "expected_tier": "caution",
     "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 0.908,
     "note": "Extreme DA with close tree on 04; asymmetric tier caps at caution."
   },
   {
@@ -83,6 +91,8 @@
     "temperature_c": 24.6,
     "expected_tier": "warning",
     "expected_risk_factor": 3.0,
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 3.0,
     "note": "Short turf-dirt 1200 ft runway at high DA."
   },
   {
@@ -126,6 +136,8 @@
     "temperature_c": 30,
     "expected_tier": "caution",
     "expected_risk_factor": 3.0,
-    "note": "Synthetic hot afternoon; asymmetric tier (08 strong, 26 moderate)."
+    "expected_worst_end_risk": 3.0,
+    "expected_best_end_risk": 1.076,
+    "note": "Synthetic hot afternoon; asymmetric ends (08 constrained, 26 moderate)."
   }
 ]

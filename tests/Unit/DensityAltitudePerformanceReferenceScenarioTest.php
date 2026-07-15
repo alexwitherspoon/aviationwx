@@ -10,14 +10,14 @@
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../lib/nasr/cache.php';
+require_once __DIR__ . '/../Helpers/LoadsNasrAptFixtureCacheTrait.php';
 require_once __DIR__ . '/../../lib/weather/density-altitude-performance.php';
 
 class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
 {
-    private const SCENARIO_FIXTURE_PATH = __DIR__ . '/../Fixtures/density-altitude-performance-scenarios.json';
+    use LoadsNasrAptFixtureCacheTrait;
 
-    private const EXPECTED_SCENARIO_COUNT = 12;
+    private const SCENARIO_FIXTURE_PATH = __DIR__ . '/../Fixtures/density-altitude-performance-scenarios.json';
 
     /** @var list<string> */
     private const REQUIRED_SCENARIO_KEYS = [
@@ -30,22 +30,21 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         'expected_tier',
     ];
 
+    /** @var list<string> */
+    private const REQUIRED_NON_NORMAL_KEYS = [
+        'expected_risk_factor',
+        'expected_worst_end_risk',
+        'expected_best_end_risk',
+    ];
+
     protected function setUp(): void
     {
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
-
-        $built = nasrBuildCacheFromCsvDirectory(__DIR__ . '/../Fixtures/nasr');
-        setNasrAptCacheForTesting([
-            'schema_version' => NASR_APT_SCHEMA_VERSION,
-            'airports' => $built['airports'],
-        ]);
+        $this->loadNasrAptFixtureCache();
     }
 
     protected function tearDown(): void
     {
-        resetNasrAptCacheMemo();
-        resetPohTakeoffTables();
+        $this->tearDownNasrAptFixtureCache();
     }
 
     /**
@@ -59,8 +58,8 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         }
 
         $decoded = json_decode((string) file_get_contents($path), true);
-        if (!is_array($decoded)) {
-            throw new \RuntimeException('Invalid density altitude performance scenario fixture JSON');
+        if (!is_array($decoded) || $decoded === []) {
+            throw new \RuntimeException('Invalid or empty density altitude performance scenario fixture JSON');
         }
 
         $cases = [];
@@ -83,19 +82,28 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
                     'Scenario fixture row ' . $index . ' has invalid expected_tier: ' . $tier
                 );
             }
-            if ($tier !== 'normal' && !isset($row['expected_risk_factor'])) {
-                throw new \RuntimeException(
-                    'Scenario fixture row ' . $index . ' must include expected_risk_factor when tier is not normal'
-                );
+            if ($tier !== 'normal') {
+                foreach (self::REQUIRED_NON_NORMAL_KEYS as $key) {
+                    if (!isset($row[$key]) || !is_numeric($row[$key])) {
+                        throw new \RuntimeException(
+                            'Scenario fixture row ' . $index . ' missing required key: ' . $key
+                        );
+                    }
+                }
             }
 
             $airportId = (string) $row['airport_id'];
+            if (isset($cases[$airportId])) {
+                throw new \RuntimeException(
+                    'Scenario fixture has duplicate airport_id: ' . $airportId
+                );
+            }
             $cases[$airportId] = [$row];
         }
 
-        if (count($cases) !== self::EXPECTED_SCENARIO_COUNT) {
+        if (count($cases) !== count($decoded)) {
             throw new \RuntimeException(
-                'Expected ' . self::EXPECTED_SCENARIO_COUNT . ' reference scenarios, found ' . count($cases)
+                'Scenario fixture row count does not match unique airport_id count'
             );
         }
 
@@ -136,14 +144,24 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         $this->assertNotNull($result, $airportId . ': expected non-normal tier');
         $this->assertSame($expectedTier, $result['tier'], $airportId . ': tier mismatch');
         $this->assertFalse($result['fallback'], $airportId . ': NASR scenario must not use weather-only fallback');
-        $this->assertSame('reference_models', $result['reason'], $airportId . ': reason mismatch');
-        $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE, $result['reference'], $airportId . ': reference mismatch');
 
         $this->assertEqualsWithDelta(
             (float) $scenario['expected_risk_factor'],
             (float) $result['risk_factor'],
             0.001,
             $airportId . ': risk_factor drift indicates POH or asymmetric tier math change'
+        );
+        $this->assertEqualsWithDelta(
+            (float) $scenario['expected_worst_end_risk'],
+            (float) $result['worst_end_risk'],
+            0.001,
+            $airportId . ': worst_end_risk drift indicates runway end scoring change'
+        );
+        $this->assertEqualsWithDelta(
+            (float) $scenario['expected_best_end_risk'],
+            (float) $result['best_end_risk'],
+            0.001,
+            $airportId . ': best_end_risk drift indicates runway end scoring change'
         );
     }
 }

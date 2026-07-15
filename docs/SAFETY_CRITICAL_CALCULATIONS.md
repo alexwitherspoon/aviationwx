@@ -185,7 +185,7 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 
 ### Reference scenario locks (CI)
 
-Twelve real airports with fixed weather inputs are locked in `tests/Fixtures/density-altitude-performance-scenarios.json`. NASR runway/obstruction rows for those airports live under `tests/Fixtures/nasr/`. `DensityAltitudePerformanceReferenceScenarioTest` calls `buildDensityAltitudePerformance()` and asserts the tier (`normal` omits the field), `risk_factor` when listed, and NASR `reference_models` path.
+Real airports with fixed weather inputs are locked in `tests/Fixtures/density-altitude-performance-scenarios.json`. NASR runway/obstruction rows for those airports live under `tests/Fixtures/nasr/`. `DensityAltitudePerformanceReferenceScenarioTest` calls `buildDensityAltitudePerformance()` and asserts the tier (`normal` omits the field), `risk_factor`, and worst/best end risk sums when a tier is present.
 
 **When to update expectations**
 
@@ -193,7 +193,7 @@ Twelve real airports with fixed weather inputs are locked in `tests/Fixtures/den
 - Tier thresholds (`DENSITY_ALTITUDE_PERFORMANCE_TIER_*`) or asymmetric end policy changes
 - NASR runway selection, obstruction clearance slope, or effective departure length rules change
 
-Recompute tiers locally (same NASR fixture build as the test `setUp()`), update the JSON expected `tier` and `expected_risk_factor`, and document the reason in the pull request. Do not change tier thresholds and scenario locks in the same change unless both are intentional.
+Recompute tiers locally (same NASR fixture build as the test `setUp()`), update the JSON expected `tier`, `expected_risk_factor`, `expected_worst_end_risk`, and `expected_best_end_risk`, and document the reason in the pull request. Do not change tier thresholds and scenario locks in the same change unless both are intentional.
 
 **Out of scope for scenario locks**: browser UI regression tests for tier display, live FAA weather (fixtures use pinned PA, temperature, and DA only).
 
