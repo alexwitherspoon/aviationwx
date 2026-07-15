@@ -26,8 +26,7 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     $effectiveDate = null;
     $airports = [];
 
-    $baseRows = nasrReadCsvFile($basePath);
-    foreach ($baseRows as $row) {
+    foreach (nasrIterateCsvFile($basePath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));
         if ($arptId === '') {
@@ -45,9 +44,8 @@ function nasrParseAptCsvDirectory(string $csvDir): array
         ];
     }
 
-    $rwyRows = nasrReadCsvFile($rwyPath);
     $runwaysByKey = [];
-    foreach ($rwyRows as $row) {
+    foreach (nasrIterateCsvFile($rwyPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));
         $rwyId = trim((string) ($row['RWY_ID'] ?? ''));
@@ -87,8 +85,7 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     }
     unset($runwaysByKey);
 
-    $endRows = nasrReadCsvFile($endPath);
-    foreach ($endRows as $row) {
+    foreach (nasrIterateCsvFile($endPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));
         $rwyId = trim((string) ($row['RWY_ID'] ?? ''));
@@ -131,37 +128,38 @@ function nasrParseAptCsvDirectory(string $csvDir): array
 }
 
 /**
- * @return list<array<string, string>>
+ * Stream NASR CSV rows without buffering the full file in memory.
+ *
+ * @return Generator<int, array<string, string>, mixed, void>
  */
-function nasrReadCsvFile(string $path): array
+function nasrIterateCsvFile(string $path): Generator
 {
     $handle = fopen($path, 'r');
     if ($handle === false) {
         throw new RuntimeException('Unable to open NASR CSV: ' . $path);
     }
 
-    $header = fgetcsv($handle, 0, ',', '"', '\\');
-    if ($header === false) {
+    try {
+        $header = fgetcsv($handle, 0, ',', '"', '\\');
+        if ($header === false) {
+            return;
+        }
+
+        $header = array_map(static fn ($col) => trim((string) $col), $header);
+
+        while (($data = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+            if ($data === [null] || $data === false) {
+                continue;
+            }
+            $row = [];
+            foreach ($header as $i => $col) {
+                $row[$col] = $data[$i] ?? '';
+            }
+            yield $row;
+        }
+    } finally {
         fclose($handle);
-        return [];
     }
-
-    $header = array_map(static fn ($col) => trim((string) $col), $header);
-    $rows = [];
-
-    while (($data = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
-        if ($data === [null] || $data === false) {
-            continue;
-        }
-        $row = [];
-        foreach ($header as $i => $col) {
-            $row[$col] = $data[$i] ?? '';
-        }
-        $rows[] = $row;
-    }
-
-    fclose($handle);
-    return $rows;
 }
 
 /**

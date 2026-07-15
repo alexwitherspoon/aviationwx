@@ -43,14 +43,6 @@ function acquireNasrAptFetchLock()
 }
 
 /**
- * Download APT zip bytes from NFDC (with retry via nasrHttpGet).
- */
-function nasrDownloadBinary(string $url): ?string
-{
-    return nasrHttpGet($url);
-}
-
-/**
  * Download and extract APT CSV group to a temp directory.
  *
  * @return array{
@@ -77,13 +69,8 @@ function downloadNasrAptCsvDirectory(): ?array
 
     foreach ($plans as $plan) {
         $url = $plan['source_url'];
-        $zipBytes = nasrDownloadBinary($url);
-        if ($zipBytes === null) {
-            continue;
-        }
-
         $zipPath = $tmpRoot . '/apt.zip';
-        if (file_put_contents($zipPath, $zipBytes) === false) {
+        if (!nasrHttpDownloadToFile($url, $zipPath)) {
             continue;
         }
 
@@ -145,12 +132,20 @@ function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir
             continue;
         }
 
-        $contents = $zip->getFromIndex($i);
-        if ($contents === false) {
+        $stream = $zip->getStream($entry);
+        if ($stream === false) {
             return false;
         }
         $dest = $extractDir . '/' . $base;
-        if (file_put_contents($dest, $contents) === false) {
+        $destHandle = @fopen($dest, 'wb');
+        if ($destHandle === false) {
+            fclose($stream);
+            return false;
+        }
+        $copied = stream_copy_to_stream($stream, $destHandle);
+        fclose($stream);
+        fclose($destHandle);
+        if ($copied === false) {
             return false;
         }
         $written[$base] = true;

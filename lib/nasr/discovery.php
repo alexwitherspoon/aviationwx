@@ -109,6 +109,80 @@ function nasrHttpGet(string $url): ?string
 }
 
 /**
+ * Execute one HTTP GET and stream the response body to a file handle.
+ *
+ * @param resource $fileHandle Writable destination (e.g. fopen(..., 'wb'))
+ * @return array{ok: bool, http_code: int, retryable: bool}
+ */
+function nasrHttpRequestOnceToFile(string $url, $fileHandle): array
+{
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_FILE => $fileHandle,
+        CURLOPT_TIMEOUT => 180,
+        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_ENCODING => '',
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; AviationWX/1.0; +https://aviationwx.org)',
+        CURLOPT_HTTPHEADER => [
+            'Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: en-US,en;q=0.9',
+        ],
+    ]);
+    $execOk = curl_exec($ch) !== false;
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErrno = curl_errno($ch);
+    curl_close($ch);
+
+    $ok = in_array($httpCode, [200, 206], true) && $execOk;
+    $retryable = $curlErrno !== 0 || in_array($httpCode, nasrRetryableHttpStatusCodes(), true);
+
+    return [
+        'ok' => $ok,
+        'http_code' => $httpCode,
+        'retryable' => $retryable,
+    ];
+}
+
+/**
+ * Download a remote file with retry/backoff, streaming directly to disk.
+ */
+function nasrHttpDownloadToFile(string $url, string $destPath): bool
+{
+    $maxAttempts = NASR_HTTP_MAX_ATTEMPTS;
+    $delays = NASR_HTTP_RETRY_DELAYS_SECONDS;
+
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        if ($attempt > 0) {
+            $delayIndex = min($attempt - 1, count($delays) - 1);
+            sleep((int) $delays[$delayIndex]);
+            @unlink($destPath);
+        }
+
+        $fp = @fopen($destPath, 'wb');
+        if ($fp === false) {
+            return false;
+        }
+
+        $result = nasrHttpRequestOnceToFile($url, $fp);
+        fclose($fp);
+
+        if ($result['ok']) {
+            return true;
+        }
+
+        @unlink($destPath);
+        if (!$result['retryable']) {
+            break;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Build NASR APT zip URL for an effective date (YYYY-MM-DD).
  *
  * FAA names files like 15_May_2025_APT_CSV.zip (not 2025-05-15_APT_CSV.zip).
