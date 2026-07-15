@@ -43,11 +43,8 @@
     "density_altitude_ft": 9399,
     "pressure_altitude_ft": 5673,
     "temperature_c": 34.7,
-    "expected_tier": "caution",
-    "expected_risk_factor": 3.0,
-    "expected_worst_end_risk": 3.0,
-    "expected_best_end_risk": 0.812,
-    "note": "Longest asphalt 08/26; hot high-elevation afternoon."
+    "expected_tier": "normal",
+    "note": "Asymmetric spread heuristic: best end below caution while worst is high."
   },
   {
     "airport_id": "56s",
@@ -66,11 +63,8 @@
     "density_altitude_ft": 12120,
     "pressure_altitude_ft": 9145,
     "temperature_c": 21.5,
-    "expected_tier": "caution",
-    "expected_risk_factor": 3.0,
-    "expected_worst_end_risk": 3.0,
-    "expected_best_end_risk": 0.908,
-    "note": "Extreme DA with close tree on 04; asymmetric tier caps at caution."
+    "expected_tier": "normal",
+    "note": "Asymmetric spread heuristic: favorable departure end below caution."
   },
   {
     "airport_id": "42b",
@@ -134,10 +128,7 @@
     "density_altitude_ft": 2000,
     "pressure_altitude_ft": 800,
     "temperature_c": 30,
-    "expected_tier": "caution",
-    "expected_risk_factor": 3.0,
-    "expected_worst_end_risk": 3.0,
-    "expected_best_end_risk": 1.076,
-    "note": "Synthetic hot afternoon; asymmetric ends (08 constrained, 26 moderate)."
+    "expected_tier": "normal",
+    "note": "Asymmetric spread heuristic: best end below caution threshold."
   }
 ]

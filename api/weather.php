@@ -39,9 +39,10 @@ require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
  *
  * @param array $weather Raw weather from cache
  * @param array|null $airport Airport config for density_altitude_performance enrichment
+ * @param string|null $airportId Config airport id for weather history lookup
  * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit, period_label)
  */
-function formatInternalApiWeatherResponse(array $weather, ?array $airport = null): array
+function formatInternalApiWeatherResponse(array $weather, ?array $airport = null, ?string $airportId = null): array
 {
     $out = $weather;
     unset($out['wind_direction_magnetic'], $out['wind_direction_text']);
@@ -59,7 +60,7 @@ function formatInternalApiWeatherResponse(array $weather, ?array $airport = null
     }
 
     if ($airport !== null) {
-        $out = attachDensityAltitudePerformance($out, $airport);
+        $out = attachDensityAltitudePerformance($out, $airport, $airportId);
     }
 
     return $out;
@@ -301,7 +302,7 @@ function generateMockWeatherData($airportId, $airport) {
         addWindDirectionMagneticToWeather($mockWeather, $airport);
 
         // Format and build response
-        $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($mockWeather, $airport)];
+        $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($mockWeather, $airport, $airportId)];
         $body = json_encode($payload);
         $etag = 'W/"' . sha1($body) . '"';
         
@@ -383,7 +384,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
             addWindDirectionMagneticToWeather($cached, $airport);
 
-            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($cached, $airport)];
+            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($cached, $airport, $airportId)];
             
             // Add debug info if debug mode is enabled
             if ($debugMode) {
@@ -444,7 +445,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
             addWindDirectionMagneticToWeather($staleData, $airport);
 
-            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($staleData, $airport), 'stale' => true];
+            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($staleData, $airport, $airportId), 'stale' => true];
             
             // Add debug info if debug mode is enabled
             if ($debugMode) {
@@ -776,7 +777,7 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
 
-    $responseWeather = formatInternalApiWeatherResponse($weatherData, $airport);
+    $responseWeather = formatInternalApiWeatherResponse($weatherData, $airport, $airportId);
 
     // Build ETag for response based on content
     $payload = ['success' => true, 'weather' => $responseWeather];

@@ -231,6 +231,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('reference_models', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG, $result['reference']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+        $this->assertSame($result['worst_end_risk'], $result['risk_factor']);
     }
 
     public function testOurAirportsPathCapsWarningAtCaution(): void
@@ -249,6 +250,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('reference_models_ourairports', $result['reason']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
+        $this->assertSame($result['worst_end_risk'], $result['risk_factor']);
     }
 
     public function testOurAirportsSelectsLongestNonWaterRunway(): void
@@ -288,6 +290,194 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $this->assertStringContainsString('Runway data unavailable', $aria);
         $this->assertStringContainsString('field elevation only', $aria);
+    }
+
+    public function testDensityAltitudePerformanceTierFromScoredEndThresholds(): void
+    {
+        $this->assertSame('normal', densityAltitudePerformanceTierFromScoredEnd(1.19));
+        $this->assertSame('caution', densityAltitudePerformanceTierFromScoredEnd(1.20));
+        $this->assertSame('warning', densityAltitudePerformanceTierFromScoredEnd(2.40));
+    }
+
+    public function testAsymmetricHeuristicSuppressesFalsePositiveOn69v(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 9399,
+            'pressure_altitude' => 5673,
+            'temperature' => 34.7,
+        ], [
+            'id' => '69v',
+            'faa' => '69V',
+            'elevation_ft' => 5915,
+        ], '69v');
+
+        $this->assertNull($result);
+    }
+
+    public function testOr81WarmDayScoresFavorableEndWhenSpreadHigh(): void
+    {
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'OR81' => [
+                    'runways' => [[
+                        'rwy_id' => '07/25',
+                        'length_ft' => 2000,
+                        'surface' => 'TURF-GRVL',
+                        'condition' => '',
+                        'ends' => [
+                            ['end_id' => '07', 'true_alignment' => 70, 'obstruction' => []],
+                            [
+                                'end_id' => '25',
+                                'true_alignment' => 250,
+                                'obstruction' => ['type' => 'TREES', 'hgt_ft' => 100.0, 'dist_ft' => 2000.0],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 1531,
+            'pressure_altitude' => 85,
+            'temperature' => 26.0,
+        ], [
+            'id' => 'or81',
+            'faa' => 'OR81',
+            'elevation_ft' => 185,
+            'magnetic_declination' => 13,
+            'runways' => [
+                ['name' => '07/25', 'heading_1' => 70, 'heading_2' => 250],
+            ],
+        ], 'or81');
+
+        $this->assertIsArray($result);
+        $this->assertSame('caution', $result['tier']);
+        $this->assertSame('asymmetric_heuristic', $result['selection_basis']);
+        $this->assertSame('07', $result['operational_end_id']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['scored_end_risk']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['scored_end_risk']);
+        $this->assertSame(3.0, $result['worst_end_risk']);
+    }
+
+    public function testOr81CoolDayNormalOnFavorableEnd(): void
+    {
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'OR81' => [
+                    'runways' => [[
+                        'rwy_id' => '07/25',
+                        'length_ft' => 2000,
+                        'surface' => 'TURF-GRVL',
+                        'condition' => '',
+                        'ends' => [
+                            ['end_id' => '07', 'true_alignment' => 70, 'obstruction' => []],
+                            [
+                                'end_id' => '25',
+                                'true_alignment' => 250,
+                                'obstruction' => ['type' => 'TREES', 'hgt_ft' => 100.0, 'dist_ft' => 2000.0],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 126,
+            'pressure_altitude' => 75,
+            'temperature' => 15.0,
+        ], [
+            'id' => 'or81',
+            'faa' => 'OR81',
+            'elevation_ft' => 185,
+            'magnetic_declination' => 13,
+            'runways' => [
+                ['name' => '07/25', 'heading_1' => 70, 'heading_2' => 250],
+            ],
+        ], 'or81');
+
+        $this->assertNull($result);
+    }
+
+    public function testKpfcLikeAsymmetricStripUsesBestEndHeuristic(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'PFC' => [
+                    'runways' => [[
+                        'rwy_id' => '14/32',
+                        'length_ft' => 5000,
+                        'surface' => 'ASPH',
+                        'condition' => 'GOOD',
+                        'ends' => [
+                            [
+                                'end_id' => '14',
+                                'true_alignment' => 140,
+                                'obstruction' => ['hgt_ft' => 200.0, 'dist_ft' => 500.0],
+                            ],
+                            [
+                                'end_id' => '32',
+                                'true_alignment' => 320,
+                                'obstruction' => [],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 500,
+            'pressure_altitude' => 100,
+            'temperature' => 15,
+        ], [
+            'id' => 'kpfc',
+            'faa' => 'PFC',
+            'icao' => 'KPFC',
+            'elevation_ft' => 10,
+        ], 'kpfc');
+
+        $this->assertNull($result);
+
+        $tables = loadPohTakeoffTables();
+        $nasrRecord = getNasrAirportForConfig(['faa' => 'PFC', 'icao' => 'KPFC']);
+        $this->assertNotNull($nasrRecord);
+        $runway = nasrSelectLongestActiveLandRunway($nasrRecord);
+        $evaluation = evaluateRunwayEndPerformanceRange($runway, 100.0, 15.0, $tables);
+        $selection = resolveDensityAltitudePerformanceEndSelection(
+            $evaluation,
+            $runway,
+            ['faa' => 'PFC', 'magnetic_declination' => 14.0],
+            null,
+            100.0,
+            15.0,
+            $tables,
+            'nasr'
+        );
+
+        $this->assertSame('asymmetric_heuristic', $selection['selection_basis']);
+        $this->assertSame('32', $selection['operational_end_id']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $selection['scored_end']['total_risk']);
+    }
+
+    public function testSelectionBasisTooltipMentionsScoredDepartureEnd(): void
+    {
+        $tooltip = densityAltitudePerformanceTooltip('caution', [
+            'tier' => 'caution',
+            'selection_basis' => 'asymmetric_heuristic',
+            'operational_end_id' => '32',
+        ]);
+
+        $this->assertStringContainsString('RWY 32', $tooltip);
+        $this->assertStringContainsString('reference takeoff performance', $tooltip);
     }
 
     public function testCapTierWithoutObstructionsDowngradesWarning(): void

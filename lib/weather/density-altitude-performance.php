@@ -7,6 +7,8 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../nasr/cache.php';
 require_once __DIR__ . '/../nasr/runway-selection.php';
 require_once __DIR__ . '/../runways.php';
+require_once __DIR__ . '/da-performance-runway-end.php';
+require_once __DIR__ . '/history.php';
 require_once __DIR__ . '/poh-takeoff.php';
 
 /** @var list<string> */
@@ -72,6 +74,160 @@ function densityAltitudePerformanceRiskFactorForTier(string $tier, float $worstT
     }
 
     return max($worstTotalRisk, $bestTotalRisk);
+}
+
+/**
+ * Map a single scored departure end risk to tier.
+ */
+function densityAltitudePerformanceTierFromScoredEnd(float $scoredRisk): string
+{
+    if ($scoredRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING) {
+        return 'warning';
+    }
+    if ($scoredRisk >= DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION) {
+        return 'caution';
+    }
+    return 'normal';
+}
+
+/**
+ * Look up or compute performance scoring for a specific runway end.
+ *
+ * @param array $evaluation Result from evaluateRunwayEndPerformanceRange()
+ * @param array $end Runway end row
+ * @param array $runway Selected runway
+ * @param float $pressureAltitudeFt Pressure altitude in feet
+ * @param float $tempC Temperature Celsius
+ * @param array{c152: array, c172: array, c182: array} $tables
+ * @return array{total_risk: float, end_id: ?string, risk152: float, risk172: float, risk182: float}
+ */
+function lookupEvaluationForRunwayEnd(
+    array $evaluation,
+    array $end,
+    array $runway,
+    float $pressureAltitudeFt,
+    float $tempC,
+    array $tables
+): array {
+    $endId = $end['end_id'] ?? null;
+    if ($endId !== null) {
+        if (($evaluation['worst']['end_id'] ?? null) === $endId) {
+            return $evaluation['worst'];
+        }
+        if (($evaluation['best']['end_id'] ?? null) === $endId) {
+            return $evaluation['best'];
+        }
+    }
+
+    $runwayLengthFt = (int) ($runway['length_ft'] ?? 0);
+    $nonPaved = nasrIsNonPavedSurface((string) ($runway['surface'] ?? ''));
+    $availableFt = nasrEffectiveDepartureLengthFt($end, $runwayLengthFt);
+
+    return evaluateSingleRunwayEndPerformance(
+        $end,
+        $availableFt,
+        $nonPaved,
+        $pressureAltitudeFt,
+        $tempC,
+        $tables
+    );
+}
+
+/**
+ * Choose operational departure end and scoring basis for DA performance tier.
+ *
+ * @param array $evaluation Result from evaluateRunwayEndPerformanceRange()
+ * @param array $runway Selected runway with ends[]
+ * @param array $airport Airport configuration
+ * @param string|null $airportId Config airport id for weather history lookup
+ * @param float $pressureAltitudeFt Pressure altitude in feet
+ * @param float $tempC Temperature Celsius
+ * @param array{c152: array, c172: array, c182: array} $tables POH tables
+ * @param string $runwaySource nasr|ourairports|config
+ * @return array{
+ *     selection_basis: string,
+ *     operational_end_id: ?string,
+ *     scored_end: ?array,
+ *     wind_basis: ?array
+ * }
+ */
+function resolveDensityAltitudePerformanceEndSelection(
+    array $evaluation,
+    array $runway,
+    array $airport,
+    ?string $airportId,
+    float $pressureAltitudeFt,
+    float $tempC,
+    array $tables,
+    string $runwaySource
+): array {
+    $worst = $evaluation['worst'];
+    $best = $evaluation['best'];
+
+    $bothEndsResult = [
+        'selection_basis' => 'both_ends',
+        'operational_end_id' => null,
+        'scored_end' => null,
+        'wind_basis' => null,
+    ];
+
+    if ($runwaySource === 'config') {
+        return $bothEndsResult;
+    }
+
+    $ends = $runway['ends'] ?? [];
+    if ($ends === []) {
+        return $bothEndsResult;
+    }
+
+    $hasResolvableHeading = false;
+    foreach ($ends as $end) {
+        if (!is_array($end)) {
+            continue;
+        }
+        if (resolveRunwayEndMagneticHeading($end, $runway, $airport) !== null) {
+            $hasResolvableHeading = true;
+            break;
+        }
+    }
+
+    if ($airportId !== null && $airportId !== '' && $hasResolvableHeading) {
+        $windBasis = computeWindowMeanWind($airportId, $airport);
+        if ($windBasis !== null) {
+            $picked = pickDepartureEndByWindFromMagnetic(
+                $runway,
+                $airport,
+                (float) $windBasis['direction_magnetic']
+            );
+            if ($picked !== null) {
+                return [
+                    'selection_basis' => 'window_mean_wind',
+                    'operational_end_id' => $picked['end_id'] ?? null,
+                    'scored_end' => lookupEvaluationForRunwayEnd(
+                        $evaluation,
+                        $picked,
+                        $runway,
+                        $pressureAltitudeFt,
+                        $tempC,
+                        $tables
+                    ),
+                    'wind_basis' => $windBasis,
+                ];
+            }
+        }
+    }
+
+    $spread = $worst['total_risk'] - $best['total_risk'];
+    if ($spread >= DA_PERF_ASYMMETRIC_SPREAD) {
+        return [
+            'selection_basis' => 'asymmetric_heuristic',
+            'operational_end_id' => $best['end_id'],
+            'scored_end' => $best,
+            'wind_basis' => null,
+        ];
+    }
+
+    return $bothEndsResult;
 }
 
 /**
@@ -265,9 +421,10 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
  *
  * @param array $weather Cached weather row
  * @param array $airport Airport configuration
+ * @param string|null $airportId Optional config airport id for weather history (defaults to airport id/icao)
  * @return array<string, mixed>|null
  */
-function buildDensityAltitudePerformance(array $weather, array $airport): ?array
+function buildDensityAltitudePerformance(array $weather, array $airport, ?string $airportId = null): ?array
 {
     $densityAltitude = $weather['density_altitude'] ?? null;
     if (!is_numeric($densityAltitude)) {
@@ -296,8 +453,8 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
             $runwaySource = 'nasr';
         }
     } else {
-        $airportId = (string) ($airport['id'] ?? $airport['icao'] ?? '');
-        $selectedRunway = getOurAirportsPerformanceRunwayForAirport($airportId, $airport);
+        $ourAirportsId = (string) ($airport['id'] ?? $airport['icao'] ?? '');
+        $selectedRunway = getOurAirportsPerformanceRunwayForAirport($ourAirportsId, $airport);
         if ($selectedRunway !== null) {
             $runwaySource = 'ourairports';
         }
@@ -323,13 +480,42 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
 
     $worstTotalRisk = $evaluation['worst']['total_risk'];
     $bestTotalRisk = $evaluation['best']['total_risk'];
-    $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
 
-    $reason = 'reference_models';
-    $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE;
+    $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
+    if ($resolvedAirportId === '') {
+        $resolvedAirportId = null;
+    }
+
+    $selection = resolveDensityAltitudePerformanceEndSelection(
+        $evaluation,
+        $selectedRunway,
+        $airport,
+        $resolvedAirportId,
+        (float) $pressureAltitude,
+        (float) $temperature,
+        $tables,
+        (string) $runwaySource
+    );
+
+    if ($selection['selection_basis'] === 'both_ends') {
+        $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
+    } else {
+        $scoredRisk = (float) ($selection['scored_end']['total_risk'] ?? 0.0);
+        $tier = densityAltitudePerformanceTierFromScoredEnd($scoredRisk);
+    }
+
     if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
     }
+
+    if ($selection['selection_basis'] === 'both_ends') {
+        $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
+    } else {
+        $riskFactor = $scoredRisk;
+    }
+
+    $reason = 'reference_models';
+    $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE;
     if ($runwaySource === 'config') {
         $reference = DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG;
     } elseif ($runwaySource === 'ourairports') {
@@ -341,17 +527,28 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
         return null;
     }
 
-    $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
-
-    return [
+    $payload = [
         'tier' => $tier,
         'risk_factor' => round($riskFactor, 3),
         'worst_end_risk' => round($worstTotalRisk, 3),
         'best_end_risk' => round($bestTotalRisk, 3),
+        'selection_basis' => $selection['selection_basis'],
         'fallback' => false,
         'reason' => $reason,
         'reference' => $reference,
     ];
+
+    if ($selection['operational_end_id'] !== null) {
+        $payload['operational_end_id'] = $selection['operational_end_id'];
+    }
+    if ($selection['scored_end'] !== null) {
+        $payload['scored_end_risk'] = round((float) $selection['scored_end']['total_risk'], 3);
+    }
+    if ($selection['wind_basis'] !== null) {
+        $payload['wind_basis'] = $selection['wind_basis'];
+    }
+
+    return $payload;
 }
 
 /**
@@ -359,11 +556,12 @@ function buildDensityAltitudePerformance(array $weather, array $airport): ?array
  *
  * @param array $weather Weather array (not modified)
  * @param array $airport Airport configuration
+ * @param string|null $airportId Optional config airport id for weather history lookup
  * @return array Weather array with optional density_altitude_performance
  */
-function attachDensityAltitudePerformance(array $weather, array $airport): array
+function attachDensityAltitudePerformance(array $weather, array $airport, ?string $airportId = null): array
 {
-    $performance = buildDensityAltitudePerformance($weather, $airport);
+    $performance = buildDensityAltitudePerformance($weather, $airport, $airportId);
     if ($performance !== null) {
         $weather['density_altitude_performance'] = $performance;
     } else {

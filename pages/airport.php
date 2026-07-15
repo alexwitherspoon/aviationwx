@@ -1418,7 +1418,7 @@ const INITIAL_WEATHER_DATA = <?php
 
     if (is_array($initialWeatherData)) {
         require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
-        $initialWeatherData = attachDensityAltitudePerformance($initialWeatherData, $airport);
+        $initialWeatherData = attachDensityAltitudePerformance($initialWeatherData, $airport, $airportId);
     }
     
     // Defensive JSON encoding with error handling

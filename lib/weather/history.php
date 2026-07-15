@@ -377,6 +377,17 @@ function computeDailyExtremesFromHistory(string $airportId, string $dateKey, str
 }
 
 /**
+ * Whether a cached history observation is an array with a numeric obs_time in window.
+ */
+function weatherHistoryObservationInWindow($observation, int $cutoff): bool
+{
+    return is_array($observation)
+        && isset($observation['obs_time'])
+        && is_numeric($observation['obs_time'])
+        && (int) $observation['obs_time'] >= $cutoff;
+}
+
+/**
  * Compute wind rose data for petal visualization
  *
  * Returns 16 sectors (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
@@ -404,8 +415,8 @@ function computeWindRose(string $airportId, ?array $airport = null): ?array
         return null;
     }
 
-    $windowObs = array_filter($observations, function ($obs) use ($cutoff) {
-        return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
+    $windowObs = array_filter($observations, static function ($obs) use ($cutoff) {
+        return weatherHistoryObservationInWindow($obs, $cutoff);
     });
     if (empty($windowObs)) {
         return null;
@@ -467,6 +478,139 @@ function computeWindRose(string $airportId, ?array $airport = null): ?array
     }
 
     return $petals;
+}
+
+/**
+ * Resolve magnetic wind direction (degrees) from a history observation.
+ *
+ * Prefers magnetic_north on a wind_direction object; otherwise converts stored true degrees.
+ *
+ * @param array $observation History observation row
+ * @param float $declinationDegrees Airport magnetic declination (positive = East)
+ * @return float|null Magnetic direction 0-360, or null when unavailable/variable
+ */
+function resolveHistoryObservationWindDirectionMagnetic(array $observation, float $declinationDegrees): ?float
+{
+    $dir = $observation['wind_direction'] ?? null;
+    if (is_array($dir)) {
+        if (!empty($dir['variable'])) {
+            return null;
+        }
+        $magnetic = $dir['magnetic_north'] ?? null;
+        if ($magnetic !== null && is_numeric($magnetic)) {
+            $normalized = fmod((float) $magnetic + 360.0, 360.0);
+            return $normalized < 0.0 ? $normalized + 360.0 : $normalized;
+        }
+        $trueNorth = $dir['true_north'] ?? null;
+        if ($trueNorth !== null && is_numeric($trueNorth)) {
+            return convertTrueToMagnetic((float) $trueNorth, $declinationDegrees);
+        }
+        return null;
+    }
+
+    if ($dir === null || !is_numeric($dir)) {
+        return null;
+    }
+
+    return convertTrueToMagnetic((float) $dir, $declinationDegrees);
+}
+
+/**
+ * Vector mean wind from weather history over the wind rose window.
+ *
+ * Uses the same window as {@see computeWindRose()}. Non-calm observations only.
+ * Returns null when history is disabled, observations are insufficient, mean speed
+ * is below DA_PERF_WIND_MIN_MEAN_KTS, or dispersion ratio exceeds DA_PERF_VARIABLE_WIND_RATIO.
+ *
+ * @param string $airportId Airport ID
+ * @param array|null $airport Airport config for magnetic declination; when null, declination 0 (tests)
+ * @return array{
+ *     direction_magnetic: float,
+ *     speed_kts: float,
+ *     observation_count: int,
+ *     window_hours: int,
+ *     dispersion_ratio: float
+ * }|null
+ */
+function computeWindowMeanWind(string $airportId, ?array $airport = null): ?array
+{
+    if (!isPublicApiWeatherHistoryEnabled()) {
+        return null;
+    }
+
+    $windowHours = getPublicApiWindRoseWindowHours();
+    $cutoff = time() - ($windowHours * 3600);
+
+    $history = loadWeatherHistory($airportId);
+    $observations = $history['observations'] ?? [];
+    if ($observations === []) {
+        return null;
+    }
+
+    $windowObs = array_filter($observations, static function ($obs) use ($cutoff) {
+        return weatherHistoryObservationInWindow($obs, $cutoff);
+    });
+    if ($windowObs === []) {
+        return null;
+    }
+
+    $declination = ($airport !== null) ? getMagneticDeclination($airport) : 0.0;
+    $uSum = 0.0;
+    $vSum = 0.0;
+    $scalarSum = 0.0;
+    $count = 0;
+
+    foreach ($windowObs as $obs) {
+        $speed = $obs['wind_speed'] ?? null;
+        if ($speed === null || !is_numeric($speed)) {
+            continue;
+        }
+        $speed = (float) $speed;
+        if ($speed < CALM_WIND_THRESHOLD_KTS) {
+            continue;
+        }
+
+        $dirMag = resolveHistoryObservationWindDirectionMagnetic($obs, $declination);
+        if ($dirMag === null) {
+            continue;
+        }
+
+        $rad = deg2rad($dirMag);
+        $uSum += -$speed * sin($rad);
+        $vSum += -$speed * cos($rad);
+        $scalarSum += $speed;
+        $count++;
+    }
+
+    if ($count < DA_PERF_WIND_MIN_OBS) {
+        return null;
+    }
+
+    $uMean = $uSum / $count;
+    $vMean = $vSum / $count;
+    $vectorSpeed = sqrt(($uMean * $uMean) + ($vMean * $vMean));
+    if ($vectorSpeed < DA_PERF_WIND_MIN_MEAN_KTS) {
+        return null;
+    }
+
+    $scalarMean = $scalarSum / $count;
+    $dispersionRatio = $scalarMean / $vectorSpeed;
+    if ($dispersionRatio > DA_PERF_VARIABLE_WIND_RATIO) {
+        return null;
+    }
+
+    $direction = rad2deg(atan2(-$uMean, -$vMean));
+    if ($direction < 0.0) {
+        $direction += 360.0;
+    }
+
+    return [
+        'direction_magnetic' => round($direction, 1),
+        'speed_kts' => round($vectorSpeed, 1),
+        'observation_count' => $count,
+        'window_hours' => $windowHours,
+        'dispersion_ratio' => round($dispersionRatio, 2),
+    ];
 }
 
 /**

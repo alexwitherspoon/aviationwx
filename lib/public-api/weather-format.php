@@ -103,9 +103,10 @@ function formatWindDirectionForApi(array $weather): array
  *
  * @param array $weather Raw weather data from cache
  * @param array $airport Airport configuration
+ * @param string|null $airportId Config airport id for weather history (enables window-mean-wind DA end selection)
  * @return array Formatted weather data
  */
-function formatWeatherResponse(array $weather, array $airport): array
+function formatWeatherResponse(array $weather, array $airport, ?string $airportId = null): array
 {
     $formatted = [
         'flight_category' => $weather['flight_category'] ?? null,
@@ -156,7 +157,7 @@ function formatWeatherResponse(array $weather, array $airport): array
         'metar_ceiling_reported' => $weather['metar_ceiling_reported'] ?? null,
     ];
 
-    $withPerformance = attachDensityAltitudePerformance($weather, $airport);
+    $withPerformance = attachDensityAltitudePerformance($weather, $airport, $airportId);
     if (isset($withPerformance['density_altitude_performance'])) {
         $formatted['density_altitude_performance'] = $withPerformance['density_altitude_performance'];
     }
