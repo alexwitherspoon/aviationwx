@@ -637,7 +637,7 @@ function loadOurAirportsPerformanceRunwaysFromFileCache(string $airportId, array
  *
  * @param string $airportId Airport identifier (config key or ICAO)
  * @param array $airport Airport configuration
- * @return array|null Selected runway with empty ends or null when unavailable
+ * @return array|null Selected runway with per-end displaced thresholds or null when unavailable
  */
 function getOurAirportsPerformanceRunwayForAirport(string $airportId, array $airport): ?array
 {

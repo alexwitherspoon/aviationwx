@@ -259,7 +259,8 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
  * Runway selection precedence:
  * 1. `runway_length_ft` / `runway_surface` in airport config (synthetic runway, empty ends)
  * 2. NASR longest active land runway (full obstruction model)
- * 3. OurAirports longest land runway when NASR absent (length/surface only; empty ends)
+ * 3. OurAirports longest land runway when NASR absent (length/surface; per-end displaced
+ *    thresholds when published; no departure obstructions or TODA)
  * 4. Weather-only fallback (`assessFallbackDensityAltitudePerformance`)
  *
  * @param array $weather Cached weather row
