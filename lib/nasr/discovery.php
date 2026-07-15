@@ -70,7 +70,7 @@ function nasrHttpRequestOnce(string $url, array $options = []): array
  * HTTP GET/HEAD with retry/backoff for transient NFDC/FAA failures.
  *
  * @param array{no_body?: bool, max_attempts?: int, range_bytes?: string} $options
- * @return string|null Response body, or empty string for successful no-body/range checks
+ * @return string|null Response body, empty string when no_body succeeds, or null on failure
  */
 function nasrHttpRequest(string $url, array $options = []): ?string
 {
