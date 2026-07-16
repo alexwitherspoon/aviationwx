@@ -29,6 +29,35 @@ class NasrParseTest extends TestCase
         $this->assertSame('RIU', $parsed['airports']['C80']['notam_id']);
     }
 
+    public function testParseFixtureMagneticDeclinationEast(): void
+    {
+        $parsed = nasrParseAptCsvDirectory($this->fixtureDir);
+        $this->assertSame(14.0, $parsed['airports']['69V']['mag_declination_deg']);
+        $this->assertSame(1985, $parsed['airports']['69V']['mag_declination_year']);
+    }
+
+    public function testParseFixtureMagneticDeclinationEastEul(): void
+    {
+        $parsed = nasrParseAptCsvDirectory($this->fixtureDir);
+        $this->assertSame(16.0, $parsed['airports']['EUL']['mag_declination_deg']);
+        $this->assertSame(2000, $parsed['airports']['EUL']['mag_declination_year']);
+    }
+
+    public function testParseMagneticDeclinationWestReturnsNegative(): void
+    {
+        $this->assertSame(-12.5, nasrParseMagneticDeclinationDeg('12.5', 'W'));
+        $this->assertSame(15.0, nasrParseMagneticDeclinationDeg('15', 'E'));
+        $this->assertNull(nasrParseMagneticDeclinationDeg('', 'E'));
+        $this->assertNull(nasrParseMagneticDeclinationDeg('14', ''));
+    }
+
+    public function testParseFixtureId76HasNoMagneticDeclination(): void
+    {
+        $parsed = nasrParseAptCsvDirectory($this->fixtureDir);
+        $this->assertNull($parsed['airports']['ID76']['mag_declination_deg']);
+        $this->assertNull($parsed['airports']['ID76']['mag_declination_year']);
+    }
+
     public function testSelectLongestRunwayExcludesFailedSurface(): void
     {
         $parsed = nasrParseAptCsvDirectory($this->fixtureDir);

@@ -55,22 +55,7 @@ runways-cache-reset: ## Reset runway cache (delete and regenerate)
 	@echo "✓ Runway cache reset complete"
 
 config-check: ## Validate current configuration and show mock mode status
-	@echo "Configuration Check"
-	@echo "==================="
-	@php -r " \
-		require 'lib/config.php'; \
-		echo 'Config file: ' . (getConfigFilePath() ?: 'NOT FOUND') . PHP_EOL; \
-		echo 'Test mode: ' . (isTestMode() ? 'YES' : 'NO') . PHP_EOL; \
-		echo 'Mock mode: ' . (shouldMockExternalServices() ? 'YES (external services will be mocked)' : 'NO (real API calls)') . PHP_EOL; \
-		echo 'Production: ' . (isProduction() ? 'YES' : 'NO') . PHP_EOL; \
-		\$$config = loadConfig(); \
-		if (\$$config) { \
-			\$$airports = array_keys(\$$config['airports'] ?? []); \
-			echo 'Airports: ' . count(\$$airports) . ' (' . implode(', ', array_slice(\$$airports, 0, 5)) . (count(\$$airports) > 5 ? '...' : '') . ')' . PHP_EOL; \
-		} else { \
-			echo 'ERROR: Could not load config' . PHP_EOL; \
-		} \
-	"
+	@php scripts/config-check.php
 
 config-example: ## Copy example config for local development (mock mode)
 	@if [ -f config/airports.json ]; then \

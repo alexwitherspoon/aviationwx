@@ -580,6 +580,25 @@ sudo grep -i 'upload health\|upload probe' /var/aviationwx/logs/app.log | tail -
 
 ---
 
+## Maintainer tooling
+
+### Config check and NASR cross-check
+
+`make config-check` (or `php scripts/config-check.php`) prints environment flags and loads the resolved `airports.json`. When a local NASR APT cache is present (`cache/nasr/nasr_apt.json` or the configured slice for the current config SHA), it also compares per-airport `elevation_ft` and `magnetic_declination` against FAA NASR and prints **warnings only** (exit code 0). Missing NASR cache skips the cross-check gracefully — typical in secrets-repo CI.
+
+```bash
+make config-check
+CONFIG_PATH=/path/to/aviationwx.org-secrets/airports.json make config-check
+```
+
+`php scripts/validate-airports-json.php path/to/airports.json` runs the same NASR cross-check as step 4 when cache is available.
+
+**Tolerances:** elevation ±2 ft (rounded integers); per-airport magnetic declination ±1.0°. Global `config.magnetic_declination` and WMM are not compared — only explicit per-airport overrides.
+
+**Interpretation:** Per-airport values intentionally override NASR at runtime; warnings flag possible stale config, not deploy blockers. NASR `MAG_VARN_YEAR` may be years old; magnetic warnings are a sanity check, not a substitute for WMM. Refresh NASR with `php scripts/fetch-nasr-apt.php` after parser or cycle updates.
+
+---
+
 ## Related Documentation
 
 - [Deployment Guide](DEPLOYMENT.md) - Production deployment

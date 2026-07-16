@@ -39,6 +39,7 @@ if (!file_exists($configPath)) {
 // Load required functions
 require_once $projectRoot . '/lib/logger.php';
 require_once $projectRoot . '/lib/config.php';
+require_once $projectRoot . '/lib/nasr/config-cross-check.php';
 
 echo "Validating airports.json: {$configPath}\n";
 echo str_repeat('=', 60) . "\n";
@@ -117,6 +118,25 @@ if (!$icaoResult['valid']) {
         }
     }
     echo "  ✓ All ICAO codes are valid\n";
+}
+
+// Validation 4: NASR cross-check (warnings only, non-blocking)
+echo "\n4. NASR cross-check (elevation_ft, magnetic_declination)...\n";
+if (loadNasrAptCache() === null) {
+    echo "  NASR cache not present; skipping elevation/magnetic cross-check\n";
+} else {
+    $nasrResult = nasrCrossCheckAirportConfig($config);
+    foreach ($nasrResult['warnings'] as $warning) {
+        $warnings[] = $warning;
+        echo "  ⚠️  {$warning}\n";
+    }
+    $checked = $nasrResult['summary']['checked'];
+    $nasrWarningCount = count($nasrResult['warnings']);
+    if ($nasrWarningCount === 0) {
+        echo "  ✓ No NASR drift warnings ({$checked} airports with NASR rows checked)\n";
+    } else {
+        echo "  NASR cross-check: {$nasrWarningCount} warning(s) across {$checked} airports with NASR rows\n";
+    }
 }
 
 // Add more validations here as needed

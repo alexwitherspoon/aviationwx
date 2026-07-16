@@ -40,6 +40,8 @@ function nasrParseAptCsvDirectory(string $csvDir): array
             'elev_ft' => nasrParseInt($row['ELEV'] ?? null),
             'lat' => nasrParseFloat($row['LAT_DECIMAL'] ?? null),
             'lon' => nasrParseFloat($row['LONG_DECIMAL'] ?? null),
+            'mag_declination_deg' => nasrParseMagneticDeclinationDeg($row['MAG_VARN'] ?? null, $row['MAG_HEMIS'] ?? null),
+            'mag_declination_year' => nasrParseInt($row['MAG_VARN_YEAR'] ?? null),
             'runways' => [],
         ];
     }
@@ -61,6 +63,8 @@ function nasrParseAptCsvDirectory(string $csvDir): array
                 'elev_ft' => null,
                 'lat' => null,
                 'lon' => null,
+                'mag_declination_deg' => null,
+                'mag_declination_year' => null,
                 'runways' => [],
             ];
         }
@@ -160,6 +164,31 @@ function nasrIterateCsvFile(string $path): Generator
     } finally {
         fclose($handle);
     }
+}
+
+/**
+ * Convert NASR MAG_VARN + MAG_HEMIS to signed magnetic declination degrees.
+ * East positive, West negative (matches platform getMagneticDeclination convention).
+ *
+ * @param mixed $varn MAG_VARN degrees
+ * @param mixed $hemis MAG_HEMIS (E or W)
+ */
+function nasrParseMagneticDeclinationDeg($varn, $hemis): ?float
+{
+    $degrees = nasrParseFloat($varn);
+    if ($degrees === null) {
+        return null;
+    }
+
+    $hemisphere = nasrNullableUpper($hemis);
+    if ($hemisphere === 'E') {
+        return $degrees;
+    }
+    if ($hemisphere === 'W') {
+        return -$degrees;
+    }
+
+    return null;
 }
 
 /**
