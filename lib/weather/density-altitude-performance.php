@@ -454,7 +454,7 @@ function buildDensityAltitudePerformance(array $weather, array $airport, ?string
             $runwaySource = 'nasr';
         }
     } else {
-        $ourAirportsId = (string) ($airport['id'] ?? $airport['icao'] ?? '');
+        $ourAirportsId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
         $selectedRunway = getOurAirportsPerformanceRunwayForAirport($ourAirportsId, $airport);
         if ($selectedRunway !== null) {
             $runwaySource = 'ourairports';
