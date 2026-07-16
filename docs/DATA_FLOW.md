@@ -690,7 +690,7 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 - **Selection**: Longest non-closed land runway; exclude water surfaces using OurAirports surface codes.
 - **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
 - **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
-- **Tier cap**: When obstruction data is absent (OurAirports or operator config override), tier is capped at **caution** (never **warning**). The strongest alarm requires NASR-grade departure-end obstruction context.
+- **Tier cap**: When departure obstruction data is absent (OurAirports, or operator config without usable `runway_ends` obstruction fields), tier is capped at **caution** (never **warning**). The strongest alarm requires departure-end obstruction height and distance on at least one end.
 
 OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
@@ -731,9 +731,10 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 
 **Path C - both ends** (`selection_basis: both_ends`):
 
-- Fallback when spread is below the asymmetric threshold, or when runway ends/headings are unavailable.
-- Config `runway_length_ft` override without usable `runway_ends` obstruction data always uses this path (length/surface only).
-- Tier uses worst/best asymmetric rules: **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution. `operational_end_id` and `scored_end_risk` are omitted.
+- Fallback when spread is below the asymmetric threshold, when runway ends/headings are unavailable, or when wind/asymmetric paths do not apply.
+- Config `runway_length_ft` override **without** `runway_ends` always uses this path (`ends` is empty; length/surface stress only).
+- Config override **with** `runway_ends` but no usable obstruction data can still use Path A or B when headings resolve; Path C applies when spread is below the asymmetric threshold.
+- Tier uses worst/best asymmetric rules: **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution. `operational_end_id` and `scored_end_risk` are omitted. Operator config and OurAirports context cap **warning** at **caution** when obstruction data is absent (see tier cap below).
 
 **Tier mapping summary**:
 
@@ -742,7 +743,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 | `window_mean_wind`, `asymmetric_heuristic` | Scored end ≥ 1.20 | Scored end ≥ 2.40 | Scored end sum |
 | `both_ends` | Worst end ≥ 1.20 | Best end ≥ 2.40 | Worst (caution) or best (warning) |
 
-**Config `runway_length_ft`**: Operator override replaces NASR and OurAirports runway selection with synthetic runway `config` (optional `runway_surface`, optional `runway_ends`). Without usable obstruction data on any end, `ends` is empty: no departure obstructions, wind/asymmetric selection skipped (Path C only), tier capped at **caution**. Optional `runway_ends` can supply per-end displaced threshold, `tkof_dist_avbl`, and obstruction `hgt_ft`/`dist_ft`; when at least one end has usable obstruction height and distance, the full POH model runs, wind/asymmetric paths apply when headings resolve, and **warning** tier is allowed. `tkof_dist_avbl` alone does not lift the tier cap. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
+**Config `runway_length_ft`**: Operator override replaces NASR and OurAirports runway selection with synthetic runway `config` (optional `runway_surface`, optional `runway_ends`). Without `runway_ends`, `ends` is empty: length/surface stress only, Path C only, tier capped at **caution**. Optional `runway_ends` supplies per-end `displaced_thr_len`, `tkof_dist_avbl`, and obstruction `hgt_ft`/`dist_ft`; those length fields reduce effective departure roll but do not lift the tier cap without usable obstruction height and distance on at least one end. When any end has usable obstruction data, the full POH model runs, wind/asymmetric paths apply when headings resolve (from `runways[0]` or end idents), and **warning** tier is allowed. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
 **Fallback model** (no runway data from config, NASR, or OurAirports): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score). UI copy must state that runway context was unavailable.
 

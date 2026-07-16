@@ -7,6 +7,9 @@
  * when NASR and OurAirports have no usable runway row.
  */
 
+require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/runway-end-ident.php';
+
 /**
  * Config override for runway length when explicitly set by operator.
  *
@@ -59,6 +62,22 @@ function configRunwayObstructionIsUsable(array $obstruction): bool
 }
 
 /**
+ * Resolve a log label for an airport row when parsing config runway ends.
+ *
+ * @param array $airport Airport configuration
+ */
+function configRunwayAirportLogLabel(array $airport): string
+{
+    foreach (['icao', 'id', 'faa', 'iata'] as $key) {
+        if (!empty($airport[$key]) && is_string($airport[$key])) {
+            return $airport[$key];
+        }
+    }
+
+    return 'unknown';
+}
+
+/**
  * Parse maintainer runway_ends[] into NASR-shaped end rows.
  *
  * @param array $airport Airport configuration
@@ -70,14 +89,23 @@ function parseConfigRunwayEnds(array $airport): array
         return [];
     }
 
+    $airportLabel = configRunwayAirportLogLabel($airport);
     $ends = [];
-    foreach ($airport['runway_ends'] as $row) {
+    foreach ($airport['runway_ends'] as $index => $row) {
         if (!is_array($row)) {
+            aviationwx_log('warning', 'config runway_ends row skipped: not an object', [
+                'airport' => $airportLabel,
+                'index' => $index,
+            ], 'app');
             continue;
         }
 
         $endId = isset($row['end_id']) && is_string($row['end_id']) ? strtoupper(trim($row['end_id'])) : '';
         if ($endId === '') {
+            aviationwx_log('warning', 'config runway_ends row skipped: missing end_id', [
+                'airport' => $airportLabel,
+                'index' => $index,
+            ], 'app');
             continue;
         }
 
@@ -183,28 +211,14 @@ function configRunwayHasDepartureObstructionData(array $runway): bool
 }
 
 /**
- * Whether a runway end ident is valid for config (1-36, optional L/C/R).
- */
-function isValidConfigRunwayEndId(string $endId): bool
-{
-    $trimmed = strtoupper(trim($endId));
-    if ($trimmed === '' || !preg_match('/^(\d{1,2})([LCR])?$/', $trimmed, $matches)) {
-        return false;
-    }
-
-    $num = (int) $matches[1];
-
-    return $num >= 1 && $num <= 36;
-}
-
-/**
  * Validate optional DA runway override fields on one airport row.
  *
  * @param string $airportCode Config airport key
  * @param array $airport Airport configuration
  * @param list<string> $errors Collected validation errors
+ * @param list<string> $warnings Collected validation warnings
  */
-function validateConfigRunwayFields(string $airportCode, array $airport, array &$errors): void
+function validateConfigRunwayFields(string $airportCode, array $airport, array &$errors, array &$warnings): void
 {
     if (array_key_exists('runway_length_ft', $airport) && $airport['runway_length_ft'] !== null) {
         if (!is_numeric($airport['runway_length_ft'])) {
@@ -217,6 +231,8 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
     if (array_key_exists('runway_surface', $airport) && $airport['runway_surface'] !== null) {
         if (!is_string($airport['runway_surface']) || trim($airport['runway_surface']) === '') {
             $errors[] = "Airport '{$airportCode}' runway_surface must be a non-empty string when set";
+        } elseif (getConfigRunwayLengthOverrideFt($airport) === null) {
+            $warnings[] = "Airport '{$airportCode}' runway_surface is set without runway_length_ft";
         }
     }
 
@@ -243,6 +259,7 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
         $errors[] = "Airport '{$airportCode}' runway_ends requires runway_length_ft";
     }
 
+    $seenEndIds = [];
     foreach ($ends as $index => $row) {
         $label = "runway_ends[{$index}]";
         if (!is_array($row)) {
@@ -256,9 +273,17 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
             continue;
         }
 
-        if (!isValidConfigRunwayEndId($endId)) {
+        $normalizedEndId = strtoupper(trim($endId));
+        if (parseRunwayEndIdentMagneticHeading($normalizedEndId) === null) {
             $errors[] = "Airport '{$airportCode}' {$label} has invalid end_id '{$endId}'";
+            continue;
         }
+
+        if (isset($seenEndIds[$normalizedEndId])) {
+            $errors[] = "Airport '{$airportCode}' {$label} duplicates end_id '{$normalizedEndId}'";
+            continue;
+        }
+        $seenEndIds[$normalizedEndId] = true;
 
         foreach (['displaced_thr_len', 'tkof_dist_avbl'] as $field) {
             if (!array_key_exists($field, $row) || $row[$field] === null) {

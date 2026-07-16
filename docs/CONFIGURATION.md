@@ -176,7 +176,7 @@ Wind-based departure-end selection uses `runways[0].heading_1` / `heading_2` whe
 
 **Operator-provided length caveat (no `runway_ends`):** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions are **not** applied. Only runway-length stress is evaluated. The cue can **under-alert** when departure obstacles matter on that strip.
 
-**Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. The same cap applies to OurAirports-only runway context.
+**Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. `tkof_dist_avbl` and `displaced_thr_len` affect stress but do not lift the caution cap without usable `obstruction.hgt_ft` and `obstruction.dist_ft` on at least one end. The same cap applies to OurAirports-only runway context.
 
 Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performance) and `docs/DATA_FLOW.md`.
 

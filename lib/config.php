@@ -4570,7 +4570,7 @@ function validateAirportsJsonStructure(array $config): array {
             }
         }
 
-        validateConfigRunwayFields($airportCode, $airport, $errors);
+        validateConfigRunwayFields($airportCode, $airport, $errors, $warnings);
 
         if (array_key_exists('iso_country', $airport) && $airport['iso_country'] !== null) {
             if (!is_string($airport['iso_country'])) {

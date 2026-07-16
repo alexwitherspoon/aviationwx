@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../heading-conversion.php';
+require_once __DIR__ . '/../runway-end-ident.php';
 require_once __DIR__ . '/../runways.php';
 
 /**
@@ -15,27 +16,6 @@ function angularDifference(float $headingA, float $headingB): float
 {
     $diff = fmod(abs($headingA - $headingB), 360.0);
     return $diff > 180.0 ? 360.0 - $diff : $diff;
-}
-
-/**
- * Parse a runway end ident into magnetic heading degrees.
- *
- * Returns null when the ident is not a valid runway number (1-36, optional L/C/R).
- * Unlike parseIdentHeading(), does not treat invalid idents as 360° north.
- */
-function parseRunwayEndIdentMagneticHeading(string $endId): ?float
-{
-    $trimmed = trim($endId);
-    if ($trimmed === '' || !preg_match('/^(\d{1,2})([LCR])?$/i', $trimmed, $matches)) {
-        return null;
-    }
-
-    $num = (int) $matches[1];
-    if ($num < 1 || $num > 36) {
-        return null;
-    }
-
-    return (float) ($num * 10);
 }
 
 /**

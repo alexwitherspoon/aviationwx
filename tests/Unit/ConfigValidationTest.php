@@ -5529,6 +5529,49 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(' ', $result['errors']));
     }
 
+    public function testRunwayEndsRejectsDuplicateEndId(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '17'],
+            ['end_id' => '17'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString("duplicates end_id '17'", implode(' ', $result['errors']));
+    }
+
+    public function testRunwaySurfaceWithoutLengthFtEmitsWarning(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_surface'] = 'TURF';
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertTrue($result['valid'], implode(' ', $result['errors']));
+        $this->assertStringContainsString(
+            "runway_surface is set without runway_length_ft",
+            implode(' ', $result['warnings'])
+        );
+    }
+
+    public function testRunwayEndsRejectsInvalidEndId(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '99'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString("invalid end_id '99'", implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================
