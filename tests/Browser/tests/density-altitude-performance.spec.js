@@ -312,7 +312,9 @@ async function loadDashboardWithMockWeather(page, weatherOverrides, expectedDens
   await page.waitForFunction(() => typeof fetchWeather === 'function', { timeout: 10000 });
 
   await page.evaluate(async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = typeof getTodayInAirportTimezone === 'function'
+      ? getTodayInAirportTimezone()
+      : new Date().toISOString().slice(0, 10);
     if (typeof setThemePreference === 'function') {
       setThemePreference('day');
     }
