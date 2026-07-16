@@ -4554,6 +4554,14 @@ function validateAirportsJsonStructure(array $config): array {
                 // Treat as unset
             } elseif (filter_var($oaId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
                 $errors[] = "Airport '{$airportCode}' ourairports_id must be a positive integer";
+            } else {
+                $oaIdent = $airport['ourairports_ident'] ?? null;
+                $hasValidIdent = is_string($oaIdent)
+                    && trim($oaIdent) !== ''
+                    && isValidOurAirportsIdentFormat($oaIdent);
+                if (!$hasValidIdent) {
+                    $errors[] = "Airport '{$airportCode}' ourairports_id requires ourairports_ident";
+                }
             }
         }
 
