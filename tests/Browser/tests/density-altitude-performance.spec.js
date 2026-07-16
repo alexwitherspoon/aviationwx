@@ -299,6 +299,16 @@ async function loadDashboardWithMockWeather(page, weatherOverrides, expectedDens
   await page.waitForFunction(() => typeof fetchWeather === 'function', { timeout: 10000 });
 
   await page.evaluate(async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (typeof setThemePreference === 'function') {
+      setThemePreference('day');
+    }
+    if (typeof applyTheme === 'function') {
+      applyTheme('day');
+    }
+    if (typeof setCookie === 'function') {
+      setCookie('aviationwx_theme_override', today);
+    }
     weatherLastUpdated = null;
     if (window.staleRefreshTimer) {
       clearTimeout(window.staleRefreshTimer);
