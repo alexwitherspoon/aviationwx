@@ -41,12 +41,12 @@ function getOurAirportsNumericIdFromAirportConfig(array $airport): ?int
         return $raw > 0 ? $raw : null;
     }
 
-    if (is_numeric($raw)) {
-        $id = (int) $raw;
-        return $id > 0 ? $id : null;
+    $validated = filter_var($raw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($validated === false) {
+        return null;
     }
 
-    return null;
+    return (int) $validated;
 }
 
 /**
@@ -63,7 +63,7 @@ function isValidOurAirportsIdentFormat(string $ident): bool
         return false;
     }
 
-    return preg_match('/^[A-Z0-9][A-Z0-9-]*$/', $ident) === 1;
+    return preg_match('/^[A-Z0-9]([A-Z0-9-]*[A-Z0-9])?$/', $ident) === 1;
 }
 
 /**
