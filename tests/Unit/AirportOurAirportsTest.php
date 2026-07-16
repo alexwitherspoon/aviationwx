@@ -18,6 +18,7 @@ class AirportOurAirportsTest extends TestCase
     {
         $this->assertFalse(isValidOurAirportsIdentFormat(''));
         $this->assertFalse(isValidOurAirportsIdentFormat('-US'));
+        $this->assertFalse(isValidOurAirportsIdentFormat('US-'));
         $this->assertFalse(isValidOurAirportsIdentFormat('bad ident'));
     }
 
