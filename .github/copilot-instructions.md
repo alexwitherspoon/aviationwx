@@ -39,7 +39,7 @@ Repository custom instructions for GitHub Copilot coding agent and code review. 
 | **Run tests** | `make test-ci` | Required before commit. PHP syntax + PHPUnit + safety tests + JS validation. |
 | **Faster tests** | `make test` | PHPUnit only (incomplete – misses syntax in untested files). |
 | **Unit only** | `make test-unit` | Fast iteration. |
-| **Config check** | `make config-check` | Validates config, shows mock mode. |
+| **Config check** | `make config-check` | Validates config, mock mode, and NASR elevation/magnetic warnings (non-blocking). |
 | **Without secrets** | `make config-example` then `make dev` | Mock mode auto-activates. |
 
 ### Local Development
