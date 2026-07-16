@@ -65,5 +65,8 @@ class AirportOurAirportsTest extends TestCase
         $this->assertNull(getOurAirportsNumericIdFromAirportConfig([
             'ourairports_id' => '1e3',
         ]));
+        $this->assertNull(getOurAirportsNumericIdFromAirportConfig([
+            'ourairports_id' => true,
+        ]));
     }
 }

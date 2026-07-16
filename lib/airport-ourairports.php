@@ -37,6 +37,9 @@ function getOurAirportsNumericIdFromAirportConfig(array $airport): ?int
     }
 
     $raw = $airport['ourairports_id'];
+    if (is_bool($raw)) {
+        return null;
+    }
     if (is_int($raw)) {
         return $raw > 0 ? $raw : null;
     }
