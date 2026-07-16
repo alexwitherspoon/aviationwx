@@ -137,8 +137,8 @@ function buildWeatherApiResponse(weatherOverrides = {}) {
 async function mockWeatherApi(page, weatherOverrides = {}) {
   const body = JSON.stringify(buildWeatherApiResponse(weatherOverrides));
 
-  await page.route('**/api/weather.php*', (route) => {
-    route.fulfill({
+  await page.route('**/api/weather.php*', async (route) => {
+    await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body,
@@ -272,8 +272,8 @@ async function gotoMockEmbedCard(page, options) {
   const embedUrl = `${baseUrl}/?embed&airport=${testAirport}&style=card&theme=light&render=1`;
   const html = buildMockEmbedCardPageHtml(baseUrl, options);
 
-  await page.route(embedUrl, (route) => {
-    route.fulfill({
+  await page.route(embedUrl, async (route) => {
+    await route.fulfill({
       status: 200,
       contentType: 'text/html; charset=utf-8',
       body: html,
