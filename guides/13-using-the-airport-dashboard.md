@@ -126,9 +126,9 @@ The dashboard uses **standard aviation weather colors**:
 
 ### Density Altitude Performance Cue
 
-Some dashboards add **⚠️** (caution) or **🚩** (warning) next to density altitude when reference light-GA takeoff charts (152/172/182, max gross, no wind credit) look limiting on the runways we have on file. It is a heads-up to check your takeoff numbers - not a go/no-go for your flight.
+Some dashboards add **⚠️** (caution) or **🚩** (warning) next to density altitude when our reference light-GA takeoff charts (152/172/182, max gross, no wind credit) suggest performance may be limiting on the runways we have on file. It is a heads-up to check your takeoff numbers - not a go/no-go for your flight.
 
-Hover or long-press the row for departure-end context. When runway length is unavailable, the cue may still flag from density altitude versus field elevation alone - the tooltip explains that fallback.
+The row tooltip or accessible label includes departure-end context. When runway length is unavailable, the cue may still flag from density altitude versus field elevation alone - the tooltip explains that fallback.
 
 No emoji means no caution or warning was flagged, or density altitude is unavailable. Either way, use your AFM or POH to confirm aircraft performance.
 
