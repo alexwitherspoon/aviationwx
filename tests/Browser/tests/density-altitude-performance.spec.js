@@ -158,6 +158,19 @@ function getDashboardDaRow(page) {
 }
 
 /**
+ * Parse rounded feet from a density altitude aria-label (locale-agnostic).
+ *
+ * @param {string|null} ariaLabel
+ * @returns {number}
+ */
+function feetFromAriaLabel(ariaLabel) {
+  expect(ariaLabel).toBeTruthy();
+  const match = ariaLabel.match(/Density altitude ([\d.,\s\u00a0]+) feet/);
+  expect(match).toBeTruthy();
+  return Number(match[1].replace(/\D/g, ''));
+}
+
+/**
  * Assert dashboard DA row tier presentation.
  *
  * @param {import('@playwright/test').Locator} daRow
@@ -182,7 +195,7 @@ async function assertDashboardDaTier(daRow, options) {
     await expect(daRow).not.toContainText('⚠️');
     await expect(daRow).not.toContainText('🚩');
     const ariaLabel = await daRow.getAttribute('aria-label');
-    expect(ariaLabel).toMatch(new RegExp(`Density altitude ${densityAltitudeFt.toLocaleString()} feet`));
+    expect(feetFromAriaLabel(ariaLabel)).toBe(Math.round(densityAltitudeFt));
     expect(ariaLabel).not.toMatch(/Caution:|Warning:/);
     return;
   }
@@ -195,7 +208,7 @@ async function assertDashboardDaTier(daRow, options) {
 
   const ariaLabel = await daRow.getAttribute('aria-label');
   expect(ariaLabel).toContain(ariaSnippet);
-  expect(ariaLabel).toMatch(new RegExp(`Density altitude ${densityAltitudeFt.toLocaleString()} feet`));
+  expect(feetFromAriaLabel(ariaLabel)).toBe(Math.round(densityAltitudeFt));
 
   const color = await valueEl.evaluate((el) => window.getComputedStyle(el).color);
   expect(color).toBe(AMBER_RGB);
