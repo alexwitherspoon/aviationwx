@@ -9,6 +9,7 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/airport-identifiers.php';
 require_once __DIR__ . '/airport-ourairports.php';
+require_once __DIR__ . '/config-runway.php';
 require_once __DIR__ . '/country-resolution.php';
 require_once __DIR__ . '/aviation-region-links.php';
 
@@ -4568,6 +4569,8 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
         }
+
+        validateConfigRunwayFields($airportCode, $airport, $errors);
 
         if (array_key_exists('iso_country', $airport) && $airport['iso_country'] !== null) {
             if (!is_string($airport['iso_country'])) {

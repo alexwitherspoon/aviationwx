@@ -171,17 +171,12 @@ function fleetDaAuditBuildPerformance(
     $nasrRecord = getNasrAirportForConfig($airport);
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
 
-    $configLength = getConfigRunwayLengthOverrideFt($airport);
+    $configRunway = buildConfigRunwayForDensityAltitude($airport);
     $selectedRunway = null;
     $runwaySource = null;
 
-    if ($configLength !== null) {
-        $selectedRunway = [
-            'rwy_id' => 'config',
-            'length_ft' => $configLength,
-            'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
-            'ends' => [],
-        ];
+    if ($configRunway !== null) {
+        $selectedRunway = $configRunway;
         $runwaySource = 'config';
     } elseif ($nasrRecord !== null) {
         $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);

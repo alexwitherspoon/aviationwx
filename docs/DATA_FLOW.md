@@ -672,13 +672,13 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
 | Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports with a NASR match |
 | Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; join via `ourairports_ident` when set, else ICAO/FAA/config slug. Longest non-closed land runway (exclude water surfaces). Same POH length/surface stress as config override; per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
-| Operator runway override | `airports.json` `runway_length_ft` / `runway_surface` | Replaces NASR and OurAirports selection; obstructions dropped |
+| Operator runway override | `airports.json` `runway_length_ft` / `runway_surface` / optional `runway_ends` | Replaces NASR and OurAirports selection; obstructions from `runway_ends` when set |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
 | Wind history (operational end) | Weather history cache | Required for Path A; see [Operational departure end selection](#operational-departure-end-selection) |
 
 **Runway context precedence** (first match wins):
 
-1. `runway_length_ft` in `airports.json` (optional `runway_surface`)
+1. `runway_length_ft` in `airports.json` (optional `runway_surface`, optional `runway_ends`)
 2. NASR longest active land runway (US AIS)
 3. OurAirports longest active land runway when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
 4. Weather-only fallback (elevation-banded DA thresholds; `fallback: true`)
@@ -732,7 +732,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 **Path C - both ends** (`selection_basis: both_ends`):
 
 - Fallback when spread is below the asymmetric threshold, or when runway ends/headings are unavailable.
-- Config `runway_length_ft` override (synthetic runway with empty ends) always uses this path.
+- Config `runway_length_ft` override without usable `runway_ends` obstruction data always uses this path (length/surface only).
 - Tier uses worst/best asymmetric rules: **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution. `operational_end_id` and `scored_end_risk` are omitted.
 
 **Tier mapping summary**:
@@ -742,7 +742,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 | `window_mean_wind`, `asymmetric_heuristic` | Scored end ≥ 1.20 | Scored end ≥ 2.40 | Scored end sum |
 | `both_ends` | Worst end ≥ 1.20 | Best end ≥ 2.40 | Worst (caution) or best (warning) |
 
-**Config `runway_length_ft`**: Operator override replaces NASR runway length (optional `runway_surface`) with synthetic runway `config` and **empty ends**. NASR departure obstructions, displaced thresholds, and `TKOF_DIST_AVBL` are not applied. Wind-based and asymmetric end selection are skipped (Path C only). Use when NASR length is wrong; can under-alert if obstacles matter. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
+**Config `runway_length_ft`**: Operator override replaces NASR and OurAirports runway selection with synthetic runway `config` (optional `runway_surface`, optional `runway_ends`). Without usable obstruction data on any end, `ends` is empty: no departure obstructions, wind/asymmetric selection skipped (Path C only), tier capped at **caution**. Optional `runway_ends` can supply per-end displaced threshold, `tkof_dist_avbl`, and obstruction `hgt_ft`/`dist_ft`; when at least one end has usable obstruction height and distance, the full POH model runs, wind/asymmetric paths apply when headings resolve, and **warning** tier is allowed. `tkof_dist_avbl` alone does not lift the tier cap. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
 **Fallback model** (no runway data from config, NASR, or OurAirports): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score). UI copy must state that runway context was unavailable.
 

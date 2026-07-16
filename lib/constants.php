@@ -450,7 +450,7 @@ if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS')) {
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG',
-        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); operator runway_length_ft override (no obstruction data)'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); operator runway_length_ft override (obstruction data when runway_ends set)'
     );
 }
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK')) {

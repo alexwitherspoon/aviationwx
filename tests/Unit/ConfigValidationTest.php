@@ -5497,6 +5497,38 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('ourairports_id requires ourairports_ident', implode(' ', $result['errors']));
     }
 
+    public function testRunwayEndsRequiresRunwayLengthFt(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '09'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('runway_ends requires runway_length_ft', implode(' ', $result['errors']));
+    }
+
+    public function testRunwayEndsAcceptsValidPrivateStripShape(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_surface'] = 'TURF';
+        $config['airports']['kspb']['runway_ends'] = [
+            [
+                'end_id' => '17',
+                'tkof_dist_avbl' => 2600,
+                'obstruction' => ['hgt_ft' => 200, 'dist_ft' => 2500, 'slope' => 20],
+            ],
+            ['end_id' => '35'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertTrue($result['valid'], implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================
