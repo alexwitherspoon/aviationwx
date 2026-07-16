@@ -122,6 +122,13 @@ if (!$icaoResult['valid']) {
 
 // Validation 4: NASR cross-check (warnings only, non-blocking)
 echo "\n4. NASR cross-check (elevation_ft, magnetic_declination)...\n";
+$resolvedConfigPath = realpath($configPath);
+if ($resolvedConfigPath !== false) {
+    putenv('CONFIG_PATH=' . $resolvedConfigPath);
+    $_ENV['CONFIG_PATH'] = $resolvedConfigPath;
+    $_SERVER['CONFIG_PATH'] = $resolvedConfigPath;
+    resetNasrAptCacheMemo();
+}
 if (loadNasrAptCache() === null) {
     echo "  NASR cache not present; skipping elevation/magnetic cross-check\n";
 } else {
