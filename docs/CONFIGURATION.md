@@ -119,6 +119,8 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | **Density altitude performance** |||
 | `runway_length_ft` | NASR longest runway | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `runway_surface` | `ASPH` when length override is set | NASR-style surface code when `runway_length_ft` is set (e.g. `TURF`, `ASPH`). Drives POH grass correction on non-paved surfaces. |
+| `ourairports_ident` | - | OurAirports open-data ident for internal runway joins (e.g. `US-4027`, `CYAV`). Not shown as the pilot-facing airport code. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
+| `ourairports_id` | - | Optional stable OurAirports integer id from `airports.csv` when set alongside `ourairports_ident`. |
 | **Data Sources** |||
 | `weather_sources` | `[]` | Array of weather source configurations (see Weather Sources section) |
 | `webcams` | `[]` | Array of webcam configurations |
@@ -146,8 +148,10 @@ The weather API `density_altitude_performance` cue compares AFM takeoff charts t
 
 1. `runway_length_ft` / `runway_surface` in `airports.json` (operator override)
 2. FAA NASR longest active land runway (US)
-3. OurAirports longest active land runway when NASR has no row (non-US and private strips without NASR)
+3. OurAirports longest active land runway when NASR has no row: match `ourairports_ident` first, then ICAO, FAA, or config slug against the runway cache
 4. Weather-only elevation bands (`fallback: true`)
+
+Set `ourairports_ident` when the strip has no FAA or ICAO code but a row exists on [OurAirports](https://ourairports.com/data/) (Public Domain). Example: 45 Ranch → `US-4027`. Optional `ourairports_id` (integer from `airports.csv`) documents the stable OurAirports primary key; runway lookup uses `ourairports_ident`. These fields are for internal data joins only; dashboard labels still use ICAO > IATA > FAA.
 
 By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
 

@@ -26,6 +26,31 @@ class FetchRunwaysTest extends TestCase
         $this->assertSame(6600, $resolved[0]['length_ft']);
     }
 
+    public function testGetOurAirportsPerformanceRunwaysFromParsedCache_UsesOurAirportsIdent(): void
+    {
+        $data = [
+            'airports' => [
+                'US-4027' => [
+                    'performance_runways' => [
+                        [
+                            'rwy_id' => '17/35',
+                            'length_ft' => 2700,
+                            'surface' => 'GRS',
+                            'ends' => [],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $runways = getOurAirportsPerformanceRunwaysFromParsedCache($data, '45ranch', [
+            'ourairports_ident' => 'US-4027',
+        ]);
+
+        $this->assertNotNull($runways);
+        $this->assertSame(2700, $runways[0]['length_ft']);
+    }
+
     public function testMergeRunwaySources_AttachesPerformanceRunwaysForFaaCoveredAirport(): void
     {
         $faa = [

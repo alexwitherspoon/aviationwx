@@ -8,6 +8,7 @@ define('AVIATIONWX_CONFIG_LOADED', true);
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/airport-identifiers.php';
+require_once __DIR__ . '/airport-ourairports.php';
 require_once __DIR__ . '/country-resolution.php';
 require_once __DIR__ . '/aviation-region-links.php';
 
@@ -4532,6 +4533,39 @@ function validateAirportsJsonStructure(array $config): array {
                     $faaMap[$faaKey] = [];
                 }
                 $faaMap[$faaKey][] = $airportCode;
+            }
+        }
+
+        if (array_key_exists('ourairports_ident', $airport)) {
+            $oaIdent = $airport['ourairports_ident'];
+            if ($oaIdent === null) {
+                // Treat as unset
+            } elseif (!is_string($oaIdent)) {
+                $errors[] = "Airport '{$airportCode}' ourairports_ident must be a string";
+            } elseif (trim($oaIdent) === '') {
+                $errors[] = "Airport '{$airportCode}' ourairports_ident must not be empty when set";
+            } elseif (!isValidOurAirportsIdentFormat($oaIdent)) {
+                $errors[] = "Airport '{$airportCode}' has invalid ourairports_ident: '{$oaIdent}' "
+                    . '(use OurAirports ident, e.g. US-4027, CYAV, ID35)';
+            }
+        }
+
+        if (array_key_exists('ourairports_id', $airport)) {
+            $oaId = $airport['ourairports_id'];
+            if ($oaId === null) {
+                // Treat as unset
+            } elseif (is_bool($oaId)) {
+                $errors[] = "Airport '{$airportCode}' ourairports_id must be a positive integer";
+            } elseif (filter_var($oaId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+                $errors[] = "Airport '{$airportCode}' ourairports_id must be a positive integer";
+            } else {
+                $oaIdent = $airport['ourairports_ident'] ?? null;
+                $hasValidIdent = is_string($oaIdent)
+                    && trim($oaIdent) !== ''
+                    && isValidOurAirportsIdentFormat($oaIdent);
+                if (!$hasValidIdent) {
+                    $errors[] = "Airport '{$airportCode}' ourairports_id requires ourairports_ident";
+                }
             }
         }
 
