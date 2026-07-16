@@ -671,7 +671,7 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 | Density altitude | Weather cache | Required; null suppresses cue |
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
 | Runway length, surface, departure obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports with a NASR match |
-| Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; longest non-closed land runway (exclude water surfaces). Same POH length/surface stress as config override; per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
+| Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; join via `ourairports_ident` when set, else ICAO/FAA/config slug. Longest non-closed land runway (exclude water surfaces). Same POH length/surface stress as config override; per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
 | Operator runway override | `airports.json` `runway_length_ft` / `runway_surface` | Replaces NASR and OurAirports selection; obstructions dropped |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
 | Wind history (operational end) | Weather history cache | Required for Path A; see [Operational departure end selection](#operational-departure-end-selection) |
@@ -680,12 +680,13 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 
 1. `runway_length_ft` in `airports.json` (optional `runway_surface`)
 2. NASR longest active land runway (US AIS)
-3. OurAirports longest active land runway when NASR has no row
+3. OurAirports longest active land runway when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
 4. Weather-only fallback (elevation-banded DA thresholds; `fallback: true`)
 
 **OurAirports runway model** (when NASR is unavailable):
 
 - **Source**: `scripts/fetch-runways.php` downloads OurAirports `runways.csv` weekly for wind-compass geometry; DA performance consumes `length_ft`, `surface`, and displaced-threshold fields from the same cache slice (not lat/lon segments alone).
+- **Join**: Config `ourairports_ident` when set; otherwise match ICAO, FAA LID, or config airport slug to OurAirports `ident` in the cache.
 - **Selection**: Longest non-closed land runway; exclude water surfaces using OurAirports surface codes.
 - **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
 - **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
