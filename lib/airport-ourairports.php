@@ -91,11 +91,14 @@ function ourAirportsCacheLookupIdentsForAirport(string $configAirportId, array $
     };
 
     $push(getOurAirportsIdentFromAirportConfig($airport));
-    if (isset($airport['icao']) && is_string($airport['icao'])) {
-        $push($airport['icao']);
-    }
-    if (isset($airport['faa']) && is_string($airport['faa'])) {
-        $push($airport['faa']);
+    foreach (['icao', 'faa'] as $field) {
+        if (!isset($airport[$field])) {
+            continue;
+        }
+        $value = $airport[$field];
+        if (is_string($value) || is_int($value) || is_float($value)) {
+            $push((string) $value);
+        }
     }
     $push($configAirportId);
 

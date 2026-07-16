@@ -33,6 +33,16 @@ class AirportOurAirportsTest extends TestCase
         $this->assertSame(['US-4027', 'ZZZZ', 'ZZZ1', '45RANCH'], $idents);
     }
 
+    public function testCacheLookupIdents_CastsScalarIcaoFaa(): void
+    {
+        $idents = ourAirportsCacheLookupIdentsForAirport('45ranch', [
+            'icao' => 1234,
+            'faa' => 5678,
+        ]);
+
+        $this->assertSame(['1234', '5678', '45RANCH'], $idents);
+    }
+
     public function testGetOurAirportsIdentFromAirportConfig_NormalizesCase(): void
     {
         $this->assertSame('US-4027', getOurAirportsIdentFromAirportConfig([
