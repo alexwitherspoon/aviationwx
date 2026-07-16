@@ -128,6 +128,21 @@
           "he_displaced_threshold_ft": 0
         }
       ]
+    },
+    "US-4027": {
+      "center_lat": 42.173084,
+      "center_lon": -116.875378,
+      "segments": [],
+      "performance_runways": [
+        {
+          "rwy_id": "17/35",
+          "length_ft": 2700,
+          "surface": "GRS",
+          "ends": [],
+          "le_displaced_threshold_ft": 0,
+          "he_displaced_threshold_ft": 0
+        }
+      ]
     }
   }
 }

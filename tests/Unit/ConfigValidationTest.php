@@ -5406,6 +5406,42 @@ class ConfigValidationTest extends TestCase
         $this->assertGreaterThanOrEqual(60, $sec);
     }
 
+    public function testValidateAirportsJsonStructure_AcceptsOurAirportsIdentFields(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['45ranch'] = [
+            'name' => '45 Ranch Airport',
+            'lat' => 42.17,
+            'lon' => -116.87,
+            'access_type' => 'public',
+            'tower_status' => 'non_towered',
+            'ourairports_ident' => 'US-4027',
+            'ourairports_id' => 344311,
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertTrue($result['valid'], implode(' ', $result['errors']));
+    }
+
+    public function testValidateAirportsJsonStructure_RejectsInvalidOurAirportsIdent(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['bad'] = [
+            'name' => 'Bad Strip',
+            'lat' => 42.0,
+            'lon' => -116.0,
+            'access_type' => 'public',
+            'tower_status' => 'non_towered',
+            'ourairports_ident' => 'not valid',
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('ourairports_ident', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================

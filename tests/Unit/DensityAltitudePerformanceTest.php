@@ -253,6 +253,25 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame($result['worst_end_risk'], $result['risk_factor']);
     }
 
+    public function testPrivateStripUsesOurAirportsIdentMapping(): void
+    {
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => 5200,
+            'pressure_altitude' => 4200,
+            'temperature' => 32,
+        ], [
+            'id' => '45ranch',
+            'elevation_ft' => 4300,
+            'ourairports_ident' => 'US-4027',
+            'ourairports_id' => 344311,
+        ], '45ranch');
+
+        $this->assertNotNull($result);
+        $this->assertFalse($result['fallback']);
+        $this->assertSame('reference_models_ourairports', $result['reason']);
+        $this->assertSame('caution', $result['tier']);
+    }
+
     public function testOurAirportsSelectsLongestNonWaterRunway(): void
     {
         $runways = [
