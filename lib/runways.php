@@ -8,6 +8,7 @@
  * Active runways only; combines both sources in APCu cache.
  */
 
+require_once __DIR__ . '/airport-ourairports.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/heading-conversion.php';
@@ -614,7 +615,7 @@ function ourAirportsSelectLongestActiveLandRunway(array $runways): ?array
  *
  * @param array $data Parsed runways cache (must have 'airports' key)
  * @param string $airportId Airport identifier
- * @param array $airport Airport config with icao, faa (optional)
+ * @param array $airport Airport config with optional ourairports_ident, icao, faa
  * @return list<array>|null Performance runways or null when not found
  */
 function getOurAirportsPerformanceRunwaysFromParsedCache(array $data, string $airportId, array $airport): ?array
@@ -623,11 +624,7 @@ function getOurAirportsPerformanceRunwaysFromParsedCache(array $data, string $ai
         return null;
     }
     $airports = $data['airports'];
-    $identsToTry = array_filter([
-        strtoupper($airportId),
-        isset($airport['icao']) ? strtoupper((string) $airport['icao']) : null,
-        isset($airport['faa']) ? strtoupper((string) $airport['faa']) : null,
-    ]);
+    $identsToTry = ourAirportsCacheLookupIdentsForAirport($airportId, $airport);
     foreach ($identsToTry as $ident) {
         if (!isset($airports[$ident]) || !is_array($airports[$ident])) {
             continue;
