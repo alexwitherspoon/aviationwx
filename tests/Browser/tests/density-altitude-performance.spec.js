@@ -165,7 +165,7 @@ function getDashboardDaRow(page) {
  */
 function feetFromAriaLabel(ariaLabel) {
   expect(ariaLabel).toBeTruthy();
-  const match = ariaLabel.match(/Density altitude ([\d.,\s\u00a0]+) feet/);
+  const match = ariaLabel.match(/Density altitude (.+?) feet/);
   expect(match).toBeTruthy();
   return Number(match[1].replace(/\D/g, ''));
 }
