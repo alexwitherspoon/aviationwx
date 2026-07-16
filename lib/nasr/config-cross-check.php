@@ -157,7 +157,7 @@ function nasrCrossCheckMagneticDeclination(string $label, array $airport, array 
     $delta = abs($configDeg - $nasrDeg);
     $tolerance = NASR_CONFIG_MAGNETIC_TOLERANCE_DEG;
 
-    if ($delta < $tolerance) {
+    if ($delta <= $tolerance) {
         return null;
     }
 
