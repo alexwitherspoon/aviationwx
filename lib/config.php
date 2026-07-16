@@ -4538,10 +4538,12 @@ function validateAirportsJsonStructure(array $config): array {
 
         if (array_key_exists('ourairports_ident', $airport)) {
             $oaIdent = $airport['ourairports_ident'];
-            if ($oaIdent === null || $oaIdent === '') {
+            if ($oaIdent === null) {
                 // Treat as unset
             } elseif (!is_string($oaIdent)) {
                 $errors[] = "Airport '{$airportCode}' ourairports_ident must be a string";
+            } elseif (trim($oaIdent) === '') {
+                $errors[] = "Airport '{$airportCode}' ourairports_ident must not be empty when set";
             } elseif (!isValidOurAirportsIdentFormat($oaIdent)) {
                 $errors[] = "Airport '{$airportCode}' has invalid ourairports_ident: '{$oaIdent}' "
                     . '(use OurAirports ident, e.g. US-4027, CYAV, ID35)';

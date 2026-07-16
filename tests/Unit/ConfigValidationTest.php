@@ -5442,6 +5442,24 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('ourairports_ident', implode(' ', $result['errors']));
     }
 
+    public function testValidateAirportsJsonStructure_RejectsEmptyOurAirportsIdent(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['bad'] = [
+            'name' => 'Bad Strip',
+            'lat' => 42.0,
+            'lon' => -116.0,
+            'access_type' => 'public',
+            'tower_status' => 'non_towered',
+            'ourairports_ident' => '',
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('ourairports_ident must not be empty', implode(' ', $result['errors']));
+    }
+
     public function testValidateAirportsJsonStructure_RejectsOurAirportsIdWithoutIdent(): void
     {
         $config = $this->createMinimalConfig();
