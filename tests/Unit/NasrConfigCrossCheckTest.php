@@ -79,15 +79,30 @@ class NasrConfigCrossCheckTest extends TestCase
                 'keul' => [
                     'id' => 'keul',
                     'faa' => 'EUL',
-                    'magnetic_declination' => 15,
+                    'magnetic_declination' => 14,
                 ],
             ],
         ]);
 
         $this->assertCount(1, $result['warnings']);
         $this->assertStringContainsString("Airport 'keul' (EUL)", $result['warnings'][0]);
-        $this->assertStringContainsString('magnetic_declination 15 differs from NASR 16°E (year 2000)', $result['warnings'][0]);
+        $this->assertStringContainsString('magnetic_declination 14 differs from NASR 16°E (year 2000)', $result['warnings'][0]);
         $this->assertSame(1, $result['summary']['magnetic_warnings']);
+    }
+
+    public function testMagneticExactlyAtTolerancePasses(): void
+    {
+        $result = nasrCrossCheckAirportConfig([
+            'airports' => [
+                'keul' => [
+                    'id' => 'keul',
+                    'faa' => 'EUL',
+                    'magnetic_declination' => 15,
+                ],
+            ],
+        ]);
+
+        $this->assertSame([], $result['warnings']);
     }
 
     public function testNoNasrRowIsSkippedWithoutWarning(): void
