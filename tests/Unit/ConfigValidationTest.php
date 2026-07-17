@@ -5558,6 +5558,22 @@ class ConfigValidationTest extends TestCase
         );
     }
 
+    public function testRunwayEndsWithInvalidLengthFtDoesNotEmitRequiresError(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = -1;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '09'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $errors = implode(' ', $result['errors']);
+        $this->assertStringContainsString('runway_length_ft must be greater than zero', $errors);
+        $this->assertStringNotContainsString('runway_ends requires runway_length_ft', $errors);
+    }
+
     public function testRunwayEndsRejectsInvalidEndId(): void
     {
         $config = $this->createMinimalConfig();

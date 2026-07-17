@@ -138,16 +138,93 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $range = evaluateRunwayEndPerformanceRange($runway, 1000.0, 25.0, $tables);
 
-        $this->assertSame('bad', $range['worst']['end_id']);
-        $this->assertSame('good', $range['best']['end_id']);
+        $this->assertSame('good', $range['worst']['end_id']);
+        $this->assertSame('bad', $range['best']['end_id']);
         $this->assertGreaterThan($range['best']['total_risk'], $range['worst']['total_risk']);
+    }
+
+    public function testReciprocalObstructionMapsToOppositeDepartureEnd(): void
+    {
+        $runway = [
+            'length_ft' => 1860,
+            'surface' => 'ASPH',
+            'ends' => [
+                [
+                    'end_id' => '14',
+                    'true_alignment' => 165,
+                    'obstruction' => ['hgt_ft' => 40.0, 'dist_ft' => 206.0],
+                ],
+                [
+                    'end_id' => '32',
+                    'true_alignment' => 345,
+                    'obstruction' => [],
+                ],
+            ],
+        ];
+
+        $depart14 = resolveDepartureObstructionForEnd($runway['ends'][0], $runway);
+        $this->assertNull($depart14['hgt_ft']);
+        $this->assertNull($depart14['dist_ft']);
+
+        $depart32 = resolveDepartureObstructionForEnd($runway['ends'][1], $runway);
+        $this->assertSame(40.0, $depart32['hgt_ft']);
+        $this->assertEqualsWithDelta(2066.0, $depart32['dist_ft'], 0.001);
+        $this->assertSame('14', $depart32['source_end_id']);
+    }
+
+    public function testKpfcRealNasrSouthboundDepartureOmitsPerformanceFlag(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'PFC' => [
+                    'runways' => [[
+                        'rwy_id' => '14/32',
+                        'length_ft' => 1860,
+                        'surface' => 'ASPH',
+                        'condition' => 'GOOD',
+                        'ends' => [
+                            [
+                                'end_id' => '14',
+                                'true_alignment' => 165,
+                                'obstruction' => ['type' => 'TREE', 'hgt_ft' => 40.0, 'dist_ft' => 206.0],
+                            ],
+                            [
+                                'end_id' => '32',
+                                'true_alignment' => 345,
+                                'obstruction' => [],
+                            ],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        $result = buildDensityAltitudePerformance([
+            'density_altitude' => -163,
+            'pressure_altitude' => -132,
+            'temperature' => 15,
+        ], [
+            'id' => 'kpfc',
+            'faa' => 'PFC',
+            'icao' => 'KPFC',
+            'elevation_ft' => 10,
+            'magnetic_declination' => 14,
+            'runways' => [
+                ['name' => '14/32', 'heading_1' => 146, 'heading_2' => 326],
+            ],
+        ], 'kpfc');
+
+        $this->assertNull($result);
     }
 
     public function testAsymmetricTierCautionWhenOnlyWorstEndConstrained(): void
     {
         $tables = loadPohTakeoffTables();
         $runway = [
-            'length_ft' => 6600,
+            'length_ft' => 2500,
             'surface' => 'ASPH',
             'ends' => [
                 [
@@ -156,18 +233,20 @@ class DensityAltitudePerformanceTest extends TestCase
                 ],
                 [
                     'end_id' => 'bad',
-                    'obstruction' => ['hgt_ft' => 135.0, 'dist_ft' => 2800.0],
+                    'obstruction' => ['hgt_ft' => 200.0, 'dist_ft' => 500.0],
                 ],
             ],
         ];
 
-        $range = evaluateRunwayEndPerformanceRange($runway, 90.0, 29.0, $tables);
+        $range = evaluateRunwayEndPerformanceRange($runway, 5000.0, 35.0, $tables);
         $tier = densityAltitudePerformanceTierFromEndRisks(
             $range['worst']['total_risk'],
             $range['best']['total_risk']
         );
 
         $this->assertSame('caution', $tier);
+        $this->assertSame('good', $range['worst']['end_id']);
+        $this->assertSame('bad', $range['best']['end_id']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['worst']['total_risk']);
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $range['best']['total_risk']);
     }
@@ -418,11 +497,12 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertSame('caution', $result['tier']);
-        $this->assertSame('asymmetric_heuristic', $result['selection_basis']);
-        $this->assertSame('07', $result['operational_end_id']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['scored_end_risk']);
-        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['scored_end_risk']);
-        $this->assertSame(3.0, $result['worst_end_risk']);
+        $this->assertSame('both_ends', $result['selection_basis']);
+        $this->assertArrayNotHasKey('operational_end_id', $result);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['risk_factor']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['risk_factor']);
+        $this->assertEqualsWithDelta(1.313, $result['worst_end_risk'], 0.01);
+        $this->assertEqualsWithDelta(1.313, $result['best_end_risk'], 0.01);
     }
 
     public function testOr81CoolDayNormalOnFavorableEnd(): void
@@ -527,7 +607,7 @@ class DensityAltitudePerformanceTest extends TestCase
         );
 
         $this->assertSame('asymmetric_heuristic', $selection['selection_basis']);
-        $this->assertSame('32', $selection['operational_end_id']);
+        $this->assertSame('14', $selection['operational_end_id']);
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $selection['scored_end']['total_risk']);
     }
 

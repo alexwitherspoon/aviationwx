@@ -3,8 +3,9 @@
 /**
  * Operator-configured runway context for density altitude performance.
  *
- * Extends runway_length_ft / runway_surface with optional per-end departure data
- * when NASR and OurAirports have no usable runway row.
+ * Extends runway_length_ft / runway_surface with optional per-end threshold data
+ * (NASR-aligned approach-side obstruction filing) when NASR and OurAirports
+ * have no usable runway row.
  */
 
 require_once __DIR__ . '/logger.php';
@@ -47,6 +48,8 @@ function getConfigRunwaySurfaceOverride(array $airport): ?string
 /**
  * Whether a config obstruction block has usable height and distance for POH stress.
  *
+ * Obstructions are filed on the approach side of the tagged threshold (NASR-aligned).
+ *
  * @param array $obstruction Parsed obstruction row
  */
 function configRunwayObstructionIsUsable(array $obstruction): bool
@@ -78,7 +81,7 @@ function configRunwayAirportLogLabel(array $airport): string
 }
 
 /**
- * Parse maintainer runway_ends[] into NASR-shaped end rows.
+ * Parse maintainer runway_ends[] into NASR-shaped end rows (approach-side obstruction filing).
  *
  * @param array $airport Airport configuration
  * @return list<array<string, mixed>>
@@ -105,6 +108,15 @@ function parseConfigRunwayEnds(array $airport): array
             aviationwx_log('warning', 'config runway_ends row skipped: missing end_id', [
                 'airport' => $airportLabel,
                 'index' => $index,
+            ], 'app');
+            continue;
+        }
+
+        if (parseRunwayEndIdentMagneticHeading($endId) === null) {
+            aviationwx_log('warning', 'config runway_ends row skipped: invalid end_id', [
+                'airport' => $airportLabel,
+                'index' => $index,
+                'end_id' => $endId,
             ], 'app');
             continue;
         }
@@ -191,7 +203,7 @@ function buildConfigRunwayForDensityAltitude(array $airport): ?array
 }
 
 /**
- * Whether a config runway includes departure obstruction data on any end.
+ * Whether a config runway includes approach-side obstruction data on any end.
  *
  * @param array $runway Runway row from buildConfigRunwayForDensityAltitude()
  */
@@ -255,7 +267,7 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
         return;
     }
 
-    if (getConfigRunwayLengthOverrideFt($airport) === null) {
+    if (!array_key_exists('runway_length_ft', $airport) || $airport['runway_length_ft'] === null) {
         $errors[] = "Airport '{$airportCode}' runway_ends requires runway_length_ft";
     }
 

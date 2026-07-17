@@ -134,17 +134,17 @@ Pipeline and operational end selection order are documented in [DATA_FLOW.md](DA
 
 **Runway selection**: **Longest** active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Multi-runway airports often have shorter strips; evaluating only the longest runway avoids over-triggering when a pilot might use a longer departure surface. Shorter-runway operations remain pilot judgment and ADM. Operator `runway_length_ft` in config overrides NASR length (see below).
 
-**Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config`. Without optional `runway_ends`, `ends` is empty and NASR-style departure obstructions are not applied (tier capped at caution). When `runway_ends` includes `obstruction.hgt_ft` and `obstruction.dist_ft` on an end, the POH obstruction model runs for that end and warning tier is allowed. Optional `tkof_dist_avbl` and `displaced_thr_len` per end reduce effective departure roll. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
+**Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config`. Without optional `runway_ends`, `ends` is empty and obstruction stress is not applied (tier capped at caution). When `runway_ends` includes `obstruction.hgt_ft` and `obstruction.dist_ft` on an end (approach-side filing, NASR-aligned), the POH obstruction model runs for departures from the reciprocal end and warning tier is allowed. Optional `tkof_dist_avbl` and `displaced_thr_len` per end reduce effective departure roll on departures from that end. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
 **Grass / non-paved**: POH note 4 - add 15% of **ground roll** to chart total (not 15% of total distance).
 
-**Obstruction clearance** (departure end): AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. For NASR `OBSTN_HGT` and `DIST_FROM_THR` within runway length, scale required distance **linearly** by `obst_hgt / 50` (including obstacles taller than 50 ft; there is no cap at the chart reference height). Compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value.
+**Obstruction clearance** (approach-side filing): FAA NASR and operator `runway_ends` file controlling obstacles on the **approach side** of threshold **R** (`OBSTN_HGT`, `DIST_FROM_THR` on end R). When scoring **departure from the reciprocal end D**, resolve obstruction from R's record at along-track distance `runway_length + dist_from_R`. AFM chart total is distance to clear a **50 ft** obstacle at max gross with 0 wind. Scale required distance **linearly** by `obst_hgt / 50` (including obstacles taller than 50 ft; there is no cap at the chart reference height). Compute clearance stress `(chart_total × height_ratio) / obst_dist`. Compare against runway stress `chart_total / effective_departure_length` and use the higher value.
 
 When NASR publishes **`OBSTN_CLNC_SLOPE`** (horizontal feet per vertical foot, e.g. 40 = 40:1), compute allowed height at the obstacle distance as `dist / slope`. If `obst_hgt` is on or below that surface, obstacle clearance stress is omitted (runway-length stress only). If the obstacle penetrates the surface, use full `obst_hgt` for linear scaling. Missing or zero slope retains linear scaling without a clearance-surface check.
 
-No obstruction stress when obstacle is beyond runway length or height/distance are missing.
+No obstruction stress when height/distance are missing on the reciprocal end record.
 
-**Effective departure length** (per runway end): `min(runway_length - displaced_thr_len, tkof_dist_avbl)` when NASR publishes those fields; otherwise published runway length.
+**Effective departure length** (per runway end): `min(runway_length - displaced_thr_len, tkof_dist_avbl)` when NASR publishes those fields; otherwise published runway length. `displaced_thr_len` and `tkof_dist_avbl` apply to departure from the tagged end only.
 
 **Profile risk**:
 
@@ -248,7 +248,7 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 | `resolveDensityAltitudePerformanceEndSelection()` | `lib/weather/density-altitude-performance.php` |
 | `evaluateRunwayEndPerformanceRange()`, `evaluateSingleRunwayEndPerformance()` | `lib/weather/density-altitude-performance.php` |
 | `densityAltitudePerformanceTierFromScoredEnd()`, `densityAltitudePerformanceTierFromEndRisks()` | `lib/weather/density-altitude-performance.php` |
-| `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()` | `lib/weather/da-performance-runway-end.php` |
+| `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()`, `resolveDepartureObstructionForEnd()` | `lib/weather/da-performance-runway-end.php` |
 | `computeWindowMeanWind()` | `lib/weather/history.php` |
 | `pohComputeDepartureEndStress()` | `lib/weather/poh-takeoff.php` |
 | NASR runway selection and effective length | `lib/nasr/runway-selection.php`, `lib/nasr/cache.php` |

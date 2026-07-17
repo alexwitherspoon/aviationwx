@@ -125,6 +125,7 @@ function lookupEvaluationForRunwayEnd(
 
     return evaluateSingleRunwayEndPerformance(
         $end,
+        $runway,
         $availableFt,
         $nonPaved,
         $pressureAltitudeFt,
@@ -233,24 +234,26 @@ function resolveDensityAltitudePerformanceEndSelection(
 /**
  * Score one runway departure end using POH chart distances.
  *
- * @param array $end Runway end with optional obstruction[]
+ * Obstructions are resolved from the reciprocal end's approach-side NASR/config filing.
+ *
+ * @param array $end Runway end row scored for departure
+ * @param array $runway Selected runway with length_ft and ends[]
  * @param array{c152: array, c172: array, c182: array} $tables
  * @return array{total_risk: float, end_id: ?string, risk152: float, risk172: float, risk182: float}
  */
 function evaluateSingleRunwayEndPerformance(
     array $end,
+    array $runway,
     int $availableFt,
     bool $nonPaved,
     float $pressureAltitudeFt,
     float $tempC,
     array $tables
 ): array {
-    $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-    $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
-    $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
-    $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
-        ? (float) $obst['slope']
-        : null;
+    $resolved = resolveDepartureObstructionForEnd($end, $runway);
+    $obstHgt = $resolved['hgt_ft'];
+    $obstDist = $resolved['dist_ft'];
+    $obstSlope = $resolved['slope'];
 
     $risk152 = 0.0;
     $risk172 = 0.0;
@@ -322,6 +325,7 @@ function evaluateRunwayEndPerformanceRange(
         $availableFt = nasrEffectiveDepartureLengthFt($end, $runwayLengthFt);
         $scored = evaluateSingleRunwayEndPerformance(
             $end,
+            $runway,
             $availableFt,
             $nonPaved,
             $pressureAltitudeFt,

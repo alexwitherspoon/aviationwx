@@ -154,23 +154,23 @@ The weather API `density_altitude_performance` cue compares AFM takeoff charts t
 
 Set `ourairports_ident` when the strip has no FAA or ICAO code but a row exists on [OurAirports](https://ourairports.com/data/) (Public Domain). Example: 45 Ranch → `US-4027`. Optional `ourairports_id` (integer from `airports.csv`) documents the stable OurAirports primary key; runway lookup uses `ourairports_ident`. These fields are for internal data joins only; dashboard labels still use ICAO > IATA > FAA.
 
-By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
+By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end approach-side obstruction filing and effective departure length.
 
 When `runway_length_ft` is set on an airport, that length replaces NASR and OurAirports runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
 
-Optional `runway_ends` supplies per-end departure context when NASR and OurAirports have no usable runway row (private strips, pending OurAirports submissions). Each entry:
+Optional `runway_ends` supplies per-threshold data (NASR-aligned) when NASR and OurAirports have no usable runway row (private strips, pending OurAirports submissions). Each entry:
 
 | Field | Description |
 |-------|-------------|
 | `end_id` | Runway end ident (e.g. `17`, `35L`) |
-| `displaced_thr_len` | Displaced threshold in feet (reduces roll available) |
-| `tkof_dist_avbl` | Declared takeoff distance available in feet (caps roll available) |
-| `obstruction.hgt_ft` | Departure obstacle height in feet |
-| `obstruction.dist_ft` | Obstacle distance from threshold in feet |
+| `displaced_thr_len` | Displaced threshold in feet (reduces roll available when departing from this end) |
+| `tkof_dist_avbl` | Declared takeoff distance available in feet (caps roll available when departing from this end) |
+| `obstruction.hgt_ft` | Controlling obstacle height in feet (approach side of this threshold) |
+| `obstruction.dist_ft` | Distance from this threshold to the obstacle along the centerline (approach side; affects departure from the **opposite** end) |
 | `obstruction.slope` | Obstacle clearance slope (e.g. `20` for 20:1) |
 | `obstruction.type` | Optional label (e.g. `TREES`, `HILL`) |
 
-When `runway_ends` is omitted, the override behaves as before: length and surface only, with no departure-end data. When any end includes usable `obstruction.hgt_ft` and `obstruction.dist_ft`, the full POH obstruction model runs and **warning** tier is allowed (not capped at caution).
+When `runway_ends` is omitted, the override behaves as before: length and surface only, with no obstruction data. When any end includes usable `obstruction.hgt_ft` and `obstruction.dist_ft`, the full POH obstruction model runs for departures from the reciprocal end and **warning** tier is allowed (not capped at caution).
 
 Wind-based departure-end selection uses `runways[0].heading_1` / `heading_2` when present alongside `runway_ends`.
 
