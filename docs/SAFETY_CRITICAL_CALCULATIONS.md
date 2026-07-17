@@ -132,7 +132,7 @@ Pipeline and tier rules are documented in [DATA_FLOW.md](DATA_FLOW.md#density-al
 
 **Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied: **0 kt wind** is assumed as a neutral conservative case (neither headwind credit nor tailwind penalty). Charts are at max gross; lighter loading is not modeled.
 
-**Runway selection**: All **active land runways** from NASR when available (exclude `WATER`, `COND=FAILED`). Score every departure end on every selected runway. POH length and surface stress penalize shorter or non-paved strips. Operator `runway_length_ft` in config overrides NASR and OurAirports (see below).
+**Runway selection**: All **active land runways** from NASR when available (exclude `WATER`, `COND=FAILED`, `COND=CLOSED`). Score every departure end on every selected runway. **Active NOTAM** full runway or aerodrome closures (from a trustworthy NOTAM cache) remove those strips before scoring; partial restrictions and upcoming closures do not. POH length and surface stress penalize shorter or non-paved strips. Operator `runway_length_ft` in config overrides NASR and OurAirports (see below).
 
 **Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config`. Without optional `runway_ends`, `ends` is empty and obstruction stress is not applied (tier capped at caution). When `runway_ends` includes `obstruction.hgt_ft` and `obstruction.dist_ft` on an end (approach-side filing, NASR-aligned), the POH obstruction model runs for departures from the reciprocal end and warning tier is allowed. Optional `tkof_dist_avbl` and `displaced_thr_len` per end reduce effective departure roll on departures from that end. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
@@ -169,15 +169,19 @@ Constants `PERFORMANCE_STRESS_LOW` (0.67) and `PERFORMANCE_STRESS_HIGH` (1.33) a
 **Best end** (`selection_basis: best_performance`):
 
 - Score all departure ends on all selected runways; find the global minimum-risk end.
+- Equal-risk ties prefer the lowest crosswind on the departure heading, then the strongest headwind, then stable runway/end ordering.
 - **warning** when best end sum ≥ 2.40
 - **caution** when best end sum ≥ 1.20 (and not warning)
 - **normal** otherwise
-- `risk_factor`, `scored_end_risk`, and `operational_end_id` use the best end
-- `worst_end_risk` is reported for transparency only and does not drive the cue
+- Airport tier maps from `best_end.total_risk` only
+- `worst_end` and other `ends[]` rows are informational only and do not drive the cue
+- Display tooltips use `best_end.end_id` and `best_end.rwy_id`
 
 Pilots choose the best available runway and direction; a poor score on an unused strip or opposite end must not trigger a false alert.
 
-**Normal** tier omits `density_altitude_performance` from API responses.
+**Normal** tier still returns the full-model payload (including `ends`). UI cues (emoji and amber styling) appear only for caution and warning.
+
+**Staleness**: Caution and warning tiers are suppressed when density altitude, temperature, pressure, or (for the full model) pressure altitude exceed fail-closed staleness thresholds. Normal-tier payloads still attach when inputs are fresh.
 
 ### OurAirports runway model (when NASR unavailable)
 
@@ -191,20 +195,23 @@ When FAA NASR has no airport row (typical for non-US fields such as Canadian ICA
 
 ### Fallback model (weather only)
 
-When no runway data: elevation-banded thresholds on density altitude and delta (DA minus field elevation). Returns tier only; `risk_factor` is **null**; `fallback: true`.
+When no runway data: elevation-banded thresholds on density altitude and delta (DA minus field elevation). Returns tier only with `fallback: true` and no runway scores.
 
 ### Implementation
 
 | Function | File |
 |----------|------|
-| `buildDensityAltitudePerformance()` | `lib/weather/density-altitude-performance.php` |
+| `computeDensityAltitudePerformance()` | `lib/weather/density-altitude-performance.php` |
 | `attachDensityAltitudePerformance()` | `lib/weather/density-altitude-performance.php` |
+| `densityAltitudePerformanceMaySurfaceAlert()` | `lib/weather/density-altitude-performance.php` |
+| `isWeatherFieldFailclosedStale()` | `lib/weather/cache-utils.php` |
 | `evaluateAirportRunwayEndPerformanceRange()`, `evaluateRunwayEndPerformanceRange()`, `evaluateSingleRunwayEndPerformance()` | `lib/weather/density-altitude-performance.php` |
 | `densityAltitudePerformanceTierFromScoredEnd()` | `lib/weather/density-altitude-performance.php` |
 | `buildConfigRunwayForDensityAltitude()`, `configRunwayHasDepartureObstructionData()` | `lib/config-runway.php` |
 | `resolveDepartureObstructionForEnd()`, `findReciprocalRunwayEnd()` | `lib/weather/da-performance-runway-end.php` |
 | `pohComputeDepartureEndStress()` | `lib/weather/poh-takeoff.php` |
 | `nasrSelectActiveLandRunwaysForPerformance()` | `lib/nasr/runway-selection.php` |
+| `filterPerformanceRunwaysForActiveNotamClosures()` | `lib/weather/da-performance-notam-closures.php` |
 | NASR cache and effective length | `lib/nasr/cache.php` |
 | NASR ingest | `scripts/fetch-nasr-apt.php` |
 
@@ -212,6 +219,8 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 
 - `tests/Unit/DensityAltitudePerformanceTest.php` - tier mapping, reciprocal obstruction, config `runway_ends`, OR81/KPFC-style strips
 - `tests/Unit/DaPerformanceMultiRunwayTest.php` - multi-runway selection and best-end tier policy
+- `tests/Unit/DaPerformanceBestEndSafetyTest.php` - false-positive regression, payload invariants, warning-tier caps, attach behavior
+- `tests/Unit/DaPerformanceRunwayClosureTest.php` - NASR failed/closed rows and active NOTAM runway exclusions
 - `tests/Unit/DensityAltitudePerformanceReferenceScenarioTest.php` - locked real-airport reference tiers
 - `tests/Unit/ConfigRunwayTest.php` - config runway builder and validation
 - `tests/Unit/PohTakeoffTest.php` - AFM lookup and obstruction stress
@@ -219,21 +228,21 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 
 ### Reference scenario locks (CI)
 
-Real airports with fixed weather inputs are locked in `tests/Fixtures/density-altitude-performance-scenarios.json`. NASR runway/obstruction rows for those airports live under `tests/Fixtures/nasr/`. `DensityAltitudePerformanceReferenceScenarioTest` calls `buildDensityAltitudePerformance()` and asserts the tier (`normal` omits the field), `risk_factor`, and worst/best end risk sums when a tier is present.
+Real airports with fixed weather inputs are locked in `tests/Fixtures/density-altitude-performance-scenarios.json`. NASR runway/obstruction rows for those airports live under `tests/Fixtures/nasr/`. `DensityAltitudePerformanceReferenceScenarioTest` calls `computeDensityAltitudePerformance()` and asserts the tier, `best_end.total_risk`, and `worst_end.total_risk` when a tier is present.
 
 **When to update expectations**
 
 - POH takeoff table JSON under `data/poh/` changes on purpose
-- Tier thresholds (`DENSITY_ALTITUDE_PERFORMANCE_TIER_*`) or asymmetric end policy changes
+- Tier thresholds (`DENSITY_ALTITUDE_PERFORMANCE_TIER_*`) or best-end tier policy changes
 - NASR runway selection, obstruction clearance slope, or effective departure length rules change
 
-Recompute tiers locally (same NASR fixture build as the test `setUp()`), update the JSON expected `tier`, `expected_risk_factor`, `expected_worst_end_risk`, and `expected_best_end_risk`, and document the reason in the pull request. Do not change tier thresholds and scenario locks in the same change unless both are intentional.
+Recompute tiers locally (same NASR fixture build as the test `setUp()`), update the JSON expected `tier`, `expected_best_end_risk`, and `expected_worst_end_risk`, and document the reason in the pull request. Do not change tier thresholds and scenario locks in the same change unless both are intentional.
 
 **Out of scope for scenario locks**: browser UI regression tests for tier display, live FAA weather (fixtures use pinned PA, temperature, and DA only).
 
 ### Fleet validation
 
-`scripts/fleet-da-constants-audit.php` evaluates DA performance policy variants against live weather for all configured airports. Requires production `CONFIG_PATH` and `weather_history_enabled`. Use to compare alert counts and per-airport basis before changing `DA_PERF_*` constants.
+`scripts/fleet-da-constants-audit.php` evaluates DA performance tiers against live weather for all configured airports. Requires production `CONFIG_PATH`. Use to compare alert counts and per-airport `best_end` before changing tier thresholds.
 
 ---
 
