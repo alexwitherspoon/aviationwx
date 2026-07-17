@@ -471,7 +471,7 @@ function pickBestWorstScoredEnds(
         if (compareScoredEndsForBestDeparture($scored, $best, $windFromDeg, $windSpeedKts) < 0) {
             $best = $scored;
         }
-        if (compareScoredEndsForWorstDeparture($scored, $worst, $windFromDeg, $windSpeedKts) > 0) {
+        if (compareScoredEndsForWorstDeparture($scored, $worst, $windFromDeg, $windSpeedKts) < 0) {
             $worst = $scored;
         }
     }

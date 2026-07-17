@@ -119,6 +119,36 @@ class DaPerformanceWindTieBreakTest extends TestCase
         $this->assertSame('25', $picked['best']['end_id']);
     }
 
+    public function testPickWorstEndSelectsHighestRisk(): void
+    {
+        $scoredEnds = [
+            [
+                'total_risk' => 1.0,
+                'end_id' => '07',
+                'rwy_id' => '07/25',
+                'true_alignment' => 70,
+                'risk152' => 0.0,
+                'risk172' => 0.0,
+                'risk182' => 0.0,
+            ],
+            [
+                'total_risk' => 2.5,
+                'end_id' => '25',
+                'rwy_id' => '07/25',
+                'true_alignment' => 250,
+                'risk152' => 0.0,
+                'risk172' => 0.0,
+                'risk182' => 0.0,
+            ],
+        ];
+
+        $picked = pickBestWorstScoredEnds($scoredEnds, null, null);
+
+        $this->assertSame('07', $picked['best']['end_id']);
+        $this->assertSame('25', $picked['worst']['end_id']);
+        $this->assertGreaterThan($picked['best']['total_risk'], $picked['worst']['total_risk']);
+    }
+
     public function testPickBestEndFallsBackToEndIdWithoutWind(): void
     {
         $scoredEnds = [
