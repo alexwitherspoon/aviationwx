@@ -634,17 +634,17 @@ See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 - **Rate Limiting**: Prevents resource exhaustion
 - **Background Processing**: Stale-while-revalidate reduces blocking
 
-## Data classification and observability
+## Data Classification and Observability
 
-AviationWX ingests many external catalogs and live feeds. New sources (NASR tables, OurAirports CSVs, computed slices) should land in predictable places for **health checks**, the **status page**, and **safety review** without another taxonomy debate.
+AviationWX ingests many external catalogs and live feeds. New sources (NASR tables, OurAirports CSVs, computed slices) land in predictable places for **health checks**, the **status page**, and **safety review**.
 
-Organize by **what breaks for whom**, not by vendor, filename, or fetch script. The status page layout may change; this vocabulary should stay stable.
+Organize by **what breaks for whom**, not by vendor, filename, or fetch script. Expandable status-page groups are views over this vocabulary; consumer slugs stay stable when groups merge or split.
 
 ### Planes (top level)
 
 | Plane | Question | Typical cadence | Primary observability |
 |-------|----------|-----------------|------------------------|
-| **Platform** | Is the node healthy enough to work? | Continuous | System Status (flat rows: config, cache, scheduler, logging, …) |
+| **Platform** | Is the node healthy enough to work? | Continuous | System Status (flat rows: config, cache, scheduler, logging, ...) |
 | **Live observations** | Is fresh operational data arriving? | Seconds to hours | System Status (expandable providers) and **Site Status** per airport |
 | **Reference catalogs** | Is slow-changing airfield context still trustworthy? | Days to weeks | System Status under **Reference data** (expandable consumer features) |
 | **Derived context** | Are computed joins and config slices still valid? | Varies | Report under the catalog or feature they serve |
@@ -666,7 +666,7 @@ These map to product and safety domains. UI groups are views over this list; gro
 
 Runway geometry and runway performance may share fetch jobs but are **distinct consumers**: they fail independently and follow different precedence (see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md) and [DATA_FLOW.md](DATA_FLOW.md)).
 
-Live observations use the same leaf pattern under their plane, for example `weather_obs` (METAR HTTP, METAR bulk, PWS, …), `restrictions` (NOTAM), and `imagery` (webcams, variants).
+Live observations use the same leaf pattern under their plane, for example `weather_obs` (METAR HTTP, METAR bulk, PWS, ...), `restrictions` (NOTAM), and `imagery` (webcams, variants).
 
 ### Source leaves (grows freely)
 
@@ -696,7 +696,7 @@ Record consumption once; reference elsewhere in copy:
 - NASR configured slices **use** full NASR cache plus config SHA
 - Density-altitude performance **uses** runway performance and weather (weather stays in the live plane)
 
-On the status page, show dependencies as a short note under the consumer (for example “NOTAM: see Live observations”), not a second health row under Reference data.
+On the status page, show dependencies as a short note under the consumer (for example "NOTAM: see Live observations"), not a second health row under Reference data.
 
 ### Rollup and health-check rules
 
@@ -707,11 +707,11 @@ Regardless of how many expandable blocks the status page renders:
 3. **One health check per cache artifact** - shared files (for example `airports.csv`) appear once under `airport_identity`, referenced from other consumers
 4. **Staleness is explicit** per leaf: local cache age, upstream probe result, hard max age
 
-Implement health checks in `lib/status-checks.php` using this model (`sources[]` under consumer features, parallel to weather `providers[]`). See [OPERATIONS.md](OPERATIONS.md#status-page) for how operators interpret the page today.
+Health checks in `lib/status-checks.php` use this model (`sources[]` under consumer features, parallel to weather `providers[]`). See [OPERATIONS.md](OPERATIONS.md#status-page) for operator interpretation.
 
 ### Where new work goes
 
-| When adding… | Ontology action |
+| When adding... | Ontology action |
 |--------------|-----------------|
 | OurAirports or NASR bulk ingest | New or updated leaf under the matching consumer; `kind: bulk` |
 | New NASR table for runway performance | Same `runway_performance` consumer, richer leaf details |
@@ -723,12 +723,14 @@ Pipeline specifics (merge order, staleness nulling, DA precedence) remain in [DA
 
 ## Monitoring
 
+Reference-catalog classification, status-page grouping, and health-check rollup rules are in [Data Classification and Observability](#data-classification-and-observability) above. Platform endpoints and logs:
+
 - **Logging**: Comprehensive file-based logging via `lib/logger.php` (writes to `/var/log/aviationwx/`, persisted on host at `/var/aviationwx/logs`)
 - **Log Rotation**: Logrotate handles rotation (1 rotated file, 100MB max per file)
 - **Metrics**: `/metrics.php` endpoint for monitoring
 - **Health Checks**: `/health.php` for uptime monitoring
 - **Diagnostics**: `/diagnostics.php` for system information
-- **Status Page**: `/status.php` for system health overview
+- **Status Page**: `/status.php` for system and reference-catalog health (see [OPERATIONS.md](OPERATIONS.md#status-page))
 
 ## Future Improvements
 
