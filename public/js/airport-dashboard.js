@@ -794,12 +794,21 @@ function formatAltitude(ft) {
 function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance) {
     const da = window.AviationWX && window.AviationWX.densityAltitudePerformance;
     if (!da) {
+        const distUnit = getDistanceUnit();
+        const value = formatAltitude(densityAltitudeFt);
+        let ariaLabel = 'Density altitude unavailable';
+        if (densityAltitudeFt !== null && densityAltitudeFt !== undefined && value !== '--') {
+            const ariaValue = distUnit === 'm'
+                ? Math.round(Number(densityAltitudeFt) * 0.3048)
+                : Math.round(Number(densityAltitudeFt));
+            ariaLabel = `Density altitude ${ariaValue.toLocaleString()} ${distUnit === 'm' ? 'meters' : 'feet'}`;
+        }
         return {
-            value: formatAltitude(densityAltitudeFt),
+            value,
             emoji: '',
             className: '',
             title: '',
-            ariaLabel: 'Density altitude unavailable',
+            ariaLabel,
         };
     }
     return da.formatDashboardDisplay(densityAltitudeFt, performance, {

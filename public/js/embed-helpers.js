@@ -226,7 +226,11 @@
         const da = window.AviationWX && window.AviationWX.densityAltitudePerformance;
         if (!da) {
             const base = formatEmbedDist(densityAltitudeFt, distUnit, true);
-            return { text: base, className: '', title: '', ariaLabel: 'Density altitude unavailable' };
+            let ariaLabel = 'Density altitude unavailable';
+            if (base !== '--') {
+                ariaLabel = `Density altitude ${base}`;
+            }
+            return { text: base, className: '', title: '', ariaLabel };
         }
         return da.formatEmbedDisplay(densityAltitudeFt, performance, distUnit, formatEmbedDist);
     }
