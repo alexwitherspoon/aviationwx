@@ -87,6 +87,8 @@ Shows:
 - Per-airport status (Weather API, Webcams)
 - Usage metrics (Views, API requests, Map tiles served)
 
+**Reference data on the status page (direction):** System Status will group slow-changing catalogs under **Reference data**, with expandable **consumer features** (runway geometry, runway performance, airport identity, comms, and related sources). Each source row should show cache age, upstream probe result when applicable, and hard max age. The stable vocabulary and rollup rules live in [ARCHITECTURE.md - Data classification and observability](ARCHITECTURE.md#data-classification-and-observability). Today several reference caches (identifier validation, frequencies, NASR FRQ) are not yet surfaced; implementation is tracked separately from this ops guide.
+
 **Interpreting signals**
 
 - **Weather Data Fetching** (system row): aggregate **HTTP fetch success** for weather sources over the last hour. It is **not** a guarantee that every airport has fresh observations. Expand the row (▶) to see per-provider **HTTP 429** counts for the last hour (`cache/weather_health.json`).

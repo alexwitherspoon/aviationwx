@@ -634,6 +634,93 @@ See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 - **Rate Limiting**: Prevents resource exhaustion
 - **Background Processing**: Stale-while-revalidate reduces blocking
 
+## Data classification and observability
+
+AviationWX ingests many external catalogs and live feeds. New sources (NASR tables, OurAirports CSVs, computed slices) should land in predictable places for **health checks**, the **status page**, and **safety review** without another taxonomy debate.
+
+Organize by **what breaks for whom**, not by vendor, filename, or fetch script. The status page layout may change; this vocabulary should stay stable.
+
+### Planes (top level)
+
+| Plane | Question | Typical cadence | Primary observability |
+|-------|----------|-----------------|------------------------|
+| **Platform** | Is the node healthy enough to work? | Continuous | System Status (flat rows: config, cache, scheduler, logging, …) |
+| **Live observations** | Is fresh operational data arriving? | Seconds to hours | System Status (expandable providers) and **Site Status** per airport |
+| **Reference catalogs** | Is slow-changing airfield context still trustworthy? | Days to weeks | System Status under **Reference data** (expandable consumer features) |
+| **Derived context** | Are computed joins and config slices still valid? | Varies | Report under the catalog or feature they serve |
+
+**Site Status** (per configured airport) is a separate dimension: live observation health only. Do not mix bulk-catalog age into per-airport cards.
+
+### Consumer features (reference catalogs)
+
+These map to product and safety domains. UI groups are views over this list; groups may merge or split without renaming consumers.
+
+| Consumer | Serves | Example sources |
+|----------|--------|-----------------|
+| `runway_geometry` | Wind compass, map runway labels | FAA NGDA, OurAirports `runways.csv` |
+| `runway_performance` | Density-altitude runway model | NASR APT, OurAirports runway fields, `airports.json` overrides; **uses** NOTAM cache for active closures |
+| `airport_identity` | Validation, joins, slugs | OurAirports `airports.csv`, config |
+| `airport_comms` | Dashboard and API frequencies | NASR FRQ, OurAirports `airport-frequencies.csv`, config |
+| `airport_location` | Country and region context | Country-resolution aggregate (computed) |
+| `geomagnetism` | Magnetic wind direction | WMM (bundled with deploy) |
+
+Runway geometry and runway performance may share fetch jobs but are **distinct consumers**: they fail independently and follow different precedence (see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md) and [DATA_FLOW.md](DATA_FLOW.md)).
+
+Live observations use the same leaf pattern under their plane, for example `weather_obs` (METAR HTTP, METAR bulk, PWS, …), `restrictions` (NOTAM), and `imagery` (webcams, variants).
+
+### Source leaves (grows freely)
+
+Each cache artifact or ingest path is one **leaf** with metadata in a consistent shape:
+
+| Field | Purpose |
+|-------|---------|
+| `consumer` | Slug from the tables above (for example `runway_geometry`, `airport_comms`) |
+| `source` | Human label and upstream URL |
+| `kind` | `bulk`, `computed`, `bundled`, or `config` |
+| `cadence` | Probe interval, fetch interval, hard max age |
+| `dependencies` | Other leaves this consumer reads (links only, not duplicate health rows) |
+
+**Kind** sets ops expectations:
+
+- **bulk** - external dump; conditional HTTP probes (ETag / `Last-Modified`) apply when supported
+- **computed** - rebuilt from config and geometry (country resolution)
+- **bundled** - ships with deploy (WMM)
+- **config** - operator truth in `airports.json` (overrides, manual runways, frequencies)
+
+### Dependencies (edges, not duplicate rows)
+
+Record consumption once; reference elsewhere in copy:
+
+- Runway geometry **uses** `airports.csv` for centers and FAA→ICAO mapping
+- Runway performance **uses** NOTAM cache for active runway and aerodrome closures
+- NASR configured slices **use** full NASR cache plus config SHA
+- Density-altitude performance **uses** runway performance and weather (weather stays in the live plane)
+
+On the status page, show dependencies as a short note under the consumer (for example “NOTAM: see Live observations”), not a second health row under Reference data.
+
+### Rollup and health-check rules
+
+Regardless of how many expandable blocks the status page renders:
+
+1. **Parent status = worst child** in that subtree
+2. **Auto-expand** when degraded or down
+3. **One health check per cache artifact** - shared files (for example `airports.csv`) appear once under `airport_identity`, referenced from other consumers
+4. **Staleness is explicit** per leaf: local cache age, upstream probe result, hard max age
+
+Implement health checks in `lib/status-checks.php` using this model (`sources[]` under consumer features, parallel to weather `providers[]`). See [OPERATIONS.md](OPERATIONS.md#status-page) for how operators interpret the page today.
+
+### Where new work goes
+
+| When adding… | Ontology action |
+|--------------|-----------------|
+| OurAirports or NASR bulk ingest | New or updated leaf under the matching consumer; `kind: bulk` |
+| New NASR table for runway performance | Same `runway_performance` consumer, richer leaf details |
+| New OurAirports CSV for a new product surface | New consumer only if it is a first-class feature; otherwise extend an existing consumer |
+| Computed aggregate | `kind: computed` under the consumer it serves |
+| Live feed | Live plane, existing provider pattern |
+
+Pipeline specifics (merge order, staleness nulling, DA precedence) remain in [DATA_FLOW.md](DATA_FLOW.md) and [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md). This section is the **map**; those documents are the **rules** for each pipeline.
+
 ## Monitoring
 
 - **Logging**: Comprehensive file-based logging via `lib/logger.php` (writes to `/var/log/aviationwx/`, persisted on host at `/var/aviationwx/logs`)

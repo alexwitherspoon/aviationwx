@@ -4,6 +4,8 @@ This document describes how weather, webcam, and NOTAM data is fetched, processe
 
 **Document role:** Checked-in reference for **required pipeline logic** - what the system must do, in present tense. It is not a project plan, rollout tracker, or implementation status log. Delivery gaps belong in GitHub issues and pull requests (see `CODE_STYLE.md`). Use this document to understand system intent, then verify in code that behavior matches. Logic stated here can be audited against the implementation to find safety or functional gaps.
 
+For how external catalogs and live feeds are **classified** (planes, consumer features, health-check leaves), see [ARCHITECTURE.md - Data classification and observability](ARCHITECTURE.md#data-classification-and-observability). This document states **pipeline behavior** for each path; the architecture section is the stable map for new ingest and status-page work.
+
 ## Table of Contents
 
 1. [Weather Data Fetching](#weather-data-fetching)
