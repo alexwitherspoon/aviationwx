@@ -323,6 +323,12 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
         }
 
         $obst = $row['obstruction'];
+        $hasHgt = array_key_exists('hgt_ft', $obst) && $obst['hgt_ft'] !== null;
+        $hasDist = array_key_exists('dist_ft', $obst) && $obst['dist_ft'] !== null;
+        if ($hasHgt xor $hasDist) {
+            $errors[] = "Airport '{$airportCode}' {$label}.obstruction.hgt_ft and obstruction.dist_ft must both be set when either is provided";
+        }
+
         if (configRunwayObstructionIsUsable($obst)) {
             $hasUsableObstruction = true;
         }

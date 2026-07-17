@@ -5574,6 +5574,24 @@ class ConfigValidationTest extends TestCase
         $this->assertStringNotContainsString('runway_ends requires runway_length_ft', $errors);
     }
 
+    public function testRunwayEndsRejectsPartialObstructionBlock(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            [
+                'end_id' => '17',
+                'obstruction' => ['hgt_ft' => 200],
+            ],
+            ['end_id' => '35'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('must both be set when either is provided', implode(' ', $result['errors']));
+    }
+
     public function testRunwayEndsRejectsMoreThanTwoEntries(): void
     {
         $config = $this->createMinimalConfig();
