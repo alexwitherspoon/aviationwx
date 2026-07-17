@@ -209,6 +209,7 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 | `densityAltitudePerformanceTierFromScoredEnd()` | `lib/weather/density-altitude-performance.php` |
 | `buildConfigRunwayForDensityAltitude()`, `configRunwayHasDepartureObstructionData()` | `lib/config-runway.php` |
 | `resolveDepartureObstructionForEnd()`, `findReciprocalRunwayEnd()` | `lib/weather/da-performance-departure-obstruction.php` |
+| `computeWindowMeanWind()` | `lib/weather/history.php` |
 | `pohComputeDepartureEndStress()` | `lib/weather/poh-takeoff.php` |
 | `nasrSelectActiveLandRunwaysForPerformance()` | `lib/nasr/runway-selection.php` |
 | `filterPerformanceRunwaysForActiveNotamClosures()` | `lib/weather/da-performance-notam-closures.php` |
