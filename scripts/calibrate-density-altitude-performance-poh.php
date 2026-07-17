@@ -208,7 +208,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         }
     }
 
-    $built = computeDensityAltitudePerformance($weather, $airport);
+    $built = computeDensityAltitudePerformance($weather, $airport, $airportId);
     $fallback = assessFallbackDensityAltitudePerformance($da, $elev);
 
     return [

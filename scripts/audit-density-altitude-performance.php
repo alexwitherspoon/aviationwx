@@ -263,7 +263,7 @@ function auditRecordRow(array &$summary, array &$rows, string $id, array $airpor
         $summary['prod_mismatch']++;
     }
 
-    $apiPayload = computeDensityAltitudePerformance($weather, $airport);
+    $apiPayload = computeDensityAltitudePerformance($weather, $airport, $id);
     $rows[] = array_merge([
         'id' => $id,
         'name' => $airport['name'] ?? '',
