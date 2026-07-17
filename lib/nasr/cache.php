@@ -8,6 +8,7 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/identifiers.php';
 require_once __DIR__ . '/parse.php';
 require_once __DIR__ . '/discovery.php';
+require_once __DIR__ . '/../config-runway.php';
 
 /**
  * @var array|null In-request memo for configured NASR slice
@@ -465,29 +466,6 @@ function getEffectiveFieldElevationFt(array $airport, ?array $nasrRecord): ?int
     return null;
 }
 
-/**
- * Config override for runway length when explicitly set by operator.
- */
-function getConfigRunwayLengthOverrideFt(array $airport): ?int
-{
-    if (isset($airport['runway_length_ft']) && is_numeric($airport['runway_length_ft'])) {
-        $len = (int) round((float) $airport['runway_length_ft']);
-        return $len > 0 ? $len : null;
-    }
-    return null;
-}
-
-/**
- * Config override for runway surface code.
- */
-function getConfigRunwaySurfaceOverride(array $airport): ?string
-{
-    if (!empty($airport['runway_surface']) && is_string($airport['runway_surface'])) {
-        $surface = strtoupper(trim($airport['runway_surface']));
-        return $surface !== '' ? $surface : null;
-    }
-    return null;
-}
 
 /**
  * Clear in-request NASR cache memo (testing).

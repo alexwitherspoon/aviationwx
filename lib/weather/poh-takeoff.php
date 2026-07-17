@@ -205,8 +205,8 @@ function pohEffectiveObstacleHeightForChart(
  * Takeoff stress from POH chart distance vs runway and departure obstruction.
  *
  * Chart total is distance to clear a 50 ft obstacle (POH standard). When a departure
- * obstruction lies at dist_ft with hgt_ft, required distance scales linearly by
- * obst_hgt/50 (including above 50 ft). When NASR publishes OBSTN_CLNC_SLOPE, obstacles
+ * obstruction lies at dist_ft with hgt_ft along the departure path, required distance
+ * scales linearly by obst_hgt/50 (including above 50 ft). When NASR publishes OBSTN_CLNC_SLOPE, obstacles
  * on or below that clearance surface do not add obstacle stress beyond runway roll.
  *
  * @param array $table POH fixture table
@@ -232,9 +232,6 @@ function pohComputeDepartureEndStress(
     $stressRunway = $chartTotal / $runwayLengthFt;
 
     if ($obstHgtFt === null || $obstDistFt === null || $obstHgtFt <= 0 || $obstDistFt <= 0) {
-        return $stressRunway;
-    }
-    if ($obstDistFt > $runwayLengthFt) {
         return $stressRunway;
     }
 

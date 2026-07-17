@@ -119,6 +119,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | **Density altitude performance** |||
 | `runway_length_ft` | NASR longest runway | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `runway_surface` | `ASPH` when length override is set | NASR-style surface code when `runway_length_ft` is set (e.g. `TURF`, `ASPH`). Drives POH grass correction on non-paved surfaces. |
+| `runway_ends` | - | Optional per-end departure data when `runway_length_ft` is set. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `ourairports_ident` | - | OurAirports open-data ident for internal runway joins (e.g. `US-4027`, `CYAV`). Not shown as the pilot-facing airport code. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `ourairports_id` | - | Optional stable OurAirports integer id from `airports.csv` when set alongside `ourairports_ident`. |
 | **Data Sources** |||
@@ -146,20 +147,36 @@ The weather API `density_altitude_performance` cue compares AFM takeoff charts t
 
 **Runway source precedence** (first match wins):
 
-1. `runway_length_ft` / `runway_surface` in `airports.json` (operator override)
+1. `runway_length_ft` / `runway_surface` / optional `runway_ends` in `airports.json` (operator override)
 2. FAA NASR longest active land runway (US)
 3. OurAirports longest active land runway when NASR has no row: match `ourairports_ident` first, then ICAO, FAA, or config slug against the runway cache
 4. Weather-only elevation bands (`fallback: true`)
 
 Set `ourairports_ident` when the strip has no FAA or ICAO code but a row exists on [OurAirports](https://ourairports.com/data/) (Public Domain). Example: 45 Ranch → `US-4027`. Optional `ourairports_id` (integer from `airports.csv`) documents the stable OurAirports primary key; runway lookup uses `ourairports_ident`. These fields are for internal data joins only; dashboard labels still use ICAO > IATA > FAA.
 
-By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end departure obstructions and effective departure length.
+By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end approach-side obstruction filing and effective departure length.
 
 When `runway_length_ft` is set on an airport, that length replaces NASR and OurAirports runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
 
-**Operator-provided length caveat:** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even when NASR lists them for the airport. Only runway-length stress is evaluated. Set this when NASR runway length is wrong or missing; the cue can **under-alert** when departure obstacles matter on that strip. Pilots remain responsible for obstacle clearance and runway selection.
+Optional `runway_ends` supplies per-threshold data (NASR-aligned) when NASR and OurAirports have no usable runway row (private strips, pending OurAirports submissions). Each entry:
 
-**Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. The same cap applies to OurAirports-only runway context.
+| Field | Description |
+|-------|-------------|
+| `end_id` | Runway end ident (e.g. `17`, `35L`) |
+| `displaced_thr_len` | Displaced threshold in feet (reduces roll available when departing from this end) |
+| `tkof_dist_avbl` | Declared takeoff distance available in feet (caps roll available when departing from this end) |
+| `obstruction.hgt_ft` | Controlling obstacle height in feet (approach side of this threshold) |
+| `obstruction.dist_ft` | Distance from this threshold to the obstacle along the centerline (approach side; affects departure from the **opposite** end) |
+| `obstruction.slope` | Obstacle clearance slope (e.g. `20` for 20:1) |
+| `obstruction.type` | Optional label (e.g. `TREES`, `HILL`) |
+
+When `runway_ends` is omitted, the override behaves as before: length and surface only, with no obstruction data. When any end includes usable `obstruction.hgt_ft` and `obstruction.dist_ft`, the full POH obstruction model runs for departures from the reciprocal end and **warning** tier is allowed (not capped at caution).
+
+Wind-based departure-end selection uses `runways[0].heading_1` / `heading_2` when present alongside `runway_ends`.
+
+**Operator-provided length caveat (no `runway_ends`):** The override builds a synthetic runway with **no departure-end data** (`ends` is empty). NASR departure obstructions are **not** applied. Only runway-length stress is evaluated. The cue can **under-alert** when departure obstacles matter on that strip.
+
+**Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. `tkof_dist_avbl` and `displaced_thr_len` affect stress but do not lift the caution cap without usable `obstruction.hgt_ft` and `obstruction.dist_ft` on at least one end. The same cap applies to OurAirports-only runway context.
 
 Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performance) and `docs/DATA_FLOW.md`.
 
