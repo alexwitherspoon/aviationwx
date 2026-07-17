@@ -94,6 +94,7 @@ function parseConfigRunwayEnds(array $airport): array
 
     $airportLabel = configRunwayAirportLogLabel($airport);
     $ends = [];
+    $seenEndIds = [];
     foreach ($airport['runway_ends'] as $index => $row) {
         if (!is_array($row)) {
             aviationwx_log('warning', 'config runway_ends row skipped: not an object', [
@@ -121,6 +122,16 @@ function parseConfigRunwayEnds(array $airport): array
             ], 'app');
             continue;
         }
+
+        if (isset($seenEndIds[$canonicalEndId])) {
+            aviationwx_log('warning', 'config runway_ends row skipped: duplicate end_id', [
+                'airport' => $airportLabel,
+                'index' => $index,
+                'end_id' => $canonicalEndId,
+            ], 'app');
+            continue;
+        }
+        $seenEndIds[$canonicalEndId] = true;
 
         $end = [
             'end_id' => $canonicalEndId,
