@@ -51,8 +51,8 @@ function densityAltitudePerformanceRunwayPairMatchesDesignator(string $rwyId, st
 /**
  * Load NOTAM rows when cache age is within the NOTAM failclosed threshold.
  *
- * Returns null when cache is missing or too stale so scoring does not assume
- * runways are open without current closure data.
+ * Returns null when cache is missing or too stale. Callers skip NOTAM-based
+ * runway exclusions and leave the ingest-filtered runway list unchanged.
  *
  * @return list<array<string, mixed>>|null
  */
