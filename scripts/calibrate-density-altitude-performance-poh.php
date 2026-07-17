@@ -185,7 +185,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         }
         $totalRisk = calculateSummedPerformanceRisk($r152, $r172, $r182);
         $endDetail['total_risk'] = round($totalRisk, 3);
-        $endDetail['tier'] = densityAltitudePerformanceTierForRisk($totalRisk);
+        $endDetail['tier'] = densityAltitudePerformanceTierFromScoredEnd($totalRisk);
         $endRows[] = $endDetail;
         $worstTotalRisk = max($worstTotalRisk, $totalRisk);
         $bestTotalRisk = min($bestTotalRisk, $totalRisk);
@@ -208,7 +208,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         }
     }
 
-    $built = buildDensityAltitudePerformance($weather, $airport);
+    $built = computeDensityAltitudePerformance($weather, $airport);
     $fallback = assessFallbackDensityAltitudePerformance($da, $elev);
 
     return [
@@ -223,7 +223,7 @@ function analyzeAirportPoh(string $airportId, array $airport, array $weather): a
         'runway_surface' => $runway['surface'] ?? '',
         'non_paved' => $nonPaved,
         'current_tier' => $built['tier'] ?? 'normal',
-        'current_risk' => $built['risk_factor'] ?? null,
+        'current_risk' => $built['best_end']['total_risk'] ?? null,
         'fallback_tier' => $fallback['tier'] ?? 'normal',
         'best_end_total_risk' => round($bestTotalRisk, 3),
         'worst_end_total_risk' => round($worstTotalRisk, 3),
@@ -266,7 +266,7 @@ function sweepStressCurve(callable $riskFromStress): array
     $rows = [];
     foreach ([0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.2, 1.33, 1.5, 1.7, 2.0] as $stress) {
         $risk = $riskFromStress($stress);
-        $tier = densityAltitudePerformanceTierForRisk($risk);
+        $tier = densityAltitudePerformanceTierFromScoredEnd($risk);
         $rows[] = ['stress' => $stress, 'risk' => round($risk, 3), 'tier' => $tier];
     }
     return $rows;

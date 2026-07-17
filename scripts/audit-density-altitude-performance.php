@@ -32,7 +32,7 @@ require_once __DIR__ . '/../lib/nasr/identifiers.php';
 /**
  * @return array<string, mixed>|null
  */
-function auditBuildPerformanceDetail(array $weather, array $airport): ?array
+function auditBuildPerformanceDetail(array $weather, array $airport, ?string $airportId = null): ?array
 {
     $densityAltitude = $weather['density_altitude'] ?? null;
     if (!is_numeric($densityAltitude)) {
@@ -42,139 +42,51 @@ function auditBuildPerformanceDetail(array $weather, array $airport): ?array
 
     $pressureAltitude = $weather['pressure_altitude'] ?? null;
     $temperature = $weather['temperature'] ?? null;
-    if (!is_numeric($pressureAltitude) || !is_numeric($temperature)) {
-        return null;
-    }
 
     $nasrRecord = getNasrAirportForConfig($airport);
     if ($nasrRecord === null) {
         $nasrRecord = auditLookupNasrFromFullCache($airport);
     }
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
-    $configLength = getConfigRunwayLengthOverrideFt($airport);
-    $selectedRunway = null;
-    $runwaySource = 'none';
 
-    if ($configLength !== null) {
-        $selectedRunway = [
-            'rwy_id' => 'config',
-            'length_ft' => $configLength,
-            'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
-            'ends' => [],
-        ];
-        $runwaySource = 'config';
-    } elseif ($nasrRecord !== null) {
-        $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
-        $runwaySource = $selectedRunway !== null ? 'nasr' : 'nasr_no_runway';
+    $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
+    if ($resolvedAirportId === '') {
+        $resolvedAirportId = null;
     }
 
-    $fallback = assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);
-    $fallbackTier = $fallback['tier'] ?? 'normal';
+    $built = computeDensityAltitudePerformance($weather, $airport, $resolvedAirportId);
+    if ($built === null) {
+        return null;
+    }
 
-    if ($selectedRunway === null) {
+    if (!empty($built['fallback'])) {
         return [
             'path' => 'fallback',
-            'tier' => $fallbackTier,
-            'risk_factor' => null,
-            'fallback_tier' => $fallbackTier,
+            'tier' => $built['tier'],
+            'fallback_tier' => $built['tier'],
             'prod_density_altitude_performance' => $weather['_prod_density_altitude_performance'] ?? null,
             'field_elev_ft' => $fieldElevationFt,
             'da_ft' => $densityAltitudeFt,
             'da_delta_ft' => $fieldElevationFt !== null ? $densityAltitudeFt - $fieldElevationFt : null,
-            'pa_ft' => (int) round((float) $pressureAltitude),
-            'temp_c' => round((float) $temperature, 1),
-            'runway_source' => $runwaySource,
-            'runway_length_ft' => null,
-            'runway_surface' => null,
-            'total_risk' => null,
+            'pa_ft' => is_numeric($pressureAltitude) ? (int) round((float) $pressureAltitude) : null,
+            'temp_c' => is_numeric($temperature) ? round((float) $temperature, 1) : null,
         ];
-    }
-
-    $tables = loadPohTakeoffTables();
-    $availableFt = (int) ($selectedRunway['length_ft'] ?? 0);
-    $surface = (string) ($selectedRunway['surface'] ?? '');
-    $nonPaved = nasrIsNonPavedSurface($surface);
-
-    $evaluation = evaluateRunwayEndPerformanceRange(
-        $selectedRunway,
-        (float) $pressureAltitude,
-        (float) $temperature,
-        $tables
-    );
-
-    $worstTotalRisk = $evaluation['worst']['total_risk'];
-    $bestTotalRisk = $evaluation['best']['total_risk'];
-    $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-    $riskFactor = densityAltitudePerformanceRiskFactorForTier($tier, $worstTotalRisk, $bestTotalRisk);
-
-    $worstEnd = [
-        'end_id' => $evaluation['worst']['end_id'],
-        'obst_hgt_ft' => null,
-        'obst_dist_ft' => null,
-        'risk172' => round($evaluation['worst']['risk172'], 3),
-        'total_risk' => round($worstTotalRisk, 3),
-    ];
-
-    $ends = $selectedRunway['ends'] ?? [];
-    if ($ends === []) {
-        $ends = [['end_id' => null, 'obstruction' => []]];
-    }
-
-    foreach ($ends as $end) {
-        if (!is_array($end)) {
-            continue;
-        }
-        if (($end['end_id'] ?? null) !== $evaluation['worst']['end_id']) {
-            continue;
-        }
-        $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-        $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
-        $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
-        $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
-            ? (float) $obst['slope']
-            : null;
-        $req172 = pohRequiredTakeoffDistanceFt(
-            $tables['c172'],
-            (float) $pressureAltitude,
-            (float) $temperature,
-            $nonPaved,
-            $obstHgt,
-            $obstDist,
-            $availableFt,
-            $obstSlope
-        );
-        $worstEnd['obst_hgt_ft'] = $obstHgt;
-        $worstEnd['obst_dist_ft'] = $obstDist;
-        $worstEnd['req172'] = $req172;
     }
 
     return [
         'path' => 'full',
-        'tier' => $tier,
-        'risk_factor' => round($riskFactor, 3),
-        'fallback_tier' => $fallbackTier,
+        'tier' => $built['tier'],
+        'selection_basis' => $built['selection_basis'] ?? null,
+        'best_end_id' => $built['best_end']['end_id'] ?? null,
+        'best_rwy_id' => $built['best_end']['rwy_id'] ?? null,
+        'worst_total_risk' => $built['worst_end']['total_risk'] ?? null,
+        'best_total_risk' => $built['best_end']['total_risk'] ?? null,
         'prod_density_altitude_performance' => $weather['_prod_density_altitude_performance'] ?? null,
         'field_elev_ft' => $fieldElevationFt,
         'da_ft' => $densityAltitudeFt,
         'da_delta_ft' => $fieldElevationFt !== null ? $densityAltitudeFt - $fieldElevationFt : null,
-        'pa_ft' => (int) round((float) $pressureAltitude),
-        'temp_c' => round((float) $temperature, 1),
-        'runway_source' => $runwaySource,
-        'runway_id' => $selectedRunway['rwy_id'] ?? null,
-        'runway_length_ft' => $availableFt,
-        'runway_surface' => $surface,
-        'non_paved' => $nonPaved,
-        'worst_end_id' => $evaluation['worst']['end_id'],
-        'best_end_id' => $evaluation['best']['end_id'],
-        'worst_obst_hgt_ft' => $worstEnd['obst_hgt_ft'] ?? null,
-        'worst_obst_dist_ft' => $worstEnd['obst_dist_ft'] ?? null,
-        'risk152' => round($evaluation['worst']['risk152'], 3),
-        'risk172' => $worstEnd['risk172'] ?? null,
-        'risk182' => round($evaluation['worst']['risk182'], 3),
-        'worst_total_risk' => round($worstTotalRisk, 3),
-        'best_total_risk' => round($bestTotalRisk, 3),
-        'stress172' => $availableFt > 0 && isset($worstEnd['req172'])
-            ? round($worstEnd['req172'] / $availableFt, 2) : null,
+        'pa_ft' => is_numeric($pressureAltitude) ? (int) round((float) $pressureAltitude) : null,
+        'temp_c' => is_numeric($temperature) ? round((float) $temperature, 1) : null,
     ];
 }
 
@@ -318,7 +230,7 @@ function auditRecordRow(array &$summary, array &$rows, string $id, array $airpor
         return;
     }
 
-    $detail = auditBuildPerformanceDetail($weather, $airport);
+    $detail = auditBuildPerformanceDetail($weather, $airport, $id);
     if ($detail === null) {
         $summary['no_da']++;
         return;
@@ -351,7 +263,7 @@ function auditRecordRow(array &$summary, array &$rows, string $id, array $airpor
         $summary['prod_mismatch']++;
     }
 
-    $apiPayload = buildDensityAltitudePerformance($weather, $airport);
+    $apiPayload = computeDensityAltitudePerformance($weather, $airport);
     $rows[] = array_merge([
         'id' => $id,
         'name' => $airport['name'] ?? '',

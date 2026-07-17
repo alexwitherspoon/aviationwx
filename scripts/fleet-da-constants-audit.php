@@ -13,6 +13,7 @@ declare(strict_types=1);
 error_reporting(E_ALL & ~E_DEPRECATED);
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/embed-helpers.php';
 require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
 
 function fleetDaAuditApiGet(string $url): ?array
@@ -27,6 +28,21 @@ function fleetDaAuditApiGet(string $url): ?array
     $decoded = json_decode($raw, true);
 
     return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Normalize Public API bulk weather rows for local computeDensityAltitudePerformance().
+ *
+ * @param array<string, mixed> $weather
+ * @return array<string, mixed>
+ */
+function fleetDaAuditNormalizeWeatherRow(array $weather): array
+{
+    if (isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+        return convertPublicApiToInternalFormat($weather);
+    }
+
+    return $weather;
 }
 
 $options = getopt('', ['format:', 'help']);
@@ -62,13 +78,14 @@ foreach (array_chunk($ids, 10) as $chunk) {
 $results = [];
 foreach ($ids as $airportId) {
     $weather = $bulk[$airportId] ?? null;
-    if ($weather === null) {
+    if (!is_array($weather)) {
         continue;
     }
 
     $ap = $enabled[$airportId];
     $ap['id'] = $airportId;
-    $perf = buildDensityAltitudePerformance($weather, $ap, $airportId);
+    $normalizedWeather = fleetDaAuditNormalizeWeatherRow($weather);
+    $perf = computeDensityAltitudePerformance($normalizedWeather, $ap, $airportId);
 
     $results[] = [
         'id' => $airportId,
@@ -76,11 +93,11 @@ foreach ($ids as $airportId) {
         'pa' => $weather['pressure_altitude'] ?? null,
         'tier' => $perf['tier'] ?? 'normal',
         'selection_basis' => $perf['selection_basis'] ?? '-',
-        'operational_end_id' => $perf['operational_end_id'] ?? '-',
-        'operational_rwy_id' => $perf['operational_rwy_id'] ?? '-',
-        'scored_end_risk' => $perf['scored_end_risk'] ?? null,
-        'worst_end_risk' => $perf['worst_end_risk'] ?? null,
-        'best_end_risk' => $perf['best_end_risk'] ?? null,
+        'best_end_id' => $perf['best_end']['end_id'] ?? '-',
+        'best_rwy_id' => $perf['best_end']['rwy_id'] ?? '-',
+        'best_total_risk' => $perf['best_end']['total_risk'] ?? null,
+        'worst_end_id' => $perf['worst_end']['end_id'] ?? '-',
+        'worst_total_risk' => $perf['worst_end']['total_risk'] ?? null,
     ];
 }
 
@@ -95,17 +112,17 @@ echo str_repeat('=', 72) . "\n";
 echo sprintf("  Alerting airports: %d / %d\n\n", $alerts, count($results));
 
 $focus = ['or81', 'kpfc', '69v', '7s9', '05s', '12id', '1xs0', 'khio', 's81', 'hio'];
-echo "FOCUS AIRPORTS\n";
+echo "FOCUS AIRPORTS (tier from best_end only)\n";
 printf(
     "%-12s %6s | %-7s %-8s %-12s %-8s %-8s %-8s\n",
     'id',
     'DA',
     'tier',
     'basis',
-    'end',
-    'scored',
-    'worst',
-    'best'
+    'best_end',
+    'best_risk',
+    'worst_end',
+    'worst_risk'
 );
 foreach ($results as $r) {
     if (!in_array($r['id'], $focus, true)) {
@@ -117,9 +134,9 @@ foreach ($results as $r) {
         (string) ($r['da'] ?? '-'),
         $r['tier'],
         $r['selection_basis'],
-        $r['operational_end_id'],
-        $r['scored_end_risk'] ?? '-',
-        $r['worst_end_risk'] ?? '-',
-        $r['best_end_risk'] ?? '-'
+        $r['best_end_id'],
+        $r['best_total_risk'] ?? '-',
+        $r['worst_end_id'],
+        $r['worst_total_risk'] ?? '-'
     );
 }
