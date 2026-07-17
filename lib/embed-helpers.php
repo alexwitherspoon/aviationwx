@@ -24,9 +24,29 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/weather/density-altitude-performance.php';
 
 // Load public API functions for airport lookup
 require_once __DIR__ . '/public-api/middleware.php';
+
+/**
+ * Attach density altitude performance for raw cache fallback rows only.
+ *
+ * Embed API and Public API responses already include performance from formatWeatherResponse().
+ *
+ * @param array $weather Weather row (internal cache shape)
+ * @param array $airport Airport configuration
+ * @param string $airportId Config airport id
+ * @return array Weather with optional density_altitude_performance
+ */
+function enrichEmbedWeatherForDisplay(array $weather, array $airport, string $airportId): array
+{
+    if ($weather === []) {
+        return $weather;
+    }
+
+    return attachDensityAltitudePerformance($weather, $airport, $airportId);
+}
 
 /**
  * Get the original client IP address for forwarding to internal API
@@ -103,7 +123,18 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     
     // Fallback: read directly from cache file if API call fails
     // This is still READ-ONLY - we just read the file that api/weather.php wrote
-    return readWeatherCacheFile($airportId);
+    $cached = readWeatherCacheFile($airportId);
+    if ($cached === null) {
+        return null;
+    }
+
+    $airport = getPublicApiAirport($airportId);
+    if ($airport === null) {
+        return $cached;
+    }
+    $airport['id'] = $airportId;
+
+    return enrichEmbedWeatherForDisplay($cached, $airport, $airportId);
 }
 
 /**
@@ -111,6 +142,7 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
  * 
  * Public API nests daily data under 'daily' key with ISO timestamps.
  * Templates expect flat fields with Unix timestamps.
+ * `density_altitude_performance` passes through unchanged.
  * 
  * @param array $apiWeather Weather data from public API
  * @return array Weather data in internal format
