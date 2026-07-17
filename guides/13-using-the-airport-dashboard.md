@@ -387,6 +387,14 @@ On mobile devices, you may also see a link that opens the airport in a supported
 
 ## Section 6: Airport Information
 
+### Where this information comes from
+
+The **Airport Information** section (elevation, runways, frequencies, fuel, and related details) combines maintainer-provided updates with open reference data. For runways and other airport facts, AviationWX uses official sources when available. When those are missing, we rely on [OurAirports](https://ourairports.com/) community-maintained data.
+
+That data also feeds the **runway wind** display and **density-altitude performance** cue when we do not have a more official runway record.
+
+If something looks wrong, contact the local airport steward or email `contact@aviationwx.org`. Airport owners and sponsors can also correct the listing on OurAirports, which helps pilots beyond AviationWX.
+
 ### Basic Info
 
 ```

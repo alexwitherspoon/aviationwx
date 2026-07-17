@@ -62,6 +62,26 @@ In your email, include:
 Optional but helpful:
 - **Photos of the install site** (even cellphone photos are fine)
 - **A sample camera image** (one representative still)
+- **OurAirports status:** listed / needs update / not listed yet (include ident or link if you have it)
+
+---
+
+### Keep your OurAirports listing current
+
+AviationWX uses [OurAirports](https://ourairports.com/) open data to fill in **airport reference information** when a more official source is not available (for example FAA NASR data for U.S. fields).
+
+That can include:
+
+- **Runways** (used for the wind rose, runway labels, and density-altitude performance cues)
+- **Radio frequencies** and other published airport facts
+- **General airport information** (name, location, identifiers)
+
+Official sources take priority when we have them. For small private strips and fields not in national databases, OurAirports is often the main reference.
+
+**If you manage or sponsor the airport**, please keep the OurAirports entry accurate and up to date - especially runways and identifiers. Stale open data can mean wrong runway labels or incomplete performance cues on the dashboard.
+
+- **Already listed?** Review and update the airport page at [ourairports.com](https://ourairports.com/).
+- **Not listed yet?** Add the airport there when you can. If you know the OurAirports ident (for example `US-4027`), include it in your submission email.
 
 ---
 
