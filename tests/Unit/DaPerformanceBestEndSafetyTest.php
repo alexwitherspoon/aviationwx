@@ -77,8 +77,8 @@ class DaPerformanceBestEndSafetyTest extends TestCase
         $this->assertArrayHasKey('ends', $result);
         $this->assertGreaterThan(1, count($result['ends']));
         $this->assertLessThanOrEqual(
-            $result['best_end']['total_risk'],
-            $result['worst_end']['total_risk']
+            $result['worst_end']['total_risk'],
+            $result['best_end']['total_risk']
         );
     }
 
@@ -113,8 +113,8 @@ class DaPerformanceBestEndSafetyTest extends TestCase
         $this->assertSame('best_performance', $result['selection_basis']);
         $this->assertFalse($result['fallback']);
         $this->assertLessThanOrEqual(
-            $result['best_end']['total_risk'],
-            $result['worst_end']['total_risk']
+            $result['worst_end']['total_risk'],
+            $result['best_end']['total_risk']
         );
         $this->assertArrayHasKey('end_id', $result['best_end']);
         $this->assertArrayHasKey('rwy_id', $result['best_end']);
