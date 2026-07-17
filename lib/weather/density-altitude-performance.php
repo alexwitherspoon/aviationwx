@@ -125,6 +125,7 @@ function lookupEvaluationForRunwayEnd(
 
     return evaluateSingleRunwayEndPerformance(
         $end,
+        $runway,
         $availableFt,
         $nonPaved,
         $pressureAltitudeFt,
@@ -171,12 +172,31 @@ function resolveDensityAltitudePerformanceEndSelection(
         'wind_basis' => null,
     ];
 
-    if ($runwaySource === 'config') {
+    $ends = $runway['ends'] ?? [];
+    if ($runwaySource === 'config' && $ends === []) {
         return $bothEndsResult;
     }
 
-    $ends = $runway['ends'] ?? [];
     if ($ends === []) {
+        return $bothEndsResult;
+    }
+
+    $validEnds = 0;
+    foreach ($ends as $end) {
+        if (!is_array($end)) {
+            continue;
+        }
+        $endId = isset($end['end_id']) ? trim((string) $end['end_id']) : '';
+        if ($endId !== '') {
+            $validEnds++;
+        }
+    }
+
+    if ($validEnds !== 2) {
+        return $bothEndsResult;
+    }
+
+    if (!runwayHasReciprocalEndPair($runway)) {
         return $bothEndsResult;
     }
 
@@ -233,24 +253,26 @@ function resolveDensityAltitudePerformanceEndSelection(
 /**
  * Score one runway departure end using POH chart distances.
  *
- * @param array $end Runway end with optional obstruction[]
+ * Obstructions are resolved from the reciprocal end's approach-side NASR/config filing.
+ *
+ * @param array $end Runway end row scored for departure
+ * @param array $runway Selected runway with length_ft and ends[]
  * @param array{c152: array, c172: array, c182: array} $tables
  * @return array{total_risk: float, end_id: ?string, risk152: float, risk172: float, risk182: float}
  */
 function evaluateSingleRunwayEndPerformance(
     array $end,
+    array $runway,
     int $availableFt,
     bool $nonPaved,
     float $pressureAltitudeFt,
     float $tempC,
     array $tables
 ): array {
-    $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
-    $obstHgt = isset($obst['hgt_ft']) ? (float) $obst['hgt_ft'] : null;
-    $obstDist = isset($obst['dist_ft']) ? (float) $obst['dist_ft'] : null;
-    $obstSlope = isset($obst['slope']) && is_numeric($obst['slope']) && (float) $obst['slope'] > 0
-        ? (float) $obst['slope']
-        : null;
+    $resolved = resolveDepartureObstructionForEnd($end, $runway);
+    $obstHgt = $resolved['hgt_ft'];
+    $obstDist = $resolved['dist_ft'];
+    $obstSlope = $resolved['slope'];
 
     $risk152 = 0.0;
     $risk172 = 0.0;
@@ -322,6 +344,7 @@ function evaluateRunwayEndPerformanceRange(
         $availableFt = nasrEffectiveDepartureLengthFt($end, $runwayLengthFt);
         $scored = evaluateSingleRunwayEndPerformance(
             $end,
+            $runway,
             $availableFt,
             $nonPaved,
             $pressureAltitudeFt,
@@ -413,7 +436,7 @@ function assessFallbackDensityAltitudePerformance(?int $densityAltitudeFt, ?int 
  * Returns null when DA is missing/stale-suppressed or tier is normal.
  *
  * Runway selection precedence:
- * 1. `runway_length_ft` / `runway_surface` in airport config (synthetic runway, empty ends)
+ * 1. `runway_length_ft` / `runway_surface` / optional `runway_ends` in airport config
  * 2. NASR longest active land runway (full obstruction model)
  * 3. OurAirports longest land runway when NASR absent (`ourairports_ident`, then ICAO/FAA,
  *    then the config airport key passed as `$airportId`; length/surface; per-end displaced
@@ -436,17 +459,12 @@ function buildDensityAltitudePerformance(array $weather, array $airport, ?string
     $nasrRecord = getNasrAirportForConfig($airport);
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
 
-    $configLength = getConfigRunwayLengthOverrideFt($airport);
     $selectedRunway = null;
     $runwaySource = null;
 
-    if ($configLength !== null) {
-        $selectedRunway = [
-            'rwy_id' => 'config',
-            'length_ft' => $configLength,
-            'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
-            'ends' => [],
-        ];
+    $configRunway = buildConfigRunwayForDensityAltitude($airport);
+    if ($configRunway !== null) {
+        $selectedRunway = $configRunway;
         $runwaySource = 'config';
     } elseif ($nasrRecord !== null) {
         $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
@@ -505,7 +523,8 @@ function buildDensityAltitudePerformance(array $weather, array $airport, ?string
         $tier = densityAltitudePerformanceTierFromScoredEnd($scoredRisk);
     }
 
-    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+    if ($runwaySource === 'ourairports'
+        || ($runwaySource === 'config' && !configRunwayHasDepartureObstructionData($selectedRunway))) {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
     }
 

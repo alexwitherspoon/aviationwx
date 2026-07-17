@@ -62,6 +62,20 @@ class DaPerformanceRunwayEndTest extends TestCase
         $this->assertSame(260.0, $heading);
     }
 
+    public function testResolveRunwayEndMagneticHeadingMatchesCanonicalRunwayNameIdents(): void
+    {
+        $end = ['end_id' => '09'];
+        $runway = [
+            'rwy_id' => '9/27',
+            'heading_1' => 95.0,
+            'heading_2' => 275.0,
+            'length_ft' => 3000,
+            'surface' => 'ASPH',
+        ];
+
+        $this->assertSame(95.0, resolveRunwayEndMagneticHeading($end, $runway, []));
+    }
+
     public function testResolveRunwayEndMagneticHeadingReturnsNullForMalformedIdent(): void
     {
         $end = ['end_id' => 'XX'];

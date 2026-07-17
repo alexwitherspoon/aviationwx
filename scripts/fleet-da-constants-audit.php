@@ -171,17 +171,12 @@ function fleetDaAuditBuildPerformance(
     $nasrRecord = getNasrAirportForConfig($airport);
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
 
-    $configLength = getConfigRunwayLengthOverrideFt($airport);
+    $configRunway = buildConfigRunwayForDensityAltitude($airport);
     $selectedRunway = null;
     $runwaySource = null;
 
-    if ($configLength !== null) {
-        $selectedRunway = [
-            'rwy_id' => 'config',
-            'length_ft' => $configLength,
-            'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
-            'ends' => [],
-        ];
+    if ($configRunway !== null) {
+        $selectedRunway = $configRunway;
         $runwaySource = 'config';
     } elseif ($nasrRecord !== null) {
         $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
@@ -218,7 +213,8 @@ function fleetDaAuditBuildPerformance(
 
     if (!empty($variant['use_legacy_tier'])) {
         $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-        if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+        if ($runwaySource === 'ourairports'
+            || ($runwaySource === 'config' && !configRunwayHasDepartureObstructionData($selectedRunway))) {
             $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
         }
         if ($tier === 'normal') {
@@ -242,7 +238,7 @@ function fleetDaAuditBuildPerformance(
         'wind_basis' => null,
     ];
 
-    if ($runwaySource !== 'config' && ($selectedRunway['ends'] ?? []) !== []) {
+    if (($selectedRunway['ends'] ?? []) !== []) {
         $windBasis = fleetDaAuditWindowMeanWind($historyObs, $airport, (float) $variant['min_mean_kts']);
         if ($windBasis !== null) {
             $picked = pickDepartureEndByWindFromMagnetic(
@@ -290,7 +286,8 @@ function fleetDaAuditBuildPerformance(
         $tier = densityAltitudePerformanceTierFromScoredEnd($scoredRisk);
     }
 
-    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+    if ($runwaySource === 'ourairports'
+        || ($runwaySource === 'config' && !configRunwayHasDepartureObstructionData($selectedRunway))) {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
     }
 
