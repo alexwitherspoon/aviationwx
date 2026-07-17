@@ -1,6 +1,6 @@
 <?php
 /**
- * Longest active land runway selection for density altitude performance.
+ * Active land runway selection for density altitude performance.
  */
 
 /**
@@ -18,7 +18,9 @@ function nasrIsNonPavedSurface(string $surface): bool
 }
 
 /**
- * Whether a NASR runway row is eligible for performance runway selection.
+ * Whether a NASR runway row is eligible for DA performance scoring.
+ *
+ * Excludes water, NASR pavement COND=FAILED/CLOSED (not live NOTAM closures).
  *
  * @param array $runway Parsed runway record
  */
@@ -30,7 +32,7 @@ function nasrRunwayIsSelectable(array $runway): bool
     }
 
     $condition = strtoupper((string) ($runway['condition'] ?? ''));
-    if ($condition === 'FAILED') {
+    if (in_array($condition, ['FAILED', 'CLOSED'], true)) {
         return false;
     }
 
@@ -55,12 +57,7 @@ function nasrSelectLongestActiveLandRunway(array $airportRecord): ?array
 }
 
 /**
- * Active land runways used for density altitude performance scoring.
- *
- * Includes every selectable runway that shares the longest runway's paved vs
- * non-paved surface category so parallel long strips are compared while
- * shorter cross-surface strips (for example turf beside a paved primary) are
- * excluded.
+ * Active land runways for DA performance (all selectable strips, longest first).
  *
  * @param array $airportRecord Parsed NASR airport record
  * @return list<array> Runways sorted by length descending
@@ -84,16 +81,7 @@ function nasrSelectActiveLandRunwaysForPerformance(array $airportRecord): array
         static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
     );
 
-    $longestSurface = (string) ($selectable[0]['surface'] ?? '');
-    $longestIsNonPaved = nasrIsNonPavedSurface($longestSurface);
-
-    return array_values(array_filter(
-        $selectable,
-        static function (array $runway) use ($longestIsNonPaved): bool {
-            $surface = (string) ($runway['surface'] ?? '');
-            return nasrIsNonPavedSurface($surface) === $longestIsNonPaved;
-        }
-    ));
+    return $selectable;
 }
 
 /**

@@ -506,7 +506,9 @@ function ourAirportsRunwayIdFromIdents(string $leIdent, string $heIdent): string
 }
 
 /**
- * Whether a parsed OurAirports runway row is eligible for performance selection.
+ * Whether an OurAirports runway row is eligible for DA performance scoring.
+ *
+ * Closed rows are omitted when `runways.csv` is ingested; water surfaces excluded here.
  *
  * @param array $runway Parsed runway with length_ft and surface
  */
@@ -602,9 +604,7 @@ function ourAirportsSelectLongestActiveLandRunway(array $runways): ?array
 }
 
 /**
- * Active land runways used for density altitude performance scoring.
- *
- * Same paved-vs-non-paved grouping as {@see nasrSelectActiveLandRunwaysForPerformance()}.
+ * Active OurAirports performance runways for DA scoring (longest first).
  *
  * @param list<array> $runways Performance runway records
  * @return list<array> Runways sorted by length descending
@@ -628,16 +628,7 @@ function ourAirportsSelectActiveLandRunwaysForPerformance(array $runways): array
         static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
     );
 
-    $longestSurface = ourAirportsNormalizeSurfaceCode((string) ($selectable[0]['surface'] ?? ''));
-    $longestIsNonPaved = nasrIsNonPavedSurface($longestSurface);
-
-    return array_values(array_filter(
-        $selectable,
-        static function (array $runway) use ($longestIsNonPaved): bool {
-            $surface = ourAirportsNormalizeSurfaceCode((string) ($runway['surface'] ?? ''));
-            return nasrIsNonPavedSurface($surface) === $longestIsNonPaved;
-        }
-    ));
+    return $selectable;
 }
 
 /**
@@ -683,23 +674,6 @@ function loadOurAirportsPerformanceRunwaysFromFileCache(string $airportId, array
     }
 
     return getOurAirportsPerformanceRunwaysFromParsedCache($data, $airportId, $airport);
-}
-
-/**
- * Select the longest OurAirports performance runway for density altitude performance.
- *
- * @param string $airportId Airport identifier (config key or ICAO)
- * @param array $airport Airport configuration
- * @return array|null Selected runway with per-end displaced thresholds or null when unavailable
- */
-function getOurAirportsPerformanceRunwayForAirport(string $airportId, array $airport): ?array
-{
-    $runways = getOurAirportsPerformanceRunwaysForAirport($airportId, $airport);
-    if ($runways === []) {
-        return null;
-    }
-
-    return $runways[0];
 }
 
 /**

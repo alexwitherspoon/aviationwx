@@ -192,6 +192,24 @@ function notamBannerExtractRunwayDesignator(string $text): ?string
 }
 
 /**
+ * Normalized runway designator from NOTAM prose (e.g. 15/33, 17L).
+ *
+ * @param string $text NOTAM body
+ * @return string|null Uppercase designator without the RWY prefix
+ */
+function notamBannerExtractRunwayDesignatorRaw(string $text): ?string
+{
+    $phrase = notamBannerExtractRunwayDesignator($text);
+    if ($phrase === null) {
+        return null;
+    }
+
+    $raw = strtoupper(str_replace(' ', '', preg_replace('/^RWY/i', '', $phrase) ?? $phrase));
+
+    return $raw !== '' ? $raw : null;
+}
+
+/**
  * Stable fingerprint for banner deduplication (paired A/numeric NOTAMs, same event).
  *
  * @param array<string, mixed> $notam Parsed NOTAM row with banner_scope and banner_category
