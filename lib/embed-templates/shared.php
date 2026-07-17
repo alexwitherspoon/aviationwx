@@ -188,6 +188,93 @@ function formatEmbedDist($valueFt, $unit, $useCommas = false) {
 }
 
 /**
+ * Build density altitude metric tile data for embed widgets.
+ *
+ * @param int|float|null $densityAltitudeFt
+ * @param array<string, mixed> $weather Weather row with optional density_altitude_performance
+ * @param string $distUnit Embed distance unit (`ft` or `m`)
+ * @param string $label Metric label (for example `DA` or `Density Alt`)
+ * @return array{
+ *     label: string,
+ *     value: string,
+ *     value_class_suffix?: string,
+ *     tile_class_suffix?: string,
+ *     tile_attrs?: string
+ * }|null
+ */
+function buildDensityAltitudeMetricTile(
+    $densityAltitudeFt,
+    array $weather,
+    string $distUnit,
+    string $label = 'DA'
+): ?array {
+    if ($densityAltitudeFt === null) {
+        return null;
+    }
+
+    $daPerformance = is_array($weather['density_altitude_performance'] ?? null)
+        ? $weather['density_altitude_performance']
+        : null;
+    $daBase = formatEmbedDist($densityAltitudeFt, $distUnit, true);
+    $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitudeFt, $daBase, $daPerformance);
+    if ($daDisplay === '--') {
+        return null;
+    }
+
+    $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
+    $daClass = densityAltitudePerformanceValueClass($tier);
+    $daTooltip = densityAltitudePerformanceTooltip($tier, $daPerformance);
+    $daAria = densityAltitudePerformanceAriaLabel($densityAltitudeFt, $tier, $distUnit, $daPerformance);
+    $classSuffix = $daClass !== '' ? ' ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') : '';
+    $titleAttr = $daTooltip !== ''
+        ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
+        : '';
+    $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
+
+    return [
+        'label' => $label,
+        'value' => $daDisplay,
+        'value_class_suffix' => $classSuffix,
+        'tile_class_suffix' => $classSuffix,
+        'tile_attrs' => $titleAttr . $ariaAttr,
+    ];
+}
+
+/**
+ * Render a full-widget density altitude metric item from a tile definition.
+ *
+ * @param array{
+ *     label: string,
+ *     value: string,
+ *     value_class_suffix?: string,
+ *     tile_class_suffix?: string,
+ *     tile_attrs?: string
+ * } $metric
+ * @return string HTML fragment or empty string
+ */
+function renderFullWidgetDensityAltitudeMetricHtml(array $metric): string
+{
+    $value = (string) ($metric['value'] ?? '');
+    if ($value === '' || $value === '--' || $value === '---') {
+        return '';
+    }
+
+    $tileClassSuffix = (string) ($metric['tile_class_suffix'] ?? '');
+    $itemClasses = 'metric-item' . $tileClassSuffix;
+    $valueClassSuffix = trim($tileClassSuffix);
+    $valueClassAttr = $valueClassSuffix !== ''
+        ? ' class="value' . htmlspecialchars($valueClassSuffix, ENT_QUOTES, 'UTF-8') . '"'
+        : ' class="value"';
+    $tileAttrs = (string) ($metric['tile_attrs'] ?? '');
+    $label = htmlspecialchars((string) ($metric['label'] ?? 'Density Alt'), ENT_QUOTES, 'UTF-8');
+
+    return "\n                        <div class=\"" . htmlspecialchars($itemClasses, ENT_QUOTES, 'UTF-8') . "\"{$tileAttrs}>"
+        . "\n                            <span class=\"label\">{$label}</span>"
+        . "\n                            <span{$valueClassAttr}>{$value}</span>"
+        . "\n                        </div>";
+}
+
+/**
  * Format wind speed with unit conversion
  * 
  * @param float|null $speedKt Wind speed in knots
@@ -715,30 +802,9 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     }
     
     // 2. Density Altitude (always show if available)
-    if ($densityAltitude !== null) {
-        $daPerformance = is_array($weather['density_altitude_performance'] ?? null)
-            ? $weather['density_altitude_performance']
-            : null;
-        $daBase = formatEmbedDist($densityAltitude, $distUnit, true);
-        $daDisplay = formatDensityAltitudePerformanceDisplay($densityAltitude, $daBase, $daPerformance);
-        if ($daDisplay !== '--') {
-            $tier = is_array($daPerformance) ? (string) ($daPerformance['tier'] ?? 'normal') : 'normal';
-            $daClass = densityAltitudePerformanceValueClass($tier);
-            $daTooltip = densityAltitudePerformanceTooltip($tier, $daPerformance);
-            $daAria = densityAltitudePerformanceAriaLabel($densityAltitude, $tier, $distUnit, $daPerformance);
-            $classSuffix = $daClass !== '' ? ' ' . htmlspecialchars($daClass, ENT_QUOTES, 'UTF-8') : '';
-            $titleAttr = $daTooltip !== ''
-                ? ' title="' . htmlspecialchars($daTooltip, ENT_QUOTES, 'UTF-8') . '"'
-                : '';
-            $ariaAttr = ' aria-label="' . htmlspecialchars($daAria, ENT_QUOTES, 'UTF-8') . '"';
-            $availableMetrics[] = [
-                'label' => 'DA',
-                'value' => $daDisplay,
-                'value_class_suffix' => $classSuffix,
-                'tile_class_suffix' => $classSuffix,
-                'tile_attrs' => $titleAttr . $ariaAttr,
-            ];
-        }
+    $daMetric = buildDensityAltitudeMetricTile($densityAltitude, $weather, $distUnit, 'DA');
+    if ($daMetric !== null) {
+        $availableMetrics[] = $daMetric;
     }
     
     // 3. Pressure (always show if available)

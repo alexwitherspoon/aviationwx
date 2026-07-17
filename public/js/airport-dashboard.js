@@ -791,96 +791,21 @@ function formatAltitude(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
-function densityAltitudePerformanceTooltip(tier, performance) {
-    if (performance && performance.fallback) {
-        return 'Runway data unavailable. Indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.';
-    }
-    const basisNote = densityAltitudePerformanceSelectionBasisNote(performance);
-    if (tier === 'warning') {
-        return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.' + basisNote;
-    }
-    if (tier === 'caution') {
-        return 'Density altitude is higher than normal. Verify performance numbers before flight.' + basisNote;
-    }
-    return '';
-}
-
-function densityAltitudePerformanceOperationalEndLabel(performance) {
-    if (!performance) {
-        return '';
-    }
-    const endId = performance.operational_end_id ? String(performance.operational_end_id).trim() : '';
-    if (endId === '') {
-        return '';
-    }
-    const rwyId = performance.operational_rwy_id ? String(performance.operational_rwy_id).trim() : '';
-    if (rwyId !== '' && rwyId !== 'config') {
-        return `RWY ${endId} (${rwyId})`;
-    }
-    return `RWY ${endId}`;
-}
-
-function densityAltitudePerformanceSelectionBasisNote(performance) {
-    if (!performance || !performance.selection_basis) {
-        return '';
-    }
-    const endLabel = densityAltitudePerformanceOperationalEndLabel(performance);
-    if (performance.selection_basis === 'window_mean_wind') {
-        const end = endLabel !== '' ? endLabel : 'the wind-aligned runway end';
-        return ` Cue reflects reference takeoff performance for ${end} using recent mean wind.`;
-    }
-    if (performance.selection_basis === 'asymmetric_heuristic') {
-        const end = endLabel !== '' ? endLabel : 'the less-constrained runway end';
-        return ` Cue reflects reference takeoff performance for ${end}; the opposite direction is more constrained.`;
-    }
-    if (performance.selection_basis === 'both_ends') {
-        if (endLabel !== '') {
-            return ` Cue reflects reference takeoff performance across comparable runways; best reference case is ${endLabel}.`;
-        }
-        return ' Cue reflects reference takeoff performance across comparable runways and departure directions.';
-    }
-    return '';
-}
-
-function densityAltitudePerformanceEmoji(tier) {
-    if (tier === 'warning') return '🚩';
-    if (tier === 'caution') return '⚠️';
-    return '';
-}
-
-function densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier, performance) {
-    if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
-        return 'Density altitude unavailable';
-    }
-    const unit = getDistanceUnit();
-    const value = unit === 'm'
-        ? Math.round(ftToM(Number(densityAltitudeFt)))
-        : Math.round(Number(densityAltitudeFt));
-    const unitLabel = unit === 'm' ? 'meters' : 'feet';
-    const base = `Density altitude ${value.toLocaleString()} ${unitLabel}`;
-    if (performance && performance.fallback) {
-        return `${base}. Runway data unavailable; indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.`;
-    }
-    if (tier === 'warning') {
-        return `${base}. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.${densityAltitudePerformanceSelectionBasisNote(performance)}`;
-    }
-    if (tier === 'caution') {
-        return `${base}. Caution: higher than normal; verify performance numbers before flight.${densityAltitudePerformanceSelectionBasisNote(performance)}`;
-    }
-    return base;
-}
-
 function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance) {
-    const value = formatAltitude(densityAltitudeFt);
-    const tier = performance && performance.tier ? performance.tier : 'normal';
-    const emoji = densityAltitudePerformanceEmoji(tier);
-    return {
-        value,
-        emoji,
-        className: (tier === 'caution' || tier === 'warning') ? 'density-altitude-warning' : '',
-        title: densityAltitudePerformanceTooltip(tier, performance),
-        ariaLabel: densityAltitudePerformanceAriaLabel(densityAltitudeFt, tier, performance),
-    };
+    const da = window.AviationWX && window.AviationWX.densityAltitudePerformance;
+    if (!da) {
+        return {
+            value: formatAltitude(densityAltitudeFt),
+            emoji: '',
+            className: '',
+            title: '',
+            ariaLabel: 'Density altitude unavailable',
+        };
+    }
+    return da.formatDashboardDisplay(densityAltitudeFt, performance, {
+        distUnit: getDistanceUnit(),
+        formatValue: (ft) => formatAltitude(ft),
+    });
 }
 
 // Format rainfall (inches) based on current unit preference
@@ -2625,6 +2550,9 @@ function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
     sanitized.dewpoint_spread = shouldShowDewpointSpread(sanitized) ? sanitized.dewpoint_spread : null;
     sanitized.pressure_altitude = shouldShowPressureAltitude(sanitized) ? sanitized.pressure_altitude : null;
     sanitized.density_altitude = shouldShowDensityAltitude(sanitized) ? sanitized.density_altitude : null;
+    if (sanitized.density_altitude === null || sanitized.density_altitude === undefined) {
+        sanitized.density_altitude_performance = null;
+    }
     
     return sanitized;
 }

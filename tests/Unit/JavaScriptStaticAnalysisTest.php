@@ -24,9 +24,23 @@ class JavaScriptStaticAnalysisTest extends TestCase
             __DIR__ . '/../../pages/homepage.php',
             __DIR__ . '/../../pages/error-404-airport.php',
             __DIR__ . '/../../public/js/airport-dashboard.js',
+            __DIR__ . '/../../public/js/density-altitude-performance-display.js',
         ];
     }
     
+    /**
+     * Dashboard loads shared DA performance display module before airport-dashboard.js
+     */
+    public function testAirportPageLoadsDensityAltitudePerformanceDisplayBeforeDashboard(): void
+    {
+        $content = file_get_contents(__DIR__ . '/../../pages/airport.php');
+        $daPos = strpos($content, 'density-altitude-performance-display.js');
+        $dashboardPos = strpos($content, 'airport-dashboard.js');
+        $this->assertNotFalse($daPos);
+        $this->assertNotFalse($dashboardPos);
+        $this->assertLessThan($dashboardPos, $daPos);
+    }
+
     /**
      * Test that no PHP functions appear in JavaScript code blocks
      */
