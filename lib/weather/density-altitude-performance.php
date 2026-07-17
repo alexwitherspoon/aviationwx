@@ -9,10 +9,12 @@ require_once __DIR__ . '/../nasr/cache.php';
 require_once __DIR__ . '/../nasr/runway-selection.php';
 require_once __DIR__ . '/../runways.php';
 require_once __DIR__ . '/cache-utils.php';
-require_once __DIR__ . '/da-performance-runway-end.php';
+require_once __DIR__ . '/da-performance-departure-obstruction.php';
 require_once __DIR__ . '/da-performance-notam-closures.php';
 require_once __DIR__ . '/poh-takeoff.php';
+require_once __DIR__ . '/history.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/../heading-conversion.php';
 
 /** @var list<string> */
 const DENSITY_ALTITUDE_PERFORMANCE_MODEL_KEYS = ['c152', 'c172', 'c182'];
@@ -88,11 +90,11 @@ function annotateScoredRunwayEnd(array $scored, array $runway, array $end): arra
 }
 
 /**
- * Resolve wind direction (true degrees, from) and speed for runway tie-breaking.
+ * Resolve wind from the current weather row for runway tie-breaking fallback.
  *
  * @return array{direction: ?float, speed: ?float}
  */
-function resolveDensityAltitudePerformanceWind(array $weather): array
+function resolveDensityAltitudePerformanceSnapshotWind(array $weather): array
 {
     $windDirection = $weather['wind_direction'] ?? null;
     $isVariable = ($weather['wind_direction_text'] ?? '') === 'VRB';
@@ -119,6 +121,36 @@ function resolveDensityAltitudePerformanceWind(array $weather): array
         'direction' => $direction,
         'speed' => $speed,
     ];
+}
+
+/**
+ * Resolve wind for equal-risk runway tie-breaking only (not POH scoring).
+ *
+ * Prefers vector mean wind from weather history over the wind rose window
+ * ({@see computeWindowMeanWind()}). Falls back to the current observation when
+ * history is disabled or quality gates fail.
+ *
+ * @return array{direction: ?float, speed: ?float}
+ */
+function resolveDensityAltitudePerformanceWind(
+    array $weather,
+    array $airport = [],
+    ?string $airportId = null
+): array {
+    $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
+    if ($resolvedAirportId !== '') {
+        $mean = computeWindowMeanWind($resolvedAirportId, $airport);
+        if ($mean !== null) {
+            $declination = getMagneticDeclination($airport);
+
+            return [
+                'direction' => convertMagneticToTrue($mean['direction_magnetic'], $declination),
+                'speed' => $mean['speed_kts'],
+            ];
+        }
+    }
+
+    return resolveDensityAltitudePerformanceSnapshotWind($weather);
 }
 
 /**
@@ -805,7 +837,7 @@ function computeDensityAltitudePerformance(array $weather, array $airport, ?stri
     $runwaySource = $context['runway_source'];
     $densityAltitudeFt = $context['density_altitude_ft'];
     $fieldElevationFt = $context['field_elevation_ft'];
-    $wind = resolveDensityAltitudePerformanceWind($weather);
+    $wind = resolveDensityAltitudePerformanceWind($weather, $airport, $context['resolved_airport_id']);
 
     if ($performanceRunways === []) {
         return assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);

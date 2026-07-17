@@ -73,7 +73,7 @@ test('operational end label uses best_end only', () => {
 test('selection basis note names best runway', () => {
     const note = da.selectionBasisNote(cautionPerformance);
     assertIncludes(note, 'RWY 31L (13R/31L)');
-    assertIncludes(note, 'best option among runways on file');
+    assertIncludes(note, 'best runway at this airport');
 });
 
 test('fallback tooltip copy', () => {

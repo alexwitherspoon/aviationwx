@@ -56,9 +56,9 @@
         }
         const endLabel = operationalEndLabel(performance);
         if (endLabel === '') {
-            return ' Cue reflects reference takeoff performance for the best runway and departure direction on file.';
+            return ' Based on the best runway at this airport.';
         }
-        return ` Cue reflects reference takeoff performance for ${endLabel} (best option among runways on file).`;
+        return ` Based on ${endLabel}, the best runway at this airport.`;
     }
 
     /**

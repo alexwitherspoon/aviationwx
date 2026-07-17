@@ -466,7 +466,7 @@ if (!defined('DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP')) {
         . 'Verify all performance calculations using your AFM.'
     );
 }
-// Wind-rose vector-mean quality gates ({@see computeWindowMeanWind()}); not used for DA performance tier.
+// Window-mean wind quality gates ({@see computeWindowMeanWind()}); DA performance tie-break only.
 if (!defined('DA_PERF_WIND_MIN_OBS')) {
     define('DA_PERF_WIND_MIN_OBS', 3);
 }

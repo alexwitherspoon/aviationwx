@@ -107,6 +107,6 @@ class DaPerformanceMultiRunwayTest extends TestCase
         ]);
 
         $this->assertStringContainsString('RWY 31L (13R/31L)', $tooltip);
-        $this->assertStringContainsString('best option among runways on file', $tooltip);
+        $this->assertStringContainsString('best runway at this airport', $tooltip);
     }
 }

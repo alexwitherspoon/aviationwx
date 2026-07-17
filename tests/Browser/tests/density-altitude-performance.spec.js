@@ -424,13 +424,13 @@ test.describe('Card embed density altitude performance tiers', () => {
   test('shows warning tier on DA tile with amber styling, tooltip, and aria-label', async ({ page }) => {
     const densityAltitudeFt = 6280;
     const formattedValue = '6,280 ft';
-    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Cue reflects reference takeoff performance for RWY 08 (08/26) (best option among runways on file).`;
+    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Based on RWY 08 (08/26), the best runway at this airport.`;
 
     await gotoMockEmbedCard(page, {
       tier: 'warning',
       densityAltitudeFt,
       emoji: '🚩',
-      tooltip: WARNING_TOOLTIP + ' Cue reflects reference takeoff performance for RWY 08 (08/26) (best option among runways on file).',
+      tooltip: WARNING_TOOLTIP + ' Based on RWY 08 (08/26), the best runway at this airport.',
       ariaLabel,
       formattedValue,
     });

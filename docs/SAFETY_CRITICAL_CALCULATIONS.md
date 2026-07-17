@@ -169,7 +169,7 @@ Constants `PERFORMANCE_STRESS_LOW` (0.67) and `PERFORMANCE_STRESS_HIGH` (1.33) a
 **Best end** (`selection_basis: best_performance`):
 
 - Score all departure ends on all selected runways; find the global minimum-risk end.
-- Equal-risk ties prefer the lowest crosswind on the departure heading, then the strongest headwind, then stable runway/end ordering.
+- Equal-risk ties prefer the lowest crosswind on the departure heading, then the strongest headwind, then stable runway/end ordering. Tie-break wind uses `computeWindowMeanWind()` over the configured history window (default last hour) when quality gates pass; otherwise the current observation.
 - **warning** when best end sum ≥ 2.40
 - **caution** when best end sum ≥ 1.20 (and not warning)
 - **normal** otherwise
@@ -208,7 +208,7 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 | `evaluateAirportRunwayEndPerformanceRange()`, `evaluateRunwayEndPerformanceRange()`, `evaluateSingleRunwayEndPerformance()` | `lib/weather/density-altitude-performance.php` |
 | `densityAltitudePerformanceTierFromScoredEnd()` | `lib/weather/density-altitude-performance.php` |
 | `buildConfigRunwayForDensityAltitude()`, `configRunwayHasDepartureObstructionData()` | `lib/config-runway.php` |
-| `resolveDepartureObstructionForEnd()`, `findReciprocalRunwayEnd()` | `lib/weather/da-performance-runway-end.php` |
+| `resolveDepartureObstructionForEnd()`, `findReciprocalRunwayEnd()` | `lib/weather/da-performance-departure-obstruction.php` |
 | `pohComputeDepartureEndStress()` | `lib/weather/poh-takeoff.php` |
 | `nasrSelectActiveLandRunwaysForPerformance()` | `lib/nasr/runway-selection.php` |
 | `filterPerformanceRunwaysForActiveNotamClosures()` | `lib/weather/da-performance-notam-closures.php` |

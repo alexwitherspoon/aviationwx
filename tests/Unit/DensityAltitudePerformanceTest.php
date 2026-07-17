@@ -674,7 +674,7 @@ class DensityAltitudePerformanceTest extends TestCase
         ]);
 
         $this->assertStringContainsString('RWY 32 (14/32)', $tooltip);
-        $this->assertStringContainsString('reference takeoff performance', $tooltip);
+        $this->assertStringContainsString('best runway at this airport', $tooltip);
     }
 
     public function testCapTierWithoutObstructionsDowngradesWarning(): void

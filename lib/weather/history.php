@@ -521,7 +521,7 @@ function resolveHistoryObservationWindDirectionMagnetic(array $observation, floa
  * Uses the same window as {@see computeWindRose()}. Non-calm observations only.
  * Returns null when history is disabled, observations are insufficient, mean speed
  * is below DA_PERF_WIND_MIN_MEAN_KTS, or dispersion exceeds DA_PERF_VARIABLE_WIND_RATIO.
- * Used for wind-rose context only; density altitude performance tier ignores mean wind.
+ * Used for density altitude performance equal-risk runway tie-breaking.
  *
  * @param string $airportId Airport ID
  * @param array|null $airport Airport config for magnetic declination; when null, declination 0 (tests)
