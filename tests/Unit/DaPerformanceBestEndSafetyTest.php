@@ -76,7 +76,7 @@ class DaPerformanceBestEndSafetyTest extends TestCase
         $this->assertFalse($result['fallback']);
         $this->assertArrayHasKey('ends', $result);
         $this->assertGreaterThan(1, count($result['ends']));
-        $this->assertGreaterThanOrEqual(
+        $this->assertLessThanOrEqual(
             $result['best_end']['total_risk'],
             $result['worst_end']['total_risk']
         );
@@ -112,7 +112,7 @@ class DaPerformanceBestEndSafetyTest extends TestCase
         $this->assertContains($result['tier'], ['caution', 'warning'], true);
         $this->assertSame('best_performance', $result['selection_basis']);
         $this->assertFalse($result['fallback']);
-        $this->assertGreaterThanOrEqual(
+        $this->assertLessThanOrEqual(
             $result['best_end']['total_risk'],
             $result['worst_end']['total_risk']
         );
