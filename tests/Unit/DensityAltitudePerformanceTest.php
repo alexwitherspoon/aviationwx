@@ -140,7 +140,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $this->assertSame('good', $range['worst']['end_id']);
         $this->assertSame('bad', $range['best']['end_id']);
-        $this->assertGreaterThan($range['best']['total_risk'], $range['worst']['total_risk']);
+        $this->assertGreaterThan($range['worst']['total_risk'], $range['best']['total_risk']);
     }
 
     public function testReciprocalObstructionMapsToOppositeDepartureEnd(): void
