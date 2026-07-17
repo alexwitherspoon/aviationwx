@@ -117,27 +117,27 @@ class DensityAltitudePerformanceTest extends TestCase
         $scoredEnds = [
             [
                 'total_risk' => 1.0,
-                'end_id' => '25',
-                'rwy_id' => '07/25',
-                'true_alignment' => 250,
+                'end_id' => '18',
+                'rwy_id' => '18/36',
+                'true_alignment' => 180,
                 'risk152' => 0.0,
                 'risk172' => 0.0,
                 'risk182' => 0.0,
             ],
             [
                 'total_risk' => 1.0,
-                'end_id' => '07',
-                'rwy_id' => '07/25',
-                'true_alignment' => 70,
+                'end_id' => '09',
+                'rwy_id' => '09/27',
+                'true_alignment' => 90,
                 'risk152' => 0.0,
                 'risk172' => 0.0,
                 'risk182' => 0.0,
             ],
         ];
 
-        $picked = pickBestWorstScoredEnds($scoredEnds, 250.0, 12.0);
+        $picked = pickBestWorstScoredEnds($scoredEnds, 100.0, 12.0);
 
-        $this->assertSame('07', $picked['best']['end_id']);
+        $this->assertSame('09', $picked['best']['end_id']);
     }
 
     public function testRunwayEndPerformanceRangeSelectsBestAndWorstEnds(): void
