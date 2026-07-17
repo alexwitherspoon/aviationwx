@@ -118,6 +118,23 @@ final class ConfigRunwayTest extends TestCase
         $this->assertFalse(configRunwayHasDepartureObstructionData($runway));
     }
 
+    public function testConfigRunwayNonReciprocalEndsDoNotLiftObstructionCap(): void
+    {
+        $runway = buildConfigRunwayForDensityAltitude([
+            'runway_length_ft' => 2700,
+            'runway_ends' => [
+                [
+                    'end_id' => '09',
+                    'obstruction' => ['hgt_ft' => 200, 'dist_ft' => 2500],
+                ],
+                ['end_id' => '18'],
+            ],
+        ]);
+
+        $this->assertNotNull($runway);
+        $this->assertFalse(configRunwayHasDepartureObstructionData($runway));
+    }
+
     public function testConfigRunwayWithoutObstructionData(): void
     {
         $runway = buildConfigRunwayForDensityAltitude([

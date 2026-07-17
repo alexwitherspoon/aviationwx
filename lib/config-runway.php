@@ -242,7 +242,7 @@ function configRunwayHasDepartureObstructionData(array $runway): bool
         }
     }
 
-    return $validEnds === 2 && $hasUsableObstruction;
+    return $validEnds === 2 && $hasUsableObstruction && runwayHasReciprocalEndPair($runway);
 }
 
 /**
@@ -372,6 +372,13 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
 
     if (count($seenEndIds) > 2) {
         $errors[] = "Airport '{$airportCode}' runway_ends must contain at most two entries";
+    }
+
+    if (count($seenEndIds) === 2) {
+        $endIds = array_keys($seenEndIds);
+        if (!runwayEndIdentsAreReciprocal($endIds[0], $endIds[1])) {
+            $errors[] = "Airport '{$airportCode}' runway_ends end_id values must be reciprocal runway ends (e.g. 09 and 27)";
+        }
     }
 
     if ($hasUsableObstruction && count($seenEndIds) < 2) {

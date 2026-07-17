@@ -143,6 +143,19 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertGreaterThan($range['best']['total_risk'], $range['worst']['total_risk']);
     }
 
+    public function testFindReciprocalRunwayEndRequiresReciprocalPair(): void
+    {
+        $runway = [
+            'length_ft' => 3000,
+            'ends' => [
+                ['end_id' => '09', 'obstruction' => ['hgt_ft' => 50.0, 'dist_ft' => 100.0]],
+                ['end_id' => '18', 'obstruction' => []],
+            ],
+        ];
+
+        $this->assertNull(findReciprocalRunwayEnd($runway['ends'][0], $runway));
+    }
+
     public function testFindReciprocalRunwayEndRequiresExactlyTwoEnds(): void
     {
         $runway = [

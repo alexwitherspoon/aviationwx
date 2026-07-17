@@ -196,6 +196,10 @@ function resolveDensityAltitudePerformanceEndSelection(
         return $bothEndsResult;
     }
 
+    if (!runwayHasReciprocalEndPair($runway)) {
+        return $bothEndsResult;
+    }
+
     $hasResolvableHeading = false;
     foreach ($ends as $end) {
         if (!is_array($end)) {

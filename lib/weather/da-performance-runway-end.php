@@ -170,6 +170,10 @@ function findReciprocalRunwayEnd(array $departureEnd, array $runway): ?array
         return null;
     }
 
+    if (!runwayEndIdentsAreReciprocal($departureId, (string) $reciprocal['end_id'])) {
+        return null;
+    }
+
     return $reciprocal;
 }
 

@@ -5655,6 +5655,21 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('obstruction requires two ends', implode(' ', $result['errors']));
     }
 
+    public function testRunwayEndsRejectsNonReciprocalPair(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '09'],
+            ['end_id' => '18'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('must be reciprocal runway ends', implode(' ', $result['errors']));
+    }
+
     public function testRunwayEndsRejectsInvalidEndId(): void
     {
         $config = $this->createMinimalConfig();
