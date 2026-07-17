@@ -329,7 +329,7 @@
         formatDensityAltitudePerformanceDisplay,
         densityAltitudePerformanceTooltip: function(tier, performance) {
             const da = window.AviationWX && window.AviationWX.densityAltitudePerformance;
-            return da ? da.tooltip(tier, performance) : '';
+            return da ? da.tooltip(tier, performance) : daPerformanceTooltip(tier, performance);
         },
         getWeatherEmojis,
         getFlightCategoryData,
