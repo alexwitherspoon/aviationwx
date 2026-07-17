@@ -38,7 +38,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
         $dashboardPos = strpos($content, 'airport-dashboard.js');
         $this->assertNotFalse($daPos);
         $this->assertNotFalse($dashboardPos);
-        $this->assertLessThan($daPos, $dashboardPos);
+        $this->assertLessThan($dashboardPos, $daPos);
     }
 
     /**
