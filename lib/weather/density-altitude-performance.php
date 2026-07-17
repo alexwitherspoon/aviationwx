@@ -809,8 +809,10 @@ function buildFullModelDensityAltitudePerformancePayload(
 /**
  * Compute density_altitude_performance for weather API consumers.
  *
- * Returns null when density altitude is missing. Otherwise returns the full-model
- * payload (including normal tier) or a weather-only fallback payload.
+ * Returns null when density altitude is missing, or when runway scoring cannot run
+ * and the weather-only fallback does not elevate the tier above normal. Otherwise
+ * returns the full-model payload (including normal tier) or a caution/warning
+ * weather-only fallback payload.
  *
  * Runway selection precedence:
  * 1. `runway_length_ft` / `runway_surface` / optional `runway_ends` in airport config
