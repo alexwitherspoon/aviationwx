@@ -208,10 +208,15 @@ function resolveDepartureObstructionForEnd(array $departureEnd, array $runway): 
         return $empty;
     }
 
+    $departureDisplaced = isset($departureEnd['displaced_thr_len']) && is_numeric($departureEnd['displaced_thr_len'])
+        ? max(0, (int) round((float) $departureEnd['displaced_thr_len']))
+        : 0;
+    $alongTrackFt = max(0, $runwayLen - $departureDisplaced) + (float) $raw['dist_ft'];
+
     $result = [
         'type' => isset($raw['type']) && is_string($raw['type']) ? $raw['type'] : null,
         'hgt_ft' => (float) $raw['hgt_ft'],
-        'dist_ft' => $runwayLen + (float) $raw['dist_ft'],
+        'dist_ft' => $alongTrackFt,
         'slope' => null,
         'source_end_id' => isset($reciprocal['end_id']) ? (string) $reciprocal['end_id'] : null,
     ];

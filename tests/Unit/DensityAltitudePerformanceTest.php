@@ -186,6 +186,29 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('14', $depart32['source_end_id']);
     }
 
+    public function testDepartureDisplacedThresholdShortensObstructionDistance(): void
+    {
+        $runway = [
+            'length_ft' => 3000,
+            'surface' => 'ASPH',
+            'ends' => [
+                [
+                    'end_id' => '09',
+                    'displaced_thr_len' => 500,
+                    'obstruction' => [],
+                ],
+                [
+                    'end_id' => '27',
+                    'obstruction' => ['hgt_ft' => 80.0, 'dist_ft' => 200.0],
+                ],
+            ],
+        ];
+
+        $depart09 = resolveDepartureObstructionForEnd($runway['ends'][0], $runway);
+        $this->assertSame(80.0, $depart09['hgt_ft']);
+        $this->assertEqualsWithDelta(2700.0, $depart09['dist_ft'], 0.001);
+    }
+
     public function testKpfcRealNasrSouthboundDepartureOmitsPerformanceFlag(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
