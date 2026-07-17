@@ -26,7 +26,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testReturnsNullWhenDensityAltitudeMissing(): void
     {
-        $result = buildDensityAltitudePerformance(['temperature' => 20, 'pressure_altitude' => 1000], [
+        $result = computeDensityAltitudePerformance(['temperature' => 20, 'pressure_altitude' => 1000], [
             'id' => 'id76',
             'faa' => 'ID76',
             'elevation_ft' => 4925,
@@ -34,9 +34,9 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testFallbackOmitsRiskFactor(): void
+    public function testFallbackOmitsRunwayScores(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 9500,
             'pressure_altitude' => 9000,
             'temperature' => 35,
@@ -48,14 +48,15 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame('warning', $result['tier']);
         $this->assertTrue($result['fallback']);
-        $this->assertNull($result['risk_factor']);
+        $this->assertArrayNotHasKey('ends', $result);
+        $this->assertArrayNotHasKey('best_end', $result);
         $this->assertSame('density_altitude_only', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
     }
 
     public function testFallbackRunsWhenRunwayMissingEvenWithoutPressureAltitude(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 9500,
         ], [
             'id' => 'unknown',
@@ -69,7 +70,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testFallbackWhenPressureAltitudeMissingButRunwayPresent(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 9500,
         ], [
             'id' => 'id76',
@@ -81,7 +82,7 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertTrue($result['fallback']);
         $this->assertSame('density_altitude_only', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_FALLBACK, $result['reference']);
-        $this->assertNull($result['risk_factor']);
+        $this->assertArrayNotHasKey('ends', $result);
     }
 
     public function testPohObstructionStressUsesChartDistanceToClearObstacle(): void
@@ -105,17 +106,38 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testDensityAltitudePerformanceTierThresholdsOnSummedRisk(): void
     {
-        $this->assertSame('normal', densityAltitudePerformanceTierForRisk(1.19));
-        $this->assertSame('caution', densityAltitudePerformanceTierForRisk(1.20));
-        $this->assertSame('caution', densityAltitudePerformanceTierForRisk(2.39));
-        $this->assertSame('warning', densityAltitudePerformanceTierForRisk(2.40));
+        $this->assertSame('normal', densityAltitudePerformanceTierFromScoredEnd(1.19));
+        $this->assertSame('caution', densityAltitudePerformanceTierFromScoredEnd(1.20));
+        $this->assertSame('caution', densityAltitudePerformanceTierFromScoredEnd(2.39));
+        $this->assertSame('warning', densityAltitudePerformanceTierFromScoredEnd(2.40));
     }
 
-    public function testAsymmetricTierWarningRequiresBestEndAboveThreshold(): void
+    public function testWindTieBreakPrefersLowerCrosswindWhenRiskEqual(): void
     {
-        $this->assertSame('caution', densityAltitudePerformanceTierFromEndRisks(3.0, 1.0));
-        $this->assertSame('warning', densityAltitudePerformanceTierFromEndRisks(3.0, 2.4));
-        $this->assertSame('normal', densityAltitudePerformanceTierFromEndRisks(1.19, 1.0));
+        $scoredEnds = [
+            [
+                'total_risk' => 1.0,
+                'end_id' => '25',
+                'rwy_id' => '07/25',
+                'true_alignment' => 250,
+                'risk152' => 0.0,
+                'risk172' => 0.0,
+                'risk182' => 0.0,
+            ],
+            [
+                'total_risk' => 1.0,
+                'end_id' => '07',
+                'rwy_id' => '07/25',
+                'true_alignment' => 70,
+                'risk152' => 0.0,
+                'risk172' => 0.0,
+                'risk182' => 0.0,
+            ],
+        ];
+
+        $picked = pickBestWorstScoredEnds($scoredEnds, 250.0, 12.0);
+
+        $this->assertSame('07', $picked['best']['end_id']);
     }
 
     public function testRunwayEndPerformanceRangeSelectsBestAndWorstEnds(): void
@@ -252,7 +274,7 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ]);
 
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => -163,
             'pressure_altitude' => -132,
             'temperature' => 15,
@@ -267,10 +289,11 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ], 'kpfc');
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame('normal', $result['tier']);
     }
 
-    public function testAsymmetricTierCautionWhenOnlyWorstEndConstrained(): void
+    public function testBestEndTierIgnoresWorstEndCautionWhenBestEndIsNormal(): void
     {
         $tables = loadPohTakeoffTables();
         $runway = [
@@ -289,12 +312,9 @@ class DensityAltitudePerformanceTest extends TestCase
         ];
 
         $range = evaluateRunwayEndPerformanceRange($runway, 5000.0, 35.0, $tables);
-        $tier = densityAltitudePerformanceTierFromEndRisks(
-            $range['worst']['total_risk'],
-            $range['best']['total_risk']
-        );
+        $tier = densityAltitudePerformanceTierFromScoredEnd($range['best']['total_risk']);
 
-        $this->assertSame('caution', $tier);
+        $this->assertSame('normal', $tier);
         $this->assertSame('09', $range['worst']['end_id']);
         $this->assertSame('27', $range['best']['end_id']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['worst']['total_risk']);
@@ -314,17 +334,14 @@ class DensityAltitudePerformanceTest extends TestCase
         ];
 
         $range = evaluateRunwayEndPerformanceRange($runway, 3441.0, 28.3, $tables);
-        $tier = densityAltitudePerformanceTierFromEndRisks(
-            $range['worst']['total_risk'],
-            $range['best']['total_risk']
-        );
+        $tier = densityAltitudePerformanceTierFromScoredEnd($range['best']['total_risk']);
 
         $this->assertSame('warning', $tier);
     }
 
     public function testCyavUsesOurAirportsLongestRunwayWhenNasrAbsent(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5000,
             'pressure_altitude' => 4500,
             'temperature' => 35,
@@ -343,7 +360,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testConfigRunwayOverrideCapsWarningAtCaution(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5000,
             'pressure_altitude' => 3441,
             'temperature' => 28.3,
@@ -359,14 +376,13 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('reference_models', $result['reason']);
         $this->assertSame(DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG, $result['reference']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
-        $this->assertSame($result['best_end_risk'], $result['risk_factor']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end']['total_risk']);
         $this->assertSame('best_performance', $result['selection_basis']);
     }
 
     public function testConfigRunwayEndsAllowWarningTierWhenObstructionProvided(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5000,
             'pressure_altitude' => 3441,
             'temperature' => 28.3,
@@ -388,12 +404,12 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame('warning', $result['tier']);
         $this->assertSame('reference_models', $result['reason']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['risk_factor']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['best_end']['total_risk']);
     }
 
     public function testOurAirportsPathCapsWarningAtCaution(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5000,
             'pressure_altitude' => 3441,
             'temperature' => 28.3,
@@ -406,14 +422,14 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('reference_models_ourairports', $result['reason']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end_risk']);
-        $this->assertSame($result['best_end_risk'], $result['risk_factor']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['worst_end']['total_risk']);
+        $this->assertSame('caution', $result['tier']);
         $this->assertSame('best_performance', $result['selection_basis']);
     }
 
     public function testPrivateStripUsesOurAirportsIdentMapping(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5200,
             'pressure_altitude' => 4200,
             'temperature' => 32,
@@ -432,7 +448,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function testPrivateStripOurAirportsLookupUsesAirportIdParameter(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 5200,
             'pressure_altitude' => 4200,
             'temperature' => 32,
@@ -495,7 +511,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
     public function test69vStaysNormalWhenBestEndIsFavorable(): void
     {
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 9399,
             'pressure_altitude' => 5673,
             'temperature' => 34.7,
@@ -505,10 +521,12 @@ class DensityAltitudePerformanceTest extends TestCase
             'elevation_ft' => 5915,
         ], '69v');
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame('normal', $result['tier']);
+        $this->assertArrayHasKey('ends', $result);
     }
 
-    public function testOr81WarmDayScoresFavorableEndWhenSpreadHigh(): void
+    public function testOr81WarmDayCautionWhenReciprocalObstructionStressesBothEnds(): void
     {
         resetNasrAptCacheMemo();
         setNasrAptCacheForTesting([
@@ -533,7 +551,7 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ]);
 
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 1531,
             'pressure_altitude' => 85,
             'temperature' => 26.0,
@@ -550,10 +568,10 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertIsArray($result);
         $this->assertSame('caution', $result['tier']);
         $this->assertSame('best_performance', $result['selection_basis']);
-        $this->assertSame('07', $result['operational_end_id']);
-        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['scored_end_risk']);
-        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['scored_end_risk']);
-        $this->assertGreaterThan($result['best_end_risk'], $result['worst_end_risk']);
+        $this->assertSame('07/25', $result['best_end']['rwy_id']);
+        $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $result['best_end']['total_risk']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $result['best_end']['total_risk']);
+        $this->assertEqualsWithDelta($result['best_end']['total_risk'], $result['worst_end']['total_risk'], 0.001);
     }
 
     public function testOr81CoolDayNormalOnFavorableEnd(): void
@@ -581,7 +599,7 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ]);
 
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 126,
             'pressure_altitude' => 75,
             'temperature' => 15.0,
@@ -595,10 +613,11 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ], 'or81');
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame('normal', $result['tier']);
     }
 
-    public function testKpfcAsymmetricStripNormalWhenBestEndIsFavorable(): void
+    public function testKpfcNormalWhenBestEndIsFavorable(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
         resetNasrAptCacheMemo();
@@ -628,7 +647,7 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ]);
 
-        $result = buildDensityAltitudePerformance([
+        $result = computeDensityAltitudePerformance([
             'density_altitude' => 500,
             'pressure_altitude' => 100,
             'temperature' => 15,
@@ -639,7 +658,8 @@ class DensityAltitudePerformanceTest extends TestCase
             'elevation_ft' => 10,
         ], 'kpfc');
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame('normal', $result['tier']);
     }
 
     public function testSelectionBasisTooltipMentionsScoredDepartureEnd(): void
@@ -647,8 +667,10 @@ class DensityAltitudePerformanceTest extends TestCase
         $tooltip = densityAltitudePerformanceTooltip('caution', [
             'tier' => 'caution',
             'selection_basis' => 'best_performance',
-            'operational_end_id' => '32',
-            'operational_rwy_id' => '14/32',
+            'best_end' => [
+                'end_id' => '32',
+                'rwy_id' => '14/32',
+            ],
         ]);
 
         $this->assertStringContainsString('RWY 32 (14/32)', $tooltip);

@@ -18,7 +18,6 @@
     "pressure_altitude_ft": 4570,
     "temperature_c": 20.1,
     "expected_tier": "warning",
-    "expected_risk_factor": 2.652,
     "expected_worst_end_risk": 2.652,
     "expected_best_end_risk": 2.652,
     "note": "High DA turf-gravel; both ends constrained."
@@ -31,7 +30,6 @@
     "pressure_altitude_ft": 3408,
     "temperature_c": 24.3,
     "expected_tier": "warning",
-    "expected_risk_factor": 2.727,
     "expected_worst_end_risk": 2.727,
     "expected_best_end_risk": 2.727,
     "note": "Short turf strip at moderate pressure altitude."
@@ -44,7 +42,7 @@
     "pressure_altitude_ft": 5673,
     "temperature_c": 34.7,
     "expected_tier": "normal",
-    "note": "Asymmetric spread heuristic: best end below caution while worst is high."
+    "note": "Best-end tier policy: global best below caution while worst end is at cap."
   },
   {
     "airport_id": "56s",
@@ -64,7 +62,7 @@
     "pressure_altitude_ft": 9145,
     "temperature_c": 21.5,
     "expected_tier": "normal",
-    "note": "Asymmetric spread heuristic: favorable departure end below caution."
+    "note": "Best-end tier policy: favorable departure end below caution threshold."
   },
   {
     "airport_id": "42b",
@@ -74,7 +72,7 @@
     "pressure_altitude_ft": 49,
     "temperature_c": 31.3,
     "expected_tier": "normal",
-    "note": "Water runway excluded; paved 14/32 asymmetric ends below caution."
+    "note": "Water runway excluded; paved 14/32 best end below caution."
   },
   {
     "airport_id": "c53",
@@ -84,7 +82,6 @@
     "pressure_altitude_ft": 3946,
     "temperature_c": 24.6,
     "expected_tier": "warning",
-    "expected_risk_factor": 3.0,
     "expected_worst_end_risk": 3.0,
     "expected_best_end_risk": 3.0,
     "note": "Short turf-dirt 1200 ft runway at high DA."
@@ -129,6 +126,6 @@
     "pressure_altitude_ft": 800,
     "temperature_c": 30,
     "expected_tier": "normal",
-    "note": "Asymmetric spread heuristic: best end below caution threshold."
+    "note": "Best-end tier policy: global best below caution threshold."
   }
 ]
