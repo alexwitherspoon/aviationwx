@@ -196,7 +196,12 @@ class DaPerformanceRunwayClosureTest extends TestCase
             'timezone' => 'America/Denver',
         ], '69v');
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame('normal', $result['tier']);
+        $this->assertFalse($result['fallback']);
+        $this->assertSame('08/26', $result['best_end']['rwy_id']);
+        $rwyIds = array_map(static fn (array $row): string => (string) ($row['rwy_id'] ?? ''), $result['ends']);
+        $this->assertNotContains('18/36', $rwyIds);
     }
 
     /**
