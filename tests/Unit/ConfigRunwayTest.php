@@ -66,6 +66,21 @@ final class ConfigRunwayTest extends TestCase
         $this->assertFalse(configRunwayHasDepartureObstructionData($runway));
     }
 
+    public function testParseConfigRunwayEndsCanonicalizesSingleDigitEndId(): void
+    {
+        $runway = buildConfigRunwayForDensityAltitude([
+            'runway_length_ft' => 2700,
+            'runway_ends' => [
+                ['end_id' => '9'],
+                ['end_id' => '27'],
+            ],
+        ]);
+
+        $this->assertNotNull($runway);
+        $this->assertSame('09', $runway['ends'][0]['end_id']);
+        $this->assertSame('27', $runway['ends'][1]['end_id']);
+    }
+
     public function testConfigRunwaySkipsInvalidEndIdAtParseTime(): void
     {
         $runway = buildConfigRunwayForDensityAltitude([

@@ -112,7 +112,8 @@ function parseConfigRunwayEnds(array $airport): array
             continue;
         }
 
-        if (parseRunwayEndIdentMagneticHeading($endId) === null) {
+        $canonicalEndId = canonicalizeRunwayEndIdent($endId);
+        if ($canonicalEndId === null) {
             aviationwx_log('warning', 'config runway_ends row skipped: invalid end_id', [
                 'airport' => $airportLabel,
                 'index' => $index,
@@ -122,7 +123,7 @@ function parseConfigRunwayEnds(array $airport): array
         }
 
         $end = [
-            'end_id' => $endId,
+            'end_id' => $canonicalEndId,
             'obstruction' => [],
         ];
 
@@ -298,16 +299,17 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
         }
 
         $normalizedEndId = strtoupper(trim($endId));
-        if (parseRunwayEndIdentMagneticHeading($normalizedEndId) === null) {
+        $canonicalEndId = canonicalizeRunwayEndIdent($normalizedEndId);
+        if ($canonicalEndId === null) {
             $errors[] = "Airport '{$airportCode}' {$label} has invalid end_id '{$endId}'";
             continue;
         }
 
-        if (isset($seenEndIds[$normalizedEndId])) {
-            $errors[] = "Airport '{$airportCode}' {$label} duplicates end_id '{$normalizedEndId}'";
+        if (isset($seenEndIds[$canonicalEndId])) {
+            $errors[] = "Airport '{$airportCode}' {$label} duplicates end_id '{$canonicalEndId}'";
             continue;
         }
-        $seenEndIds[$normalizedEndId] = true;
+        $seenEndIds[$canonicalEndId] = true;
 
         foreach (['displaced_thr_len', 'tkof_dist_avbl'] as $field) {
             if (!array_key_exists($field, $row) || $row[$field] === null) {
