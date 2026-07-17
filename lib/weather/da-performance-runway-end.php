@@ -40,20 +40,27 @@ function resolveRunwayEndMagneticHeading(array $end, array $runway, array $airpo
         return null;
     }
 
+    $canonicalEndId = canonicalizeRunwayEndIdent($endId);
+    if ($canonicalEndId === null) {
+        return null;
+    }
+
     $rwyId = (string) ($runway['rwy_id'] ?? '');
     if ($rwyId !== '' && isset($runway['heading_1'], $runway['heading_2'])) {
         $idents = explode('/', $rwyId, 2);
         $leIdent = $idents[0] ?? '';
         $heIdent = $idents[1] ?? $leIdent;
-        if (strcasecmp($endId, $leIdent) === 0 && is_numeric($runway['heading_1'])) {
+        $leCanonical = canonicalizeRunwayEndIdent($leIdent);
+        $heCanonical = canonicalizeRunwayEndIdent($heIdent);
+        if ($leCanonical !== null && $canonicalEndId === $leCanonical && is_numeric($runway['heading_1'])) {
             return (float) $runway['heading_1'];
         }
-        if (strcasecmp($endId, $heIdent) === 0 && is_numeric($runway['heading_2'])) {
+        if ($heCanonical !== null && $canonicalEndId === $heCanonical && is_numeric($runway['heading_2'])) {
             return (float) $runway['heading_2'];
         }
     }
 
-    $parsed = parseRunwayEndIdentMagneticHeading($endId);
+    $parsed = parseRunwayEndIdentMagneticHeading($canonicalEndId);
     if ($parsed === null) {
         return null;
     }
@@ -171,7 +178,9 @@ function findReciprocalRunwayEnd(array $departureEnd, array $runway): ?array
  *
  * FAA NASR and operator runway_ends file controlling obstacles on the approach side of
  * threshold R (OBSTN_HGT / DIST_FROM_THR on end R). That obstacle lies ahead when
- * departing from the reciprocal end D, at along-track distance runway_length + dist from R.
+ * departing from the reciprocal end D, at along-track distance
+ * `(runway_length - departure_displaced_thr_len) + dist_from_R` when the departure
+ * end publishes a displaced threshold, otherwise `runway_length + dist_from_R`.
  *
  * @param array $departureEnd Runway end row scored for departure
  * @param array $runway Selected runway with length_ft and ends[]
