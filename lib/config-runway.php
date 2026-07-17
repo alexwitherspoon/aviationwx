@@ -209,17 +209,28 @@ function buildConfigRunwayForDensityAltitude(array $airport): ?array
  */
 function configRunwayHasDepartureObstructionData(array $runway): bool
 {
+    $validEnds = 0;
+    $hasUsableObstruction = false;
+
     foreach ($runway['ends'] ?? [] as $end) {
         if (!is_array($end)) {
             continue;
         }
+
+        $endId = isset($end['end_id']) ? trim((string) $end['end_id']) : '';
+        if ($endId === '') {
+            continue;
+        }
+
+        $validEnds++;
+
         $obst = is_array($end['obstruction'] ?? null) ? $end['obstruction'] : [];
         if (configRunwayObstructionIsUsable($obst)) {
-            return true;
+            $hasUsableObstruction = true;
         }
     }
 
-    return false;
+    return $validEnds >= 2 && $hasUsableObstruction;
 }
 
 /**
