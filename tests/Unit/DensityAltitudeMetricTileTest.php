@@ -81,7 +81,7 @@ class DensityAltitudeMetricTileTest extends TestCase
         ]);
 
         $this->assertStringContainsString('Density Alt', $html);
-        $this->assertStringContainsString('density-altitude-warning', $html);
+        $this->assertStringContainsString('class="value density-altitude-warning"', $html);
         $this->assertStringContainsString('5,342 ft 🚩', $html);
     }
 }

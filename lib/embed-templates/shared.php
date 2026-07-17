@@ -261,7 +261,7 @@ function renderFullWidgetDensityAltitudeMetricHtml(array $metric): string
 
     $tileClassSuffix = (string) ($metric['tile_class_suffix'] ?? '');
     $itemClasses = 'metric-item' . $tileClassSuffix;
-    $valueClassSuffix = trim($tileClassSuffix);
+    $valueClassSuffix = (string) ($metric['value_class_suffix'] ?? $tileClassSuffix);
     $valueClassAttr = $valueClassSuffix !== ''
         ? ' class="value' . htmlspecialchars($valueClassSuffix, ENT_QUOTES, 'UTF-8') . '"'
         : ' class="value"';
