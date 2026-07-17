@@ -33,7 +33,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
      */
     public function testAirportPageLoadsDensityAltitudePerformanceDisplayBeforeDashboard(): void
     {
-        $content = file_get_contents(__DIR__ . '/../../pages/airport.php');
+        $content = $this->readTestFileContent(__DIR__ . '/../../pages/airport.php');
         $daPos = strpos($content, 'density-altitude-performance-display.js');
         $dashboardPos = strpos($content, 'airport-dashboard.js');
         $this->assertNotFalse($daPos);
