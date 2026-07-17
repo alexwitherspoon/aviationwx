@@ -46,21 +46,54 @@ function nasrRunwayIsSelectable(array $runway): bool
  */
 function nasrSelectLongestActiveLandRunway(array $airportRecord): ?array
 {
-    $best = null;
-    $bestLen = 0;
+    $runways = nasrSelectActiveLandRunwaysForPerformance($airportRecord);
+    if ($runways === []) {
+        return null;
+    }
 
+    return $runways[0];
+}
+
+/**
+ * Active land runways used for density altitude performance scoring.
+ *
+ * Includes every selectable runway that shares the longest runway's paved vs
+ * non-paved surface category so parallel long strips are compared while
+ * shorter cross-surface strips (for example turf beside a paved primary) are
+ * excluded.
+ *
+ * @param array $airportRecord Parsed NASR airport record
+ * @return list<array> Runways sorted by length descending
+ */
+function nasrSelectActiveLandRunwaysForPerformance(array $airportRecord): array
+{
+    $selectable = [];
     foreach ($airportRecord['runways'] ?? [] as $runway) {
         if (!is_array($runway) || !nasrRunwayIsSelectable($runway)) {
             continue;
         }
-        $len = (int) ($runway['length_ft'] ?? 0);
-        if ($len > $bestLen) {
-            $bestLen = $len;
-            $best = $runway;
-        }
+        $selectable[] = $runway;
     }
 
-    return $best;
+    if ($selectable === []) {
+        return [];
+    }
+
+    usort(
+        $selectable,
+        static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
+    );
+
+    $longestSurface = (string) ($selectable[0]['surface'] ?? '');
+    $longestIsNonPaved = nasrIsNonPavedSurface($longestSurface);
+
+    return array_values(array_filter(
+        $selectable,
+        static function (array $runway) use ($longestIsNonPaved): bool {
+            $surface = (string) ($runway['surface'] ?? '');
+            return nasrIsNonPavedSurface($surface) === $longestIsNonPaved;
+        }
+    ));
 }
 
 /**

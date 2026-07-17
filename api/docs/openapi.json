@@ -1076,7 +1076,12 @@
               },
               "operational_end_id": {
                 "type": "string",
-                "description": "Runway end ident scored for tier (e.g. 14, 32L); omitted when selection_basis is both_ends",
+                "description": "Runway end ident used for display (e.g. 14, 32L)",
+                "nullable": true
+              },
+              "operational_rwy_id": {
+                "type": "string",
+                "description": "Runway pair ident for the operational departure end (e.g. 13R/31L); omitted when unavailable",
                 "nullable": true
               },
               "selection_basis": {

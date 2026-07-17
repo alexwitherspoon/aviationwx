@@ -236,21 +236,39 @@
         return '';
     }
 
+    function densityAltitudePerformanceOperationalEndLabel(performance) {
+        if (!performance) {
+            return '';
+        }
+        const endId = performance.operational_end_id ? String(performance.operational_end_id).trim() : '';
+        if (endId === '') {
+            return '';
+        }
+        const rwyId = performance.operational_rwy_id ? String(performance.operational_rwy_id).trim() : '';
+        if (rwyId !== '' && rwyId !== 'config') {
+            return `RWY ${endId} (${rwyId})`;
+        }
+        return `RWY ${endId}`;
+    }
+
     function densityAltitudePerformanceSelectionBasisNote(performance) {
         if (!performance || !performance.selection_basis) {
             return '';
         }
-        const endId = performance.operational_end_id ? String(performance.operational_end_id).trim() : '';
+        const endLabel = densityAltitudePerformanceOperationalEndLabel(performance);
         if (performance.selection_basis === 'window_mean_wind') {
-            const end = endId !== '' ? `RWY ${endId}` : 'the wind-aligned runway end';
+            const end = endLabel !== '' ? endLabel : 'the wind-aligned runway end';
             return ` Cue reflects reference takeoff performance for ${end} using recent mean wind.`;
         }
         if (performance.selection_basis === 'asymmetric_heuristic') {
-            const end = endId !== '' ? `RWY ${endId}` : 'the less-constrained runway end';
+            const end = endLabel !== '' ? endLabel : 'the less-constrained runway end';
             return ` Cue reflects reference takeoff performance for ${end}; the opposite direction is more constrained.`;
         }
         if (performance.selection_basis === 'both_ends') {
-            return ' Cue reflects reference takeoff performance for both departure directions on the longest runway.';
+            if (endLabel !== '') {
+                return ` Cue reflects reference takeoff performance across comparable runways; best reference case is ${endLabel}.`;
+            }
+            return ' Cue reflects reference takeoff performance across comparable runways and departure directions.';
         }
         return '';
     }

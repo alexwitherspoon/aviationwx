@@ -487,10 +487,11 @@ class DensityAltitudePerformanceTest extends TestCase
         $nasrRecord = getNasrAirportForConfig(['faa' => 'PFC', 'icao' => 'KPFC']);
         $this->assertNotNull($nasrRecord);
         $runway = nasrSelectLongestActiveLandRunway($nasrRecord);
-        $evaluation = evaluateRunwayEndPerformanceRange($runway, 100.0, 15.0, $tables);
+        $this->assertNotNull($runway);
+        $evaluation = evaluateAirportRunwayEndPerformanceRange([$runway], 100.0, 15.0, $tables);
         $selection = resolveDensityAltitudePerformanceEndSelection(
             $evaluation,
-            $runway,
+            [$runway],
             ['faa' => 'PFC', 'magnetic_declination' => 14.0],
             null,
             100.0,
@@ -501,6 +502,7 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $this->assertSame('asymmetric_heuristic', $selection['selection_basis']);
         $this->assertSame('32', $selection['operational_end_id']);
+        $this->assertSame('14/32', $selection['operational_rwy_id']);
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $selection['scored_end']['total_risk']);
     }
 

@@ -117,3 +117,61 @@ function pickDepartureEndByWindFromMagnetic(array $runway, array $airport, float
 
     return $bestEnd;
 }
+
+/**
+ * Pick the departure end aligned with mean wind across all performance runways.
+ *
+ * @param list<array> $runways Selected runways with ends[]
+ * @param array $airport Airport configuration
+ * @param float $windFromMagDeg Mean wind direction (magnetic, meteorological FROM)
+ * @return array|null Matched end row with magnetic_heading and rwy_id, or null when no end resolves
+ */
+function pickDepartureEndByWindAcrossRunways(array $runways, array $airport, float $windFromMagDeg): ?array
+{
+    $bestEnd = null;
+    $bestDiff = null;
+
+    foreach ($runways as $runway) {
+        if (!is_array($runway)) {
+            continue;
+        }
+
+        $picked = pickDepartureEndByWindFromMagnetic($runway, $airport, $windFromMagDeg);
+        if ($picked === null) {
+            continue;
+        }
+
+        $heading = (float) ($picked['magnetic_heading'] ?? 0.0);
+        $diff = angularDifference($heading, $windFromMagDeg);
+        if ($bestDiff === null || $diff < $bestDiff) {
+            $bestDiff = $diff;
+            $bestEnd = $picked;
+            $bestEnd['rwy_id'] = isset($runway['rwy_id']) ? (string) $runway['rwy_id'] : null;
+        }
+    }
+
+    return $bestEnd;
+}
+
+/**
+ * Find a performance runway record by published runway id.
+ *
+ * @param list<array> $runways Selected runways
+ */
+function findPerformanceRunwayById(array $runways, ?string $rwyId): ?array
+{
+    if ($rwyId === null || $rwyId === '') {
+        return null;
+    }
+
+    foreach ($runways as $runway) {
+        if (!is_array($runway)) {
+            continue;
+        }
+        if ((string) ($runway['rwy_id'] ?? '') === $rwyId) {
+            return $runway;
+        }
+    }
+
+    return null;
+}

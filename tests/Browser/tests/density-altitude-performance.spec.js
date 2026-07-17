@@ -404,13 +404,13 @@ test.describe('Card embed density altitude performance tiers', () => {
   test('shows warning tier on DA tile with amber styling, tooltip, and aria-label', async ({ page }) => {
     const densityAltitudeFt = 6280;
     const formattedValue = '6,280 ft';
-    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Cue reflects reference takeoff performance for both departure directions on the longest runway.`;
+    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Cue reflects reference takeoff performance across comparable runways and departure directions.`;
 
     await gotoMockEmbedCard(page, {
       tier: 'warning',
       densityAltitudeFt,
       emoji: '🚩',
-      tooltip: WARNING_TOOLTIP + ' Cue reflects reference takeoff performance for both departure directions on the longest runway.',
+      tooltip: WARNING_TOOLTIP + ' Cue reflects reference takeoff performance across comparable runways and departure directions.',
       ariaLabel,
       formattedValue,
     });

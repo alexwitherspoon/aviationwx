@@ -172,30 +172,30 @@ function fleetDaAuditBuildPerformance(
     $fieldElevationFt = getEffectiveFieldElevationFt($airport, $nasrRecord);
 
     $configLength = getConfigRunwayLengthOverrideFt($airport);
-    $selectedRunway = null;
+    $performanceRunways = [];
     $runwaySource = null;
 
     if ($configLength !== null) {
-        $selectedRunway = [
+        $performanceRunways = [[
             'rwy_id' => 'config',
             'length_ft' => $configLength,
             'surface' => getConfigRunwaySurfaceOverride($airport) ?? 'ASPH',
             'ends' => [],
-        ];
+        ]];
         $runwaySource = 'config';
     } elseif ($nasrRecord !== null) {
-        $selectedRunway = nasrSelectLongestActiveLandRunway($nasrRecord);
-        if ($selectedRunway !== null) {
+        $performanceRunways = nasrSelectActiveLandRunwaysForPerformance($nasrRecord);
+        if ($performanceRunways !== []) {
             $runwaySource = 'nasr';
         }
     } else {
-        $selectedRunway = getOurAirportsPerformanceRunwayForAirport($airportId, $airport);
-        if ($selectedRunway !== null) {
+        $performanceRunways = getOurAirportsPerformanceRunwaysForAirport($airportId, $airport);
+        if ($performanceRunways !== []) {
             $runwaySource = 'ourairports';
         }
     }
 
-    if ($selectedRunway === null) {
+    if ($performanceRunways === []) {
         return assessFallbackDensityAltitudePerformance($densityAltitudeFt, $fieldElevationFt);
     }
 
@@ -206,8 +206,8 @@ function fleetDaAuditBuildPerformance(
     }
 
     $tables = loadPohTakeoffTables();
-    $evaluation = evaluateRunwayEndPerformanceRange(
-        $selectedRunway,
+    $evaluation = evaluateAirportRunwayEndPerformanceRange(
+        $performanceRunways,
         (float) $pressureAltitude,
         (float) $temperature,
         $tables
@@ -237,27 +237,37 @@ function fleetDaAuditBuildPerformance(
 
     $selection = [
         'selection_basis' => 'both_ends',
-        'operational_end_id' => null,
+        'operational_end_id' => $evaluation['best']['end_id'] ?? null,
+        'operational_rwy_id' => $evaluation['best']['rwy_id'] ?? null,
         'scored_end' => null,
         'wind_basis' => null,
     ];
 
-    if ($runwaySource !== 'config' && ($selectedRunway['ends'] ?? []) !== []) {
+    if ($runwaySource !== 'config' && $performanceRunways !== []) {
         $windBasis = fleetDaAuditWindowMeanWind($historyObs, $airport, (float) $variant['min_mean_kts']);
         if ($windBasis !== null) {
-            $picked = pickDepartureEndByWindFromMagnetic(
-                $selectedRunway,
+            $picked = pickDepartureEndByWindAcrossRunways(
+                $performanceRunways,
                 $airport,
                 (float) $windBasis['direction_magnetic']
             );
             if ($picked !== null) {
+                $pickedRunway = findPerformanceRunwayById(
+                    $performanceRunways,
+                    isset($picked['rwy_id']) ? (string) $picked['rwy_id'] : null
+                );
+                if ($pickedRunway === null) {
+                    $pickedRunway = $performanceRunways[0];
+                }
+
                 $selection = [
                     'selection_basis' => 'window_mean_wind',
                     'operational_end_id' => $picked['end_id'] ?? null,
+                    'operational_rwy_id' => $picked['rwy_id'] ?? ($pickedRunway['rwy_id'] ?? null),
                     'scored_end' => lookupEvaluationForRunwayEnd(
                         $evaluation,
                         $picked,
-                        $selectedRunway,
+                        $pickedRunway,
                         (float) $pressureAltitude,
                         (float) $temperature,
                         $tables
@@ -276,6 +286,7 @@ function fleetDaAuditBuildPerformance(
             $selection = [
                 'selection_basis' => 'asymmetric_heuristic',
                 'operational_end_id' => $evaluation['best']['end_id'],
+                'operational_rwy_id' => $evaluation['best']['rwy_id'] ?? null,
                 'scored_end' => $evaluation['best'],
                 'wind_basis' => null,
             ];
@@ -302,6 +313,7 @@ function fleetDaAuditBuildPerformance(
         'tier' => $tier,
         'selection_basis' => $selection['selection_basis'],
         'operational_end_id' => $selection['operational_end_id'],
+        'operational_rwy_id' => $selection['operational_rwy_id'] ?? null,
         'scored_end_risk' => $scoredRisk !== null ? round($scoredRisk, 3) : null,
         'worst_end_risk' => round($worstTotalRisk, 3),
         'best_end_risk' => round($bestTotalRisk, 3),

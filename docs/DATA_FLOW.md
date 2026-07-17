@@ -679,8 +679,8 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 **Runway context precedence** (first match wins):
 
 1. `runway_length_ft` in `airports.json` (optional `runway_surface`)
-2. NASR longest active land runway (US AIS)
-3. OurAirports longest active land runway when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
+2. NASR comparable active land runways (US AIS; same paved/non-paved category as longest)
+3. OurAirports comparable land runways when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
 4. Weather-only fallback (elevation-banded DA thresholds; `fallback: true`)
 
 **OurAirports runway model** (when NASR is unavailable):
@@ -702,7 +702,7 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 **Full model** (runway data available):
 
-1. Select **longest** active land runway (exclude `WATER`, exclude `COND=FAILED`). Shorter runways at the same airport are not evaluated, to avoid over-alerting when the longest strip is available; pilots choosing a shorter runway must apply their own ADM.
+1. Select **comparable** active land runways (exclude `WATER`, exclude `COND=FAILED`): every selectable runway sharing the longest runway's paved vs non-paved surface category. Score all departure ends across those runways; worst and best drive tier mapping. Display uses the global best-performing departure end (and wind-aligned end when mean wind qualifies).
 2. Score each departure end: AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (**0 kt wind** - neutral conservative case; no headwind/tailwind adjustment).
 3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
 4. Use per-end effective departure length from NASR (`TKOF_DIST_AVBL`, displaced threshold) when published.
@@ -720,7 +720,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 
 - Requires `config.public_api.weather_history_enabled`, resolvable magnetic headings for at least one runway end, and a config airport id for history lookup.
 - `computeWindowMeanWind()` reads observations in `wind_rose_window_hours` (default 1 hour), same rolling window as the wind rose. Non-calm observations only (`wind_speed ≥ CALM_WIND_THRESHOLD_KTS`, 3 kt). Vector mean direction and speed must pass quality gates (minimum observation count, mean speed, dispersion ratio). See [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance).
-- `pickDepartureEndByWindFromMagnetic()` selects the runway end whose magnetic heading is closest to the mean wind **from** direction (into-wind departure).
+- `pickDepartureEndByWindAcrossRunways()` selects the runway end (across all comparable runways) whose magnetic heading is closest to the mean wind **from** direction (into-wind departure).
 - Tier maps from **scored end risk** on that end only. Response includes `operational_end_id`, `scored_end_risk`, and `wind_basis`.
 
 **Path B - asymmetric spread heuristic** (`selection_basis: asymmetric_heuristic`):
@@ -766,7 +766,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
   },
   "fallback": false,
   "reason": "reference_models",
-  "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
+  "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); comparable NASR runways"
 }
 ```
 
@@ -778,7 +778,7 @@ After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` pi
 |-----------|------|------|
 | Assessment and API payload | `lib/weather/density-altitude-performance.php` | `buildDensityAltitudePerformance()`, tier mapping, attach at format time |
 | Operational end selection | `lib/weather/density-altitude-performance.php` | `resolveDensityAltitudePerformanceEndSelection()` |
-| Runway end headings and wind pick | `lib/weather/da-performance-runway-end.php` | `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()` |
+| Runway end headings and wind pick | `lib/weather/da-performance-runway-end.php` | `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindAcrossRunways()` |
 | Window mean wind | `lib/weather/history.php` | `computeWindowMeanWind()` |
 | AFM table lookup | `lib/weather/poh-takeoff.php` | Chart distance and obstruction stress |
 | NASR runway selection | `lib/nasr/*` | Longest runway, effective departure length, obstructions |

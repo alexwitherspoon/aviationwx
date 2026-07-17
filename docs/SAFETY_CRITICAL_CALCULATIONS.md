@@ -132,7 +132,7 @@ Pipeline and operational end selection order are documented in [DATA_FLOW.md](DA
 
 **Reference aircraft**: Cessna 152M, 172N, 182T short-field takeoff charts at max gross (`data/poh/*.json`). Wind correction is **not** applied in v1: **0 kt wind** is assumed as a generalized neutral conservative case (neither headwind credit nor tailwind penalty). Charts are at max gross; lighter loading is not modeled.
 
-**Runway selection**: **Longest** active land runway from NASR; exclude `WATER` surfaces and `COND=FAILED`. Multi-runway airports often have shorter strips; evaluating only the longest runway avoids over-triggering when a pilot might use a longer departure surface. Shorter-runway operations remain pilot judgment and ADM. Operator `runway_length_ft` in config overrides NASR length (see below).
+**Runway selection**: **Comparable** active land runways from NASR: every selectable runway that shares the longest runway's paved vs non-paved surface category (parallel long paved strips are all scored; shorter cross-surface strips such as turf beside a paved primary are excluded). Exclude `WATER` surfaces and `COND=FAILED`. Operator `runway_length_ft` in config overrides NASR length (see below).
 
 **Config `runway_length_ft` override**: When set in `airports.json`, the full model uses that length (and optional `runway_surface`) with a synthetic runway id `config` and **empty `ends`**. NASR departure obstructions (`OBSTN_HGT`, `DIST_FROM_THR`, `OBSTN_CLNC_SLOPE`), displaced thresholds, and `TKOF_DIST_AVBL` are **not** applied even if NASR lists them for the airport. Only runway-length stress is computed. Use when NASR runway data is wrong or missing; be aware this can **under-alert** if departure obstacles matter on that strip. Operator documentation: `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
@@ -182,7 +182,7 @@ dispersion_ratio = scalar_mean / vector_speed
 | `DA_PERF_WIND_MIN_MEAN_KTS` | 5.0 | Minimum vector mean speed |
 | `DA_PERF_VARIABLE_WIND_RATIO` | 2.0 | Maximum `scalar_mean / vector_speed` (reject highly variable wind) |
 
-`pickDepartureEndByWindFromMagnetic()` selects the runway end whose magnetic heading has the smallest angular difference from mean wind FROM (into-wind departure). Tier maps from that end's total risk only.
+`pickDepartureEndByWindAcrossRunways()` selects the runway end (across all comparable runways) whose magnetic heading has the smallest angular difference from mean wind FROM (into-wind departure). Tier maps from that end's total risk only.
 
 **Path B - asymmetric spread heuristic** (`selection_basis: asymmetric_heuristic`):
 
@@ -227,7 +227,7 @@ When spread is below 1.5, runway ends are empty, headings are unresolvable, or c
 
 ### OurAirports runway model (when NASR unavailable)
 
-When FAA NASR has no airport row (typical for non-US fields such as Canadian ICAOs), select the **longest** active land runway from the OurAirports cache. Exclude closed runways and water surfaces.
+When FAA NASR has no airport row (typical for non-US fields such as Canadian ICAOs), select **comparable** active land runways from the OurAirports cache using the same paved-vs-non-paved grouping. Exclude closed runways and water surfaces.
 
 **Stress model**: Same POH reference tables and grass correction as the NASR full model. Per-end records carry **displaced-threshold length** when OurAirports publishes it; there are **no departure obstructions** and no `TKOF_DIST_AVBL` (OurAirports does not publish NASR-style obstacle or TODA fields).
 
@@ -246,9 +246,10 @@ When no runway data: elevation-banded thresholds on density altitude and delta (
 | `buildDensityAltitudePerformance()` | `lib/weather/density-altitude-performance.php` |
 | `attachDensityAltitudePerformance()` | `lib/weather/density-altitude-performance.php` |
 | `resolveDensityAltitudePerformanceEndSelection()` | `lib/weather/density-altitude-performance.php` |
-| `evaluateRunwayEndPerformanceRange()`, `evaluateSingleRunwayEndPerformance()` | `lib/weather/density-altitude-performance.php` |
+| `evaluateAirportRunwayEndPerformanceRange()`, `evaluateRunwayEndPerformanceRange()`, `evaluateSingleRunwayEndPerformance()` | `lib/weather/density-altitude-performance.php` |
 | `densityAltitudePerformanceTierFromScoredEnd()`, `densityAltitudePerformanceTierFromEndRisks()` | `lib/weather/density-altitude-performance.php` |
-| `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()` | `lib/weather/da-performance-runway-end.php` |
+| `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()`, `pickDepartureEndByWindAcrossRunways()` | `lib/weather/da-performance-runway-end.php` |
+| `nasrSelectActiveLandRunwaysForPerformance()` | `lib/nasr/runway-selection.php` |
 | `computeWindowMeanWind()` | `lib/weather/history.php` |
 | `pohComputeDepartureEndStress()` | `lib/weather/poh-takeoff.php` |
 | NASR runway selection and effective length | `lib/nasr/runway-selection.php`, `lib/nasr/cache.php` |

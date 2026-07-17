@@ -438,13 +438,13 @@ if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE',
-        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); comparable NASR runways'
     );
 }
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS',
-        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest OurAirports runway (no obstruction data)'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); comparable OurAirports runways (no obstruction data)'
     );
 }
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG')) {

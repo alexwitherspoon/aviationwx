@@ -30,6 +30,34 @@ function densityAltitudePerformanceTooltip(string $tier, ?array $performance = n
 }
 
 /**
+ * Format the operational departure end for pilot-facing copy.
+ *
+ * @param array<string, mixed>|null $performance Optional API payload
+ */
+function densityAltitudePerformanceOperationalEndLabel(?array $performance): string
+{
+    if (!is_array($performance)) {
+        return '';
+    }
+
+    $endId = isset($performance['operational_end_id'])
+        ? trim((string) $performance['operational_end_id'])
+        : '';
+    if ($endId === '') {
+        return '';
+    }
+
+    $rwyId = isset($performance['operational_rwy_id'])
+        ? trim((string) $performance['operational_rwy_id'])
+        : '';
+    if ($rwyId !== '' && $rwyId !== 'config') {
+        return 'RWY ' . $endId . ' (' . $rwyId . ')';
+    }
+
+    return 'RWY ' . $endId;
+}
+
+/**
  * Tooltip suffix explaining which departure direction was scored.
  *
  * @param array<string, mixed>|null $performance Optional API payload with selection_basis
@@ -41,21 +69,23 @@ function densityAltitudePerformanceSelectionBasisNote(?array $performance): stri
     }
 
     $basis = (string) $performance['selection_basis'];
-    $endId = isset($performance['operational_end_id'])
-        ? trim((string) $performance['operational_end_id'])
-        : '';
+    $endLabel = densityAltitudePerformanceOperationalEndLabel($performance);
 
     if ($basis === 'window_mean_wind') {
-        $end = $endId !== '' ? 'RWY ' . $endId : 'the wind-aligned runway end';
+        $end = $endLabel !== '' ? $endLabel : 'the wind-aligned runway end';
         return ' Cue reflects reference takeoff performance for ' . $end . ' using recent mean wind.';
     }
     if ($basis === 'asymmetric_heuristic') {
-        $end = $endId !== '' ? 'RWY ' . $endId : 'the less-constrained runway end';
+        $end = $endLabel !== '' ? $endLabel : 'the less-constrained runway end';
         return ' Cue reflects reference takeoff performance for ' . $end
             . '; the opposite direction is more constrained.';
     }
     if ($basis === 'both_ends') {
-        return ' Cue reflects reference takeoff performance for both departure directions on the longest runway.';
+        if ($endLabel !== '') {
+            return ' Cue reflects reference takeoff performance across comparable runways; best reference case is '
+                . $endLabel . '.';
+        }
+        return ' Cue reflects reference takeoff performance across comparable runways and departure directions.';
     }
 
     return '';
