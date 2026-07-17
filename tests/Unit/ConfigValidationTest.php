@@ -5574,6 +5574,39 @@ class ConfigValidationTest extends TestCase
         $this->assertStringNotContainsString('runway_ends requires runway_length_ft', $errors);
     }
 
+    public function testRunwayEndsRejectsMoreThanTwoEntries(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '09'],
+            ['end_id' => '18'],
+            ['end_id' => '27'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('must contain at most two entries', implode(' ', $result['errors']));
+    }
+
+    public function testRunwayEndsObstructionRequiresTwoEnds(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            [
+                'end_id' => '17',
+                'obstruction' => ['hgt_ft' => 200, 'dist_ft' => 2500],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('obstruction requires two ends', implode(' ', $result['errors']));
+    }
+
     public function testRunwayEndsRejectsInvalidEndId(): void
     {
         $config = $this->createMinimalConfig();

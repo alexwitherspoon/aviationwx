@@ -283,6 +283,7 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
     }
 
     $seenEndIds = [];
+    $hasUsableObstruction = false;
     foreach ($ends as $index => $row) {
         $label = "runway_ends[{$index}]";
         if (!is_array($row)) {
@@ -322,6 +323,9 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
         }
 
         $obst = $row['obstruction'];
+        if (configRunwayObstructionIsUsable($obst)) {
+            $hasUsableObstruction = true;
+        }
         foreach (['hgt_ft', 'dist_ft'] as $field) {
             if (!array_key_exists($field, $obst) || $obst[$field] === null) {
                 continue;
@@ -336,5 +340,13 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
                 $errors[] = "Airport '{$airportCode}' {$label}.obstruction.slope must be a positive number";
             }
         }
+    }
+
+    if (count($seenEndIds) > 2) {
+        $errors[] = "Airport '{$airportCode}' runway_ends must contain at most two entries";
+    }
+
+    if ($hasUsableObstruction && count($seenEndIds) < 2) {
+        $errors[] = "Airport '{$airportCode}' runway_ends obstruction requires two ends";
     }
 }
