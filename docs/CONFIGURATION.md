@@ -117,7 +117,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `webcam_history_preset_hours` | global default | Period options in UI |
 | `default_preferences` | global default | Override unit toggle defaults for this airport |
 | **Density altitude performance** |||
-| `runway_length_ft` | NASR longest runway | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
+| `runway_length_ft` | NASR runways on file | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `runway_surface` | `ASPH` when length override is set | NASR-style surface code when `runway_length_ft` is set (e.g. `TURF`, `ASPH`). Drives POH grass correction on non-paved surfaces. |
 | `runway_ends` | - | Optional per-end departure data when `runway_length_ft` is set. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `ourairports_ident` | - | OurAirports open-data ident for internal runway joins (e.g. `US-4027`, `CYAV`). Not shown as the pilot-facing airport code. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
@@ -148,13 +148,13 @@ The weather API `density_altitude_performance` cue compares AFM takeoff charts t
 **Runway source precedence** (first match wins):
 
 1. `runway_length_ft` / `runway_surface` / optional `runway_ends` in `airports.json` (operator override)
-2. FAA NASR longest active land runway (US)
-3. OurAirports longest active land runway when NASR has no row: match `ourairports_ident` first, then ICAO, FAA, or config slug against the runway cache
+2. FAA NASR active land runways (US)
+3. OurAirports active land runways when NASR has no row: match `ourairports_ident` first, then ICAO, FAA, or config slug against the runway cache
 4. Weather-only elevation bands (`fallback: true`)
 
 Set `ourairports_ident` when the strip has no FAA or ICAO code but a row exists on [OurAirports](https://ourairports.com/data/) (Public Domain). Example: 45 Ranch → `US-4027`. Optional `ourairports_id` (integer from `airports.csv`) documents the stable OurAirports primary key; runway lookup uses `ourairports_ident`. These fields are for internal data joins only; dashboard labels still use ICAO > IATA > FAA.
 
-By default, US airports with a NASR match use the **longest** active land runway from NASR with per-end approach-side obstruction filing and effective departure length.
+US airports with a NASR match score **every** active land runway and map the cue from the global best-performing departure end. Obstructions use approach-side filing on the reciprocal end (same as NASR).
 
 When `runway_length_ft` is set on an airport, that length replaces NASR and OurAirports runway selection. Optional `runway_surface` sets the surface code for POH grass correction (non-paved surfaces add 15% of ground roll to chart total).
 

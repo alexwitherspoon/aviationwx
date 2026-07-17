@@ -66,22 +66,37 @@ Returns weather data for the specified airport.
     "density_altitude": 1234,
     "density_altitude_performance": {
       "tier": "caution",
-      "risk_factor": 1.85,
-      "worst_end_risk": 1.85,
-      "best_end_risk": 0.92,
-      "scored_end_risk": 1.85,
-      "operational_end_id": "26",
-      "selection_basis": "window_mean_wind",
-      "wind_basis": {
-        "direction_magnetic": 260.0,
-        "speed_kts": 8.5,
-        "observation_count": 4,
-        "window_hours": 1,
-        "dispersion_ratio": 1.12
-      },
       "fallback": false,
+      "selection_basis": "best_performance",
       "reason": "reference_models",
-      "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
+      "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); NASR runways on file",
+      "runway_source": "nasr",
+      "best_end": {
+        "rwy_id": "08/26",
+        "end_id": "26",
+        "total_risk": 1.65,
+        "tier": "caution"
+      },
+      "worst_end": {
+        "rwy_id": "08/26",
+        "end_id": "08",
+        "total_risk": 2.45,
+        "tier": "warning"
+      },
+      "ends": [
+        {
+          "rwy_id": "08/26",
+          "end_id": "26",
+          "total_risk": 1.65,
+          "tier": "caution"
+        },
+        {
+          "rwy_id": "08/26",
+          "end_id": "08",
+          "total_risk": 2.45,
+          "tier": "warning"
+        }
+      ]
     },
     "pressure_altitude": 456,
     "temp_high_today": 18.5,
@@ -110,6 +125,8 @@ Returns weather data for the specified airport.
   }
 }
 ```
+
+`density_altitude_performance.tier` and `best_end` drive UI cues. `worst_end` and `ends[]` are informational only. Caution and warning tiers are omitted when supporting weather fields are fail-closed stale.
 
 **Error Response:**
 ```json

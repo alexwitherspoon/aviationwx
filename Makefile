@@ -155,6 +155,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a️⃣  Wind Rose Safety Tests (JS)..."
 	@node tests/js/wind-rose.test.js || { echo "❌ Wind rose JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a0c️⃣  Density Altitude Performance Display Tests (JS)..."
+	@node tests/js/density-altitude-performance-display.test.js || { echo "❌ DA performance display JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a0️⃣  Wind Calm Policy Tests (JS)..."
 	@node tests/js/wind-calm-policy.test.js || { echo "❌ Wind calm policy JS tests failed"; exit 1; }
 	@echo ""

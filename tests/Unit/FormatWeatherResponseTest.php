@@ -288,5 +288,29 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertArrayHasKey('density_altitude_performance', $result);
         $this->assertSame('warning', $result['density_altitude_performance']['tier']);
         $this->assertFalse($result['density_altitude_performance']['fallback']);
+        $this->assertArrayHasKey('ends', $result['density_altitude_performance']);
+    }
+
+    public function testNormalTierIncludesFullModelPayload(): void
+    {
+        $this->loadNasrAptFixtureCache();
+
+        $weather = [
+            'density_altitude' => 9399,
+            'pressure_altitude' => 5673,
+            'temperature' => 34.7,
+        ];
+        $airport = [
+            'id' => '69v',
+            'faa' => '69V',
+            'elevation_ft' => 5915,
+        ];
+
+        $result = formatWeatherResponse($weather, $airport, '69v');
+
+        $this->assertArrayHasKey('density_altitude_performance', $result);
+        $this->assertSame('normal', $result['density_altitude_performance']['tier']);
+        $this->assertGreaterThan(1, count($result['density_altitude_performance']['ends']));
+        $this->assertSame('normal', $result['density_altitude_performance']['best_end']['tier']);
     }
 }

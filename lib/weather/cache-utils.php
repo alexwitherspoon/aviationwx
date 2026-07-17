@@ -124,6 +124,61 @@ function nullStaleFieldsBySource(&$data, $failclosedSeconds, $failclosedSecondsM
 }
 
 /**
+ * Whether a weather field exceeds the fail-closed staleness threshold.
+ *
+ * @param array $weather Weather row (cache or API internal shape)
+ * @param string $field Field name to check
+ * @param array|null $airport Airport config for threshold override
+ * @param bool $isMetarOnly True when all configured sources are METAR
+ */
+function isWeatherFieldFailclosedStale(
+    array $weather,
+    string $field,
+    ?array $airport = null,
+    bool $isMetarOnly = false
+): bool {
+    if (!array_key_exists($field, $weather) || $weather[$field] === null) {
+        return true;
+    }
+
+    $failclosedSeconds = getStaleFailclosedSeconds($airport);
+    $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
+    $metarSourceFields = ['visibility', 'ceiling', 'cloud_cover'];
+    $isMetarField = in_array($field, $metarSourceFields, true);
+    $threshold = $isMetarField || $isMetarOnly
+        ? $failclosedSecondsMetar
+        : $failclosedSeconds;
+
+    $now = time();
+    $fieldObsTimeMap = $weather['_field_obs_time_map'] ?? [];
+    if (isset($fieldObsTimeMap[$field]) && $fieldObsTimeMap[$field] > 0) {
+        return ($now - (int) $fieldObsTimeMap[$field]) >= $threshold;
+    }
+
+    if ($isMetarField) {
+        if (!isset($weather['last_updated_metar']) || (int) $weather['last_updated_metar'] <= 0) {
+            return true;
+        }
+
+        return ($now - (int) $weather['last_updated_metar']) >= $failclosedSecondsMetar;
+    }
+
+    if ($isMetarOnly) {
+        if (!isset($weather['last_updated_metar']) || (int) $weather['last_updated_metar'] <= 0) {
+            return true;
+        }
+
+        return ($now - (int) $weather['last_updated_metar']) >= $failclosedSecondsMetar;
+    }
+
+    if (!isset($weather['last_updated_primary']) || (int) $weather['last_updated_primary'] <= 0) {
+        return true;
+    }
+
+    return ($now - (int) $weather['last_updated_primary']) >= $failclosedSeconds;
+}
+
+/**
  * Apply failclosed staleness check using config-based thresholds
  * 
  * Convenience function that gets thresholds from config and applies them.

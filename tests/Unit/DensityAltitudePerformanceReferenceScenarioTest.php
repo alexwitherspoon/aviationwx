@@ -2,7 +2,7 @@
 /**
  * SAFETY-CRITICAL: Locked density altitude performance reference scenarios.
  *
- * Fixture weather and NASR rows assert expected tiers from buildDensityAltitudePerformance().
+ * Fixture weather and NASR rows assert expected tiers from computeDensityAltitudePerformance().
  * Update tests/Fixtures/density-altitude-performance-scenarios.json only when POH tables,
  * tier policy, or runway selection rules change on purpose (see docs/SAFETY_CRITICAL_CALCULATIONS.md).
  */
@@ -34,7 +34,6 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
 
     /** @var list<string> */
     private const REQUIRED_NON_NORMAL_KEYS = [
-        'expected_risk_factor',
         'expected_worst_end_risk',
         'expected_best_end_risk',
     ];
@@ -152,7 +151,7 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
             'temperature' => (float) $scenario['temperature_c'],
         ];
 
-        $result = buildDensityAltitudePerformance($weather, $airport);
+        $result = computeDensityAltitudePerformance($weather, $airport);
         $expectedTier = (string) $scenario['expected_tier'];
 
         if ($expectedTier === 'normal') {
@@ -170,10 +169,10 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
                 $selectedRunway['ends'] ?? [],
                 $airportId . ': normal scenario requires NASR runway end rows for selected runway'
             );
-            $this->assertNull(
-                $result,
-                $airportId . ': normal tier must omit density_altitude_performance'
-            );
+            $this->assertNotNull($result, $airportId . ': normal tier must return full-model payload');
+            $this->assertSame('normal', $result['tier'], $airportId . ': tier mismatch');
+            $this->assertFalse($result['fallback'], $airportId . ': normal scenario must not use weather-only fallback');
+            $this->assertArrayHasKey('ends', $result, $airportId . ': normal scenario must include runway scores');
 
             return;
         }
@@ -181,24 +180,21 @@ class DensityAltitudePerformanceReferenceScenarioTest extends TestCase
         $this->assertNotNull($result, $airportId . ': expected non-normal tier');
         $this->assertSame($expectedTier, $result['tier'], $airportId . ': tier mismatch');
         $this->assertFalse($result['fallback'], $airportId . ': NASR scenario must not use weather-only fallback');
+        $this->assertSame('best_performance', $result['selection_basis'], $airportId . ': selection_basis drift');
+        $this->assertArrayHasKey('best_end', $result, $airportId . ': best_end required');
+        $this->assertArrayHasKey('worst_end', $result, $airportId . ': worst_end required');
 
         $this->assertEqualsWithDelta(
-            (float) $scenario['expected_risk_factor'],
-            (float) $result['risk_factor'],
+            (float) $scenario['expected_best_end_risk'],
+            (float) $result['best_end']['total_risk'],
             0.001,
-            $airportId . ': risk_factor drift indicates POH or asymmetric tier math change'
+            $airportId . ': best_end.total_risk drift indicates POH or best-end tier math change'
         );
         $this->assertEqualsWithDelta(
             (float) $scenario['expected_worst_end_risk'],
-            (float) $result['worst_end_risk'],
+            (float) $result['worst_end']['total_risk'],
             0.001,
-            $airportId . ': worst_end_risk drift indicates runway end scoring change'
-        );
-        $this->assertEqualsWithDelta(
-            (float) $scenario['expected_best_end_risk'],
-            (float) $result['best_end_risk'],
-            0.001,
-            $airportId . ': best_end_risk drift indicates runway end scoring change'
+            $airportId . ': worst_end.total_risk drift indicates runway end scoring change'
         );
     }
 }

@@ -644,22 +644,22 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **SAFETY CRITICAL**: This cue reminds pilots to verify AFM performance numbers when density altitude and runway context suggest extra planning. It is **not** a go/no-go judgment.
 
-**When it runs**: On each weather API response (Internal API, Public API, embeds) after density altitude is present and not fail-closed null. `attachDensityAltitudePerformance()` calls `buildDensityAltitudePerformance()` at format time so NASR cache updates apply without re-fetching weather.
+**When it runs**: On each weather API response (Internal API, Public API, embed iframe/widget SSR, and Embed API) after density altitude is present and not fail-closed null. `attachDensityAltitudePerformance()` (via `formatWeatherResponse()` or `enrichEmbedWeatherForDisplay()` on cache fallback) runs at format/render time so NASR cache updates apply without re-fetching weather.
 
 **Suppression** (no `density_altitude_performance` field in the response):
 
 - Density altitude missing or fail-closed null
-- Full model unavailable (missing pressure altitude or temperature) and fallback tier is `normal`
-- Full model or fallback yields tier `normal`
+- Weather-only fallback yields tier `normal`
+- Caution or warning tier when supporting weather inputs are fail-closed stale
 
 **Pipeline**:
 
-1. Resolve runway context (config override, NASR, OurAirports, or weather-only fallback).
-2. Score **every** departure end on the selected runway (C152/C172/C182 reference models).
-3. Choose operational departure end and scoring basis (window mean wind, asymmetric heuristic, or both ends).
-4. Map risk to tier (`caution` / `warning`) from the scored end or worst/best pair.
-5. Cap tier at `caution` when obstruction data is absent (config override or OurAirports).
-6. Omit the field when tier is `normal`.
+1. Resolve runway context (config override, NASR, OurAirports, active NOTAM closures, or weather-only fallback).
+2. Score **every** departure end on **every** active land runway selected for the airport (C152/C172/C182 reference models).
+3. Map tier from the global **best** departure end (`selection_basis: best_performance`). Equal-risk ties prefer the lowest crosswind, then the strongest headwind, then stable runway/end ordering. Tie-break wind uses the vector mean from weather history over `wind_rose_window_hours` (default last hour) when quality gates pass; otherwise the current observation.
+4. Cap tier at `caution` when obstruction data is absent (OurAirports, or config without usable `runway_ends` obstruction fields).
+5. Include the field whenever density altitude is available. Full-model responses include `best_end`, `worst_end`, and `ends` even when tier is `normal`. Weather-only fallback omits runway scores.
+6. Omit caution/warning tiers when density altitude, temperature, pressure, or (for the full model) pressure altitude exceed fail-closed staleness thresholds.
 
 Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance).
 
@@ -671,30 +671,29 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 | Density altitude | Weather cache | Required; null suppresses cue |
 | Field elevation | `airports.json` or NASR `APT_BASE` | Fallback path and delta |
 | Runway length, surface, approach-side obstructions | NASR `APT_RWY` / `APT_RWY_END` cache | US airports with a NASR match |
-| Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; join via `ourairports_ident` when set, else ICAO/FAA/config slug. Longest non-closed land runway (exclude water surfaces). Same POH length/surface stress as config override; per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
+| Runway length, surface (no obstructions) | OurAirports `runways.csv` cache | When NASR has no row; join via `ourairports_ident` when set, else ICAO/FAA/config slug. Active land runways; exclude water surfaces. Per-end displaced thresholds when published; no departure obstructions. See [OurAirports runway model](#ourairports-runway-model) below. |
 | Operator runway override | `airports.json` `runway_length_ft` / `runway_surface` / optional `runway_ends` | Replaces NASR and OurAirports selection; obstructions from `runway_ends` when set |
 | AFM takeoff tables | `data/poh/*.json` | C152M, C172N, C182T short-field charts |
-| Wind history (operational end) | Weather history cache | Required for Path A; see [Operational departure end selection](#operational-departure-end-selection) |
 
 **Runway context precedence** (first match wins):
 
 1. `runway_length_ft` in `airports.json` (optional `runway_surface`, optional `runway_ends`)
-2. NASR longest active land runway (US AIS)
-3. OurAirports longest active land runway when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
+2. NASR active land runways (US AIS; exclude `WATER`, `COND=FAILED`, `COND=CLOSED`)
+3. OurAirports active land runways when NASR has no row (`ourairports_ident`, then ICAO/FAA/config slug)
 4. Weather-only fallback (elevation-banded DA thresholds; `fallback: true`)
 
 **OurAirports runway model** (when NASR is unavailable):
 
 - **Source**: `scripts/fetch-runways.php` downloads OurAirports `runways.csv` weekly for wind-compass geometry; DA performance consumes `length_ft`, `surface`, and displaced-threshold fields from the same cache slice (not lat/lon segments alone).
 - **Join**: Config `ourairports_ident` when set; otherwise match ICAO, FAA LID, or config airport slug to OurAirports `ident` in the cache.
-- **Selection**: Longest non-closed land runway; exclude water surfaces using OurAirports surface codes.
+- **Selection**: All active land runways; exclude water surfaces using OurAirports surface codes.
 - **Stress**: Full POH reference model on runway length and surface (grass correction when non-paved). Per-end records apply displaced-threshold length when OurAirports publishes it; no departure obstructions or TODA from AIS.
 - **API**: `fallback: false`, `reason: reference_models_ourairports` when this path is used.
 - **Tier cap**: When departure obstruction data is absent (OurAirports, or operator config without usable `runway_ends` obstruction fields), tier is capped at **caution** (never **warning**). The strongest alarm requires departure-end obstruction height and distance on at least one end.
 
 OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
-**NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed runway surface condition (`COND=FAILED`) and water surfaces are excluded from longest-runway selection.
+**NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed or closed NASR pavement condition and water surfaces are excluded from runway selection.
 
 **Configured runtime slice**: Weather formatting loads `cache/nasr/nasr_apt_configured.json`, a subset containing only NASR records referenced by `airports.json`. The slice rebuilds automatically when the config file or full NASR cache changes (tracked via config SHA and source mtime in `nasr_meta.json`).
 
@@ -702,92 +701,67 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 **Full model** (runway data available):
 
-1. Select **longest** active land runway (exclude `WATER`, exclude `COND=FAILED`). Shorter runways at the same airport are not evaluated, to avoid over-alerting when the longest strip is available; pilots choosing a shorter runway must apply their own ADM.
+1. Select all **active land runways** (exclude `WATER`, exclude `COND=FAILED` and `COND=CLOSED`). Remove strips with **active** full runway or aerodrome NOTAM closures when the NOTAM cache is trustworthy. Score every departure end on remaining runways. POH length and surface stress penalize shorter or non-paved strips; no surface-category pre-filter.
 2. Score each departure end: AFM takeoff distance to clear 50 ft for C152/C172/C182 at max gross (**0 kt wind** - neutral conservative case; no headwind/tailwind adjustment).
 3. Apply POH note 4 on non-paved surfaces: `total = chart_total + 0.15 × ground_roll`.
 4. Use per-end effective departure length from NASR (`TKOF_DIST_AVBL`, displaced threshold) when published.
-5. Obstruction clearance: AFM chart total is distance to clear a **50 ft** obstacle. For NASR departure obstacles within runway length, scale required distance **linearly** by `obst_hgt / 50` (including above 50 ft). When `OBSTN_CLNC_SLOPE` is published, obstacles on or below the NASR clearance surface at that distance add no obstacle stress; penetrating obstacles use full height. Compare clearance stress `required / obst_dist` against runway stress `chart_total / effective_departure_length`; use the higher stress per model.
-6. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3) for each departure end. Track worst and best ends across the runway.
-7. [Operational departure end selection](#operational-departure-end-selection) chooses which end drives the tier.
-8. Tier mapping applies single-end or both-ends rules (see below).
-9. Omit `density_altitude_performance` when tier is `normal`.
+5. Obstruction clearance: approach-side obstacles on the reciprocal end (NASR or `runway_ends`). Scale required distance **linearly** by `obst_hgt / 50`. When `OBSTN_CLNC_SLOPE` is published, obstacles on or below the NASR clearance surface add no obstacle stress; penetrating obstacles use full height. Compare clearance stress against runway stress; use the higher stress per model.
+6. Per-end total risk: unweighted sum `r152 + r172 + r182` (0-3). Track global worst and best ends across all runways. Equal-risk best-end ties prefer lowest crosswind, then strongest headwind, using vector mean wind from the history window when available.
+7. Tier maps from the **best** end only (`selection_basis: best_performance`).
+8. Include `density_altitude_performance` whenever density altitude is available. Full-model responses include `best_end`, `worst_end`, and `ends` even when tier is `normal`. Weather-only fallback omits runway scores.
+9. Suppress caution/warning tiers when supporting weather fields are fail-closed stale (`attachDensityAltitudePerformance()`).
 
-#### Operational departure end selection
+#### Tier mapping
 
-After both ends are scored, `resolveDensityAltitudePerformanceEndSelection()` picks the departure end that drives the alert. Evaluation order is fixed; the first matching path wins.
+| Tier | Condition | Best end score |
+|------|-----------|----------------|
+| warning | Best end sum ≥ 2.40 | `best_end.total_risk` |
+| caution | Best end sum ≥ 1.20 (and not warning) | `best_end.total_risk` |
+| normal | Best end sum &lt; 1.20 | `best_end.total_risk` |
 
-**Path A - window mean wind** (`selection_basis: window_mean_wind`):
+**Config `runway_length_ft`**: Operator override replaces NASR and OurAirports runway selection with synthetic runway `config` (optional `runway_surface`, optional `runway_ends`). Without `runway_ends`, `ends` is empty: length/surface stress only, tier capped at **caution**. Optional `runway_ends` supplies per-end `displaced_thr_len`, `tkof_dist_avbl`, and approach-side obstruction `hgt_ft`/`dist_ft` (NASR-aligned filing on the tagged threshold; stress applies to departure from the reciprocal end). **Warning** tier is allowed when usable obstruction height and distance are published on at least one end. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
 
-- Requires `config.public_api.weather_history_enabled`, resolvable magnetic headings for at least one runway end, and a config airport id for history lookup.
-- `computeWindowMeanWind()` reads observations in `wind_rose_window_hours` (default 1 hour), same rolling window as the wind rose. Non-calm observations only (`wind_speed ≥ CALM_WIND_THRESHOLD_KTS`, 3 kt). Vector mean direction and speed must pass quality gates (minimum observation count, mean speed, dispersion ratio). See [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance).
-- `pickDepartureEndByWindFromMagnetic()` selects the runway end whose magnetic heading is closest to the mean wind **from** direction (into-wind departure).
-- Tier maps from **scored end risk** on that end only. Response includes `operational_end_id`, `scored_end_risk`, and `wind_basis`.
+**Fallback model** (no runway data from config, NASR, or OurAirports): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true` without runway scores. UI copy must state that runway context was unavailable.
 
-**Path B - asymmetric spread heuristic** (`selection_basis: asymmetric_heuristic`):
-
-- Applies when Path A does not (light/variable wind, insufficient history, or unresolvable headings).
-- When `worst_end_risk - best_end_risk ≥ DA_PERF_ASYMMETRIC_SPREAD` (1.5), tier from the **best** (most favorable) end only. Covers one-way strips where one direction has departure obstructions and the other does not.
-- Tier maps from **scored end risk** on the best end. Response includes `operational_end_id` and `scored_end_risk`; `wind_basis` is null.
-
-**Path C - both ends** (`selection_basis: both_ends`):
-
-- Fallback when spread is below the asymmetric threshold, when runway ends/headings are unavailable, or when wind/asymmetric paths do not apply.
-- Config `runway_length_ft` override **without** `runway_ends` always uses this path (`ends` is empty; length/surface stress only).
-- Config override **with** `runway_ends` but no usable obstruction data can still use Path A or B when headings resolve; Path C applies when spread is below the asymmetric threshold.
-- Tier uses worst/best asymmetric rules: **warning** when best end sum ≥ 2.40; **caution** when worst end sum ≥ 1.20 (and not warning). `risk_factor` uses best-end sum for warning, worst-end sum for caution. `operational_end_id` and `scored_end_risk` are omitted. Operator config and OurAirports context cap **warning** at **caution** when obstruction data is absent (see tier cap below).
-
-**Tier mapping summary**:
-
-| `selection_basis` | Caution | Warning | `risk_factor` source |
-|-------------------|---------|---------|----------------------|
-| `window_mean_wind`, `asymmetric_heuristic` | Scored end ≥ 1.20 | Scored end ≥ 2.40 | Scored end sum |
-| `both_ends` | Worst end ≥ 1.20 | Best end ≥ 2.40 | Worst (caution) or best (warning) |
-
-**Config `runway_length_ft`**: Operator override replaces NASR and OurAirports runway selection with synthetic runway `config` (optional `runway_surface`, optional `runway_ends`). Without `runway_ends`, `ends` is empty: length/surface stress only, Path C only, tier capped at **caution**. Optional `runway_ends` supplies per-end `displaced_thr_len`, `tkof_dist_avbl`, and approach-side obstruction `hgt_ft`/`dist_ft` (NASR-aligned filing on the tagged threshold; stress applies to departure from the reciprocal end). Length fields reduce effective departure roll on departures from the tagged end but do not lift the tier cap without usable obstruction height and distance on at least one end. When any end has usable obstruction data, the full POH model runs, wind/asymmetric paths apply when headings resolve (from `runways[0]` or end idents), and **warning** tier is allowed. See `docs/CONFIGURATION.md` (Density altitude performance overrides).
-
-**Fallback model** (no runway data from config, NASR, or OurAirports): Elevation-banded density-altitude thresholds only. Returns `tier` and `fallback: true`; `risk_factor` is **null** (no numeric score). UI copy must state that runway context was unavailable.
-
-**API field** `density_altitude_performance`:
+**API field** `density_altitude_performance` (full model):
 
 ```json
 {
   "tier": "caution",
-  "risk_factor": 1.85,
-  "worst_end_risk": 1.85,
-  "best_end_risk": 0.92,
-  "scored_end_risk": 1.85,
-  "operational_end_id": "26",
-  "selection_basis": "window_mean_wind",
-  "wind_basis": {
-    "direction_magnetic": 260.0,
-    "speed_kts": 8.5,
-    "observation_count": 4,
-    "window_hours": 1,
-    "dispersion_ratio": 1.12
-  },
   "fallback": false,
+  "selection_basis": "best_performance",
   "reason": "reference_models",
-  "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway"
+  "reference": "Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); NASR runways on file",
+  "runway_source": "nasr",
+  "best_end": {"rwy_id": "08/26", "end_id": "26", "total_risk": 1.65, "tier": "caution"},
+  "worst_end": {"rwy_id": "08/26", "end_id": "08", "total_risk": 2.45, "tier": "warning"},
+  "ends": [
+    {"rwy_id": "08/26", "end_id": "26", "total_risk": 1.65, "tier": "caution"},
+    {"rwy_id": "08/26", "end_id": "08", "total_risk": 2.45, "tier": "warning"}
+  ]
 }
 ```
 
-**Display**: ⚠️ (caution) or 🚩 (warning) adjacent to the density altitude value; warning tier uses amber styling. Tooltips use AFM wording and, when present, name the scored departure end (`operational_end_id`) and selection basis.
+**Weather-only fallback** (no runway data): `tier`, `fallback: true`, `reason`, and `reference` only.
+
+**Consumer contract**: Airport-level `tier` and `best_end` drive UI cues. `worst_end` and other `ends[]` rows are informational only.
+
+**Display**: ⚠️ (caution) or 🚩 (warning) adjacent to the density altitude value; warning tier uses amber styling. Tooltips name the best-performing departure end when available.
 
 **Implementation**:
 
 | Component | File | Role |
 |-----------|------|------|
-| Assessment and API payload | `lib/weather/density-altitude-performance.php` | `buildDensityAltitudePerformance()`, tier mapping, attach at format time |
-| Operational end selection | `lib/weather/density-altitude-performance.php` | `resolveDensityAltitudePerformanceEndSelection()` |
-| Runway end headings and wind pick | `lib/weather/da-performance-runway-end.php` | `resolveRunwayEndMagneticHeading()`, `pickDepartureEndByWindFromMagnetic()` |
-| Window mean wind | `lib/weather/history.php` | `computeWindowMeanWind()` |
+| Assessment and API payload | `lib/weather/density-altitude-performance.php` | `computeDensityAltitudePerformance()`, tier mapping, attach at format time |
+| Departure obstruction mapping | `lib/weather/da-performance-departure-obstruction.php` | `resolveDepartureObstructionForEnd()`, reciprocal end pairing |
+| Config runway builder | `lib/config-runway.php` | `buildConfigRunwayForDensityAltitude()`, `runway_ends` parsing |
 | AFM table lookup | `lib/weather/poh-takeoff.php` | Chart distance and obstruction stress |
-| NASR runway selection | `lib/nasr/*` | Longest runway, effective departure length, obstructions |
+| NASR runway selection | `lib/nasr/*` | Active land runways, effective departure length |
 | Display helpers | `lib/density-altitude-performance-display.php` | Tooltip copy |
 
-**Tests**: `tests/Unit/DensityAltitudePerformanceTest.php`, `tests/Unit/DensityAltitudePerformanceReferenceScenarioTest.php`, `tests/Unit/WindowMeanWindTest.php`, `tests/Unit/PohTakeoffTest.php`, `tests/Unit/NasrParseTest.php`
+**Tests**: `tests/Unit/DensityAltitudePerformanceTest.php`, `tests/Unit/DaPerformanceMultiRunwayTest.php`, `tests/Unit/DensityAltitudePerformanceReferenceScenarioTest.php`, `tests/Unit/ConfigRunwayTest.php`, `tests/Unit/PohTakeoffTest.php`, `tests/Unit/NasrParseTest.php`
 
-**Fleet validation**: `scripts/fleet-da-constants-audit.php` compares policy variants against live weather for configured airports (requires production `CONFIG_PATH`).
+**Fleet validation**: `scripts/fleet-da-constants-audit.php` runs `computeDensityAltitudePerformance()` against live weather for configured airports (requires production `CONFIG_PATH`).
 
 **See also**: [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance)
 
@@ -1159,7 +1133,7 @@ When new data is fetched but some fields are missing:
 
 **Wind Rose Petals**: `computeWindRose()` derives 16-sector wind distribution from observations in a configurable rolling window. Window size is set by `config.public_api.wind_rose_window_hours` (default 1). Observations with wind speed below `CALM_WIND_THRESHOLD_KTS` (3 knots) are excluded. Requires at least 2 valid observations. Result is added to weather cache as `last_hour_wind` when `config.public_api.weather_history_enabled` is true. Petals extend in direction wind is FROM (meteorological convention). Arrow shows direction wind is blowing TOWARD (windsock convention).
 
-**Window mean wind** (density altitude performance): `computeWindowMeanWind()` uses the same history window and non-calm filter to derive a vector mean wind for operational departure end selection. Quality gates (`DA_PERF_WIND_MIN_OBS`, `DA_PERF_WIND_MIN_MEAN_KTS`, `DA_PERF_VARIABLE_WIND_RATIO`) are stricter than the wind rose minimum. See [Operational departure end selection](#operational-departure-end-selection) and [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude-performance).
+**Window mean wind**: `computeWindowMeanWind()` uses the same history window and non-calm filter as the wind rose. Quality gates (`DA_PERF_WIND_MIN_OBS`, `DA_PERF_WIND_MIN_MEAN_KTS`, `DA_PERF_VARIABLE_WIND_RATIO`) are stricter than the rose minimum. Density altitude performance uses this vector mean only for equal-risk runway tie-breaking; POH scoring remains at 0 kt wind. See [Density Altitude Performance](#density-altitude-performance).
 
 **API Format**: The Internal and Public APIs return `last_hour_wind` as an object: `{ sectors: number[16], sector_labels: string[16], reference: "magnetic_north", unit: "knots", period_label: string }`. Sectors are ordered N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW. `period_label` is derived from `wind_rose_window_hours` (e.g. "last hour", "last 3 hours") or overridden by `wind_rose_period_label`. Null when insufficient observations.
 

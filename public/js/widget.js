@@ -694,6 +694,7 @@
                 `${BASE_URL}/public/js/runway-label-layout.js`,
                 `${BASE_URL}/public/js/wind-compass-resize-utils.js`,
                 `${BASE_URL}/public/js/wind-visual.js`,
+                `${BASE_URL}/public/js/density-altitude-performance-display.js`,
                 `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
@@ -708,6 +709,9 @@
                 ),
                 [`${BASE_URL}/public/js/wind-visual.js`]: () => (
                     window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function'
+                ),
+                [`${BASE_URL}/public/js/density-altitude-performance-display.js`]: () => (
+                    window.AviationWX && window.AviationWX.densityAltitudePerformance
                 ),
                 [`${BASE_URL}/public/js/embed-helpers.js`]: () => (
                     window.AviationWX && window.AviationWX.helpers

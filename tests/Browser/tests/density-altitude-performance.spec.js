@@ -23,29 +23,49 @@ const AMBER_RGB = 'rgb(230, 126, 34)';
  * @param {object} [overrides]
  * @returns {object}
  */
-function buildDensityAltitudePerformance(tier, overrides = {}) {
+function mockDensityAltitudePerformancePayload(tier, overrides = {}) {
   const base = tier === 'warning'
     ? {
       tier: 'warning',
-      risk_factor: 2.45,
-      worst_end_risk: 2.45,
-      best_end_risk: 1.85,
-      selection_basis: 'both_ends',
       fallback: false,
+      selection_basis: 'best_performance',
       reason: 'reference_models',
       reference: 'reference_models_config',
+      runway_source: 'nasr',
+      best_end: {
+        end_id: '08',
+        rwy_id: '08/26',
+        total_risk: 2.45,
+        tier: 'warning',
+      },
+      worst_end: {
+        end_id: '26',
+        rwy_id: '08/26',
+        total_risk: 3.0,
+        tier: 'warning',
+      },
+      ends: [],
     }
     : {
       tier: 'caution',
-      risk_factor: 1.65,
-      worst_end_risk: 2.1,
-      best_end_risk: 1.65,
-      selection_basis: 'asymmetric_heuristic',
-      operational_end_id: '32',
-      scored_end_risk: 1.65,
       fallback: false,
+      selection_basis: 'best_performance',
       reason: 'reference_models',
       reference: 'reference_models_config',
+      runway_source: 'nasr',
+      best_end: {
+        end_id: '32',
+        rwy_id: '14/32',
+        total_risk: 1.65,
+        tier: 'caution',
+      },
+      worst_end: {
+        end_id: '14',
+        rwy_id: '14/32',
+        total_risk: 2.1,
+        tier: 'caution',
+      },
+      ends: [],
     };
 
   return { ...base, ...overrides };
@@ -364,7 +384,7 @@ test.describe('Dashboard density altitude performance tiers', () => {
       density_altitude: densityAltitudeFt,
       pressure_altitude: 4570,
       temperature: 20.1,
-      density_altitude_performance: buildDensityAltitudePerformance('caution'),
+      density_altitude_performance: mockDensityAltitudePerformancePayload('caution'),
     }, densityAltitudeFt);
 
     const daRow = getDashboardDaRow(page);
@@ -384,7 +404,7 @@ test.describe('Dashboard density altitude performance tiers', () => {
       density_altitude: densityAltitudeFt,
       pressure_altitude: 4570,
       temperature: 20.1,
-      density_altitude_performance: buildDensityAltitudePerformance('warning', {
+      density_altitude_performance: mockDensityAltitudePerformancePayload('warning', {
         fallback: false,
       }),
     }, densityAltitudeFt);
@@ -404,13 +424,13 @@ test.describe('Card embed density altitude performance tiers', () => {
   test('shows warning tier on DA tile with amber styling, tooltip, and aria-label', async ({ page }) => {
     const densityAltitudeFt = 6280;
     const formattedValue = '6,280 ft';
-    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Cue reflects reference takeoff performance for both departure directions on the longest runway.`;
+    const ariaLabel = `Density altitude ${densityAltitudeFt.toLocaleString()} feet. Warning: dangerously high for average GA aircraft; verify performance numbers before flight. Based on RWY 08 (08/26), the best runway at this airport.`;
 
     await gotoMockEmbedCard(page, {
       tier: 'warning',
       densityAltitudeFt,
       emoji: '🚩',
-      tooltip: WARNING_TOOLTIP + ' Cue reflects reference takeoff performance for both departure directions on the longest runway.',
+      tooltip: WARNING_TOOLTIP + ' Based on RWY 08 (08/26), the best runway at this airport.',
       ariaLabel,
       formattedValue,
     });

@@ -103,7 +103,7 @@ function formatWindDirectionForApi(array $weather): array
  *
  * @param array $weather Raw weather data from cache
  * @param array $airport Airport configuration
- * @param string|null $airportId Config airport id for weather history (enables window-mean-wind DA end selection)
+ * @param string|null $airportId Config airport id for density altitude performance runway resolution
  * @return array Formatted weather data
  */
 function formatWeatherResponse(array $weather, array $airport, ?string $airportId = null): array

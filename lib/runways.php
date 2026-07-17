@@ -506,7 +506,9 @@ function ourAirportsRunwayIdFromIdents(string $leIdent, string $heIdent): string
 }
 
 /**
- * Whether a parsed OurAirports runway row is eligible for performance selection.
+ * Whether an OurAirports runway row is eligible for DA performance scoring.
+ *
+ * Closed rows are omitted when `runways.csv` is ingested; water surfaces excluded here.
  *
  * @param array $runway Parsed runway with length_ft and surface
  */
@@ -593,21 +595,40 @@ function buildOurAirportsPerformanceRunways(array $runways): array
  */
 function ourAirportsSelectLongestActiveLandRunway(array $runways): ?array
 {
-    $best = null;
-    $bestLen = 0;
+    $selected = ourAirportsSelectActiveLandRunwaysForPerformance($runways);
+    if ($selected === []) {
+        return null;
+    }
 
+    return $selected[0];
+}
+
+/**
+ * Active OurAirports performance runways for DA scoring (longest first).
+ *
+ * @param list<array> $runways Performance runway records
+ * @return list<array> Runways sorted by length descending
+ */
+function ourAirportsSelectActiveLandRunwaysForPerformance(array $runways): array
+{
+    $selectable = [];
     foreach ($runways as $runway) {
         if (!is_array($runway) || !ourAirportsRunwayIsSelectable($runway)) {
             continue;
         }
-        $len = (int) ($runway['length_ft'] ?? 0);
-        if ($len > $bestLen) {
-            $bestLen = $len;
-            $best = $runway;
-        }
+        $selectable[] = $runway;
     }
 
-    return $best;
+    if ($selectable === []) {
+        return [];
+    }
+
+    usort(
+        $selectable,
+        static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
+    );
+
+    return $selectable;
 }
 
 /**
@@ -656,25 +677,28 @@ function loadOurAirportsPerformanceRunwaysFromFileCache(string $airportId, array
 }
 
 /**
- * Select the longest OurAirports performance runway for density altitude performance.
+ * Active OurAirports performance runways for density altitude scoring.
  *
  * @param string $airportId Airport identifier (config key or ICAO)
  * @param array $airport Airport configuration
- * @return array|null Selected runway with per-end displaced thresholds or null when unavailable
+ * @return list<array> Runways with per-end displaced thresholds, longest first
  */
-function getOurAirportsPerformanceRunwayForAirport(string $airportId, array $airport): ?array
+function getOurAirportsPerformanceRunwaysForAirport(string $airportId, array $airport): array
 {
     $runways = loadOurAirportsPerformanceRunwaysFromFileCache($airportId, $airport);
     if ($runways === null) {
-        return null;
+        return [];
     }
 
-    $selected = ourAirportsSelectLongestActiveLandRunway($runways);
-    if ($selected === null) {
-        return null;
+    $selected = ourAirportsSelectActiveLandRunwaysForPerformance($runways);
+    if ($selected === []) {
+        return [];
     }
 
-    return ourAirportsPerformanceRunwayForEvaluation($selected);
+    return array_map(
+        static fn (array $runway): array => ourAirportsPerformanceRunwayForEvaluation($runway),
+        $selected
+    );
 }
 
 /**

@@ -629,6 +629,32 @@
           }
         }
       },
+      "DensityAltitudeRunwayEndScore": {
+        "type": "object",
+        "description": "Summed profile risk for one departure end. Per-end tier describes that end alone and may differ from the airport tier.",
+        "properties": {
+          "rwy_id": {
+            "type": "string",
+            "description": "Runway pair ident (e.g. 08/26); omitted when unavailable",
+            "nullable": true
+          },
+          "end_id": {
+            "type": "string",
+            "description": "Departure runway end ident (e.g. 26, 32L); omitted when unavailable",
+            "nullable": true
+          },
+          "total_risk": {
+            "type": "number",
+            "description": "Summed profile risk 0-3 for C152/C172/C182 reference models"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["normal", "caution", "warning"],
+            "description": "Tier for this end alone (warning may be capped to caution for OurAirports or config without obstruction data)"
+          }
+        },
+        "required": ["total_risk", "tier"]
+      },
       "Meta": {
         "type": "object",
         "properties": {
@@ -1049,56 +1075,22 @@
           },
           "density_altitude_performance": {
             "type": "object",
-            "description": "Density altitude performance cue (omitted when tier is normal). Not a go/no-go judgment.",
+            "description": "Density altitude performance assessment. Present when density altitude is available and inputs are fresh enough for the returned tier. Airport-level tier and best_end drive UI cues; worst_end and ends[] are informational. Not a go/no-go judgment.",
             "nullable": true,
             "properties": {
               "tier": {
                 "type": "string",
-                "enum": ["caution", "warning"],
-                "description": "Density altitude performance tier (normal is omitted from API responses)"
-              },
-              "risk_factor": {
-                "type": "number",
-                "description": "Summed profile risk 0-3 when full model used (best-end sum for warning, worst-end sum for caution); null when fallback",
-                "nullable": true
-              },
-              "worst_end_risk": {
-                "type": "number",
-                "description": "Worst departure-end summed profile risk (0-3) when full model used"
-              },
-              "best_end_risk": {
-                "type": "number",
-                "description": "Best departure-end summed profile risk (0-3) when full model used"
-              },
-              "scored_end_risk": {
-                "type": "number",
-                "description": "Summed profile risk (0-3) for the operational departure end used for tier when selection_basis is window_mean_wind or asymmetric_heuristic"
-              },
-              "operational_end_id": {
-                "type": "string",
-                "description": "Runway end ident scored for tier (e.g. 14, 32L); omitted when selection_basis is both_ends",
-                "nullable": true
-              },
-              "selection_basis": {
-                "type": "string",
-                "enum": ["window_mean_wind", "asymmetric_heuristic", "both_ends"],
-                "description": "How the operational departure end was chosen for tier scoring"
-              },
-              "wind_basis": {
-                "type": "object",
-                "description": "Window mean wind used when selection_basis is window_mean_wind",
-                "nullable": true,
-                "properties": {
-                  "direction_magnetic": { "type": "number" },
-                  "speed_kts": { "type": "number" },
-                  "observation_count": { "type": "integer" },
-                  "window_hours": { "type": "integer" },
-                  "dispersion_ratio": { "type": "number" }
-                }
+                "enum": ["normal", "caution", "warning"],
+                "description": "Airport-level tier from best_end.total_risk only"
               },
               "fallback": {
                 "type": "boolean",
                 "description": "True when runway data unavailable and elevation-banded thresholds used"
+              },
+              "selection_basis": {
+                "type": "string",
+                "enum": ["best_performance"],
+                "description": "Present when fallback is false; tier maps from the global best-performing departure end"
               },
               "reason": {
                 "type": "string",
@@ -1107,6 +1099,26 @@
               "reference": {
                 "type": "string",
                 "description": "Reference AFM models and assumptions"
+              },
+              "runway_source": {
+                "type": "string",
+                "enum": ["config", "nasr", "ourairports"],
+                "description": "Runway data source used for scoring (full model only)"
+              },
+              "best_end": {
+                "$ref": "#/components/schemas/DensityAltitudeRunwayEndScore",
+                "description": "Best-performing departure end across all selected runways; drives airport tier and UI cues (full model only)"
+              },
+              "worst_end": {
+                "$ref": "#/components/schemas/DensityAltitudeRunwayEndScore",
+                "description": "Worst-performing departure end across all selected runways; informational only (full model only)"
+              },
+              "ends": {
+                "type": "array",
+                "description": "All scored departure ends, sorted by total_risk ascending (best first; full model only)",
+                "items": {
+                  "$ref": "#/components/schemas/DensityAltitudeRunwayEndScore"
+                }
               }
             }
           },

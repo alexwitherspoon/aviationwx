@@ -129,6 +129,17 @@ module.exports = defineConfig([
     },
 },
 {
+    files: [
+        'public/js/wind-visual.js',
+        'public/js/density-altitude-performance-display.js'
+    ],
+    languageOptions: {
+        globals: {
+            ...globals.node
+        }
+    }
+},
+{
     // Dashboard app code, moved verbatim out of pages/airport.php where it
     // was inline (and effectively unlinted). It intentionally defines
     // top-level functions consumed by inline HTML attributes (onclick,

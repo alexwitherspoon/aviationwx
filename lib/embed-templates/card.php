@@ -77,9 +77,6 @@ function processCardWidgetData($data, $options) {
     $dewpointDisplay = formatEmbedTemp($dewpoint, $tempUnit, 1);
     if ($dewpointDisplay === '--') $dewpointDisplay = '---';
     
-    $densityAltitudeDisplay = formatEmbedDist($densityAltitude, $distUnit, true);
-    if ($densityAltitudeDisplay === '--') $densityAltitudeDisplay = '---';
-    
     $pressureDisplay = formatEmbedPressure($pressure, $baroUnit);
     if ($pressureDisplay === '--') $pressureDisplay = '---';
     $windTextDisplay = formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit);
@@ -205,7 +202,6 @@ function processCardWidgetData($data, $options) {
         'dewpointSpread' => $dewpointSpread,
         'tempDisplay' => $tempDisplay,
         'dewpointDisplay' => $dewpointDisplay,
-        'densityAltitudeDisplay' => $densityAltitudeDisplay,
         'pressureDisplay' => $pressureDisplay,
         'windTextDisplay' => $windTextDisplay,
         'windSpeedValue' => $windSpeedValue,

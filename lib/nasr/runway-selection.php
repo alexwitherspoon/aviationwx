@@ -1,6 +1,6 @@
 <?php
 /**
- * Longest active land runway selection for density altitude performance.
+ * Active land runway selection for density altitude performance.
  */
 
 /**
@@ -18,7 +18,9 @@ function nasrIsNonPavedSurface(string $surface): bool
 }
 
 /**
- * Whether a NASR runway row is eligible for performance runway selection.
+ * Whether a NASR runway row is eligible for DA performance scoring.
+ *
+ * Excludes water, NASR pavement COND=FAILED/CLOSED (not live NOTAM closures).
  *
  * @param array $runway Parsed runway record
  */
@@ -30,7 +32,7 @@ function nasrRunwayIsSelectable(array $runway): bool
     }
 
     $condition = strtoupper((string) ($runway['condition'] ?? ''));
-    if ($condition === 'FAILED') {
+    if (in_array($condition, ['FAILED', 'CLOSED'], true)) {
         return false;
     }
 
@@ -46,21 +48,40 @@ function nasrRunwayIsSelectable(array $runway): bool
  */
 function nasrSelectLongestActiveLandRunway(array $airportRecord): ?array
 {
-    $best = null;
-    $bestLen = 0;
+    $runways = nasrSelectActiveLandRunwaysForPerformance($airportRecord);
+    if ($runways === []) {
+        return null;
+    }
 
+    return $runways[0];
+}
+
+/**
+ * Active land runways for DA performance (all selectable strips, longest first).
+ *
+ * @param array $airportRecord Parsed NASR airport record
+ * @return list<array> Runways sorted by length descending
+ */
+function nasrSelectActiveLandRunwaysForPerformance(array $airportRecord): array
+{
+    $selectable = [];
     foreach ($airportRecord['runways'] ?? [] as $runway) {
         if (!is_array($runway) || !nasrRunwayIsSelectable($runway)) {
             continue;
         }
-        $len = (int) ($runway['length_ft'] ?? 0);
-        if ($len > $bestLen) {
-            $bestLen = $len;
-            $best = $runway;
-        }
+        $selectable[] = $runway;
     }
 
-    return $best;
+    if ($selectable === []) {
+        return [];
+    }
+
+    usort(
+        $selectable,
+        static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
+    );
+
+    return $selectable;
 }
 
 /**

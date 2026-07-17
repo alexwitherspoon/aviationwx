@@ -438,13 +438,13 @@ if (!defined('POH_GRASS_GROUND_ROLL_FACTOR')) {
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE',
-        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest NASR runway'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); NASR runways on file'
     );
 }
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS')) {
     define(
         'DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_OURAIRPORTS',
-        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); longest OurAirports runway (no obstruction data)'
+        'Cessna 152/172/182 AFM max gross, 0 kt wind (neutral conservative case); OurAirports runways on file (no obstruction data)'
     );
 }
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_REFERENCE_CONFIG')) {
@@ -466,6 +466,7 @@ if (!defined('DENSITY_ALTITUDE_PERFORMANCE_FALLBACK_TOOLTIP')) {
         . 'Verify all performance calculations using your AFM.'
     );
 }
+// Window-mean wind quality gates ({@see computeWindowMeanWind()}); DA performance tie-break only.
 if (!defined('DA_PERF_WIND_MIN_OBS')) {
     define('DA_PERF_WIND_MIN_OBS', 3);
 }
@@ -474,9 +475,6 @@ if (!defined('DA_PERF_WIND_MIN_MEAN_KTS')) {
 }
 if (!defined('DA_PERF_VARIABLE_WIND_RATIO')) {
     define('DA_PERF_VARIABLE_WIND_RATIO', 2.0);
-}
-if (!defined('DA_PERF_ASYMMETRIC_SPREAD')) {
-    define('DA_PERF_ASYMMETRIC_SPREAD', 1.5);
 }
 
 // Airport country resolution (geometry aggregate under CACHE_BASE_DIR; see scripts/refresh-airport-country-resolution.php)
