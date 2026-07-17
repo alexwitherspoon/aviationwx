@@ -222,15 +222,88 @@
         }
     }
     
+    function daPerformanceTier(performance) {
+        return performance && performance.tier ? String(performance.tier) : 'normal';
+    }
+
+    function daPerformanceOperationalEndLabel(performance) {
+        if (!performance || !performance.best_end || typeof performance.best_end !== 'object') {
+            return '';
+        }
+        const endId = performance.best_end.end_id ? String(performance.best_end.end_id).trim() : '';
+        if (endId === '') {
+            return '';
+        }
+        const rwyId = performance.best_end.rwy_id ? String(performance.best_end.rwy_id).trim() : '';
+        if (rwyId !== '' && rwyId !== 'config') {
+            return `RWY ${endId} (${rwyId})`;
+        }
+        return `RWY ${endId}`;
+    }
+
+    function daPerformanceSelectionBasisNote(performance) {
+        if (!performance || !performance.selection_basis) {
+            return '';
+        }
+        const endLabel = daPerformanceOperationalEndLabel(performance);
+        if (endLabel === '') {
+            return ' Based on the best runway at this airport.';
+        }
+        return ` Based on ${endLabel}, the best runway at this airport.`;
+    }
+
+    function daPerformanceTooltip(tier, performance) {
+        if (performance && performance.fallback) {
+            return 'Runway data unavailable. Indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.';
+        }
+        const basisNote = daPerformanceSelectionBasisNote(performance);
+        if (tier === 'warning') {
+            return 'Density altitude is dangerously high for average GA aircraft. Verify performance numbers before flight.' + basisNote;
+        }
+        if (tier === 'caution') {
+            return 'Density altitude is higher than normal. Verify performance numbers before flight.' + basisNote;
+        }
+        return '';
+    }
+
+    function daPerformanceAriaLabel(densityAltitudeFt, tier, performance, distUnit) {
+        if (densityAltitudeFt === null || densityAltitudeFt === undefined) {
+            return 'Density altitude unavailable';
+        }
+        const ariaValue = distUnit === 'm'
+            ? Math.round(Number(densityAltitudeFt) * 0.3048)
+            : Math.round(Number(densityAltitudeFt));
+        const unitLabel = distUnit === 'm' ? 'meters' : 'feet';
+        const base = `Density altitude ${ariaValue.toLocaleString()} ${unitLabel}`;
+        if (performance && performance.fallback) {
+            return `${base}. Runway data unavailable; indicator based on density altitude relative to field elevation only. Verify all performance calculations using your AFM.`;
+        }
+        if (tier === 'warning') {
+            return `${base}. Warning: dangerously high for average GA aircraft; verify performance numbers before flight.${daPerformanceSelectionBasisNote(performance)}`;
+        }
+        if (tier === 'caution') {
+            return `${base}. Caution: higher than normal; verify performance numbers before flight.${daPerformanceSelectionBasisNote(performance)}`;
+        }
+        return base;
+    }
+
     function formatDensityAltitudePerformanceDisplay(densityAltitudeFt, performance, distUnit) {
         const da = window.AviationWX && window.AviationWX.densityAltitudePerformance;
         if (!da) {
             const base = formatEmbedDist(densityAltitudeFt, distUnit, true);
-            let ariaLabel = 'Density altitude unavailable';
-            if (base !== '--') {
-                ariaLabel = `Density altitude ${base}`;
+            if (base === '--') {
+                return { text: base, className: '', title: '', ariaLabel: 'Density altitude unavailable' };
             }
-            return { text: base, className: '', title: '', ariaLabel };
+            const tier = daPerformanceTier(performance);
+            const isElevated = tier === 'caution' || tier === 'warning';
+            const tierEmoji = isElevated ? (tier === 'warning' ? '🚩' : '⚠️') : '';
+            const text = tierEmoji ? `${base} ${tierEmoji}` : base;
+            return {
+                text,
+                className: isElevated ? 'density-altitude-warning' : '',
+                title: daPerformanceTooltip(tier, performance),
+                ariaLabel: daPerformanceAriaLabel(densityAltitudeFt, tier, performance, distUnit),
+            };
         }
         return da.formatEmbedDisplay(densityAltitudeFt, performance, distUnit, formatEmbedDist);
     }
