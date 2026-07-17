@@ -230,7 +230,7 @@ function configRunwayHasDepartureObstructionData(array $runway): bool
         }
     }
 
-    return $validEnds >= 2 && $hasUsableObstruction;
+    return $validEnds === 2 && $hasUsableObstruction;
 }
 
 /**
