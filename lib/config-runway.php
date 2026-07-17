@@ -317,6 +317,15 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
             }
             if (!is_numeric($row[$field]) || (int) round((float) $row[$field]) <= 0) {
                 $errors[] = "Airport '{$airportCode}' {$label}.{$field} must be a positive number";
+                continue;
+            }
+
+            if ($field === 'displaced_thr_len') {
+                $runwayLen = getConfigRunwayLengthOverrideFt($airport);
+                $displaced = (int) round((float) $row[$field]);
+                if ($runwayLen !== null && $displaced >= $runwayLen) {
+                    $errors[] = "Airport '{$airportCode}' {$label}.displaced_thr_len must be less than runway_length_ft";
+                }
             }
         }
 

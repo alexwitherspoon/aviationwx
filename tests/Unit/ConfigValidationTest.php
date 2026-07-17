@@ -5574,6 +5574,21 @@ class ConfigValidationTest extends TestCase
         $this->assertStringNotContainsString('runway_ends requires runway_length_ft', $errors);
     }
 
+    public function testRunwayEndsRejectsDisplacedThresholdNotLessThanLength(): void
+    {
+        $config = $this->createMinimalConfig();
+        $config['airports']['kspb']['runway_length_ft'] = 2700;
+        $config['airports']['kspb']['runway_ends'] = [
+            ['end_id' => '09', 'displaced_thr_len' => 2700],
+            ['end_id' => '27'],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('displaced_thr_len must be less than runway_length_ft', implode(' ', $result['errors']));
+    }
+
     public function testRunwayEndsRejectsEquivalentEndIdSpellings(): void
     {
         $config = $this->createMinimalConfig();
