@@ -126,11 +126,11 @@ class DensityAltitudePerformanceTest extends TestCase
             'surface' => 'ASPH',
             'ends' => [
                 [
-                    'end_id' => 'bad',
+                    'end_id' => '27',
                     'obstruction' => ['hgt_ft' => 200.0, 'dist_ft' => 500.0],
                 ],
                 [
-                    'end_id' => 'good',
+                    'end_id' => '09',
                     'obstruction' => [],
                 ],
             ],
@@ -138,8 +138,8 @@ class DensityAltitudePerformanceTest extends TestCase
 
         $range = evaluateRunwayEndPerformanceRange($runway, 1000.0, 25.0, $tables);
 
-        $this->assertSame('good', $range['worst']['end_id']);
-        $this->assertSame('bad', $range['best']['end_id']);
+        $this->assertSame('09', $range['worst']['end_id']);
+        $this->assertSame('27', $range['best']['end_id']);
         $this->assertGreaterThan($range['best']['total_risk'], $range['worst']['total_risk']);
     }
 
@@ -265,11 +265,11 @@ class DensityAltitudePerformanceTest extends TestCase
             'surface' => 'ASPH',
             'ends' => [
                 [
-                    'end_id' => 'good',
+                    'end_id' => '09',
                     'obstruction' => [],
                 ],
                 [
-                    'end_id' => 'bad',
+                    'end_id' => '27',
                     'obstruction' => ['hgt_ft' => 200.0, 'dist_ft' => 500.0],
                 ],
             ],
@@ -282,8 +282,8 @@ class DensityAltitudePerformanceTest extends TestCase
         );
 
         $this->assertSame('caution', $tier);
-        $this->assertSame('good', $range['worst']['end_id']);
-        $this->assertSame('bad', $range['best']['end_id']);
+        $this->assertSame('09', $range['worst']['end_id']);
+        $this->assertSame('27', $range['best']['end_id']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['worst']['total_risk']);
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $range['best']['total_risk']);
     }
