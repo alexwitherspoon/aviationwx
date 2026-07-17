@@ -129,19 +129,41 @@ function findReciprocalRunwayEnd(array $departureEnd, array $runway): ?array
         return null;
     }
 
+    $candidates = [];
     foreach ($runway['ends'] ?? [] as $end) {
         if (!is_array($end)) {
             continue;
         }
+
         $endId = isset($end['end_id']) ? trim((string) $end['end_id']) : '';
-        if ($endId === '' || strcasecmp($endId, $departureId) === 0) {
+        if ($endId === '') {
             continue;
         }
 
-        return $end;
+        $candidates[] = $end;
     }
 
-    return null;
+    if (count($candidates) !== 2) {
+        return null;
+    }
+
+    $reciprocal = null;
+    $matchedDeparture = false;
+    foreach ($candidates as $end) {
+        $endId = trim((string) $end['end_id']);
+        if (strcasecmp($endId, $departureId) === 0) {
+            $matchedDeparture = true;
+            continue;
+        }
+
+        $reciprocal = $end;
+    }
+
+    if (!$matchedDeparture || $reciprocal === null) {
+        return null;
+    }
+
+    return $reciprocal;
 }
 
 /**
