@@ -213,7 +213,8 @@ function fleetDaAuditBuildPerformance(
 
     if (!empty($variant['use_legacy_tier'])) {
         $tier = densityAltitudePerformanceTierFromEndRisks($worstTotalRisk, $bestTotalRisk);
-        if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+        if ($runwaySource === 'ourairports'
+            || ($runwaySource === 'config' && !configRunwayHasDepartureObstructionData($selectedRunway))) {
             $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
         }
         if ($tier === 'normal') {
@@ -237,7 +238,7 @@ function fleetDaAuditBuildPerformance(
         'wind_basis' => null,
     ];
 
-    if ($runwaySource !== 'config' && ($selectedRunway['ends'] ?? []) !== []) {
+    if (($selectedRunway['ends'] ?? []) !== []) {
         $windBasis = fleetDaAuditWindowMeanWind($historyObs, $airport, (float) $variant['min_mean_kts']);
         if ($windBasis !== null) {
             $picked = pickDepartureEndByWindFromMagnetic(
@@ -285,7 +286,8 @@ function fleetDaAuditBuildPerformance(
         $tier = densityAltitudePerformanceTierFromScoredEnd($scoredRisk);
     }
 
-    if ($runwaySource === 'config' || $runwaySource === 'ourairports') {
+    if ($runwaySource === 'ourairports'
+        || ($runwaySource === 'config' && !configRunwayHasDepartureObstructionData($selectedRunway))) {
         $tier = densityAltitudePerformanceCapTierWithoutObstructions($tier);
     }
 
