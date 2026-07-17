@@ -181,6 +181,21 @@ function resolveDensityAltitudePerformanceEndSelection(
         return $bothEndsResult;
     }
 
+    $validEnds = 0;
+    foreach ($ends as $end) {
+        if (!is_array($end)) {
+            continue;
+        }
+        $endId = isset($end['end_id']) ? trim((string) $end['end_id']) : '';
+        if ($endId !== '') {
+            $validEnds++;
+        }
+    }
+
+    if ($validEnds !== 2) {
+        return $bothEndsResult;
+    }
+
     $hasResolvableHeading = false;
     foreach ($ends as $end) {
         if (!is_array($end)) {

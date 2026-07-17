@@ -648,6 +648,38 @@ class DensityAltitudePerformanceTest extends TestCase
         $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $selection['scored_end']['total_risk']);
     }
 
+    public function testEndSelectionFailsClosedWithSingleParsedEnd(): void
+    {
+        $tables = loadPohTakeoffTables();
+        $runway = [
+            'rwy_id' => '9/27',
+            'length_ft' => 3000,
+            'surface' => 'ASPH',
+            'heading_1' => 95.0,
+            'heading_2' => 275.0,
+            'ends' => [
+                ['end_id' => '09', 'obstruction' => []],
+            ],
+        ];
+        $evaluation = evaluateRunwayEndPerformanceRange($runway, 1000.0, 25.0, $tables);
+        $selection = resolveDensityAltitudePerformanceEndSelection(
+            $evaluation,
+            $runway,
+            [
+                'id' => 'zzstrip',
+                'runways' => [['name' => '9/27', 'heading_1' => 95, 'heading_2' => 275]],
+            ],
+            'zzstrip',
+            1000.0,
+            25.0,
+            $tables,
+            'config'
+        );
+
+        $this->assertSame('both_ends', $selection['selection_basis']);
+        $this->assertNull($selection['operational_end_id']);
+    }
+
     public function testSelectionBasisTooltipMentionsScoredDepartureEnd(): void
     {
         $tooltip = densityAltitudePerformanceTooltip('caution', [
