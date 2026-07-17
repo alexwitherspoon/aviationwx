@@ -87,8 +87,11 @@ Shows:
 - Per-airport status (Weather API, Webcams)
 - Usage metrics (Views, API requests, Map tiles served)
 
+**Reference data:** System Status groups slow-changing catalogs under **Reference data**, with expandable **consumer features** (runway geometry, runway performance, airport identity, comms, and related sources). Each source row shows local cache age, upstream probe result when applicable, and hard max age. Vocabulary and rollup rules: [ARCHITECTURE.md - Data Classification and Observability](ARCHITECTURE.md#data-classification-and-observability).
+
 **Interpreting signals**
 
+- **Reference data** (system row): rollup of reference-catalog consumers. Expand (▶) for per-source rows (FAA NGDA, OurAirports CSVs, NASR APT, NASR FRQ, identifier cache, and related leaves). Parent status is the worst child; the section auto-expands when degraded or down.
 - **Weather Data Fetching** (system row): aggregate **HTTP fetch success** for weather sources over the last hour. It is **not** a guarantee that every airport has fresh observations. Expand the row (▶) to see per-provider **HTTP 429** counts for the last hour (`cache/weather_health.json`).
 - **NOTAM Data Fetching** (system row): aggregate NMS API success over the last hour. Expand the row to see per-endpoint 429 counts (location query, geo query, auth token) from `cache/notam_health.json`. Fleet-wide NMS pauses after upstream **429**/**503** are stored in `cache/backoff.json` (`global_notam_*` keys); deferred queries during a pause do not add HTTP 429 counts.
 - **Per-airport weather**: based on observation timestamps in the weather cache (same family of values as the public API).
