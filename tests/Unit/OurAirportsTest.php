@@ -43,14 +43,16 @@ class OurAirportsTest extends TestCase
     
     public function testGetOurAirportsData_ReturnsArray()
     {
-        // This test may download data from the internet
-        // Skip if we can't reach the internet or want to avoid network calls
-        $data = getOurAirportsData(true); // Force refresh
-        
-        if ($data === null) {
-            $this->markTestSkipped('Could not download OurAirports data (network issue or service unavailable)');
+        ensureCacheDir(CACHE_OURAIRPORTS_DIR);
+        $fixture = file_get_contents(__DIR__ . '/../Fixtures/ourairports/airports.csv');
+        if ($fixture === false) {
+            $this->markTestSkipped('OurAirports fixture missing');
         }
-        
+        file_put_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV, $fixture, LOCK_EX);
+        require_once __DIR__ . '/../../lib/ourairports/ingest-airports.php';
+        $this->assertTrue(ingestOurAirportsIdentityFromDisk());
+
+        $data = getOurAirportsData();
         $this->assertIsArray($data);
         $this->assertArrayHasKey('icao', $data);
         $this->assertArrayHasKey('iata', $data);
@@ -62,20 +64,24 @@ class OurAirportsTest extends TestCase
     
     public function testGetOurAirportsData_ContainsKnownAirports()
     {
+        ensureCacheDir(CACHE_OURAIRPORTS_DIR);
+        $fixture = file_get_contents(__DIR__ . '/../Fixtures/ourairports/airports.csv');
+        if ($fixture === false) {
+            $this->markTestSkipped('OurAirports fixture missing');
+        }
+        file_put_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV, $fixture, LOCK_EX);
+        require_once __DIR__ . '/../../lib/ourairports/ingest-airports.php';
+        ingestOurAirportsIdentityFromDisk();
+
         $data = getOurAirportsData();
         
         if ($data === null) {
             $this->markTestSkipped('Could not get OurAirports data');
         }
         
-        // Check for well-known major airports (these should definitely be in the data)
         $this->assertContains('KPDX', $data['icao'], 'KPDX should be in ICAO list');
         $this->assertContains('PDX', $data['iata'], 'PDX should be in IATA list');
-        
-        // Verify we have substantial data
-        $this->assertGreaterThan(5000, count($data['icao']), 'Should have thousands of ICAO codes');
-        $this->assertGreaterThan(5000, count($data['iata']), 'Should have thousands of IATA codes');
-        $this->assertGreaterThan(10000, count($data['faa']), 'Should have many FAA codes');
+        $this->assertContains('HIO', $data['faa'], 'HIO should be in FAA list');
     }
     
     public function testIsValidRealIataCode_ValidCode()

@@ -366,6 +366,8 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         
         // Set airport-specific variables for use in template
         $airport['id'] = $airportId;
+        require_once __DIR__ . '/lib/airport-frequencies.php';
+        $airport['frequencies'] = getMergedAirportFrequencies($airportId, $airport);
         
         // Track page view metric
         metrics_track_page_view($airportId);

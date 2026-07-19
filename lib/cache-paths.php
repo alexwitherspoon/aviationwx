@@ -936,6 +936,38 @@ if (!defined('CACHE_OURAIRPORTS_FILE')) {
     define('CACHE_OURAIRPORTS_FILE', CACHE_BASE_DIR . '/ourairports_data.json');
 }
 
+if (!defined('CACHE_OURAIRPORTS_DIR')) {
+    define('CACHE_OURAIRPORTS_DIR', CACHE_BASE_DIR . '/ourairports');
+}
+
+if (!defined('CACHE_OURAIRPORTS_META_FILE')) {
+    define('CACHE_OURAIRPORTS_META_FILE', CACHE_OURAIRPORTS_DIR . '/ourairports_meta.json');
+}
+
+if (!defined('CACHE_OURAIRPORTS_AIRPORTS_CSV')) {
+    define('CACHE_OURAIRPORTS_AIRPORTS_CSV', CACHE_OURAIRPORTS_DIR . '/airports.csv');
+}
+
+if (!defined('CACHE_OURAIRPORTS_RUNWAYS_CSV')) {
+    define('CACHE_OURAIRPORTS_RUNWAYS_CSV', CACHE_OURAIRPORTS_DIR . '/runways.csv');
+}
+
+if (!defined('CACHE_OURAIRPORTS_FREQUENCIES_CSV')) {
+    define('CACHE_OURAIRPORTS_FREQUENCIES_CSV', CACHE_OURAIRPORTS_DIR . '/airport-frequencies.csv');
+}
+
+if (!defined('CACHE_OURAIRPORTS_BULK_LOCK')) {
+    define('CACHE_OURAIRPORTS_BULK_LOCK', CACHE_OURAIRPORTS_DIR . '/.bulk_fetch.lock');
+}
+
+if (!defined('CACHE_OURAIRPORTS_PROBE_LOCK')) {
+    define('CACHE_OURAIRPORTS_PROBE_LOCK', CACHE_OURAIRPORTS_DIR . '/.probe.lock');
+}
+
+if (!defined('CACHE_OURAIRPORTS_META_LOCK')) {
+    define('CACHE_OURAIRPORTS_META_LOCK', CACHE_OURAIRPORTS_DIR . '/.meta.lock');
+}
+
 if (!defined('CACHE_ICAO_AIRPORTS_FILE')) {
     define('CACHE_ICAO_AIRPORTS_FILE', CACHE_BASE_DIR . '/icao_airports.json');
 }
@@ -960,6 +992,10 @@ if (!defined('CACHE_RUNWAYS_DIR')) {
 
 if (!defined('CACHE_RUNWAYS_DATA_FILE')) {
     define('CACHE_RUNWAYS_DATA_FILE', CACHE_RUNWAYS_DIR . '/runways_data.json');
+}
+
+if (!defined('CACHE_FAA_NGDA_RUNWAYS_CSV')) {
+    define('CACHE_FAA_NGDA_RUNWAYS_CSV', CACHE_RUNWAYS_DIR . '/faa_ngda_runways.csv');
 }
 
 if (!defined('CACHE_RUNWAYS_FETCH_LOCK')) {
@@ -1007,6 +1043,32 @@ if (!defined('CACHE_NASR_APT_FETCH_LOCK')) {
 function getNasrAptFetchLockPath(): string
 {
     return CACHE_NASR_APT_FETCH_LOCK;
+}
+
+if (!defined('CACHE_NASR_FRQ_DATA_FILE')) {
+    define('CACHE_NASR_FRQ_DATA_FILE', CACHE_NASR_DIR . '/nasr_frq.json');
+}
+
+if (!defined('CACHE_NASR_FRQ_CONFIGURED_FILE')) {
+    define('CACHE_NASR_FRQ_CONFIGURED_FILE', CACHE_NASR_DIR . '/nasr_frq_configured.json');
+}
+
+if (!defined('CACHE_NASR_FRQ_FETCH_LOCK')) {
+    define('CACHE_NASR_FRQ_FETCH_LOCK', CACHE_NASR_DIR . '/.fetch_frq.lock');
+}
+
+if (!defined('CACHE_OURAIRPORTS_FREQUENCIES_FILE')) {
+    define('CACHE_OURAIRPORTS_FREQUENCIES_FILE', CACHE_BASE_DIR . '/ourairports_frequencies.json');
+}
+
+/**
+ * Get path to NASR FRQ fetch lock file
+ *
+ * @return string Full path to lock file
+ */
+function getNasrFrqFetchLockPath(): string
+{
+    return CACHE_NASR_FRQ_FETCH_LOCK;
 }
 
 // =============================================================================
@@ -1079,6 +1141,7 @@ function ensureAllCacheDirs(): array {
         CACHE_PEAK_GUSTS_DIR,
         CACHE_TEMP_EXTREMES_DIR,
         CACHE_RUNWAYS_DIR,
+        CACHE_OURAIRPORTS_DIR,
         CACHE_NASR_DIR,
         CACHE_WEATHER_DIR,
         CACHE_WEATHER_HISTORY_DIR,

@@ -367,9 +367,27 @@ if (!defined('OPERATIONS_SNAPSHOT_MAX_AGE_SECONDS')) {
     define('OPERATIONS_SNAPSHOT_MAX_AGE_SECONDS', 1800); // 30 minutes
 }
 
-// Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
-if (!defined('RUNWAYS_FETCH_CHECK_INTERVAL')) {
-    define('RUNWAYS_FETCH_CHECK_INTERVAL', 604800); // 7 days
+// Runway geometry (FAA + OurAirports) - probe daily; fetch when upstream changes or hard max age
+if (!defined('OURAIRPORTS_PROBE_INTERVAL')) {
+    define('OURAIRPORTS_PROBE_INTERVAL', 86400); // 1 day
+}
+if (!defined('OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL')) {
+    define('OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL', 60); // scheduler spawn check
+}
+if (!defined('OURAIRPORTS_BULK_HARD_MAX_AGE')) {
+    define('OURAIRPORTS_BULK_HARD_MAX_AGE', 2592000); // 30 days
+}
+if (!defined('OURAIRPORTS_PROBE_WORKER_TIMEOUT')) {
+    define('OURAIRPORTS_PROBE_WORKER_TIMEOUT', 180);
+}
+if (!defined('OURAIRPORTS_BULK_WORKER_TIMEOUT')) {
+    define('OURAIRPORTS_BULK_WORKER_TIMEOUT', 600);
+}
+if (!defined('RUNWAYS_MERGE_WORKER_TIMEOUT')) {
+    define('RUNWAYS_MERGE_WORKER_TIMEOUT', 600);
+}
+if (!defined('FAA_NGDA_RUNWAY_REFRESH_MAX_AGE')) {
+    define('FAA_NGDA_RUNWAY_REFRESH_MAX_AGE', 604800); // 7 days
 }
 if (!defined('RUNWAYS_CACHE_MAX_AGE')) {
     define('RUNWAYS_CACHE_MAX_AGE', 2592000); // 30 days
@@ -414,6 +432,12 @@ if (!defined('NASR_DISCOVERY_SMOKE_TIMEOUT_SECONDS')) {
 }
 if (!defined('NASR_APT_MIN_AIRPORT_COUNT')) {
     define('NASR_APT_MIN_AIRPORT_COUNT', 10000);
+}
+if (!defined('NASR_FRQ_SCHEMA_VERSION')) {
+    define('NASR_FRQ_SCHEMA_VERSION', 1);
+}
+if (!defined('NASR_FRQ_MIN_AIRPORT_COUNT')) {
+    define('NASR_FRQ_MIN_AIRPORT_COUNT', 5000);
 }
 
 // Density altitude performance (reference AFM models, not a go/no-go judgment)

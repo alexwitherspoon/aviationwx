@@ -3309,151 +3309,45 @@ function findSimilarAirports(string $searchCode, array $config, int $maxResults 
 
 /**
  * Download and cache OurAirports data (ICAO, IATA, FAA codes)
- * 
- * Downloads from OurAirports project (Public Domain)
- * Source: https://davidmegginson.github.io/ourairports-data/airports.csv
- * Caches the data locally to avoid repeated downloads
- * 
- * OurAirports provides comprehensive airport data with 40,000+ airports worldwide,
- * including ICAO, IATA, and FAA (gps_code) identifiers. Data is updated nightly.
- * 
- * @param bool $forceRefresh Force refresh even if cache exists
+ *
+ * Identity JSON is built by scripts/fetch-ourairports-bulk.php from raw airports.csv on disk.
+ * This reader never performs HTTP requests.
+ *
+ * @param bool $forceRefresh Re-read identity JSON from disk airports.csv when available
  * @return array|null Array with 'icao', 'iata', and 'faa' keys, each containing arrays of codes, or null on error
  */
 function getOurAirportsData(bool $forceRefresh = false): ?array {
-    $cacheFile = __DIR__ . '/../cache/ourairports_data.json';
-    $cacheMaxAge = 7 * 24 * 3600; // 7 days (data updated nightly)
-    
-    // Check cache first (unless forcing refresh)
-    if (!$forceRefresh && file_exists($cacheFile)) {
-        $cacheAge = time() - filemtime($cacheFile);
-        if ($cacheAge < $cacheMaxAge) {
-            // Use @ to suppress errors for non-critical cache file operations
-            // We handle failures explicitly with null checks and fallbacks below
-            $cached = @json_decode(@file_get_contents($cacheFile), true);
-            if (is_array($cached) && isset($cached['icao']) && isset($cached['iata']) && isset($cached['faa'])) {
-                return $cached;
-            }
+    if (!defined('CACHE_OURAIRPORTS_FILE')) {
+        require_once __DIR__ . '/cache-paths.php';
+    }
+    require_once __DIR__ . '/ourairports/ingest-airports.php';
+
+    $cacheFile = CACHE_OURAIRPORTS_FILE;
+
+    if ($forceRefresh || ourAirportsIdentityCacheIsStale()) {
+        if (is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
+            ingestOurAirportsIdentityFromDisk();
         }
     }
-    
-    // Download from OurAirports
-    try {
-        $csvUrl = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30, // Larger timeout for big file
-                'method' => 'GET',
-                'header' => 'User-Agent: AviationWX/1.0',
-                'ignore_errors' => true
-            ]
-        ]);
-        
-        $csvContent = @file_get_contents($csvUrl, false, $context);
-        if ($csvContent === false) {
-            aviationwx_log('warning', 'failed to download OurAirports data', [], 'app');
-            // Return cached version if available, even if stale
-            if (file_exists($cacheFile)) {
-                // Use @ to suppress errors for non-critical cache file operations
-            // We handle failures explicitly with null checks and fallbacks below
-            $cached = @json_decode(@file_get_contents($cacheFile), true);
-                if (is_array($cached) && isset($cached['icao'])) {
-                    return $cached;
-                }
-            }
-            return null;
-        }
-        
-        // Parse CSV and extract codes
-        // CSV columns: id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,...
-        $icaoCodes = [];
-        $iataCodes = [];
-        $faaCodes = [];
-        $lines = explode("\n", $csvContent);
-        $headerSkipped = false;
-        
-        foreach ($lines as $lineNum => $line) {
-            $line = trim($line);
-            if (empty($line)) {
-                continue;
-            }
-            
-            // Skip header line
-            if (!$headerSkipped) {
-                $headerSkipped = true;
-                continue;
-            }
-            
-            // Parse CSV line (handle quoted fields properly)
-            $fields = str_getcsv($line, ',', '"', '\\');
-            if (count($fields) < 15) {
-                continue; // Skip malformed lines
-            }
-            
-            // Column 12: icao_code
-            if (isset($fields[12]) && !empty($fields[12])) {
-                $icao = strtoupper(trim($fields[12]));
-                if (preg_match('/^[A-Z0-9]{3,4}$/', $icao)) {
-                    $icaoCodes[$icao] = true;
-                }
-            }
-            
-            // Column 13: iata_code
-            if (isset($fields[13]) && !empty($fields[13])) {
-                $iata = strtoupper(trim($fields[13]));
-                if (preg_match('/^[A-Z]{3}$/', $iata)) {
-                    $iataCodes[$iata] = true;
-                }
-            }
-            
-            // Column 14: gps_code (FAA identifier)
-            if (isset($fields[14]) && !empty($fields[14])) {
-                $faa = strtoupper(trim($fields[14]));
-                if (preg_match('/^[A-Z0-9]{3,4}$/', $faa)) {
-                    $faaCodes[$faa] = true;
-                }
-            }
-        }
-        
-        // Convert to simple arrays
-        $result = [
-            'icao' => array_keys($icaoCodes),
-            'iata' => array_keys($iataCodes),
-            'faa' => array_keys($faaCodes)
-        ];
-        
-        // Save to cache
-        $cacheDir = dirname($cacheFile);
-        if (!is_dir($cacheDir)) {
-            // Use @ to suppress errors for non-critical directory creation
-            // We handle failures explicitly with error checks below
-            @mkdir($cacheDir, 0755, true);
-        }
-        // Use @ to suppress errors for non-critical cache file writes
-        // We handle failures explicitly with error checks below
-        @file_put_contents($cacheFile, json_encode($result, JSON_PRETTY_PRINT));
-        
-        aviationwx_log('info', 'OurAirports data downloaded and cached', [
-            'icao_count' => count($result['icao']),
-            'iata_count' => count($result['iata']),
-            'faa_count' => count($result['faa'])
-        ], 'app');
-        
-        return $result;
-        
-    } catch (Exception $e) {
-        aviationwx_log('error', 'error downloading OurAirports data', ['error' => $e->getMessage()], 'app');
-        // Return cached version if available
-        if (file_exists($cacheFile)) {
-            // Use @ to suppress errors for non-critical cache file operations
-            // We handle failures explicitly with null checks and fallbacks below
-            $cached = @json_decode(@file_get_contents($cacheFile), true);
-            if (is_array($cached) && isset($cached['icao'])) {
-                return $cached;
-            }
-        }
+
+    if (!is_readable($cacheFile)) {
         return null;
     }
+
+    $cacheAge = time() - filemtime($cacheFile);
+    $cached = @json_decode((string) @file_get_contents($cacheFile), true);
+    if (!is_array($cached) || !isset($cached['icao'], $cached['iata'], $cached['faa'])) {
+        return null;
+    }
+
+    if ($cacheAge >= OURAIRPORTS_BULK_HARD_MAX_AGE) {
+        aviationwx_log('warning', 'OurAirports identity cache exceeds hard max age', [
+            'age_seconds' => $cacheAge,
+            'max_age_seconds' => OURAIRPORTS_BULK_HARD_MAX_AGE,
+        ], 'app');
+    }
+
+    return $cached;
 }
 
 /**

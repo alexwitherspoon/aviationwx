@@ -447,6 +447,7 @@ function checkRunwayCacheHealth(?array $config): array {
     $mtime = filemtime($path);
     $age = time() - $mtime;
     $needsRefresh = runwaysCacheNeedsRefresh();
+    $waitingReason = runwaysMergeWaitingReason();
     // @ suppresses json_decode warnings for malformed cache; we handle null below
     $data = @json_decode((string) file_get_contents($path), true);
     $airportCount = isset($data['airports']) && is_array($data['airports']) ? count($data['airports']) : 0;
@@ -454,7 +455,11 @@ function checkRunwayCacheHealth(?array $config): array {
     $status = $needsRefresh ? 'degraded' : 'operational';
     $message = "{$airportCount} airports in cache";
     if ($needsRefresh) {
-        $message .= ' • Stale (refresh recommended)';
+        if ($waitingReason !== null) {
+            $message .= ' • Refresh pending (' . $waitingReason . ')';
+        } else {
+            $message .= ' • Stale (refresh recommended)';
+        }
     } else {
         $message .= ' • Up to date';
     }

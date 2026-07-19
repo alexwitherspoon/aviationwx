@@ -3,10 +3,9 @@
 /**
  * Runway Geometry Fetcher
  *
- * Downloads FAA (US) and OurAirports (worldwide) runway data, merges with FAA preferred,
- * transforms to normalized segments, writes file cache, warms APCu.
- *
- * Lock file prevents concurrent fetches. Runs weekly; fetches only when missing or >30 days old.
+ * Merges FAA (US) and OurAirports runway data into normalized segments, writes file cache,
+ * warms APCu. Reads OurAirports raw CSVs from disk; downloads FAA NGDA when policy requires.
+ * Scheduler invokes in background only.
  *
  * Usage: php scripts/fetch-runways.php
  */
@@ -14,14 +13,53 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/runways.php';
+require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
+require_once __DIR__ . '/../lib/ourairports/http.php';
+require_once __DIR__ . '/../lib/ourairports/urls.php';
 
 // Large runway cache + APCu warm needs extra memory for json_decode
 // @ suppresses ini_set failure in restricted environments (e.g. disable_functions)
 @ini_set('memory_limit', '256M');
 
-$OURAIRPORTS_RUNWAYS_URL = 'https://davidmegginson.github.io/ourairports-data/runways.csv';
-$FAA_RUNWAYS_URL = 'https://ngda-transportation-geoplatform.hub.arcgis.com/api/download/v1/items/110af7b8a9424a59a3fb1d8fc69a2172/csv?layers=0';
+/**
+ * Read a local CSV file or return null.
+ */
+function readLocalCsvFile(string $path): ?string
+{
+    if (!is_readable($path)) {
+        return null;
+    }
+
+    $content = @file_get_contents($path);
+
+    return ($content === false || $content === '') ? null : $content;
+}
+
+/**
+ * Download FAA NGDA runway CSV when refresh policy requires it.
+ */
+function downloadFaaNgdaRunwaysIfNeeded(): ?string
+{
+    if (!faaNgdaRunwayCsvNeedsRefresh() && is_readable(CACHE_FAA_NGDA_RUNWAYS_CSV)) {
+        return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
+    $response = ourAirportsHttpGet(FAA_NGDA_RUNWAYS_CSV_URL);
+    if (!$response['ok'] || $response['body'] === null) {
+        return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
+    ensureCacheDir(CACHE_RUNWAYS_DIR);
+    $tmp = CACHE_FAA_NGDA_RUNWAYS_CSV . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, $response['body'], LOCK_EX) === false || !@rename($tmp, CACHE_FAA_NGDA_RUNWAYS_CSV)) {
+        @unlink($tmp);
+        return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
+    return $response['body'];
+}
 
 /**
  * Acquire fetch lock; return handle or false
@@ -51,32 +89,6 @@ function acquireRunwaysFetchLock() {
         return false;
     }
     return $fp;
-}
-
-/**
- * Download URL to string
- *
- * @param string $url URL to fetch
- * @return string|null Content or null on failure
- */
-function downloadUrl(string $url): ?string {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 120,
-        CURLOPT_CONNECTTIMEOUT => 15,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_USERAGENT => 'AviationWX Runway Fetcher/1.0',
-    ]);
-    $content = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($content === false || $httpCode !== 200) {
-        return null;
-    }
-    return $content;
 }
 
 /**
@@ -405,26 +417,28 @@ if (php_sapi_name() === 'cli') {
         return;
     }
 
+    initWorkerTimeout(RUNWAYS_MERGE_WORKER_TIMEOUT, 'runways_merge');
+
     $fp = acquireRunwaysFetchLock();
     if ($fp === false) {
         aviationwx_log('info', 'runways fetch: another instance running, skipping', [], 'app');
         exit(0);
     }
 
-    if (!runwaysCacheNeedsRefresh()) {
+    if (!runwaysMergeWorkerShouldRun()) {
         flock($fp, LOCK_UN);
         fclose($fp);
-        aviationwx_log('info', 'runways fetch: cache fresh, skipping', [], 'app');
+        aviationwx_log('info', 'runways fetch: not due or waiting for OurAirports bulk CSVs', [], 'app');
         exit(0);
     }
 
-    aviationwx_log('info', 'runways fetch: starting download', [], 'app');
+    aviationwx_log('info', 'runways fetch: starting merge', [], 'app');
 
-    $ourairportsCsv = downloadUrl($OURAIRPORTS_RUNWAYS_URL);
-    $faaCsv = downloadUrl($FAA_RUNWAYS_URL);
+    $ourairportsCsv = readLocalCsvFile(ourAirportsCsvPath('runways'));
+    $faaCsv = downloadFaaNgdaRunwaysIfNeeded();
 
     if ($ourairportsCsv === null && $faaCsv === null) {
-        aviationwx_log('error', 'runways fetch: both downloads failed', [], 'app', true);
+        aviationwx_log('error', 'runways fetch: no runway source data available on disk', [], 'app', true);
         flock($fp, LOCK_UN);
         fclose($fp);
         exit(1);
@@ -433,54 +447,9 @@ if (php_sapi_name() === 'cli') {
     $ourairports = $ourairportsCsv !== null ? parseOurAirportsRunways($ourairportsCsv) : [];
     $faa = $faaCsv !== null ? parseFaaRunways($faaCsv) : [];
 
-    $airportCenters = [];
-    $faaToIcao = [];
-    if ($ourairportsCsv !== null) {
-        $airportsCsv = downloadUrl('https://davidmegginson.github.io/ourairports-data/airports.csv');
-        if ($airportsCsv !== null) {
-            $lines = str_getcsv($airportsCsv, "\n", '"', '\\');
-            $header = str_getcsv(array_shift($lines), ',', '"', '\\');
-            $idx = array_flip(array_map('trim', $header));
-            $identIdx = $idx['ident'] ?? null;
-            $latIdx = $idx['latitude_deg'] ?? null;
-            $lonIdx = $idx['longitude_deg'] ?? null;
-            $gpsIdx = $idx['gps_code'] ?? null;
-            $icaoIdx = $idx['icao_code'] ?? null;
-            $iataIdx = $idx['iata_code'] ?? null;
-            $localIdx = $idx['local_code'] ?? null;
-            $countryIdx = $idx['iso_country'] ?? null;
-            if ($identIdx !== null && $latIdx !== null && $lonIdx !== null) {
-                foreach ($lines as $line) {
-                    $row = str_getcsv($line, ',', '"', '\\');
-                    if (count($row) <= max($identIdx, $latIdx, $lonIdx)) {
-                        continue;
-                    }
-                    $id = strtoupper(trim($row[$identIdx] ?? ''));
-                    $lat = $row[$latIdx] ?? '';
-                    $lon = $row[$lonIdx] ?? '';
-                    if ($id !== '' && $lat !== '' && $lon !== '') {
-                        $airportCenters[$id] = ['lat' => (float) $lat, 'lon' => (float) $lon];
-                    }
-                    if ($icaoIdx === null || $countryIdx === null || trim($row[$countryIdx] ?? '') !== 'US') {
-                        continue;
-                    }
-                    $icao = strtoupper(trim($row[$icaoIdx] ?? ''));
-                    if ($icao === '') {
-                        continue;
-                    }
-                    foreach ([$gpsIdx, $iataIdx, $localIdx] as $altIdx) {
-                        if ($altIdx === null) {
-                            continue;
-                        }
-                        $alt = strtoupper(trim($row[$altIdx] ?? ''));
-                        if ($alt !== '' && $alt !== $icao) {
-                            $faaToIcao[$alt] = $icao;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    $mapping = ourAirportsLoadAirportCentersAndFaaMappingFromDisk();
+    $airportCenters = $mapping['centers'];
+    $faaToIcao = $mapping['faa_to_icao'];
 
     $merged = mergeRunwaySources($faa, $ourairports, $airportCenters, $faaToIcao);
 
