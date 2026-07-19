@@ -363,6 +363,10 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     if ((int) ($nm['upstream_429_last_hour'] ?? 0) > 0) {
         return true;
     }
+    $ref = $data['reference_catalogs'] ?? null;
+    if (is_array($ref) && (($ref['status'] ?? '') !== 'operational')) {
+        return true;
+    }
     return false;
 }
 
@@ -538,6 +542,14 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
         }
     }
 
+    $referenceCatalogs = null;
+    if (is_array($system)
+        && isset($system['components']['reference_data'])
+        && is_array($system['components']['reference_data'])) {
+        require_once __DIR__ . '/reference-data-health.php';
+        $referenceCatalogs = reference_data_health_to_public($system['components']['reference_data']);
+    }
+
     return [
         'snapshot_meta' => [
             'schema_version' => OPERATIONS_SNAPSHOT_SCHEMA_VERSION,
@@ -557,6 +569,7 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
             'notam' => $notamHealth,
             'variant' => $variantHealth,
         ],
+        'reference_catalogs' => $referenceCatalogs,
         'capacity_layer' => [
             'node_performance' => is_array($node) ? $node : null,
             'image_processing' => is_array($img) ? $img : null,

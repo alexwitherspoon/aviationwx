@@ -314,18 +314,12 @@ function checkSystemHealth(): array {
     }
 
     $health['components']['notam_fetching'] = $notamDataHealth;
-    
-    // Runway cache (FAA/OurAirports)
-    $runwayCacheHealth = checkRunwayCacheHealth($config);
-    $health['components']['runway_cache'] = $runwayCacheHealth;
-    $health['components']['airport_country_resolution'] = checkAirportCountryResolutionHealth(
+
+    require_once __DIR__ . '/reference-data-health.php';
+    $health['components']['reference_data'] = reference_data_health_build(
         $config,
         $configSha256ForStatus !== '' ? $configSha256ForStatus : null
     );
-
-    $health['components']['magnetic_declination'] = checkMagneticDeclinationHealth();
-
-    $health['components']['nasr_apt_cache'] = checkNasrAptCacheHealth();
 
     return $health;
 }

@@ -180,6 +180,27 @@ class OperationsSnapshotTest extends TestCase
         $this->assertFalse(operations_snapshot_verbose_detail_warranted([]));
     }
 
+    public function testVerboseDetailWarrantedWhenReferenceCatalogsDegraded(): void
+    {
+        $data = [
+            'uptime_layer' => ['system' => ['status' => 'operational'], 'public_api' => null],
+            'data_plane' => ['weather' => ['status' => 'operational'], 'notam' => ['status' => 'operational']],
+            'reference_catalogs' => ['status' => 'degraded'],
+        ];
+        $this->assertTrue(operations_snapshot_verbose_detail_warranted($data));
+    }
+
+    public function testApplyVerboseGatePreservesReferenceCatalogs(): void
+    {
+        $data = [
+            'reference_catalogs' => ['status' => 'operational', 'consumers' => []],
+            'details' => ['log_fingerprints' => [['message' => 'x']]],
+        ];
+        $out = operations_snapshot_apply_verbose_gate($data, false);
+        $this->assertArrayHasKey('reference_catalogs', $out);
+        $this->assertSame([], $out['details']);
+    }
+
     public function testApplyVerboseGate_removesDetailsWhenNotVerbose(): void
     {
         $data = [
@@ -201,13 +222,46 @@ class OperationsSnapshotTest extends TestCase
         $this->assertTrue(@mkdir($tmp, 0755, true));
 
         try {
-            $sys = json_encode([
+            file_put_contents($tmp . '/status_system_health.json', json_encode([
                 'cached_at' => time(),
                 'ttl' => 600,
-                'key' => 'x',
-                'data' => ['status' => 'operational', 'components' => []],
-            ], JSON_THROW_ON_ERROR);
-            file_put_contents($tmp . '/status_system_health.json', $sys);
+                'key' => 'status_system_health',
+                'data' => [
+                    'status' => 'degraded',
+                    'components' => [
+                        'reference_data' => [
+                            'name' => 'Reference data',
+                            'status' => 'degraded',
+                            'message' => 'Runway geometry degraded',
+                            'lastChanged' => time(),
+                            'consumers' => [
+                                [
+                                    'slug' => 'runway_geometry',
+                                    'name' => 'Runway geometry',
+                                    'status' => 'degraded',
+                                    'message' => 'Merged runway cache: Stale',
+                                    'lastChanged' => time(),
+                                    'sources' => [
+                                        [
+                                            'slug' => 'runways_merged',
+                                            'name' => 'Merged runway cache',
+                                            'kind' => 'computed',
+                                            'status' => 'degraded',
+                                            'message' => 'Stale',
+                                            'lastChanged' => time(),
+                                            'details' => [
+                                                'local_age_seconds' => null,
+                                                'last_probe_result' => null,
+                                                'upstream_last_modified' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR));
             file_put_contents($tmp . '/public_api_health.json', json_encode([
                 'cached_at' => time(),
                 'ttl' => 600,
@@ -243,6 +297,9 @@ class OperationsSnapshotTest extends TestCase
             $built = operations_snapshot_build($tmp, ['now' => time(), 'log_path' => '']);
             $this->assertSame(OPERATIONS_SNAPSHOT_SCHEMA_VERSION, $built['snapshot_meta']['schema_version']);
             $this->assertArrayHasKey('uptime_layer', $built);
+            $this->assertArrayHasKey('reference_catalogs', $built);
+            $this->assertSame('degraded', $built['reference_catalogs']['status']);
+            $this->assertArrayHasKey('consumers', $built['reference_catalogs']);
 
             $snap = $tmp . '/operations_snapshot.json';
             $this->assertTrue(operations_snapshot_write_envelope($snap, $built, OPERATIONS_SNAPSHOT_MAX_AGE_SECONDS));
