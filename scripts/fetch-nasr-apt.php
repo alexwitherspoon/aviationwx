@@ -12,6 +12,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/nasr/parse.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
@@ -274,6 +275,7 @@ function fetchNasrAptIfNeeded(bool $force = false): bool
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    initWorkerTimeout(NASR_APT_WORKER_TIMEOUT, 'nasr_apt');
     $force = in_array('--force', $argv ?? [], true);
     $ok = fetchNasrAptIfNeeded($force);
     exit($ok ? 0 : 1);

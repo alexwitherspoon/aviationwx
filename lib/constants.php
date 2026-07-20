@@ -439,6 +439,12 @@ if (!defined('NASR_FRQ_SCHEMA_VERSION')) {
 if (!defined('NASR_FRQ_MIN_AIRPORT_COUNT')) {
     define('NASR_FRQ_MIN_AIRPORT_COUNT', 5000);
 }
+if (!defined('NASR_APT_WORKER_TIMEOUT')) {
+    define('NASR_APT_WORKER_TIMEOUT', 1800);
+}
+if (!defined('NASR_FRQ_WORKER_TIMEOUT')) {
+    define('NASR_FRQ_WORKER_TIMEOUT', 900);
+}
 
 // Density altitude performance (reference AFM models, not a go/no-go judgment)
 if (!defined('DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION')) {

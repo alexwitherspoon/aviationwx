@@ -12,6 +12,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-parse.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
@@ -204,6 +205,7 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    initWorkerTimeout(NASR_FRQ_WORKER_TIMEOUT, 'nasr_frq');
     $force = in_array('--force', $argv ?? [], true);
     $ok = fetchNasrFrqIfNeeded($force);
     exit($ok ? 0 : 1);
