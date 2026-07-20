@@ -9,6 +9,7 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/locks.php';
 require_once __DIR__ . '/meta.php';
 require_once __DIR__ . '/urls.php';
+require_once __DIR__ . '/ingest-airports.php';
 
 /** File keys that feed scripts/fetch-runways.php merge inputs. */
 const OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS = ['airports', 'runways'];
@@ -315,6 +316,46 @@ function faaNgdaRunwayCsvNewerThanMerge(): bool
 function runwaysMergeFetchInProgress(): bool
 {
     return ourAirportsLockIsHeld(getRunwaysFetchLockPath());
+}
+
+/**
+ * Abort runway merge when inputs look partial or the merged cache would shrink materially.
+ *
+ * @param array<string, mixed> $merged
+ * @param array<string, mixed>|null $previousCache
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ */
+function runwaysMergeRejectReason(
+    array $merged,
+    ?array $previousCache,
+    array $airportCenters,
+    bool $airportsCsvExpected
+): ?string {
+    if ($airportsCsvExpected && $airportCenters === []) {
+        return 'airports.csv present but center mapping is empty';
+    }
+
+    $newCount = count($merged);
+    if ($newCount === 0) {
+        return 'merged airport count is zero';
+    }
+
+    if ($previousCache === null) {
+        return null;
+    }
+
+    $oldAirports = $previousCache['airports'] ?? null;
+    if (!is_array($oldAirports) || $oldAirports === []) {
+        return null;
+    }
+
+    $oldCount = count($oldAirports);
+    $minAllowed = (int) floor($oldCount * RUNWAYS_MERGE_MIN_AIRPORT_RETAIN_RATIO);
+    if ($newCount < $minAllowed) {
+        return 'merged airport count below retention threshold';
+    }
+
+    return null;
 }
 
 /**

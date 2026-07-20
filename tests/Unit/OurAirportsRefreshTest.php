@@ -322,4 +322,48 @@ class OurAirportsRefreshTest extends TestCase
 
         $this->assertFalse(ourAirportsProbeWorkerShouldRun());
     }
+
+    public function testRunwaysMergeRejectReasonWhenCentersMissingButCsvExpected(): void
+    {
+        $reason = runwaysMergeRejectReason(
+            ['KTEST' => []],
+            null,
+            [],
+            true
+        );
+
+        $this->assertSame('airports.csv present but center mapping is empty', $reason);
+    }
+
+    public function testRunwaysMergeRejectReasonWhenMergedCacheShrinksMaterially(): void
+    {
+        $previous = [
+            'airports' => array_fill(0, 100, ['runways' => []]),
+        ];
+
+        $reason = runwaysMergeRejectReason(
+            array_fill(0, 80, ['runways' => []]),
+            $previous,
+            ['KTEST' => ['lat' => 1.0, 'lon' => 2.0]],
+            false
+        );
+
+        $this->assertSame('merged airport count below retention threshold', $reason);
+    }
+
+    public function testRunwaysMergeRejectReasonAllowsHealthyShrinkWithinThreshold(): void
+    {
+        $previous = [
+            'airports' => array_fill(0, 100, ['runways' => []]),
+        ];
+
+        $reason = runwaysMergeRejectReason(
+            array_fill(0, 95, ['runways' => []]),
+            $previous,
+            ['KTEST' => ['lat' => 1.0, 'lon' => 2.0]],
+            false
+        );
+
+        $this->assertNull($reason);
+    }
 }

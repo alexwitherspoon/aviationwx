@@ -471,6 +471,24 @@ if (php_sapi_name() === 'cli') {
 
     $merged = mergeRunwaySources($faa, $ourairports, $airportCenters, $faaToIcao);
 
+    $previousCache = loadRunwaysCacheDataFromDisk();
+    $airportsCsvPath = ourAirportsCsvPath('airports');
+    $airportsCsvSize = is_readable($airportsCsvPath) ? @filesize($airportsCsvPath) : false;
+    $airportsCsvExpected = is_int($airportsCsvSize) && $airportsCsvSize > 200;
+    $rejectReason = runwaysMergeRejectReason($merged, $previousCache, $airportCenters, $airportsCsvExpected);
+    if ($rejectReason !== null) {
+        aviationwx_log('error', 'runways fetch: retaining previous cache', [
+            'reason' => $rejectReason,
+            'merged_airports' => count($merged),
+            'previous_airports' => is_array($previousCache['airports'] ?? null)
+                ? count($previousCache['airports'])
+                : 0,
+        ], 'app', true);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        exit(is_readable(CACHE_RUNWAYS_DATA_FILE) ? 0 : 1);
+    }
+
     $output = [
         'fetched_at' => time(),
         'airports' => $merged,
