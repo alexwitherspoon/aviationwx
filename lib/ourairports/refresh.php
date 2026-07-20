@@ -112,7 +112,9 @@ function ourAirportsProbeWorkerShouldRun(): bool
  */
 function ourAirportsBulkWorkerShouldRun(): bool
 {
-    return ourAirportsBulkNeedsFetch() && !ourAirportsBulkFetchInProgress();
+    return ourAirportsBulkNeedsFetch()
+        && !ourAirportsBulkFetchInProgress()
+        && !runwaysMergeFetchInProgress();
 }
 
 /**

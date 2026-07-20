@@ -17,6 +17,7 @@ class OurAirportsRefreshTest extends TestCase
     use IsolatesOurAirportsCacheTrait;
 
     private mixed $bulkLockHandle = null;
+    private mixed $mergeLockHandle = null;
 
     protected function setUp(): void
     {
@@ -30,6 +31,12 @@ class OurAirportsRefreshTest extends TestCase
             @flock($this->bulkLockHandle, LOCK_UN);
             fclose($this->bulkLockHandle);
             $this->bulkLockHandle = null;
+        }
+
+        if (is_resource($this->mergeLockHandle)) {
+            @flock($this->mergeLockHandle, LOCK_UN);
+            fclose($this->mergeLockHandle);
+            $this->mergeLockHandle = null;
         }
 
         parent::tearDown();
@@ -288,6 +295,22 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(flock($this->bulkLockHandle, LOCK_EX | LOCK_NB));
 
         $this->assertTrue(ourAirportsBulkFetchInProgress());
+        $this->assertFalse(ourAirportsBulkWorkerShouldRun());
+    }
+
+    public function testBulkWorkerShouldNotRunWhileRunwayMergeInProgress(): void
+    {
+        ourAirportsUpdateFileMeta('runways', [
+            'last_probe_result' => 'changed',
+        ]);
+
+        $this->assertTrue(ourAirportsBulkNeedsFetch());
+
+        $this->mergeLockHandle = fopen(getRunwaysFetchLockPath(), 'c+');
+        $this->assertIsResource($this->mergeLockHandle);
+        $this->assertTrue(flock($this->mergeLockHandle, LOCK_EX | LOCK_NB));
+
+        $this->assertTrue(runwaysMergeFetchInProgress());
         $this->assertFalse(ourAirportsBulkWorkerShouldRun());
     }
 
