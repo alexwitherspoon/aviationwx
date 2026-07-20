@@ -13,38 +13,16 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
+require_once __DIR__ . '/../lib/file-locks.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-parse.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
 require_once __DIR__ . '/../lib/nasr/util.php';
 
 /**
- * Acquire FRQ fetch lock; return handle or false.
- *
- * @return resource|false
+ * Fetch NASR FRQ when cache is missing or stale.
  */
-function acquireNasrFrqFetchLock()
-{
-    $lockPath = getNasrFrqFetchLockPath();
-    $dir = dirname($lockPath);
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if (!$fp) {
-        return false;
-    }
-    if (!@flock($fp, LOCK_EX | LOCK_NB)) {
-        fclose($fp);
-        return false;
-    }
-
-    return $fp;
-}
-
-/**
- * Download and extract FRQ.csv to a temp directory.
+function fetchNasrFrqIfNeeded(bool $force = false): bool
  *
  * @return array{
  *   dir: string,
@@ -131,7 +109,8 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
         return true;
     }
 
-    $lock = acquireNasrFrqFetchLock();
+    $lockPath = getNasrFrqFetchLockPath();
+    $lock = acquireExclusiveFileLock($lockPath);
     if ($lock === false) {
         aviationwx_log('info', 'nasr_frq: fetch skipped, lock held', [], 'app');
         return is_readable(CACHE_NASR_FRQ_DATA_FILE);
@@ -199,8 +178,7 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
         nasrCleanupDirectory($tmpRoot);
         return true;
     } finally {
-        @flock($lock, LOCK_UN);
-        fclose($lock);
+        releaseExclusiveFileLock($lock, $lockPath);
     }
 }
 
