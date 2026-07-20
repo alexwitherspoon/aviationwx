@@ -28,6 +28,25 @@ function reference_data_require_status_checks(): void
 }
 
 /**
+ * Latest observability timestamp for an OurAirports bulk CSV leaf.
+ *
+ * @param array<string, mixed> $meta
+ */
+function reference_data_ourairports_bulk_last_changed(bool $readable, string $path, array $meta): int
+{
+    $lastChanged = $readable ? (int) filemtime($path) : 0;
+
+    foreach (['last_probe_at', 'last_fetch_at'] as $metaKey) {
+        $value = $meta[$metaKey] ?? null;
+        if (is_int($value) || (is_string($value) && $value !== '' && ctype_digit($value))) {
+            $lastChanged = max($lastChanged, (int) $value);
+        }
+    }
+
+    return $lastChanged;
+}
+
+/**
  * Map a status-checks component row into a reference source leaf.
  *
  * @param array<string, mixed> $health
@@ -101,7 +120,7 @@ function reference_data_ourairports_bulk_source_health(string $fileKey, string $
         'kind' => 'bulk',
         'status' => $status,
         'message' => $messages !== [] ? implode(' • ', $messages) : 'Up to date',
-        'lastChanged' => $readable ? (int) filemtime($path) : 0,
+        'lastChanged' => reference_data_ourairports_bulk_last_changed($readable, $path, $meta),
         'details' => [
             'local_age_seconds' => $localAge,
             'last_probe_result' => is_string($meta['last_probe_result'] ?? null) ? $meta['last_probe_result'] : null,

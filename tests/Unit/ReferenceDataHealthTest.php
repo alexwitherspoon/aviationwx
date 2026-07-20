@@ -9,7 +9,9 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../Helpers/IsolatesOurAirportsCacheTrait.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/ourairports/meta.php';
 require_once __DIR__ . '/../../lib/reference-data-health.php';
+require_once __DIR__ . '/../../lib/reference-data-sources.php';
 
 class ReferenceDataHealthTest extends TestCase
 {
@@ -62,6 +64,24 @@ class ReferenceDataHealthTest extends TestCase
 
         $this->assertSame('down', $component['status']);
         $this->assertStringContainsString('down', $component['message']);
+    }
+
+    public function testOurAirportsBulkLastChangedUsesProbeTimestamp(): void
+    {
+        file_put_contents(CACHE_OURAIRPORTS_RUNWAYS_CSV, "id,airport_ident\n1,TEST\n", LOCK_EX);
+        touch(CACHE_OURAIRPORTS_RUNWAYS_CSV, time() - 7200);
+
+        ourAirportsUpdateFileMeta('runways', [
+            'last_probe_at' => time() - 60,
+        ]);
+
+        $leaf = reference_data_ourairports_bulk_source_health(
+            'runways',
+            'ourairports_runways',
+            'OurAirports runways'
+        );
+
+        $this->assertGreaterThan((int) filemtime(CACHE_OURAIRPORTS_RUNWAYS_CSV), $leaf['lastChanged']);
     }
 
     public function testPublicSerializerUsesSnakeCase(): void
