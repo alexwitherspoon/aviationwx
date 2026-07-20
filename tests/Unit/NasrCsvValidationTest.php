@@ -105,7 +105,7 @@ class NasrCsvValidationTest extends TestCase
         $path = sys_get_temp_dir() . '/nasr_goodzip_' . bin2hex(random_bytes(4)) . '.zip';
         $zip = new ZipArchive();
         $this->assertTrue($zip->open($path, ZipArchive::CREATE) === true);
-        $zip->addFile($this->fixtureDir . '/FRQ.csv', 'FRQ.csv');
+        $this->assertTrue($zip->addFile($this->fixtureDir . '/FRQ.csv', 'FRQ.csv'));
         $zip->close();
 
         try {
