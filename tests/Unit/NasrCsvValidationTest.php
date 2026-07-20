@@ -53,7 +53,7 @@ class NasrCsvValidationTest extends TestCase
     public function testNasrCsvFileRejectsZeroByteFile(): void
     {
         $path = sys_get_temp_dir() . '/nasr_zero_' . bin2hex(random_bytes(4)) . '.csv';
-        file_put_contents($path, '');
+        $this->assertNotFalse(file_put_contents($path, ''));
 
         try {
             $this->assertFalse(nasrFrqCsvFileIsValid($path));
@@ -65,7 +65,7 @@ class NasrCsvValidationTest extends TestCase
     public function testNasrDownloadedZipRejectsEmptyFile(): void
     {
         $path = sys_get_temp_dir() . '/nasr_empty_' . bin2hex(random_bytes(4)) . '.zip';
-        file_put_contents($path, '');
+        $this->assertNotFalse(file_put_contents($path, ''));
 
         try {
             $this->assertFalse(nasrDownloadedZipFileIsValid($path));
@@ -77,7 +77,7 @@ class NasrCsvValidationTest extends TestCase
     public function testNasrDownloadedZipRejectsNonZipMagic(): void
     {
         $path = sys_get_temp_dir() . '/nasr_badzip_' . bin2hex(random_bytes(4)) . '.zip';
-        file_put_contents($path, str_repeat('x', 64));
+        $this->assertNotFalse(file_put_contents($path, str_repeat('x', 64)));
 
         try {
             $this->assertFalse(nasrDownloadedZipFileIsValid($path));
