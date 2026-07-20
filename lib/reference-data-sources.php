@@ -243,7 +243,8 @@ function reference_data_nasr_frq_source_health(): array
     if (is_array($meta) && isset($meta['frq_airport_count'])) {
         $airportCount = (int) $meta['frq_airport_count'];
     } elseif ($readable) {
-        $decoded = json_decode((string) file_get_contents($path), true);
+        // @ suppresses json_decode warnings for malformed cache; we handle null below
+        $decoded = @json_decode((string) @file_get_contents($path), true);
         if (is_array($decoded) && isset($decoded['airports']) && is_array($decoded['airports'])) {
             $airportCount = count($decoded['airports']);
         }
