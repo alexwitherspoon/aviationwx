@@ -13,11 +13,11 @@ const OURAIRPORTS_CSV_FILE_KEYS = [
     'airport_frequencies' => 'airport-frequencies.csv',
 ];
 
-/** Expected CSV header prefix per file key (OurAirports bulk schema). */
-const OURAIRPORTS_CSV_HEADER_PREFIX = [
-    'airports' => 'id,ident,',
-    'runways' => 'id,airport_ref,',
-    'airport_frequencies' => 'id,airport_ref,',
+/** Expected leading CSV column names per file key (OurAirports bulk schema). */
+const OURAIRPORTS_CSV_HEADER_COLUMNS = [
+    'airports' => ['id', 'ident'],
+    'runways' => ['id', 'airport_ref'],
+    'airport_frequencies' => ['id', 'airport_ref'],
 ];
 
 const OURAIRPORTS_DATA_BASE_URL = 'https://davidmegginson.github.io/ourairports-data';
@@ -71,6 +71,24 @@ function ourAirportsCsvPath(string $fileKey): string
 }
 
 /**
+ * Parse the first CSV row into normalized lowercase column names.
+ *
+ * @return list<string>
+ */
+function ourAirportsCsvHeaderColumns(string $firstLine): array
+{
+    $fields = str_getcsv($firstLine, ',', '"', '\\');
+    if (!is_array($fields)) {
+        return [];
+    }
+
+    return array_map(
+        static fn (mixed $field): string => strtolower(trim((string) $field)),
+        $fields
+    );
+}
+
+/**
  * Whether a downloaded body looks like a valid OurAirports CSV for the file key.
  */
 function ourAirportsCsvBodyIsValid(string $body, string $fileKey): bool
@@ -84,7 +102,17 @@ function ourAirportsCsvBodyIsValid(string $body, string $fileKey): bool
         return false;
     }
 
-    $prefix = OURAIRPORTS_CSV_HEADER_PREFIX[$fileKey];
+    $columns = ourAirportsCsvHeaderColumns($firstLine);
+    if ($columns === []) {
+        return false;
+    }
 
-    return str_starts_with($firstLine, $prefix);
+    $expected = OURAIRPORTS_CSV_HEADER_COLUMNS[$fileKey];
+    foreach ($expected as $index => $columnName) {
+        if (($columns[$index] ?? '') !== $columnName) {
+            return false;
+        }
+    }
+
+    return true;
 }
