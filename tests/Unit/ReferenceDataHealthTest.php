@@ -58,6 +58,56 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertContains('ourairports_runways', $slugs);
     }
 
+    public function testRunwayPerformanceConsumerIncludesAllPrecedenceSources(): void
+    {
+        $component = reference_data_health_build(null, null);
+        $consumer = null;
+        foreach ($component['consumers'] as $row) {
+            if (($row['slug'] ?? '') === 'runway_performance') {
+                $consumer = $row;
+                break;
+            }
+        }
+
+        $this->assertIsArray($consumer);
+        $slugs = array_column($consumer['sources'], 'slug');
+        $this->assertContains('nasr_apt', $slugs);
+        $this->assertContains('ourairports_runways', $slugs);
+        $this->assertContains('airports_config', $slugs);
+    }
+
+    public function testAirportIdentityAndCommsIncludeConfigSource(): void
+    {
+        $component = reference_data_health_build(null, null);
+        $bySlug = [];
+        foreach ($component['consumers'] as $consumer) {
+            $bySlug[$consumer['slug'] ?? ''] = $consumer;
+        }
+
+        $this->assertContains('airports_config', array_column($bySlug['airport_identity']['sources'], 'slug'));
+        $this->assertContains('airports_config', array_column($bySlug['airport_comms']['sources'], 'slug'));
+    }
+
+    public function testConfigSourceReportsOverrideCounts(): void
+    {
+        $config = [
+            'airports' => [
+                'ktest' => [
+                    'icao' => 'KTEST',
+                    'runway_length_ft' => 3200,
+                    'frequencies' => ['ctaf' => '122.8'],
+                ],
+            ],
+        ];
+
+        $leaf = reference_data_config_source_health($config, 'abc123');
+
+        $this->assertSame('config', $leaf['kind']);
+        $this->assertSame('operational', $leaf['status']);
+        $this->assertSame(1, $leaf['details']['runway_override_count'] ?? null);
+        $this->assertSame(1, $leaf['details']['frequencies_override_count'] ?? null);
+    }
+
     public function testMissingRunwaysMergedMarksConsumerDown(): void
     {
         $component = reference_data_health_build(null, null);

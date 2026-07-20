@@ -133,6 +133,86 @@ function reference_data_ourairports_bulk_source_health(string $fileKey, string $
 /**
  * @return array<string, mixed>
  */
+function reference_data_config_source_health(?array $config, ?string $configSha256 = null): array
+{
+    $airports = is_array($config) ? ($config['airports'] ?? []) : [];
+    if (!is_array($airports) || $airports === []) {
+        return [
+            'slug' => 'airports_config',
+            'name' => 'airports.json',
+            'kind' => 'config',
+            'status' => 'down',
+            'message' => 'Configuration missing or empty',
+            'lastChanged' => 0,
+            'details' => [
+                'local_age_seconds' => null,
+                'last_probe_result' => null,
+                'upstream_last_modified' => null,
+                'needs_fetch' => false,
+                'last_fetch_error' => null,
+                'effective_date' => null,
+                'airport_count' => 0,
+                'runway_override_count' => 0,
+                'frequencies_override_count' => 0,
+                'config_sha256' => is_string($configSha256) && $configSha256 !== '' ? $configSha256 : null,
+            ],
+        ];
+    }
+
+    $runwayOverrideCount = 0;
+    $frequenciesOverrideCount = 0;
+    foreach ($airports as $airport) {
+        if (!is_array($airport)) {
+            continue;
+        }
+        if (isset($airport['runway_length_ft']) && is_numeric($airport['runway_length_ft'])) {
+            $runwayOverrideCount++;
+        }
+        if (isset($airport['frequencies']) && is_array($airport['frequencies']) && $airport['frequencies'] !== []) {
+            $frequenciesOverrideCount++;
+        }
+    }
+
+    $airportCount = count($airports);
+    $message = "{$airportCount} airports configured";
+    if ($runwayOverrideCount > 0) {
+        $message .= " • {$runwayOverrideCount} runway overrides";
+    }
+    if ($frequenciesOverrideCount > 0) {
+        $message .= " • {$frequenciesOverrideCount} frequency overrides";
+    }
+
+    $configPath = function_exists('getConfigFilePath') ? getConfigFilePath() : null;
+    $lastChanged = 0;
+    if (is_string($configPath) && $configPath !== '' && is_readable($configPath)) {
+        $lastChanged = (int) filemtime($configPath);
+    }
+
+    return [
+        'slug' => 'airports_config',
+        'name' => 'airports.json',
+        'kind' => 'config',
+        'status' => 'operational',
+        'message' => $message,
+        'lastChanged' => $lastChanged,
+        'details' => [
+            'local_age_seconds' => $lastChanged > 0 ? time() - $lastChanged : null,
+            'last_probe_result' => null,
+            'upstream_last_modified' => null,
+            'needs_fetch' => false,
+            'last_fetch_error' => null,
+            'effective_date' => null,
+            'airport_count' => $airportCount,
+            'runway_override_count' => $runwayOverrideCount,
+            'frequencies_override_count' => $frequenciesOverrideCount,
+            'config_sha256' => is_string($configSha256) && $configSha256 !== '' ? $configSha256 : null,
+        ],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
 function reference_data_faa_ngda_runways_source_health(): array
 {
     $path = CACHE_FAA_NGDA_RUNWAYS_CSV;
@@ -357,6 +437,15 @@ function reference_data_source_diagnostics_text(array $sourceRow): string
     }
     if (is_string($details['effective_date'] ?? null) && $details['effective_date'] !== '') {
         $parts[] = 'cycle: ' . $details['effective_date'];
+    }
+    if (isset($details['runway_override_count']) && (int) $details['runway_override_count'] > 0) {
+        $parts[] = 'runway overrides: ' . (int) $details['runway_override_count'];
+    }
+    if (isset($details['frequencies_override_count']) && (int) $details['frequencies_override_count'] > 0) {
+        $parts[] = 'frequency overrides: ' . (int) $details['frequencies_override_count'];
+    }
+    if (is_string($details['config_sha256'] ?? null) && $details['config_sha256'] !== '') {
+        $parts[] = 'config sha: ' . substr($details['config_sha256'], 0, 12);
     }
     if (isset($details['local_age_seconds']) && $details['local_age_seconds'] !== null) {
         $parts[] = 'age: ' . (int) $details['local_age_seconds'] . 's';

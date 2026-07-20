@@ -195,13 +195,17 @@ function reference_data_health_build(?array $config, ?string $configSha256 = nul
         ], 'Uses OurAirports airports.csv for centers and FAA to ICAO mapping (see airport_identity).'),
         reference_data_build_consumer('runway_performance', 'Runway performance', [
             reference_data_nasr_apt_source_health(),
+            reference_data_ourairports_bulk_source_health('runways', 'ourairports_runways', 'OurAirports runways'),
+            reference_data_config_source_health($config, $configSha256),
         ], 'Active runway closures: see NOTAM under Live observations.'),
         reference_data_build_consumer('airport_identity', 'Airport identity', [
             reference_data_ourairports_identity_source_health(),
+            reference_data_config_source_health($config, $configSha256),
         ]),
         reference_data_build_consumer('airport_comms', 'Airport communications', [
             reference_data_nasr_frq_source_health(),
             reference_data_ourairports_frequencies_source_health(),
+            reference_data_config_source_health($config, $configSha256),
         ]),
         reference_data_build_consumer('airport_location', 'Airport location', [
             reference_data_country_resolution_source_health($config, $configSha256),
