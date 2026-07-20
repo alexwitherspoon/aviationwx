@@ -80,6 +80,13 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(faaNgdaRunwayCsvNeedsRefresh());
     }
 
+    public function testFaaNgdaRunwayCsvBodyRejectsInvalidPayload(): void
+    {
+        $this->assertFalse(faaNgdaRunwayCsvBodyIsValid('<html><body>error</body></html>'));
+        $this->assertFalse(faaNgdaRunwayCsvBodyIsValid(''));
+        $this->assertTrue(faaNgdaRunwayCsvBodyIsValid("ARPT_ID,RWY_ID\nKTEST,18/36\n"));
+    }
+
     public function testFaaNgdaOverdueRefreshRespectsFetchBackoff(): void
     {
         file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);

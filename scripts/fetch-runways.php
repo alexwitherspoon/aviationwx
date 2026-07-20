@@ -53,6 +53,15 @@ function downloadFaaNgdaRunwaysIfNeeded(): ?string
         return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
     }
 
+    if (!faaNgdaRunwayCsvBodyIsValid($response['body'])) {
+        aviationwx_log('error', 'runways fetch: rejected invalid FAA NGDA CSV body', [
+            'http_code' => $response['http_code'],
+            'body_bytes' => strlen($response['body']),
+        ], 'app');
+        faaNgdaRecordFetchAttempt(false);
+        return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
     ensureCacheDir(CACHE_RUNWAYS_DIR);
     $tmp = CACHE_FAA_NGDA_RUNWAYS_CSV . '.tmp.' . getmypid();
     if (@file_put_contents($tmp, $response['body'], LOCK_EX) === false || !@rename($tmp, CACHE_FAA_NGDA_RUNWAYS_CSV)) {

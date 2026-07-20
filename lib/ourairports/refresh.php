@@ -228,6 +228,25 @@ function faaNgdaOverdueRefreshShouldTriggerMerge(): bool
 }
 
 /**
+ * Whether an FAA NGDA runway CSV response body looks usable.
+ */
+function faaNgdaRunwayCsvBodyIsValid(string $body): bool
+{
+    if ($body === '' || strlen($body) < 20) {
+        return false;
+    }
+
+    $trimmed = ltrim($body);
+    if ($trimmed !== '' && $trimmed[0] === '<') {
+        return false;
+    }
+
+    $firstLine = strtok($body, "\n");
+
+    return is_string($firstLine) && stripos($firstLine, 'ARPT_ID') !== false;
+}
+
+/**
  * True when OurAirports probe meta for runway merge inputs requires bulk or merge action.
  */
 function ourAirportsRunwaySourcesProbeNeedsAction(): bool
