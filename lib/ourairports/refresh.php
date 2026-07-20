@@ -182,6 +182,52 @@ function faaNgdaRunwayCsvNeedsRefresh(): bool
 }
 
 /**
+ * Record an FAA NGDA runway CSV download attempt for merge backoff.
+ */
+function faaNgdaRecordFetchAttempt(bool $succeeded): void
+{
+    $saved = ourAirportsWithMetaLock(static function () use ($succeeded): bool {
+        $meta = ourAirportsLoadMeta();
+        $ngda = isset($meta['faa_ngda']) && is_array($meta['faa_ngda']) ? $meta['faa_ngda'] : [];
+        $ngda['last_fetch_attempt_at'] = time();
+        if ($succeeded) {
+            $ngda['last_fetch_succeeded_at'] = time();
+            unset($ngda['last_fetch_error']);
+        } else {
+            $ngda['last_fetch_error'] = 'download_failed';
+        }
+        $meta['faa_ngda'] = $ngda;
+
+        return ourAirportsSaveMeta($meta);
+    });
+
+    if ($saved !== true) {
+        aviationwx_log('warning', 'faa_ngda: failed to record fetch attempt in meta', [], 'app');
+    }
+}
+
+/**
+ * True when an overdue FAA NGDA refresh should spawn the runway merge worker.
+ *
+ * Failed downloads back off so the scheduler does not respawn merge every minute.
+ */
+function faaNgdaOverdueRefreshShouldTriggerMerge(): bool
+{
+    if (!faaNgdaRunwayCsvNeedsRefresh()) {
+        return false;
+    }
+
+    $meta = ourAirportsLoadMeta();
+    $ngda = isset($meta['faa_ngda']) && is_array($meta['faa_ngda']) ? $meta['faa_ngda'] : [];
+    $lastAttempt = isset($ngda['last_fetch_attempt_at']) ? (int) $ngda['last_fetch_attempt_at'] : 0;
+    if ($lastAttempt <= 0) {
+        return true;
+    }
+
+    return (time() - $lastAttempt) >= FAA_NGDA_FETCH_RETRY_INTERVAL;
+}
+
+/**
  * True when OurAirports probe meta for runway merge inputs requires bulk or merge action.
  */
 function ourAirportsRunwaySourcesProbeNeedsAction(): bool
@@ -272,7 +318,7 @@ function runwaysCacheNeedsRefresh(): bool
         return true;
     }
 
-    if (faaNgdaRunwayCsvNeedsRefresh()) {
+    if (faaNgdaOverdueRefreshShouldTriggerMerge()) {
         return true;
     }
 

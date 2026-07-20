@@ -80,6 +80,40 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(faaNgdaRunwayCsvNeedsRefresh());
     }
 
+    public function testFaaNgdaOverdueRefreshRespectsFetchBackoff(): void
+    {
+        file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);
+        touch(CACHE_RUNWAYS_DATA_FILE, time());
+
+        file_put_contents(CACHE_FAA_NGDA_RUNWAYS_CSV, 'ARPT_ID', LOCK_EX);
+        touch(CACHE_FAA_NGDA_RUNWAYS_CSV, time() - FAA_NGDA_RUNWAY_REFRESH_MAX_AGE - 60);
+
+        faaNgdaRecordFetchAttempt(false);
+
+        $this->assertTrue(faaNgdaRunwayCsvNeedsRefresh());
+        $this->assertFalse(faaNgdaOverdueRefreshShouldTriggerMerge());
+        $this->assertFalse(runwaysCacheNeedsRefresh());
+    }
+
+    public function testFaaNgdaOverdueRefreshRetriesAfterBackoffExpires(): void
+    {
+        file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);
+        touch(CACHE_RUNWAYS_DATA_FILE, time());
+
+        file_put_contents(CACHE_FAA_NGDA_RUNWAYS_CSV, 'ARPT_ID', LOCK_EX);
+        touch(CACHE_FAA_NGDA_RUNWAYS_CSV, time() - FAA_NGDA_RUNWAY_REFRESH_MAX_AGE - 60);
+
+        $meta = ourAirportsLoadMeta();
+        $meta['faa_ngda'] = [
+            'last_fetch_attempt_at' => time() - FAA_NGDA_FETCH_RETRY_INTERVAL - 60,
+            'last_fetch_error' => 'download_failed',
+        ];
+        ourAirportsSaveMeta($meta);
+
+        $this->assertTrue(faaNgdaOverdueRefreshShouldTriggerMerge());
+        $this->assertTrue(runwaysCacheNeedsRefresh());
+    }
+
     public function testRunwaySourcesProbeChangedIgnoresFrequenciesAndErrors(): void
     {
         ourAirportsUpdateFileMeta('runways', [

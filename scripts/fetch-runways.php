@@ -17,6 +17,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
 require_once __DIR__ . '/../lib/ourairports/http.php';
+require_once __DIR__ . '/../lib/ourairports/refresh.php';
 require_once __DIR__ . '/../lib/ourairports/urls.php';
 
 // Large runway cache + APCu warm needs extra memory for json_decode
@@ -48,6 +49,7 @@ function downloadFaaNgdaRunwaysIfNeeded(): ?string
 
     $response = ourAirportsHttpGet(FAA_NGDA_RUNWAYS_CSV_URL);
     if (!$response['ok'] || $response['body'] === null) {
+        faaNgdaRecordFetchAttempt(false);
         return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
     }
 
@@ -55,8 +57,11 @@ function downloadFaaNgdaRunwaysIfNeeded(): ?string
     $tmp = CACHE_FAA_NGDA_RUNWAYS_CSV . '.tmp.' . getmypid();
     if (@file_put_contents($tmp, $response['body'], LOCK_EX) === false || !@rename($tmp, CACHE_FAA_NGDA_RUNWAYS_CSV)) {
         @unlink($tmp);
+        faaNgdaRecordFetchAttempt(false);
         return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
     }
+
+    faaNgdaRecordFetchAttempt(true);
 
     return $response['body'];
 }

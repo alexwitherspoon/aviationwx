@@ -389,6 +389,9 @@ if (!defined('RUNWAYS_MERGE_WORKER_TIMEOUT')) {
 if (!defined('FAA_NGDA_RUNWAY_REFRESH_MAX_AGE')) {
     define('FAA_NGDA_RUNWAY_REFRESH_MAX_AGE', 604800); // 7 days
 }
+if (!defined('FAA_NGDA_FETCH_RETRY_INTERVAL')) {
+    define('FAA_NGDA_FETCH_RETRY_INTERVAL', 3600); // 1 hour between failed refresh attempts
+}
 if (!defined('RUNWAYS_CACHE_MAX_AGE')) {
     define('RUNWAYS_CACHE_MAX_AGE', 2592000); // 30 days
 }
