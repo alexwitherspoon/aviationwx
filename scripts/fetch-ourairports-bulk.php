@@ -49,6 +49,9 @@ try {
 
         $result = ourAirportsDownloadFile($fileKey);
         if (!$result['ok']) {
+            if (!empty($result['downloaded'])) {
+                $downloadedAny = true;
+            }
             $failures++;
             aviationwx_log('warning', 'ourairports bulk fetch failed', [
                 'file_key' => $fileKey,

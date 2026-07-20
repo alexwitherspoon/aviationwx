@@ -77,11 +77,14 @@ function ourAirportsDownloadFile(string $fileKey): array
         'upstream_etag' => $response['etag'],
         'last_modified' => $response['last_modified'],
     ])) {
-        @unlink($path);
+        aviationwx_log('warning', 'ourairports: CSV saved but meta update failed', [
+            'file_key' => $fileKey,
+            'http_code' => $response['http_code'],
+        ], 'app');
 
         return [
             'file_key' => $fileKey,
-            'downloaded' => false,
+            'downloaded' => true,
             'ok' => false,
             'http_code' => $response['http_code'],
         ];
