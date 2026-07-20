@@ -23,6 +23,8 @@ function nasrDownloadedZipFileIsValid(string $path): bool
         return false;
     }
 
+    clearstatcache(true, $path);
+
     $size = @filesize($path);
     if (!is_int($size) || $size < NASR_ZIP_MIN_FILE_BYTES) {
         return false;
