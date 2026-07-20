@@ -254,7 +254,9 @@ function reference_data_health_to_public(array $component): array
                 'kind' => (string) ($source['kind'] ?? 'bulk'),
                 'status' => (string) ($source['status'] ?? 'operational'),
                 'message' => (string) ($source['message'] ?? ''),
-                'local_age_seconds' => isset($details['local_age_seconds']) ? (int) $details['local_age_seconds'] : null,
+                'local_age_seconds' => array_key_exists('local_age_seconds', $details)
+                    ? ($details['local_age_seconds'] === null ? null : (int) $details['local_age_seconds'])
+                    : null,
                 'last_probe_result' => $details['last_probe_result'] ?? null,
                 'upstream_last_modified' => $details['upstream_last_modified'] ?? null,
                 'needs_fetch' => (bool) ($details['needs_fetch'] ?? false),
