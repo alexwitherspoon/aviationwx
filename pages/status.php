@@ -1173,7 +1173,8 @@ if (php_sapi_name() === 'cli') {
                                                     aria-expanded="<?php echo $consumerAutoExpand ? 'true' : 'false'; ?>"
                                                     aria-controls="<?php echo $consumerPanelId; ?>"
                                                     aria-label="<?php echo $consumerAutoExpand ? 'Hide' : 'Show'; ?> sources for <?php echo htmlspecialchars((string) ($consumerRow['name'] ?? 'consumer'), ENT_QUOTES, 'UTF-8'); ?>"
-                                                    data-consumer-toggle="<?php echo $componentKeyEscaped; ?>-<?php echo (int) $consumerIndex; ?>">
+                                                    data-consumer-toggle="<?php echo $componentKeyEscaped; ?>-<?php echo (int) $consumerIndex; ?>"
+                                                    data-consumer-name="<?php echo htmlspecialchars((string) ($consumerRow['name'] ?? 'consumer'), ENT_QUOTES, 'UTF-8'); ?>">
                                                 <span class="expand-icon" aria-hidden="true">▶</span>
                                             </button>
                                             <?php endif; ?>
@@ -1708,12 +1709,15 @@ if (php_sapi_name() === 'cli') {
                     return;
                 }
                 var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                var consumerName = btn.getAttribute('data-consumer-name') || 'consumer';
                 if (isExpanded) {
                     btn.setAttribute('aria-expanded', 'false');
+                    btn.setAttribute('aria-label', 'Show sources for ' + consumerName);
                     panel.classList.remove('expanded');
                     panel.classList.add('collapsed');
                 } else {
                     btn.setAttribute('aria-expanded', 'true');
+                    btn.setAttribute('aria-label', 'Hide sources for ' + consumerName);
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
