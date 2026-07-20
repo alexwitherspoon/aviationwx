@@ -47,6 +47,10 @@ function downloadFaaNgdaRunwaysIfNeeded(): ?string
         return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
     }
 
+    if (faaNgdaRunwayCsvNeedsRefresh() && !faaNgdaOverdueRefreshShouldTriggerMerge() && is_readable(CACHE_FAA_NGDA_RUNWAYS_CSV)) {
+        return readLocalCsvFile(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
     $response = ourAirportsHttpGet(FAA_NGDA_RUNWAYS_CSV_URL);
     if (!$response['ok'] || $response['body'] === null) {
         faaNgdaRecordFetchAttempt(false);
