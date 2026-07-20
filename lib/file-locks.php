@@ -4,6 +4,8 @@
  * Shared exclusive file lock helpers for background workers.
  */
 
+require_once __DIR__ . '/cache-paths.php';
+
 /**
  * True when another process holds an exclusive lock on the lock file.
  */
