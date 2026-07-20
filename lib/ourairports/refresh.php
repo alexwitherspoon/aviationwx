@@ -24,9 +24,6 @@ function ourAirportsProbeResultsRequiringFetch(): array
     return ['changed', 'error'];
 }
 
-/**
- * Return last_probe_result for a file key, if set.
- */
 function ourAirportsFileProbeResult(string $fileKey): ?string
 {
     $meta = ourAirportsGetFileMeta($fileKey);
@@ -35,9 +32,6 @@ function ourAirportsFileProbeResult(string $fileKey): ?string
     return is_string($result) && $result !== '' ? $result : null;
 }
 
-/**
- * Whether a raw OurAirports CSV should be fetched.
- */
 function ourAirportsFileNeedsFetch(string $fileKey): bool
 {
     if (!ourAirportsIsValidFileKey($fileKey)) {
@@ -86,9 +80,6 @@ function ourAirportsFileBlocksRunwayMerge(string $fileKey): bool
     return ourAirportsFileProbeResult($fileKey) === 'changed';
 }
 
-/**
- * True when any OurAirports bulk CSV needs fetch.
- */
 function ourAirportsBulkNeedsFetch(): bool
 {
     foreach (ourAirportsCsvFileKeys() as $fileKey) {
@@ -100,17 +91,11 @@ function ourAirportsBulkNeedsFetch(): bool
     return false;
 }
 
-/**
- * True when the scheduler should spawn the OurAirports probe worker.
- */
 function ourAirportsProbeWorkerShouldRun(): bool
 {
     return !ourAirportsProbeInProgress() && !ourAirportsBulkFetchInProgress();
 }
 
-/**
- * True when the scheduler should spawn the bulk fetch worker.
- */
 function ourAirportsBulkWorkerShouldRun(): bool
 {
     return ourAirportsBulkNeedsFetch()
@@ -118,9 +103,6 @@ function ourAirportsBulkWorkerShouldRun(): bool
         && !runwaysMergeFetchInProgress();
 }
 
-/**
- * Whether merge worker inputs (airports + runways CSV) are on disk.
- */
 function ourAirportsRunwayMergeInputsReady(): bool
 {
     foreach (OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS as $fileKey) {
@@ -132,9 +114,6 @@ function ourAirportsRunwayMergeInputsReady(): bool
     return true;
 }
 
-/**
- * True when runway merge CSV inputs are on disk and bulk fetch is not pending for them.
- */
 function ourAirportsRunwayMergeInputsCurrent(): bool
 {
     if (!ourAirportsRunwayMergeInputsReady()) {
@@ -150,9 +129,6 @@ function ourAirportsRunwayMergeInputsCurrent(): bool
     return true;
 }
 
-/**
- * True when runway merge depends on a completed OurAirports bulk fetch.
- */
 function ourAirportsRunwayMergeDependsOnBulkFetch(): bool
 {
     if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
@@ -170,9 +146,6 @@ function ourAirportsRunwayMergeDependsOnBulkFetch(): bool
     return false;
 }
 
-/**
- * Whether cached FAA NGDA runway CSV should be re-downloaded.
- */
 function faaNgdaRunwayCsvNeedsRefresh(): bool
 {
     if (!is_readable(CACHE_FAA_NGDA_RUNWAYS_CSV)) {
@@ -184,9 +157,6 @@ function faaNgdaRunwayCsvNeedsRefresh(): bool
     return $age >= FAA_NGDA_RUNWAY_REFRESH_MAX_AGE;
 }
 
-/**
- * Record an FAA NGDA runway CSV download attempt for merge backoff.
- */
 function faaNgdaRecordFetchAttempt(bool $succeeded): void
 {
     $saved = ourAirportsWithMetaLock(static function () use ($succeeded): bool {
@@ -230,9 +200,6 @@ function faaNgdaOverdueRefreshShouldTriggerMerge(): bool
     return (time() - $lastAttempt) >= FAA_NGDA_FETCH_RETRY_INTERVAL;
 }
 
-/**
- * Whether an FAA NGDA runway CSV response body looks usable.
- */
 function faaNgdaRunwayCsvBodyIsValid(string $body): bool
 {
     if ($body === '' || strlen($body) < 20) {
@@ -249,9 +216,6 @@ function faaNgdaRunwayCsvBodyIsValid(string $body): bool
     return is_string($firstLine) && stripos($firstLine, 'ARPT_ID') !== false;
 }
 
-/**
- * True when OurAirports probe meta for runway merge inputs requires bulk or merge action.
- */
 function ourAirportsRunwaySourcesProbeNeedsAction(): bool
 {
     foreach (OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS as $fileKey) {
@@ -264,9 +228,6 @@ function ourAirportsRunwaySourcesProbeNeedsAction(): bool
     return false;
 }
 
-/**
- * True when OurAirports probe meta indicates runway-related upstream content changed.
- */
 function ourAirportsRunwaySourcesProbeChanged(): bool
 {
     foreach (OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS as $fileKey) {
@@ -278,9 +239,6 @@ function ourAirportsRunwaySourcesProbeChanged(): bool
     return false;
 }
 
-/**
- * True when a runway merge input CSV is newer than the merged runway cache.
- */
 function ourAirportsRunwaySourcesNewerThanMerge(): bool
 {
     if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
@@ -298,9 +256,6 @@ function ourAirportsRunwaySourcesNewerThanMerge(): bool
     return false;
 }
 
-/**
- * True when the cached FAA NGDA CSV is newer than the merged runway cache.
- */
 function faaNgdaRunwayCsvNewerThanMerge(): bool
 {
     if (!is_readable(CACHE_RUNWAYS_DATA_FILE) || !is_readable(CACHE_FAA_NGDA_RUNWAYS_CSV)) {
@@ -358,9 +313,6 @@ function runwaysMergeRejectReason(
     return null;
 }
 
-/**
- * True when scripts/fetch-runways.php should rebuild runways_data.json.
- */
 function runwaysCacheNeedsRefresh(): bool
 {
     if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
@@ -391,9 +343,6 @@ function runwaysCacheNeedsRefresh(): bool
     return false;
 }
 
-/**
- * True when the scheduler should spawn the runway merge worker.
- */
 function runwaysMergeWorkerShouldRun(): bool
 {
     if (!runwaysCacheNeedsRefresh()) {

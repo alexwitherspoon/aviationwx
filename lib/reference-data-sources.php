@@ -83,8 +83,6 @@ function reference_data_source_from_component_health(
 }
 
 /**
- * Build one OurAirports bulk CSV source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_ourairports_bulk_source_health(string $fileKey, string $slug, string $name): array
@@ -133,8 +131,6 @@ function reference_data_ourairports_bulk_source_health(string $fileKey, string $
 }
 
 /**
- * Build FAA NGDA runway bulk source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_faa_ngda_runways_source_health(): array
@@ -173,8 +169,6 @@ function reference_data_faa_ngda_runways_source_health(): array
 }
 
 /**
- * Build merged runway cache source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_runways_merged_source_health(?array $config): array
@@ -190,8 +184,6 @@ function reference_data_runways_merged_source_health(?array $config): array
 }
 
 /**
- * Build NASR APT bulk source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_nasr_apt_source_health(): array
@@ -210,8 +202,6 @@ function reference_data_nasr_apt_source_health(): array
 }
 
 /**
- * Build NASR FRQ bulk source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_nasr_frq_source_health(): array
@@ -280,8 +270,6 @@ function reference_data_nasr_frq_source_health(): array
 }
 
 /**
- * Build OurAirports airport identity source leaf (CSV + derived JSON).
- *
  * @return array<string, mixed>
  */
 function reference_data_ourairports_identity_source_health(): array
@@ -298,8 +286,6 @@ function reference_data_ourairports_identity_source_health(): array
 }
 
 /**
- * Build OurAirports frequencies source leaf (CSV + derived JSON).
- *
  * @return array<string, mixed>
  */
 function reference_data_ourairports_frequencies_source_health(): array
@@ -320,8 +306,6 @@ function reference_data_ourairports_frequencies_source_health(): array
 }
 
 /**
- * Build airport country resolution source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_country_resolution_source_health(?array $config, ?string $configSha256): array
@@ -337,8 +321,6 @@ function reference_data_country_resolution_source_health(?array $config, ?string
 }
 
 /**
- * Build bundled WMM source leaf.
- *
  * @return array<string, mixed>
  */
 function reference_data_wmm_source_health(): array
