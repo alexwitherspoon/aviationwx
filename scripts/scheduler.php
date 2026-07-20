@@ -15,7 +15,7 @@
  * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
  * - Per-camera refresh_seconds with config hierarchy: camera > airport > global > default
  * - Rate bounds: MIN_WEBCAM_REFRESH (10s) to MAX_WEBCAM_REFRESH (1hr)
- * - Runways cache refresh (background worker; OurAirports probe daily + bulk fetch)
+ * - Runways cache refresh (background worker; OurAirports daily probe + bulk fetch)
  * - Airport country resolution aggregate (first-loop evaluation; then hourly checks; worker when missing, stale SHA, invalid, or aggregate older than policy max age)
  * 
  * Usage:

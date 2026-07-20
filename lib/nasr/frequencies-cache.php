@@ -301,7 +301,11 @@ function nasrFrqCacheNeedsRefresh(): bool
         return true;
     }
 
-    return (time() - $fetchedTs) > NASR_CACHE_MAX_AGE;
+    if ((time() - $fetchedTs) > NASR_CACHE_MAX_AGE) {
+        return true;
+    }
+
+    return nasrCycleRediscoveryNeeded($meta);
 }
 
 /**

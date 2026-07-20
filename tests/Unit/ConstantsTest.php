@@ -230,6 +230,32 @@ class ConstantsTest extends TestCase
             'Scheduler gate interval should be far shorter than aggregate max age'
         );
     }
+
+    /**
+     * Reference data refresh cadence shares a weekly gate and 28-day NASR cycle grid.
+     */
+    public function testReferenceDataPolicyConstants_AreAligned(): void
+    {
+        $this->assertSame(7 * 86400, REFERENCE_DATA_WEEK_SECONDS);
+        $this->assertSame(28 * 86400, NASR_CYCLE_PERIOD_SECONDS);
+        $this->assertSame(86400, OURAIRPORTS_PROBE_INTERVAL);
+        $this->assertSame(REFERENCE_DATA_WEEK_SECONDS, NASR_FETCH_CHECK_INTERVAL);
+        $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, OURAIRPORTS_BULK_HARD_MAX_AGE);
+        $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, FAA_NGDA_RUNWAY_REFRESH_MAX_AGE);
+        $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, RUNWAYS_CACHE_MAX_AGE);
+        $this->assertSame(RUNWAYS_CACHE_MAX_AGE, RUNWAYS_APCU_TTL);
+        $this->assertSame(
+            NASR_CYCLE_PERIOD_SECONDS + REFERENCE_DATA_WEEK_SECONDS,
+            NASR_CACHE_MAX_AGE
+        );
+        $this->assertSame((int) (NASR_CYCLE_PERIOD_DAYS / 2), NASR_PROBE_DAYS_BEFORE);
+        $this->assertSame((int) (NASR_CYCLE_PERIOD_DAYS / 2), NASR_PROBE_DAYS_AFTER);
+        $this->assertSame(
+            REFERENCE_DATA_SPAWN_CHECK_INTERVAL,
+            OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL
+        );
+        $this->assertSame(6 * 3600, FAA_NGDA_FETCH_RETRY_INTERVAL);
+    }
     
     /**
      * Test that sentinel value constants are defined
