@@ -347,6 +347,36 @@ cleanupFilesByAge(
     $stats, $dryRun, $verbose
 );
 cleanupFilesByAge(
+    CACHE_OURAIRPORTS_FREQUENCIES_FILE,
+    CLEANUP_OURAIRPORTS_AGE,
+    'OurAirports frequencies cache',
+    $stats, $dryRun, $verbose
+);
+cleanupFilesByAge(
+    CACHE_OURAIRPORTS_META_FILE,
+    CLEANUP_OURAIRPORTS_AGE,
+    'OurAirports bulk meta',
+    $stats, $dryRun, $verbose
+);
+foreach ([
+    CACHE_OURAIRPORTS_AIRPORTS_CSV,
+    CACHE_OURAIRPORTS_RUNWAYS_CSV,
+    CACHE_OURAIRPORTS_FREQUENCIES_CSV,
+] as $ourAirportsCsvPath) {
+    cleanupFilesByAge(
+        $ourAirportsCsvPath,
+        CLEANUP_OURAIRPORTS_AGE,
+        'OurAirports raw CSV',
+        $stats, $dryRun, $verbose
+    );
+}
+cleanupFilesByAge(
+    CACHE_FAA_NGDA_RUNWAYS_CSV,
+    CLEANUP_OURAIRPORTS_AGE,
+    'FAA NGDA runways CSV cache',
+    $stats, $dryRun, $verbose
+);
+cleanupFilesByAge(
     CACHE_ICAO_AIRPORTS_FILE,
     CLEANUP_ICAO_AIRPORTS_AGE,
     'ICAO airports cache',

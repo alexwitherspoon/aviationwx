@@ -363,7 +363,40 @@ function operations_snapshot_verbose_detail_warranted(array $data): bool {
     if ((int) ($nm['upstream_429_last_hour'] ?? 0) > 0) {
         return true;
     }
+    $ref = $data['reference_catalogs'] ?? null;
+    if (is_array($ref) && (($ref['status'] ?? '') !== 'operational')) {
+        return true;
+    }
     return false;
+}
+
+/**
+ * Build public reference_catalogs for operations snapshots.
+ *
+ * @param array<string, mixed>|null $systemHealthData Cached status_system_health inner data
+ * @return array<string, mixed>
+ */
+function operations_snapshot_build_reference_catalogs(?array $systemHealthData): array
+{
+    require_once __DIR__ . '/reference-data-health.php';
+
+    if (is_array($systemHealthData)
+        && isset($systemHealthData['components']['reference_data'])
+        && is_array($systemHealthData['components']['reference_data'])) {
+        return reference_data_health_to_public($systemHealthData['components']['reference_data']);
+    }
+
+    require_once __DIR__ . '/config.php';
+    $config = loadConfig();
+    $configPath = getConfigFilePath();
+    $configSha = '';
+    if (is_string($configPath) && is_readable($configPath)) {
+        $configSha = hash_file('sha256', $configPath) ?: '';
+    }
+
+    return reference_data_health_to_public(
+        checkReferenceDataHealth($config, $configSha !== '' ? $configSha : null)
+    );
 }
 
 /**
@@ -538,6 +571,8 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
         }
     }
 
+    $referenceCatalogs = operations_snapshot_build_reference_catalogs(is_array($system) ? $system : null);
+
     return [
         'snapshot_meta' => [
             'schema_version' => OPERATIONS_SNAPSHOT_SCHEMA_VERSION,
@@ -557,6 +592,7 @@ function operations_snapshot_build(string $cacheBaseDir, array $options = []): a
             'notam' => $notamHealth,
             'variant' => $variantHealth,
         ],
+        'reference_catalogs' => $referenceCatalogs,
         'capacity_layer' => [
             'node_performance' => is_array($node) ? $node : null,
             'image_processing' => is_array($img) ? $img : null,
@@ -645,6 +681,8 @@ function operations_snapshot_get_api_payload(?string $snapshotPath = null): arra
     $now = time();
 
     if ($envelope === null || !isset($envelope['data']) || !is_array($envelope['data'])) {
+        $referenceCatalogs = operations_snapshot_build_reference_catalogs(null);
+
         return [
             'operations' => [
                 'snapshot_meta' => [
@@ -657,6 +695,7 @@ function operations_snapshot_get_api_payload(?string $snapshotPath = null): arra
                 ],
                 'uptime_layer' => null,
                 'data_plane' => null,
+                'reference_catalogs' => $referenceCatalogs,
                 'capacity_layer' => null,
                 'edge_layer' => null,
                 'pipeline_meta' => null,
@@ -676,6 +715,12 @@ function operations_snapshot_get_api_payload(?string $snapshotPath = null): arra
 
     $verbose = operations_snapshot_verbose_detail_warranted($inner);
     $inner = operations_snapshot_apply_verbose_gate($inner, $verbose);
+
+    if (!isset($inner['reference_catalogs']) || !is_array($inner['reference_catalogs'])) {
+        $inner['reference_catalogs'] = operations_snapshot_build_reference_catalogs(
+            is_array($inner['uptime_layer']['system'] ?? null) ? $inner['uptime_layer']['system'] : null
+        );
+    }
 
     if (!isset($inner['snapshot_meta']) || !is_array($inner['snapshot_meta'])) {
         $inner['snapshot_meta'] = [];

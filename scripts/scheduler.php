@@ -15,7 +15,7 @@
  * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
  * - Per-camera refresh_seconds with config hierarchy: camera > airport > global > default
  * - Rate bounds: MIN_WEBCAM_REFRESH (10s) to MAX_WEBCAM_REFRESH (1hr)
- * - Runways cache refresh (weekly; startup if missing)
+ * - Runways cache refresh (background worker; OurAirports daily probe + bulk fetch)
  * - Airport country resolution aggregate (first-loop evaluation; then hourly checks; worker when missing, stale SHA, invalid, or aggregate older than policy max age)
  * 
  * Usage:
@@ -34,6 +34,8 @@ require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
+require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
+require_once __DIR__ . '/../lib/nasr/workers.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
@@ -57,7 +59,10 @@ $lastWeeklyAggregation = '';
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastRunwaysFetch = 0;
+$lastOurAirportsProbe = 0;
+$lastOurAirportsBulkFetch = 0;
 $lastNasrAptFetch = 0;
+$lastNasrFrqFetch = 0;
 $lastCountryResolutionSchedulerCheck = 0;
 $countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
@@ -68,6 +73,7 @@ $lastNwsPointsRefresh = 0;
 $lastNwsPointsMissingLog = 0;
 $runwaysFetchOnStartupDone = false;
 $nasrAptFetchOnStartupDone = false;
+$nasrFrqFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -683,58 +689,87 @@ while ($running) {
             $lastStuckWorkerCleanup = $now;
         }
         
-        // 8. Runways data fetch (weekly check; startup if missing)
-        // Fetches FAA + OurAirports runway data for wind visualization
-        if (!$runwaysFetchOnStartupDone && runwaysCacheNeedsRefresh()) {
-            $runwaysScript = __DIR__ . '/fetch-runways.php';
-            if (file_exists($runwaysScript)) {
-                $output = [];
-                $exitCode = 0;
-                exec('php ' . escapeshellarg($runwaysScript) . ' 2>&1', $output, $exitCode);
-                $runwaysFetchOnStartupDone = true;
-                if ($exitCode === 0) {
-                    aviationwx_log('info', 'scheduler: runways fetch complete (startup)', [], 'app');
+        // 8. OurAirports upstream probe (daily; background worker only)
+        if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL && ourAirportsProbeWorkerShouldRun()) {
+            $probeScript = __DIR__ . '/probe-ourairports.php';
+            if (file_exists($probeScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($probeScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: ourairports probe started', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: probe-ourairports.php missing', [
+                    'path' => $probeScript,
+                ], 'app');
+            }
+            $lastOurAirportsProbe = $now;
+        }
+
+        // 8-i. OurAirports bulk CSV fetch when policy requires
+        if (($now - $lastOurAirportsBulkFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && ourAirportsBulkWorkerShouldRun()) {
+            $bulkScript = __DIR__ . '/fetch-ourairports-bulk.php';
+            if (file_exists($bulkScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($bulkScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: ourairports bulk fetch started', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-ourairports-bulk.php missing', [
+                    'path' => $bulkScript,
+                ], 'app');
+            }
+            $lastOurAirportsBulkFetch = $now;
+        }
+
+        // 8-ii. Runways merge fetch (background; reads OurAirports CSVs from disk)
+        $runwaysScript = __DIR__ . '/fetch-runways.php';
+        if (!$runwaysFetchOnStartupDone) {
+            if (runwaysMergeWorkerShouldRun()) {
+                if (file_exists($runwaysScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
                 } else {
-                    aviationwx_log('warning', 'scheduler: runways fetch failed at startup', [
-                        'exit_code' => $exitCode,
-                        'output' => implode("\n", $output)
+                    aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+                        'path' => $runwaysScript,
                     ], 'app');
                 }
             }
-        } elseif (($now - $lastRunwaysFetch) >= RUNWAYS_FETCH_CHECK_INTERVAL && runwaysCacheNeedsRefresh()) {
-            $runwaysScript = __DIR__ . '/fetch-runways.php';
+            $runwaysFetchOnStartupDone = true;
+            $lastRunwaysFetch = $now;
+        } elseif (($now - $lastRunwaysFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && runwaysMergeWorkerShouldRun()) {
             if (file_exists($runwaysScript)) {
-                $output = [];
-                $exitCode = 0;
-                exec('php ' . escapeshellarg($runwaysScript) . ' 2>&1', $output, $exitCode);
-                $lastRunwaysFetch = $now;
-                if ($exitCode === 0) {
-                    aviationwx_log('info', 'scheduler: runways fetch complete (weekly)', [], 'app');
-                } else {
-                    aviationwx_log('warning', 'scheduler: runways fetch failed', [
-                        'exit_code' => $exitCode,
-                        'output' => implode("\n", $output)
-                    ], 'app');
-                }
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: runways fetch started', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+                    'path' => $runwaysScript,
+                ], 'app');
             }
+            $lastRunwaysFetch = $now;
         }
 
         // 8a. NASR APT cache fetch (weekly check; startup if missing)
-        if (!$nasrAptFetchOnStartupDone && nasrAptCacheNeedsRefresh()) {
-            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
-            if (file_exists($nasrScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
-                    'path' => $nasrScript,
-                ], 'app');
+        if (!$nasrAptFetchOnStartupDone) {
+            if (nasrAptWorkerShouldRun()) {
+                $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+                if (file_exists($nasrScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+                        'path' => $nasrScript,
+                    ], 'app');
+                }
+                $lastNasrAptFetch = $now;
             }
             $nasrAptFetchOnStartupDone = true;
-            $lastNasrAptFetch = $now;
-        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptCacheNeedsRefresh()) {
+        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptWorkerShouldRun()) {
             $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
             if (file_exists($nasrScript)) {
                 $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -747,6 +782,38 @@ while ($running) {
                 ], 'app');
             }
             $lastNasrAptFetch = $now;
+        }
+
+        // 8a-ii. NASR FRQ cache fetch (weekly check; startup if missing)
+        if (!$nasrFrqFetchOnStartupDone) {
+            if (nasrFrqWorkerShouldRun()) {
+                $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
+                if (file_exists($nasrFrqScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: nasr frq fetch started (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
+                        'path' => $nasrFrqScript,
+                    ], 'app');
+                }
+                $lastNasrFrqFetch = $now;
+            }
+            $nasrFrqFetchOnStartupDone = true;
+        } elseif (($now - $lastNasrFrqFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrFrqWorkerShouldRun()) {
+            $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
+            if (file_exists($nasrFrqScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: nasr frq fetch started (weekly)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
+                    'path' => $nasrFrqScript,
+                ], 'app');
+            }
+            $lastNasrFrqFetch = $now;
         }
 
         // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)

@@ -180,6 +180,12 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertArrayHasKey('operations', $response['json']);
         $this->assertIsArray($response['json']['operations']);
         $this->assertArrayHasKey('snapshot_meta', $response['json']['operations']);
+        $this->assertArrayHasKey('reference_catalogs', $response['json']['operations']);
+        $referenceCatalogs = $response['json']['operations']['reference_catalogs'];
+        $this->assertIsArray($referenceCatalogs);
+        $this->assertArrayHasKey('consumers', $referenceCatalogs);
+        $this->assertNotEmpty($referenceCatalogs['consumers']);
+        $this->assertArrayHasKey('sources', $referenceCatalogs['consumers'][0]);
     }
     
     /**

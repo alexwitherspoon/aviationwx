@@ -189,14 +189,31 @@ function nasrHttpDownloadToFile(string $url, string $destPath): bool
  */
 function buildNasrAptZipUrl(string $dateYmd): string
 {
+    return buildNasrSubscriptionZipUrl($dateYmd, 'APT');
+}
+
+/**
+ * Build NASR FRQ zip URL for an effective date (YYYY-MM-DD).
+ */
+function buildNasrFrqZipUrl(string $dateYmd): string
+{
+    return buildNasrSubscriptionZipUrl($dateYmd, 'FRQ');
+}
+
+/**
+ * Build NASR subscription CSV zip URL for a cycle date and data group.
+ */
+function buildNasrSubscriptionZipUrl(string $dateYmd, string $group): string
+{
     $ts = strtotime($dateYmd . ' UTC');
     if ($ts === false) {
         return '';
     }
 
     $slug = gmdate('d_M_Y', $ts);
+    $group = strtoupper(trim($group));
 
-    return 'https://nfdc.faa.gov/webContent/28DaySub/extra/' . $slug . '_APT_CSV.zip';
+    return 'https://nfdc.faa.gov/webContent/28DaySub/extra/' . $slug . '_' . $group . '_CSV.zip';
 }
 
 /**

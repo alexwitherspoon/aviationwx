@@ -200,4 +200,45 @@ class NasrParseTest extends TestCase
         $this->assertSame('2026-07-09', $ranked[0]);
         $this->assertSame('2026-08-06', $ranked[1]);
     }
+
+    public function testNasrFrqCacheNeedsRefreshWhenCycleRediscoveryDue(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/frequencies-cache.php';
+
+        $frqPath = CACHE_NASR_FRQ_DATA_FILE;
+        $metaPath = CACHE_NASR_APT_META_FILE;
+        $frqBackup = file_exists($frqPath) ? file_get_contents($frqPath) : null;
+        $metaBackup = file_exists($metaPath) ? file_get_contents($metaPath) : null;
+
+        $dir = dirname($frqPath);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        file_put_contents($frqPath, json_encode([
+            'schema_version' => NASR_FRQ_SCHEMA_VERSION,
+            'airports' => ['KTEST' => ['TWR' => '118.0']],
+        ], JSON_UNESCAPED_SLASHES));
+
+        try {
+            file_put_contents($metaPath, json_encode([
+                'tracked_current_cycle_date' => gmdate('Y-m-d', time() - (NASR_CYCLE_PERIOD_DAYS * 86400)),
+                'tracked_next_cycle_date' => gmdate('Y-m-d', time() - 86400),
+                'frq_fetched_at' => gmdate('c', time() - 86400),
+            ], JSON_UNESCAPED_SLASHES));
+
+            $this->assertTrue(nasrFrqCacheNeedsRefresh());
+        } finally {
+            if ($frqBackup !== null) {
+                file_put_contents($frqPath, $frqBackup);
+            } elseif (file_exists($frqPath)) {
+                @unlink($frqPath);
+            }
+            if ($metaBackup !== null) {
+                file_put_contents($metaPath, $metaBackup);
+            } elseif (file_exists($metaPath)) {
+                @unlink($metaPath);
+            }
+        }
+    }
 }

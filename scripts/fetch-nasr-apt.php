@@ -12,35 +12,15 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
+require_once __DIR__ . '/../lib/file-locks.php';
 require_once __DIR__ . '/../lib/nasr/parse.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
+require_once __DIR__ . '/../lib/nasr/util.php';
+require_once __DIR__ . '/../lib/nasr/csv-validation.php';
 
 @ini_set('memory_limit', '1024M');
-
-/**
- * Acquire fetch lock; return handle or false.
- *
- * @return resource|false
- */
-function acquireNasrAptFetchLock()
-{
-    $lockPath = getNasrAptFetchLockPath();
-    $dir = dirname($lockPath);
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if (!$fp) {
-        return false;
-    }
-    if (!@flock($fp, LOCK_EX | LOCK_NB)) {
-        fclose($fp);
-        return false;
-    }
-    return $fp;
-}
 
 /**
  * Download and extract APT CSV group to a temp directory.
@@ -90,6 +70,13 @@ function downloadNasrAptCsvDirectory(): ?array
         if (!is_readable($extractDir . '/APT_BASE.csv')
             || !is_readable($extractDir . '/APT_RWY.csv')
             || !is_readable($extractDir . '/APT_RWY_END.csv')) {
+            continue;
+        }
+
+        if (!nasrAptCsvDirectoryIsValid($extractDir)) {
+            aviationwx_log('warning', 'nasr_apt: rejected invalid CSV extract', [
+                'source_url' => $url,
+            ], 'app');
             continue;
         }
 
@@ -161,32 +148,6 @@ function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir
 }
 
 /**
- * Recursively remove a directory.
- */
-function nasrCleanupDirectory(string $dir): void
-{
-    if (!is_dir($dir)) {
-        return;
-    }
-    $items = scandir($dir);
-    if ($items === false) {
-        return;
-    }
-    foreach ($items as $item) {
-        if ($item === '.' || $item === '..') {
-            continue;
-        }
-        $path = $dir . '/' . $item;
-        if (is_dir($path)) {
-            nasrCleanupDirectory($path);
-        } else {
-            @unlink($path);
-        }
-    }
-    @rmdir($dir);
-}
-
-/**
  * Run NASR APT fetch when cache is missing or older than NASR_CACHE_MAX_AGE.
  *
  * @return bool True when cache exists after run (including skipped fresh cache)
@@ -197,7 +158,8 @@ function fetchNasrAptIfNeeded(bool $force = false): bool
         return true;
     }
 
-    $lock = acquireNasrAptFetchLock();
+    $lockPath = getNasrAptFetchLockPath();
+    $lock = acquireExclusiveFileLock($lockPath);
     if ($lock === false) {
         aviationwx_log('info', 'nasr_apt: fetch skipped, lock held', [], 'app');
         return is_readable(CACHE_NASR_APT_DATA_FILE);
@@ -293,12 +255,12 @@ function fetchNasrAptIfNeeded(bool $force = false): bool
         nasrCleanupDirectory($extractRoot);
         return true;
     } finally {
-        @flock($lock, LOCK_UN);
-        fclose($lock);
+        releaseExclusiveFileLock($lock, $lockPath);
     }
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    initWorkerTimeout(NASR_APT_WORKER_TIMEOUT, 'nasr_apt');
     $force = in_array('--force', $argv ?? [], true);
     $ok = fetchNasrAptIfNeeded($force);
     exit($ok ? 0 : 1);

@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
 require_once __DIR__ . '/../../lib/runways.php';
+require_once __DIR__ . '/../../lib/airport-frequencies.php';
 
 /**
  * Handle GET /v1/airports/{id} request
@@ -127,8 +128,9 @@ function formatAirportDetails(string $airportId, array $airport): array
     }
     
     // Frequencies and services: empty returns {} for schema consistency
-    if (isset($airport['frequencies']) && is_array($airport['frequencies']) && !empty($airport['frequencies'])) {
-        $formatted['frequencies'] = $airport['frequencies'];
+    $mergedFrequencies = getMergedAirportFrequencies($airportId, $airport);
+    if ($mergedFrequencies !== []) {
+        $formatted['frequencies'] = $mergedFrequencies;
     } else {
         $formatted['frequencies'] = (object) [];
     }

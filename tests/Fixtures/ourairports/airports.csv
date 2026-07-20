@@ -1,0 +1,3 @@
+id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code
+1,KPDX,large_airport,Portland International,45.588722,-122.5975,31,NA,US,US-OR,Portland,yes,KPDX,PDX,KPDX,PDX
+2,HIO,small_airport,Portland-Hillsboro,45.540394,-122.949825,208,NA,US,US-OR,Portland,no,KHIO,HIO,HIO,HIO

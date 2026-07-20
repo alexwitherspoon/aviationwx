@@ -1636,6 +1636,49 @@
           }
         }
       },
+      "ReferenceCatalogSource": {
+        "type": "object",
+        "properties": {
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "kind": { "type": "string", "enum": ["bulk", "computed", "bundled"] },
+          "status": { "type": "string", "enum": ["operational", "degraded", "down"] },
+          "message": { "type": "string" },
+          "local_age_seconds": { "type": ["integer", "null"] },
+          "last_probe_result": { "type": ["string", "null"] },
+          "upstream_last_modified": { "type": ["string", "null"] },
+          "needs_fetch": { "type": "boolean" },
+          "last_fetch_error": { "type": ["string", "null"] },
+          "effective_date": { "type": ["string", "null"] }
+        }
+      },
+      "ReferenceCatalogConsumer": {
+        "type": "object",
+        "properties": {
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["operational", "degraded", "down"] },
+          "message": { "type": "string" },
+          "last_changed": { "type": "integer" },
+          "dependencies": { "type": "string" },
+          "sources": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReferenceCatalogSource" }
+          }
+        }
+      },
+      "ReferenceCatalogs": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["operational", "degraded", "down"] },
+          "message": { "type": "string" },
+          "last_changed": { "type": "integer" },
+          "consumers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReferenceCatalogConsumer" }
+          }
+        }
+      },
       "OperationsResponse": {
         "type": "object",
         "properties": {
@@ -1647,7 +1690,12 @@
           },
           "operations": {
             "type": "object",
-            "description": "Snapshot payload: snapshot_meta, uptime_layer, data_plane, capacity_layer, edge_layer, pipeline_meta, and optional details.",
+            "description": "Snapshot payload: snapshot_meta, uptime_layer, data_plane, reference_catalogs, capacity_layer, edge_layer, pipeline_meta, and optional details.",
+            "properties": {
+              "reference_catalogs": {
+                "$ref": "#/components/schemas/ReferenceCatalogs"
+              }
+            },
             "additionalProperties": true
           }
         }

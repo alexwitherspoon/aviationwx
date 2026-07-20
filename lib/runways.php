@@ -428,19 +428,8 @@ function warmRunwaysApcuCache(array $airports): int {
     return $warmed;
 }
 
-/**
- * Check if runway cache needs refresh (missing or stale)
- *
- * @return bool True if fetch should run
- */
-function runwaysCacheNeedsRefresh(): bool {
-    $path = CACHE_RUNWAYS_DATA_FILE;
-    if (!file_exists($path)) {
-        return true;
-    }
-    $age = time() - filemtime($path);
-    return $age >= RUNWAYS_CACHE_MAX_AGE;
-}
+// Refresh policy (runwaysCacheNeedsRefresh, runwaysMergeWorkerShouldRun) lives in ourairports/refresh.php.
+require_once __DIR__ . '/ourairports/refresh.php';
 
 /**
  * Whether an OurAirports surface code represents water (excluded from DA runway selection).
