@@ -1100,7 +1100,7 @@ if (php_sapi_name() === 'cli') {
                                         data-component-toggle="<?php echo $componentKeyEscaped; ?>"
                                         data-component-name="<?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                         data-breakdown-type="<?php echo $hasConsumerBreakdown ? 'consumers' : 'providers'; ?>"
-                                        title="<?php echo $hasConsumerBreakdown ? 'Show reference catalog consumers' : 'Show per-provider HTTP 429 counts'; ?>">
+                                        title="<?php echo $hasConsumerBreakdown ? ($autoExpandConsumers ? 'Hide reference catalog consumers' : 'Show reference catalog consumers') : 'Show per-provider HTTP 429 counts'; ?>">
                                     <span class="expand-icon" aria-hidden="true">▶</span>
                                 </button>
                                 <?php endif; ?>
