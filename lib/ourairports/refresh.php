@@ -343,13 +343,13 @@ function runwaysCacheNeedsRefresh(): bool
     return false;
 }
 
-function runwaysMergeWorkerShouldRun(): bool
+function runwaysMergeWorkerShouldRun(bool $holdingExclusiveLock = false): bool
 {
     if (!runwaysCacheNeedsRefresh()) {
         return false;
     }
 
-    if (runwaysMergeFetchInProgress()) {
+    if (!$holdingExclusiveLock && runwaysMergeFetchInProgress()) {
         return false;
     }
 

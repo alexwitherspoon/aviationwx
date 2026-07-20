@@ -437,16 +437,27 @@ if (php_sapi_name() === 'cli') {
 
     initWorkerTimeout(RUNWAYS_MERGE_WORKER_TIMEOUT, 'runways_merge');
 
+    if (!runwaysMergeWorkerShouldRun()) {
+        $reason = runwaysMergeWaitingReason();
+        aviationwx_log('info', 'runways fetch: skipped', [
+            'reason' => $reason ?? 'not due',
+        ], 'app');
+        exit(0);
+    }
+
     $fp = acquireRunwaysFetchLock();
     if ($fp === false) {
         aviationwx_log('info', 'runways fetch: another instance running, skipping', [], 'app');
         exit(0);
     }
 
-    if (!runwaysMergeWorkerShouldRun()) {
+    if (!runwaysMergeWorkerShouldRun(true)) {
         flock($fp, LOCK_UN);
         fclose($fp);
-        aviationwx_log('info', 'runways fetch: not due or waiting for OurAirports bulk CSVs', [], 'app');
+        $reason = runwaysMergeWaitingReason();
+        aviationwx_log('info', 'runways fetch: skipped after lock', [
+            'reason' => $reason ?? 'not due',
+        ], 'app');
         exit(0);
     }
 
