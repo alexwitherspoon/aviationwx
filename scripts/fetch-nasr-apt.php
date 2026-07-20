@@ -15,6 +15,7 @@ require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/nasr/parse.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
+require_once __DIR__ . '/../lib/nasr/util.php';
 
 @ini_set('memory_limit', '1024M');
 
@@ -158,32 +159,6 @@ function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir
     }
 
     return true;
-}
-
-/**
- * Recursively remove a directory.
- */
-function nasrCleanupDirectory(string $dir): void
-{
-    if (!is_dir($dir)) {
-        return;
-    }
-    $items = scandir($dir);
-    if ($items === false) {
-        return;
-    }
-    foreach ($items as $item) {
-        if ($item === '.' || $item === '..') {
-            continue;
-        }
-        $path = $dir . '/' . $item;
-        if (is_dir($path)) {
-            nasrCleanupDirectory($path);
-        } else {
-            @unlink($path);
-        }
-    }
-    @rmdir($dir);
 }
 
 /**

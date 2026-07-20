@@ -5,28 +5,14 @@
  */
 
 require_once __DIR__ . '/../cache-paths.php';
+require_once __DIR__ . '/../file-locks.php';
 
 /**
  * True when another process holds an exclusive lock on the lock file.
  */
 function ourAirportsLockIsHeld(string $lockPath): bool
 {
-    if (!is_file($lockPath)) {
-        return false;
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if ($fp === false) {
-        return false;
-    }
-
-    $held = !@flock($fp, LOCK_EX | LOCK_NB);
-    if (!$held) {
-        @flock($fp, LOCK_UN);
-    }
-    fclose($fp);
-
-    return $held;
+    return exclusiveFileLockIsHeld($lockPath);
 }
 
 /**
@@ -36,22 +22,7 @@ function ourAirportsLockIsHeld(string $lockPath): bool
  */
 function ourAirportsAcquireExclusiveLock(string $lockPath)
 {
-    $dir = dirname($lockPath);
-    if (!is_dir($dir)) {
-        ensureCacheDir($dir);
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if ($fp === false) {
-        return false;
-    }
-
-    if (!@flock($fp, LOCK_EX | LOCK_NB)) {
-        fclose($fp);
-        return false;
-    }
-
-    return $fp;
+    return acquireExclusiveFileLock($lockPath);
 }
 
 /**
@@ -61,8 +32,7 @@ function ourAirportsAcquireExclusiveLock(string $lockPath)
  */
 function ourAirportsReleaseExclusiveLock($handle, string $lockPath): void
 {
-    @flock($handle, LOCK_UN);
-    fclose($handle);
+    releaseExclusiveFileLock($handle, $lockPath);
 }
 
 /**

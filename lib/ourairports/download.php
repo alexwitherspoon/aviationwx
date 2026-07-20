@@ -7,6 +7,7 @@
 require_once __DIR__ . '/http.php';
 require_once __DIR__ . '/meta.php';
 require_once __DIR__ . '/urls.php';
+require_once __DIR__ . '/../logger.php';
 
 /**
  * Download one OurAirports CSV when policy requires a fetch.
@@ -41,6 +42,21 @@ function ourAirportsDownloadFile(string $fileKey): array
         ];
     }
 
+    if (!ourAirportsCsvBodyIsValid($response['body'], $fileKey)) {
+        aviationwx_log('error', 'ourairports: download rejected invalid CSV body', [
+            'file_key' => $fileKey,
+            'http_code' => $response['http_code'],
+            'body_bytes' => strlen($response['body']),
+        ], 'app');
+
+        return [
+            'file_key' => $fileKey,
+            'downloaded' => false,
+            'ok' => false,
+            'http_code' => $response['http_code'],
+        ];
+    }
+
     ensureCacheDir(CACHE_OURAIRPORTS_DIR);
     $path = ourAirportsCsvPath($fileKey);
     $tmp = $path . '.tmp.' . getmypid();
@@ -54,13 +70,22 @@ function ourAirportsDownloadFile(string $fileKey): array
         ];
     }
 
-    ourAirportsUpdateFileMeta($fileKey, [
+    if (!ourAirportsUpdateFileMeta($fileKey, [
         'last_fetch_at' => $now,
         'last_probe_result' => 'unchanged',
         'etag' => $response['etag'],
         'upstream_etag' => $response['etag'],
         'last_modified' => $response['last_modified'],
-    ]);
+    ])) {
+        @unlink($path);
+
+        return [
+            'file_key' => $fileKey,
+            'downloaded' => false,
+            'ok' => false,
+            'http_code' => $response['http_code'],
+        ];
+    }
 
     return [
         'file_key' => $fileKey,

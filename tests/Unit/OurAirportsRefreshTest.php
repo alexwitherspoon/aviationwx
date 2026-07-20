@@ -249,4 +249,13 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(ourAirportsBulkFetchInProgress());
         $this->assertFalse(ourAirportsBulkWorkerShouldRun());
     }
+
+    public function testProbeWorkerSkipsWhenBulkFetchInProgress(): void
+    {
+        $this->bulkLockHandle = fopen(CACHE_OURAIRPORTS_BULK_LOCK, 'c+');
+        $this->assertIsResource($this->bulkLockHandle);
+        $this->assertTrue(flock($this->bulkLockHandle, LOCK_EX | LOCK_NB));
+
+        $this->assertFalse(ourAirportsProbeWorkerShouldRun());
+    }
 }

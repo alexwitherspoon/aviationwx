@@ -60,4 +60,21 @@ class OurAirportsDownloadMetaTest extends TestCase
         $this->assertSame('new-upstream', $meta['etag']);
         $this->assertSame('unchanged', $meta['last_probe_result']);
     }
+
+    public function testMetaUpdateFailsWhenMetaLockHeld(): void
+    {
+        $lockPath = CACHE_OURAIRPORTS_META_LOCK;
+        $fp = fopen($lockPath, 'c+');
+        $this->assertIsResource($fp);
+        $this->assertTrue(flock($fp, LOCK_EX | LOCK_NB));
+
+        try {
+            $this->assertFalse(ourAirportsUpdateFileMeta('airports', [
+                'last_probe_result' => 'error',
+            ]));
+        } finally {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
 }

@@ -1,17 +1,17 @@
 <?php
 
 /**
- * Reference catalog health (consumer features and source leaves).
+ * Reference catalog health (consumer rollup and public operations schema).
+ *
+ * Per-source leaves live in reference-data-sources.php.
  *
  * @see docs/ARCHITECTURE.md#data-classification-and-observability
  */
 
-require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/cached-data-loader.php';
 require_once __DIR__ . '/constants.php';
-require_once __DIR__ . '/ourairports/meta.php';
-require_once __DIR__ . '/ourairports/refresh.php';
-require_once __DIR__ . '/ourairports/urls.php';
-require_once __DIR__ . '/ourairports/ingest-airports.php';
+require_once __DIR__ . '/reference-data-sources.php';
 
 /** @var array<string, int> Rollup precedence (higher = worse). */
 const REFERENCE_DATA_STATUS_RANK = [
@@ -72,310 +72,71 @@ function reference_data_rollup_last_changed(array $children): int
 }
 
 /**
- * Build one OurAirports bulk CSV source leaf.
+ * Cache invalidation basis for reference catalog health (file mtimes).
  *
- * @return array<string, mixed>
+ * @return list<string>
  */
-function reference_data_ourairports_bulk_source_health(string $fileKey, string $slug, string $name): array
+function reference_data_health_cache_paths(): array
 {
-    $path = ourAirportsCsvPath($fileKey);
-    $meta = ourAirportsGetFileMeta($fileKey);
-    $readable = is_readable($path);
-    $localAge = $readable ? time() - (int) filemtime($path) : null;
-    $needsFetch = ourAirportsFileNeedsFetch($fileKey);
-
-    $status = 'operational';
-    $messages = [];
-    if (!$readable) {
-        $status = 'down';
-        $messages[] = 'CSV missing';
-    } elseif ($needsFetch) {
-        $status = 'degraded';
-        $probeResult = $meta['last_probe_result'] ?? null;
-        if ($probeResult === 'error') {
-            $messages[] = 'Upstream probe failed';
-        } elseif ($probeResult === 'changed') {
-            $messages[] = 'Upstream changed';
-        } elseif ($localAge !== null && $localAge >= OURAIRPORTS_BULK_HARD_MAX_AGE) {
-            $messages[] = 'Hard max age exceeded';
-        } else {
-            $messages[] = 'Refresh recommended';
-        }
-    }
-
     return [
-        'slug' => $slug,
-        'name' => $name,
-        'kind' => 'bulk',
-        'status' => $status,
-        'message' => $messages !== [] ? implode(' • ', $messages) : 'Up to date',
-        'lastChanged' => $readable ? (int) filemtime($path) : 0,
-        'details' => [
-            'local_age_seconds' => $localAge,
-            'last_probe_result' => is_string($meta['last_probe_result'] ?? null) ? $meta['last_probe_result'] : null,
-            'upstream_last_modified' => is_string($meta['last_modified'] ?? null) ? $meta['last_modified'] : null,
-            'needs_fetch' => $needsFetch,
-        ],
+        CACHE_OURAIRPORTS_META_FILE,
+        CACHE_OURAIRPORTS_AIRPORTS_CSV,
+        CACHE_OURAIRPORTS_RUNWAYS_CSV,
+        CACHE_OURAIRPORTS_FREQUENCIES_CSV,
+        CACHE_RUNWAYS_DATA_FILE,
+        CACHE_NASR_APT_META_FILE,
+        CACHE_NASR_APT_DATA_FILE,
+        CACHE_NASR_FRQ_DATA_FILE,
+        CACHE_FAA_NGDA_RUNWAYS_CSV,
+        CACHE_AIRPORT_COUNTRY_RESOLUTION_FILE,
+        CACHE_OURAIRPORTS_FILE,
+        CACHE_OURAIRPORTS_FREQUENCIES_FILE,
     ];
 }
 
 /**
- * Build FAA NGDA runway bulk source leaf.
- *
- * @return array<string, mixed>
+ * Build APCu cache key material from on-disk reference catalog inputs.
  */
-function reference_data_faa_ngda_runways_source_health(): array
+function reference_data_health_cache_basis(): string
 {
-    $path = CACHE_FAA_NGDA_RUNWAYS_CSV;
-    $readable = is_readable($path);
-    $localAge = $readable ? time() - (int) filemtime($path) : null;
-    $needsRefresh = faaNgdaRunwayCsvNeedsRefresh();
-
-    $status = 'operational';
-    $message = 'Up to date';
-    if (!$readable) {
-        $status = 'down';
-        $message = 'FAA NGDA CSV missing';
-    } elseif ($needsRefresh) {
-        $status = 'degraded';
-        $message = 'Refresh recommended';
+    $basis = '';
+    foreach (reference_data_health_cache_paths() as $path) {
+        $mtime = (file_exists($path) && is_file($path)) ? (int) @filemtime($path) : 0;
+        $basis .= $path . ':' . $mtime . ';';
     }
 
-    return [
-        'slug' => 'faa_ngda_runways',
-        'name' => 'FAA NGDA runways',
-        'kind' => 'bulk',
-        'status' => $status,
-        'message' => $message,
-        'lastChanged' => $readable ? (int) filemtime($path) : 0,
-        'details' => [
-            'local_age_seconds' => $localAge,
-            'last_probe_result' => null,
-            'upstream_last_modified' => null,
-            'needs_fetch' => $needsRefresh,
-        ],
-    ];
+    $cfgPath = getConfigFilePath();
+    if (is_string($cfgPath) && $cfgPath !== '' && file_exists($cfgPath) && is_file($cfgPath)) {
+        $mt = @filemtime($cfgPath);
+        $basis .= 'cfg:' . (($mt !== false) ? (int) $mt : 0);
+    }
+
+    return $basis;
 }
 
 /**
- * Build merged runway cache source leaf.
+ * Build reference catalog health with APCu caching in non-test environments.
  *
+ * @param array<string, mixed>|null $config Loaded config
+ * @param string|null $configSha256 SHA-256 of raw airports.json
  * @return array<string, mixed>
  */
-function reference_data_runways_merged_source_health(?array $config): array
+function checkReferenceDataHealth(?array $config, ?string $configSha256 = null): array
 {
-    require_once __DIR__ . '/status-checks.php';
-    $health = checkRunwayCacheHealth($config);
-
-    return [
-        'slug' => 'runways_merged',
-        'name' => 'Merged runway cache',
-        'kind' => 'computed',
-        'status' => $health['status'],
-        'message' => $health['message'],
-        'lastChanged' => (int) ($health['lastChanged'] ?? 0),
-        'details' => array_merge(
-            is_array($health['details'] ?? null) ? $health['details'] : [],
-            [
-                'local_age_seconds' => null,
-                'last_probe_result' => null,
-                'upstream_last_modified' => null,
-                'needs_fetch' => ($health['status'] ?? '') !== 'operational',
-            ]
-        ),
-    ];
-}
-
-/**
- * Build NASR APT bulk source leaf.
- *
- * @return array<string, mixed>
- */
-function reference_data_nasr_apt_source_health(): array
-{
-    require_once __DIR__ . '/status-checks.php';
-    $health = checkNasrAptCacheHealth();
-
-    return [
-        'slug' => 'nasr_apt',
-        'name' => 'NASR APT',
-        'kind' => 'bulk',
-        'status' => $health['status'],
-        'message' => $health['message'],
-        'lastChanged' => (int) ($health['lastChanged'] ?? 0),
-        'details' => array_merge(
-            is_array($health['details'] ?? null) ? $health['details'] : [],
-            [
-                'local_age_seconds' => null,
-                'last_probe_result' => null,
-                'upstream_last_modified' => null,
-                'needs_fetch' => (bool) ($health['details']['needs_refresh'] ?? false),
-            ]
-        ),
-    ];
-}
-
-/**
- * Build NASR FRQ bulk source leaf.
- *
- * @return array<string, mixed>
- */
-function reference_data_nasr_frq_source_health(): array
-{
-    require_once __DIR__ . '/nasr/cache.php';
-    require_once __DIR__ . '/nasr/frequencies-cache.php';
-
-    $path = CACHE_NASR_FRQ_DATA_FILE;
-    $readable = is_readable($path);
-    $localAge = $readable ? time() - (int) filemtime($path) : null;
-    $needsRefresh = nasrFrqCacheNeedsRefresh();
-    $meta = loadNasrAptMeta();
-    $lastError = is_array($meta) ? ($meta['frq_last_fetch_error'] ?? null) : null;
-
-    $status = 'operational';
-    $messages = [];
-    if (!$readable) {
-        $status = 'down';
-        $messages[] = 'NASR FRQ cache missing';
-    } else {
-        if ($needsRefresh) {
-            $status = 'degraded';
-            $messages[] = 'Refresh recommended';
-        }
-        if (is_string($lastError) && $lastError !== '') {
-            $status = 'degraded';
-            $messages[] = 'Last fetch failed';
-        }
+    if (isTestMode()) {
+        return reference_data_health_build($config, $configSha256);
     }
 
-    $airportCount = 0;
-    if ($readable) {
-        $decoded = json_decode((string) file_get_contents($path), true);
-        if (is_array($decoded) && isset($decoded['airports']) && is_array($decoded['airports'])) {
-            $airportCount = count($decoded['airports']);
-        }
-    }
+    $cacheKey = 'status_ref_data_health_' . substr(hash('sha256', reference_data_health_cache_basis()), 0, 16);
 
-    $message = $airportCount > 0
-        ? "{$airportCount} airports in FRQ cache"
-        : 'NASR FRQ cache present';
-    if ($messages !== []) {
-        $message .= ' • ' . implode(' • ', $messages);
-    } elseif (!$needsRefresh) {
-        $message .= ' • Up to date';
-    }
-
-    return [
-        'slug' => 'nasr_frq',
-        'name' => 'NASR FRQ',
-        'kind' => 'bulk',
-        'status' => $status,
-        'message' => $message,
-        'lastChanged' => $readable ? (int) filemtime($path) : 0,
-        'details' => [
-            'local_age_seconds' => $localAge,
-            'last_probe_result' => null,
-            'upstream_last_modified' => null,
-            'needs_fetch' => $needsRefresh,
-            'last_fetch_error' => $lastError,
-        ],
-    ];
-}
-
-/**
- * Build OurAirports airport identity source leaf (CSV + derived JSON).
- *
- * @return array<string, mixed>
- */
-function reference_data_ourairports_identity_source_health(): array
-{
-    $csv = reference_data_ourairports_bulk_source_health('airports', 'ourairports_airports', 'OurAirports airports');
-    $jsonStale = ourAirportsIdentityCacheIsStale();
-    if ($jsonStale && ($csv['status'] ?? '') === 'operational') {
-        $csv['status'] = 'degraded';
-        $csv['message'] .= ' • Identity JSON older than CSV';
-    }
-
-    return $csv;
-}
-
-/**
- * Build OurAirports frequencies source leaf (CSV + derived JSON).
- *
- * @return array<string, mixed>
- */
-function reference_data_ourairports_frequencies_source_health(): array
-{
-    $csv = reference_data_ourairports_bulk_source_health(
-        'airport_frequencies',
-        'ourairports_frequencies',
-        'OurAirports frequencies'
+    return getCachedData(
+        static function () use ($config, $configSha256): array {
+            return reference_data_health_build($config, $configSha256);
+        },
+        $cacheKey,
+        null,
+        STATUS_HEALTH_CACHE_TTL
     );
-    $jsonStale = ourAirportsFrequenciesCacheIsStale();
-    if ($jsonStale && ($csv['status'] ?? '') === 'operational') {
-        $csv['status'] = 'degraded';
-        $csv['message'] .= ' • Frequencies JSON older than CSV';
-    }
-
-    return $csv;
-}
-
-/**
- * Build airport country resolution source leaf.
- *
- * @return array<string, mixed>
- */
-function reference_data_country_resolution_source_health(?array $config, ?string $configSha256): array
-{
-    require_once __DIR__ . '/status-checks.php';
-    $health = computeAirportCountryResolutionHealth($config, $configSha256);
-
-    return [
-        'slug' => 'country_resolution',
-        'name' => 'Airport country resolution',
-        'kind' => 'computed',
-        'status' => $health['status'],
-        'message' => $health['message'],
-        'lastChanged' => (int) ($health['lastChanged'] ?? 0),
-        'details' => array_merge(
-            is_array($health['details'] ?? null) ? $health['details'] : [],
-            [
-                'local_age_seconds' => null,
-                'last_probe_result' => null,
-                'upstream_last_modified' => null,
-                'needs_fetch' => ($health['status'] ?? '') !== 'operational',
-            ]
-        ),
-    ];
-}
-
-/**
- * Build bundled WMM source leaf.
- *
- * @return array<string, mixed>
- */
-function reference_data_wmm_source_health(): array
-{
-    require_once __DIR__ . '/status-checks.php';
-    $health = checkMagneticDeclinationHealth();
-
-    return [
-        'slug' => 'wmm',
-        'name' => 'World Magnetic Model',
-        'kind' => 'bundled',
-        'status' => $health['status'],
-        'message' => $health['message'],
-        'lastChanged' => (int) ($health['lastChanged'] ?? 0),
-        'details' => array_merge(
-            is_array($health['details'] ?? null) ? $health['details'] : [],
-            [
-                'local_age_seconds' => null,
-                'last_probe_result' => null,
-                'upstream_last_modified' => null,
-                'needs_fetch' => false,
-            ]
-        ),
-    ];
 }
 
 /**
@@ -496,6 +257,9 @@ function reference_data_health_to_public(array $component): array
                 'local_age_seconds' => isset($details['local_age_seconds']) ? (int) $details['local_age_seconds'] : null,
                 'last_probe_result' => $details['last_probe_result'] ?? null,
                 'upstream_last_modified' => $details['upstream_last_modified'] ?? null,
+                'needs_fetch' => (bool) ($details['needs_fetch'] ?? false),
+                'last_fetch_error' => $details['last_fetch_error'] ?? null,
+                'effective_date' => $details['effective_date'] ?? null,
             ];
         }
 

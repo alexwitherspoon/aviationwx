@@ -113,7 +113,7 @@ function ourAirportsHttpGet(string $url): array
     curl_close($ch);
 
     $responseHeaders = ourAirportsParseResponseHeaders($headerLines);
-    $ok = $httpCode === 200 && is_string($body);
+    $ok = $httpCode === 200 && is_string($body) && $body !== '';
 
     return [
         'ok' => $ok,

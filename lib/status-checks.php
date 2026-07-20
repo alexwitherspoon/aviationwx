@@ -316,7 +316,7 @@ function checkSystemHealth(): array {
     $health['components']['notam_fetching'] = $notamDataHealth;
 
     require_once __DIR__ . '/reference-data-health.php';
-    $health['components']['reference_data'] = reference_data_health_build(
+    $health['components']['reference_data'] = checkReferenceDataHealth(
         $config,
         $configSha256ForStatus !== '' ? $configSha256ForStatus : null
     );

@@ -100,6 +100,14 @@ function ourAirportsBulkNeedsFetch(): bool
 }
 
 /**
+ * True when the scheduler should spawn the OurAirports probe worker.
+ */
+function ourAirportsProbeWorkerShouldRun(): bool
+{
+    return !ourAirportsProbeInProgress() && !ourAirportsBulkFetchInProgress();
+}
+
+/**
  * True when the scheduler should spawn the bulk fetch worker.
  */
 function ourAirportsBulkWorkerShouldRun(): bool

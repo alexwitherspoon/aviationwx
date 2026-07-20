@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../cache-paths.php';
 require_once __DIR__ . '/locks.php';
 require_once __DIR__ . '/urls.php';
+require_once __DIR__ . '/../logger.php';
 
 /**
  * Default per-file meta record.
@@ -125,6 +126,12 @@ function ourAirportsUpdateFileMeta(string $fileKey, array $updates): bool
 
         return ourAirportsSaveMeta($meta);
     });
+
+    if ($saved !== true) {
+        aviationwx_log('warning', 'ourairports: meta update failed', [
+            'file_key' => $fileKey,
+        ], 'app');
+    }
 
     return $saved === true;
 }

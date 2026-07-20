@@ -15,7 +15,7 @@ require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-parse.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
-require_once __DIR__ . '/fetch-nasr-apt.php';
+require_once __DIR__ . '/../lib/nasr/util.php';
 
 /**
  * Acquire FRQ fetch lock; return handle or false.

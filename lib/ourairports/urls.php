@@ -13,6 +13,13 @@ const OURAIRPORTS_CSV_FILE_KEYS = [
     'airport_frequencies' => 'airport-frequencies.csv',
 ];
 
+/** Expected CSV header prefix per file key (OurAirports bulk schema). */
+const OURAIRPORTS_CSV_HEADER_PREFIX = [
+    'airports' => 'id,ident,',
+    'runways' => 'id,airport_ref,',
+    'airport_frequencies' => 'id,airport_ref,',
+];
+
 const OURAIRPORTS_DATA_BASE_URL = 'https://davidmegginson.github.io/ourairports-data';
 
 const FAA_NGDA_RUNWAYS_CSV_URL = 'https://ngda-transportation-geoplatform.hub.arcgis.com/api/download/v1/items/110af7b8a9424a59a3fb1d8fc69a2172/csv?layers=0';
@@ -61,4 +68,23 @@ function ourAirportsCsvUrl(string $fileKey): string
 function ourAirportsCsvPath(string $fileKey): string
 {
     return CACHE_OURAIRPORTS_DIR . '/' . ourAirportsCsvFilename($fileKey);
+}
+
+/**
+ * Whether a downloaded body looks like a valid OurAirports CSV for the file key.
+ */
+function ourAirportsCsvBodyIsValid(string $body, string $fileKey): bool
+{
+    if ($body === '' || !ourAirportsIsValidFileKey($fileKey)) {
+        return false;
+    }
+
+    $firstLine = strtok($body, "\r\n");
+    if (!is_string($firstLine) || $firstLine === '') {
+        return false;
+    }
+
+    $prefix = OURAIRPORTS_CSV_HEADER_PREFIX[$fileKey];
+
+    return str_starts_with($firstLine, $prefix);
 }

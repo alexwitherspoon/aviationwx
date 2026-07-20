@@ -76,6 +76,7 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertArrayHasKey('last_changed', $public['consumers'][0]);
         $this->assertArrayHasKey('sources', $public['consumers'][0]);
         $this->assertArrayHasKey('local_age_seconds', $public['consumers'][0]['sources'][0]);
+        $this->assertArrayHasKey('needs_fetch', $public['consumers'][0]['sources'][0]);
     }
 
     public function testCheckSystemHealthExposesReferenceDataComponent(): void

@@ -16,6 +16,7 @@ require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/webcam-image-metrics.php';
 require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 require_once __DIR__ . '/../lib/status-checks.php'; // Health check functions
+require_once __DIR__ . '/../lib/reference-data-sources.php';
 require_once __DIR__ . '/../lib/status-utils.php'; // Utility functions
 require_once __DIR__ . '/../lib/cached-data-loader.php';
 
@@ -505,6 +506,86 @@ if (php_sapi_name() === 'cli') {
             max-height: 1200px;
         }
 
+        .component-consumers {
+            margin-top: 0.5rem;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+        }
+
+        .component-consumers.collapsed {
+            max-height: 0;
+            margin-top: 0;
+        }
+
+        .component-consumers.expanded {
+            max-height: 2400px;
+        }
+
+        .component-consumer-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .component-consumer-item {
+            padding: 0.35rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .component-consumer-item:last-child {
+            border-bottom: none;
+        }
+
+        .component-consumer-header {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            color: #444;
+        }
+
+        .consumer-expand-btn {
+            border: none;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            line-height: 1;
+            color: #6b7280;
+        }
+
+        .consumer-expand-btn .expand-icon {
+            display: inline-block;
+            transition: transform 0.2s;
+            font-size: 0.7rem;
+        }
+
+        .consumer-expand-btn[aria-expanded="true"] .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .component-consumer-status {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: #888;
+            text-transform: capitalize;
+        }
+
+        .component-sources {
+            margin-top: 0.35rem;
+            margin-left: 1rem;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+        }
+
+        .component-sources.collapsed {
+            max-height: 0;
+            margin-top: 0;
+        }
+
+        .component-sources.expanded {
+            max-height: 1200px;
+        }
+
         .component-provider-table {
             width: 100%;
             border-collapse: collapse;
@@ -990,21 +1071,36 @@ if (php_sapi_name() === 'cli') {
                     $componentProviders = (isset($component['providers']) && is_array($component['providers']))
                         ? $component['providers']
                         : [];
+                    $componentConsumers = (isset($component['consumers']) && is_array($component['consumers']))
+                        ? $component['consumers']
+                        : [];
                     $hasProviderBreakdown = $componentProviders !== [];
+                    $hasConsumerBreakdown = $componentConsumers !== [];
+                    $hasExpandBreakdown = $hasProviderBreakdown || $hasConsumerBreakdown;
+                    $hasDegradedConsumer = false;
+                    foreach ($componentConsumers as $consumerRow) {
+                        if (is_array($consumerRow) && ($consumerRow['status'] ?? 'operational') !== 'operational') {
+                            $hasDegradedConsumer = true;
+                            break;
+                        }
+                    }
+                    $autoExpandConsumers = $componentKey === 'reference_data'
+                        && (($component['status'] ?? '') !== 'operational' || $hasDegradedConsumer);
                     $componentKeyEscaped = htmlspecialchars((string) $componentKey, ENT_QUOTES, 'UTF-8');
                     ?>
-                    <li class="component-item<?php echo $hasProviderBreakdown ? ' component-item-expandable' : ''; ?>">
+                    <li class="component-item<?php echo $hasExpandBreakdown ? ' component-item-expandable' : ''; ?>">
                         <div class="component-info">
                             <div class="component-name">
-                                <?php if ($hasProviderBreakdown): ?>
+                                <?php if ($hasExpandBreakdown): ?>
                                 <button type="button"
                                         class="component-expand-btn"
-                                        aria-expanded="false"
-                                        aria-controls="component-providers-<?php echo $componentKeyEscaped; ?>"
-                                        aria-label="Show per-provider HTTP 429 counts for <?php echo htmlspecialchars($component['name']); ?>"
+                                        aria-expanded="<?php echo $autoExpandConsumers ? 'true' : 'false'; ?>"
+                                        aria-controls="<?php echo $hasConsumerBreakdown ? 'component-breakdown-' : 'component-providers-'; ?><?php echo $componentKeyEscaped; ?>"
+                                        aria-label="<?php echo $autoExpandConsumers ? 'Hide' : 'Show'; ?> <?php echo $hasConsumerBreakdown ? 'reference catalog consumers for ' : 'per-provider HTTP 429 counts for '; ?><?php echo htmlspecialchars($component['name']); ?>"
                                         data-component-toggle="<?php echo $componentKeyEscaped; ?>"
                                         data-component-name="<?php echo htmlspecialchars($component['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                                        title="Show per-provider HTTP 429 counts">
+                                        data-breakdown-type="<?php echo $hasConsumerBreakdown ? 'consumers' : 'providers'; ?>"
+                                        title="<?php echo $hasConsumerBreakdown ? 'Show reference catalog consumers' : 'Show per-provider HTTP 429 counts'; ?>">
                                     <span class="expand-icon" aria-hidden="true">▶</span>
                                 </button>
                                 <?php endif; ?>
@@ -1054,6 +1150,72 @@ if (php_sapi_name() === 'cli') {
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasConsumerBreakdown): ?>
+                            <div class="component-consumers <?php echo $autoExpandConsumers ? 'expanded' : 'collapsed'; ?>"
+                                 id="component-breakdown-<?php echo $componentKeyEscaped; ?>">
+                                <ul class="component-consumer-list">
+                                    <?php foreach ($componentConsumers as $consumerIndex => $consumerRow): ?>
+                                    <?php
+                                    $consumerSources = (isset($consumerRow['sources']) && is_array($consumerRow['sources']))
+                                        ? $consumerRow['sources']
+                                        : [];
+                                    $consumerStatus = (string) ($consumerRow['status'] ?? 'operational');
+                                    $consumerAutoExpand = $consumerStatus !== 'operational';
+                                    $consumerPanelId = 'consumer-sources-' . $componentKeyEscaped . '-' . (int) $consumerIndex;
+                                    ?>
+                                    <li class="component-consumer-item">
+                                        <div class="component-consumer-header">
+                                            <?php if ($consumerSources !== []): ?>
+                                            <button type="button"
+                                                    class="consumer-expand-btn"
+                                                    aria-expanded="<?php echo $consumerAutoExpand ? 'true' : 'false'; ?>"
+                                                    aria-controls="<?php echo $consumerPanelId; ?>"
+                                                    aria-label="<?php echo $consumerAutoExpand ? 'Hide' : 'Show'; ?> sources for <?php echo htmlspecialchars((string) ($consumerRow['name'] ?? 'consumer'), ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-consumer-toggle="<?php echo $componentKeyEscaped; ?>-<?php echo (int) $consumerIndex; ?>">
+                                                <span class="expand-icon" aria-hidden="true">▶</span>
+                                            </button>
+                                            <?php endif; ?>
+                                            <span><?php echo htmlspecialchars((string) ($consumerRow['name'] ?? '')); ?></span>
+                                            <span class="component-consumer-status"><?php echo htmlspecialchars($consumerStatus); ?></span>
+                                        </div>
+                                        <?php if (isset($consumerRow['message']) && is_string($consumerRow['message']) && $consumerRow['message'] !== ''): ?>
+                                        <div class="component-message" style="margin-left: 1rem; font-size: 0.8rem;">
+                                            <?php echo htmlspecialchars($consumerRow['message']); ?>
+                                        </div>
+                                        <?php endif; ?>
+                                        <?php if ($consumerSources !== []): ?>
+                                        <div class="component-sources <?php echo $consumerAutoExpand ? 'expanded' : 'collapsed'; ?>"
+                                             id="<?php echo $consumerPanelId; ?>">
+                                            <table class="component-provider-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Source</th>
+                                                        <th scope="col">Status</th>
+                                                        <th scope="col">Message</th>
+                                                        <th scope="col">Diagnostics</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($consumerSources as $sourceRow): ?>
+                                                    <?php
+                                                    $diagnostics = reference_data_source_diagnostics_text($sourceRow);
+                                                    ?>
+                                                    <tr>
+                                                        <td><?php echo htmlspecialchars((string) ($sourceRow['name'] ?? '')); ?></td>
+                                                        <td><?php echo htmlspecialchars((string) ($sourceRow['status'] ?? '')); ?></td>
+                                                        <td><?php echo htmlspecialchars((string) ($sourceRow['message'] ?? '')); ?></td>
+                                                        <td><?php echo htmlspecialchars($diagnostics !== '' ? $diagnostics : '—'); ?></td>
+                                                    </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <?php endif; ?>
+                                    </li>
+                                    <?php endforeach; ?>
+                                </ul>
                             </div>
                             <?php endif; ?>
                             <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
@@ -1505,28 +1667,53 @@ if (php_sapi_name() === 'cli') {
 
             window.toggleAirport = toggleAirport;
 
-            function toggleComponentProviders(componentIndex) {
+            function toggleComponentBreakdown(componentIndex) {
                 var btn = document.querySelector('.component-expand-btn[data-component-toggle="' + componentIndex + '"]');
-                var panel = document.getElementById('component-providers-' + componentIndex);
-                if (!btn || !panel) {
+                if (!btn) {
+                    return;
+                }
+                var breakdownType = btn.getAttribute('data-breakdown-type') || 'providers';
+                var panelId = breakdownType === 'consumers'
+                    ? 'component-breakdown-' + componentIndex
+                    : 'component-providers-' + componentIndex;
+                var panel = document.getElementById(panelId);
+                if (!panel) {
                     return;
                 }
                 var isExpanded = btn.getAttribute('aria-expanded') === 'true';
                 var componentName = btn.getAttribute('data-component-name') || 'component';
+                var showLabel = breakdownType === 'consumers'
+                    ? 'Show reference catalog consumers for '
+                    : 'Show per-provider HTTP 429 counts for ';
+                var hideLabel = breakdownType === 'consumers'
+                    ? 'Hide reference catalog consumers for '
+                    : 'Hide per-provider HTTP 429 counts for ';
                 if (isExpanded) {
                     btn.setAttribute('aria-expanded', 'false');
-                    btn.setAttribute(
-                        'aria-label',
-                        'Show per-provider HTTP 429 counts for ' + componentName
-                    );
+                    btn.setAttribute('aria-label', showLabel + componentName);
                     panel.classList.remove('expanded');
                     panel.classList.add('collapsed');
                 } else {
                     btn.setAttribute('aria-expanded', 'true');
-                    btn.setAttribute(
-                        'aria-label',
-                        'Hide per-provider HTTP 429 counts for ' + componentName
-                    );
+                    btn.setAttribute('aria-label', hideLabel + componentName);
+                    panel.classList.remove('collapsed');
+                    panel.classList.add('expanded');
+                }
+            }
+
+            function toggleConsumerSources(consumerKey) {
+                var btn = document.querySelector('.consumer-expand-btn[data-consumer-toggle="' + consumerKey + '"]');
+                var panel = document.getElementById('consumer-sources-' + consumerKey);
+                if (!btn || !panel) {
+                    return;
+                }
+                var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    panel.classList.remove('expanded');
+                    panel.classList.add('collapsed');
+                } else {
+                    btn.setAttribute('aria-expanded', 'true');
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
@@ -1536,7 +1723,16 @@ if (php_sapi_name() === 'cli') {
                 btn.addEventListener('click', function () {
                     var idx = btn.getAttribute('data-component-toggle');
                     if (idx !== null && idx !== '') {
-                        toggleComponentProviders(idx);
+                        toggleComponentBreakdown(idx);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.consumer-expand-btn[data-consumer-toggle]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var key = btn.getAttribute('data-consumer-toggle');
+                    if (key !== null && key !== '') {
+                        toggleConsumerSources(key);
                     }
                 });
             });

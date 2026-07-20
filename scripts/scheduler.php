@@ -35,6 +35,7 @@ require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
+require_once __DIR__ . '/../lib/nasr/workers.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
@@ -689,7 +690,7 @@ while ($running) {
         }
         
         // 8. OurAirports upstream probe (daily; background worker only)
-        if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL) {
+        if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL && ourAirportsProbeWorkerShouldRun()) {
             $probeScript = __DIR__ . '/probe-ourairports.php';
             if (file_exists($probeScript)) {
                 $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -742,21 +743,23 @@ while ($running) {
         }
 
         // 8a. NASR APT cache fetch (weekly check; startup if missing)
-        if (!$nasrAptFetchOnStartupDone && nasrAptCacheNeedsRefresh()) {
-            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
-            if (file_exists($nasrScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
-                    'path' => $nasrScript,
-                ], 'app');
+        if (!$nasrAptFetchOnStartupDone) {
+            if (nasrAptWorkerShouldRun()) {
+                $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+                if (file_exists($nasrScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+                        'path' => $nasrScript,
+                    ], 'app');
+                }
+                $lastNasrAptFetch = $now;
             }
             $nasrAptFetchOnStartupDone = true;
-            $lastNasrAptFetch = $now;
-        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptCacheNeedsRefresh()) {
+        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptWorkerShouldRun()) {
             $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
             if (file_exists($nasrScript)) {
                 $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -772,21 +775,23 @@ while ($running) {
         }
 
         // 8a-ii. NASR FRQ cache fetch (weekly check; startup if missing)
-        if (!$nasrFrqFetchOnStartupDone && nasrFrqCacheNeedsRefresh()) {
-            $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
-            if (file_exists($nasrFrqScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: nasr frq fetch started (startup)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
-                    'path' => $nasrFrqScript,
-                ], 'app');
+        if (!$nasrFrqFetchOnStartupDone) {
+            if (nasrFrqWorkerShouldRun()) {
+                $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
+                if (file_exists($nasrFrqScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: nasr frq fetch started (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
+                        'path' => $nasrFrqScript,
+                    ], 'app');
+                }
+                $lastNasrFrqFetch = $now;
             }
             $nasrFrqFetchOnStartupDone = true;
-            $lastNasrFrqFetch = $now;
-        } elseif (($now - $lastNasrFrqFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrFrqCacheNeedsRefresh()) {
+        } elseif (($now - $lastNasrFrqFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrFrqWorkerShouldRun()) {
             $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
             if (file_exists($nasrFrqScript)) {
                 $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';

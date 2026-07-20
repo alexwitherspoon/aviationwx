@@ -314,6 +314,27 @@ class OperationsSnapshotTest extends TestCase
         }
     }
 
+    public function testBuildReferenceCatalogsFallsBackWhenSystemHealthMissing(): void
+    {
+        $built = operations_snapshot_build_reference_catalogs(null);
+
+        $this->assertIsArray($built);
+        $this->assertArrayHasKey('status', $built);
+        $this->assertArrayHasKey('consumers', $built);
+        $this->assertNotEmpty($built['consumers']);
+    }
+
+    public function testGetApiPayload_includesReferenceCatalogsWhenSnapshotMissing(): void
+    {
+        $payload = operations_snapshot_get_api_payload(
+            sys_get_temp_dir() . '/awx_ops_missing_' . bin2hex(random_bytes(4)) . '.json'
+        );
+
+        $this->assertArrayHasKey('operations', $payload);
+        $this->assertArrayHasKey('reference_catalogs', $payload['operations']);
+        $this->assertIsArray($payload['operations']['reference_catalogs']);
+    }
+
     public function testGetApiPayload_staleWhenOlderThanMaxAge(): void
     {
         $snap = sys_get_temp_dir() . '/awx_ops_api_' . bin2hex(random_bytes(4)) . '.json';
