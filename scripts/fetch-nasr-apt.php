@@ -18,6 +18,7 @@ require_once __DIR__ . '/../lib/nasr/parse.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
 require_once __DIR__ . '/../lib/nasr/util.php';
+require_once __DIR__ . '/../lib/nasr/csv-validation.php';
 
 @ini_set('memory_limit', '1024M');
 
@@ -69,6 +70,13 @@ function downloadNasrAptCsvDirectory(): ?array
         if (!is_readable($extractDir . '/APT_BASE.csv')
             || !is_readable($extractDir . '/APT_RWY.csv')
             || !is_readable($extractDir . '/APT_RWY_END.csv')) {
+            continue;
+        }
+
+        if (!nasrAptCsvDirectoryIsValid($extractDir)) {
+            aviationwx_log('warning', 'nasr_apt: rejected invalid CSV extract', [
+                'source_url' => $url,
+            ], 'app');
             continue;
         }
 
