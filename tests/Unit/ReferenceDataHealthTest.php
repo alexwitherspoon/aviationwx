@@ -108,6 +108,7 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertSame('operational', $leaf['status']);
         $this->assertSame(1, $leaf['details']['runway_override_count'] ?? null);
         $this->assertSame(1, $leaf['details']['frequencies_override_count'] ?? null);
+        $this->assertSame('1 airport configured • 1 runway override • 1 frequency override', $leaf['message']);
     }
 
     public function testMissingRunwaysMergedMarksConsumerDown(): void

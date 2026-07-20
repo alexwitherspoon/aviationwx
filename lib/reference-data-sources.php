@@ -174,12 +174,18 @@ function reference_data_config_source_health(?array $config, ?string $configSha2
     }
 
     $airportCount = count($airports);
-    $message = "{$airportCount} airports configured";
+    $message = $airportCount === 1
+        ? '1 airport configured'
+        : "{$airportCount} airports configured";
     if ($runwayOverrideCount > 0) {
-        $message .= " • {$runwayOverrideCount} runway overrides";
+        $message .= $runwayOverrideCount === 1
+            ? ' • 1 runway override'
+            : " • {$runwayOverrideCount} runway overrides";
     }
     if ($frequenciesOverrideCount > 0) {
-        $message .= " • {$frequenciesOverrideCount} frequency overrides";
+        $message .= $frequenciesOverrideCount === 1
+            ? ' • 1 frequency override'
+            : " • {$frequenciesOverrideCount} frequency overrides";
     }
 
     $configPath = function_exists('getConfigFilePath') ? getConfigFilePath() : null;
