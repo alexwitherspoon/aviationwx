@@ -139,6 +139,10 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
             aviationwx_log('error', 'nasr_frq: parse failed, retaining previous cache', [
                 'error' => $e->getMessage(),
             ], 'app');
+            updateNasrAptMetaFields([
+                'frq_last_fetch_error' => 'parse_failed',
+                'frq_last_fetch_error_at' => gmdate('c'),
+            ]);
             nasrCleanupDirectory($tmpRoot);
             return is_readable(CACHE_NASR_FRQ_DATA_FILE);
         }
@@ -150,6 +154,10 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
                 'minimum' => NASR_FRQ_MIN_AIRPORT_COUNT,
                 'source_url' => $download['source_url'],
             ], 'app');
+            updateNasrAptMetaFields([
+                'frq_last_fetch_error' => 'airport_count_below_minimum',
+                'frq_last_fetch_error_at' => gmdate('c'),
+            ]);
             nasrCleanupDirectory($tmpRoot);
             return is_readable(CACHE_NASR_FRQ_DATA_FILE);
         }
