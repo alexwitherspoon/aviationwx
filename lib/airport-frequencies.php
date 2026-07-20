@@ -12,6 +12,7 @@
 require_once __DIR__ . '/airport-ourairports.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/nasr/frequencies-cache.php';
+require_once __DIR__ . '/ourairports/ingest-airports.php';
 
 /** @var array|null In-request memo for OurAirports frequencies cache */
 $GLOBALS['_ourairports_frequencies_cache_memo'] = null;
@@ -196,7 +197,6 @@ function loadOurAirportsFrequenciesCache(): ?array
     }
 
     if (ourAirportsFrequenciesCacheIsStale() && is_readable(CACHE_OURAIRPORTS_FREQUENCIES_CSV)) {
-        require_once __DIR__ . '/ourairports/ingest-airports.php';
         ingestOurAirportsFrequenciesFromDisk();
     }
 
