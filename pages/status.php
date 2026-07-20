@@ -1692,11 +1692,21 @@ if (php_sapi_name() === 'cli') {
                 if (isExpanded) {
                     btn.setAttribute('aria-expanded', 'false');
                     btn.setAttribute('aria-label', showLabel + componentName);
+                    if (breakdownType === 'consumers') {
+                        btn.setAttribute('title', 'Show reference catalog consumers');
+                    } else {
+                        btn.setAttribute('title', 'Show per-provider HTTP 429 counts');
+                    }
                     panel.classList.remove('expanded');
                     panel.classList.add('collapsed');
                 } else {
                     btn.setAttribute('aria-expanded', 'true');
                     btn.setAttribute('aria-label', hideLabel + componentName);
+                    if (breakdownType === 'consumers') {
+                        btn.setAttribute('title', 'Hide reference catalog consumers');
+                    } else {
+                        btn.setAttribute('title', 'Hide per-provider HTTP 429 counts');
+                    }
                     panel.classList.remove('collapsed');
                     panel.classList.add('expanded');
                 }
