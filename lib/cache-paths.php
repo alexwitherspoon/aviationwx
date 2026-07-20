@@ -1035,6 +1035,10 @@ if (!defined('CACHE_NASR_APT_FETCH_LOCK')) {
     define('CACHE_NASR_APT_FETCH_LOCK', CACHE_NASR_DIR . '/.fetch.lock');
 }
 
+if (!defined('CACHE_NASR_META_LOCK')) {
+    define('CACHE_NASR_META_LOCK', CACHE_NASR_DIR . '/.meta.lock');
+}
+
 /**
  * Get path to NASR APT fetch lock file
  *
@@ -1043,6 +1047,14 @@ if (!defined('CACHE_NASR_APT_FETCH_LOCK')) {
 function getNasrAptFetchLockPath(): string
 {
     return CACHE_NASR_APT_FETCH_LOCK;
+}
+
+/**
+ * Get path to NASR shared metadata lock file (APT + FRQ fields in nasr_meta.json).
+ */
+function getNasrMetaLockPath(): string
+{
+    return CACHE_NASR_META_LOCK;
 }
 
 if (!defined('CACHE_NASR_FRQ_DATA_FILE')) {

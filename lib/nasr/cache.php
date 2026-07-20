@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../cache-paths.php';
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../file-locks.php';
 require_once __DIR__ . '/identifiers.php';
 require_once __DIR__ . '/parse.php';
 require_once __DIR__ . '/discovery.php';
@@ -316,37 +317,28 @@ function saveNasrAptCache(array $airports, array $meta): bool
         return false;
     }
 
-    $meta['schema_version'] = NASR_APT_SCHEMA_VERSION;
-    $meta['fetched_at'] = $meta['fetched_at'] ?? gmdate('c');
-    $meta['airport_count'] = count($airports);
-    $metaJson = json_encode($meta, JSON_UNESCAPED_SLASHES);
-    if ($metaJson === false) {
-        return false;
-    }
+    $aptMetaFields = $meta;
+    $aptMetaFields['schema_version'] = NASR_APT_SCHEMA_VERSION;
+    $aptMetaFields['fetched_at'] = $aptMetaFields['fetched_at'] ?? gmdate('c');
+    $aptMetaFields['airport_count'] = count($airports);
 
     $tmpData = CACHE_NASR_APT_DATA_FILE . '.tmp.' . getmypid();
-    $tmpMeta = CACHE_NASR_APT_META_FILE . '.tmp.' . getmypid();
 
     if (file_put_contents($tmpData, $dataJson, LOCK_EX) === false) {
         @unlink($tmpData);
         return false;
     }
-    if (file_put_contents($tmpMeta, $metaJson, LOCK_EX) === false) {
-        @unlink($tmpData);
-        @unlink($tmpMeta);
-        return false;
-    }
 
     if (!@rename($tmpData, CACHE_NASR_APT_DATA_FILE)) {
         @unlink($tmpData);
-        @unlink($tmpMeta);
         return false;
     }
-    if (!@rename($tmpMeta, CACHE_NASR_APT_META_FILE)) {
-        @unlink($tmpMeta);
-        if (!updateNasrAptMetaFields($meta)) {
-            return false;
-        }
+
+    $metaWritten = nasrWithMetaLock(static function () use ($aptMetaFields): bool {
+        return nasrPersistAptMetaUnlocked($aptMetaFields);
+    });
+    if ($metaWritten !== true) {
+        return false;
     }
 
     resetNasrAptCacheMemo();
@@ -372,12 +364,33 @@ function loadNasrAptMeta(): ?array
 }
 
 /**
- * Merge fields into NASR meta without touching airport data cache.
+ * Run a callback while holding the shared NASR meta lock.
+ *
+ * @template T
+ * @param callable(): T $callback
+ * @return T|null Callback result, or null when the lock is held
+ */
+function nasrWithMetaLock(callable $callback)
+{
+    $lockPath = getNasrMetaLockPath();
+    $lock = acquireExclusiveFileLock($lockPath);
+    if ($lock === false) {
+        return null;
+    }
+
+    try {
+        return $callback();
+    } finally {
+        releaseExclusiveFileLock($lock, $lockPath);
+    }
+}
+
+/**
+ * Merge and write NASR meta; caller must hold the meta lock.
  *
  * @param array<string, mixed> $fields
- * @return bool True on success
  */
-function updateNasrAptMetaFields(array $fields): bool
+function nasrPersistAptMetaUnlocked(array $fields): bool
 {
     ensureCacheDir(CACHE_NASR_DIR);
 
@@ -402,6 +415,21 @@ function updateNasrAptMetaFields(array $fields): bool
     }
 
     return true;
+}
+
+/**
+ * Merge fields into NASR meta without touching airport data cache.
+ *
+ * @param array<string, mixed> $fields
+ * @return bool True on success
+ */
+function updateNasrAptMetaFields(array $fields): bool
+{
+    $result = nasrWithMetaLock(static function () use ($fields): bool {
+        return nasrPersistAptMetaUnlocked($fields);
+    });
+
+    return $result === true;
 }
 
 /**
