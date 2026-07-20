@@ -20,15 +20,14 @@ require_once __DIR__ . '/../lib/nasr/discovery.php';
 require_once __DIR__ . '/../lib/nasr/util.php';
 
 /**
- * Fetch NASR FRQ when cache is missing or stale.
- */
-function fetchNasrFrqIfNeeded(bool $force = false): bool
+ * Download and extract FRQ.csv to a temp directory.
  *
  * @return array{
  *   dir: string,
  *   source_url: string,
  *   effective_date: ?string,
- *   discovery_source: string
+ *   discovery_source: string,
+ *   tmp_root: string
  * }|null
  */
 function downloadNasrFrqCsvDirectory(): ?array
