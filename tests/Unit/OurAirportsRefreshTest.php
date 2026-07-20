@@ -282,7 +282,7 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(runwaysMergeWorkerShouldRun());
     }
 
-    public function testMergeWorkerShouldRunWhenCallerAlreadyHoldsExclusiveLock(): void
+    public function testMergeWorkerShouldRun_WhenCallerHoldsExclusiveLock_IgnoresSelfLock(): void
     {
         file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);
         touch(CACHE_RUNWAYS_DATA_FILE, time() - 3600);

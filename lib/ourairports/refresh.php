@@ -343,6 +343,12 @@ function runwaysCacheNeedsRefresh(): bool
     return false;
 }
 
+/**
+ * Whether the runway merge worker should run now.
+ *
+ * @param bool $holdingExclusiveLock When true, skip the merge-in-progress lock check because
+ *                                   the caller already holds the runways fetch lock.
+ */
 function runwaysMergeWorkerShouldRun(bool $holdingExclusiveLock = false): bool
 {
     if (!runwaysCacheNeedsRefresh()) {
