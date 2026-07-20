@@ -724,11 +724,17 @@ while ($running) {
         // 8-ii. Runways merge fetch (background; reads OurAirports CSVs from disk)
         $runwaysScript = __DIR__ . '/fetch-runways.php';
         if (!$runwaysFetchOnStartupDone) {
-            if (file_exists($runwaysScript) && runwaysMergeWorkerShouldRun()) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
+            if (runwaysMergeWorkerShouldRun()) {
+                if (file_exists($runwaysScript)) {
+                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
+                    reapZombies();
+                    aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+                        'path' => $runwaysScript,
+                    ], 'app');
+                }
             }
             $runwaysFetchOnStartupDone = true;
             $lastRunwaysFetch = $now;
@@ -738,6 +744,10 @@ while ($running) {
                 exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
                 reapZombies();
                 aviationwx_log('info', 'scheduler: runways fetch started', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+                    'path' => $runwaysScript,
+                ], 'app');
             }
             $lastRunwaysFetch = $now;
         }
