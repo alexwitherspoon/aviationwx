@@ -11,7 +11,7 @@ const NASR_CSV_HEADER_PREFIX = [
     'FRQ' => '"EFF_DATE","FACILITY"',
 ];
 
-/** Minimum bytes for a ZIP local file header (reject zero-byte HTTP bodies). */
+/** Minimum bytes for an empty ZIP (End of Central Directory only; rejects zero-byte HTTP bodies). */
 const NASR_ZIP_MIN_FILE_BYTES = 22;
 
 /**
