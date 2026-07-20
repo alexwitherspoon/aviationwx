@@ -58,7 +58,7 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertContains('ourairports_runways', $slugs);
     }
 
-    public function testRunwayPerformanceConsumerIncludesAllPrecedenceSources(): void
+    public function testRunwayPerformanceConsumer_IncludesAllPrecedenceSources(): void
     {
         $component = reference_data_health_build(null, null);
         $consumer = null;
@@ -76,7 +76,7 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertContains('airports_config', $slugs);
     }
 
-    public function testAirportIdentityAndCommsIncludeConfigSource(): void
+    public function testAirportIdentityAndComms_IncludeConfigSource(): void
     {
         $component = reference_data_health_build(null, null);
         $bySlug = [];
@@ -84,11 +84,13 @@ class ReferenceDataHealthTest extends TestCase
             $bySlug[$consumer['slug'] ?? ''] = $consumer;
         }
 
+        $this->assertArrayHasKey('airport_identity', $bySlug);
+        $this->assertArrayHasKey('airport_comms', $bySlug);
         $this->assertContains('airports_config', array_column($bySlug['airport_identity']['sources'], 'slug'));
         $this->assertContains('airports_config', array_column($bySlug['airport_comms']['sources'], 'slug'));
     }
 
-    public function testConfigSourceReportsOverrideCounts(): void
+    public function testConfigSource_ReportsOverrideCounts(): void
     {
         $config = [
             'airports' => [
