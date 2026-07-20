@@ -9,15 +9,19 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/../Helpers/IsolatesOurAirportsCacheTrait.php';
 
 class OurAirportsTest extends TestCase
 {
+    use IsolatesOurAirportsCacheTrait;
+
     private $originalCacheFile = null;
     private $testCacheFile = null;
     
     protected function setUp(): void
     {
         parent::setUp();
+        $this->resetOurAirportsTestCacheState();
         
         // Backup original cache file if it exists
         $this->originalCacheFile = CACHE_BASE_DIR . '/ourairports_data.json';
