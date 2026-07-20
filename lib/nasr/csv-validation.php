@@ -15,7 +15,7 @@ const NASR_CSV_HEADER_PREFIX = [
 const NASR_ZIP_MIN_FILE_BYTES = 22;
 
 /**
- * Whether a downloaded NASR subscription zip is non-empty and contains entries.
+ * Whether a downloaded NASR subscription zip is non-empty and contains file entries.
  */
 function nasrDownloadedZipFileIsValid(string $path): bool
 {
@@ -45,7 +45,14 @@ function nasrDownloadedZipFileIsValid(string $path): bool
         return false;
     }
 
-    $valid = $zip->numFiles > 0;
+    $valid = false;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = $zip->getNameIndex($i);
+        if (is_string($name) && $name !== '' && !str_ends_with($name, '/')) {
+            $valid = true;
+            break;
+        }
+    }
     $zip->close();
 
     return $valid;

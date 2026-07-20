@@ -100,6 +100,21 @@ class NasrCsvValidationTest extends TestCase
         }
     }
 
+    public function testNasrDownloadedZipRejectsDirectoryOnlyArchive(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_dironly_' . bin2hex(random_bytes(4)) . '.zip';
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path, ZipArchive::CREATE) === true);
+        $this->assertTrue($zip->addEmptyDir('empty/'));
+        $zip->close();
+
+        try {
+            $this->assertFalse(nasrDownloadedZipFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function testNasrDownloadedZipAcceptsZipWithFrqFixture(): void
     {
         $path = sys_get_temp_dir() . '/nasr_goodzip_' . bin2hex(random_bytes(4)) . '.zip';
