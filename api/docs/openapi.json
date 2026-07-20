@@ -1641,7 +1641,7 @@
         "properties": {
           "slug": { "type": "string" },
           "name": { "type": "string" },
-          "kind": { "type": "string", "enum": ["bulk", "computed", "bundled"] },
+          "kind": { "type": "string", "enum": ["bulk", "computed", "bundled", "config"] },
           "status": { "type": "string", "enum": ["operational", "degraded", "down"] },
           "message": { "type": "string" },
           "local_age_seconds": { "type": ["integer", "null"] },

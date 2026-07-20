@@ -71,6 +71,7 @@ class ReferenceDataHealthTest extends TestCase
 
         $this->assertIsArray($consumer);
         $slugs = array_column($consumer['sources'], 'slug');
+        $this->assertSame(['airports_config', 'nasr_apt', 'ourairports_runways'], $slugs);
         $this->assertContains('nasr_apt', $slugs);
         $this->assertContains('ourairports_runways', $slugs);
         $this->assertContains('airports_config', $slugs);
@@ -86,8 +87,14 @@ class ReferenceDataHealthTest extends TestCase
 
         $this->assertArrayHasKey('airport_identity', $bySlug);
         $this->assertArrayHasKey('airport_comms', $bySlug);
-        $this->assertContains('airports_config', array_column($bySlug['airport_identity']['sources'], 'slug'));
-        $this->assertContains('airports_config', array_column($bySlug['airport_comms']['sources'], 'slug'));
+        $this->assertSame(
+            ['airports_config', 'ourairports_airports'],
+            array_column($bySlug['airport_identity']['sources'], 'slug')
+        );
+        $this->assertSame(
+            ['airports_config', 'nasr_frq', 'ourairports_frequencies'],
+            array_column($bySlug['airport_comms']['sources'], 'slug')
+        );
     }
 
     public function testConfigSource_ReportsOverrideCounts(): void
