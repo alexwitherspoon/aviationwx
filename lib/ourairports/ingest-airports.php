@@ -207,7 +207,11 @@ function ourAirportsLoadAirportCentersAndFaaMappingFromDisk(): array
         return ['centers' => $centers, 'faa_to_icao' => $faaToIcao];
     }
 
-    $csv = (string) file_get_contents($path);
+    $csv = @file_get_contents($path);
+    if ($csv === false || $csv === '') {
+        return ['centers' => $centers, 'faa_to_icao' => $faaToIcao];
+    }
+
     $lines = str_getcsv($csv, "\n", '"', '\\');
     if ($lines === [] || count($lines) < 2) {
         return ['centers' => $centers, 'faa_to_icao' => $faaToIcao];
