@@ -54,6 +54,14 @@ function downloadNasrAptCsvDirectory(): ?array
             continue;
         }
 
+        if (!nasrDownloadedZipFileIsValid($zipPath)) {
+            aviationwx_log('warning', 'nasr_apt: rejected invalid zip download', [
+                'source_url' => $url,
+                'zip_bytes' => @filesize($zipPath),
+            ], 'app');
+            continue;
+        }
+
         $zip = new ZipArchive();
         if ($zip->open($zipPath) !== true) {
             continue;

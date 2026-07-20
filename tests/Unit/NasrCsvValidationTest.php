@@ -49,4 +49,69 @@ class NasrCsvValidationTest extends TestCase
             @unlink($path);
         }
     }
+
+    public function testNasrCsvFileRejectsZeroByteFile(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_zero_' . bin2hex(random_bytes(4)) . '.csv';
+        file_put_contents($path, '');
+
+        try {
+            $this->assertFalse(nasrFrqCsvFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testNasrDownloadedZipRejectsEmptyFile(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_empty_' . bin2hex(random_bytes(4)) . '.zip';
+        file_put_contents($path, '');
+
+        try {
+            $this->assertFalse(nasrDownloadedZipFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testNasrDownloadedZipRejectsNonZipMagic(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_badzip_' . bin2hex(random_bytes(4)) . '.zip';
+        file_put_contents($path, str_repeat('x', 64));
+
+        try {
+            $this->assertFalse(nasrDownloadedZipFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testNasrDownloadedZipRejectsZipWithNoEntries(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_emptyzip_' . bin2hex(random_bytes(4)) . '.zip';
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path, ZipArchive::CREATE) === true);
+        $zip->close();
+
+        try {
+            $this->assertFalse(nasrDownloadedZipFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testNasrDownloadedZipAcceptsZipWithFrqFixture(): void
+    {
+        $path = sys_get_temp_dir() . '/nasr_goodzip_' . bin2hex(random_bytes(4)) . '.zip';
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path, ZipArchive::CREATE) === true);
+        $zip->addFile($this->fixtureDir . '/FRQ.csv', 'FRQ.csv');
+        $zip->close();
+
+        try {
+            $this->assertTrue(nasrDownloadedZipFileIsValid($path));
+        } finally {
+            @unlink($path);
+        }
+    }
 }
