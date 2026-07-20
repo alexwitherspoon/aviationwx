@@ -1207,7 +1207,7 @@ if (php_sapi_name() === 'cli') {
                                                         <td><?php echo htmlspecialchars((string) ($sourceRow['name'] ?? '')); ?></td>
                                                         <td><?php echo htmlspecialchars((string) ($sourceRow['status'] ?? '')); ?></td>
                                                         <td><?php echo htmlspecialchars((string) ($sourceRow['message'] ?? '')); ?></td>
-                                                        <td><?php echo htmlspecialchars($diagnostics !== '' ? $diagnostics : '—'); ?></td>
+                                                        <td><?php echo htmlspecialchars($diagnostics !== '' ? $diagnostics : '---'); ?></td>
                                                     </tr>
                                                     <?php endforeach; ?>
                                                 </tbody>
