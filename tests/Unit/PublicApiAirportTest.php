@@ -22,6 +22,7 @@ class PublicApiAirportTest extends TestCase
         resetOurAirportsFrequenciesCacheMemo();
         parent::tearDown();
     }
+
     private static function loadFormatAirportDetails(): void
     {
         static $loaded = false;
