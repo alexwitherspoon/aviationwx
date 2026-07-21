@@ -282,6 +282,36 @@ class OurAirportsRefreshTest extends TestCase
         $this->assertTrue(runwaysMergeWorkerShouldRun());
     }
 
+    public function testMergeWorkerShouldRun_WhenCallerHoldsExclusiveLock_IgnoresSelfLock(): void
+    {
+        file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);
+        touch(CACHE_RUNWAYS_DATA_FILE, time() - 3600);
+        file_put_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV, "id,ident\n", LOCK_EX);
+        file_put_contents(CACHE_OURAIRPORTS_RUNWAYS_CSV, "id,airport_ident\n", LOCK_EX);
+        touch(CACHE_OURAIRPORTS_AIRPORTS_CSV, time() - 7200);
+        touch(CACHE_OURAIRPORTS_RUNWAYS_CSV, time() - 7200);
+
+        ourAirportsUpdateFileMeta('airports', [
+            'last_probe_result' => 'unchanged',
+        ]);
+        ourAirportsUpdateFileMeta('runways', [
+            'last_probe_result' => 'unchanged',
+        ]);
+
+        $lockPath = getRunwaysFetchLockPath();
+        $fp = fopen($lockPath, 'c+');
+        $this->assertIsResource($fp);
+        $this->assertTrue(flock($fp, LOCK_EX | LOCK_NB));
+
+        try {
+            $this->assertFalse(runwaysMergeWorkerShouldRun());
+            $this->assertTrue(runwaysMergeWorkerShouldRun(true));
+        } finally {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
     public function testBulkWorkerShouldNotRunWhileLockHeld(): void
     {
         ourAirportsUpdateFileMeta('airports', [

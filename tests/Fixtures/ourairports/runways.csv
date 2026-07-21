@@ -1,0 +1,3 @@
+id,airport_ref,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_elevation_ft,he_elevation_ft,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft
+1,1,KPDX,11000,150,ASPH,1,0,10L,28R,45.589722,-122.605000,45.588722,-122.590000,31,31,100,280,0,0
+2,2,KHIO,6600,150,ASPH,1,0,03,21,45.540394,-122.960000,45.540394,-122.939650,208,208,30,210,0,0
