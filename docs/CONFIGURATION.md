@@ -186,9 +186,11 @@ The `frequencies` object maps service names to MHz strings. Align keys with char
 
 **Reference fill at read time:** When a role is omitted from config, the dashboard and Public API `GET /v1/airports/{id}` merge frequencies from reference catalogs: **config overrides NASR FRQ when set per field; otherwise NASR when FAA publishes a row; otherwise OurAirports `airport-frequencies.csv`.** NASR is preferred over OurAirports when both exist (including selected non-US airports in NASR, such as `CYVR`). Values are never written back into `airports.json` by ingest workers.
 
+NASR `FREQ_USE` mappings include tower/ground (`LCL/P`, `GND/P`), CTAF/UNICOM, ATIS, approach/departure (`APCH/P`, `DEP/P`, combined `APCH/P DEP/P`), clearance delivery (`CD/P`), and automated weather rows whose `FREQ_USE` contains `ASOS` or `AWOS`. Secondary NASR rows (`LCL/S`, `GND/S`, `APCH/S`, `DEP/S`, and `CD PRE *` clearance) fill a role only when no primary row exists. Instrument-approach backup frequencies (`FREQ_USE` ending in ` IC`) are not surfaced.
+
 | Key | When to use |
 |-----|-------------|
-| `tower`, `ground`, `atis`, `clearance_delivery`, `approach`, `departure` | As published for controlled airports. |
+| `tower`, `ground`, `atis`, `clearance`, `approach`, `departure` | As published for controlled airports. |
 | `ctaf` | Common traffic frequency at non-towered airports. When the source lists **CTAF/UNICOM** on **one** frequency, use **`ctaf` only**. Do not also add `unicom` with the same MHz (duplicate line in the UI, not two services). |
 | `unicom` | When UNICOM is **distinct** from CTAF (e.g. towered field FBO/airport advisory on 122.8 while traffic uses tower), or when only UNICOM is given without a separate CTAF. |
 | `awos`, `asos` | Automated weather as published. |

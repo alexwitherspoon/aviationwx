@@ -32,6 +32,57 @@ class NasrFrequenciesParseTest extends TestCase
         $this->assertSame('121.7', $parsed['airports']['HIO']['ground']);
         $this->assertSame('127.65', $parsed['airports']['HIO']['atis']);
         $this->assertSame('122.95', $parsed['airports']['HIO']['unicom']);
+        $this->assertSame('118.1', $parsed['airports']['HIO']['approach']);
+        $this->assertSame('118.1', $parsed['airports']['HIO']['departure']);
+        $this->assertSame('119.3', $parsed['airports']['HIO']['ctaf']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_ApproachDepartureCombined_ReturnsBothRoles(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('APCH/P DEP/P');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['approach', 'departure'], $mapping['roles']);
+        $this->assertSame(NASR_FREQ_MAP_TIER_PRIMARY, $mapping['tier']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_InstrumentApproachBackup_ReturnsNull(): void
+    {
+        $this->assertNull(nasrDescribeFreqUseMapping('APCH/P IC'));
+    }
+
+    public function testNasrDescribeFreqUseMapping_AwosPattern_ReturnsAwosRole(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('AWOS-3 PVT');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['awos'], $mapping['roles']);
+    }
+
+    public function testParseFrqCsv_ApproachDepartureClearanceAndWeatherRoles(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('125.3', $parsed['airports']['SPB']['approach']);
+        $this->assertSame('125.3', $parsed['airports']['SPB']['departure']);
+        $this->assertSame('121.9', $parsed['airports']['SPB']['clearance']);
+        $this->assertSame('118.275', $parsed['airports']['LLJ']['asos']);
+        $this->assertSame('119.025', $parsed['airports']['AWS1']['awos']);
+        $this->assertSame('121.75', $parsed['airports']['CLR1']['clearance']);
+    }
+
+    public function testParseFrqCsv_SecondaryTowerFillsWhenPrimaryMissing(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('119.5', $parsed['airports']['SEC1']['tower']);
+    }
+
+    public function testParseFrqCsv_PrimaryTowerWinsOverSecondary(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('120.1', $parsed['airports']['PRI1']['tower']);
     }
 
     public function testGetNasrFrequenciesForConfigResolvesFaaIdentifier(): void
@@ -137,6 +188,24 @@ class AirportFrequenciesTest extends TestCase
             'ground' => '121.7',
             'unicom' => '122.95',
             'atis' => '127.65',
+            'approach' => '118.1',
+            'departure' => '118.1',
+        ], $merged);
+    }
+
+    public function testMergedFrequenciesFromNasr_ApproachDepartureClearanceRoles(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        $merged = getMergedAirportFrequencies('kspb', [
+            'icao' => 'KSPB',
+            'faa' => 'SPB',
+        ]);
+
+        $this->assertSame([
+            'approach' => '125.3',
+            'departure' => '125.3',
+            'clearance' => '121.9',
         ], $merged);
     }
 

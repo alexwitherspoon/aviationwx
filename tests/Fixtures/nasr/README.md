@@ -8,7 +8,7 @@ Offline slices of FAA NASR CSV extracts for unit tests.
 
 ## FRQ (airport frequencies)
 
-`FRQ.csv` contains pilot-facing frequency rows for fixture airports such as `69V` (duplicate CTAF/UNICOM) and `HIO` (tower/ground/ATIS).
+`FRQ.csv` contains pilot-facing frequency rows for fixture airports such as `69V` (duplicate CTAF/UNICOM), `HIO` (tower/ground/ATIS/approach/departure), and `SPB` (approach/departure/clearance).
 
 Rows may span more than one subscription `EFF_DATE`. The parser keys airports by `SERVICED_FACILITY` (ARPT_ID).
 
