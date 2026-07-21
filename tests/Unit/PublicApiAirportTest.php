@@ -18,7 +18,9 @@ class PublicApiAirportTest extends TestCase
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();
+        require_once __DIR__ . '/../../lib/airport-frequencies.php';
         resetOurAirportsFrequenciesCacheMemo();
+        parent::tearDown();
     }
     private static function loadFormatAirportDetails(): void
     {
