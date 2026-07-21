@@ -150,7 +150,7 @@ class AirportFrequenciesTest extends TestCase
         $this->assertSame(['ctaf' => '123.2'], $merged);
     }
 
-    public function testMergedFrequenciesPreferNasrOverOurAirportsWhenBothPresent(): void
+    public function testGetMergedAirportFrequencies_NasrAndOurAirportsBothPresent_PrefersNasr(): void
     {
         $this->loadNasrFrqFixtureCache();
 
