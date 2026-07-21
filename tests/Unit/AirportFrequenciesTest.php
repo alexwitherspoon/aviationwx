@@ -150,6 +150,29 @@ class AirportFrequenciesTest extends TestCase
         $this->assertSame(['ctaf' => '123.2'], $merged);
     }
 
+    public function testMergedFrequenciesPreferNasrOverOurAirportsWhenBothPresent(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        setOurAirportsFrequenciesCacheForTesting([
+            'CYVR' => [
+                'tower' => '119.0',
+                'ground' => '121.0',
+                'atis' => '127.0',
+            ],
+        ]);
+
+        $merged = getMergedAirportFrequencies('cyvr', [
+            'icao' => 'CYVR',
+        ]);
+
+        $this->assertSame([
+            'tower' => '118.7',
+            'ground' => '121.7',
+            'atis' => '124.6',
+        ], $merged);
+    }
+
     public function testParseOurAirportsFrequenciesCsvDedupesRoles(): void
     {
         $csv = <<<CSV

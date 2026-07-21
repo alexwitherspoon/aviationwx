@@ -9,8 +9,17 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Helpers/LoadsNasrFrqFixtureCacheTrait.php';
+
 class PublicApiAirportTest extends TestCase
 {
+    use LoadsNasrFrqFixtureCacheTrait;
+
+    protected function tearDown(): void
+    {
+        $this->tearDownNasrFrqFixtureCache();
+        resetOurAirportsFrequenciesCacheMemo();
+    }
     private static function loadFormatAirportDetails(): void
     {
         static $loaded = false;
@@ -223,5 +232,61 @@ class PublicApiAirportTest extends TestCase
         $this->assertIsArray($formatted['services']);
         $this->assertArrayHasKey('fuel', $formatted['services']);
         $this->assertSame('100LL, Jet-A', $formatted['services']['fuel']);
+    }
+
+    public function testFormatAirportDetails_MergedFrequenciesFromNasrWhenConfigMissing(): void
+    {
+        self::loadFormatAirportDetails();
+        $this->loadNasrFrqFixtureCache();
+
+        $formatted = formatAirportDetails('69v', [
+            'faa' => '69V',
+            'name' => 'Huntington Muni',
+        ]);
+
+        $this->assertIsArray($formatted['frequencies']);
+        $this->assertSame(['ctaf' => '122.8'], $formatted['frequencies']);
+    }
+
+    public function testFormatAirportDetails_MergedFrequenciesPreferNasrOverOurAirports(): void
+    {
+        self::loadFormatAirportDetails();
+        $this->loadNasrFrqFixtureCache();
+
+        setOurAirportsFrequenciesCacheForTesting([
+            'CYVR' => [
+                'tower' => '119.0',
+                'ground' => '121.0',
+                'atis' => '127.0',
+            ],
+        ]);
+
+        $formatted = formatAirportDetails('cyvr', [
+            'icao' => 'CYVR',
+            'name' => 'Vancouver Intl',
+        ]);
+
+        $this->assertSame([
+            'tower' => '118.7',
+            'ground' => '121.7',
+            'atis' => '124.6',
+        ], $formatted['frequencies']);
+    }
+
+    public function testFormatAirportDetails_ConfigFrequencyOverridesNasrPerField(): void
+    {
+        self::loadFormatAirportDetails();
+        $this->loadNasrFrqFixtureCache();
+
+        $formatted = formatAirportDetails('69v', [
+            'faa' => '69V',
+            'name' => 'Huntington Muni',
+            'frequencies' => [
+                'ctaf' => '123.0',
+            ],
+        ]);
+
+        $this->assertSame('123', $formatted['frequencies']['ctaf']);
+        $this->assertSame('122.8', $formatted['frequencies']['unicom']);
     }
 }

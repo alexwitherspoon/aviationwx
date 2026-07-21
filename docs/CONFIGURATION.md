@@ -182,7 +182,9 @@ Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performa
 
 ### Radio frequencies
 
-The `frequencies` object maps service names to MHz strings. Align keys with chart / FAA Airport/Facility Directory style where possible:
+The `frequencies` object maps service names to MHz strings. Align keys with chart / FAA Airport/Facility Directory style where possible.
+
+**Reference fill at read time:** When a role is omitted from config, the dashboard and Public API `GET /v1/airports/{id}` merge frequencies from reference catalogs: **config overrides NASR FRQ when set per field; otherwise NASR when FAA publishes a row; otherwise OurAirports `airport-frequencies.csv`.** NASR is preferred over OurAirports when both exist (including selected non-US airports in NASR, such as `CYVR`). Values are never written back into `airports.json` by ingest workers.
 
 | Key | When to use |
 |-----|-------------|
