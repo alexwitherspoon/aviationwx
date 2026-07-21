@@ -15,6 +15,13 @@ class PublicApiAirportTest extends TestCase
 {
     use LoadsNasrFrqFixtureCacheTrait;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        require_once __DIR__ . '/../../lib/airport-frequencies.php';
+        setOurAirportsFrequenciesCacheForTesting([]);
+    }
+
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();

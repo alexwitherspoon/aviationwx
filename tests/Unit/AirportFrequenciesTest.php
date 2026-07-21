@@ -52,6 +52,12 @@ class AirportFrequenciesTest extends TestCase
 {
     use LoadsNasrFrqFixtureCacheTrait;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        setOurAirportsFrequenciesCacheForTesting([]);
+    }
+
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();
