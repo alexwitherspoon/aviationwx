@@ -62,6 +62,15 @@ function downloadNasrFrqCsvDirectory(): ?array
         return null;
     }
 
+    if (!nasrDownloadedZipFileIsValid($zipPath)) {
+        aviationwx_log('warning', 'nasr_frq: rejected invalid zip download', [
+            'source_url' => $url,
+            'zip_bytes' => @filesize($zipPath),
+        ], 'app');
+        nasrCleanupDirectory($tmpRoot);
+        return null;
+    }
+
     $zip = new ZipArchive();
     if ($zip->open($zipPath) !== true) {
         nasrCleanupDirectory($tmpRoot);

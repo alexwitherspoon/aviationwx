@@ -1,6 +1,6 @@
 <?php
 /**
- * Pre-parse validation for NASR APT and FRQ CSV extracts.
+ * Pre-parse validation for NASR APT and FRQ downloads and CSV extracts.
  */
 
 /** @var array<string, string> */
@@ -10,6 +10,55 @@ const NASR_CSV_HEADER_PREFIX = [
     'APT_RWY_END' => '"EFF_DATE","SITE_NO","SITE_TYPE_CODE","STATE_CODE","ARPT_ID","CITY","COUNTRY_CODE","RWY_ID","RWY_END_ID"',
     'FRQ' => '"EFF_DATE","FACILITY"',
 ];
+
+/** Minimum bytes for an empty ZIP (End of Central Directory only; rejects zero-byte HTTP bodies). */
+const NASR_ZIP_MIN_FILE_BYTES = 22;
+
+/**
+ * Whether a downloaded NASR subscription zip is non-empty and contains file entries.
+ */
+function nasrDownloadedZipFileIsValid(string $path): bool
+{
+    if (!is_readable($path)) {
+        return false;
+    }
+
+    clearstatcache(true, $path);
+
+    $size = @filesize($path);
+    if (!is_int($size) || $size < NASR_ZIP_MIN_FILE_BYTES) {
+        return false;
+    }
+
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) {
+        return false;
+    }
+
+    $header = fread($handle, 2);
+    fclose($handle);
+
+    if ($header !== 'PK') {
+        return false;
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        return false;
+    }
+
+    $valid = false;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = $zip->getNameIndex($i);
+        if (is_string($name) && $name !== '' && !str_ends_with($name, '/')) {
+            $valid = true;
+            break;
+        }
+    }
+    $zip->close();
+
+    return $valid;
+}
 
 /**
  * Whether a NASR CSV file has a non-empty body and expected header prefix.
