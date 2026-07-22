@@ -190,7 +190,7 @@ NASR `FREQ_USE` mappings include tower/ground (`LCL/P`, `GND/P`), CTAF/UNICOM, A
 
 | Key | When to use |
 |-----|-------------|
-| `tower`, `ground`, `atis`, `clearance`, `approach`, `departure` | As published for controlled airports. |
+| `tower`, `ground`, `atis`, `clearance`, `approach`, `departure` | As published for controlled airports. Legacy config may use `clearance_delivery`; it is normalized to `clearance` at merge time. |
 | `ctaf` | Common traffic frequency at non-towered airports. When the source lists **CTAF/UNICOM** on **one** frequency, use **`ctaf` only**. Do not also add `unicom` with the same MHz (duplicate line in the UI, not two services). |
 | `unicom` | When UNICOM is **distinct** from CTAF (e.g. towered field FBO/airport advisory on 122.8 while traffic uses tower), or when only UNICOM is given without a separate CTAF. |
 | `awos`, `asos` | Automated weather as published. |
