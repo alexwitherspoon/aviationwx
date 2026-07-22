@@ -17,6 +17,7 @@ class NasrFrequenciesParseTest extends TestCase
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();
+        parent::tearDown();
     }
 
     public function testParseFrqCsvMapsPilotFacingRoles(): void
@@ -113,6 +114,7 @@ class AirportFrequenciesTest extends TestCase
     {
         $this->tearDownNasrFrqFixtureCache();
         resetOurAirportsFrequenciesCacheMemo();
+        parent::tearDown();
     }
 
     public function testCollapseDuplicateRolesRemovesUnicomWhenSameAsCtaf(): void
