@@ -187,7 +187,7 @@ function fetchNasrFrqIfNeeded(bool $force = false): bool
             'frq_last_discovery_at' => gmdate('c'),
         ];
 
-        $saved = saveNasrFrqCache($parsed['airports'], $meta);
+        $saved = saveNasrFrqCache($parsed['airports'], $meta, $parsed['pairing'] ?? []);
         if (!$saved) {
             aviationwx_log('error', 'nasr_frq: failed to write cache', [], 'app');
             nasrCleanupDirectory($tmpRoot);

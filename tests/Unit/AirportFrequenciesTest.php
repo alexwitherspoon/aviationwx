@@ -17,6 +17,7 @@ class NasrFrequenciesParseTest extends TestCase
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();
+        parent::tearDown();
     }
 
     public function testParseFrqCsvMapsPilotFacingRoles(): void
@@ -32,6 +33,94 @@ class NasrFrequenciesParseTest extends TestCase
         $this->assertSame('121.7', $parsed['airports']['HIO']['ground']);
         $this->assertSame('127.65', $parsed['airports']['HIO']['atis']);
         $this->assertSame('122.95', $parsed['airports']['HIO']['unicom']);
+        $this->assertSame('118.1', $parsed['airports']['HIO']['approach']);
+        $this->assertSame('118.1', $parsed['airports']['HIO']['departure']);
+        $this->assertSame('119.3', $parsed['airports']['HIO']['ctaf']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_ApproachDepartureCombined_ReturnsBothRoles(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('APCH/P DEP/P');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['approach', 'departure'], $mapping['roles']);
+        $this->assertSame(NASR_FREQ_MAP_TIER_PRIMARY, $mapping['tier']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_ApproachIc_ReturnsIcFallbackTier(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('APCH/P IC');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['approach'], $mapping['roles']);
+        $this->assertSame(NASR_FREQ_MAP_TIER_IC_FALLBACK, $mapping['tier']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_LclPrimaryIc_ReturnsIcFallbackTower(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('LCL/P IC');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['tower'], $mapping['roles']);
+        $this->assertSame(NASR_FREQ_MAP_TIER_IC_FALLBACK, $mapping['tier']);
+    }
+
+    public function testNasrDescribeFreqUseMapping_AwosPattern_ReturnsAwosRole(): void
+    {
+        $mapping = nasrDescribeFreqUseMapping('AWOS-3 PVT');
+
+        $this->assertNotNull($mapping);
+        $this->assertSame(['awos'], $mapping['roles']);
+    }
+
+    public function testParseFrqCsv_ApproachDepartureClearanceAndWeatherRoles(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('125.3', $parsed['airports']['SPB']['approach']);
+        $this->assertSame('125.3', $parsed['airports']['SPB']['departure']);
+        $this->assertSame('121.9', $parsed['airports']['SPB']['clearance']);
+        $this->assertSame('118.275', $parsed['airports']['LLJ']['asos']);
+        $this->assertSame('119.025', $parsed['airports']['AWS1']['awos']);
+        $this->assertSame('121.75', $parsed['airports']['CLR1']['clearance']);
+    }
+
+    public function testParseFrqCsv_SecondaryTowerFillsWhenPrimaryMissing(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('119.5', $parsed['airports']['SEC1']['tower']);
+    }
+
+    public function testParseFrqCsv_PrimaryTowerWinsOverSecondary(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('120.1', $parsed['airports']['PRI1']['tower']);
+        $this->assertSame('119.3', $parsed['airports']['HIO']['tower']);
+    }
+
+    public function testParseFrqCsv_IcFallbackTowerUsedWhenPrimaryMissing(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('118.5', $parsed['airports']['LNK']['tower']);
+        $this->assertSame('118.5', $parsed['airports']['LNK']['ctaf']);
+    }
+
+    public function testParseFrqCsv_ApproachPrefersInitialContactWhenPrimaryAlsoPresent(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame('125.95', $parsed['airports']['CMH']['approach']);
+        $this->assertSame('125.95', $parsed['airports']['CMH']['departure']);
+    }
+
+    public function testParseFrqCsv_RecordsCtafUnicomPairingMetadata(): void
+    {
+        $parsed = nasrParseFrqCsvFile($this->nasrFrqFixtureDirectory() . '/FRQ.csv');
+
+        $this->assertSame(['ctaf_unicom_mhz' => '122.8'], $parsed['pairing']['U82']);
     }
 
     public function testGetNasrFrequenciesForConfigResolvesFaaIdentifier(): void
@@ -52,10 +141,17 @@ class AirportFrequenciesTest extends TestCase
 {
     use LoadsNasrFrqFixtureCacheTrait;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        setOurAirportsFrequenciesCacheForTesting([]);
+    }
+
     protected function tearDown(): void
     {
         $this->tearDownNasrFrqFixtureCache();
         resetOurAirportsFrequenciesCacheMemo();
+        parent::tearDown();
     }
 
     public function testCollapseDuplicateRolesRemovesUnicomWhenSameAsCtaf(): void
@@ -103,7 +199,7 @@ class AirportFrequenciesTest extends TestCase
         ]);
 
         $this->assertSame('123', $merged['ctaf']);
-        $this->assertSame('122.8', $merged['unicom']);
+        $this->assertArrayNotHasKey('unicom', $merged);
     }
 
     public function testMergedFrequenciesFromNasrCollapseCtafUnicomDuplicate(): void
@@ -131,6 +227,24 @@ class AirportFrequenciesTest extends TestCase
             'ground' => '121.7',
             'unicom' => '122.95',
             'atis' => '127.65',
+            'approach' => '118.1',
+            'departure' => '118.1',
+        ], $merged);
+    }
+
+    public function testMergedFrequenciesFromNasr_ApproachDepartureClearanceRoles(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        $merged = getMergedAirportFrequencies('kspb', [
+            'icao' => 'KSPB',
+            'faa' => 'SPB',
+        ]);
+
+        $this->assertSame([
+            'approach' => '125.3',
+            'departure' => '125.3',
+            'clearance' => '121.9',
         ], $merged);
     }
 
@@ -150,6 +264,29 @@ class AirportFrequenciesTest extends TestCase
         $this->assertSame(['ctaf' => '123.2'], $merged);
     }
 
+    public function testGetMergedAirportFrequencies_NasrAndOurAirportsBothPresent_PrefersNasr(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        setOurAirportsFrequenciesCacheForTesting([
+            'CYVR' => [
+                'tower' => '119.0',
+                'ground' => '121.0',
+                'atis' => '127.0',
+            ],
+        ]);
+
+        $merged = getMergedAirportFrequencies('cyvr', [
+            'icao' => 'CYVR',
+        ]);
+
+        $this->assertSame([
+            'tower' => '118.7',
+            'ground' => '121.7',
+            'atis' => '124.6',
+        ], $merged);
+    }
+
     public function testParseOurAirportsFrequenciesCsvDedupesRoles(): void
     {
         $csv = <<<CSV
@@ -161,5 +298,62 @@ CSV;
         $parsed = parseOurAirportsFrequenciesCsv($csv);
 
         $this->assertSame(['ctaf' => '122.9'], $parsed['TEST']);
+    }
+
+    public function testNormalizeAirportFrequencyConfigKeys_MapsClearanceDeliveryToClearance(): void
+    {
+        $normalized = normalizeAirportFrequencyConfigKeys([
+            'clearance_delivery' => '121.65',
+            'ctaf' => '122.8',
+        ]);
+
+        $this->assertSame([
+            'clearance' => '121.65',
+            'ctaf' => '122.8',
+        ], $normalized);
+    }
+
+    public function testGetMergedAirportFrequencies_NormalizesClearanceDeliveryConfigKey(): void
+    {
+        $merged = getMergedAirportFrequencies('test', [
+            'frequencies' => [
+                'clearance_delivery' => '121.65',
+            ],
+        ]);
+
+        $this->assertSame(['clearance' => '121.65'], $merged);
+    }
+
+    public function testGetMergedAirportFrequencies_SuppressesGhostUnicomAfterPartialCtafOverride(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        setOurAirportsFrequenciesCacheForTesting([
+            'U82' => [
+                'unicom' => '122.8',
+            ],
+        ]);
+
+        $merged = getMergedAirportFrequencies('u82', [
+            'icao' => 'U82',
+            'faa' => 'U82',
+            'frequencies' => [
+                'ctaf' => '122.9',
+            ],
+        ]);
+
+        $this->assertSame(['ctaf' => '122.9'], $merged);
+    }
+
+    public function testGetMergedAirportFrequencies_LincolnTowerFromIcFallback(): void
+    {
+        $this->loadNasrFrqFixtureCache();
+
+        $merged = getMergedAirportFrequencies('klnk', [
+            'icao' => 'KLNK',
+            'faa' => 'LNK',
+        ]);
+
+        $this->assertSame('118.5', $merged['tower']);
     }
 }

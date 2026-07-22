@@ -20,6 +20,7 @@ trait LoadsNasrFrqFixtureCacheTrait
         setNasrFrqCacheForTesting([
             'schema_version' => NASR_FRQ_SCHEMA_VERSION,
             'airports' => $built['airports'],
+            'pairing' => $built['pairing'] ?? [],
         ]);
     }
 

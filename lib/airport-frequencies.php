@@ -132,6 +132,87 @@ function collapseDuplicateAirportFrequencyRoles(array $frequencies): array
 }
 
 /**
+ * Normalize legacy config frequency role keys to canonical platform keys.
+ *
+ * @param array<string, mixed> $frequencies
+ * @return array<string, string>
+ */
+function normalizeAirportFrequencyConfigKeys(array $frequencies): array
+{
+    $normalized = [];
+
+    foreach ($frequencies as $role => $mhz) {
+        if (!is_string($role) || $role === '') {
+            continue;
+        }
+
+        $canonicalRole = match ($role) {
+            'clearance_delivery' => 'clearance',
+            default => $role,
+        };
+
+        $value = normalizeAviationFrequencyMhz($mhz);
+        if ($value === null) {
+            continue;
+        }
+
+        if (!isset($normalized[$canonicalRole])) {
+            $normalized[$canonicalRole] = $value;
+        }
+    }
+
+    return $normalized;
+}
+
+/**
+ * Suppress companion NASR/OA roles resurrected after a partial config override.
+ *
+ * When NASR published CTAF and UNICOM on one MHz and config overrides only CTAF,
+ * do not show a separate UNICOM line at the paired MHz from lower-precedence sources.
+ *
+ * @param array<string, string> $merged
+ * @param array<string, string> $configFreqs
+ * @param array<string, string> $nasrPairing
+ * @return array<string, string>
+ */
+function suppressCompanionFrequencyRolesAfterPartialConfigOverride(
+    array $merged,
+    array $configFreqs,
+    array $nasrPairing
+): array {
+    $pairedCtafUnicom = $nasrPairing['ctaf_unicom_mhz'] ?? null;
+    if (is_string($pairedCtafUnicom)
+        && $pairedCtafUnicom !== ''
+        && isset($configFreqs['ctaf'])
+        && !isset($configFreqs['unicom'])
+        && isset($merged['unicom'])
+        && $merged['unicom'] === $pairedCtafUnicom) {
+        unset($merged['unicom']);
+    }
+
+    $pairedTowerCtaf = $nasrPairing['tower_ctaf_mhz'] ?? null;
+    if (is_string($pairedTowerCtaf)
+        && $pairedTowerCtaf !== ''
+        && isset($configFreqs['tower'])
+        && !isset($configFreqs['ctaf'])
+        && isset($merged['ctaf'])
+        && $merged['ctaf'] === $pairedTowerCtaf) {
+        unset($merged['ctaf']);
+    }
+
+    if (is_string($pairedTowerCtaf)
+        && $pairedTowerCtaf !== ''
+        && isset($configFreqs['ctaf'])
+        && !isset($configFreqs['tower'])
+        && isset($merged['tower'])
+        && $merged['tower'] === $pairedTowerCtaf) {
+        unset($merged['tower']);
+    }
+
+    return $merged;
+}
+
+/**
  * Merge frequency maps with per-field precedence (first source wins per role).
  *
  * @param list<array<string, string>> $sources Ordered sources (highest precedence first)
@@ -253,21 +334,17 @@ function getMergedAirportFrequencies(string $airportId, array $airport): array
 {
     $configFreqs = [];
     if (isset($airport['frequencies']) && is_array($airport['frequencies'])) {
-        foreach ($airport['frequencies'] as $role => $mhz) {
-            if (!is_string($role) || $role === '') {
-                continue;
-            }
-            $value = normalizeAviationFrequencyMhz($mhz);
-            if ($value !== null) {
-                $configFreqs[$role] = $value;
-            }
-        }
+        $configFreqs = normalizeAirportFrequencyConfigKeys($airport['frequencies']);
     }
 
     $nasrFreqs = getNasrFrequenciesForConfig($airport);
     $ourAirportsFreqs = getOurAirportsFrequenciesForAirport($airportId, $airport);
+    $nasrPairing = getNasrFrequencyPairingForConfig($airport);
 
-    return mergeAirportFrequencySources([$configFreqs, $nasrFreqs, $ourAirportsFreqs]);
+    $merged = mergeAirportFrequencySources([$configFreqs, $nasrFreqs, $ourAirportsFreqs]);
+    $merged = suppressCompanionFrequencyRolesAfterPartialConfigOverride($merged, $configFreqs, $nasrPairing);
+
+    return $merged;
 }
 
 /**
