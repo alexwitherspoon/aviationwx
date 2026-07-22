@@ -124,9 +124,13 @@ function nasrRecordApproachDepartureSource(
     }
 
     if ($tier === NASR_FREQ_MAP_TIER_PRIMARY) {
-        $approachDepartureSources[$arptId][$role]['primary'] = $mhz;
+        if ($approachDepartureSources[$arptId][$role]['primary'] === null) {
+            $approachDepartureSources[$arptId][$role]['primary'] = $mhz;
+        }
     } elseif ($tier === NASR_FREQ_MAP_TIER_IC_FALLBACK) {
-        $approachDepartureSources[$arptId][$role]['ic'] = $mhz;
+        if ($approachDepartureSources[$arptId][$role]['ic'] === null) {
+            $approachDepartureSources[$arptId][$role]['ic'] = $mhz;
+        }
     }
 }
 
