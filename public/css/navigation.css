@@ -335,13 +335,29 @@
    Responsive Styles
    ============================================ */
 
-@media (max-width: 900px) {
+/* Full inline nav needs ~1050px; switch to hamburger before links overflow */
+@media (max-width: 1050px) {
     .site-nav-links {
         display: none;
     }
     
     .site-nav-hamburger {
         display: block;
+    }
+
+    .site-nav-logo-text {
+        display: none;
+    }
+
+    .site-nav-search-wrapper {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .site-nav-search-input {
+        width: 100%;
+        max-width: 350px;
+        min-width: 120px;
     }
 }
 
