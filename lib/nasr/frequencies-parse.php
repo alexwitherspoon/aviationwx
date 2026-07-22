@@ -106,7 +106,7 @@ function nasrFormatFrequencyMhz($mhz): ?string
 }
 
 /**
- * @param array<string, array{primary: ?string, ic: ?string}> $approachDepartureSources
+ * @param array<string, array<string, array{primary: ?string, ic: ?string}>> $approachDepartureSources
  */
 function nasrRecordApproachDepartureSource(
     array &$approachDepartureSources,
@@ -134,7 +134,7 @@ function nasrRecordApproachDepartureSource(
  * Apply one FRQ.csv row to per-airport role candidates.
  *
  * @param array<string, array<string, list<array{mhz: string, tier: int, order: int}>>> $roleCandidates
- * @param array<string, array{primary: ?string, ic: ?string}> $approachDepartureSources
+ * @param array<string, array<string, array{primary: ?string, ic: ?string}>> $approachDepartureSources
  * @param array<string, string> $row
  */
 function nasrCollectFrqRowCandidates(
