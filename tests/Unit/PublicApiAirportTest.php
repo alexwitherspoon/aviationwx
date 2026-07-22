@@ -297,6 +297,6 @@ class PublicApiAirportTest extends TestCase
         ]);
 
         $this->assertSame('123', $formatted['frequencies']['ctaf']);
-        $this->assertSame('122.8', $formatted['frequencies']['unicom']);
+        $this->assertArrayNotHasKey('unicom', $formatted['frequencies']);
     }
 }
