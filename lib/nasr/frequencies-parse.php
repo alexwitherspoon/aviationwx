@@ -131,17 +131,17 @@ function nasrRecordApproachDepartureSource(
 }
 
 /**
- * Apply one FRQ.csv row to the airports map when its mapping tier is allowed.
+ * Apply one FRQ.csv row to per-airport role candidates.
  *
- * @param array<string, array<string, string>> $airports
+ * @param array<string, array<string, list<array{mhz: string, tier: int, order: int}>>> $roleCandidates
  * @param array<string, array{primary: ?string, ic: ?string}> $approachDepartureSources
  * @param array<string, string> $row
  */
-function nasrApplyFrqRowToAirports(
-    array &$airports,
+function nasrCollectFrqRowCandidates(
+    array &$roleCandidates,
     array &$approachDepartureSources,
     array $row,
-    int $maxTier
+    int $rowOrder
 ): void {
     $arptId = strtoupper(trim((string) ($row['SERVICED_FACILITY'] ?? '')));
     if ($arptId === '') {
@@ -149,7 +149,7 @@ function nasrApplyFrqRowToAirports(
     }
 
     $mapping = nasrDescribeFreqUseMapping((string) ($row['FREQ_USE'] ?? ''));
-    if ($mapping === null || $mapping['tier'] > $maxTier) {
+    if ($mapping === null) {
         return;
     }
 
@@ -158,17 +158,57 @@ function nasrApplyFrqRowToAirports(
         return;
     }
 
-    if (!isset($airports[$arptId])) {
-        $airports[$arptId] = [];
-    }
-
     foreach ($mapping['roles'] as $role) {
         nasrRecordApproachDepartureSource($approachDepartureSources, $arptId, $role, $mhz, $mapping['tier']);
 
-        if (!isset($airports[$arptId][$role])) {
-            $airports[$arptId][$role] = $mhz;
+        if (!isset($roleCandidates[$arptId])) {
+            $roleCandidates[$arptId] = [];
+        }
+        if (!isset($roleCandidates[$arptId][$role])) {
+            $roleCandidates[$arptId][$role] = [];
+        }
+
+        $roleCandidates[$arptId][$role][] = [
+            'mhz' => $mhz,
+            'tier' => $mapping['tier'],
+            'order' => $rowOrder,
+        ];
+    }
+}
+
+/**
+ * Resolve collected FRQ role candidates into airport frequency maps.
+ *
+ * @param array<string, array<string, list<array{mhz: string, tier: int, order: int}>>> $roleCandidates
+ * @return array<string, array<string, string>>
+ */
+function nasrResolveFrqRoleCandidates(array $roleCandidates): array
+{
+    $airports = [];
+
+    foreach ($roleCandidates as $arptId => $roles) {
+        foreach ($roles as $role => $candidates) {
+            usort($candidates, static function (array $a, array $b): int {
+                if ($a['tier'] !== $b['tier']) {
+                    return $a['tier'] <=> $b['tier'];
+                }
+
+                return $a['order'] <=> $b['order'];
+            });
+
+            if ($candidates === []) {
+                continue;
+            }
+
+            if (!isset($airports[$arptId])) {
+                $airports[$arptId] = [];
+            }
+
+            $airports[$arptId][$role] = $candidates[0]['mhz'];
         }
     }
+
+    return $airports;
 }
 
 /**
@@ -254,22 +294,17 @@ function nasrParseFrqCsvFile(string $csvPath): array
     }
 
     $effectiveDate = null;
-    $airports = [];
+    $roleCandidates = [];
     $approachDepartureSources = [];
+    $rowOrder = 0;
 
     foreach (nasrIterateCsvFile($csvPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
-        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_PRIMARY);
+        nasrCollectFrqRowCandidates($roleCandidates, $approachDepartureSources, $row, $rowOrder);
+        $rowOrder++;
     }
 
-    foreach (nasrIterateCsvFile($csvPath) as $row) {
-        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_IC_FALLBACK);
-    }
-
-    foreach (nasrIterateCsvFile($csvPath) as $row) {
-        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_SECONDARY);
-    }
-
+    $airports = nasrResolveFrqRoleCandidates($roleCandidates);
     nasrApplyApproachDepartureInitialContactPreference($airports, $approachDepartureSources);
 
     return [
