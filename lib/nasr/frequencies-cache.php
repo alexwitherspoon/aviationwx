@@ -159,10 +159,12 @@ function nasrRebuildConfiguredFrqSlice(?array $configOverride = null): ?array
 
     $arptIds = nasrCollectArptIdsForPlatformAirports($config);
     $airports = nasrBuildConfiguredAirportsFromFull($full['airports'], $arptIds);
+    $pairing = nasrBuildConfiguredPairingFromFull($full['pairing'] ?? [], $arptIds);
 
     $payload = [
         'schema_version' => NASR_FRQ_SCHEMA_VERSION,
         'airports' => $airports,
+        'pairing' => $pairing,
     ];
 
     if (!nasrWriteConfiguredFrqCache($payload, $configSha)) {
@@ -235,14 +237,16 @@ function loadNasrFrqCache(): ?array
  *
  * @param array<string, array<string, string>> $airports Parsed frequencies keyed by ARPT_ID
  * @param array<string, mixed> $meta Metadata fields to merge into nasr_meta.json
+ * @param array<string, array<string, string>> $pairing Companion-role metadata keyed by ARPT_ID
  */
-function saveNasrFrqCache(array $airports, array $meta): bool
+function saveNasrFrqCache(array $airports, array $meta, array $pairing = []): bool
 {
     ensureCacheDir(CACHE_NASR_DIR);
 
     $payload = [
         'schema_version' => NASR_FRQ_SCHEMA_VERSION,
         'airports' => $airports,
+        'pairing' => $pairing,
     ];
 
     $dataJson = json_encode($payload, JSON_UNESCAPED_SLASHES);
@@ -332,6 +336,33 @@ function getNasrFrequenciesForConfig(array $airport): array
 }
 
 /**
+ * Resolve NASR companion-role pairing metadata for an airport config row.
+ *
+ * @param array $airport Airport configuration
+ * @return array<string, string>
+ */
+function getNasrFrequencyPairingForConfig(array $airport): array
+{
+    $cache = loadNasrFrqCache();
+    if ($cache === null) {
+        return [];
+    }
+
+    $pairingIndex = $cache['pairing'] ?? [];
+    if (!is_array($pairingIndex)) {
+        return [];
+    }
+
+    foreach (nasrCandidateArptIds($airport) as $candidate) {
+        if (isset($pairingIndex[$candidate]) && is_array($pairingIndex[$candidate])) {
+            return $pairingIndex[$candidate];
+        }
+    }
+
+    return [];
+}
+
+/**
  * Clear in-request NASR FRQ cache memo (testing).
  */
 function resetNasrFrqCacheMemo(): void
@@ -355,9 +386,29 @@ function setNasrFrqCacheForTesting(?array $payload): void
  * Build NASR FRQ cache payload from a CSV directory (tests).
  *
  * @param string $csvDir Directory containing FRQ.csv
- * @return array{airports: array<string, array<string, string>>, effective_date: ?string}
+ * @return array{airports: array<string, array<string, string>>, pairing: array<string, array<string, string>>, effective_date: ?string}
  */
 function nasrBuildFrqCacheFromCsvDirectory(string $csvDir): array
 {
     return nasrParseFrqCsvFile(rtrim($csvDir, '/') . '/FRQ.csv');
+}
+
+/**
+ * Filter full NASR pairing metadata to configured ARPT_IDs.
+ *
+ * @param array<string, array<string, string>> $fullPairing
+ * @param list<string> $arptIds
+ * @return array<string, array<string, string>>
+ */
+function nasrBuildConfiguredPairingFromFull(array $fullPairing, array $arptIds): array
+{
+    $configured = [];
+
+    foreach ($arptIds as $arptId) {
+        if (isset($fullPairing[$arptId]) && is_array($fullPairing[$arptId]) && $fullPairing[$arptId] !== []) {
+            $configured[$arptId] = $fullPairing[$arptId];
+        }
+    }
+
+    return $configured;
 }

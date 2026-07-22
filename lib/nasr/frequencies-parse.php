@@ -8,14 +8,16 @@ require_once __DIR__ . '/parse.php';
 /** @var int Primary NASR FREQ_USE mappings (LCL/P, APCH/P, CD/P, ASOS/AWOS patterns, ...) */
 const NASR_FREQ_MAP_TIER_PRIMARY = 0;
 
+/** @var int Initial-contact NASR rows (LCL/P IC, APCH/P IC, ...) fill roles still empty after primary */
+const NASR_FREQ_MAP_TIER_IC_FALLBACK = 1;
+
 /** @var int Secondary NASR FREQ_USE mappings (LCL/S, GND/S, CD PRE *, ...) */
-const NASR_FREQ_MAP_TIER_SECONDARY = 1;
+const NASR_FREQ_MAP_TIER_SECONDARY = 2;
 
 /**
  * Map NASR FRQ FREQ_USE to platform frequency roles and mapping tier.
  *
- * Primary rows win over secondary rows for the same role. Instrument-approach backup
- * rows (FREQ_USE ending in " IC") and non-pilot-facing uses are ignored.
+ * Primary (/P) rows apply first, then Initial Contact (IC) fallbacks, then secondary (/S).
  *
  * @param string $freqUse NASR FREQ_USE column
  * @return array{roles: list<string>, tier: int}|null
@@ -27,11 +29,8 @@ function nasrDescribeFreqUseMapping(string $freqUse): ?array
         return null;
     }
 
-    if (preg_match('/\sIC$/', $use) === 1) {
-        return null;
-    }
-
     $primary = NASR_FREQ_MAP_TIER_PRIMARY;
+    $icFallback = NASR_FREQ_MAP_TIER_IC_FALLBACK;
     $secondary = NASR_FREQ_MAP_TIER_SECONDARY;
 
     $exact = match ($use) {
@@ -44,6 +43,10 @@ function nasrDescribeFreqUseMapping(string $freqUse): ?array
         'APCH/P' => ['roles' => ['approach'], 'tier' => $primary],
         'DEP/P' => ['roles' => ['departure'], 'tier' => $primary],
         'CD/P' => ['roles' => ['clearance'], 'tier' => $primary],
+        'LCL/P IC' => ['roles' => ['tower'], 'tier' => $icFallback],
+        'APCH/P DEP/P IC' => ['roles' => ['approach', 'departure'], 'tier' => $icFallback],
+        'APCH/P IC' => ['roles' => ['approach'], 'tier' => $icFallback],
+        'DEP/P IC' => ['roles' => ['departure'], 'tier' => $icFallback],
         'LCL/S' => ['roles' => ['tower'], 'tier' => $secondary],
         'GND/S' => ['roles' => ['ground'], 'tier' => $secondary],
         'APCH/S DEP/S' => ['roles' => ['approach', 'departure'], 'tier' => $secondary],
@@ -103,13 +106,43 @@ function nasrFormatFrequencyMhz($mhz): ?string
 }
 
 /**
+ * @param array<string, array{primary: ?string, ic: ?string}> $approachDepartureSources
+ */
+function nasrRecordApproachDepartureSource(
+    array &$approachDepartureSources,
+    string $arptId,
+    string $role,
+    string $mhz,
+    int $tier
+): void {
+    if ($role !== 'approach' && $role !== 'departure') {
+        return;
+    }
+
+    if (!isset($approachDepartureSources[$arptId][$role])) {
+        $approachDepartureSources[$arptId][$role] = ['primary' => null, 'ic' => null];
+    }
+
+    if ($tier === NASR_FREQ_MAP_TIER_PRIMARY) {
+        $approachDepartureSources[$arptId][$role]['primary'] = $mhz;
+    } elseif ($tier === NASR_FREQ_MAP_TIER_IC_FALLBACK) {
+        $approachDepartureSources[$arptId][$role]['ic'] = $mhz;
+    }
+}
+
+/**
  * Apply one FRQ.csv row to the airports map when its mapping tier is allowed.
  *
  * @param array<string, array<string, string>> $airports
+ * @param array<string, array{primary: ?string, ic: ?string}> $approachDepartureSources
  * @param array<string, string> $row
  */
-function nasrApplyFrqRowToAirports(array &$airports, array $row, int $maxTier): void
-{
+function nasrApplyFrqRowToAirports(
+    array &$airports,
+    array &$approachDepartureSources,
+    array $row,
+    int $maxTier
+): void {
     $arptId = strtoupper(trim((string) ($row['SERVICED_FACILITY'] ?? '')));
     if ($arptId === '') {
         return;
@@ -130,6 +163,8 @@ function nasrApplyFrqRowToAirports(array &$airports, array $row, int $maxTier): 
     }
 
     foreach ($mapping['roles'] as $role) {
+        nasrRecordApproachDepartureSource($approachDepartureSources, $arptId, $role, $mhz, $mapping['tier']);
+
         if (!isset($airports[$arptId][$role])) {
             $airports[$arptId][$role] = $mhz;
         }
@@ -137,10 +172,80 @@ function nasrApplyFrqRowToAirports(array &$airports, array $row, int $maxTier): 
 }
 
 /**
+ * Prefer Initial Contact MHz for approach/departure when both IC and primary rows exist.
+ *
+ * @param array<string, array<string, string>> $airports
+ * @param array<string, array<string, array{primary: ?string, ic: ?string}>> $approachDepartureSources
+ */
+function nasrApplyApproachDepartureInitialContactPreference(
+    array &$airports,
+    array $approachDepartureSources
+): void {
+    foreach ($approachDepartureSources as $arptId => $roles) {
+        foreach ($roles as $role => $sources) {
+            $primary = $sources['primary'] ?? null;
+            $ic = $sources['ic'] ?? null;
+            if ($primary === null || $ic === null || $primary === $ic) {
+                continue;
+            }
+
+            if (!isset($airports[$arptId])) {
+                $airports[$arptId] = [];
+            }
+
+            $airports[$arptId][$role] = $ic;
+        }
+    }
+}
+
+/**
+ * Build NASR pairing metadata for merge-time companion-role suppression.
+ *
+ * @param array<string, string> $roles
+ * @return array<string, string>
+ */
+function nasrBuildFrequencyPairingMetadata(array $roles): array
+{
+    $pairing = [];
+
+    if (isset($roles['ctaf'], $roles['unicom']) && $roles['ctaf'] === $roles['unicom']) {
+        $pairing['ctaf_unicom_mhz'] = $roles['ctaf'];
+    }
+
+    if (isset($roles['tower'], $roles['ctaf']) && $roles['tower'] === $roles['ctaf']) {
+        $pairing['tower_ctaf_mhz'] = $roles['tower'];
+    }
+
+    return $pairing;
+}
+
+/**
+ * @param array<string, array<string, string>> $airports
+ * @return array<string, array<string, string>>
+ */
+function nasrBuildFrequencyPairingIndex(array $airports): array
+{
+    $pairing = [];
+
+    foreach ($airports as $arptId => $roles) {
+        $meta = nasrBuildFrequencyPairingMetadata($roles);
+        if ($meta !== []) {
+            $pairing[$arptId] = $meta;
+        }
+    }
+
+    return $pairing;
+}
+
+/**
  * Parse NASR FRQ.csv into airports keyed by SERVICED_FACILITY (ARPT_ID).
  *
  * @param string $csvPath Path to FRQ.csv
- * @return array{airports: array<string, array<string, string>>, effective_date: ?string}
+ * @return array{
+ *   airports: array<string, array<string, string>>,
+ *   pairing: array<string, array<string, string>>,
+ *   effective_date: ?string
+ * }
  */
 function nasrParseFrqCsvFile(string $csvPath): array
 {
@@ -150,18 +255,26 @@ function nasrParseFrqCsvFile(string $csvPath): array
 
     $effectiveDate = null;
     $airports = [];
+    $approachDepartureSources = [];
 
     foreach (nasrIterateCsvFile($csvPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
-        nasrApplyFrqRowToAirports($airports, $row, NASR_FREQ_MAP_TIER_PRIMARY);
+        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_PRIMARY);
     }
 
     foreach (nasrIterateCsvFile($csvPath) as $row) {
-        nasrApplyFrqRowToAirports($airports, $row, NASR_FREQ_MAP_TIER_SECONDARY);
+        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_IC_FALLBACK);
     }
+
+    foreach (nasrIterateCsvFile($csvPath) as $row) {
+        nasrApplyFrqRowToAirports($airports, $approachDepartureSources, $row, NASR_FREQ_MAP_TIER_SECONDARY);
+    }
+
+    nasrApplyApproachDepartureInitialContactPreference($airports, $approachDepartureSources);
 
     return [
         'airports' => $airports,
+        'pairing' => nasrBuildFrequencyPairingIndex($airports),
         'effective_date' => $effectiveDate,
     ];
 }

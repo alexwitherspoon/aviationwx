@@ -454,7 +454,7 @@ if (!defined('NASR_APT_MIN_AIRPORT_COUNT')) {
     define('NASR_APT_MIN_AIRPORT_COUNT', 10000);
 }
 if (!defined('NASR_FRQ_SCHEMA_VERSION')) {
-    define('NASR_FRQ_SCHEMA_VERSION', 2);
+    define('NASR_FRQ_SCHEMA_VERSION', 3);
 }
 if (!defined('NASR_FRQ_MIN_AIRPORT_COUNT')) {
     define('NASR_FRQ_MIN_AIRPORT_COUNT', 5000);
