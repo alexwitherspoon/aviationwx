@@ -423,9 +423,10 @@ if ($themeCookie === 'dark') {
     // External stylesheet with build-hash cache busting: pilots re-check the
     // same airport constantly, so a cached stylesheet beats re-inlining ~85KB
     // of CSS into every HTML response. Minified build is produced by the
-    // Docker image build (scripts/minify-css.sh); fall back to styles.css
-    // when it is absent (local dev with the repo bind-mounted).
-    $cssHref = file_exists(__DIR__ . '/../public/css/styles.min.css')
+    // Minified build is produced by the Docker image build (scripts/minify-css.sh).
+    // Development serves styles.css so bind-mounted CSS edits apply without re-minifying.
+    $minCssPath = __DIR__ . '/../public/css/styles.min.css';
+    $cssHref = (isProduction() && file_exists($minCssPath))
         ? '/public/css/styles.min.css'
         : '/public/css/styles.css';
     ?>
