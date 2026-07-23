@@ -99,7 +99,8 @@ test('valid wind renders numeric components with aircraft-relative arrows', () =
     const html = dom.window.document.getElementById('runway-display-list').innerHTML;
     assert(/rwy-comp-hw">\u2193 \d+ kts/.test(html), 'expected headwind down arrow with numeric speed');
     assert(/rwy-comp-tw">\u2191 \d+ kts/.test(html), 'expected tailwind up arrow with numeric speed');
-    assert(/← \d+ kts|→ \d+ kts/.test(html), 'expected crosswind drift arrow with numeric speed');
+    assert(/rwy-comp-xw">\d+ kts/.test(html), 'expected crosswind magnitude when drift rounds to zero');
+    assert(!/rwy-comp-xw">[←→] 0 kts/.test(html), 'must not show drift arrow on zero crosswind');
 });
 
 test('calm wind with missing heading shows --- not zero kts', () => {

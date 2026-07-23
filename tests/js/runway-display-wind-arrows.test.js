@@ -14,6 +14,8 @@ const {
     alongRunwayWindArrow,
     crosswindDriftArrow,
     alongRunwayWindCssClass,
+    windComponentShowsDirectionalArrow,
+    formatWindComponentArrow,
     runwayEndWindDisplay,
 } = require('../../public/js/runway-display.js');
 
@@ -68,6 +70,17 @@ test('crosswind: drift left when wind is from the right', () => {
     assert(crosswindDriftArrow(-7) === '\u2190', 'negative signed crosswind drifts left');
 });
 
+test('directional arrow suppressed when rounded magnitude is zero', () => {
+    assert(!windComponentShowsDirectionalArrow(0.4), 'sub-knot crosswind hides arrow');
+    assert(formatWindComponentArrow(0.4, crosswindDriftArrow) === '', 'no drift arrow for 0.4 kt');
+    assert(formatWindComponentArrow(0, crosswindDriftArrow) === '', 'no drift arrow for calm');
+    assert(formatWindComponentArrow(1, crosswindDriftArrow) === '\u2192', 'arrow shown at 1 kt');
+});
+
+test('along-runway arrow suppressed when rounded magnitude is zero', () => {
+    assert(formatWindComponentArrow(0.4, alongRunwayWindArrow) === '', 'no along arrow for 0.4 kt');
+});
+
 test('36/18 at 045: runway 36 headwind down-green, drift left', () => {
     const display = runwayEndWindDisplay(45, 10, 360);
     assertNear(display.headwindKts, 7.07, 0.05, 'headwind magnitude');
@@ -106,9 +119,11 @@ test('runway 04 at 207/15: tailwind up-red, drift left', () => {
 test('direct headwind has zero crosswind drift arrow convention', () => {
     const hw = headwindKts(270, 12, 270);
     const xw = signedCrosswindKts(270, 12, 270);
+    const display = runwayEndWindDisplay(270, 12, 270);
     assertNear(hw, 12, 0.01, 'headwind');
     assertNear(xw, 0, 0.01, 'crosswind');
-    assert(alongRunwayWindArrow(hw) === '\u2193', 'into the wind');
+    assert(display.alongArrow === '\u2193', 'into the wind');
+    assert(display.crosswindArrow === '', 'no crosswind arrow when drift rounds to zero');
 });
 
 console.log('\n' + '='.repeat(50));

@@ -108,6 +108,35 @@
     }
 
     /**
+     * Whether a signed component is large enough to show a directional arrow after rounding.
+     *
+     * @param {number} signedKts Signed component in knots
+     * @return {boolean}
+     */
+    function windComponentShowsDirectionalArrow(signedKts) {
+        if (!Number.isFinite(signedKts)) {
+            return false;
+        }
+
+        return formatWindKts(Math.abs(signedKts)) !== '0';
+    }
+
+    /**
+     * Directional arrow for display, omitted when the rounded magnitude is zero.
+     *
+     * @param {number} signedKts Signed component in knots
+     * @param {function(number): string} arrowFn Arrow selector for non-zero components
+     * @return {string}
+     */
+    function formatWindComponentArrow(signedKts, arrowFn) {
+        if (!windComponentShowsDirectionalArrow(signedKts)) {
+            return '';
+        }
+
+        return arrowFn(signedKts);
+    }
+
+    /**
      * CSS class for along-runway wind component coloring.
      *
      * @param {number} headwindKtsSigned Signed headwind component in knots
@@ -131,8 +160,8 @@
         return {
             headwindKts: hw,
             crosswindKts: xw,
-            alongArrow: alongRunwayWindArrow(hw),
-            crosswindArrow: crosswindDriftArrow(xw),
+            alongArrow: formatWindComponentArrow(hw, alongRunwayWindArrow),
+            crosswindArrow: formatWindComponentArrow(xw, crosswindDriftArrow),
             alongClass: alongRunwayWindCssClass(hw),
         };
     }
@@ -210,17 +239,19 @@
         const windSpeed = calm ? 0 : Number(weather.wind_speed);
         let hw = headwindKts(windFrom, windSpeed, heading);
         let xwSigned = signedCrosswindKts(windFrom, windSpeed, heading);
-        const hwArrow = alongRunwayWindArrow(hw);
+        const hwArrow = formatWindComponentArrow(hw, alongRunwayWindArrow);
         const hwClass = alongRunwayWindCssClass(hw);
         const hwVal = formatWindKts(Math.abs(hw));
         const xwVal = formatWindKts(Math.abs(xwSigned));
-        const xwArrow = crosswindDriftArrow(xwSigned);
+        const xwArrow = formatWindComponentArrow(xwSigned, crosswindDriftArrow);
+        const hwPrefix = hwArrow === '' ? '' : hwArrow + ' ';
+        const xwPrefix = xwArrow === '' ? '' : xwArrow + ' ';
         return ''
             + '<div class="runway-hybrid-wind-row runway-dense-end">'
             + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
             + '<span class="runway-dense-end-id">:</span> '
-            + '<span class="' + hwClass + '">' + hwArrow + ' ' + hwVal + ' ' + unit + '</span> '
-            + '<span class="rwy-comp-xw">' + xwArrow + ' ' + xwVal + ' ' + unit + '</span>'
+            + '<span class="' + hwClass + '">' + hwPrefix + hwVal + ' ' + unit + '</span> '
+            + '<span class="rwy-comp-xw">' + xwPrefix + xwVal + ' ' + unit + '</span>'
             + calmTags
             + '</div>';
     }
@@ -308,6 +339,8 @@
             alongRunwayWindArrow: alongRunwayWindArrow,
             crosswindDriftArrow: crosswindDriftArrow,
             alongRunwayWindCssClass: alongRunwayWindCssClass,
+            windComponentShowsDirectionalArrow: windComponentShowsDirectionalArrow,
+            formatWindComponentArrow: formatWindComponentArrow,
             runwayEndWindDisplay: runwayEndWindDisplay,
             MISSING: MISSING
         };
