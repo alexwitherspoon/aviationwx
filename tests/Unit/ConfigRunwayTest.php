@@ -148,4 +148,36 @@ final class ConfigRunwayTest extends TestCase
         $this->assertNotNull($runway);
         $this->assertFalse(configRunwayHasDepartureObstructionData($runway));
     }
+
+    public function testValidateRunwayFactsRequiresRwyId(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                ['calm_wind_arrival' => '15'],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains("Airport 'kxyz' runway_facts[0].rwy_id is required", $errors);
+    }
+
+    public function testValidateRunwayFactsRejectsInvalidCalmWindEnd(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'calm_wind_departure' => '99',
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains(
+            "Airport 'kxyz' runway_facts[0].calm_wind_departure must be a valid runway end ident",
+            $errors
+        );
+    }
 }
