@@ -85,6 +85,87 @@
         return windSpeedKts * Math.sin(delta);
     }
 
+    /**
+     * Along-fuselage arrow from the pilot's perspective on final (nose toward threshold).
+     * Down = into the wind (headwind); up = tailwind.
+     *
+     * @param {number} headwindKtsSigned Signed headwind component in knots
+     * @return {string} Unicode arrow character
+     */
+    function alongRunwayWindArrow(headwindKtsSigned) {
+        return headwindKtsSigned >= 0 ? '\u2193' : '\u2191';
+    }
+
+    /**
+     * Across-fuselage drift arrow from the pilot's perspective on final.
+     * Right = pushed right; left = pushed left (not METAR wind-from direction).
+     *
+     * @param {number} crosswindKtsSigned Signed crosswind component in knots
+     * @return {string} Unicode arrow character
+     */
+    function crosswindDriftArrow(crosswindKtsSigned) {
+        return crosswindKtsSigned >= 0 ? '\u2192' : '\u2190';
+    }
+
+    /**
+     * Whether a signed component is large enough to show a directional arrow after rounding.
+     *
+     * @param {number} signedKts Signed component in knots
+     * @return {boolean}
+     */
+    function windComponentShowsDirectionalArrow(signedKts) {
+        if (!Number.isFinite(signedKts)) {
+            return false;
+        }
+
+        return formatWindKts(Math.abs(signedKts)) !== '0';
+    }
+
+    /**
+     * Directional arrow for display, omitted when the rounded magnitude is zero.
+     *
+     * @param {number} signedKts Signed component in knots
+     * @param {function(number): string} arrowFn Arrow selector for non-zero components
+     * @return {string}
+     */
+    function formatWindComponentArrow(signedKts, arrowFn) {
+        if (!windComponentShowsDirectionalArrow(signedKts)) {
+            return '';
+        }
+
+        return arrowFn(signedKts);
+    }
+
+    /**
+     * CSS class for along-runway wind component coloring.
+     *
+     * @param {number} headwindKtsSigned Signed headwind component in knots
+     * @return {string} rwy-comp-hw or rwy-comp-tw
+     */
+    function alongRunwayWindCssClass(headwindKtsSigned) {
+        return headwindKtsSigned >= 0 ? 'rwy-comp-hw' : 'rwy-comp-tw';
+    }
+
+    /**
+     * Per-end wind display arrows and classes for tests and render.
+     *
+     * @param {number} windFromDeg Wind direction (magnetic, degrees from)
+     * @param {number} windSpeedKts Wind speed in knots
+     * @param {number} runwayHeadingDeg Runway end magnetic heading
+     * @return {{headwindKts: number, crosswindKts: number, alongArrow: string, crosswindArrow: string, alongClass: string}}
+     */
+    function runwayEndWindDisplay(windFromDeg, windSpeedKts, runwayHeadingDeg) {
+        const hw = headwindKts(windFromDeg, windSpeedKts, runwayHeadingDeg);
+        const xw = signedCrosswindKts(windFromDeg, windSpeedKts, runwayHeadingDeg);
+        return {
+            headwindKts: hw,
+            crosswindKts: xw,
+            alongArrow: formatWindComponentArrow(hw, alongRunwayWindArrow),
+            crosswindArrow: formatWindComponentArrow(xw, crosswindDriftArrow),
+            alongClass: alongRunwayWindCssClass(hw),
+        };
+    }
+
     function windFromWeather(weather) {
         if (!weather) {
             return null;
@@ -158,17 +239,19 @@
         const windSpeed = calm ? 0 : Number(weather.wind_speed);
         let hw = headwindKts(windFrom, windSpeed, heading);
         let xwSigned = signedCrosswindKts(windFrom, windSpeed, heading);
-        const hwArrow = hw >= 0 ? '\u2191' : '\u2193';
-        const hwClass = hw >= 0 ? 'rwy-comp-hw' : 'rwy-comp-tw';
+        const hwArrow = formatWindComponentArrow(hw, alongRunwayWindArrow);
+        const hwClass = alongRunwayWindCssClass(hw);
         const hwVal = formatWindKts(Math.abs(hw));
         const xwVal = formatWindKts(Math.abs(xwSigned));
-        const xwArrow = xwSigned >= 0 ? '\u2190' : '\u2192';
+        const xwArrow = formatWindComponentArrow(xwSigned, crosswindDriftArrow);
+        const hwPrefix = hwArrow === '' ? '' : hwArrow + ' ';
+        const xwPrefix = xwArrow === '' ? '' : xwArrow + ' ';
         return ''
             + '<div class="runway-hybrid-wind-row runway-dense-end">'
             + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
             + '<span class="runway-dense-end-id">:</span> '
-            + '<span class="' + hwClass + '">' + hwArrow + ' ' + hwVal + ' ' + unit + '</span> '
-            + '<span class="rwy-comp-xw">' + xwArrow + ' ' + xwVal + ' ' + unit + '</span>'
+            + '<span class="' + hwClass + '">' + hwPrefix + hwVal + ' ' + unit + '</span> '
+            + '<span class="rwy-comp-xw">' + xwPrefix + xwVal + ' ' + unit + '</span>'
             + calmTags
             + '</div>';
     }
@@ -253,6 +336,12 @@
             isCalmWindSpeed: isCalmWindSpeed,
             headwindKts: headwindKts,
             signedCrosswindKts: signedCrosswindKts,
+            alongRunwayWindArrow: alongRunwayWindArrow,
+            crosswindDriftArrow: crosswindDriftArrow,
+            alongRunwayWindCssClass: alongRunwayWindCssClass,
+            windComponentShowsDirectionalArrow: windComponentShowsDirectionalArrow,
+            formatWindComponentArrow: formatWindComponentArrow,
+            runwayEndWindDisplay: runwayEndWindDisplay,
             MISSING: MISSING
         };
     }
