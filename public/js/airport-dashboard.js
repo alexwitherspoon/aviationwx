@@ -1704,6 +1704,14 @@ function initWindSpeedUnitToggle() {
         // Re-render wind data with new unit if we have weather data
         if (currentWeatherData) {
             updateWindVisual(currentWeatherData);
+            if (window.AviationWX && typeof window.AviationWX.renderRunwayDisplay === 'function') {
+                const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds)
+                    ? AIRPORT_DATA.weather_refresh_seconds
+                    : 60;
+                window.AviationWX.renderRunwayDisplay(
+                    sanitizeWeatherDataForDisplay(currentWeatherData, refreshIntervalSeconds)
+                );
+            }
         }
     });
     
