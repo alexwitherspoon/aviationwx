@@ -98,6 +98,46 @@ Returns weather data for the specified airport.
         }
       ]
     },
+    "runway_display": {
+      "runway_source": "nasr",
+      "source_reference": "FAA NASR",
+      "effective_date": "2024-08-08",
+      "runways": [
+        {
+          "rwy_id": "08/26",
+          "length_ft": 5000,
+          "width_ft": 75,
+          "surface": "Asphalt",
+          "surface_code": "ASPH",
+          "lights": "High intensity",
+          "traffic": null,
+          "closed": false,
+          "ends": [
+            {
+              "end_id": "08",
+              "heading_mag": 83,
+              "right_hand_traffic": false,
+              "calm_wind_arrival": false,
+              "calm_wind_departure": false
+            },
+            {
+              "end_id": "26",
+              "heading_mag": 263,
+              "right_hand_traffic": false,
+              "calm_wind_arrival": true,
+              "calm_wind_departure": true
+            }
+          ],
+          "field_sources": {
+            "length_ft": "nasr",
+            "width_ft": "nasr",
+            "surface": "nasr",
+            "lights": "nasr"
+          },
+          "row_source": "nasr"
+        }
+      ]
+    },
     "pressure_altitude": 456,
     "temp_high_today": 18.5,
     "temp_low_today": 10.0,
@@ -127,6 +167,8 @@ Returns weather data for the specified airport.
 ```
 
 `density_altitude_performance.tier` and `best_end` drive UI cues. `worst_end` and `ends[]` are informational only. Caution and warning tiers are omitted when supporting weather fields are fail-closed stale.
+
+`runway_display` carries resolved runway facts for the dashboard and integrations. Per-end HW/XW are computed client-side from `wind_direction_magnetic` and `wind_speed`; missing wind shows `---`. Provenance is in `field_sources` and `runway_source`, not on dashboard cards.
 
 **Error Response:**
 ```json

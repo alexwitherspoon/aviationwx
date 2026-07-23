@@ -102,6 +102,25 @@ class EmbedWeatherEnrichmentTest extends TestCase
         $this->assertArrayHasKey('ends', $payload['weather']['density_altitude_performance']);
     }
 
+    public function testEnrichEmbedWeatherForDisplay_AttachesRunwayDisplayFromConfig(): void
+    {
+        $airport = [
+            'id' => 'ktest',
+            'runway_length_ft' => 2500,
+            'runway_surface' => 'TURF',
+            'runways' => [
+                ['name' => '17/35', 'heading_1' => 175, 'heading_2' => 355],
+            ],
+        ];
+        $weather = ['temperature' => 68];
+
+        $enriched = enrichEmbedWeatherForDisplay($weather, $airport, 'ktest');
+
+        $this->assertArrayHasKey('runway_display', $enriched);
+        $this->assertSame('config', $enriched['runway_display']['runway_source']);
+        $this->assertSame('17/35', $enriched['runway_display']['runways'][0]['rwy_id']);
+    }
+
     public function testGetCompactWidgetMetrics_IncludesDaPerformanceCueForWarningTier(): void
     {
         $airport = [
