@@ -40,7 +40,8 @@ function notamBannerClassifyScope(array $notam, array $airport): ?string
     if ($notamType === 'tfr') {
         return 'airspace';
     }
-    if ($notamType === 'aerodrome_closure' && isAerodromeClosure($notam, $airport)) {
+    if ($notamType === 'aerodrome_closure'
+        && (isAerodromeClosure($notam, $airport) || isRunwayAffectingRestrictionNotam($notam, $airport))) {
         return notamBannerClosureScopeFromNotam($notam);
     }
 
@@ -62,11 +63,14 @@ function notamBannerClosureScopeFromNotam(array $notam): string
         return 'aerodrome';
     }
 
-    $upper = strtoupper((string) ($notam['text'] ?? ''));
-    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
+    $upper = notamNormalizeProse((string) ($notam['text'] ?? ''));
+    if (preg_match('/\bAD\s+AP\s+(?:CLSD|CLOSED)\b/', $upper) === 1) {
         return 'aerodrome';
     }
-    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
+    if (preg_match('/\b(?:ARPT|AIRPORT)\s+(?:CLSD|CLOSED)\b/', $upper) === 1) {
+        return 'aerodrome';
+    }
+    if (notamTextIndicatesAerodromeClosurePhrase((string) ($notam['text'] ?? ''))) {
         return 'aerodrome';
     }
 
@@ -100,21 +104,7 @@ function notamBannerClassifyCategory(string $scope, array $notam): string
  */
 function notamBannerTextIndicatesPartialRunwayRestriction(string $text): bool
 {
-    if ($text === '') {
-        return false;
-    }
-    $upper = strtoupper($text);
-    if (str_contains($upper, 'WINGSPAN')) {
-        return true;
-    }
-    if (preg_match('/\bCLSD\s+TO\b/', $upper) === 1) {
-        return true;
-    }
-    if (preg_match('/\bTO\s+ACFT\b/', $upper) === 1 && str_contains($upper, 'CLSD')) {
-        return true;
-    }
-
-    return false;
+    return notamTextIndicatesPartialRunwayRestriction($text);
 }
 
 /**
@@ -168,27 +158,12 @@ function notamBannerClassifyAirspaceCategory(string $text): string
  */
 function notamBannerExtractRunwayDesignator(string $text): ?string
 {
-    if ($text === '') {
-        return null;
-    }
-    if (preg_match(
-        '/\bRWY\s+(\d{1,2}[LRC]?\s*\/\s*\d{1,2}[LRC]?|\d{1,2}[LRC]?)\b/i',
-        $text,
-        $matches
-    ) !== 1) {
+    $raw = notamExtractRunwayDesignatorForDisplay($text);
+    if ($raw === null) {
         return null;
     }
 
-    $designator = strtoupper(preg_replace('/\s+/', '', $matches[1]) ?? $matches[1]);
-    if ($designator === '') {
-        return null;
-    }
-
-    if (str_contains($designator, '/')) {
-        return 'RWY ' . $designator;
-    }
-
-    return 'RWY ' . $designator;
+    return 'RWY ' . $raw;
 }
 
 /**
