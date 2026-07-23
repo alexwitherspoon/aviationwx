@@ -559,11 +559,19 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - OurAirports `true_alignment` is converted to magnetic with `getMagneticDeclination()` (config → global → WMM), matching the wind compass and density altitude performance.
 - When declination is unavailable and only `true_alignment` exists, prefer runway end ident parsing before using raw true degrees.
 
+**Component formulas** (signed, magnetic):
+- Headwind: `wind_speed * cos(runway_heading - wind_from)`
+- Crosswind: `wind_speed * sin(runway_heading - wind_from)`
+
+**Display arrows** (aircraft-relative, per runway end - pilot on final, nose toward that threshold):
+- Along fuselage: **↓** green = headwind (into the wind); **↑** red = tailwind.
+- Across fuselage: **→** = drift/push to the right; **←** = drift/push to the left. Arrows show crosswind effect on the aircraft, not METAR wind-from direction.
+
 **NOTAM closure on cards**:
 - When the airport NOTAM cache is within the failclosed threshold, mark a runway `closed` for aerodrome closure NOTAMs, full pair closures, and when every published end is closed by active single-end NOTAMs (same semantics as density altitude performance runway filtering). Partial restrictions and upcoming closures do not mark a runway closed.
 
 **Implementation**: `lib/runway-display.php`, `public/js/runway-display.js`
-**Tests**: `tests/Unit/RunwayDisplayTest.php`, `tests/js/runway-display-wind.test.js`
+**Tests**: `tests/Unit/RunwayDisplayTest.php`, `tests/js/runway-display-wind.test.js`, `tests/js/runway-display-wind-arrows.test.js`
 
 See [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source) for per-source conventions.
 

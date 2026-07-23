@@ -85,6 +85,58 @@
         return windSpeedKts * Math.sin(delta);
     }
 
+    /**
+     * Along-fuselage arrow from the pilot's perspective on final (nose toward threshold).
+     * Down = into the wind (headwind); up = tailwind.
+     *
+     * @param {number} headwindKtsSigned Signed headwind component in knots
+     * @return {string} Unicode arrow character
+     */
+    function alongRunwayWindArrow(headwindKtsSigned) {
+        return headwindKtsSigned >= 0 ? '\u2193' : '\u2191';
+    }
+
+    /**
+     * Across-fuselage drift arrow from the pilot's perspective on final.
+     * Right = pushed right; left = pushed left (not METAR wind-from direction).
+     *
+     * @param {number} crosswindKtsSigned Signed crosswind component in knots
+     * @return {string} Unicode arrow character
+     */
+    function crosswindDriftArrow(crosswindKtsSigned) {
+        return crosswindKtsSigned >= 0 ? '\u2192' : '\u2190';
+    }
+
+    /**
+     * CSS class for along-runway wind component coloring.
+     *
+     * @param {number} headwindKtsSigned Signed headwind component in knots
+     * @return {string} rwy-comp-hw or rwy-comp-tw
+     */
+    function alongRunwayWindCssClass(headwindKtsSigned) {
+        return headwindKtsSigned >= 0 ? 'rwy-comp-hw' : 'rwy-comp-tw';
+    }
+
+    /**
+     * Per-end wind display arrows and classes for tests and render.
+     *
+     * @param {number} windFromDeg Wind direction (magnetic, degrees from)
+     * @param {number} windSpeedKts Wind speed in knots
+     * @param {number} runwayHeadingDeg Runway end magnetic heading
+     * @return {{headwindKts: number, crosswindKts: number, alongArrow: string, crosswindArrow: string, alongClass: string}}
+     */
+    function runwayEndWindDisplay(windFromDeg, windSpeedKts, runwayHeadingDeg) {
+        const hw = headwindKts(windFromDeg, windSpeedKts, runwayHeadingDeg);
+        const xw = signedCrosswindKts(windFromDeg, windSpeedKts, runwayHeadingDeg);
+        return {
+            headwindKts: hw,
+            crosswindKts: xw,
+            alongArrow: alongRunwayWindArrow(hw),
+            crosswindArrow: crosswindDriftArrow(xw),
+            alongClass: alongRunwayWindCssClass(hw),
+        };
+    }
+
     function windFromWeather(weather) {
         if (!weather) {
             return null;
@@ -158,11 +210,11 @@
         const windSpeed = calm ? 0 : Number(weather.wind_speed);
         let hw = headwindKts(windFrom, windSpeed, heading);
         let xwSigned = signedCrosswindKts(windFrom, windSpeed, heading);
-        const hwArrow = hw >= 0 ? '\u2191' : '\u2193';
-        const hwClass = hw >= 0 ? 'rwy-comp-hw' : 'rwy-comp-tw';
+        const hwArrow = alongRunwayWindArrow(hw);
+        const hwClass = alongRunwayWindCssClass(hw);
         const hwVal = formatWindKts(Math.abs(hw));
         const xwVal = formatWindKts(Math.abs(xwSigned));
-        const xwArrow = xwSigned >= 0 ? '\u2190' : '\u2192';
+        const xwArrow = crosswindDriftArrow(xwSigned);
         return ''
             + '<div class="runway-hybrid-wind-row runway-dense-end">'
             + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
@@ -253,6 +305,10 @@
             isCalmWindSpeed: isCalmWindSpeed,
             headwindKts: headwindKts,
             signedCrosswindKts: signedCrosswindKts,
+            alongRunwayWindArrow: alongRunwayWindArrow,
+            crosswindDriftArrow: crosswindDriftArrow,
+            alongRunwayWindCssClass: alongRunwayWindCssClass,
+            runwayEndWindDisplay: runwayEndWindDisplay,
             MISSING: MISSING
         };
     }

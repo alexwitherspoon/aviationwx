@@ -165,7 +165,7 @@ The wind rose shows wind relative to the runway(s):
 - **Wind arrow** (red) – current wind direction, points where wind is blowing TOWARD (windsock style)
 - **Petals** (light red) – last-hour wind distribution by direction (16 sectors). Petals extend in direction wind is FROM. Calm winds (&lt; 3 kts) are excluded. Only shown when weather history has 2+ valid observations.
 - **Runway alignment** overlaid for reference
-- **Per-end wind components** on each runway card in Airport Information (headwind/tailwind and crosswind per threshold)
+- **Per-end wind components** on each runway card in Airport Information (↓ green headwind, ↑ red tailwind, →/← crosswind drift per threshold)
 
 ---
 
@@ -397,6 +397,8 @@ If something looks wrong, contact the local airport steward or email `contact@av
 ### Runways
 
 Runway length, surface, lights, and traffic pattern notes appear in a **Runways** subsection above Frequencies. Each runway pair is shown on its own card with per-end headwind and crosswind components that update with current wind and your unit preferences.
+
+Wind arrows are **aircraft-relative** for each runway end (as if you are on final to that threshold): **↓** green = into the wind along the runway; **↑** red = tailwind; **→** / **←** = crosswind drift to your right or left.
 
 When wind is calm (below 3 kt), designated calm wind runway ends may show a tag (`Calm wind arr`, `Calm wind dep`, or `Calm Wind Runway`). Tags hide when wind is 3 kt or above - runway choice is always yours.
 

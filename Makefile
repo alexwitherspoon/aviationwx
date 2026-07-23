@@ -164,6 +164,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a0d️⃣  Runway Display Wind Tests (JS)..."
 	@node tests/js/runway-display-wind.test.js || { echo "❌ Runway display wind JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a0d1️⃣  Runway Display Wind Arrow Tests (JS)..."
+	@node tests/js/runway-display-wind-arrows.test.js || { echo "❌ Runway display wind arrow JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a0e️⃣  Runway Display Render Tests (JS)..."
 	@node tests/js/runway-display-render.test.js || { echo "❌ Runway display render JS tests failed"; exit 1; }
 	@echo ""
