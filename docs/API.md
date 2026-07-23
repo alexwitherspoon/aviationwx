@@ -109,7 +109,7 @@ Returns weather data for the specified airport.
           "width_ft": 75,
           "surface": "Asphalt",
           "surface_code": "ASPH",
-          "lights": "High intensity",
+          "lights": "Full time",
           "traffic": null,
           "closed": false,
           "ends": [
