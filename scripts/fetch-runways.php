@@ -131,10 +131,8 @@ function parseOurAirportsRunways(string $csv): array {
             continue;
         }
 
-        $closed = $idx['closed'] ?? null;
-        if ($closed !== null && isset($row[$closed]) && (int) $row[$closed] === 1) {
-            continue;
-        }
+        $closedIdx = $idx['closed'] ?? null;
+        $isClosed = $closedIdx !== null && isset($row[$closedIdx]) && (int) $row[$closedIdx] === 1;
 
         $ident = $idx['airport_ident'] ?? null;
         $leLat = $idx['le_latitude_deg'] ?? null;
@@ -145,6 +143,10 @@ function parseOurAirportsRunways(string $csv): array {
         $heIdent = $idx['he_ident'] ?? null;
         $lengthIdx = $idx['length_ft'] ?? null;
         $surfaceIdx = $idx['surface'] ?? null;
+        $widthIdx = $idx['width_ft'] ?? null;
+        $lightedIdx = $idx['lighted'] ?? null;
+        $leHeadingIdx = $idx['le_heading_degT'] ?? null;
+        $heHeadingIdx = $idx['he_heading_degT'] ?? null;
         $leDisplacedIdx = $idx['le_displaced_threshold_ft'] ?? null;
         $heDisplacedIdx = $idx['he_displaced_threshold_ft'] ?? null;
 
@@ -160,7 +162,17 @@ function parseOurAirportsRunways(string $csv): array {
         $lengthFt = $lengthIdx !== null && isset($row[$lengthIdx]) && is_numeric($row[$lengthIdx])
             ? (int) round((float) $row[$lengthIdx])
             : 0;
+        $widthFt = $widthIdx !== null && isset($row[$widthIdx]) && is_numeric($row[$widthIdx])
+            ? (int) round((float) $row[$widthIdx])
+            : null;
         $surface = $surfaceIdx !== null ? trim((string) ($row[$surfaceIdx] ?? '')) : '';
+        $lighted = $lightedIdx !== null && isset($row[$lightedIdx]) && (int) $row[$lightedIdx] === 1;
+        $leHeading = $leHeadingIdx !== null && isset($row[$leHeadingIdx]) && is_numeric($row[$leHeadingIdx])
+            ? (int) round((float) $row[$leHeadingIdx])
+            : null;
+        $heHeading = $heHeadingIdx !== null && isset($row[$heHeadingIdx]) && is_numeric($row[$heHeadingIdx])
+            ? (int) round((float) $row[$heHeadingIdx])
+            : null;
         $leDisplaced = $leDisplacedIdx !== null && isset($row[$leDisplacedIdx]) && is_numeric($row[$leDisplacedIdx])
             ? (int) round((float) $row[$leDisplacedIdx])
             : 0;
@@ -188,7 +200,12 @@ function parseOurAirportsRunways(string $csv): array {
             'le_ident' => $leIdent !== null ? trim($row[$leIdent] ?? '') : '',
             'he_ident' => $heIdent !== null ? trim($row[$heIdent] ?? '') : '',
             'length_ft' => $lengthFt,
+            'width_ft' => $widthFt,
             'surface' => $surface,
+            'lighted' => $lighted,
+            'closed' => $isClosed,
+            'le_heading_degT' => $leHeading,
+            'he_heading_degT' => $heHeading,
             'le_displaced_threshold_ft' => $leDisplaced,
             'he_displaced_threshold_ft' => $heDisplaced,
             'source' => 'ourairports',
@@ -394,6 +411,7 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
         $oaRunways = resolveOurAirportsRunwaysForCacheIdent($faaId, $ourairports, $faaToIcao);
         if ($oaRunways !== null) {
             $entry['performance_runways'] = buildOurAirportsPerformanceRunways($oaRunways);
+            $entry['display_runways'] = buildOurAirportsDisplayRunways($oaRunways);
         }
         $result[$faaId] = $entry;
         $coveredByIdent[$faaId] = true;
@@ -423,6 +441,7 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
             'center_lat' => $center['lat'],
             'center_lon' => $center['lon'],
             'performance_runways' => buildOurAirportsPerformanceRunways($runways),
+            'display_runways' => buildOurAirportsDisplayRunways($runways),
         ];
     }
     return $result;
