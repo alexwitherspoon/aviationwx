@@ -162,6 +162,12 @@ function formatWeatherResponse(array $weather, array $airport, ?string $airportI
         $formatted['density_altitude_performance'] = $withPerformance['density_altitude_performance'];
     }
 
+    require_once __DIR__ . '/../runway-display.php';
+    $withRunways = attachRunwayDisplay($withPerformance, $airport, $airportId);
+    if (isset($withRunways['runway_display'])) {
+        $formatted['runway_display'] = $withRunways['runway_display'];
+    }
+
     return $formatted;
 }
 

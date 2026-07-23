@@ -497,12 +497,17 @@ function ourAirportsRunwayIdFromIdents(string $leIdent, string $heIdent): string
 /**
  * Whether an OurAirports runway row is eligible for DA performance scoring.
  *
- * Closed rows are omitted when `runways.csv` is ingested; water surfaces excluded here.
+ * Closed rows are filtered here; ingest retains them for dashboard display.
+ * Water surfaces are excluded.
  *
  * @param array $runway Parsed runway with length_ft and surface
  */
 function ourAirportsRunwayIsSelectable(array $runway): bool
 {
+    if (!empty($runway['closed'])) {
+        return false;
+    }
+
     $lengthFt = (int) ($runway['length_ft'] ?? 0);
     if ($lengthFt <= 0) {
         return false;
@@ -540,6 +545,75 @@ function resolveOurAirportsRunwaysForCacheIdent(string $ident, array $ourairport
     }
 
     return null;
+}
+
+function ourAirportsRunwayIsDisplayable(array $runway): bool
+{
+    $lengthFt = (int) ($runway['length_ft'] ?? 0);
+    if ($lengthFt <= 0) {
+        return false;
+    }
+
+    $surface = (string) ($runway['surface'] ?? '');
+    if ($surface !== '' && ourAirportsIsWaterSurface($surface)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Build display runway records from OurAirports parse rows (includes closed strips).
+ *
+ * @param list<array> $runways Parsed OurAirports runway rows
+ * @return list<array>
+ */
+function buildOurAirportsDisplayRunways(array $runways): array
+{
+    $display = [];
+    foreach ($runways as $runway) {
+        if (!is_array($runway) || !ourAirportsRunwayIsDisplayable($runway)) {
+            continue;
+        }
+
+        $leIdent = (string) ($runway['le_ident'] ?? '');
+        $heIdent = (string) ($runway['he_ident'] ?? '');
+        $ends = [];
+        if ($leIdent !== '') {
+            $leEnd = ['end_id' => $leIdent];
+            if (isset($runway['le_heading_degT']) && is_numeric($runway['le_heading_degT'])) {
+                $leEnd['true_alignment'] = (int) round((float) $runway['le_heading_degT']);
+            }
+            $ends[] = $leEnd;
+        }
+        if ($heIdent !== '') {
+            $heEnd = ['end_id' => $heIdent];
+            if (isset($runway['he_heading_degT']) && is_numeric($runway['he_heading_degT'])) {
+                $heEnd['true_alignment'] = (int) round((float) $runway['he_heading_degT']);
+            }
+            $ends[] = $heEnd;
+        }
+
+        $display[] = [
+            'rwy_id' => ourAirportsRunwayIdFromIdents($leIdent, $heIdent),
+            'length_ft' => (int) $runway['length_ft'],
+            'width_ft' => isset($runway['width_ft']) && is_numeric($runway['width_ft'])
+                ? (int) $runway['width_ft']
+                : null,
+            'surface' => ourAirportsNormalizeSurfaceCode((string) ($runway['surface'] ?? '')),
+            'lighted' => !empty($runway['lighted']),
+            'closed' => !empty($runway['closed']),
+            'ends' => $ends,
+            'le_displaced_threshold_ft' => isset($runway['le_displaced_threshold_ft'])
+                ? (int) $runway['le_displaced_threshold_ft']
+                : 0,
+            'he_displaced_threshold_ft' => isset($runway['he_displaced_threshold_ft'])
+                ? (int) $runway['he_displaced_threshold_ft']
+                : 0,
+        ];
+    }
+
+    return $display;
 }
 
 /**
@@ -618,6 +692,53 @@ function ourAirportsSelectActiveLandRunwaysForPerformance(array $runways): array
     );
 
     return $selectable;
+}
+
+/**
+ * Extract display runways for an airport from parsed runway cache data.
+ *
+ * @param array $data Parsed runways cache (must have 'airports' key)
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config with optional ourairports_ident, icao, faa
+ * @return list<array>|null
+ */
+function getOurAirportsDisplayRunwaysFromParsedCache(array $data, string $airportId, array $airport = []): ?array
+{
+    if (!isset($data['airports']) || !is_array($data['airports'])) {
+        return null;
+    }
+    $airports = $data['airports'];
+    $identsToTry = ourAirportsCacheLookupIdentsForAirport($airportId, $airport);
+    foreach ($identsToTry as $ident) {
+        if (!isset($airports[$ident]) || !is_array($airports[$ident])) {
+            continue;
+        }
+        $display = $airports[$ident]['display_runways'] ?? null;
+        if (is_array($display) && $display !== []) {
+            return $display;
+        }
+        $runways = $airports[$ident]['performance_runways'] ?? null;
+        if (is_array($runways) && $runways !== []) {
+            return $runways;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Load OurAirports display runways from file cache for an airport.
+ *
+ * @return list<array>|null
+ */
+function loadOurAirportsDisplayRunwaysFromFileCache(string $airportId, array $airport): ?array
+{
+    $data = loadRunwaysCacheDataFromDisk();
+    if ($data === null) {
+        return null;
+    }
+
+    return getOurAirportsDisplayRunwaysFromParsedCache($data, $airportId, $airport);
 }
 
 /**

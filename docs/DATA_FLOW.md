@@ -746,6 +746,49 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 **Weather-only fallback** (no runway data): `tier`, `fallback: true`, `reason`, and `reference` only.
 
+### Runway display (dashboard and weather API)
+
+**When it runs**: On each weather API response (Internal API, Public API, embed iframe/widget SSR, and Embed API) at format/render time. `attachRunwayDisplay()` (via `formatWeatherResponse()`, `formatInternalApiWeatherResponse()`, or `enrichEmbedWeatherForDisplay()` on cache fallback) resolves runway facts from config, NASR, and OurAirports without re-fetching weather.
+
+**Suppression** (no `runway_display` field in the response):
+
+- No runway rows resolve from config, NASR, or OurAirports
+
+**Pipeline**:
+
+1. Resolve runway inventory (config override per field, NASR, OurAirports).
+2. Merge dimensions, surface, lights, traffic notes, calm-wind designation, and magnetic headings per end.
+3. Apply active NOTAM full-closure semantics on weather responses (same rules as density altitude performance).
+4. Attach `runway_display` to the formatted weather payload. Per-end headwind and crosswind are computed client-side from `wind_speed` and magnetic wind direction; missing wind shows unavailable in UI.
+
+**Public API airport metadata** (`GET /v1/airports/{id}`): `runway_facts` uses the same resolver with NOTAM closure omitted (metadata is cached longer). Omits calm-wind designation and traffic notes. Legacy `runways[]` remains config compass geometry only.
+
+Formulas and fail-closed wind rules are in [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-per-end-wind-components).
+
+**API field** `runway_display` (weather responses):
+
+```json
+{
+  "runway_source": "nasr",
+  "source_reference": "FAA NASR",
+  "effective_date": "2024-08-08",
+  "runways": [
+    {
+      "rwy_id": "08/26",
+      "length_ft": 5000,
+      "width_ft": 75,
+      "surface": "Asphalt",
+      "closed": false,
+      "ends": [
+        {"end_id": "08", "heading_mag": 83, "calm_wind_arrival": false, "calm_wind_departure": false}
+      ]
+    }
+  ]
+}
+```
+
+**API field** `runway_facts` (airport metadata): same runway rows without calm-wind flags, traffic notes, or NOTAM-derived `closed`.
+
 **Consumer contract**: Airport-level `tier` and `best_end` drive UI cues. `worst_end` and other `ends[]` rows are informational only.
 
 **Display**: ⚠️ (caution) or 🚩 (warning) adjacent to the density altitude value; warning tier uses amber styling. Tooltips name the best-performing departure end when available.

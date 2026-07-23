@@ -423,9 +423,10 @@ if ($themeCookie === 'dark') {
     // External stylesheet with build-hash cache busting: pilots re-check the
     // same airport constantly, so a cached stylesheet beats re-inlining ~85KB
     // of CSS into every HTML response. Minified build is produced by the
-    // Docker image build (scripts/minify-css.sh); fall back to styles.css
-    // when it is absent (local dev with the repo bind-mounted).
-    $cssHref = file_exists(__DIR__ . '/../public/css/styles.min.css')
+    // Minified build is produced by the Docker image build (scripts/minify-css.sh).
+    // Development serves styles.css so bind-mounted CSS edits apply without re-minifying.
+    $minCssPath = __DIR__ . '/../public/css/styles.min.css';
+    $cssHref = (isProduction() && file_exists($minCssPath))
         ? '/public/css/styles.min.css'
         : '/public/css/styles.css';
     ?>
@@ -1097,6 +1098,11 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
 
+            <section id="runway-display-section" class="frequencies runway-style-e" aria-labelledby="runway-display-heading" hidden>
+                <h3 id="runway-display-heading">Runways</h3>
+                <div id="runway-display-list" class="runway-hybrid-list"></div>
+            </section>
+
             <!-- Frequencies -->
             <div class="frequencies">
                 <h3>Frequencies</h3>
@@ -1325,6 +1331,7 @@ if ($themeCookie === 'dark') {
     <script src="/public/js/outage-display-sync.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/runway-label-layout.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/wind-visual.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/runway-display.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/density-altitude-performance-display.js?v=<?= $buildHashShort ?>"></script>
     <?php
     // Webcam seed data for the dashboard bootstrap below. Timestamps reuse
@@ -1419,7 +1426,9 @@ const INITIAL_WEATHER_DATA = <?php
 
     if (is_array($initialWeatherData)) {
         require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
+        require_once __DIR__ . '/../lib/runway-display.php';
         $initialWeatherData = attachDensityAltitudePerformance($initialWeatherData, $airport, $airportId);
+        $initialWeatherData = attachRunwayDisplay($initialWeatherData, $airport, $airportId);
     }
     
     // Defensive JSON encoding with error handling

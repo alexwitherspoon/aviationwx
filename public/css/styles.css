@@ -3639,3 +3639,262 @@ body.night-mode .weather-item.density-altitude-warning .weather-value,
 body.night-mode .density-altitude-warning {
     color: #f39c12 !important;
 }
+
+/* Runway display (Airport Information hybrid cards) */
+.runway-style-e {
+    --runway-text-primary: #1a1a1a;
+    --runway-text-body: #333;
+    --runway-text-muted: #666;
+    --runway-text-dim: #555;
+    --runway-border-subtle: #e8e8e8;
+    --runway-hw-color: #2e7d32;
+    --runway-tw-color: #c62828;
+    --runway-xw-color: #666;
+    --runway-badge-fg: #1a4f8a;
+    --runway-badge-bg: #e8f0fa;
+    --runway-badge-border: #b3cce8;
+    --runway-status-closed: #c62828;
+}
+
+.runway-style-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--runway-status-closed);
+}
+
+.runway-style-winds {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.runway-style-traffic {
+    font-size: 0.8rem;
+    color: var(--runway-text-dim);
+    margin-top: 0.35rem;
+}
+
+.runway-style-e .runway-hybrid-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.runway-style-e .runway-hybrid-card {
+    flex: 1 1 220px;
+    max-width: 100%;
+    text-align: left;
+}
+
+.runway-style-e .runway-hybrid-headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.runway-style-e .runway-hybrid-headline .value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--runway-text-primary);
+}
+
+.runway-style-e .runway-hybrid-meta {
+    font-size: 0.85rem;
+    color: var(--runway-text-body);
+    margin-bottom: 0.2rem;
+}
+
+.runway-style-e .runway-hybrid-meta .label {
+    display: inline;
+    font-size: 0.75rem;
+    margin-right: 0.35rem;
+    font-weight: 600;
+    color: var(--runway-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.runway-style-e .runway-hybrid-desktop-only > .runway-hybrid-meta:first-child > span:not(.label) {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--runway-text-dim);
+}
+
+.runway-style-e .runway-hybrid-desktop-only > .runway-hybrid-meta:not(:first-child) > span:not(.label) {
+    font-weight: 700;
+    color: var(--runway-text-primary);
+}
+
+.runway-style-e .runway-hybrid-winds {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--runway-border-subtle);
+}
+
+.runway-style-e .runway-hybrid-wind-row,
+.runway-style-e .runway-hybrid-desktop-only .runway-dense-end {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--runway-text-body);
+}
+
+.runway-style-e .runway-hybrid-end-id,
+.runway-style-e .runway-hybrid-desktop-only .runway-dense-end-id,
+.runway-style-e .runway-dense-end-id {
+    font-weight: 600;
+    color: var(--runway-text-primary);
+}
+
+.runway-style-e .runway-hybrid-mobile-only {
+    display: none;
+}
+
+.runway-style-e .runway-hybrid-specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--runway-text-muted);
+}
+
+.runway-style-e .runway-hybrid-specs .spec-label {
+    color: var(--runway-text-muted);
+}
+
+.runway-style-e .runway-hybrid-specs .spec-val {
+    font-weight: 700;
+    color: var(--runway-text-primary);
+}
+
+.runway-calm-wind-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--runway-badge-fg);
+    background: var(--runway-badge-bg);
+    border: 1px solid var(--runway-badge-border);
+    border-radius: 4px;
+    padding: 0.12rem 0.4rem;
+    line-height: 1.2;
+}
+
+.runway-calm-wind-badge--inline {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+    vertical-align: baseline;
+}
+
+.rwy-comp-hw {
+    color: var(--runway-hw-color);
+    font-weight: 600;
+}
+
+.rwy-comp-tw {
+    color: var(--runway-tw-color);
+    font-weight: 600;
+}
+
+.rwy-comp-xw {
+    color: var(--runway-xw-color);
+    font-weight: 500;
+}
+
+/* Dark mode runway tokens (match weather-item / label hierarchy) */
+body.dark-mode .runway-style-e {
+    --runway-text-primary: var(--dark-text-bright);
+    --runway-text-body: var(--dark-text-primary);
+    --runway-text-muted: var(--dark-text-muted);
+    --runway-text-dim: var(--dark-text-muted);
+    --runway-border-subtle: var(--dark-border-light);
+    --runway-hw-color: #6ecf6e;
+    --runway-tw-color: #ef5350;
+    --runway-xw-color: var(--dark-text-muted);
+    --runway-badge-fg: #9ec5ef;
+    --runway-badge-bg: #1a2a3d;
+    --runway-badge-border: #3a5f88;
+    --runway-status-closed: #ef5350;
+}
+
+/* Night mode runway tokens (red-safe palette, same hierarchy as dashboard) */
+body.night-mode .runway-style-e {
+    --runway-text-primary: var(--night-text-bright);
+    --runway-text-body: var(--night-text-primary);
+    --runway-text-muted: var(--night-text-muted);
+    --runway-text-dim: var(--night-text-muted);
+    --runway-border-subtle: var(--night-border-light);
+    --runway-hw-color: #99cc99;
+    --runway-tw-color: var(--night-text-bright);
+    --runway-xw-color: var(--night-text-muted);
+    --runway-badge-fg: var(--night-text-bright);
+    --runway-badge-bg: var(--night-bg-button);
+    --runway-badge-border: var(--night-border);
+    --runway-status-closed: var(--night-text-bright);
+}
+
+@media (max-width: 768px) {
+    .runway-style-e .runway-hybrid-list {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .runway-style-e .runway-hybrid-desktop-only {
+        display: none;
+    }
+
+    .runway-style-e .runway-hybrid-mobile-only {
+        display: block;
+    }
+
+    .runway-style-e .runway-hybrid-card {
+        flex: 0 0 auto;
+        width: 100%;
+        padding: 0.5rem 0.625rem;
+        box-sizing: border-box;
+    }
+
+    .runway-style-e .runway-hybrid-dim {
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--runway-text-dim);
+        line-height: 1.35;
+        margin-bottom: 0.2rem;
+    }
+
+    .runway-style-e .runway-hybrid-mobile-only .runway-hybrid-winds {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+        margin-bottom: 0.25rem;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .runway-style-e {
+        --runway-text-primary: var(--dark-text-bright);
+        --runway-text-body: var(--dark-text-primary);
+        --runway-text-muted: var(--dark-text-muted);
+        --runway-text-dim: var(--dark-text-muted);
+        --runway-border-subtle: var(--dark-border-light);
+        --runway-hw-color: #6ecf6e;
+        --runway-tw-color: #ef5350;
+        --runway-xw-color: var(--dark-text-muted);
+        --runway-badge-fg: #9ec5ef;
+        --runway-badge-bg: #1a2a3d;
+        --runway-badge-border: #3a5f88;
+        --runway-status-closed: #ef5350;
+    }
+}

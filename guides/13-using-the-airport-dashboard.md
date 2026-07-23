@@ -154,10 +154,9 @@ The wind rose shows wind relative to the runway(s):
 |                               S                                             |
 |                                                                             |
 |                 +-----------------------------------+                       |
-|                 |  Runway 15/33                     |                       |
-|                 |  Headwind:  8 kts  (Rwy 33)       |                       |
-|                 |  Crosswind: 5 kts  (from left)    |                       |
+|                 |  Wind speed, direction, gusts       |                       |
 |                 |  Wind rose: Last hour              |                       |
+|                 |  (Per-end HW/XW: Runways section)  |                       |
 |                 +-----------------------------------+                       |
 +-----------------------------------------------------------------------------+
 ```
@@ -166,7 +165,7 @@ The wind rose shows wind relative to the runway(s):
 - **Wind arrow** (red) – current wind direction, points where wind is blowing TOWARD (windsock style)
 - **Petals** (light red) – last-hour wind distribution by direction (16 sectors). Petals extend in direction wind is FROM. Calm winds (&lt; 3 kts) are excluded. Only shown when weather history has 2+ valid observations.
 - **Runway alignment** overlaid for reference
-- **Component breakdown** – headwind/tailwind and crosswind for each runway end
+- **Per-end wind components** on each runway card in Airport Information (headwind/tailwind and crosswind per threshold)
 
 ---
 
@@ -395,18 +394,30 @@ That data also feeds the **runway wind** display and **density-altitude performa
 
 If something looks wrong, contact the local airport steward or email `contact@aviationwx.org`. Airport owners and sponsors can also correct the listing on OurAirports, which helps pilots beyond AviationWX.
 
-### Basic Info
+### Runways
+
+Runway length, surface, lights, and traffic pattern notes appear in a **Runways** subsection above Frequencies. Each runway pair is shown on its own card with per-end headwind and crosswind components that update with current wind and your unit preferences.
+
+When wind is calm (below 3 kt), designated calm wind runway ends may show a tag (`Calm wind arr`, `Calm wind dep`, or `Calm Wind Runway`). Tags hide when wind is 3 kt or above - runway choice is always yours.
+
+Closed runways show **RWY CLSD**. Missing width is omitted from the dimensions line (length only). Other unknown facts show `---`.
+
+Runway fact provenance is included in the weather API (`runway_display`) for integrations; the dashboard does not show source badges on the cards.
+
+### Basic Info (elevation, fuel, repairs)
 
 ```
 +-----------------------------------------------------------------------------+
 |  Airport Information                                                        |
 +-----------------------------------------------------------------------------+
 |                                                                             |
-|    Elevation            Runways              Fuel                           |
+|    Elevation              Fuel              Repairs                       |
 |    +-----------+       +-----------+       +-----------+                    |
-|    |   58 ft   |       |   15/33   |       |   100LL   |                    |
-|    |    MSL    |       |  5100x75  |       |   MoGas   |                    |
+|    |   58 ft   |       |   100LL   |       | Available |                    |
+|    |    MSL    |       |   MoGas   |       |           |                    |
 |    +-----------+       +-----------+       +-----------+                    |
+|                                                                             |
+|    Runways (one card per runway pair - dimensions, surface, wind per end)   |
 |                                                                             |
 |    Frequencies                                                              |
 |    +-----------+       +-----------+       +-----------+                    |

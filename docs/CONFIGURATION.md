@@ -120,6 +120,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `runway_length_ft` | NASR runways on file | Optional override for the density altitude performance cue. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `runway_surface` | `ASPH` when length override is set | NASR-style surface code when `runway_length_ft` is set (e.g. `TURF`, `ASPH`). Drives POH grass correction on non-paved surfaces. |
 | `runway_ends` | - | Optional per-end departure data when `runway_length_ft` is set. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
+| `runway_facts` | NASR / OurAirports | Optional per-runway dashboard overrides (dimensions, surface, lights, traffic, calm wind ends). See [Runway display overrides](#runway-display-overrides). |
 | `ourairports_ident` | - | OurAirports open-data ident for internal runway joins (e.g. `US-4027`, `CYAV`). Not shown as the pilot-facing airport code. See [Density altitude performance overrides](#density-altitude-performance-overrides). |
 | `ourairports_id` | - | Optional stable OurAirports integer id from `airports.csv` when set alongside `ourairports_ident`. |
 | **Data Sources** |||
@@ -179,6 +180,22 @@ Wind-based departure-end selection uses `runways[0].heading_1` / `heading_2` whe
 **Tier cap without obstruction data:** Because the override has no departure-end obstructions, the indicator cannot emit **warning** (🚩); tier is capped at **caution** when length/surface stress alone would otherwise trigger warning. `tkof_dist_avbl` and `displaced_thr_len` affect stress but do not lift the caution cap without usable `obstruction.hgt_ft` and `obstruction.dist_ft` on at least one end. The same cap applies to OurAirports-only runway context.
 
 Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performance) and `docs/DATA_FLOW.md`.
+
+### Runway display overrides
+
+Optional `runway_facts[]` rows override NASR and OurAirports fields used by the airport dashboard **Runways** subsection, the `runway_display` block on weather API responses, and the `runway_facts` block on Public API airport metadata (`GET /v1/airports/{id}`). Config wins per field; NASR fills gaps; OurAirports is the fallback.
+
+| Field | Description |
+|-------|-------------|
+| `rwy_id` | Runway identifier (e.g. `09/27`, `15/33`) |
+| `length_ft`, `width_ft` | Dimensions in feet |
+| `surface` | NASR-style surface code or human label (e.g. `ASPH`, `Asphalt`) |
+| `lights`, `traffic` | Lighting and traffic pattern labels when published |
+| `calm_wind_arrival`, `calm_wind_departure` | Runway end idents for calm-wind tags when wind is below 3 kt |
+| `closed` | When true, the runway card shows **RWY CLSD** |
+| `ends[]` | Optional per-end overrides (`end_id`, `right_hand_traffic`) |
+
+`runway_facts` is independent of `runway_length_ft` / `runway_ends` (density altitude performance). You may use both on the same airport when needed.
 
 ### Radio frequencies
 

@@ -299,4 +299,37 @@ class PublicApiAirportTest extends TestCase
         $this->assertSame('123', $formatted['frequencies']['ctaf']);
         $this->assertArrayNotHasKey('unicom', $formatted['frequencies']);
     }
+
+    public function testFormatAirportDetails_ConfigRunwayFacts_IncludesRunwayFacts(): void
+    {
+        self::loadFormatAirportDetails();
+
+        $formatted = formatAirportDetails('ktest', [
+            'id' => 'ktest',
+            'name' => 'Test Strip',
+            'runway_length_ft' => 2800,
+            'runway_surface' => 'TURF',
+            'runways' => [
+                ['name' => '17/35', 'heading_1' => 175, 'heading_2' => 355],
+            ],
+        ]);
+
+        $this->assertArrayHasKey('runway_facts', $formatted);
+        $this->assertSame('config', $formatted['runway_facts']['runway_source']);
+        $this->assertSame('17/35', $formatted['runway_facts']['runways'][0]['rwy_id']);
+        $this->assertSame(2800, $formatted['runway_facts']['runways'][0]['length_ft']);
+        $this->assertArrayNotHasKey('traffic', $formatted['runway_facts']['runways'][0]);
+    }
+
+    public function testFormatAirportDetails_NoResolvableRunways_OmitsRunwayFacts(): void
+    {
+        self::loadFormatAirportDetails();
+
+        $formatted = formatAirportDetails('empty', [
+            'id' => 'empty',
+            'name' => 'No Runways',
+        ]);
+
+        $this->assertArrayNotHasKey('runway_facts', $formatted);
+    }
 }

@@ -24,7 +24,7 @@
 (function(window) {
     'use strict';
 
-    const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
+    const CALM_WIND_THRESHOLD = 3; // FAA METAR calm: wind < 3 kt reported as 00000KT
 
     /**
      * True when wind speed is a valid calm reading (not missing/unavailable).

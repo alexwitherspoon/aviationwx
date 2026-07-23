@@ -313,4 +313,24 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertGreaterThan(1, count($result['density_altitude_performance']['ends']));
         $this->assertSame('normal', $result['density_altitude_performance']['best_end']['tier']);
     }
+
+    public function testRunwayDisplayIncludedWhenConfigRunwayPresent(): void
+    {
+        $weather = ['temperature' => 72];
+        $airport = [
+            'id' => 'ktest',
+            'runway_length_ft' => 2500,
+            'runway_surface' => 'TURF',
+            'runways' => [
+                ['name' => '17/35', 'heading_1' => 175, 'heading_2' => 355],
+            ],
+        ];
+
+        $result = formatWeatherResponse($weather, $airport, 'ktest');
+
+        $this->assertArrayHasKey('runway_display', $result);
+        $this->assertSame('config', $result['runway_display']['runway_source']);
+        $this->assertNotEmpty($result['runway_display']['runways']);
+        $this->assertSame('17/35', $result['runway_display']['runways'][0]['rwy_id']);
+    }
 }

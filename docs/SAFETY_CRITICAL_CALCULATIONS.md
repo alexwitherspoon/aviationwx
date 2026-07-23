@@ -546,6 +546,25 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - **Lat/lon runways** (manual or FAA/OurAirports): Geographic bearing = true north. Rotated to magnetic in `getRunwaySegmentsForAirport()` before returning.
 - **Heading-based runways** (`heading_1`/`heading_2`): Runway numbers = magnetic north. No rotation.
 
+### Runway display (dashboard per-end HW/XW)
+
+**Purpose**: Show runway facts and per-end headwind/crosswind components on the airport dashboard. This is **informational only** - not a go/no-go decision.
+
+**Wind inputs**:
+- Use `wind_direction_magnetic` (or Public API `wind_direction.magnetic_north`). When direction or `wind_speed` is missing or non-numeric after sanitization, show `---` for HW and XW (fail closed). Never infer zero wind from missing data.
+- Calm wind display (0 kt components and calm wind designation tags) applies only when `wind_speed` is present and below 3 kt (same threshold as the wind compass).
+
+**Runway headings**:
+- NASR `heading_mag` and config `heading_mag` are magnetic and used as-is.
+- OurAirports `true_alignment` is converted to magnetic with `getMagneticDeclination()` (config → global → WMM), matching the wind compass and density altitude performance.
+- When declination is unavailable and only `true_alignment` exists, prefer runway end ident parsing before using raw true degrees.
+
+**NOTAM closure on cards**:
+- When the airport NOTAM cache is within the failclosed threshold, mark a runway `closed` for aerodrome closure NOTAMs, full pair closures, and when every published end is closed by active single-end NOTAMs (same semantics as density altitude performance runway filtering). Partial restrictions and upcoming closures do not mark a runway closed.
+
+**Implementation**: `lib/runway-display.php`, `public/js/runway-display.js`
+**Tests**: `tests/Unit/RunwayDisplayTest.php`, `tests/js/runway-display-wind.test.js`
+
 See [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source) for per-source conventions.
 
 ---

@@ -285,4 +285,41 @@ class RunwaysTest extends TestCase
         $this->assertCount(1, $segments);
         $this->assertSame('manual', $segments[0]['source']);
     }
+
+    public function testBuildOurAirportsDisplayRunways_StoresTrueHeadingsAsTrueAlignment(): void
+    {
+        $rows = buildOurAirportsDisplayRunways([
+            [
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'length_ft' => 3000,
+                'le_heading_degT' => 95.2,
+                'he_heading_degT' => 275.2,
+                'surface' => 'ASP',
+            ],
+        ]);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame(95, $rows[0]['ends'][0]['true_alignment']);
+        $this->assertSame(275, $rows[0]['ends'][1]['true_alignment']);
+        $this->assertArrayNotHasKey('heading_mag', $rows[0]['ends'][0]);
+    }
+
+    public function testBuildOurAirportsDisplayRunways_IncludesEndIdentsWithoutHeadings(): void
+    {
+        $rows = buildOurAirportsDisplayRunways([
+            [
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'length_ft' => 3000,
+                'surface' => 'ASP',
+            ],
+        ]);
+
+        $this->assertCount(1, $rows);
+        $this->assertCount(2, $rows[0]['ends']);
+        $this->assertSame('09', $rows[0]['ends'][0]['end_id']);
+        $this->assertSame('27', $rows[0]['ends'][1]['end_id']);
+        $this->assertArrayNotHasKey('true_alignment', $rows[0]['ends'][0]);
+    }
 }

@@ -655,6 +655,222 @@
         },
         "required": ["total_risk", "tier"]
       },
+      "RunwayFactsEnd": {
+        "type": "object",
+        "description": "Runway end ident and optional magnetic heading for airport metadata.",
+        "properties": {
+          "end_id": {
+            "type": "string",
+            "description": "Runway end ident (e.g. 08, 26L)"
+          },
+          "heading_mag": {
+            "type": "integer",
+            "description": "Magnetic heading in degrees",
+            "nullable": true
+          }
+        },
+        "required": ["end_id"]
+      },
+      "RunwayFactsRunway": {
+        "type": "object",
+        "description": "Static runway inventory row for airport metadata (no wind components or calm-wind designation).",
+        "properties": {
+          "rwy_id": {
+            "type": "string",
+            "description": "Runway pair ident (e.g. 08/26)"
+          },
+          "length_ft": {
+            "type": "integer",
+            "description": "Published length in feet"
+          },
+          "width_ft": {
+            "type": "integer",
+            "description": "Published width in feet; omitted when unknown",
+            "nullable": true
+          },
+          "surface": {
+            "type": "string",
+            "description": "Pilot-facing surface label",
+            "nullable": true
+          },
+          "surface_code": {
+            "type": "string",
+            "description": "Source surface code (NASR or OurAirports)",
+            "nullable": true
+          },
+          "lights": {
+            "type": "string",
+            "description": "Lighting description when known",
+            "nullable": true
+          },
+          "closed": {
+            "type": "boolean",
+            "description": "True when closed in source data (NASR, OurAirports, or config); excludes NOTAM closure"
+          },
+          "ends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunwayFactsEnd"
+            }
+          },
+          "field_sources": {
+            "type": "object",
+            "description": "Per-field provenance (config, nasr, ourairports)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["rwy_id", "length_ft", "closed", "ends"]
+      },
+      "RunwayFacts": {
+        "type": "object",
+        "description": "Resolved static runway inventory from config, NASR, or OurAirports. Present on GET /v1/airports/{id} when at least one runway row resolves.",
+        "properties": {
+          "runway_source": {
+            "type": "string",
+            "enum": ["config", "nasr", "ourairports"],
+            "description": "Primary data source for the runway list"
+          },
+          "source_reference": {
+            "type": "string",
+            "description": "Human-readable source label",
+            "nullable": true
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date",
+            "description": "NASR effective date when runway_source is nasr",
+            "nullable": true
+          },
+          "runways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunwayFactsRunway"
+            }
+          }
+        },
+        "required": ["runway_source", "runways"]
+      },
+      "RunwayDisplayEnd": {
+        "type": "object",
+        "description": "Runway end geometry and calm-wind designation for weather runway_display.",
+        "properties": {
+          "end_id": {
+            "type": "string",
+            "description": "Runway end ident (e.g. 08, 26L)"
+          },
+          "heading_mag": {
+            "type": "integer",
+            "description": "Magnetic heading in degrees",
+            "nullable": true
+          },
+          "right_hand_traffic": {
+            "type": "boolean",
+            "description": "True when non-standard right-hand pattern is published for this end"
+          },
+          "calm_wind_arrival": {
+            "type": "boolean",
+            "description": "True when airport designates this end for calm-wind arrivals"
+          },
+          "calm_wind_departure": {
+            "type": "boolean",
+            "description": "True when airport designates this end for calm-wind departures"
+          }
+        },
+        "required": ["end_id"]
+      },
+      "RunwayDisplayRunway": {
+        "type": "object",
+        "description": "Resolved runway facts for dashboard and weather API consumers. Per-end headwind/crosswind are computed client-side from wind fields.",
+        "properties": {
+          "rwy_id": {
+            "type": "string",
+            "description": "Runway pair ident (e.g. 08/26)"
+          },
+          "length_ft": {
+            "type": "integer",
+            "description": "Published length in feet"
+          },
+          "width_ft": {
+            "type": "integer",
+            "description": "Published width in feet; omitted when unknown",
+            "nullable": true
+          },
+          "surface": {
+            "type": "string",
+            "description": "Pilot-facing surface label",
+            "nullable": true
+          },
+          "surface_code": {
+            "type": "string",
+            "description": "Source surface code",
+            "nullable": true
+          },
+          "lights": {
+            "type": "string",
+            "description": "Lighting description when known",
+            "nullable": true
+          },
+          "traffic": {
+            "type": "string",
+            "description": "Non-standard traffic pattern note when published",
+            "nullable": true
+          },
+          "closed": {
+            "type": "boolean",
+            "description": "True when closed in source data or active NOTAM closure"
+          },
+          "ends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunwayDisplayEnd"
+            }
+          },
+          "field_sources": {
+            "type": "object",
+            "description": "Per-field provenance (config, nasr, ourairports)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "row_source": {
+            "type": "string",
+            "description": "Primary source for the runway row"
+          }
+        },
+        "required": ["rwy_id", "length_ft", "closed", "ends"]
+      },
+      "RunwayDisplay": {
+        "type": "object",
+        "description": "Resolved runway facts on weather responses. Headwind and crosswind per end are computed client-side from wind_speed and wind_direction; missing wind shows as unavailable in UI.",
+        "nullable": true,
+        "properties": {
+          "runway_source": {
+            "type": "string",
+            "enum": ["config", "nasr", "ourairports"],
+            "description": "Primary data source for the runway list"
+          },
+          "source_reference": {
+            "type": "string",
+            "description": "Human-readable source label",
+            "nullable": true
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date",
+            "description": "NASR effective date when runway_source is nasr",
+            "nullable": true
+          },
+          "runways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunwayDisplayRunway"
+            }
+          }
+        },
+        "required": ["runway_source", "runways"]
+      },
       "Meta": {
         "type": "object",
         "properties": {
@@ -949,6 +1165,10 @@
                 "enum": ["true_north", "magnetic"],
                 "description": "Reference for runway heading_1/heading_2. true_north when runways use true north; magnetic when runways use magnetic headings."
               },
+              "runway_facts": {
+                "$ref": "#/components/schemas/RunwayFacts",
+                "description": "Resolved static runway inventory (length, width, surface). Omitted when no runway rows resolve. Prefer this over runways[] for dimensions; runways[] remains config compass geometry only."
+              },
               "frequencies": {
                 "type": "object",
                 "description": "Radio frequencies (e.g. ctaf, tower). Empty object {} when none configured.",
@@ -1121,6 +1341,9 @@
                 }
               }
             }
+          },
+          "runway_display": {
+            "$ref": "#/components/schemas/RunwayDisplay"
           },
           "pressure_altitude": {
             "type": "integer",

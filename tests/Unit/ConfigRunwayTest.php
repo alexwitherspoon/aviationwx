@@ -148,4 +148,75 @@ final class ConfigRunwayTest extends TestCase
         $this->assertNotNull($runway);
         $this->assertFalse(configRunwayHasDepartureObstructionData($runway));
     }
+
+    public function testValidateRunwayFactsRequiresRwyId(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                ['calm_wind_arrival' => '15'],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains("Airport 'kxyz' runway_facts[0].rwy_id is required", $errors);
+    }
+
+    public function testValidateRunwayFactsRejectsInvalidCalmWindEnd(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'calm_wind_departure' => '99',
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains(
+            "Airport 'kxyz' runway_facts[0].calm_wind_departure must be a valid runway end ident",
+            $errors
+        );
+    }
+
+    public function testValidateRunwayFactsRejectsNonPositiveDimensions(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'length_ft' => 0,
+                    'width_ft' => 'wide',
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains("Airport 'kxyz' runway_facts[0].length_ft must be a positive number", $errors);
+        $this->assertContains("Airport 'kxyz' runway_facts[0].width_ft must be a positive number", $errors);
+    }
+
+    public function testValidateRunwayFactsRejectsInvalidEndsOverride(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'ends' => [
+                        ['end_id' => '99'],
+                    ],
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains(
+            "Airport 'kxyz' runway_facts[0].ends[0].end_id must be a valid runway end ident",
+            $errors
+        );
+    }
 }

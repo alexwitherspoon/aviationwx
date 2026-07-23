@@ -272,21 +272,28 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
     }
 
     if (!array_key_exists('runway_ends', $airport)) {
+        validateConfigRunwayFactsFields($airportCode, $airport, $errors);
+
         return;
     }
 
     $ends = $airport['runway_ends'];
     if ($ends === null) {
+        validateConfigRunwayFactsFields($airportCode, $airport, $errors);
+
         return;
     }
 
     if (!is_array($ends)) {
         $errors[] = "Airport '{$airportCode}' runway_ends must be an array";
+        validateConfigRunwayFactsFields($airportCode, $airport, $errors);
 
         return;
     }
 
     if ($ends === []) {
+        validateConfigRunwayFactsFields($airportCode, $airport, $errors);
+
         return;
     }
 
@@ -383,5 +390,68 @@ function validateConfigRunwayFields(string $airportCode, array $airport, array &
 
     if ($hasUsableObstruction && count($seenEndIds) < 2) {
         $errors[] = "Airport '{$airportCode}' runway_ends obstruction requires two ends";
+    }
+
+    validateConfigRunwayFactsFields($airportCode, $airport, $errors);
+}
+
+/**
+ * Validate optional runway_facts[] dashboard override rows.
+ *
+ * @param string $airportCode Config airport key
+ * @param array $airport Airport configuration
+ * @param list<string> $errors Collected validation errors
+ */
+function validateConfigRunwayFactsFields(string $airportCode, array $airport, array &$errors): void
+{
+    if (!isset($airport['runway_facts']) || !is_array($airport['runway_facts'])) {
+        return;
+    }
+
+    foreach ($airport['runway_facts'] as $index => $row) {
+        if (!is_array($row)) {
+            $errors[] = "Airport '{$airportCode}' runway_facts[{$index}] must be an object";
+            continue;
+        }
+        $rwyId = isset($row['rwy_id']) ? trim((string) $row['rwy_id']) : '';
+        if ($rwyId === '') {
+            $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].rwy_id is required";
+        }
+        foreach (['calm_wind_arrival', 'calm_wind_departure'] as $field) {
+            if (!isset($row[$field]) || $row[$field] === null || $row[$field] === '') {
+                continue;
+            }
+            if (canonicalizeRunwayEndIdent((string) $row[$field]) === null) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].{$field} must be a valid runway end ident";
+            }
+        }
+        foreach (['length_ft', 'width_ft'] as $field) {
+            if (!isset($row[$field]) || $row[$field] === null || $row[$field] === '') {
+                continue;
+            }
+            if (!is_numeric($row[$field]) || (int) round((float) $row[$field]) <= 0) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].{$field} must be a positive number";
+            }
+        }
+        if (!isset($row['ends'])) {
+            continue;
+        }
+        if (!is_array($row['ends'])) {
+            $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends must be an array";
+            continue;
+        }
+        foreach ($row['ends'] as $endIndex => $endRow) {
+            if (!is_array($endRow)) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}] must be an object";
+                continue;
+            }
+            $endId = isset($endRow['end_id']) ? trim((string) $endRow['end_id']) : '';
+            if ($endId === '' || canonicalizeRunwayEndIdent($endId) === null) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}].end_id must be a valid runway end ident";
+            }
+            if (isset($endRow['right_hand_traffic']) && !is_bool($endRow['right_hand_traffic'])) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}].right_hand_traffic must be a boolean";
+            }
+        }
     }
 }

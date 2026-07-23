@@ -4,6 +4,8 @@
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/csv-validation.php';
+require_once __DIR__ . '/runway-remarks.php';
 
 /**
  * Parse NASR APT CSV directory into airport records keyed by ARPT_ID.
@@ -77,12 +79,14 @@ function nasrParseAptCsvDirectory(string $csvDir): array
         }
 
         $key = $arptId . '|' . $rwyId;
+        $lightsCode = nasrNullableUpper($row['RWY_LGT_CODE'] ?? null);
         $runwaysByKey[$key] = [
             'rwy_id' => $rwyId,
             'length_ft' => $lengthFt,
             'width_ft' => nasrParseInt($row['RWY_WIDTH'] ?? null),
             'surface' => $surface,
             'condition' => $condition,
+            'lights_code' => $lightsCode,
             'ends' => [],
         ];
         $airports[$arptId]['runways'][$rwyId] = &$runwaysByKey[$key];
@@ -105,9 +109,11 @@ function nasrParseAptCsvDirectory(string $csvDir): array
         $hgt = nasrParseFloat($row['OBSTN_HGT'] ?? null);
         $dist = nasrParseFloat($row['DIST_FROM_THR'] ?? null);
 
+        $rightHand = nasrNullableUpper($row['RIGHT_HAND_TRAFFIC_PAT_FLAG'] ?? null);
         $airports[$arptId]['runways'][$rwyId]['ends'][] = [
             'end_id' => $endId,
             'true_alignment' => nasrParseInt($row['TRUE_ALIGNMENT'] ?? null),
+            'right_hand_traffic' => $rightHand === 'Y',
             'elev_ft' => nasrParseInt($row['RWY_END_ELEV'] ?? null),
             'tkof_dist_avbl' => nasrParseInt($row['TKOF_DIST_AVBL'] ?? null),
             'displaced_thr_len' => nasrParseInt($row['DISPLACED_THR_LEN'] ?? null),
@@ -123,6 +129,11 @@ function nasrParseAptCsvDirectory(string $csvDir): array
 
     foreach ($airports as $arptId => $record) {
         $airports[$arptId]['runways'] = array_values($record['runways']);
+    }
+
+    $rmkPath = rtrim($csvDir, '/') . '/APT_RMK.csv';
+    if (is_readable($rmkPath) && nasrCsvFileIsValid($rmkPath, NASR_CSV_HEADER_PREFIX['APT_RMK'])) {
+        nasrAttachCalmWindRemarksFromAptRmk($airports, $rmkPath);
     }
 
     return [

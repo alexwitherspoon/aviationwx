@@ -29,6 +29,7 @@ require_once __DIR__ . '/../lib/heading-conversion.php';
 require_once __DIR__ . '/../lib/http-integrity.php';
 require_once __DIR__ . '/../lib/public-api/weather-format.php';
 require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
+require_once __DIR__ . '/../lib/runway-display.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -61,6 +62,7 @@ function formatInternalApiWeatherResponse(array $weather, ?array $airport = null
 
     if ($airport !== null) {
         $out = attachDensityAltitudePerformance($out, $airport, $airportId);
+        $out = attachRunwayDisplay($out, $airport, $airportId);
     }
 
     return $out;

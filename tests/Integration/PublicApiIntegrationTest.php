@@ -344,6 +344,71 @@ class PublicApiIntegrationTest extends TestCase
     }
 
     /**
+     * GET /v1/airports/{id}/weather includes runway_display when runway data resolves
+     */
+    public function testGetWeather_IncludesRunwayDisplay(): void
+    {
+        $this->skipIfApiDisabled();
+
+        $response = $this->apiRequest('/airports/kspb/weather');
+
+        if ($response['code'] !== 200) {
+            $this->markTestSkipped('Weather for kspb not available (got ' . $response['code'] . ')');
+            return;
+        }
+
+        $weather = $response['json']['weather'] ?? null;
+        $this->assertNotNull($weather, 'Response should include weather');
+
+        if (!isset($weather['runway_display'])) {
+            $this->markTestSkipped('kspb has no resolved runway_display in this environment');
+            return;
+        }
+
+        $display = $weather['runway_display'];
+        $this->assertArrayHasKey('runway_source', $display);
+        $this->assertArrayHasKey('runways', $display);
+        $this->assertNotEmpty($display['runways']);
+        $this->assertArrayHasKey('rwy_id', $display['runways'][0]);
+        $this->assertArrayHasKey('length_ft', $display['runways'][0]);
+    }
+
+    /**
+     * GET /v1/airports/{id} includes runway_facts when runway data resolves
+     */
+    public function testGetAirport_IncludesRunwayFactsWhenAvailable(): void
+    {
+        $this->skipIfApiDisabled();
+
+        $response = $this->apiRequest('/airports/kspb');
+
+        if ($response['code'] !== 200) {
+            $this->markTestSkipped('Airport kspb not available (got ' . $response['code'] . ')');
+            return;
+        }
+
+        $airport = $response['json']['airport'] ?? null;
+        $this->assertNotNull($airport, 'Response should include airport');
+
+        if (!isset($airport['runway_facts'])) {
+            $this->markTestSkipped('kspb has no resolved runway_facts in this environment');
+            return;
+        }
+
+        $facts = $airport['runway_facts'];
+        $this->assertArrayHasKey('runway_source', $facts);
+        $this->assertArrayHasKey('runways', $facts);
+        $this->assertNotEmpty($facts['runways']);
+        $row = $facts['runways'][0];
+        $this->assertArrayHasKey('rwy_id', $row);
+        $this->assertArrayHasKey('length_ft', $row);
+        $this->assertArrayNotHasKey('traffic', $row);
+        if (isset($row['ends'][0])) {
+            $this->assertArrayNotHasKey('calm_wind_arrival', $row['ends'][0]);
+        }
+    }
+
+    /**
      * GET /v1/airports/{id}/weather/history observations have wind_direction object
      */
     public function testWeatherHistory_ObservationsHaveWindDirectionObject(): void

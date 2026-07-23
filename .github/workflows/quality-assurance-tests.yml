@@ -1014,6 +1014,7 @@ jobs:
           - 'weather-data-visibility.spec.js'
           - 'e2e-weather-flow.spec.js'
           - 'density-altitude-performance.spec.js'
+          - 'runway-display.spec.js'
     
     steps:
       - name: Checkout code

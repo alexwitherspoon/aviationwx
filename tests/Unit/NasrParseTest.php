@@ -29,11 +29,25 @@ class NasrParseTest extends TestCase
         $this->assertSame('RIU', $parsed['airports']['C80']['notam_id']);
     }
 
-    public function testParseFixtureMagneticDeclinationEast(): void
+    public function testParseFixtureAttachesCalmWindFromAptRmk(): void
     {
         $parsed = nasrParseAptCsvDirectory($this->fixtureDir);
-        $this->assertSame(14.0, $parsed['airports']['69V']['mag_declination_deg']);
-        $this->assertSame(1985, $parsed['airports']['69V']['mag_declination_year']);
+        $this->assertArrayHasKey('SPB', $parsed['airports']);
+        $calm = $parsed['airports']['SPB']['calm_wind'] ?? null;
+        $this->assertIsArray($calm);
+        $this->assertSame('15', $calm['arrival']);
+        $this->assertSame('33', $calm['departure']);
+    }
+
+    public function testParseFixtureRunwayLightsCode(): void
+    {
+        $parsed = nasrParseAptCsvDirectory($this->fixtureDir);
+        $runways = $parsed['airports']['C80']['runways'] ?? [];
+        $byId = [];
+        foreach ($runways as $runway) {
+            $byId[$runway['rwy_id']] = $runway;
+        }
+        $this->assertSame('MED', $byId['12/30']['lights_code'] ?? null);
     }
 
     public function testParseFixtureMagneticDeclinationEastEul(): void
