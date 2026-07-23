@@ -581,13 +581,13 @@ function buildOurAirportsDisplayRunways(array $runways): array
         if ($leIdent !== '' && isset($runway['le_heading_degT']) && is_numeric($runway['le_heading_degT'])) {
             $ends[] = [
                 'end_id' => $leIdent,
-                'heading_mag' => (int) round((float) $runway['le_heading_degT']),
+                'true_alignment' => (int) round((float) $runway['le_heading_degT']),
             ];
         }
         if ($heIdent !== '' && isset($runway['he_heading_degT']) && is_numeric($runway['he_heading_degT'])) {
             $ends[] = [
                 'end_id' => $heIdent,
-                'heading_mag' => (int) round((float) $runway['he_heading_degT']),
+                'true_alignment' => (int) round((float) $runway['he_heading_degT']),
             ];
         }
 
