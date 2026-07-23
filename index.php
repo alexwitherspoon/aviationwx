@@ -26,7 +26,7 @@ if ($requestPath === 'status.php' || $requestPath === 'status') {
 if ($requestPath === 'mockups/runway-display') {
     if (!isProduction()) {
         header('Content-Type: text/html; charset=utf-8');
-        readfile(__DIR__ . '/public/mockups/runway-display-mockups.html');
+        readfile(__DIR__ . '/mockups/runway-display-mockups.html');
         exit;
     }
     http_response_code(404);
