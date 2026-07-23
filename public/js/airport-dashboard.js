@@ -2622,6 +2622,11 @@ function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
             sanitized[field] = null;
         }
     });
+
+    if (sanitized.wind_direction === null || sanitized.wind_direction === undefined) {
+        sanitized.wind_direction_magnetic = null;
+        sanitized.wind_direction_text = null;
+    }
     
     // Calculated fields: null if source fields are invalid
     sanitized.gust_factor = shouldShowGustFactor(sanitized) ? sanitized.gust_factor : null;
