@@ -13,7 +13,9 @@
     }
 
     function isCalmWindSpeed(speed) {
-        if (window.AviationWX && typeof window.AviationWX.isCalmWindSpeed === 'function') {
+        if (typeof window !== 'undefined'
+            && window.AviationWX
+            && typeof window.AviationWX.isCalmWindSpeed === 'function') {
             return window.AviationWX.isCalmWindSpeed(speed);
         }
         return speed !== null && speed !== undefined && Number.isFinite(speed) && speed < 3;
@@ -91,6 +93,14 @@
         return weather && weather.wind_direction_magnetic != null ? weather.wind_direction_magnetic : null;
     }
 
+    function isRunwayWindReady(weather) {
+        const windFromRaw = windFromWeather(weather);
+        const windSpeedRaw = weather && weather.wind_speed;
+        return windFromRaw != null && windSpeedRaw != null
+            && Number.isFinite(Number(windFromRaw))
+            && Number.isFinite(Number(windSpeedRaw));
+    }
+
     function calmWindEndTags(end, calm) {
         if (!calm) {
             return '';
@@ -117,11 +127,7 @@
         const calmTags = calmWindEndTags(end, calm);
 
         if (!calm) {
-            const windFromRaw = windFromWeather(weather);
-            const windSpeedRaw = weather && weather.wind_speed;
-            const windReady = windFromRaw != null && windSpeedRaw != null
-                && Number.isFinite(Number(windFromRaw))
-                && Number.isFinite(Number(windSpeedRaw));
+            const windReady = isRunwayWindReady(weather);
             if (!windReady || heading == null || !Number.isFinite(heading)) {
                 return ''
                     + '<div class="runway-hybrid-wind-row runway-dense-end">'
@@ -225,6 +231,19 @@
         section.hidden = false;
     }
 
-    window.AviationWX = window.AviationWX || {};
-    window.AviationWX.renderRunwayDisplay = renderRunwayDisplay;
+    if (typeof window !== 'undefined') {
+        window.AviationWX = window.AviationWX || {};
+        window.AviationWX.renderRunwayDisplay = renderRunwayDisplay;
+        window.AviationWX.isRunwayWindReady = isRunwayWindReady;
+    }
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            isRunwayWindReady: isRunwayWindReady,
+            isCalmWindSpeed: isCalmWindSpeed,
+            headwindKts: headwindKts,
+            signedCrosswindKts: signedCrosswindKts,
+            MISSING: MISSING
+        };
+    }
 })();
