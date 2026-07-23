@@ -707,6 +707,10 @@
             "type": "boolean",
             "description": "True when closed in source data (NASR, OurAirports, or config); excludes NOTAM closure"
           },
+          "is_helipad": {
+            "type": "boolean",
+            "description": "True for FAA helipad designators (H1, H2, etc.); per-end wind components are omitted in UI"
+          },
           "ends": {
             "type": "array",
             "items": {
@@ -820,6 +824,10 @@
           "closed": {
             "type": "boolean",
             "description": "True when closed in source data or active NOTAM closure"
+          },
+          "is_helipad": {
+            "type": "boolean",
+            "description": "True for FAA helipad designators (H1, H2, etc.); per-end wind components are omitted in UI"
           },
           "ends": {
             "type": "array",

@@ -759,7 +759,7 @@ OurAirports is community-maintained; length and surface can disagree with nation
 1. Resolve runway inventory (config override per field, NASR, OurAirports).
 2. Merge dimensions, surface, lights, traffic notes, calm-wind designation, and magnetic headings per end.
 3. Apply active NOTAM full-closure semantics on weather responses (same rules as density altitude performance).
-4. Attach `runway_display` to the formatted weather payload. Per-end headwind and crosswind are computed client-side from `wind_speed` and magnetic wind direction; missing wind shows unavailable in UI. Arrow semantics (aircraft-relative along- and cross-fuselage) are defined in [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-dashboard-per-end-hwxw).
+4. Attach `runway_display` to the formatted weather payload. Per-end headwind and crosswind are computed client-side from `wind_speed` and magnetic wind direction; missing wind shows unavailable in UI. Helipad rows (`is_helipad: true`) omit per-end wind components. Arrow semantics (aircraft-relative along- and cross-fuselage) are defined in [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-dashboard-per-end-hwxw).
 
 **Public API airport metadata** (`GET /v1/airports/{id}`): `runway_facts` uses the same resolver with NOTAM closure omitted (metadata is cached longer). Omits calm-wind designation and traffic notes. Legacy `runways[]` remains config compass geometry only.
 

@@ -95,7 +95,37 @@ test('missing wind shows --- not zero kts', () => {
     assert(!/rwy-comp-(hw|tw|xw)">\s*[↓↑←→]?\s*0 kts/.test(html), 'must not show zero runway wind rows when wind missing');
 });
 
-test('valid wind renders numeric components with aircraft-relative arrows', () => {
+test('helipad card omits per-end wind components', () => {
+    const dom = buildDom({
+        wind_direction_magnetic: 270,
+        wind_speed: 12,
+        runway_display: {
+            runway_source: 'nasr',
+            runways: [{
+                rwy_id: 'H1',
+                length_ft: 50,
+                width_ft: 50,
+                surface: 'Asphalt',
+                lights: null,
+                closed: false,
+                is_helipad: true,
+                ends: [
+                    { end_id: 'H1', heading_mag: null, calm_wind_arrival: false, calm_wind_departure: false },
+                ],
+            }],
+        },
+    });
+    const html = dom.window.document.getElementById('runway-display-list').innerHTML;
+    assert(html.includes('H1'), 'helipad headline must render');
+    assert(html.includes('50'), 'dimensions must render');
+    assert(html.includes('Asphalt'), 'surface must render');
+    assert(!html.includes('rwy-comp-hw'), 'helipad must not render headwind row');
+    assert(!html.includes('rwy-comp-xw'), 'helipad must not render crosswind row');
+    assert(!html.includes('--- kts'), 'helipad must not render placeholder wind components');
+    assert(dom.window.document.querySelectorAll('.runway-hybrid-wind-row').length === 0, 'no wind rows');
+});
+
+test('non-helipad runway still renders wind components', () => {
     const dom = buildDom(sampleWeather);
     const html = dom.window.document.getElementById('runway-display-list').innerHTML;
     assert(/rwy-comp-hw">\u2193 \d+ kts/.test(html), 'expected headwind down arrow with numeric speed');
