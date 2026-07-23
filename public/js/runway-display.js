@@ -6,6 +6,12 @@
 
     const MISSING = '---';
 
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     function isCalmWindSpeed(speed) {
         if (window.AviationWX && typeof window.AviationWX.isCalmWindSpeed === 'function') {
             return window.AviationWX.isCalmWindSpeed(speed);
@@ -122,7 +128,7 @@
         const xwArrow = xwSigned >= 0 ? '\u2190' : '\u2192';
         return ''
             + '<div class="runway-hybrid-wind-row runway-dense-end">'
-            + '<span class="runway-hybrid-end-id runway-dense-end-id">' + end.end_id + '</span>'
+            + '<span class="runway-hybrid-end-id runway-dense-end-id">' + escapeHtml(end.end_id) + '</span>'
             + '<span class="runway-dense-end-id">:</span> '
             + '<span class="' + hwClass + '">' + hwArrow + ' ' + hwVal + ' ' + unit + '</span> '
             + '<span class="rwy-comp-xw">' + xwArrow + ' ' + xwVal + ' ' + unit + '</span>'
@@ -134,7 +140,7 @@
         if (value === null || value === undefined || value === '') {
             return MISSING;
         }
-        return String(value);
+        return escapeHtml(String(value));
     }
 
     function runwayCardHtml(row, weather) {
@@ -145,7 +151,9 @@
         const dim = formatDimensions(row.length_ft, row.width_ft);
         const surface = displayValue(row.surface);
         const lights = displayValue(row.lights);
-        const traffic = row.traffic ? '<div class="runway-style-traffic">' + row.traffic + '</div>' : '';
+        const traffic = row.traffic
+            ? '<div class="runway-style-traffic">' + escapeHtml(row.traffic) + '</div>'
+            : '';
         const ends = Array.isArray(row.ends) ? row.ends : [];
         const windHtml = ends.map(function (end) {
             return endWindLine(end, weather, calm);
@@ -158,7 +166,7 @@
 
         return ''
             + '<div class="weather-item runway-hybrid-card">'
-            + '<div class="runway-hybrid-headline"><span class="value">' + row.rwy_id + '</span>' + closedHtml + '</div>'
+            + '<div class="runway-hybrid-headline"><span class="value">' + escapeHtml(row.rwy_id) + '</span>' + closedHtml + '</div>'
             + '<div class="runway-hybrid-desktop-only">'
             + '<div class="runway-hybrid-meta"><span class="label">Dimensions</span><span>' + dim + '</span></div>'
             + '<div class="runway-hybrid-meta"><span class="label">Surface</span><span>' + surface + '</span></div>'
