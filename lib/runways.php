@@ -497,7 +497,8 @@ function ourAirportsRunwayIdFromIdents(string $leIdent, string $heIdent): string
 /**
  * Whether an OurAirports runway row is eligible for DA performance scoring.
  *
- * Closed rows are omitted when `runways.csv` is ingested; water surfaces excluded here.
+ * Closed rows are filtered here; ingest retains them for dashboard display.
+ * Water surfaces are excluded.
  *
  * @param array $runway Parsed runway with length_ft and surface
  */
