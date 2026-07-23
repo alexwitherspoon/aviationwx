@@ -13,6 +13,7 @@ require_once __DIR__ . '/../airport-identifiers.php';
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/tfr-indicators.php';
+require_once __DIR__ . '/closure-parse.php';
 
 /** Epsilon for comparing decoded TFR vertices (degrees) */
 const TFR_VERTEX_EQUAL_EPSILON_DEG = 1.0e-6;
@@ -727,35 +728,6 @@ function isNotamCancellation(array $notam): bool {
 }
 
 /**
- * Whether NOTAM prose indicates a runway or aerodrome closure when Q-code is absent.
- *
- * @param string $text NOTAM body (any case)
- * @return bool True for RWY/AD AP/ARPT closure phrases; false for taxiway-only or hazard-only text
- */
-function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
-    $upper = strtoupper($text);
-    if ($upper === '') {
-        return false;
-    }
-
-    if (!str_contains($upper, 'CLSD') && !str_contains($upper, 'CLOSED')) {
-        return false;
-    }
-
-    if (preg_match('/\bRWY\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
-        return true;
-    }
-    if (preg_match('/\bAD\s+AP\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
-        return true;
-    }
-    if (preg_match('/\b(ARPT|AIRPORT)\b.*\b(CLSD|CLOSED)\b/', $upper) === 1) {
-        return true;
-    }
-
-    return false;
-}
-
-/**
  * Whether a parsed NOTAM is runway- or aerodrome-level (not taxiway/apron).
  *
  * Accepts QMR/QFA Q-codes, FAA scenario 86 / AIXM runway members, or conservative text fallback.
@@ -764,43 +736,70 @@ function notamTextIndicatesRunwayOrAerodromeClosure(string $text): bool {
  * @return bool True when scope is runway or aerodrome
  */
 function notamRestrictionScopeIsRunwayOrAerodrome(array $notam): bool {
+    $text = (string) ($notam['text'] ?? '');
     $code = strtoupper((string) ($notam['code'] ?? ''));
     if (str_starts_with($code, 'QMX') || str_starts_with($code, 'QMA') || str_starts_with($code, 'QMP')) {
         return false;
     }
-    if (str_starts_with($code, 'QMR') || str_starts_with($code, 'QFA')) {
+    if (str_starts_with($code, 'QMR')) {
+        if (notamQmrCodeContradictsRunwayClosureScope($text)) {
+            return false;
+        }
+
+        return true;
+    }
+    if (str_starts_with($code, 'QFA')) {
         return true;
     }
 
     $scenario = (string) ($notam['scenario'] ?? '');
     if ($scenario === NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE) {
+        if (notamTextIndicatesTaxiwayOnlyClosure($text) && !notamTextIndicatesDirectRunwayClosure($text)) {
+            return false;
+        }
+
         return true;
     }
     if (!empty($notam['aixm_runway_event'])) {
+        if (notamTextIndicatesTaxiwayOnlyClosure($text) && !notamTextIndicatesDirectRunwayClosure($text)) {
+            return false;
+        }
+
         return true;
     }
 
     if ($code === '') {
-        return notamTextIndicatesRunwayOrAerodromeClosure((string) ($notam['text'] ?? ''));
+        return notamTextIndicatesRunwayOrAerodromeClosure($text);
     }
 
     return false;
 }
 
 /**
+ * Whether a NOTAM location field or airport name matches the configured airport.
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @param array<string, mixed> $airport Airport configuration
+ */
+function notamMatchesAirportLocation(array $notam, array $airport): bool {
+    $identifiers = getAirportIdentifiers($airport);
+    $notamLocation = strtoupper((string) ($notam['location'] ?? ''));
+
+    if (in_array($notamLocation, $identifiers, true)) {
+        return true;
+    }
+
+    $airportName = strtoupper((string) ($airport['name'] ?? ''));
+    $notamAirportName = strtoupper((string) ($notam['airport_name'] ?? ''));
+    if ($airportName === '' || $notamAirportName === '') {
+        return false;
+    }
+
+    return isWordMatch($notamAirportName, $airportName) || isWordMatch($airportName, $notamAirportName);
+}
+
+/**
  * Check if NOTAM is a runway or aerodrome closure.
- *
- * Only matches runway-level and above closures (not taxiway/apron, not hazard-only text):
- * - QMR* = Runway closed
- * - QFA* = Aerodrome/airport closed
- * - FAA scenario 86 / AIXM runway events (DOM format without Q-code)
- * - Text fallback when Q-code is empty (RWY/AD AP/ARPT CLSD/CLOSED phrases)
- *
- * Excludes:
- * - QMX* = Taxiway closures (less critical)
- * - QMA* = Apron/ramp closures (less critical)
- * - QMP* = Parking area closures (less critical)
- * - Type C (Cancel) NOTAMs (restriction lifted, not a warning)
  *
  * @param array<string, mixed> $notam Parsed NOTAM data
  * @param array<string, mixed> $airport Airport configuration
@@ -815,30 +814,39 @@ function isAerodromeClosure(array $notam, array $airport): bool {
         return false;
     }
 
-    $text = strtoupper((string) ($notam['text'] ?? ''));
-    if (!str_contains($text, 'CLSD') && !str_contains($text, 'CLOSED')) {
+    $text = notamNormalizeProse((string) ($notam['text'] ?? ''));
+    if (!notamProseHasClosureKeyword($text)) {
         return false;
     }
 
-    // Location match (current or historical identifiers)
-    $identifiers = getAirportIdentifiers($airport);
-    $notamLocation = strtoupper($notam['location'] ?? '');
-    
-    if (!in_array($notamLocation, $identifiers)) {
-        // Also check airport name matching for geospatial queries (word boundary match)
-        $airportName = strtoupper($airport['name'] ?? '');
-        $notamAirportName = strtoupper($notam['airport_name'] ?? '');
-        
-        if (empty($airportName) || empty($notamAirportName)) {
-            return false;
-        }
-        // Use word boundary matching to avoid "FIELD" matching "SPRINGFIELD"
-        if (!isWordMatch($notamAirportName, $airportName) && !isWordMatch($airportName, $notamAirportName)) {
-            return false;
-        }
+    if (!notamMatchesAirportLocation($notam, $airport)) {
+        return false;
     }
-    
+
     return true;
+}
+
+/**
+ * Runway-affecting partial restriction (banner pipeline; does not mark runway fully closed).
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @param array<string, mixed> $airport Airport configuration
+ */
+function isRunwayAffectingRestrictionNotam(array $notam, array $airport): bool {
+    if (isNotamCancellation($notam)) {
+        return false;
+    }
+
+    $text = (string) ($notam['text'] ?? '');
+    if (!notamTextIndicatesRunwayAffectingPartialRestriction($text)) {
+        return false;
+    }
+
+    if (isAerodromeClosure($notam, $airport)) {
+        return false;
+    }
+
+    return notamMatchesAirportLocation($notam, $airport);
 }
 
 /**
@@ -1133,7 +1141,8 @@ function filterRelevantNotams(array $notams, array $airport): array {
     $relevant = [];
     
     foreach ($notams as $notam) {
-        $isClosureNotam = isAerodromeClosure($notam, $airport);
+        $isClosureNotam = isAerodromeClosure($notam, $airport)
+            || isRunwayAffectingRestrictionNotam($notam, $airport);
         $isTfrNotam = isTfr($notam);
         
         if ($isClosureNotam) {

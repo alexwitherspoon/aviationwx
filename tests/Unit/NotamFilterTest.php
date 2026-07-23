@@ -186,6 +186,83 @@ class NotamFilterTest extends TestCase {
         $this->assertFalse(isAerodromeClosure($notam, $airport));
     }
 
+    public function testIsAerodromeClosure_RejectsKboiTaxiwayBetweenRunwayLandmarks(): void
+    {
+        $airport = ['icao' => 'KBOI', 'faa' => 'BOI', 'name' => 'Boise Air Terminal'];
+        $notam = [
+            'code' => '',
+            'text' => 'TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION',
+            'location' => 'KBOI',
+        ];
+
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsAerodromeClosure_RejectsQmrCodeWhenProseIsTaxiwayOnly(): void
+    {
+        $airport = ['icao' => 'KBOI', 'faa' => 'BOI', 'name' => 'Boise Air Terminal'];
+        $notam = [
+            'code' => 'QMRXX',
+            'text' => 'TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION',
+            'location' => 'KBOI',
+        ];
+
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testIsRunwayAffectingRestrictionNotam_KboiApproachTwyWingspan(): void
+    {
+        $airport = ['icao' => 'KBOI', 'faa' => 'BOI', 'name' => 'Boise Air Terminal'];
+        $notam = [
+            'code' => '',
+            'text' => 'TWY J BTN APCH END RWY 10R AND TWY W CLSD TO ACFT WINGSPAN MORE THAN 118FT',
+            'location' => 'KBOI',
+        ];
+
+        $this->assertTrue(isRunwayAffectingRestrictionNotam($notam, $airport));
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+
+    public function testFilterRelevantNotams_Kboi_IncludesRunwayClosureAndApproachRestrictionOnly(): void
+    {
+        $airport = [
+            'icao' => 'KBOI',
+            'faa' => 'BOI',
+            'name' => 'Boise Air Terminal',
+            'timezone' => 'America/Boise',
+        ];
+        $notams = [
+            [
+                'id' => 'A1032/2026',
+                'text' => 'BOI RWY 10L/28R CLSD EXC XNG',
+                'location' => 'KBOI',
+                'start_time_utc' => '2026-04-11T14:55:00.000Z',
+                'end_time_utc' => '2026-11-01T18:00:00.000Z',
+            ],
+            [
+                'id' => '06/140/2026',
+                'text' => 'TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION',
+                'location' => 'KBOI',
+                'start_time_utc' => '2026-06-15T07:42:00.000Z',
+                'end_time_utc' => '2026-07-31T12:00:00.000Z',
+            ],
+            [
+                'id' => '07/190/2026',
+                'text' => 'TWY J BTN APCH END RWY 10R AND TWY W CLSD TO ACFT WINGSPAN MORE THAN 118FT',
+                'location' => 'KBOI',
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 86400),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 90000),
+            ],
+        ];
+
+        $relevant = filterRelevantNotams($notams, $airport);
+        $ids = array_column($relevant, 'id');
+
+        $this->assertContains('A1032/2026', $ids);
+        $this->assertContains('07/190/2026', $ids);
+        $this->assertNotContains('06/140/2026', $ids);
+    }
+
     public function testFilterRelevantNotams_IncludesKspbScenario86Fixture(): void
     {
         require_once __DIR__ . '/../../lib/notam/parser.php';
