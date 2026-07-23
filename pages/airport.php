@@ -1097,10 +1097,10 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
 
-            <div id="runway-display-section" class="frequencies runway-style-e" aria-label="Runway details" hidden>
-                <h3>Runways</h3>
+            <section id="runway-display-section" class="frequencies runway-style-e" aria-labelledby="runway-display-heading" hidden>
+                <h3 id="runway-display-heading">Runways</h3>
                 <div id="runway-display-list" class="runway-hybrid-list"></div>
-            </div>
+            </section>
 
             <!-- Frequencies -->
             <div class="frequencies">
