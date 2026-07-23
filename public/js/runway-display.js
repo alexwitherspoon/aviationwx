@@ -86,7 +86,10 @@
     }
 
     function windFromWeather(weather) {
-        const wdObj = weather && weather.wind_direction;
+        if (!weather) {
+            return null;
+        }
+        const wdObj = weather.wind_direction;
         if (wdObj && typeof wdObj === 'object') {
             return wdObj.magnetic_north != null ? wdObj.magnetic_north : null;
         }

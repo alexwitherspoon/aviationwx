@@ -37,6 +37,10 @@ function assert(condition, message) {
 
 console.log('\nRunway display wind (safety-critical)\n' + '='.repeat(50));
 
+test('null weather is not ready', () => {
+    assert(!isRunwayWindReady(null), 'null weather must fail closed');
+});
+
 test('missing wind direction is not ready', () => {
     assert(!isRunwayWindReady({ wind_speed: 10 }), 'speed alone is insufficient');
 });
