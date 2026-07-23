@@ -53,6 +53,14 @@ test('valid magnetic wind is ready', () => {
     assert(isRunwayWindReady({ wind_direction_magnetic: 270, wind_speed: 12 }), 'numeric wind is ready');
 });
 
+test('orphaned wind_direction_magnetic is not ready when wind_direction is null', () => {
+    assert(!isRunwayWindReady({
+        wind_direction: null,
+        wind_direction_magnetic: 270,
+        wind_speed: 10,
+    }), 'stale direction must not use orphaned magnetic field');
+});
+
 test('public API wind_direction object is ready', () => {
     assert(isRunwayWindReady({
         wind_direction: { magnetic_north: 90 },

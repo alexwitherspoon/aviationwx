@@ -87,10 +87,13 @@
 
     function windFromWeather(weather) {
         const wdObj = weather && weather.wind_direction;
-        if (wdObj && typeof wdObj === 'object' && wdObj.magnetic_north != null) {
-            return wdObj.magnetic_north;
+        if (wdObj && typeof wdObj === 'object') {
+            return wdObj.magnetic_north != null ? wdObj.magnetic_north : null;
         }
-        return weather && weather.wind_direction_magnetic != null ? weather.wind_direction_magnetic : null;
+        if (weather.wind_direction == null || weather.wind_direction === undefined) {
+            return null;
+        }
+        return weather.wind_direction_magnetic != null ? weather.wind_direction_magnetic : null;
     }
 
     function isRunwayWindReady(weather) {
