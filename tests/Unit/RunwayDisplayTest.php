@@ -218,4 +218,80 @@ class RunwayDisplayTest extends TestCase
             'magnetic_declination' => 12.5,
         ]));
     }
+
+    public function testFormatRunwayFactsForAirportApi_ConfigRunway_StripsCalmWindAndTraffic(): void
+    {
+        $airport = [
+            'id' => 'ktest',
+            'runway_length_ft' => 3000,
+            'runway_surface' => 'ASPH',
+            'runways' => [
+                ['name' => '09/27', 'heading_1' => 90, 'heading_2' => 270],
+            ],
+            'runway_facts' => [
+                [
+                    'rwy_id' => '09/27',
+                    'traffic' => 'Right traffic RWY 27',
+                    'calm_wind_arrival' => '09',
+                ],
+            ],
+        ];
+
+        $facts = formatRunwayFactsForAirportApi($airport, 'ktest');
+        $this->assertNotNull($facts);
+        $this->assertSame('config', $facts['runway_source']);
+        $row = $facts['runways'][0];
+        $this->assertArrayNotHasKey('traffic', $row);
+        $this->assertArrayNotHasKey('row_source', $row);
+        $this->assertArrayNotHasKey('calm_wind_arrival', $row['ends'][0]);
+        $this->assertArrayNotHasKey('calm_wind_departure', $row['ends'][0]);
+        $this->assertArrayNotHasKey('right_hand_traffic', $row['ends'][0]);
+    }
+
+    public function testGetRunwayDisplayForAirport_IncludeNotamClosuresFalse_SkipsNotamClosure(): void
+    {
+        $sourceRow = [
+            'rwy_id' => '18/36',
+            'length_ft' => 4000,
+            'surface' => 'ASPH',
+            'ends' => [
+                ['end_id' => '18'],
+                ['end_id' => '36'],
+            ],
+        ];
+        $notamClosures = [
+            'aerodrome_closed' => false,
+            'closed_pair_designators' => ['18/36'],
+            'closed_end_idents' => [],
+        ];
+
+        $withNotam = runwayDisplayFormatRunwayRow(
+            $sourceRow,
+            [],
+            [],
+            [],
+            $notamClosures,
+            'nasr',
+            null
+        );
+        $withoutNotam = runwayDisplayFormatRunwayRow(
+            $sourceRow,
+            [],
+            [],
+            [],
+            [
+                'aerodrome_closed' => false,
+                'closed_pair_designators' => [],
+                'closed_end_idents' => [],
+            ],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($withNotam);
+        $this->assertNotNull($withoutNotam);
+        $this->assertTrue($withNotam['closed']);
+        $this->assertFalse($withoutNotam['closed']);
+        $this->assertFalse(runwayDisplayFormatRunwayFactsRow($withoutNotam)['closed']);
+    }
 }

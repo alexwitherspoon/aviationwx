@@ -54,7 +54,8 @@ function buildDom(weather) {
 }
 
 const sampleWeather = {
-    wind_direction_magnetic: 220,
+    wind_direction: 270,
+    wind_direction_magnetic: 270,
     wind_speed: 6,
     runway_display: {
         runway_source: 'nasr',
