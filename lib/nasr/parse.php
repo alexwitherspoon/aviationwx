@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/csv-validation.php';
 require_once __DIR__ . '/runway-remarks.php';
 
 /**
@@ -131,7 +132,7 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     }
 
     $rmkPath = rtrim($csvDir, '/') . '/APT_RMK.csv';
-    if (is_readable($rmkPath)) {
+    if (is_readable($rmkPath) && nasrCsvFileIsValid($rmkPath, NASR_CSV_HEADER_PREFIX['APT_RMK'])) {
         nasrAttachCalmWindRemarksFromAptRmk($airports, $rmkPath);
     }
 
