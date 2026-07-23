@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
 require_once __DIR__ . '/../../lib/runways.php';
 require_once __DIR__ . '/../../lib/airport-frequencies.php';
+require_once __DIR__ . '/../../lib/runway-display.php';
 
 /**
  * Handle GET /v1/airports/{id} request
@@ -126,7 +127,12 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['runways'] = [];
         $formatted['runway_heading_reference'] = null;
     }
-    
+
+    $runwayFacts = formatRunwayFactsForAirportApi($airport, $airportId);
+    if ($runwayFacts !== null) {
+        $formatted['runway_facts'] = $runwayFacts;
+    }
+
     // Frequencies and services: empty returns {} for schema consistency
     $mergedFrequencies = getMergedAirportFrequencies($airportId, $airport);
     if ($mergedFrequencies !== []) {

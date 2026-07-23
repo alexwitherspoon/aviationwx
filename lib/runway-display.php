@@ -495,6 +495,8 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
 /**
  * Build runway display payload for an airport.
  *
+ * @param array<string, mixed> $airport
+ * @param array{include_notam_closures?: bool} $options include_notam_closures defaults true
  * @return array{
  *   runway_source: ?string,
  *   source_reference: ?string,
@@ -502,8 +504,9 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
  *   runways: list<array<string, mixed>>
  * }|null
  */
-function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): ?array
+function getRunwayDisplayForAirport(array $airport, ?string $airportId = null, array $options = []): ?array
 {
+    $includeNotamClosures = ($options['include_notam_closures'] ?? true) === true;
     $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
     $configFacts = runwayDisplayConfigFactsByRunwayId($airport);
     $nasrRecord = getNasrAirportForConfig($airport);
@@ -514,7 +517,7 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
         'closed_pair_designators' => [],
         'closed_end_idents' => [],
     ];
-    if ($resolvedAirportId !== '') {
+    if ($includeNotamClosures && $resolvedAirportId !== '') {
         $notamRows = loadNotamRowsForDensityAltitudePerformance($resolvedAirportId);
         if ($notamRows !== null) {
             $notamClosures = notamResolveActiveDensityAltitudeRunwayClosures($notamRows, $airport);
@@ -606,6 +609,88 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
         'source_reference' => $sourceReference,
         'effective_date' => $effectiveDate,
         'runways' => $formatted,
+    ];
+}
+
+/**
+ * Strip one resolved runway row to static airport-metadata facts (no wind or NOTAM context).
+ *
+ * @param array<string, mixed> $row Resolved row from runwayDisplayFormatRunwayRow()
+ * @return array<string, mixed>
+ */
+function runwayDisplayFormatRunwayFactsRow(array $row): array
+{
+    $facts = [
+        'rwy_id' => $row['rwy_id'],
+        'length_ft' => $row['length_ft'],
+        'surface' => $row['surface'],
+        'surface_code' => $row['surface_code'],
+        'lights' => $row['lights'],
+        'closed' => $row['closed'],
+        'field_sources' => $row['field_sources'] ?? [],
+        'ends' => [],
+    ];
+
+    if (isset($row['width_ft']) && is_numeric($row['width_ft'])) {
+        $facts['width_ft'] = (int) $row['width_ft'];
+    }
+
+    foreach ($row['ends'] ?? [] as $end) {
+        if (!is_array($end)) {
+            continue;
+        }
+        $endId = $end['end_id'] ?? null;
+        if (!is_string($endId) || $endId === '') {
+            continue;
+        }
+        $endFacts = ['end_id' => $endId];
+        if (isset($end['heading_mag']) && is_numeric($end['heading_mag'])) {
+            $endFacts['heading_mag'] = (int) $end['heading_mag'];
+        }
+        $facts['ends'][] = $endFacts;
+    }
+
+    return $facts;
+}
+
+/**
+ * Resolved static runway inventory for Public API airport metadata.
+ *
+ * Omits calm-wind designation, traffic notes, and NOTAM-derived closure (metadata
+ * is cached longer than live weather). Source-record closed flags remain.
+ *
+ * @param array<string, mixed> $airport
+ * @return array{
+ *   runway_source: ?string,
+ *   source_reference: ?string,
+ *   effective_date: ?string,
+ *   runways: list<array<string, mixed>>
+ * }|null
+ */
+function formatRunwayFactsForAirportApi(array $airport, ?string $airportId = null): ?array
+{
+    $display = getRunwayDisplayForAirport($airport, $airportId, ['include_notam_closures' => false]);
+    if ($display === null) {
+        return null;
+    }
+
+    $runways = [];
+    foreach ($display['runways'] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $runways[] = runwayDisplayFormatRunwayFactsRow($row);
+    }
+
+    if ($runways === []) {
+        return null;
+    }
+
+    return [
+        'runway_source' => $display['runway_source'],
+        'source_reference' => $display['source_reference'],
+        'effective_date' => $display['effective_date'],
+        'runways' => $runways,
     ];
 }
 
