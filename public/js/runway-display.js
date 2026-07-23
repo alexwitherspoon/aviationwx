@@ -126,28 +126,32 @@
         const endIdHtml = escapeHtml(end.end_id);
         const calmTags = calmWindEndTags(end, calm);
 
-        if (!calm) {
-            const windReady = isRunwayWindReady(weather);
-            if (!windReady || heading == null || !Number.isFinite(heading)) {
-                return ''
-                    + '<div class="runway-hybrid-wind-row runway-dense-end">'
-                    + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
-                    + '<span class="runway-dense-end-id">:</span> '
-                    + '<span class="rwy-comp-hw">' + MISSING + ' ' + unit + '</span> '
-                    + '<span class="rwy-comp-xw">' + MISSING + ' ' + unit + '</span>'
-                    + calmTags
-                    + '</div>';
-            }
+        if (heading == null || !Number.isFinite(heading)) {
+            return ''
+                + '<div class="runway-hybrid-wind-row runway-dense-end">'
+                + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
+                + '<span class="runway-dense-end-id">:</span> '
+                + '<span class="rwy-comp-hw">' + MISSING + ' ' + unit + '</span> '
+                + '<span class="rwy-comp-xw">' + MISSING + ' ' + unit + '</span>'
+                + calmTags
+                + '</div>';
+        }
+
+        if (!calm && !isRunwayWindReady(weather)) {
+            return ''
+                + '<div class="runway-hybrid-wind-row runway-dense-end">'
+                + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
+                + '<span class="runway-dense-end-id">:</span> '
+                + '<span class="rwy-comp-hw">' + MISSING + ' ' + unit + '</span> '
+                + '<span class="rwy-comp-xw">' + MISSING + ' ' + unit + '</span>'
+                + calmTags
+                + '</div>';
         }
 
         const windFrom = calm ? 0 : Number(windFromWeather(weather));
         const windSpeed = calm ? 0 : Number(weather.wind_speed);
-        let hw = 0;
-        let xwSigned = 0;
-        if (heading != null && Number.isFinite(heading)) {
-            hw = headwindKts(windFrom, windSpeed, heading);
-            xwSigned = signedCrosswindKts(windFrom, windSpeed, heading);
-        }
+        let hw = headwindKts(windFrom, windSpeed, heading);
+        let xwSigned = signedCrosswindKts(windFrom, windSpeed, heading);
         const hwArrow = hw >= 0 ? '\u2191' : '\u2193';
         const hwClass = hw >= 0 ? 'rwy-comp-hw' : 'rwy-comp-tw';
         const hwVal = formatWindKts(Math.abs(hw));

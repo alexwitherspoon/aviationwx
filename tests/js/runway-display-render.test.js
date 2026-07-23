@@ -100,6 +100,29 @@ test('valid wind renders numeric components', () => {
     assert(/← \d+ kts|→ \d+ kts/.test(html), 'expected crosswind arrow with numeric speed');
 });
 
+test('calm wind with missing heading shows --- not zero kts', () => {
+    const dom = buildDom({
+        wind_speed: 1,
+        runway_display: {
+            runway_source: 'config',
+            runways: [{
+                rwy_id: '09/27',
+                length_ft: 2000,
+                width_ft: 40,
+                surface: 'Turf',
+                lights: null,
+                closed: false,
+                ends: [
+                    { end_id: '09', heading_mag: null, calm_wind_arrival: true, calm_wind_departure: true },
+                ],
+            }],
+        },
+    });
+    const html = dom.window.document.getElementById('runway-display-list').innerHTML;
+    assert(html.includes('--- kts'), 'missing heading must render --- even when calm');
+    assert(!html.includes('↑ 0 kts'), 'must not show zero components without heading');
+});
+
 test('dashboard CSS hides mobile block on desktop', () => {
     const css = fs.readFileSync(
         path.join(__dirname, '../../public/css/styles.css'),
