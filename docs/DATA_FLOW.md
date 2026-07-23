@@ -1732,7 +1732,7 @@ A NOTAM is classified as an aerodrome closure if (and not a cancellation). Scope
 
 - **Q-code path**: Code starts with `QMR` (runway) or `QFA` (aerodrome)
 - **FAA AIXM path**: `scenario` is `86` (`NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE`) and/or `aixm_runway_event` is true (DOM runway closures often omit Q-code)
-- **Text fallback** (only when `code` is empty): Phrases such as `RWY ... CLSD`, `AD AP CLSD`, or `ARPT/AIRPORT ... CLSD`. Taxiway-only closures (`TWY`, `APRON`, `RAMP`) are excluded. Explicit `QMX`/`QMA`/`QMP` Q-codes are always excluded.
+- **Text fallback** (only when `code` is empty): Direct runway subject phrases (`RWY {designator} CLSD/CLOSED`), aerodrome phrases (`AD AP CLSD`, `ARPT/AIRPORT CLSD`). Taxiway-only closures (`TWY ... CLSD` where the runway is only a landmark) are excluded. Runway-affecting partial restrictions (`CLSD TO`, wingspan near `APCH END RWY`) are retained for the banner pipeline but do not mark runways fully closed. Explicit `QMX`/`QMA`/`QMP` Q-codes are always excluded; `QMR` is rejected when prose is taxiway-only.
 
 Additionally:
 - **Text indicates closure**: Contains `CLSD` or `CLOSED` (not hazard-only phrases such as `UNSAFE` or `HAZARD`)

@@ -76,6 +76,31 @@ final class NotamBannerTest extends TestCase
         );
     }
 
+    public function testNotamBannerExtractRunwayDesignator_IgnoresTaxiwayLandmarkPhrase(): void
+    {
+        $text = 'TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION';
+        $this->assertNull(notamBannerExtractRunwayDesignator($text));
+        $this->assertNull(notamBannerExtractRunwayDesignatorRaw($text));
+    }
+
+    public function testNotamBannerClassifyScope_KboiApproachRestriction_ReturnsRunwayScope(): void
+    {
+        $airport = [
+            'icao' => 'KBOI',
+            'faa' => 'BOI',
+            'name' => 'Boise Air Terminal',
+        ];
+        $notam = [
+            'notam_type' => 'aerodrome_closure',
+            'code' => '',
+            'text' => 'TWY J BTN APCH END RWY 10R AND TWY W CLSD TO ACFT WINGSPAN MORE THAN 118FT',
+            'location' => 'KBOI',
+        ];
+
+        $this->assertSame('runway', notamBannerClassifyScope($notam, $airport));
+        $this->assertSame('partial_restriction', notamBannerClassifyCategory('runway', $notam));
+    }
+
     public function testNotamBannerClassifyAirspace_FireTfrText_ReturnsFireHeadline(): void
     {
         $text = 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
