@@ -2776,6 +2776,10 @@ function displayWeather(weather) {
         </div>
         
     `;
+
+    if (window.AviationWX && typeof window.AviationWX.renderRunwayDisplay === 'function') {
+        window.AviationWX.renderRunwayDisplay(sanitizedWeather);
+    }
 }
 
 /**

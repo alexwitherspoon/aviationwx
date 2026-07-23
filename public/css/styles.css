@@ -3639,3 +3639,221 @@ body.night-mode .weather-item.density-altitude-warning .weather-value,
 body.night-mode .density-altitude-warning {
     color: #f39c12 !important;
 }
+
+/* Runway display (Airport Information hybrid cards) */
+.runway-style-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #c62828;
+}
+
+.runway-style-winds {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.runway-style-traffic {
+    font-size: 0.8rem;
+    color: #555;
+    margin-top: 0.35rem;
+}
+
+.runway-style-e .runway-hybrid-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.runway-style-e .runway-hybrid-card {
+    flex: 1 1 220px;
+    max-width: 100%;
+    text-align: left;
+}
+
+.runway-style-e .runway-hybrid-headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.runway-style-e .runway-hybrid-headline .value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.runway-style-e .runway-hybrid-meta {
+    font-size: 0.85rem;
+    color: #333;
+    margin-bottom: 0.2rem;
+}
+
+.runway-style-e .runway-hybrid-meta .label {
+    display: inline;
+    font-size: 0.75rem;
+    margin-right: 0.35rem;
+    font-weight: 600;
+}
+
+.runway-style-e .runway-hybrid-desktop-only > .runway-hybrid-meta:first-child > span:not(.label) {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.runway-style-e .runway-hybrid-desktop-only > .runway-hybrid-meta:not(:first-child) > span:not(.label) {
+    font-weight: 700;
+}
+
+.runway-style-e .runway-hybrid-winds {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e8e8e8;
+}
+
+.runway-style-e .runway-hybrid-wind-row,
+.runway-style-e .runway-hybrid-desktop-only .runway-dense-end {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #333;
+}
+
+.runway-style-e .runway-hybrid-end-id,
+.runway-style-e .runway-hybrid-desktop-only .runway-dense-end-id {
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.runway-style-e .runway-hybrid-mobile-only {
+    display: none;
+}
+
+.runway-style-e .runway-hybrid-specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #666;
+}
+
+.runway-style-e .runway-hybrid-specs .spec-val {
+    font-weight: 700;
+    color: #333;
+}
+
+.runway-calm-wind-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1a4f8a;
+    background: #e8f0fa;
+    border: 1px solid #b3cce8;
+    border-radius: 4px;
+    padding: 0.12rem 0.4rem;
+    line-height: 1.2;
+}
+
+.runway-calm-wind-badge--inline {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+    vertical-align: baseline;
+}
+
+.rwy-comp-hw {
+    color: #2e7d32;
+    font-weight: 600;
+}
+
+.rwy-comp-tw {
+    color: #c62828;
+    font-weight: 600;
+}
+
+.rwy-comp-xw {
+    color: #666;
+    font-weight: 500;
+}
+
+body.dark-mode .runway-style-e .runway-hybrid-winds {
+    border-top-color: var(--dark-border, #2a2a2a);
+}
+
+body.dark-mode .runway-style-traffic,
+body.dark-mode .runway-style-e .runway-hybrid-meta {
+    color: var(--dark-text-muted, #b8b8b8);
+}
+
+body.dark-mode .runway-style-e .runway-hybrid-desktop-only > .runway-hybrid-meta:first-child > span:not(.label) {
+    color: var(--dark-text-muted, #b8b8b8);
+}
+
+body.dark-mode .runway-style-e .runway-hybrid-end-id,
+body.dark-mode .runway-style-e .runway-hybrid-desktop-only .runway-dense-end-id {
+    color: var(--dark-text-bright, #fff);
+}
+
+body.dark-mode .runway-style-e .runway-hybrid-wind-row,
+body.dark-mode .runway-style-e .runway-hybrid-desktop-only .runway-dense-end {
+    color: var(--dark-text-muted, #b8b8b8);
+}
+
+body.dark-mode .runway-calm-wind-badge {
+    color: #9ec5ef;
+    background: #1a2a3d;
+    border-color: #3a5f88;
+}
+
+body.dark-mode .rwy-comp-xw {
+    color: #999;
+}
+
+@media (max-width: 768px) {
+    .runway-style-e .runway-hybrid-list {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .runway-style-e .runway-hybrid-desktop-only {
+        display: none;
+    }
+
+    .runway-style-e .runway-hybrid-mobile-only {
+        display: block;
+    }
+
+    .runway-style-e .runway-hybrid-card {
+        flex: 0 0 auto;
+        width: 100%;
+        padding: 0.5rem 0.625rem;
+        box-sizing: border-box;
+    }
+
+    .runway-style-e .runway-hybrid-dim {
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #555;
+        line-height: 1.35;
+        margin-bottom: 0.2rem;
+    }
+
+    .runway-style-e .runway-hybrid-mobile-only .runway-hybrid-winds {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+        margin-bottom: 0.25rem;
+    }
+}
