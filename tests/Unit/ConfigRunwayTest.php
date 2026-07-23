@@ -180,4 +180,22 @@ final class ConfigRunwayTest extends TestCase
             $errors
         );
     }
+
+    public function testValidateRunwayFactsRejectsNonPositiveDimensions(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'length_ft' => 0,
+                    'width_ft' => 'wide',
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains("Airport 'kxyz' runway_facts[0].length_ft must be a positive number", $errors);
+        $this->assertContains("Airport 'kxyz' runway_facts[0].width_ft must be a positive number", $errors);
+    }
 }

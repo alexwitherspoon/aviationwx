@@ -425,5 +425,13 @@ function validateConfigRunwayFactsFields(string $airportCode, array $airport, ar
                 $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].{$field} must be a valid runway end ident";
             }
         }
+        foreach (['length_ft', 'width_ft'] as $field) {
+            if (!isset($row[$field]) || $row[$field] === null || $row[$field] === '') {
+                continue;
+            }
+            if (!is_numeric($row[$field]) || (int) round((float) $row[$field]) <= 0) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].{$field} must be a positive number";
+            }
+        }
     }
 }
