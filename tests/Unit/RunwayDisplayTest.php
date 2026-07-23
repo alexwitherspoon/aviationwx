@@ -125,4 +125,84 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('ourairports', $row['field_sources']['width_ft']);
         $this->assertSame('ourairports', $row['field_sources']['lights']);
     }
+
+    public function testRunwayDisplayMagneticHeadingForEnd_WithDeclination_ConvertsTrueAlignment(): void
+    {
+        $heading = runwayDisplayMagneticHeadingForEnd([
+            'end_id' => '09',
+            'true_alignment' => 100,
+        ], 15.0);
+
+        $this->assertSame(85, $heading);
+    }
+
+    public function testRunwayDisplayRunwayClosedFromNotam_AerodromeClosure_ReturnsTrue(): void
+    {
+        $closures = [
+            'aerodrome_closed' => true,
+            'closed_pair_designators' => [],
+            'closed_end_idents' => [],
+        ];
+
+        $this->assertTrue(runwayDisplayRunwayClosedFromNotam('09/27', [
+            ['end_id' => '09'],
+            ['end_id' => '27'],
+        ], $closures));
+    }
+
+    public function testRunwayDisplayRunwayClosedFromNotam_AllEndsClosed_ReturnsTrue(): void
+    {
+        $closures = [
+            'aerodrome_closed' => false,
+            'closed_pair_designators' => [],
+            'closed_end_idents' => ['09', '27'],
+        ];
+
+        $this->assertTrue(runwayDisplayRunwayClosedFromNotam('09/27', [
+            ['end_id' => '09'],
+            ['end_id' => '27'],
+        ], $closures));
+    }
+
+    public function testRunwayDisplayRunwayClosedFromNotam_PartialEndClosure_ReturnsFalse(): void
+    {
+        $closures = [
+            'aerodrome_closed' => false,
+            'closed_pair_designators' => [],
+            'closed_end_idents' => ['09'],
+        ];
+
+        $this->assertFalse(runwayDisplayRunwayClosedFromNotam('09/27', [
+            ['end_id' => '09'],
+            ['end_id' => '27'],
+        ], $closures));
+    }
+
+    public function testRunwayDisplayFormatRunwayRow_NotamPairClosure_MarksClosed(): void
+    {
+        $row = runwayDisplayFormatRunwayRow(
+            [
+                'rwy_id' => '18/36',
+                'length_ft' => 4000,
+                'surface' => 'ASPH',
+                'ends' => [
+                    ['end_id' => '18'],
+                    ['end_id' => '36'],
+                ],
+            ],
+            [],
+            [],
+            [],
+            [
+                'aerodrome_closed' => false,
+                'closed_pair_designators' => ['18/36'],
+                'closed_end_idents' => [],
+            ],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($row);
+        $this->assertTrue($row['closed']);
+    }
 }

@@ -5,6 +5,7 @@
  * Precedence per field: airports.json → NASR → OurAirports.
  */
 
+require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/config-runway.php';
 require_once __DIR__ . '/heading-conversion.php';
 require_once __DIR__ . '/nasr/cache.php';
@@ -303,6 +304,50 @@ function runwayDisplayResolveCalmWind(array $configRow, array $airportCalmWind, 
 }
 
 /**
+ * Whether a runway card should show closed from active NOTAM full closures.
+ *
+ * Matches density altitude performance NOTAM semantics: aerodrome closure,
+ * full pair closure, or every published end closed by single-end NOTAMs.
+ *
+ * @param list<array<string, mixed>> $ends
+ * @param array{aerodrome_closed: bool, closed_pair_designators: list<string>, closed_end_idents: list<string>} $notamClosures
+ */
+function runwayDisplayRunwayClosedFromNotam(string $rwyId, array $ends, array $notamClosures): bool
+{
+    if ($notamClosures['aerodrome_closed'] ?? false) {
+        return true;
+    }
+
+    foreach ($notamClosures['closed_pair_designators'] ?? [] as $pair) {
+        if (densityAltitudePerformanceRunwayPairMatchesDesignator($rwyId, $pair)) {
+            return true;
+        }
+    }
+
+    $closedEndIdents = $notamClosures['closed_end_idents'] ?? [];
+    if ($ends === [] || $closedEndIdents === []) {
+        return false;
+    }
+
+    $hasEnd = false;
+    foreach ($ends as $end) {
+        if (!is_array($end)) {
+            continue;
+        }
+        $endIdent = canonicalizeRunwayEndIdent((string) ($end['end_id'] ?? ''));
+        if ($endIdent === null) {
+            continue;
+        }
+        $hasEnd = true;
+        if (!in_array($endIdent, $closedEndIdents, true)) {
+            return false;
+        }
+    }
+
+    return $hasEnd;
+}
+
+/**
  * Format one runway row for API/dashboard display.
  *
  * @param array<string, mixed> $sourceRow
@@ -389,11 +434,8 @@ function runwayDisplayFormatRunwayRow(
     if (isset($configRow['closed'])) {
         $closed = (bool) $configRow['closed'];
     }
-    foreach ($notamClosures['closed_pair_designators'] as $pair) {
-        if (densityAltitudePerformanceRunwayPairMatchesDesignator($rwyId, $pair)) {
-            $closed = true;
-            break;
-        }
+    if (runwayDisplayRunwayClosedFromNotam($rwyId, $ends, $notamClosures)) {
+        $closed = true;
     }
 
     $traffic = $configRow['traffic'] ?? runwayDisplayTrafficNote($sourceEnds);
@@ -438,7 +480,7 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
     $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
     $configFacts = runwayDisplayConfigFactsByRunwayId($airport);
     $nasrRecord = getNasrAirportForConfig($airport);
-    $declination = is_array($nasrRecord) ? ($nasrRecord['mag_declination_deg'] ?? null) : null;
+    $declination = (float) getMagneticDeclination($airport);
 
     $notamClosures = [
         'aerodrome_closed' => false,
@@ -521,7 +563,7 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
             $oaRow,
             $notamClosures,
             $rowSource,
-            is_numeric($declination) ? (float) $declination : null
+            $declination
         );
         if ($row !== null) {
             $formatted[] = $row;
