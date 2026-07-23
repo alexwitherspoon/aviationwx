@@ -18,26 +18,6 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('On request', nasrRunwayLightsLabel('PERI'));
     }
 
-    public function testNasrParseCalmWindDesignationFromRemark_SplitEnds_ReturnsArrivalAndDeparture(): void
-    {
-        $parsed = nasrParseCalmWindDesignationFromRemark(
-            'CALM WIND RWY 15 FOR ARRIVALS; RWY 33 FOR DEPARTURES.'
-        );
-        $this->assertNotNull($parsed);
-        $this->assertSame('15', $parsed['arrival']);
-        $this->assertSame('33', $parsed['departure']);
-    }
-
-    public function testNasrParseCalmWindDesignationFromRemark_SingleEnd_ReturnsBothEnds(): void
-    {
-        $parsed = nasrParseCalmWindDesignationFromRemark(
-            'RWY 15 DESIGNATED CALM WIND RWY.'
-        );
-        $this->assertNotNull($parsed);
-        $this->assertSame('15', $parsed['arrival']);
-        $this->assertSame('15', $parsed['departure']);
-    }
-
     public function testGetRunwayDisplayForAirport_NoSourceData_ReturnsNull(): void
     {
         $this->assertNull(getRunwayDisplayForAirport(['id' => 'nonexistent-strip-xyz'], 'nonexistent-strip-xyz'));

@@ -26,6 +26,14 @@ class NasrCsvValidationTest extends TestCase
         $this->assertTrue(nasrFrqCsvFileIsValid($this->fixtureDir . '/FRQ.csv'));
     }
 
+    public function testNasrAptRmkCsvFileIsValidForFixture(): void
+    {
+        $this->assertTrue(nasrCsvFileIsValid(
+            $this->fixtureDir . '/APT_RMK.csv',
+            NASR_CSV_HEADER_PREFIX['APT_RMK']
+        ));
+    }
+
     public function testNasrCsvFileRejectsHtmlBody(): void
     {
         $path = sys_get_temp_dir() . '/nasr_invalid_' . bin2hex(random_bytes(4)) . '.csv';
