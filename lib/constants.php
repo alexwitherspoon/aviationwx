@@ -1151,7 +1151,7 @@ if (!defined('CLIMATE_WIND_SPEED_MAX_KTS')) {
     define('CLIMATE_WIND_SPEED_MAX_KTS', 242); // 220 * 1.1
 }
 
-// Calm wind threshold (knots) - winds below this are considered "calm" in aviation
+// Calm wind threshold (knots) - FAA METAR: wind < 3 kt reported as calm (00000KT)
 if (!defined('CALM_WIND_THRESHOLD_KTS')) {
     define('CALM_WIND_THRESHOLD_KTS', 3);
 }
