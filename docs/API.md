@@ -168,7 +168,7 @@ Returns weather data for the specified airport.
 
 `density_altitude_performance.tier` and `best_end` drive UI cues. `worst_end` and `ends[]` are informational only. Caution and warning tiers are omitted when supporting weather fields are fail-closed stale.
 
-`runway_display` carries resolved runway facts for the dashboard and integrations. Per-end HW/XW are computed client-side from `wind_direction_magnetic` and `wind_speed`; missing wind shows `---`. Arrow direction is aircraft-relative per runway end (see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-dashboard-per-end-hwxw)). Provenance is in `field_sources` and `runway_source`, not on dashboard cards.
+`runway_display` carries resolved runway facts for the dashboard and integrations. Per-end HW/XW are computed client-side from `wind_direction_magnetic` and `wind_speed`; missing wind shows `---`. Helipad rows (`is_helipad: true`, FAA designators such as `H1`) omit per-end wind components in the UI. Arrow direction is aircraft-relative per runway end (see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-dashboard-per-end-hwxw)). Provenance is in `field_sources` and `runway_source`, not on dashboard cards.
 
 **Public API** (`GET /v1/airports/{id}/weather`): same `runway_display` shape via `formatWeatherResponse()`. OpenAPI schema: `RunwayDisplay` in `api/docs/openapi.json`.
 

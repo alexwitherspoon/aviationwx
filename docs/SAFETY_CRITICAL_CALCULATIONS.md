@@ -571,6 +571,9 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 **NOTAM closure on cards**:
 - When the airport NOTAM cache is within the failclosed threshold, mark a runway `closed` for aerodrome closure NOTAMs, full pair closures, and when every published end is closed by active single-end NOTAMs (same semantics as density altitude performance runway filtering). Partial restrictions and upcoming closures do not mark a runway closed.
 
+**Helipads**:
+- FAA NASR helipad rows use `rwy_id` designators such as `H1` and have no published magnetic heading. Set `is_helipad: true` on the API row and omit per-end HW/XW in the dashboard UI. Dimensions, surface, and lights still render.
+
 **Implementation**: `lib/runway-display.php`, `public/js/runway-display.js`
 **Tests**: `tests/Unit/RunwayDisplayTest.php`, `tests/js/runway-display-wind.test.js`, `tests/js/runway-display-wind-arrows.test.js`
 
