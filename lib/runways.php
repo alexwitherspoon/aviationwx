@@ -579,17 +579,19 @@ function buildOurAirportsDisplayRunways(array $runways): array
         $leIdent = (string) ($runway['le_ident'] ?? '');
         $heIdent = (string) ($runway['he_ident'] ?? '');
         $ends = [];
-        if ($leIdent !== '' && isset($runway['le_heading_degT']) && is_numeric($runway['le_heading_degT'])) {
-            $ends[] = [
-                'end_id' => $leIdent,
-                'true_alignment' => (int) round((float) $runway['le_heading_degT']),
-            ];
+        if ($leIdent !== '') {
+            $leEnd = ['end_id' => $leIdent];
+            if (isset($runway['le_heading_degT']) && is_numeric($runway['le_heading_degT'])) {
+                $leEnd['true_alignment'] = (int) round((float) $runway['le_heading_degT']);
+            }
+            $ends[] = $leEnd;
         }
-        if ($heIdent !== '' && isset($runway['he_heading_degT']) && is_numeric($runway['he_heading_degT'])) {
-            $ends[] = [
-                'end_id' => $heIdent,
-                'true_alignment' => (int) round((float) $runway['he_heading_degT']),
-            ];
+        if ($heIdent !== '') {
+            $heEnd = ['end_id' => $heIdent];
+            if (isset($runway['he_heading_degT']) && is_numeric($runway['he_heading_degT'])) {
+                $heEnd['true_alignment'] = (int) round((float) $runway['he_heading_degT']);
+            }
+            $ends[] = $heEnd;
         }
 
         $display[] = [
