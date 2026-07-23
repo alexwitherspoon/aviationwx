@@ -112,9 +112,30 @@
 
     function endWindLine(end, weather, calm) {
         const heading = end.heading_mag;
-        const windFrom = calm ? 0 : (windFromWeather(weather) != null ? Number(windFromWeather(weather)) : 0);
-        const windSpeed = calm ? 0 : (weather.wind_speed != null ? Number(weather.wind_speed) : 0);
         const unit = windUnitLabel();
+        const endIdHtml = escapeHtml(end.end_id);
+        const calmTags = calmWindEndTags(end, calm);
+
+        if (!calm) {
+            const windFromRaw = windFromWeather(weather);
+            const windSpeedRaw = weather && weather.wind_speed;
+            const windReady = windFromRaw != null && windSpeedRaw != null
+                && Number.isFinite(Number(windFromRaw))
+                && Number.isFinite(Number(windSpeedRaw));
+            if (!windReady || heading == null || !Number.isFinite(heading)) {
+                return ''
+                    + '<div class="runway-hybrid-wind-row runway-dense-end">'
+                    + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
+                    + '<span class="runway-dense-end-id">:</span> '
+                    + '<span class="rwy-comp-hw">' + MISSING + ' ' + unit + '</span> '
+                    + '<span class="rwy-comp-xw">' + MISSING + ' ' + unit + '</span>'
+                    + calmTags
+                    + '</div>';
+            }
+        }
+
+        const windFrom = calm ? 0 : Number(windFromWeather(weather));
+        const windSpeed = calm ? 0 : Number(weather.wind_speed);
         let hw = 0;
         let xwSigned = 0;
         if (heading != null && Number.isFinite(heading)) {
@@ -128,11 +149,11 @@
         const xwArrow = xwSigned >= 0 ? '\u2190' : '\u2192';
         return ''
             + '<div class="runway-hybrid-wind-row runway-dense-end">'
-            + '<span class="runway-hybrid-end-id runway-dense-end-id">' + escapeHtml(end.end_id) + '</span>'
+            + '<span class="runway-hybrid-end-id runway-dense-end-id">' + endIdHtml + '</span>'
             + '<span class="runway-dense-end-id">:</span> '
             + '<span class="' + hwClass + '">' + hwArrow + ' ' + hwVal + ' ' + unit + '</span> '
             + '<span class="rwy-comp-xw">' + xwArrow + ' ' + xwVal + ' ' + unit + '</span>'
-            + calmWindEndTags(end, calm)
+            + calmTags
             + '</div>';
     }
 
