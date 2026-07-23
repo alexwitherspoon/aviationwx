@@ -22,17 +22,6 @@ if ($requestPath === 'status.php' || $requestPath === 'status') {
     exit;
 }
 
-// Local design mockups (non-production only)
-if ($requestPath === 'mockups/runway-display') {
-    if (!isProduction()) {
-        header('Content-Type: text/html; charset=utf-8');
-        readfile(__DIR__ . '/mockups/runway-display-mockups.html');
-        exit;
-    }
-    http_response_code(404);
-    exit;
-}
-
 // Route Public API requests (/api/v1/...)
 if (strpos($requestPath, 'api/v1/') === 0 || strpos($requestPath, 'api/v1') === 0) {
     include 'api/v1/router.php';
