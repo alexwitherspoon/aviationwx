@@ -91,7 +91,8 @@ test('missing wind shows --- not zero kts', () => {
     });
     const html = dom.window.document.getElementById('runway-display-list').innerHTML;
     assert(html.includes('--- kts'), 'missing wind must render ---');
-    assert(!html.includes('↓ 0 kts'), 'must not show zero headwind when wind missing');
+    assert(!/\b0 kts\b/.test(html), 'must not show zero wind components when wind missing');
+    assert(!/rwy-comp-(hw|tw|xw)">\s*[↓↑←→]?\s*0 kts/.test(html), 'must not show zero runway wind rows when wind missing');
 });
 
 test('valid wind renders numeric components with aircraft-relative arrows', () => {
@@ -123,7 +124,8 @@ test('calm wind with missing heading shows --- not zero kts', () => {
     });
     const html = dom.window.document.getElementById('runway-display-list').innerHTML;
     assert(html.includes('--- kts'), 'missing heading must render --- even when calm');
-    assert(!html.includes('↓ 0 kts') && !html.includes('↑ 0 kts'), 'must not show zero components without heading');
+    assert(!/\b0 kts\b/.test(html), 'must not show zero wind components without heading');
+    assert(!/rwy-comp-(hw|tw|xw)">\s*[↓↑←→]?\s*0 kts/.test(html), 'must not show zero runway wind rows without heading');
 });
 
 test('dashboard CSS hides mobile block on desktop', () => {
