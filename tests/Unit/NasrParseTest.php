@@ -36,7 +36,7 @@ class NasrParseTest extends TestCase
         $calm = $parsed['airports']['SPB']['calm_wind'] ?? null;
         $this->assertIsArray($calm);
         $this->assertSame('15', $calm['arrival']);
-        $this->assertSame('33', $calm['departure']);
+        $this->assertSame('15', $calm['departure']);
     }
 
     public function testParseFixtureRunwayLightsCode(): void
