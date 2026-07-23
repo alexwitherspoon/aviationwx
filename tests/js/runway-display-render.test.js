@@ -1,0 +1,119 @@
+/**
+ * Runway display render invariants (safety-critical)
+ *
+ * Run with: node tests/js/runway-display-render.test.js
+ */
+
+const { JSDOM } = require('jsdom');
+const fs = require('fs');
+const path = require('path');
+
+const runwayDisplayJs = fs.readFileSync(
+    path.join(__dirname, '../../public/js/runway-display.js'),
+    'utf8'
+);
+
+let passed = 0;
+let failed = 0;
+
+function test(name, fn) {
+    try {
+        fn();
+        console.log(`  ✓ ${name}`);
+        passed++;
+    } catch (e) {
+        console.error(`  ✗ ${name}`);
+        console.error(`    ${e.message}`);
+        failed++;
+    }
+}
+
+function assert(condition, message) {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+function buildDom(weather) {
+    const dom = new JSDOM(`<!DOCTYPE html><html><body>
+        <section id="runway-display-section" class="frequencies runway-style-e" hidden>
+            <div id="runway-display-list" class="runway-hybrid-list"></div>
+        </section>
+    </body></html>`, { runScripts: 'outside-only' });
+
+    const { window } = dom;
+    window.formatWindSpeed = (kts) => String(Math.round(kts));
+    window.getWindSpeedUnitLabel = () => 'kts';
+    window.getDistanceUnit = () => 'ft';
+    window.formatAltitude = (v) => String(Math.round(v));
+
+    window.eval(runwayDisplayJs);
+    window.AviationWX.renderRunwayDisplay(weather);
+
+    return dom;
+}
+
+const sampleWeather = {
+    wind_direction_magnetic: 220,
+    wind_speed: 6,
+    runway_display: {
+        runway_source: 'nasr',
+        runways: [{
+            rwy_id: '09/27',
+            length_ft: 2260,
+            width_ft: 35,
+            surface: 'Gravel',
+            lights: null,
+            closed: false,
+            ends: [
+                { end_id: '09', heading_mag: 90, calm_wind_arrival: false, calm_wind_departure: false },
+                { end_id: '27', heading_mag: 270, calm_wind_arrival: false, calm_wind_departure: false }
+            ]
+        }]
+    }
+};
+
+console.log('\nRunway display render (safety-critical)\n' + '='.repeat(50));
+
+test('renders one card with desktop and mobile blocks in markup', () => {
+    const dom = buildDom(sampleWeather);
+    const doc = dom.window.document;
+    assert(doc.querySelectorAll('.runway-hybrid-card').length === 1, 'expected one card');
+    assert(doc.querySelectorAll('.runway-hybrid-desktop-only').length === 1, 'expected one desktop block');
+    assert(doc.querySelectorAll('.runway-hybrid-mobile-only').length === 1, 'expected one mobile block');
+    assert(!doc.getElementById('runway-display-section').hidden, 'section should be visible');
+});
+
+test('missing wind shows --- not zero kts', () => {
+    const dom = buildDom({
+        runway_display: sampleWeather.runway_display
+    });
+    const html = dom.window.document.getElementById('runway-display-list').innerHTML;
+    assert(html.includes('--- kts'), 'missing wind must render ---');
+    assert(!html.includes('↑ 0 kts'), 'must not show zero headwind when wind missing');
+});
+
+test('valid wind renders numeric components', () => {
+    const dom = buildDom(sampleWeather);
+    const html = dom.window.document.getElementById('runway-display-list').innerHTML;
+    assert(/↑ \d+ kts/.test(html), 'expected headwind arrow with numeric speed');
+    assert(/← \d+ kts|→ \d+ kts/.test(html), 'expected crosswind arrow with numeric speed');
+});
+
+test('dashboard CSS hides mobile block on desktop', () => {
+    const css = fs.readFileSync(
+        path.join(__dirname, '../../public/css/styles.css'),
+        'utf8'
+    );
+    assert(css.includes('.runway-style-e .runway-hybrid-mobile-only'), 'mobile hide rule missing');
+    assert(css.includes('display: none'), 'display none rule missing');
+    assert(css.includes('@media (max-width: 768px)'), 'mobile breakpoint missing');
+    assert(css.includes('body.dark-mode .runway-style-e'), 'dark mode runway tokens missing');
+    assert(css.includes('body.night-mode .runway-style-e'), 'night mode runway tokens missing');
+});
+
+console.log('\n' + '='.repeat(50));
+console.log(`Results: ${passed} passed, ${failed} failed\n`);
+if (failed > 0) {
+    process.exit(1);
+}
