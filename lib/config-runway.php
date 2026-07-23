@@ -433,5 +433,25 @@ function validateConfigRunwayFactsFields(string $airportCode, array $airport, ar
                 $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].{$field} must be a positive number";
             }
         }
+        if (!isset($row['ends'])) {
+            continue;
+        }
+        if (!is_array($row['ends'])) {
+            $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends must be an array";
+            continue;
+        }
+        foreach ($row['ends'] as $endIndex => $endRow) {
+            if (!is_array($endRow)) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}] must be an object";
+                continue;
+            }
+            $endId = isset($endRow['end_id']) ? trim((string) $endRow['end_id']) : '';
+            if ($endId === '' || canonicalizeRunwayEndIdent($endId) === null) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}].end_id must be a valid runway end ident";
+            }
+            if (isset($endRow['right_hand_traffic']) && !is_bool($endRow['right_hand_traffic'])) {
+                $errors[] = "Airport '{$airportCode}' runway_facts[{$index}].ends[{$endIndex}].right_hand_traffic must be a boolean";
+            }
+        }
     }
 }

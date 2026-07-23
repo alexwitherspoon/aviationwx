@@ -198,4 +198,25 @@ final class ConfigRunwayTest extends TestCase
         $this->assertContains("Airport 'kxyz' runway_facts[0].length_ft must be a positive number", $errors);
         $this->assertContains("Airport 'kxyz' runway_facts[0].width_ft must be a positive number", $errors);
     }
+
+    public function testValidateRunwayFactsRejectsInvalidEndsOverride(): void
+    {
+        $errors = [];
+        $warnings = [];
+        validateConfigRunwayFields('kxyz', [
+            'runway_facts' => [
+                [
+                    'rwy_id' => '15/33',
+                    'ends' => [
+                        ['end_id' => '99'],
+                    ],
+                ],
+            ],
+        ], $errors, $warnings);
+
+        $this->assertContains(
+            "Airport 'kxyz' runway_facts[0].ends[0].end_id must be a valid runway end ident",
+            $errors
+        );
+    }
 }
