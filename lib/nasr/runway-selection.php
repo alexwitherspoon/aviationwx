@@ -85,6 +85,50 @@ function nasrSelectActiveLandRunwaysForPerformance(array $airportRecord): array
 }
 
 /**
+ * Runways eligible for dashboard display (includes NASR closed rows; excludes water).
+ *
+ * @param array $airportRecord Parsed NASR airport record
+ * @return list<array> Runways sorted by length descending
+ */
+function nasrSelectRunwaysForDisplay(array $airportRecord): array
+{
+    $displayable = [];
+    foreach ($airportRecord['runways'] ?? [] as $runway) {
+        if (!is_array($runway)) {
+            continue;
+        }
+        $surface = strtoupper((string) ($runway['surface'] ?? ''));
+        if ($surface !== '' && str_contains($surface, 'WATER')) {
+            continue;
+        }
+        $length = (int) ($runway['length_ft'] ?? 0);
+        if ($length <= 0) {
+            continue;
+        }
+        $displayable[] = $runway;
+    }
+
+    usort(
+        $displayable,
+        static fn (array $a, array $b): int => (int) ($b['length_ft'] ?? 0) <=> (int) ($a['length_ft'] ?? 0)
+    );
+
+    return $displayable;
+}
+
+/**
+ * Whether a NASR runway row is marked closed in source data.
+ *
+ * @param array $runway Parsed runway record
+ */
+function nasrRunwayIsClosedInSource(array $runway): bool
+{
+    $condition = strtoupper((string) ($runway['condition'] ?? ''));
+
+    return in_array($condition, ['FAILED', 'CLOSED'], true);
+}
+
+/**
  * Effective departure roll available from a runway end (NASR TKOF_DIST_AVBL and displaced threshold).
  *
  * Uses the shorter of physical runway minus displacement and declared takeoff distance available.

@@ -110,7 +110,7 @@ function downloadNasrAptCsvDirectory(): ?array
  */
 function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir): bool
 {
-    $allowed = ['APT_BASE.csv', 'APT_RWY.csv', 'APT_RWY_END.csv'];
+    $allowed = ['APT_BASE.csv', 'APT_RWY.csv', 'APT_RWY_END.csv', 'APT_RMK.csv'];
     $written = [];
 
     for ($i = 0; $i < $zip->numFiles; $i++) {
@@ -147,6 +147,9 @@ function nasrExtractAllowlistedAptCsvFromZip(ZipArchive $zip, string $extractDir
     }
 
     foreach ($allowed as $name) {
+        if ($name === 'APT_RMK.csv') {
+            continue;
+        }
         if (empty($written[$name])) {
             return false;
         }
