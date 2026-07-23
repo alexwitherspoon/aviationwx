@@ -193,7 +193,7 @@ Optional `runway_facts[]` rows override NASR and OurAirports fields used by the 
 | `lights`, `traffic` | Lighting and traffic pattern labels when published |
 | `calm_wind_arrival`, `calm_wind_departure` | Runway end idents for calm-wind tags when wind is below 3 kt |
 | `closed` | When true, the runway card shows **RWY CLSD** |
-| `ends[]` | Optional per-end overrides (`end_id`, calm wind flags) |
+| `ends[]` | Optional per-end overrides (`end_id`, `right_hand_traffic`) |
 
 `runway_facts` is independent of `runway_length_ft` / `runway_ends` (density altitude performance). You may use both on the same airport when needed.
 
