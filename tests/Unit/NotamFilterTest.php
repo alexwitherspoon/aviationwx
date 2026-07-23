@@ -210,6 +210,19 @@ class NotamFilterTest extends TestCase {
         $this->assertFalse(isAerodromeClosure($notam, $airport));
     }
 
+    public function testIsAerodromeClosure_AcceptsAdApClsdExcTwyOnScenario86(): void
+    {
+        $airport = ['icao' => 'KXXX', 'name' => 'Test Field'];
+        $notam = [
+            'code' => '',
+            'text' => 'AD AP CLSD EXC TWY A',
+            'location' => 'KXXX',
+            'scenario' => '86',
+        ];
+
+        $this->assertTrue(isAerodromeClosure($notam, $airport));
+    }
+
     public function testIsRunwayAffectingRestrictionNotam_KboiApproachTwyWingspan(): void
     {
         $airport = ['icao' => 'KBOI', 'faa' => 'BOI', 'name' => 'Boise Air Terminal'];

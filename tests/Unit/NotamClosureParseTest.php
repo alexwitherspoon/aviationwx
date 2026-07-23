@@ -97,6 +97,8 @@ final class NotamClosureParseTest extends TestCase
         yield 'kboi' => ['TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION', true];
         yield 'simple' => ['TWY A CLSD', true];
         yield 'runway closed' => ['RWY 10L/28R CLSD', false];
+        yield 'aerodrome exc twy' => ['AD AP CLSD EXC TWY A', false];
+        yield 'airport exc twy' => ['BOISE AIRPORT CLSD EXC TWY B', false];
     }
 
     #[DataProvider('taxiwayOnlyProvider')]

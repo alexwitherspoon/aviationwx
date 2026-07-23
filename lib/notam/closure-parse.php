@@ -80,14 +80,18 @@ function notamTextIndicatesTaxiwayOnlyClosure(string $text): bool
         return false;
     }
 
+    if (notamTextIndicatesAerodromeClosurePhrase($text)) {
+        return false;
+    }
+
     if (preg_match('/\bTWY\b/', $upper) !== 1) {
         return false;
     }
 
     return preg_match(
-        '/\bTWY\s+(?:[A-Z0-9]{1,3}\b|.+?\b(?:CLSD|CLOSED)\b)/',
+        '/\bTWY\s+[A-Z0-9]{1,3}\s+(?:CLSD|CLOSED)\b|\bTWY\s+.+?\s+(?:CLSD|CLOSED)\b/',
         $upper
-    ) === 1 && preg_match('/\b(?:CLSD|CLOSED)\b/', $upper) === 1;
+    ) === 1;
 }
 
 /**
