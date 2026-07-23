@@ -10,6 +10,60 @@ const NASR_CALM_WIND_RWY_TOKEN = 'R(?:WY|Y)';
 const NASR_CALM_WIND_IDENT_CAPTURE = '(\d{1,2}[LRC]?)';
 
 /**
+ * Regex patterns for single-end calm-wind remarks (arrival and departure same runway).
+ *
+ * @return list<string>
+ */
+function nasrCalmWindSingleEndBothPatterns(): array
+{
+    static $patterns = null;
+    if ($patterns === null) {
+        $rwy = NASR_CALM_WIND_RWY_TOKEN;
+        $id = NASR_CALM_WIND_IDENT_CAPTURE;
+        $patterns = [
+            '/' . $rwy . '\s+' . $id . '\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+IS\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+DSGND\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+DESIGNATED\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+DESIGNATED\s+AS\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+PREFERRED\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+WILL\s+BE\s+THE\s+DESIGNATED\s+CALM\s+WIND\s+' . $rwy . '\b/',
+            '/' . $rwy . '\s+' . $id . '\s+PREFERRED\s+CALM\s+WIND\s+RUNWAY\b/',
+            '/RWY\s+' . $id . '\s+PREF\s+CALM\s+WIND\s+RWY\b/',
+            '/RWY\s+' . $id . '\s+CALM\s+WIND\b/',
+        ];
+    }
+
+    return $patterns;
+}
+
+/**
+ * Regex patterns for calm-wind remarks that lead with CALM WIND before the runway ident.
+ *
+ * @return list<string>
+ */
+function nasrCalmWindLeadingPatterns(): array
+{
+    static $patterns = null;
+    if ($patterns === null) {
+        $rwy = NASR_CALM_WIND_RWY_TOKEN;
+        $id = NASR_CALM_WIND_IDENT_CAPTURE;
+        $patterns = [
+            '/CALM\s+WIND\s+' . $rwy . '\s+' . $id . '\b/',
+            '/CALM\s+WIND\s+USE\s+' . $rwy . '\s+' . $id . '\b/',
+            '/CALM\s+WIND\s+RWY\s+IS\s+RWY\s+' . $id . '\b/',
+            '/PREFERRED\s+CALM\s+WIND\s+RWY\s+' . $id . '\b/',
+            '/CALM\s+WIND\s+LESS\s+THAN\s+\d+\s+KNOTS?\s+USE\s+RWY\s+' . $id . '\b/',
+            '/CALM\s+WIND\s+PREFERRED\s+DRCTN\s+IS\s+RWY\s+' . $id . '\b/',
+            '/PREF\s+CALM\s+WIND\s+RWY\s+USE\s+RWY\s+' . $id . '\b/',
+            '/DRG\s+CALM\s+WINDS?\s+USE\s+RWY\s+' . $id . '\b/',
+        ];
+    }
+
+    return $patterns;
+}
+
+/**
  * Merge high-confidence calm wind designations from APT_RMK.csv into airport records.
  *
  * @param array<string, array<string, mixed>> $airports Parsed airports keyed by ARPT_ID (by reference)
@@ -205,20 +259,7 @@ function nasrParseCalmWindDesignationFromRemark(string $remark, array $context =
         return nasrNormalizeCalmWindDesignation($m[1], $m[1]);
     }
 
-    $singleEndBothPatterns = [
-        '/' . $rwy . '\s+' . $id . '\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+IS\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+DSGND\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+DESIGNATED\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+DESIGNATED\s+AS\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+PREFERRED\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+WILL\s+BE\s+THE\s+DESIGNATED\s+CALM\s+WIND\s+' . $rwy . '\b/',
-        '/' . $rwy . '\s+' . $id . '\s+PREFERRED\s+CALM\s+WIND\s+RUNWAY\b/',
-        '/RWY\s+' . $id . '\s+PREF\s+CALM\s+WIND\s+RWY\b/',
-        '/RWY\s+' . $id . '\s+CALM\s+WIND\b/',
-    ];
-
-    foreach ($singleEndBothPatterns as $pattern) {
+    foreach (nasrCalmWindSingleEndBothPatterns() as $pattern) {
         if (preg_match($pattern, $text, $m)) {
             return nasrNormalizeCalmWindDesignation($m[1], $m[1]);
         }
@@ -232,18 +273,7 @@ function nasrParseCalmWindDesignationFromRemark(string $remark, array $context =
         return nasrNormalizeCalmWindDesignation($m[1], $m[1]);
     }
 
-    $leadingPatterns = [
-        '/CALM\s+WIND\s+' . $rwy . '\s+' . $id . '\b/',
-        '/CALM\s+WIND\s+USE\s+' . $rwy . '\s+' . $id . '\b/',
-        '/CALM\s+WIND\s+RWY\s+IS\s+RWY\s+' . $id . '\b/',
-        '/PREFERRED\s+CALM\s+WIND\s+RWY\s+' . $id . '\b/',
-        '/CALM\s+WIND\s+LESS\s+THAN\s+\d+\s+KNOTS?\s+USE\s+RWY\s+' . $id . '\b/',
-        '/CALM\s+WIND\s+PREFERRED\s+DRCTN\s+IS\s+RWY\s+' . $id . '\b/',
-        '/PREF\s+CALM\s+WIND\s+RWY\s+USE\s+RWY\s+' . $id . '\b/',
-        '/DRG\s+CALM\s+WINDS?\s+USE\s+RWY\s+' . $id . '\b/',
-    ];
-
-    foreach ($leadingPatterns as $pattern) {
+    foreach (nasrCalmWindLeadingPatterns() as $pattern) {
         if (preg_match($pattern, $text, $m)) {
             return nasrNormalizeCalmWindDesignation($m[1], $m[1]);
         }
