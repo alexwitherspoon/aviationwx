@@ -110,7 +110,12 @@ function getActiveRunwayNotamClosuresForAirport(string $airportId, array $airpor
     }
 
     $cacheFile = notamCacheFilePath($airportId);
-    $memoKey = $airportId . ':' . (is_file($cacheFile) ? hash_file('xxh128', $cacheFile) : '0');
+    $cacheDigest = '0';
+    if (is_file($cacheFile)) {
+        $hash = hash_file('sha256', $cacheFile);
+        $cacheDigest = $hash !== false ? $hash : '0';
+    }
+    $memoKey = $airportId . ':' . $cacheDigest;
     if (isset($memo[$memoKey])) {
         return $memo[$memoKey];
     }
