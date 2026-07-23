@@ -390,9 +390,10 @@ function runwayDisplayFormatRunwayRow(
     );
     $widthFt = is_numeric($widthFt) ? (int) $widthFt : null;
 
-    [$surfaceCode, $surfaceSource] = runwayDisplayResolveField(
+    [$surfaceCode, $surfaceSource] = runwayDisplayResolveFieldWithFallback(
         $configRow,
         $sourceRow['surface'] ?? null,
+        $oaRow['surface'] ?? null,
         $configRow['surface'] ?? null,
         $sourceName
     );
@@ -496,7 +497,7 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
  * Build runway display payload for an airport.
  *
  * @param array<string, mixed> $airport
- * @param array{include_notam_closures?: bool} $options include_notam_closures defaults true
+ * @param array{include_notam_closures?: bool, notam_closures?: array{aerodrome_closed: bool, closed_pair_designators: list<string>, closed_end_idents: list<string>}} $options
  * @return array{
  *   runway_source: ?string,
  *   source_reference: ?string,
@@ -518,9 +519,10 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null, a
         'closed_end_idents' => [],
     ];
     if ($includeNotamClosures && $resolvedAirportId !== '') {
-        $notamRows = loadNotamRowsForDensityAltitudePerformance($resolvedAirportId);
-        if ($notamRows !== null) {
-            $notamClosures = notamResolveActiveDensityAltitudeRunwayClosures($notamRows, $airport);
+        if (isset($options['notam_closures']) && is_array($options['notam_closures'])) {
+            $notamClosures = $options['notam_closures'];
+        } else {
+            $notamClosures = getActiveRunwayNotamClosuresForAirport($resolvedAirportId, $airport);
         }
     }
 
@@ -702,7 +704,13 @@ function formatRunwayFactsForAirportApi(array $airport, ?string $airportId = nul
  */
 function attachRunwayDisplay(array $weather, array $airport, ?string $airportId = null): array
 {
-    $display = getRunwayDisplayForAirport($airport, $airportId);
+    $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
+    $options = [];
+    if ($resolvedAirportId !== '') {
+        $options['notam_closures'] = getActiveRunwayNotamClosuresForAirport($resolvedAirportId, $airport);
+    }
+
+    $display = getRunwayDisplayForAirport($airport, $airportId, $options);
     if ($display !== null) {
         $weather['runway_display'] = $display;
     }

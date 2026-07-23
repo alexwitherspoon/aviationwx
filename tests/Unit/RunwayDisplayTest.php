@@ -126,6 +126,31 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('ourairports', $row['field_sources']['lights']);
     }
 
+    public function testRunwayDisplayFormatRunwayRow_FieldSourcesUseOurAirportsSurfaceFallback(): void
+    {
+        $row = runwayDisplayFormatRunwayRow(
+            [
+                'rwy_id' => '09/27',
+                'length_ft' => 4000,
+                'ends' => [
+                    ['end_id' => '09'],
+                    ['end_id' => '27'],
+                ],
+            ],
+            [],
+            [],
+            ['surface' => 'GRVL'],
+            ['aerodrome_closed' => false, 'closed_pair_designators' => [], 'closed_end_idents' => []],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($row);
+        $this->assertSame('Gravel', $row['surface']);
+        $this->assertSame('GRVL', $row['surface_code']);
+        $this->assertSame('ourairports', $row['field_sources']['surface']);
+    }
+
     public function testRunwayDisplayMagneticHeadingForEnd_WithDeclination_ConvertsTrueAlignment(): void
     {
         $heading = runwayDisplayMagneticHeadingForEnd([

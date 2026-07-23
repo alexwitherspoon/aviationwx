@@ -84,6 +84,53 @@ function loadNotamRowsForDensityAltitudePerformance(string $airportId, ?int $now
 }
 
 /**
+ * Active runway NOTAM closures for an airport (request-scoped memo).
+ *
+ * Shared by density altitude performance filtering and runway display so a
+ * single weather response does not read/decode the NOTAM cache twice.
+ *
+ * @param array<string, mixed> $airport Airport configuration
+ * @return array{
+ *     aerodrome_closed: bool,
+ *     closed_pair_designators: list<string>,
+ *     closed_end_idents: list<string>
+ * }
+ */
+function getActiveRunwayNotamClosuresForAirport(string $airportId, array $airport): array
+{
+    static $memo = [];
+
+    $airportId = trim($airportId);
+    if ($airportId === '') {
+        return [
+            'aerodrome_closed' => false,
+            'closed_pair_designators' => [],
+            'closed_end_idents' => [],
+        ];
+    }
+
+    if (isset($memo[$airportId])) {
+        return $memo[$airportId];
+    }
+
+    $defaults = [
+        'aerodrome_closed' => false,
+        'closed_pair_designators' => [],
+        'closed_end_idents' => [],
+    ];
+
+    $notams = loadNotamRowsForDensityAltitudePerformance($airportId);
+    if ($notams === null) {
+        $memo[$airportId] = $defaults;
+        return $defaults;
+    }
+
+    $memo[$airportId] = notamResolveActiveDensityAltitudeRunwayClosures($notams, $airport);
+
+    return $memo[$airportId];
+}
+
+/**
  * Active full-closure NOTAMs that remove runways or departure ends from DA scoring.
  *
  * Partial restrictions (wingspan, CLSD TO) are ignored. Only `active` status applies
@@ -221,13 +268,10 @@ function filterPerformanceRunwaysForActiveNotamClosures(
         return $runways;
     }
 
-    $notams = loadNotamRowsForDensityAltitudePerformance($airportId);
-    if ($notams === null) {
-        return $runways;
-    }
+    $airportId = trim($airportId);
 
     return applyNotamClosuresToPerformanceRunways(
         $runways,
-        notamResolveActiveDensityAltitudeRunwayClosures($notams, $airport)
+        getActiveRunwayNotamClosuresForAirport($airportId, $airport)
     );
 }
