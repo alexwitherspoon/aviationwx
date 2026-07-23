@@ -501,7 +501,9 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
         }
     }
 
-    $airportCalmWind = is_array($nasrRecord['calm_wind'] ?? null) ? $nasrRecord['calm_wind'] : [];
+    $airportCalmWind = is_array($nasrRecord) && is_array($nasrRecord['calm_wind'] ?? null)
+        ? $nasrRecord['calm_wind']
+        : [];
     $formatted = [];
     foreach ($sourceRunways as $sourceRow) {
         if (!is_array($sourceRow)) {
