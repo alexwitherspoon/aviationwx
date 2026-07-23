@@ -170,6 +170,10 @@ Returns weather data for the specified airport.
 
 `runway_display` carries resolved runway facts for the dashboard and integrations. Per-end HW/XW are computed client-side from `wind_direction_magnetic` and `wind_speed`; missing wind shows `---`. Provenance is in `field_sources` and `runway_source`, not on dashboard cards.
 
+**Public API** (`GET /v1/airports/{id}/weather`): same `runway_display` shape via `formatWeatherResponse()`. OpenAPI schema: `RunwayDisplay` in `api/docs/openapi.json`.
+
+**Public API airport metadata** (`GET /v1/airports/{id}`): `runway_facts` carries static inventory (length, width when known, surface, lights, source-only `closed`) without calm-wind flags, traffic notes, or NOTAM closure. Legacy `runways[]` remains config compass geometry (`name`, `heading_1`, `heading_2`) only. OpenAPI schema: `RunwayFacts`.
+
 **Error Response:**
 ```json
 {

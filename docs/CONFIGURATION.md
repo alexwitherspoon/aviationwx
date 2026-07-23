@@ -183,7 +183,7 @@ Policy detail: `docs/SAFETY_CRITICAL_CALCULATIONS.md` (Density Altitude Performa
 
 ### Runway display overrides
 
-Optional `runway_facts[]` rows override NASR and OurAirports fields used by the airport dashboard **Runways** subsection and the `runway_display` block on weather API responses. Config wins per field; NASR fills gaps; OurAirports is the fallback.
+Optional `runway_facts[]` rows override NASR and OurAirports fields used by the airport dashboard **Runways** subsection, the `runway_display` block on weather API responses, and the `runway_facts` block on Public API airport metadata (`GET /v1/airports/{id}`). Config wins per field; NASR fills gaps; OurAirports is the fallback.
 
 | Field | Description |
 |-------|-------------|
