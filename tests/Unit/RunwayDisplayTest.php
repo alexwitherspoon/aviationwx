@@ -205,4 +205,17 @@ class RunwayDisplayTest extends TestCase
         $this->assertNotNull($row);
         $this->assertTrue($row['closed']);
     }
+
+    public function testRunwayDisplayMagneticDeclinationDeg_NoCoordinates_ReturnsNull(): void
+    {
+        $this->assertNull(runwayDisplayMagneticDeclinationDeg(['id' => 'ktest']));
+    }
+
+    public function testRunwayDisplayMagneticDeclinationDeg_ConfigOverride_ReturnsValue(): void
+    {
+        $this->assertSame(12.5, runwayDisplayMagneticDeclinationDeg([
+            'id' => 'ktest',
+            'magnetic_declination' => 12.5,
+        ]));
+    }
 }

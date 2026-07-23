@@ -466,6 +466,33 @@ function runwayDisplayFormatRunwayRow(
 }
 
 /**
+ * Magnetic declination for runway heading conversion when known.
+ *
+ * Returns null when no config/global override and no lat/lon for WMM, so
+ * runwayDisplayMagneticHeadingForEnd() can prefer end-ident parsing over
+ * treating true_alignment as magnetic with a zero default.
+ */
+function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
+{
+    if ($airport !== null && isset($airport['magnetic_declination']) && is_numeric($airport['magnetic_declination'])) {
+        return (float) $airport['magnetic_declination'];
+    }
+    if (($global = getGlobalConfig('magnetic_declination')) !== null && is_numeric($global)) {
+        return (float) $global;
+    }
+    if (
+        $airport !== null
+        && isset($airport['lat'], $airport['lon'])
+        && is_numeric($airport['lat'])
+        && is_numeric($airport['lon'])
+    ) {
+        return (float) getMagneticDeclination($airport);
+    }
+
+    return null;
+}
+
+/**
  * Build runway display payload for an airport.
  *
  * @return array{
@@ -480,7 +507,7 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null): 
     $resolvedAirportId = $airportId ?? (string) ($airport['id'] ?? $airport['icao'] ?? '');
     $configFacts = runwayDisplayConfigFactsByRunwayId($airport);
     $nasrRecord = getNasrAirportForConfig($airport);
-    $declination = (float) getMagneticDeclination($airport);
+    $declination = runwayDisplayMagneticDeclinationDeg($airport);
 
     $notamClosures = [
         'aerodrome_closed' => false,
