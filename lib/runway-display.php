@@ -136,6 +136,33 @@ function runwayDisplayResolveField(array $configRow, mixed $sourceValue, mixed $
 }
 
 /**
+ * Resolve one field with config precedence, then primary source, then OurAirports fallback.
+ *
+ * @param array<string, mixed> $configRow
+ * @return array{0: mixed, 1: ?string}
+ */
+function runwayDisplayResolveFieldWithFallback(
+    array $configRow,
+    mixed $primaryValue,
+    mixed $fallbackValue,
+    mixed $configValue,
+    string $primarySource,
+    string $fallbackSource = 'ourairports'
+): array {
+    if ($configValue !== null && $configValue !== '') {
+        return [$configValue, 'config'];
+    }
+    if ($primaryValue !== null && $primaryValue !== '') {
+        return [$primaryValue, $primarySource];
+    }
+    if ($fallbackValue !== null && $fallbackValue !== '') {
+        return [$fallbackValue, $fallbackSource];
+    }
+
+    return [null, null];
+}
+
+/**
  * Magnetic heading for a runway end.
  */
 function runwayDisplayMagneticHeadingForEnd(array $end, ?float $declinationDeg): ?int
@@ -303,9 +330,10 @@ function runwayDisplayFormatRunwayRow(
     }
     $lengthFt = (int) $lengthFt;
 
-    [$widthFt, $widthSource] = runwayDisplayResolveField(
+    [$widthFt, $widthSource] = runwayDisplayResolveFieldWithFallback(
         $configRow,
-        $sourceRow['width_ft'] ?? ($oaRow['width_ft'] ?? null),
+        $sourceRow['width_ft'] ?? null,
+        $oaRow['width_ft'] ?? null,
         $configRow['width_ft'] ?? null,
         $sourceName
     );
@@ -324,9 +352,10 @@ function runwayDisplayFormatRunwayRow(
     $oaLights = runwayDisplayOurAirportsLightsLabel(
         isset($oaRow['lighted']) ? (bool) $oaRow['lighted'] : null
     );
-    [$lights, $lightsSource] = runwayDisplayResolveField(
+    [$lights, $lightsSource] = runwayDisplayResolveFieldWithFallback(
         $configRow,
-        $nasrLights ?? $oaLights,
+        $nasrLights,
+        $oaLights,
         $configRow['lights'] ?? null,
         $sourceName
     );

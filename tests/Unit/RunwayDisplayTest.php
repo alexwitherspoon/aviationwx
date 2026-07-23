@@ -88,4 +88,31 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('config', $withRunways['runway_display']['runway_source']);
         $this->assertSame(72, $withRunways['temperature']);
     }
+
+    public function testRunwayDisplayFormatRunwayRow_FieldSourcesUseOurAirportsFallback(): void
+    {
+        $row = runwayDisplayFormatRunwayRow(
+            [
+                'rwy_id' => '09/27',
+                'length_ft' => 4000,
+                'surface' => 'ASPH',
+                'ends' => [
+                    ['end_id' => '09'],
+                    ['end_id' => '27'],
+                ],
+            ],
+            [],
+            [],
+            ['width_ft' => 75, 'lighted' => true],
+            ['aerodrome_closed' => false, 'closed_pair_designators' => [], 'closed_end_idents' => []],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($row);
+        $this->assertSame(75, $row['width_ft']);
+        $this->assertSame('Lighted', $row['lights']);
+        $this->assertSame('ourairports', $row['field_sources']['width_ft']);
+        $this->assertSame('ourairports', $row['field_sources']['lights']);
+    }
 }
