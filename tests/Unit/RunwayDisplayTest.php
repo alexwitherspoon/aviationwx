@@ -89,6 +89,16 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame(72, $withRunways['temperature']);
     }
 
+    public function testRunwayDisplayMagneticHeadingForEnd_NoDeclination_PrefersEndIdentOverTrueAlignment(): void
+    {
+        $heading = runwayDisplayMagneticHeadingForEnd([
+            'end_id' => '09',
+            'true_alignment' => 95,
+        ], null);
+
+        $this->assertSame(90, $heading);
+    }
+
     public function testRunwayDisplayFormatRunwayRow_FieldSourcesUseOurAirportsFallback(): void
     {
         $row = runwayDisplayFormatRunwayRow(

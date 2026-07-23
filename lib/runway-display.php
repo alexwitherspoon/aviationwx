@@ -183,6 +183,12 @@ function runwayDisplayMagneticHeadingForEnd(array $end, ?float $declinationDeg):
     }
 
     if ($declinationDeg === null) {
+        $endId = (string) ($end['end_id'] ?? '');
+        $parsed = $endId !== '' ? parseRunwayEndIdentMagneticHeading($endId) : null;
+        if ($parsed !== null) {
+            return $parsed;
+        }
+
         return (int) round((float) $trueAlignment);
     }
 
