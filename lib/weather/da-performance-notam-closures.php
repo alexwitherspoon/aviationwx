@@ -100,7 +100,7 @@ function getActiveRunwayNotamClosuresForAirport(string $airportId, array $airpor
 {
     static $memo = [];
 
-    $airportId = trim($airportId);
+    $airportId = strtolower(trim($airportId));
     if ($airportId === '') {
         return [
             'aerodrome_closed' => false,

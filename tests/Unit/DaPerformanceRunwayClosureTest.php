@@ -174,6 +174,25 @@ class DaPerformanceRunwayClosureTest extends TestCase
         $this->assertSame(count($runways), count($filtered));
     }
 
+    public function testGetActiveRunwayNotamClosuresForAirport_NormalizesAirportIdForMemoKey(): void
+    {
+        $this->writeNotamCache('69v', [[
+            'id' => 'n-memo-case',
+            'location' => '69V',
+            'text' => '69V RWY 18/36 CLSD',
+            'code' => 'QMRXX',
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() - 3600),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 3600),
+        ]]);
+
+        $airport = ['faa' => '69V', 'timezone' => 'America/Denver'];
+        $upper = getActiveRunwayNotamClosuresForAirport('69V', $airport);
+        $lower = getActiveRunwayNotamClosuresForAirport('69v', $airport);
+
+        $this->assertContains('18/36', $upper['closed_pair_designators']);
+        $this->assertSame($upper, $lower);
+    }
+
     public function testBuildUsesRemainingRunwayWhenNotamClosesWorstStripAt69v(): void
     {
         $this->writeNotamCache('69v', [[
