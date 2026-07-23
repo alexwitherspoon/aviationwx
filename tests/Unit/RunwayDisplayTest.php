@@ -8,17 +8,17 @@ require_once __DIR__ . '/../../lib/runway-display.php';
 
 class RunwayDisplayTest extends TestCase
 {
-    public function testSurfaceLabelMapsAsphalt(): void
+    public function testRunwayDisplaySurfaceLabel_AsphCode_ReturnsAsphalt(): void
     {
         $this->assertSame('Asphalt', runwayDisplaySurfaceLabel('ASPH'));
     }
 
-    public function testNasrLightsLabelMapsPeri(): void
+    public function testNasrRunwayLightsLabel_PeriCode_ReturnsOnRequest(): void
     {
         $this->assertSame('On request', nasrRunwayLightsLabel('PERI'));
     }
 
-    public function testParseCalmWindSplitEndsRemark(): void
+    public function testNasrParseCalmWindDesignationFromRemark_SplitEnds_ReturnsArrivalAndDeparture(): void
     {
         $parsed = nasrParseCalmWindDesignationFromRemark(
             'CALM WIND RWY 15 FOR ARRIVALS; RWY 33 FOR DEPARTURES.'
@@ -28,7 +28,7 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('33', $parsed['departure']);
     }
 
-    public function testParseCalmWindSingleEndRemark(): void
+    public function testNasrParseCalmWindDesignationFromRemark_SingleEnd_ReturnsBothEnds(): void
     {
         $parsed = nasrParseCalmWindDesignationFromRemark(
             'RWY 15 DESIGNATED CALM WIND RWY.'
@@ -38,12 +38,12 @@ class RunwayDisplayTest extends TestCase
         $this->assertSame('15', $parsed['departure']);
     }
 
-    public function testGetRunwayDisplayReturnsNullWhenNoData(): void
+    public function testGetRunwayDisplayForAirport_NoSourceData_ReturnsNull(): void
     {
         $this->assertNull(getRunwayDisplayForAirport(['id' => 'nonexistent-strip-xyz'], 'nonexistent-strip-xyz'));
     }
 
-    public function testGetRunwayDisplayUsesConfigRunwayFacts(): void
+    public function testGetRunwayDisplayForAirport_ConfigRunwayFacts_MergesOverrides(): void
     {
         $airport = [
             'id' => 'ktest',
@@ -70,7 +70,7 @@ class RunwayDisplayTest extends TestCase
         $this->assertTrue($display['runways'][0]['ends'][0]['calm_wind_arrival']);
     }
 
-    public function testAttachRunwayDisplayAddsPayloadToWeather(): void
+    public function testAttachRunwayDisplay_ValidConfigAttachesRunwayDisplay(): void
     {
         $airport = [
             'id' => 'ktest',
