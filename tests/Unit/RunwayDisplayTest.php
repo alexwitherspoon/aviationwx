@@ -8,6 +8,86 @@ require_once __DIR__ . '/../../lib/runway-display.php';
 
 class RunwayDisplayTest extends TestCase
 {
+    public function testRunwayDisplayIsHelipad_H1_ReturnsTrue(): void
+    {
+        $this->assertTrue(runwayDisplayIsHelipad('H1'));
+        $this->assertTrue(runwayDisplayIsHelipad('h2'));
+    }
+
+    public function testRunwayDisplayIsHelipad_RunwayPair_ReturnsFalse(): void
+    {
+        $this->assertFalse(runwayDisplayIsHelipad('09/27'));
+        $this->assertFalse(runwayDisplayIsHelipad('10L/28R'));
+    }
+
+    public function testRunwayDisplayFormatRunwayRow_Helipad_SetsIsHelipadFlag(): void
+    {
+        $row = runwayDisplayFormatRunwayRow(
+            [
+                'rwy_id' => 'H1',
+                'length_ft' => 50,
+                'width_ft' => 50,
+                'surface' => 'ASPH',
+                'ends' => [
+                    ['end_id' => 'H1'],
+                ],
+            ],
+            [],
+            [],
+            [],
+            ['aerodrome_closed' => false, 'closed_pair_designators' => [], 'closed_end_idents' => []],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($row);
+        $this->assertTrue($row['is_helipad']);
+    }
+
+    public function testRunwayDisplayFormatRunwayRow_RunwayPair_IsNotHelipad(): void
+    {
+        $row = runwayDisplayFormatRunwayRow(
+            [
+                'rwy_id' => '09/27',
+                'length_ft' => 4000,
+                'surface' => 'ASPH',
+                'ends' => [
+                    ['end_id' => '09'],
+                    ['end_id' => '27'],
+                ],
+            ],
+            [],
+            [],
+            [],
+            ['aerodrome_closed' => false, 'closed_pair_designators' => [], 'closed_end_idents' => []],
+            'nasr',
+            null
+        );
+
+        $this->assertNotNull($row);
+        $this->assertFalse($row['is_helipad']);
+    }
+
+    public function testRunwayDisplayFormatRunwayFactsRow_PreservesIsHelipad(): void
+    {
+        $facts = runwayDisplayFormatRunwayFactsRow([
+            'rwy_id' => 'H1',
+            'length_ft' => 50,
+            'width_ft' => 50,
+            'surface' => 'Asphalt',
+            'surface_code' => 'ASPH',
+            'lights' => null,
+            'closed' => false,
+            'is_helipad' => true,
+            'field_sources' => ['length_ft' => 'nasr'],
+            'ends' => [
+                ['end_id' => 'H1', 'heading_mag' => null],
+            ],
+        ]);
+
+        $this->assertTrue($facts['is_helipad']);
+    }
+
     public function testRunwayDisplaySurfaceLabel_AsphCode_ReturnsAsphalt(): void
     {
         $this->assertSame('Asphalt', runwayDisplaySurfaceLabel('ASPH'));

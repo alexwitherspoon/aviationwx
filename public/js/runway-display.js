@@ -275,9 +275,11 @@
             ? '<div class="runway-style-traffic">' + escapeHtml(row.traffic) + '</div>'
             : '';
         const ends = Array.isArray(row.ends) ? row.ends : [];
-        const windHtml = ends.map(function (end) {
-            return endWindLine(end, weather, calm);
-        }).join('');
+        const windHtml = row.is_helipad
+            ? ''
+            : ends.map(function (end) {
+                return endWindLine(end, weather, calm);
+            }).join('');
         const specsHtml = ''
             + '<div class="runway-hybrid-specs">'
             + '<span><span class="spec-label">Surface:</span> <span class="spec-val">' + surface + '</span></span>'

@@ -304,6 +304,17 @@ function runwayDisplayResolveCalmWind(array $configRow, array $airportCalmWind, 
 }
 
 /**
+ * Whether a runway row is a helicopter landing pad (FAA NASR designator H1, H2, etc.).
+ *
+ * Helipads have no published runway heading; per-end headwind and crosswind are not
+ * meaningful and must not be shown on dashboard cards.
+ */
+function runwayDisplayIsHelipad(string $rwyId): bool
+{
+    return (bool) preg_match('/^H\d+$/i', trim($rwyId));
+}
+
+/**
  * Whether a runway card should show closed from active NOTAM full closures.
  *
  * Matches density altitude performance NOTAM semantics: aerodrome closure,
@@ -460,6 +471,7 @@ function runwayDisplayFormatRunwayRow(
         'lights' => $lights,
         'traffic' => $traffic,
         'closed' => $closed,
+        'is_helipad' => runwayDisplayIsHelipad($rwyId),
         'ends' => $ends,
         'field_sources' => $fieldSources,
         'row_source' => $sourceName,
@@ -629,6 +641,7 @@ function runwayDisplayFormatRunwayFactsRow(array $row): array
         'surface_code' => $row['surface_code'],
         'lights' => $row['lights'],
         'closed' => $row['closed'],
+        'is_helipad' => !empty($row['is_helipad']),
         'field_sources' => $row['field_sources'] ?? [],
         'ends' => [],
     ];
