@@ -132,6 +132,37 @@ class DaPerformanceRunwayClosureTest extends TestCase
         $this->assertSame(count($runways), count($filtered));
     }
 
+    public function testKboiTaxiwayNotamDoesNotMarkRunwayPairClosed(): void
+    {
+        $this->writeNotamCache('kboi', [
+            [
+                'id' => 'A1032/2026',
+                'location' => 'KBOI',
+                'text' => 'BOI RWY 10L/28R CLSD EXC XNG',
+                'code' => 'QMRXX',
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() - 3600),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 3600),
+            ],
+            [
+                'id' => '06/140/2026',
+                'location' => 'KBOI',
+                'text' => 'TWY G BTN RWY 10R/28L AND TWY A CLSD CONSTRUCTION',
+                'code' => '',
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() - 3600),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 3600),
+            ],
+        ]);
+
+        $closures = getActiveRunwayNotamClosuresForAirport('kboi', [
+            'icao' => 'KBOI',
+            'faa' => 'BOI',
+            'timezone' => 'America/Boise',
+        ]);
+
+        $this->assertSame(['10L/28R'], $closures['closed_pair_designators']);
+        $this->assertFalse($closures['aerodrome_closed']);
+    }
+
     public function testUpcomingRunwayClosureNotamDoesNotExcludeRunway(): void
     {
         $this->writeNotamCache('69v', [[

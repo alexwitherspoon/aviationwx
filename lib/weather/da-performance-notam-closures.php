@@ -109,8 +109,10 @@ function getActiveRunwayNotamClosuresForAirport(string $airportId, array $airpor
         ];
     }
 
-    if (isset($memo[$airportId])) {
-        return $memo[$airportId];
+    $cacheFile = notamCacheFilePath($airportId);
+    $memoKey = $airportId . ':' . (is_file($cacheFile) ? hash_file('xxh128', $cacheFile) : '0');
+    if (isset($memo[$memoKey])) {
+        return $memo[$memoKey];
     }
 
     $defaults = [
@@ -121,13 +123,13 @@ function getActiveRunwayNotamClosuresForAirport(string $airportId, array $airpor
 
     $notams = loadNotamRowsForDensityAltitudePerformance($airportId);
     if ($notams === null) {
-        $memo[$airportId] = $defaults;
+        $memo[$memoKey] = $defaults;
         return $defaults;
     }
 
-    $memo[$airportId] = notamResolveActiveDensityAltitudeRunwayClosures($notams, $airport);
+    $memo[$memoKey] = notamResolveActiveDensityAltitudeRunwayClosures($notams, $airport);
 
-    return $memo[$airportId];
+    return $memo[$memoKey];
 }
 
 /**
