@@ -45,7 +45,10 @@ function enrichEmbedWeatherForDisplay(array $weather, array $airport, string $ai
         return $weather;
     }
 
-    return attachDensityAltitudePerformance($weather, $airport, $airportId);
+    require_once __DIR__ . '/runway-display.php';
+    $weather = attachDensityAltitudePerformance($weather, $airport, $airportId);
+
+    return attachRunwayDisplay($weather, $airport, $airportId);
 }
 
 /**

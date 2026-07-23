@@ -1097,6 +1097,11 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
 
+            <div id="runway-display-section" class="frequencies runway-style-e" aria-label="Runway details" hidden>
+                <h3>Runways</h3>
+                <div id="runway-display-list" class="runway-hybrid-list"></div>
+            </div>
+
             <!-- Frequencies -->
             <div class="frequencies">
                 <h3>Frequencies</h3>
@@ -1325,6 +1330,7 @@ if ($themeCookie === 'dark') {
     <script src="/public/js/outage-display-sync.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/runway-label-layout.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/wind-visual.js?v=<?= $buildHashShort ?>"></script>
+    <script src="/public/js/runway-display.js?v=<?= $buildHashShort ?>"></script>
     <script src="/public/js/density-altitude-performance-display.js?v=<?= $buildHashShort ?>"></script>
     <?php
     // Webcam seed data for the dashboard bootstrap below. Timestamps reuse
@@ -1419,7 +1425,9 @@ const INITIAL_WEATHER_DATA = <?php
 
     if (is_array($initialWeatherData)) {
         require_once __DIR__ . '/../lib/weather/density-altitude-performance.php';
+        require_once __DIR__ . '/../lib/runway-display.php';
         $initialWeatherData = attachDensityAltitudePerformance($initialWeatherData, $airport, $airportId);
+        $initialWeatherData = attachRunwayDisplay($initialWeatherData, $airport, $airportId);
     }
     
     // Defensive JSON encoding with error handling
