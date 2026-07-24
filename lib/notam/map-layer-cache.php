@@ -7,6 +7,8 @@
  * status revalidation from embedded NOTAM rows.
  */
 
+require_once __DIR__ . '/cache.php';
+require_once __DIR__ . '/map-layer.php';
 require_once __DIR__ . '/map-aggregate-cache.php';
 
 /**

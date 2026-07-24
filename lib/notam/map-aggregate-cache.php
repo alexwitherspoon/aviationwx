@@ -133,12 +133,6 @@ function notamAirspaceNmsFieldSourcesForNotam(array $notam, bool $hasDrawableGeo
         $sources['status'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
 
-    $text = (string) ($notam['text'] ?? '');
-    $verticalLimits = parseTfrVerticalLimitsSummary($text);
-    if ($verticalLimits !== null && $verticalLimits !== '') {
-        $sources['vertical_limits'] = NOTAM_AIRSPACE_SOURCE_NMS;
-    }
-
     if (isTfr($notam)) {
         $sources['restriction_kind'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
