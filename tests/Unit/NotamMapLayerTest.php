@@ -408,6 +408,28 @@ final class NotamMapLayerTest extends TestCase
         $this->assertSame('A3389/2026', $payload['features'][0]['properties']['notam_id']);
     }
 
+    public function testNotamTfrMapLayerFeatureFromAirspaceRecord_IncludesBannerHeadlineForFireTfr(): void
+    {
+        $now = time();
+        $notam = [
+            'id' => '8339/2026',
+            'text' => 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
+                . 'PURSUANT TO 14 CFR SECTION 91.137(A)(2) WI AN AREA DEFINED AS 7NM RADIUS OF '
+                . '473130N1160445W SFC-7500FT GOLD RUN FIRE',
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+        ];
+        $record = notamAirspaceRecordFromNotam($notam, 's83', 'UTC');
+        $this->assertNotNull($record);
+
+        $feature = notamTfrMapLayerFeatureFromAirspaceRecord($record, $now);
+        $this->assertNotNull($feature);
+        $headline = $feature['properties']['banner_headline'] ?? '';
+        $this->assertStringContainsString('Fire TFR', $headline);
+        $this->assertStringContainsString('7 NM radius', $headline);
+        $this->assertStringContainsString('SFC', $headline);
+    }
+
     public function testNotamTfrMapLayerGeoJsonRingFromVertices_ClosedSquare_ReturnsClosedRing(): void
     {
         $vertices = [

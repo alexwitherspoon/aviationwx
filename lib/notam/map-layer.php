@@ -16,9 +16,13 @@ require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/cache.php';
 require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
+require_once __DIR__ . '/tfr-category.php';
 
 /** Segments on approximate circle rings (visual only, not for navigation). */
 const NOTAM_TFR_MAP_CIRCLE_SEGMENTS = 64;
+
+/** User-facing note on map layer API coverage (also in JSON coverage_note). */
+const NOTAM_MAP_COVERAGE_NOTE = 'TFR geometry from FAA NMS per-airport fetches; not exhaustive. Verify via official NOTAMs before flight.';
 
 /**
  * Bump when map build, dedup, or serve-time revalidation logic changes.
@@ -450,6 +454,8 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
     $bucket = notamTfrMapLayerStyleBucket($status);
     $official = 'https://notams.aim.faa.gov/notamSearch/search?notamNumber=' . rawurlencode($id);
 
+    $text = (string) ($notam['text'] ?? '');
+
     $baseProps = [
         'notam_id' => $id,
         'airport_id' => (string) ($record['source_airport_id'] ?? ''),
@@ -457,17 +463,12 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         'map_layer_style' => $bucket,
         'official_link' => $official,
         'geometry_kind' => $geometryKind,
+        'banner_headline' => notamBuildAirspaceTfrHeadlineFromText($text),
     ];
 
     $statusLine = notamTfrMapLayerTooltipStatusLine($notam, $status, $timezone, $nowUnix);
     if ($statusLine !== null && $statusLine !== '') {
         $baseProps['status_line'] = $statusLine;
-    }
-
-    $text = (string) ($notam['text'] ?? '');
-    $verticalLimits = parseTfrVerticalLimitsSummary($text);
-    if ($verticalLimits !== null && $verticalLimits !== '') {
-        $baseProps['vertical_limits'] = $verticalLimits;
     }
 
     if ($geometryKind === 'circle') {
@@ -524,14 +525,25 @@ function notamTfrMapLayerBuildPayloadFromAirspaceStore(array $envelope, ?int $no
 
     $features = notamTfrMapLayerDeduplicateFeaturesByGeometry($features);
 
-    return [
+    return array_merge([
         'type' => 'FeatureCollection',
         'features' => $features,
         'generated_at' => $nowUnix,
         'cache_ttl_seconds' => $ttl,
         'map_layer_build_token' => (string) ($envelope['map_layer_build_token'] ?? notamTfrMapLayerCurrentBuildToken()),
+    ], notamTfrMapLayerResponseMetadata());
+}
+
+/**
+ * Shared map-layer metadata fields for FeatureCollection responses.
+ *
+ * @return array{coverage_scope: string, coverage_note: string}
+ */
+function notamTfrMapLayerResponseMetadata(): array
+{
+    return [
         'coverage_scope' => 'faa_nms_side_channel',
-        'coverage_note' => 'TFR geometry from FAA NMS per-airport fetches; not exhaustive. Verify via official NOTAMs before flight.',
+        'coverage_note' => NOTAM_MAP_COVERAGE_NOTE,
     ];
 }
 
@@ -547,15 +559,13 @@ function notamTfrMapLayerEmptyPayload(int $nowUnix, ?int $ttl = null, bool $fail
 {
     $ttl = $ttl ?? getNotamCacheTtlSeconds();
 
-    $payload = [
+    $payload = array_merge([
         'type' => 'FeatureCollection',
         'features' => [],
         'generated_at' => $nowUnix,
         'cache_ttl_seconds' => $ttl,
         'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
-        'coverage_scope' => 'faa_nms_side_channel',
-        'coverage_note' => 'TFR geometry from FAA NMS per-airport fetches; not exhaustive. Verify via official NOTAMs before flight.',
-    ];
+    ], notamTfrMapLayerResponseMetadata());
 
     if ($failclosed) {
         $payload['failclosed'] = true;

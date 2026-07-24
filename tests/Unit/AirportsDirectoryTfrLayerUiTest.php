@@ -20,6 +20,11 @@ class AirportsDirectoryTfrLayerUiTest extends TestCase {
         $this->airportsPhp = $raw;
     }
 
+    public function testTfrLayerTitleUsesBannerHeadlineWhenPresent(): void {
+        $this->assertStringContainsString('p.banner_headline', $this->airportsPhp);
+        $this->assertStringContainsString('notamTfrMapEscapeTipText(p.banner_headline)', $this->airportsPhp);
+    }
+
     public function testTfrLayerUsesBindPopupOnly(): void {
         $this->assertStringContainsString(
             'layer.bindPopup(\'<div class="tfr-map-popup">\' + lines.join(\'\') + \'</div>\');',

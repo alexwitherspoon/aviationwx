@@ -104,16 +104,17 @@ function notamAirspaceRecordRunwayClosureCapable(array $notam): bool
  * Per-field provenance map for a fully NMS-sourced airspace record.
  *
  * @param array<string, mixed> $notam Parsed NOTAM row
+ * @param bool $hasDrawableGeometry When true, geometry was already validated for map draw
  * @return array<string, string>
  */
-function notamAirspaceNmsFieldSourcesForNotam(array $notam): array
+function notamAirspaceNmsFieldSourcesForNotam(array $notam, bool $hasDrawableGeometry = false): array
 {
     $sources = [
         'notam_id' => NOTAM_AIRSPACE_SOURCE_NMS,
         'text' => NOTAM_AIRSPACE_SOURCE_NMS,
     ];
 
-    if (notamTfrMapLayerMinimalFeatureForGeometryKey($notam) !== null) {
+    if ($hasDrawableGeometry) {
         $sources['geometry'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
 
@@ -182,7 +183,7 @@ function notamAirspaceRecordFromNotam(array $notam, string $sourceAirportId, str
             'runway_closure' => notamAirspaceRecordRunwayClosureCapable($notam),
         ],
         'record_sources' => [NOTAM_AIRSPACE_SOURCE_NMS],
-        'field_sources' => notamAirspaceNmsFieldSourcesForNotam($notam),
+        'field_sources' => notamAirspaceNmsFieldSourcesForNotam($notam, true),
         'merged_at' => null,
     ];
 
