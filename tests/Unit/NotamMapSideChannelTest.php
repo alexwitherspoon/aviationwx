@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
  * NMS map side-channel (#244): fetch hook, airspace store, and map serve contracts.
  *
  * @covers ::fetchNotamsForAirport
+ * @covers ::notamAirspaceNormNumberFromId
  * @covers ::notamMapAirspaceAggregateUpsertFromFetch
  * @covers ::notamTfrMapLayerServeOrRebuild
  */
@@ -228,5 +229,14 @@ final class NotamMapSideChannelTest extends TestCase
         $payload = notamTfrMapLayerBuildPayloadFromAirspaceStore($envelope, $now);
 
         $this->assertSame([], $payload['features']);
+    }
+
+    public function testNotamAirspaceNormNumberFromId_LetterSeries_ExtractsNumericPart(): void
+    {
+        $this->assertSame('N:3389', notamAirspaceNormNumberFromId('A3389/2026'));
+        $this->assertSame('N:2698', notamAirspaceNormNumberFromId('2698/2026'));
+        $this->assertSame('N:8339', notamAirspaceNormNumberFromId('8339/2026'));
+        $this->assertNull(notamAirspaceNormNumberFromId(''));
+        $this->assertNull(notamAirspaceNormNumberFromId('invalid'));
     }
 }

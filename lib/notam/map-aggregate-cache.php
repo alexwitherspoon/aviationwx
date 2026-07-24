@@ -39,7 +39,11 @@ function notamAirspaceNormNumberFromId(string $notamId): ?string
     }
 
     if (preg_match('/^([A-Za-z]?\d+)\/(\d{4})$/', $notamId, $matches) === 1) {
-        return 'N:' . (int) $matches[1];
+        if (preg_match('/(\d+)/', $matches[1], $numberMatch) !== 1) {
+            return null;
+        }
+
+        return 'N:' . (int) $numberMatch[1];
     }
 
     return null;
