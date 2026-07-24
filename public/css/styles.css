@@ -3641,6 +3641,18 @@ body.night-mode .density-altitude-warning {
 }
 
 /* Runway display (Airport Information hybrid cards) */
+/* Nested section must not inherit global section card chrome (shadow/radius/padding).
+   Keep .frequencies top rule + spacing so Runways matches Frequencies/Links. */
+#runway-display-section {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+}
+
 .runway-style-e {
     --runway-text-primary: #1a1a1a;
     --runway-text-body: #333;
@@ -3680,11 +3692,15 @@ body.night-mode .density-altitude-warning {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
-    justify-content: flex-start;
+    justify-content: center;
 }
 
+/* min-width covers closed status + Calm Wind RWY badge without forcing
+   rare split arr/dep + long unit chrome onto one line; those may wrap. */
 .runway-style-e .runway-hybrid-card {
-    flex: 1 1 220px;
+    flex: 0 1 auto;
+    width: fit-content;
+    min-width: min(22rem, 100%);
     max-width: 100%;
     text-align: left;
 }
@@ -3811,6 +3827,13 @@ body.night-mode .density-altitude-warning {
     font-weight: 500;
 }
 
+/* Theme section rules use !important; keep nested Runways panel uncarded. */
+body.dark-mode #runway-display-section,
+body.night-mode #runway-display-section {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 /* Dark mode runway tokens (match weather-item / label hierarchy) */
 body.dark-mode .runway-style-e {
     --runway-text-primary: var(--dark-text-bright);
@@ -3827,20 +3850,29 @@ body.dark-mode .runway-style-e {
     --runway-status-closed: #ef5350;
 }
 
-/* Night mode runway tokens (red-safe palette, same hierarchy as dashboard) */
+/* Night mode runway tokens (red-safe only - no green/blue accents).
+   Favorable headwind matches other wind color; bold weight marks it. */
 body.night-mode .runway-style-e {
     --runway-text-primary: var(--night-text-bright);
     --runway-text-body: var(--night-text-primary);
     --runway-text-muted: var(--night-text-muted);
     --runway-text-dim: var(--night-text-muted);
     --runway-border-subtle: var(--night-border-light);
-    --runway-hw-color: #99cc99;
+    --runway-hw-color: var(--night-text-bright);
     --runway-tw-color: var(--night-text-bright);
     --runway-xw-color: var(--night-text-muted);
     --runway-badge-fg: var(--night-text-bright);
     --runway-badge-bg: var(--night-bg-button);
     --runway-badge-border: var(--night-border);
     --runway-status-closed: var(--night-text-bright);
+}
+
+body.night-mode .rwy-comp-hw {
+    font-weight: 700;
+}
+
+body.night-mode .rwy-comp-tw {
+    font-weight: 500;
 }
 
 @media (max-width: 768px) {
@@ -3883,6 +3915,11 @@ body.night-mode .runway-style-e {
 }
 
 @media (prefers-color-scheme: dark) {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #runway-display-section {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
     body:not(.dark-mode):not(.night-mode):not(.light-mode) .runway-style-e {
         --runway-text-primary: var(--dark-text-bright);
         --runway-text-body: var(--dark-text-primary);

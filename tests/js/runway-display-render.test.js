@@ -168,6 +168,45 @@ test('dashboard CSS hides mobile block on desktop', () => {
     assert(css.includes('@media (max-width: 768px)'), 'mobile breakpoint missing');
     assert(css.includes('body.dark-mode .runway-style-e'), 'dark mode runway tokens missing');
     assert(css.includes('body.night-mode .runway-style-e'), 'night mode runway tokens missing');
+    const nightRunwayBlock = css.match(/body\.night-mode \.runway-style-e\s*\{[^}]+\}/);
+    assert(nightRunwayBlock, 'night mode runway token block missing');
+    assert(
+        !/#99cc99|#6ecf6e|#2e7d32|#1a4f8a|#9ec5ef/i.test(nightRunwayBlock[0]),
+        'night mode runway tokens must stay red-safe (no green/blue accents)'
+    );
+    assert(
+        /--runway-hw-color:\s*var\(--night-text-bright\)/.test(nightRunwayBlock[0]),
+        'night mode headwind must match bright red wind color'
+    );
+    assert(
+        /--runway-tw-color:\s*var\(--night-text-bright\)/.test(nightRunwayBlock[0]),
+        'night mode tailwind must match bright red wind color'
+    );
+    assert(
+        /body\.night-mode \.rwy-comp-hw\s*\{[^}]*font-weight:\s*700/.test(css),
+        'night mode favorable wind must use bold weight'
+    );
+    assert(
+        /body\.night-mode \.rwy-comp-tw\s*\{[^}]*font-weight:\s*500/.test(css),
+        'night mode tailwind must not use favorable bold weight'
+    );
+    assert(css.includes('#runway-display-section'), 'nested runway section reset missing');
+    assert(
+        /\.runway-style-e \.runway-hybrid-list\s*\{[^}]*justify-content:\s*center/.test(css),
+        'runway list centering missing'
+    );
+    assert(
+        /\.runway-style-e \.runway-hybrid-card\s*\{[^}]*width:\s*fit-content/.test(css),
+        'content-sized runway cards missing'
+    );
+    assert(
+        /\.runway-style-e \.runway-hybrid-card\s*\{[^}]*flex:\s*0 1 auto/.test(css),
+        'runway card flex-grow disable missing'
+    );
+    assert(
+        /\.runway-style-e \.runway-hybrid-card\s*\{[^}]*min-width:\s*min\(22rem,\s*100%\)/.test(css),
+        'desktop runway card min-width for badges/status missing'
+    );
 });
 
 console.log('\n' + '='.repeat(50));
