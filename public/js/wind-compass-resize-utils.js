@@ -11,6 +11,8 @@
 
     const MIN_CSS_SIZE = 48;
     const MAX_CSS_SIZE = 300;
+    /** Design reference for full-mode compass typography and stroke weights (dashboard size). */
+    const FULL_MODE_REFERENCE_CSS_SIZE = 300;
 
     /**
      * Clamp and round the CSS box size used for a square wind compass.
@@ -44,20 +46,35 @@
         };
     }
 
+    /**
+     * Scale factor for full-mode stroke widths and fonts relative to the 300px reference.
+     *
+     * @param {number} cssSize Display width/height in CSS pixels
+     * @returns {number}
+     */
+    function computeFullModeScale(cssSize) {
+        const safeCss = resolveWindCompassCssSize(cssSize, FULL_MODE_REFERENCE_CSS_SIZE);
+        return safeCss / FULL_MODE_REFERENCE_CSS_SIZE;
+    }
+
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
             MIN_CSS_SIZE,
             MAX_CSS_SIZE,
+            FULL_MODE_REFERENCE_CSS_SIZE,
             resolveWindCompassCssSize,
             computeWindCompassPixelSize,
+            computeFullModeScale,
         };
     } else {
         global.AviationWX = global.AviationWX || {};
         global.AviationWX.windCompassResize = {
             MIN_CSS_SIZE,
             MAX_CSS_SIZE,
+            FULL_MODE_REFERENCE_CSS_SIZE,
             resolveWindCompassCssSize,
             computeWindCompassPixelSize,
+            computeFullModeScale,
         };
     }
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

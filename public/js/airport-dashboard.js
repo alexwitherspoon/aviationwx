@@ -2915,25 +2915,33 @@ function updateWindVisual(weather) {
     // Draw the compass on the canvas via the shared renderer (single source of truth
     // with the embeds). The detail panel below is dashboard-specific and stays here.
     if (window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function') {
-        window.AviationWX.drawWindCompass(canvas, {
-            windSpeed: ws,
-            windDirection: windDirNumeric,
-            isVRB: isVariableWind,
-            isDark: isDarkMode,
-            night: isNightMode,
-            size: 'full',
-            fullMode: {
-                runwaySegments: (typeof RUNWAY_SEGMENTS !== 'undefined' && RUNWAY_SEGMENTS) ? RUNWAY_SEGMENTS : [],
-                lastHourWind: lastHourWind,
-                periodLabel: lhwPeriodLabel,
-                windDirectionMagnetic: windDirNumeric,
-                magneticDeclination: MAGNETIC_DECLINATION || 0,
-                fieldObsTimeMap: weather._field_obs_time_map || {},
-                staleFailclosedSeconds: STALE_FAILCLOSED_SECONDS,
-                metarStaleFailclosedSeconds: METAR_STALE_FAILCLOSED_SECONDS,
-                isMetarOnly: isMetarOnly
-            }
-        });
+        const drawDashboardCompass = function() {
+            window.AviationWX.drawWindCompass(canvas, {
+                windSpeed: ws,
+                windDirection: windDirNumeric,
+                isVRB: isVariableWind,
+                isDark: isDarkMode,
+                night: isNightMode,
+                size: 'full',
+                fullMode: {
+                    runwaySegments: (typeof RUNWAY_SEGMENTS !== 'undefined' && RUNWAY_SEGMENTS) ? RUNWAY_SEGMENTS : [],
+                    lastHourWind: lastHourWind,
+                    periodLabel: lhwPeriodLabel,
+                    windDirectionMagnetic: windDirNumeric,
+                    magneticDeclination: MAGNETIC_DECLINATION || 0,
+                    fieldObsTimeMap: weather._field_obs_time_map || {},
+                    staleFailclosedSeconds: STALE_FAILCLOSED_SECONDS,
+                    metarStaleFailclosedSeconds: METAR_STALE_FAILCLOSED_SECONDS,
+                    isMetarOnly: isMetarOnly
+                }
+            });
+        };
+
+        if (window.AviationWX.observeWindCompassCanvas) {
+            window.AviationWX.observeWindCompassCanvas(canvas, drawDashboardCompass, 300);
+        } else {
+            drawDashboardCompass();
+        }
     }
 
     // Get today's peak gust from server (daily tracking, never stale)

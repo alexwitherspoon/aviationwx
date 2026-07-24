@@ -7,8 +7,10 @@
 const {
     MIN_CSS_SIZE,
     MAX_CSS_SIZE,
+    FULL_MODE_REFERENCE_CSS_SIZE,
     resolveWindCompassCssSize,
     computeWindCompassPixelSize,
+    computeFullModeScale,
 } = require('../../public/js/wind-compass-resize-utils.js');
 
 let passed = 0;
@@ -54,6 +56,17 @@ test('computeWindCompassPixelSize honors devicePixelRatio', () => {
 test('computeWindCompassPixelSize defaults DPR to 1', () => {
     const result = computeWindCompassPixelSize(160, 0);
     assertEqual(result.pixelSize, 160, 'pixel size without DPR');
+});
+
+test('computeFullModeScale uses 300px reference', () => {
+    assertEqual(FULL_MODE_REFERENCE_CSS_SIZE, 300, 'reference size');
+    assertEqual(computeFullModeScale(300), 1, 'full reference');
+    assertEqual(computeFullModeScale(150), 0.5, 'half size');
+});
+
+test('computeFullModeScale clamps before scaling', () => {
+    assertEqual(computeFullModeScale(400), 1, 'max clamp keeps scale at 1');
+    assertEqual(computeFullModeScale(MIN_CSS_SIZE), MIN_CSS_SIZE / FULL_MODE_REFERENCE_CSS_SIZE, 'min clamp');
 });
 
 console.log('\n' + '='.repeat(50));

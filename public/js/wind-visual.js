@@ -127,12 +127,12 @@
      * Draw full-mode wind compass (dashboard-matching)
      */
     function drawWindCompassFullMode(canvas, options) {
-        const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
-        const cx = width / 2;
-        const cy = height / 2;
-        const r = Math.min(width, height) / 2 - 20;
+        const layout = prepareWindCompassFullModeContext(canvas, options);
+        const ctx = layout.ctx;
+        const scale = layout.scale;
+        const cx = layout.cx;
+        const cy = layout.cy;
+        const r = layout.r;
 
         const full = options.fullMode || {};
         const isNight = options.night === true;
@@ -140,8 +140,6 @@
         const magneticDeclination = full.magneticDeclination || 0;
 
         const colors = getWindCompassColors({ isDark: isDark, night: isNight });
-
-        ctx.clearRect(0, 0, width, height);
 
         const deg2rad = Math.PI / 180;
         if (magneticDeclination !== 0) {
@@ -152,7 +150,7 @@
         }
 
         ctx.strokeStyle = colors.circle;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * scale;
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, 2 * Math.PI);
         ctx.stroke();
@@ -187,7 +185,7 @@
             const endY = cy - rw * ey;
 
             ctx.strokeStyle = colors.runway;
-            ctx.lineWidth = 8;
+            ctx.lineWidth = 8 * scale;
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -216,7 +214,7 @@
             : '';
 
         if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
-            drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
+            drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors, scale);
         }
 
         const windDirRaw = options.windDirection ?? null;
@@ -235,12 +233,12 @@
                     : (windDirNumeric - magneticDeclination + 360) % 360;
                 const windDirToward = (windDirFromMag + 180) % 360;
                 const windAngle = (windDirToward * Math.PI) / 180;
-                drawWindArrowFull(ctx, cx, cy, r, windAngle, ws, colors);
+                drawWindArrowFull(ctx, cx, cy, r, windAngle, ws, colors, scale);
             } else if (ws !== null && ws >= CALM_WIND_THRESHOLD && isVRB) {
-                ctx.font = 'bold 20px sans-serif';
+                ctx.font = 'bold ' + (20 * scale) + 'px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = colors.labelOutline;
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3 * scale;
                 ctx.lineJoin = 'round';
                 if (magneticDeclination !== 0) {
                     ctx.save();
@@ -256,10 +254,10 @@
                     ctx.fillText('VRB', cx, cy);
                 }
             } else if (isCalmWindSpeed(ws)) {
-                ctx.font = 'bold 20px sans-serif';
+                ctx.font = 'bold ' + (20 * scale) + 'px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = colors.labelOutline;
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3 * scale;
                 ctx.lineJoin = 'round';
                 if (magneticDeclination !== 0) {
                     ctx.save();
@@ -277,7 +275,7 @@
             }
         }
 
-        ctx.font = 'bold 14px sans-serif';
+        ctx.font = 'bold ' + (14 * scale) + 'px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         labelPositions.forEach(function(lp) {
@@ -288,7 +286,7 @@
             const strokeW = colors.runwayLabelStrokeWidth !== undefined ? colors.runwayLabelStrokeWidth : 3;
             if (strokeW > 0) {
                 ctx.strokeStyle = colors.runwayLabelOutline !== undefined ? colors.runwayLabelOutline : colors.labelOutline;
-                ctx.lineWidth = strokeW;
+                ctx.lineWidth = strokeW * scale;
                 ctx.strokeText(lp.ident, 0, 0);
             }
             ctx.fillStyle = colors.runwayLabel;
@@ -298,11 +296,11 @@
 
         ['N', 'E', 'S', 'W'].forEach(function(l, i) {
             const ang = (i * 90) * deg2rad;
-            const labelX = cx + Math.sin(ang) * (r + 10);
-            const labelY = cy - Math.cos(ang) * (r + 10);
+            const labelX = cx + Math.sin(ang) * (r + 10 * scale);
+            const labelY = cy - Math.cos(ang) * (r + 10 * scale);
             const tangentAngle = Math.atan2(-Math.cos(ang), Math.sin(ang)) + Math.PI / 2;
             ctx.fillStyle = colors.compass;
-            ctx.font = 'bold 16px sans-serif';
+            ctx.font = 'bold ' + (16 * scale) + 'px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.save();
@@ -312,7 +310,7 @@
             ctx.restore();
         });
 
-        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors);
+        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors, scale);
 
         if (magneticDeclination !== 0) {
             ctx.restore();
@@ -323,7 +321,8 @@
      * Draw True North marker: star at top (0°), arc to N (magnetic), mag var label halfway along arc in green.
      * Compass is rotated so True North is at top; N/S/E/W are skewed by mag var.
      */
-    function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
+    function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors, scale) {
+        const s = scale || 1;
         const absDecl = Math.abs(declination);
         if (absDecl === 0) return;
         const arcColor = colors.trueNorth ?? '#4a7';
@@ -333,7 +332,7 @@
         const canvasMagneticNorth = -Math.PI / 2;
 
         ctx.strokeStyle = arcColor;
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 5 * s;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -348,9 +347,9 @@
         ctx.textBaseline = 'middle';
         const starX = cx + Math.sin(trueNorthAngle) * r;
         const starY = cy - Math.cos(trueNorthAngle) * r;
-        ctx.font = '14px sans-serif';
+        ctx.font = (14 * s) + 'px sans-serif';
         ctx.strokeStyle = colors.labelOutline || '#fff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * s;
         ctx.lineJoin = 'round';
         ctx.save();
         ctx.translate(starX, starY);
@@ -361,27 +360,28 @@
         ctx.restore();
 
         const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
-        const labelRadius = r - 12;
+        const labelRadius = r - 12 * s;
         const midCanvasAngle = (canvasNorth + canvasMagneticNorth) / 2;
         const labelX = cx + labelRadius * Math.cos(midCanvasAngle);
         const labelY = cy + labelRadius * Math.sin(midCanvasAngle);
         const tangentAngle = midCanvasAngle + Math.PI / 2;
-        ctx.font = '12px sans-serif';
+        ctx.font = (12 * s) + 'px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.save();
         ctx.translate(labelX, labelY);
         ctx.rotate(tangentAngle);
         ctx.strokeStyle = colors.labelOutline;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.5 * s;
         ctx.strokeText(declLabel, 0, 0);
         ctx.fillStyle = arcColor;
         ctx.fillText(declLabel, 0, 0);
         ctx.restore();
     }
 
-    function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
-        const maxPetalLength = Math.min(45, r * 0.35);
+    function drawWindRosePetals(ctx, cx, cy, r, petals, colors, scale) {
+        const s = scale || 1;
+        const maxPetalLength = Math.min(45 * s, r * 0.35);
         const maxSpeed = Math.max(1, Math.max.apply(null, petals));
         const deg2rad = Math.PI / 180;
         const chevronColor = colors.chevron || 'rgba(220, 53, 69, 0.75)';
@@ -390,7 +390,7 @@
             const speed = petals[i] || 0;
             if (speed <= 0) continue;
             const length = (speed / maxSpeed) * maxPetalLength;
-            if (length < 2) continue;
+            if (length < 2 * s) continue;
 
             const centerAngle = (i * 22.5 - 90) * deg2rad;
             const halfWidth = (22.5 / 2) * deg2rad;
@@ -404,10 +404,10 @@
             ctx.fillStyle = colors.windRosePetal || 'rgba(220, 53, 69, 0.5)';
             ctx.fill();
             ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1 * s;
             ctx.stroke();
 
-            if (length < 18) continue;
+            if (length < 18 * s) continue;
             const cosA = Math.cos(centerAngle);
             const sinA = Math.sin(centerAngle);
             const petalHalfAngle = (22.5 / 2) * deg2rad;
@@ -438,18 +438,20 @@
         }
     }
 
-    function drawWindArrowFull(ctx, cx, cy, r, angle, speed, colors) {
-        const arrowLength = Math.min(speed * 6, r - 30);
+    function drawWindArrowFull(ctx, cx, cy, r, angle, speed, colors, scale) {
+        const s = scale || 1;
+        const arrowLength = Math.min(speed * 6 * s, r - 30 * s);
         const arrowEndX = cx + Math.sin(angle) * arrowLength;
         const arrowEndY = cy - Math.cos(angle) * arrowLength;
         const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
-        const triangleBaseDist = 15 * Math.cos(Math.PI / 6);
+        const headSize = 15 * s;
+        const triangleBaseDist = headSize * Math.cos(Math.PI / 6);
         const lineEndX = arrowEndX - triangleBaseDist * Math.cos(arrowAngle);
         const lineEndY = arrowEndY - triangleBaseDist * Math.sin(arrowAngle);
 
         ctx.strokeStyle = colors.windArrow;
         ctx.fillStyle = colors.windArrow;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 4 * s;
         ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -457,8 +459,8 @@
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(arrowEndX, arrowEndY);
-        ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle - Math.PI / 6));
-        ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle + Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle + Math.PI / 6));
+        ctx.lineTo(arrowEndX - headSize * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - headSize * Math.sin(arrowAngle - Math.PI / 6));
+        ctx.lineTo(arrowEndX - headSize * Math.cos(arrowAngle + Math.PI / 6), arrowEndY - headSize * Math.sin(arrowAngle + Math.PI / 6));
         ctx.closePath();
         ctx.fill();
     }
@@ -681,6 +683,46 @@
         return (window.AviationWX && window.AviationWX.windCompassResize) || {};
     }
 
+    function getFullModeReferenceCssSize() {
+        const utils = getWindCompassResizeUtils();
+        return utils.FULL_MODE_REFERENCE_CSS_SIZE || 300;
+    }
+
+    function getFullModeScale(cssSize) {
+        const compute = getWindCompassResizeUtils().computeFullModeScale;
+        if (typeof compute === 'function') {
+            return compute(cssSize);
+        }
+        return cssSize / getFullModeReferenceCssSize();
+    }
+
+    /**
+     * Resize backing store for DPR and return logical (CSS) drawing coordinates.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @param {Object} [options]
+     * @returns {{ctx: CanvasRenderingContext2D, cssSize: number, scale: number, cx: number, cy: number, r: number}}
+     */
+    function prepareWindCompassFullModeContext(canvas, options) {
+        const ctx = canvas.getContext('2d');
+        const refSize = getFullModeReferenceCssSize();
+        const fallbackCss = (options && Number.isFinite(options.cssSize) && options.cssSize > 0)
+            ? options.cssSize
+            : (canvas._aviationwxCssSize || canvas.clientWidth || canvas._aviationwxWindCompassFallback || refSize);
+        const cssSize = syncWindCompassCanvasPixels(canvas, fallbackCss);
+        const dpr = canvas._aviationwxDpr || 1;
+        const scale = getFullModeScale(cssSize);
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cssSize, cssSize);
+
+        const cx = cssSize / 2;
+        const cy = cssSize / 2;
+        const r = cssSize / 2 - 20 * scale;
+
+        return { ctx: ctx, cssSize: cssSize, scale: scale, cx: cx, cy: cy, r: r };
+    }
+
     /**
      * Resize a wind compass canvas backing store to match its displayed box.
      *
@@ -716,7 +758,40 @@
             canvas.height = resolved.pixelSize;
         }
 
+        // Dashboard canvas has no width:100% rule; without explicit CSS size the
+        // backing-store dimensions become the displayed size. Embed compasses stay
+        // responsive via container CSS (wf-compass / wind-viz-container).
+        if (shouldPinCanvasDisplaySize(canvas)) {
+            canvas.style.width = resolved.cssSize + 'px';
+            canvas.style.height = resolved.cssSize + 'px';
+        } else {
+            canvas.style.width = '';
+            canvas.style.height = '';
+        }
+
+        canvas._aviationwxCssSize = resolved.cssSize;
+        canvas._aviationwxDpr = dpr;
+
         return resolved.cssSize;
+    }
+
+    /**
+     * Whether to set inline canvas dimensions after backing-store resize.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @returns {boolean}
+     */
+    function shouldPinCanvasDisplaySize(canvas) {
+        if (!canvas) {
+            return false;
+        }
+        if (canvas.id === 'windCanvas') {
+            return true;
+        }
+        if (canvas.closest('.wf-compass, .wind-viz-container')) {
+            return false;
+        }
+        return false;
     }
 
     /**
@@ -724,14 +799,15 @@
      *
      * @param {HTMLCanvasElement} canvas
      * @param {Function} drawFn Callback that draws using the current canvas pixels
-     * @param {number} [fallbackCssSize=240] CSS-pixel size when layout is not ready
+     * @param {number} [fallbackCssSize=300] CSS-pixel size when layout is not ready
      */
     function observeWindCompassCanvas(canvas, drawFn, fallbackCssSize) {
         if (!canvas || typeof drawFn !== 'function') {
             return;
         }
 
-        const fallback = fallbackCssSize || 240;
+        const fallback = fallbackCssSize || getFullModeReferenceCssSize();
+        canvas._aviationwxWindCompassFallback = fallback;
         canvas._aviationwxWindCompassRedraw = drawFn;
 
         const redraw = function() {
@@ -752,7 +828,6 @@
                 return;
             }
 
-            syncWindCompassCanvasPixels(canvas, fallback);
             latestDraw();
         };
 

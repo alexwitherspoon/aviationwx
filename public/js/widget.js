@@ -622,16 +622,14 @@
                     const fullMode = weather.wind_compass_full_mode || null;
                     const isFullModeCanvas = !!fullMode || !!canvas.closest('.wind-viz-container');
 
-                    const renderCompass = (cssSize) => {
+                    const renderCompass = () => {
+                        const cssSize = canvas._aviationwxCssSize || canvas.clientWidth || 300;
                         let size = 'medium';
                         if (cssSize >= 240) size = 'full';
                         else if (cssSize >= 100) size = 'large';
                         else if (cssSize >= 80) size = 'medium';
                         else if (cssSize >= 60) size = 'small';
                         else size = 'mini';
-
-                        const ctx = canvas.getContext('2d');
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                         const wd = weather.wind_direction;
                         const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
@@ -643,20 +641,15 @@
                             runways: runways,
                             isDark: isDark,
                             size: size,
+                            cssSize: cssSize,
                             fullMode: fullMode
                         });
                     };
 
                     if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
-                        window.AviationWX.observeWindCompassCanvas(canvas, () => {
-                            renderCompass(canvas.clientWidth || 240);
-                        }, 240);
+                        window.AviationWX.observeWindCompassCanvas(canvas, renderCompass, 300);
                     } else {
-                        const fallbackCssSize = isFullModeCanvas ? 240 : canvas.width;
-                        const cssSize = (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas)
-                            ? window.AviationWX.syncWindCompassCanvasPixels(canvas, fallbackCssSize)
-                            : fallbackCssSize;
-                        renderCompass(cssSize);
+                        renderCompass();
                     }
                 });
             };
