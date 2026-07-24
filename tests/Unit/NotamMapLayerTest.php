@@ -5,17 +5,15 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/notam/cache.php';
+require_once __DIR__ . '/../../lib/notam/map-aggregate-cache.php';
 require_once __DIR__ . '/../../lib/notam/map-layer-cache.php';
 
 /**
- * NOTAM TFR map layer (GeoJSON aggregation) unit tests.
+ * NOTAM TFR map layer (GeoJSON from map-airspace side-channel) unit tests.
  */
 final class NotamMapLayerTest extends TestCase
 {
     private string $cacheDir = '';
-
-    /** @var (callable(): void)|null Active rebuild lock holder subprocess release hook */
-    private $rebuildLockHolderRelease = null;
 
     protected function setUp(): void
     {
@@ -28,11 +26,6 @@ final class NotamMapLayerTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->rebuildLockHolderRelease !== null) {
-            ($this->rebuildLockHolderRelease)();
-            $this->rebuildLockHolderRelease = null;
-        }
-
         unset($GLOBALS['notamCacheTestDirectory']);
         if ($this->cacheDir === '' || !is_dir($this->cacheDir)) {
             return;
@@ -49,49 +42,25 @@ final class NotamMapLayerTest extends TestCase
     }
 
     /**
-     * @param array<int, array<string, mixed>> $features
+     * @param array<string, array<string, mixed>> $recordsById
      */
-    private function writeAggregateCache(array $features, int $mtime, ?string $buildToken = null): void
+    private function writeAirspaceAggregate(array $recordsById, int $mtime, ?string $buildToken = null): void
     {
-        $mapPath = getNotamTfrMapLayerCachePath();
+        $path = getNotamMapAirspaceAggregatePath();
         $json = json_encode([
-            'type' => 'FeatureCollection',
-            'features' => $features,
-            'generated_at' => $mtime,
-            'cache_ttl_seconds' => 3600,
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'records' => $recordsById,
+            'updated_at' => $mtime,
             'map_layer_build_token' => $buildToken ?? notamTfrMapLayerCurrentBuildToken(),
         ], JSON_UNESCAPED_SLASHES);
         if ($json === false) {
-            self::fail('Could not encode NOTAM map aggregate test cache JSON');
-        }
-        if (file_put_contents($mapPath, $json) === false) {
-            self::fail('Could not write NOTAM map aggregate test cache: ' . $mapPath);
-        }
-        if (!touch($mapPath, $mtime)) {
-            self::fail('Could not set mtime on NOTAM map aggregate test cache: ' . $mapPath);
-        }
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $notams
-     */
-    private function writePerAirportNotamCache(string $airportId, array $notams): void
-    {
-        $path = notamCacheFilePath($airportId);
-        $fetchedAt = time();
-        $payload = [
-            'notams' => $notams,
-            'fetched_at' => $fetchedAt,
-        ];
-        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            self::fail('Could not encode per-airport NOTAM test cache JSON for ' . $airportId);
+            self::fail('Could not encode map-airspace test aggregate JSON');
         }
         if (file_put_contents($path, $json) === false) {
-            self::fail('Could not write per-airport NOTAM test cache: ' . $path);
+            self::fail('Could not write map-airspace test aggregate: ' . $path);
         }
-        if (!touch($path, $fetchedAt)) {
-            self::fail('Could not set mtime on per-airport NOTAM test cache: ' . $path);
+        if (!touch($path, $mtime)) {
+            self::fail('Could not set mtime on map-airspace test aggregate: ' . $path);
         }
     }
 
@@ -113,135 +82,10 @@ final class NotamMapLayerTest extends TestCase
         ];
     }
 
-    private static function removeTree(string $dir): void
-    {
-        foreach (scandir($dir) ?: [] as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $item;
-            is_dir($path) ? self::removeTree($path) : @unlink($path);
-        }
-        @rmdir($dir);
-    }
-
-    /**
-     * Start a child PHP process that holds the rebuild flock until released.
-     *
-     * Uses a separate process so LOCK_NB contention matches another worker (not
-     * same-process flock upgrade behavior on some platforms).
-     *
-     * @return callable Release function; also invoked from tearDown on failure.
-     */
-    private function startRebuildLockHolder(): callable
-    {
-        if ($this->rebuildLockHolderRelease !== null) {
-            self::fail('Rebuild lock holder subprocess already active');
-        }
-
-        $lockPath = getNotamTfrMapLayerRebuildLockPath();
-        $lockDir = dirname($lockPath);
-        if (!is_dir($lockDir) && !mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
-            self::fail('Could not create NOTAM map rebuild lock directory: ' . $lockDir);
-        }
-
-        $helperScript = $this->cacheDir . '/hold-rebuild-lock.php';
-        $readyPath = $this->cacheDir . '/hold-rebuild-lock.ready';
-        $written = file_put_contents($helperScript, <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-$lockPath = $argv[1] ?? '';
-$readyPath = $argv[2] ?? '';
-if ($lockPath === '' || $readyPath === '') {
-    fwrite(STDERR, "missing lock or ready path\n");
-    exit(1);
-}
-
-$fp = fopen($lockPath, 'c+');
-if ($fp === false || !flock($fp, LOCK_EX)) {
-    fwrite(STDERR, "lock acquire failed\n");
-    exit(1);
-}
-
-if (file_put_contents($readyPath, 'ready', LOCK_EX) === false) {
-    fwrite(STDERR, "ready marker write failed\n");
-    exit(1);
-}
-
-while (!feof(STDIN)) {
-    $chunk = fread(STDIN, 1024);
-    if ($chunk === false) {
-        break;
-    }
-}
-
-@unlink($readyPath);
-flock($fp, LOCK_UN);
-fclose($fp);
-PHP
-        );
-        if ($written === false) {
-            self::fail('Could not write rebuild lock holder script: ' . $helperScript);
-        }
-
-        $phpBinary = defined('PHP_BINARY') ? PHP_BINARY : 'php';
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'r'],
-            2 => ['pipe', 'w'],
-        ];
-        $process = proc_open([$phpBinary, $helperScript, $lockPath, $readyPath], $descriptors, $pipes);
-        if (!is_resource($process)) {
-            @unlink($helperScript);
-            self::fail('Could not start rebuild lock holder subprocess');
-        }
-
-        $deadline = microtime(true) + 5.0;
-        while (!is_file($readyPath) && microtime(true) < $deadline) {
-            usleep(10_000);
-        }
-        if (!is_file($readyPath)) {
-            fclose($pipes[0]);
-            fclose($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[2]);
-            proc_close($process);
-            @unlink($helperScript);
-            self::fail('Rebuild lock holder subprocess did not become ready: ' . trim((string) $stderr));
-        }
-
-        $release = function () use ($process, $pipes, $helperScript, $readyPath): void {
-            if (isset($pipes[0]) && is_resource($pipes[0])) {
-                fclose($pipes[0]);
-            }
-            if (isset($pipes[1]) && is_resource($pipes[1])) {
-                fclose($pipes[1]);
-            }
-            if (isset($pipes[2]) && is_resource($pipes[2])) {
-                fclose($pipes[2]);
-            }
-            proc_close($process);
-            @unlink($helperScript);
-            @unlink($readyPath);
-        };
-
-        $this->rebuildLockHolderRelease = $release;
-
-        return function () use ($release): void {
-            if ($this->rebuildLockHolderRelease === null) {
-                return;
-            }
-            $release();
-            $this->rebuildLockHolderRelease = null;
-        };
-    }
-
     /**
      * @return array<int, array<string, mixed>> NOTAM rows for a drawable circle TFR
      */
-    private function drawableTfrNotamRows(int $now, string $notamId = 'LOCK1/2026'): array
+    private function drawableTfrNotamRows(int $now, string $notamId = 'MAP1/2026'): array
     {
         return [
             [
@@ -253,42 +97,36 @@ PHP
         ];
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_MissingMap_ReturnsTrue(): void
+    /**
+     * @return array<string, mixed>
+     */
+    private function drawableTfrAirspaceRecord(int $now, string $notamId = 'MAP1/2026', string $airportId = 's83'): array
     {
-        $config = $this->minimalListedAirportConfig();
-        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(0, $config, 3600));
+        $notam = $this->drawableTfrNotamRows($now, $notamId)[0];
+        $record = notamAirspaceRecordFromNotam($notam, $airportId, 'UTC');
+        if ($record === null) {
+            self::fail('Expected drawable airspace record for ' . $notamId);
+        }
+
+        return $record;
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_FreshMapAndSources_ReturnsFalse(): void
+    private function sampleTfrText(): string
     {
-        $config = $this->minimalListedAirportConfig();
-        $now = time();
-        $this->writePerAirportNotamCache('s83', []);
-        $this->writeAggregateCache([], $now);
-
-        $this->assertFalse(notamTfrMapLayerAggregateNeedsRebuild(
-            $now,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            $now
-        ));
+        return 'ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS '
+            . 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 413900N1122300W (OGD319029) STATIC GROUND BASED ROCKET ENGINE TEST.';
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_StaleBuildToken_ReturnsTrue(): void
+    private static function removeTree(string $dir): void
     {
-        $config = $this->minimalListedAirportConfig();
-        $now = time();
-        $this->writePerAirportNotamCache('s83', []);
-        $this->writeAggregateCache([], $now, 'stale-token');
-
-        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
-            $now,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            $now
-        ));
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            is_dir($path) ? self::removeTree($path) : @unlink($path);
+        }
+        @rmdir($dir);
     }
 
     public function testNotamTfrMapLayerCurrentBuildToken_WithGitSha_IncludesLogicVersion(): void
@@ -309,20 +147,20 @@ PHP
         }
     }
 
-    public function testNotamTfrMapLayerAggregateBuildTokenMatches_RejectsLegacyShaOnlyToken(): void
+    public function testNotamMapAirspaceAggregateBuildTokenMatches_RejectsLegacyShaOnlyToken(): void
     {
         $originalGitSha = getenv('GIT_SHA');
         putenv('GIT_SHA=abcdef12');
         try {
             $legacy = [
-                'type' => 'FeatureCollection',
-                'features' => [],
+                'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+                'records' => [],
                 'map_layer_build_token' => 'abcdef1',
             ];
-            $this->assertFalse(notamTfrMapLayerAggregateBuildTokenMatches($legacy));
+            $this->assertFalse(notamMapAirspaceAggregateBuildTokenMatches($legacy));
 
             $legacy['map_layer_build_token'] = notamTfrMapLayerCurrentBuildToken();
-            $this->assertTrue(notamTfrMapLayerAggregateBuildTokenMatches($legacy));
+            $this->assertTrue(notamMapAirspaceAggregateBuildTokenMatches($legacy));
         } finally {
             if ($originalGitSha === false) {
                 putenv('GIT_SHA');
@@ -332,488 +170,264 @@ PHP
         }
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_LegacyShaOnlyToken_ReturnsTrue(): void
+    public function testNotamMapAirspaceAggregateIsStale_MissingFile_ReturnsTrue(): void
     {
-        $originalGitSha = getenv('GIT_SHA');
-        putenv('GIT_SHA=abcdef12');
-        try {
-            $config = $this->minimalListedAirportConfig();
-            $now = time();
-            $this->writePerAirportNotamCache('s83', []);
-            $this->writeAggregateCache([], $now, 'abcdef1');
-
-            $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
-                $now,
-                $config,
-                3600,
-                notamTfrMapLayerReadAggregateCache(),
-                $now
-            ));
-        } finally {
-            if ($originalGitSha === false) {
-                putenv('GIT_SHA');
-            } else {
-                putenv('GIT_SHA=' . $originalGitSha);
-            }
-        }
+        $this->assertTrue(notamMapAirspaceAggregateIsStale(3600));
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_NewerSource_ReturnsTrue(): void
+    public function testNotamMapAirspaceAggregateIsStale_FreshFile_ReturnsFalse(): void
     {
-        $config = $this->minimalListedAirportConfig();
-        $mapTime = time() - 100;
-        $this->writeAggregateCache([], $mapTime);
-
-        $this->writePerAirportNotamCache('s83', []);
-        touch(notamCacheFilePath('s83'), time());
-
-        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
-            $mapTime,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            time()
-        ));
-    }
-
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_ExpiredTtl_ReturnsTrue(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $mapTime = time() - 4000;
-        $this->writeAggregateCache([], $mapTime);
-        $this->writePerAirportNotamCache('s83', []);
-        touch(notamCacheFilePath('s83'), $mapTime);
-
-        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
-            $mapTime,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            $mapTime
-        ));
-    }
-
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_EmptyAggregateWithDrawableSource_ReturnsTrue(): void
-    {
-        $config = $this->minimalListedAirportConfig();
         $now = time();
-        $tfrText = $this->sampleTfrText();
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'GAP1/2026',
-                'text' => $tfrText,
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
-            ],
-        ]);
-        touch(notamCacheFilePath('s83'), $now - 120);
-        $this->writeAggregateCache([], $now);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+        $this->writeAirspaceAggregate([], $now);
+        $this->assertFalse(notamMapAirspaceAggregateIsStale(3600, $now));
+    }
 
-        $this->assertTrue(notamTfrMapLayerAggregateNeedsRebuild(
-            $now,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            $listedCaches['newest_mtime'],
-            $listedCaches,
+    public function testNotamMapAirspaceAggregateIsStale_ExpiredTtl_ReturnsTrue(): void
+    {
+        $now = time();
+        $this->writeAirspaceAggregate([], $now - 4000);
+        $this->assertTrue(notamMapAirspaceAggregateIsStale(3600, $now));
+    }
+
+    public function testNotamAirspaceRecordFromNotam_SetsFieldSourcesForDrawableTfr(): void
+    {
+        $now = time();
+        $record = $this->drawableTfrAirspaceRecord($now, 'SRC1/2026');
+
+        $this->assertSame('tfr', $record['restriction_kind']);
+        $this->assertTrue($record['capabilities']['map']);
+        $this->assertArrayHasKey('geometry', $record['field_sources']);
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $record['field_sources']['geometry']);
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $record['field_sources']['notam_id']);
+    }
+
+    public function testNotamMapAirspaceAggregateUpsertFromFetch_WritesDrawableTfr(): void
+    {
+        $now = time();
+        $config = $this->minimalListedAirportConfig();
+        $airport = $config['airports']['s83'];
+
+        notamMapAirspaceAggregateUpsertFromFetch('s83', $airport, $this->drawableTfrNotamRows($now, 'UPS1/2026'));
+
+        $envelope = notamMapAirspaceAggregateRead();
+        $this->assertNotNull($envelope);
+        $this->assertArrayHasKey('UPS1/2026', $envelope['records']);
+        $this->assertSame(notamTfrMapLayerCurrentBuildToken(), $envelope['map_layer_build_token'] ?? null);
+    }
+
+    public function testSideChannel_DrawableTfrNotAirportRelevant_AppearsOnMapNotInBannerFilter(): void
+    {
+        $now = time();
+        $config = $this->minimalListedAirportConfig();
+        $airport = $config['airports']['s83'];
+        $notams = $this->drawableTfrNotamRows($now, 'FAR1/2026');
+
+        notamMapAirspaceAggregateUpsertFromFetch('s83', $airport, $notams);
+
+        $filtered = filterRelevantNotams($notams, $airport);
+        $this->assertSame([], $filtered);
+
+        $this->writeAirspaceAggregate(
+            ['FAR1/2026' => $this->drawableTfrAirspaceRecord($now, 'FAR1/2026')],
             $now
-        ));
+        );
+
+        $payload = notamTfrMapLayerServeOrRebuild();
+        $this->assertCount(1, $payload['features']);
+        $this->assertSame('FAR1/2026', $payload['features'][0]['properties']['notam_id'] ?? null);
     }
 
-    public function testNotamTfrMapLayerAggregateNeedsRebuild_EmptyAggregateWithoutDrawableSource_ReturnsFalse(): void
+    public function testNotamTfrMapLayerServeOrRebuild_MissingStore_FailClosed(): void
     {
-        $config = $this->minimalListedAirportConfig();
+        $payload = notamTfrMapLayerServeOrRebuild();
+
+        $this->assertSame([], $payload['features']);
+        $this->assertTrue($payload['failclosed'] ?? false);
+        $this->assertSame('faa_nms_side_channel', $payload['coverage_scope'] ?? null);
+    }
+
+    public function testNotamTfrMapLayerServeOrRebuild_StaleStore_FailClosed(): void
+    {
         $now = time();
-        $this->writePerAirportNotamCache('s83', []);
-        touch(notamCacheFilePath('s83'), $now - 120);
-        $this->writeAggregateCache([], $now);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+        $record = $this->drawableTfrAirspaceRecord($now, 'OLD1/2026');
+        $this->writeAirspaceAggregate(['OLD1/2026' => $record], $now - 4000);
 
-        $this->assertFalse(notamTfrMapLayerAggregateNeedsRebuild(
-            $now,
-            $config,
-            3600,
-            notamTfrMapLayerReadAggregateCache(),
-            $listedCaches['newest_mtime'],
-            $listedCaches,
-            $now
-        ));
+        $payload = notamTfrMapLayerServeOrRebuild();
+
+        $this->assertSame([], $payload['features']);
+        $this->assertTrue($payload['failclosed'] ?? false);
     }
 
-    public function testNotamTfrMapLayerResolveCachedGeometry_RebuildsWhenAggregateEmptyButSourcesHaveDrawableTfr(): void
+    public function testNotamTfrMapLayerServeOrRebuild_StaleBuildToken_FailClosed(): void
     {
-        $config = $this->minimalListedAirportConfig();
         $now = time();
-        $tfrText = $this->sampleTfrText();
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'GAP2/2026',
-                'text' => $tfrText,
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
-            ],
-        ]);
-        touch(notamCacheFilePath('s83'), $now - 120);
-        $this->writeAggregateCache([], $now);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+        $record = $this->drawableTfrAirspaceRecord($now, 'TOK1/2026');
+        $this->writeAirspaceAggregate(['TOK1/2026' => $record], $now, 'stale-token');
 
-        $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
+        $payload = notamTfrMapLayerServeOrRebuild();
 
-        $this->assertNotEmpty($geometry['features']);
-        $this->assertSame('GAP2/2026', $geometry['features'][0]['properties']['notam_id'] ?? null);
+        $this->assertSame([], $payload['features']);
+        $this->assertTrue($payload['failclosed'] ?? false);
     }
 
-    public function testNotamTfrMapLayerRebuildAggregateLocked_ReturnsNullWhenRebuildLockHeld(): void
+    public function testNotamTfrMapLayerServeOrRebuild_FreshStore_ReturnsFeature(): void
     {
-        $config = $this->minimalListedAirportConfig();
         $now = time();
-        $this->writePerAirportNotamCache('s83', $this->drawableTfrNotamRows($now));
-        touch(notamCacheFilePath('s83'), $now);
-        $this->writeAggregateCache([], $now - 120);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
-        $mapMtime = notamTfrMapLayerAggregateCacheMtime();
+        $record = $this->drawableTfrAirspaceRecord($now, 'LIVE1/2026');
+        $this->writeAirspaceAggregate(['LIVE1/2026' => $record], $now);
 
-        $releaseLock = $this->startRebuildLockHolder();
-        try {
-            $this->assertNull(notamTfrMapLayerRebuildAggregateLocked(
-                $config,
-                $mapMtime,
-                3600,
-                $listedCaches,
-                notamTfrMapLayerReadAggregateCache()
-            ));
-        } finally {
-            $releaseLock();
-        }
+        $payload = notamTfrMapLayerServeOrRebuild();
+
+        $this->assertCount(1, $payload['features']);
+        $this->assertSame('LIVE1/2026', $payload['features'][0]['properties']['notam_id'] ?? null);
+        $this->assertSame('faa_nms_side_channel', $payload['coverage_scope'] ?? null);
+        $this->assertArrayHasKey('coverage_note', $payload);
+        $this->assertFalse($payload['failclosed'] ?? false);
     }
 
-    public function testNotamTfrMapLayerResolveCachedGeometry_WhenRebuildLockHeld_ServesExistingStaleAggregate(): void
+    public function testNotamTfrMapLayerBuildPayloadFromAirspaceStore_UsesCachedStatusWhenStartTimeMissing(): void
     {
-        $config = $this->minimalListedAirportConfig();
         $now = time();
-        $this->writePerAirportNotamCache('s83', $this->drawableTfrNotamRows($now, 'WAIT1/2026'));
-        touch(notamCacheFilePath('s83'), $now);
-        $this->writeAggregateCache([], $now - 120);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
+        $notam = [
+            'id' => 'CACHE1/2026',
+            'text' => $this->sampleTfrText(),
+            'start_time_utc' => '',
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+            'status' => 'active',
+        ];
+        $record = notamAirspaceRecordFromNotam($notam, 's83', 'UTC');
+        $this->assertNotNull($record);
 
-        $releaseLock = $this->startRebuildLockHolder();
-        try {
-            $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
+        $envelope = [
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'records' => ['CACHE1/2026' => $record],
+            'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
+        ];
 
-            $this->assertSame([], $geometry['features']);
-        } finally {
-            $releaseLock();
-        }
-
-        $geometryAfterLock = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
-        $this->assertNotEmpty($geometryAfterLock['features']);
-        $this->assertSame('WAIT1/2026', $geometryAfterLock['features'][0]['properties']['notam_id'] ?? null);
-    }
-
-    public function testNotamTfrMapLayerResolveCachedGeometry_WhenRebuildLockHeld_ReturnsRefreshedAggregateFromDisk(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $now = time();
-        $this->writePerAirportNotamCache('s83', $this->drawableTfrNotamRows($now, 'WAIT2/2026'));
-        touch(notamCacheFilePath('s83'), $now);
-        $this->writeAggregateCache([], $now - 120);
-
-        $releaseLock = $this->startRebuildLockHolder();
-        try {
-            $refreshedFeatures = [
-                [
-                    'type' => 'Feature',
-                    'id' => 'tfr-WAIT2',
-                    'geometry' => [
-                        'type' => 'Point',
-                        'coordinates' => [-112.38, 41.65],
-                    ],
-                    'properties' => [
-                        'notam_id' => 'WAIT2/2026',
-                        'status' => 'active',
-                        'geometry_kind' => 'circle',
-                        'radius_nm' => 5.0,
-                    ],
-                ],
-            ];
-            $this->writeAggregateCache($refreshedFeatures, $now - 60);
-
-            $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
-            $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
-
-            $this->assertCount(1, $geometry['features']);
-            $this->assertSame('WAIT2/2026', $geometry['features'][0]['properties']['notam_id'] ?? null);
-        } finally {
-            $releaseLock();
-        }
-    }
-
-    public function testNotamTfrMapLayerRebuildAggregateBlocking_ColdStartWritesAggregateFile(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $now = time();
-        $mapPath = getNotamTfrMapLayerCachePath();
-        $this->assertFileDoesNotExist($mapPath);
-
-        $this->writePerAirportNotamCache('s83', $this->drawableTfrNotamRows($now, 'COLD1/2026'));
-        touch(notamCacheFilePath('s83'), $now);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
-
-        $payload = notamTfrMapLayerRebuildAggregateBlocking($config, 3600, $listedCaches);
-
-        $this->assertNotNull($payload);
-        $this->assertFileExists($mapPath);
-        $this->assertNotEmpty($payload['features']);
-        $this->assertSame('COLD1/2026', $payload['features'][0]['properties']['notam_id'] ?? null);
-        $aggregate = notamTfrMapLayerReadAggregateCache();
-        $this->assertNotNull($aggregate);
-        $this->assertSame(notamTfrMapLayerCurrentBuildToken(), $aggregate['map_layer_build_token'] ?? null);
-    }
-
-    public function testNotamTfrMapLayerResolveCachedGeometry_ColdStartWhenAggregateMissingRebuildsOnDisk(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $now = time();
-        $mapPath = getNotamTfrMapLayerCachePath();
-        $this->assertFileDoesNotExist($mapPath);
-
-        $this->writePerAirportNotamCache('s83', $this->drawableTfrNotamRows($now, 'COLD2/2026'));
-        touch(notamCacheFilePath('s83'), $now);
-        $listedCaches = notamTfrMapLayerLoadListedAirportCaches($config);
-
-        $geometry = notamTfrMapLayerResolveCachedGeometry($config, 3600, $listedCaches);
-
-        $this->assertFileExists($mapPath);
-        $this->assertNotEmpty($geometry['features']);
-        $this->assertSame('COLD2/2026', $geometry['features'][0]['properties']['notam_id'] ?? null);
-    }
-
-    private function sampleTfrText(): string
-    {
-        return 'ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS '
-            . 'WITHIN AN AREA DEFINED AS 5NM RADIUS OF 413900N1122300W (OGD319029) STATIC GROUND BASED ROCKET ENGINE TEST.';
-    }
-
-    public function testNotamTfrMapLayerBuildPayload_UsesCachedStatusWhenStartTimeMissing(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $tfrText = $this->sampleTfrText();
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'CACHE1/2026',
-                'text' => $tfrText,
-                'start_time_utc' => '',
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
-                'status' => 'active',
-            ],
-        ]);
-
-        $payload = notamTfrMapLayerBuildPayload($config);
+        $payload = notamTfrMapLayerBuildPayloadFromAirspaceStore($envelope, $now);
 
         $this->assertCount(1, $payload['features']);
         $this->assertSame('active', $payload['features'][0]['properties']['status'] ?? null);
         $this->assertSame('active', $payload['features'][0]['properties']['map_layer_style'] ?? null);
     }
 
-    public function testNotamTfrMapLayerBuildPayload_SkipsUnknownCachedStatusWhenStartTimeMissing(): void
+    public function testNotamTfrMapLayerBuildPayloadFromAirspaceStore_SkipsUnknownCachedStatusWhenStartTimeMissing(): void
     {
-        $config = $this->minimalListedAirportConfig();
-        $tfrText = $this->sampleTfrText();
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'CACHE2/2026',
-                'text' => $tfrText,
-                'start_time_utc' => '',
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 7200),
-                'status' => 'unknown',
-            ],
-        ]);
+        $now = time();
+        $notam = [
+            'id' => 'CACHE2/2026',
+            'text' => $this->sampleTfrText(),
+            'start_time_utc' => '',
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+            'status' => 'unknown',
+        ];
+        $record = notamAirspaceRecordFromNotam($notam, 's83', 'UTC');
+        $this->assertNotNull($record);
 
-        $payload = notamTfrMapLayerBuildPayload($config);
+        $envelope = [
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'records' => ['CACHE2/2026' => $record],
+            'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
+        ];
+
+        $payload = notamTfrMapLayerBuildPayloadFromAirspaceStore($envelope, $now);
 
         $this->assertSame([], $payload['features']);
     }
 
-    public function testNotamTfrMapLayerRevalidatePayload_UpdatesStatusAndPromotesActiveOnDedup(): void
+    public function testNotamTfrMapLayerBuildPayloadFromAirspaceStore_DropsExpiredFeature(): void
     {
-        $config = $this->minimalListedAirportConfig();
+        $now = strtotime('2026-05-16T10:00:00Z');
+        $notam = [
+            'id' => 'T1/2026',
+            'text' => $this->sampleTfrText(),
+            'start_time_utc' => '2026-05-15T18:00:00Z',
+            'end_time_utc' => '2026-05-15T22:00:00Z',
+            'effective_segments' => [
+                [
+                    'start_time_utc' => '2026-05-15T18:00:00Z',
+                    'end_time_utc' => '2026-05-15T22:00:00Z',
+                ],
+            ],
+        ];
+        $record = notamAirspaceRecordFromNotam($notam, 's83', 'UTC');
+        $this->assertNotNull($record);
+
+        $envelope = [
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'records' => ['T1/2026' => $record],
+            'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
+        ];
+
+        $payload = notamTfrMapLayerBuildPayloadFromAirspaceStore($envelope, $now);
+
+        $this->assertSame([], $payload['features']);
+    }
+
+    public function testNotamTfrMapLayerBuildPayloadFromAirspaceStore_PromotesActiveOnDedup(): void
+    {
         $now = strtotime('2026-05-15T20:00:00Z');
         $tfrText = $this->sampleTfrText();
         $segment = [
             'start_time_utc' => '2026-05-15T18:00:00Z',
             'end_time_utc' => '2026-05-15T22:00:00Z',
         ];
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'A3389/2026',
-                'text' => $tfrText,
-                'start_time_utc' => '2026-05-15T18:00:00Z',
-                'end_time_utc' => '2026-05-15T22:00:00Z',
-                'effective_segments' => [$segment],
-            ],
-            [
-                'id' => '8821/2026',
-                'text' => $tfrText,
-                'start_time_utc' => '2026-05-16T18:00:00Z',
-                'end_time_utc' => '2026-05-16T22:00:00Z',
-                'effective_segments' => [
-                    [
-                        'start_time_utc' => '2026-05-16T18:00:00Z',
-                        'end_time_utc' => '2026-05-16T22:00:00Z',
-                    ],
-                ],
-            ],
-        ]);
-
-        $cached = [
-            'type' => 'FeatureCollection',
-            'features' => [
+        $activeNotam = [
+            'id' => 'A3389/2026',
+            'text' => $tfrText,
+            'start_time_utc' => '2026-05-15T18:00:00Z',
+            'end_time_utc' => '2026-05-15T22:00:00Z',
+            'effective_segments' => [$segment],
+        ];
+        $upcomingNotam = [
+            'id' => '8821/2026',
+            'text' => $tfrText,
+            'start_time_utc' => '2026-05-16T18:00:00Z',
+            'end_time_utc' => '2026-05-16T22:00:00Z',
+            'effective_segments' => [
                 [
-                    'type' => 'Feature',
-                    'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
-                    'properties' => [
-                        'geometry_kind' => 'circle',
-                        'radius_nm' => 7.0,
-                        'status' => 'upcoming_future',
-                        'map_layer_style' => 'upcoming',
-                        'notam_id' => '8821/2026',
-                        'airport_id' => 's83',
-                    ],
-                ],
-                [
-                    'type' => 'Feature',
-                    'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
-                    'properties' => [
-                        'geometry_kind' => 'circle',
-                        'radius_nm' => 7.0,
-                        'status' => 'upcoming_future',
-                        'map_layer_style' => 'upcoming',
-                        'notam_id' => 'A3389/2026',
-                        'airport_id' => 's83',
-                    ],
+                    'start_time_utc' => '2026-05-16T18:00:00Z',
+                    'end_time_utc' => '2026-05-16T22:00:00Z',
                 ],
             ],
-            'generated_at' => $now - 500,
-            'cache_ttl_seconds' => 3600,
         ];
 
-        $out = notamTfrMapLayerRevalidatePayload($cached, $config, $now);
-
-        $this->assertCount(1, $out['features']);
-        $this->assertSame('active', $out['features'][0]['properties']['status']);
-        $this->assertSame('active', $out['features'][0]['properties']['map_layer_style']);
-        $this->assertSame('A3389/2026', $out['features'][0]['properties']['notam_id']);
-        $this->assertSame($now, $out['generated_at']);
-    }
-
-    public function testNotamTfrMapLayerRevalidatePayload_DropsExpiredFeature(): void
-    {
-        $config = $this->minimalListedAirportConfig();
-        $now = strtotime('2026-05-16T10:00:00Z');
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'T1/2026',
-                'text' => $this->sampleTfrText(),
-                'start_time_utc' => '2026-05-15T18:00:00Z',
-                'end_time_utc' => '2026-05-15T22:00:00Z',
-                'effective_segments' => [
-                    [
-                        'start_time_utc' => '2026-05-15T18:00:00Z',
-                        'end_time_utc' => '2026-05-15T22:00:00Z',
-                    ],
-                ],
+        $envelope = [
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'records' => [
+                'A3389/2026' => notamAirspaceRecordFromNotam($activeNotam, 's83', 'UTC'),
+                '8821/2026' => notamAirspaceRecordFromNotam($upcomingNotam, 's83', 'UTC'),
             ],
-        ]);
-
-        $cached = [
-            'type' => 'FeatureCollection',
-            'features' => [
-                [
-                    'type' => 'Feature',
-                    'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
-                    'properties' => [
-                        'geometry_kind' => 'circle',
-                        'radius_nm' => 7.0,
-                        'status' => 'active',
-                        'map_layer_style' => 'active',
-                        'notam_id' => 'T1/2026',
-                        'airport_id' => 's83',
-                    ],
-                ],
-            ],
-            'generated_at' => $now - 500,
-            'cache_ttl_seconds' => 3600,
+            'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
         ];
 
-        $out = notamTfrMapLayerRevalidatePayload($cached, $config, $now);
+        $payload = notamTfrMapLayerBuildPayloadFromAirspaceStore($envelope, $now);
 
-        $this->assertSame([], $out['features']);
+        $this->assertCount(1, $payload['features']);
+        $this->assertSame('active', $payload['features'][0]['properties']['status']);
+        $this->assertSame('A3389/2026', $payload['features'][0]['properties']['notam_id']);
     }
 
-    public function testNotamTfrMapLayerRevalidatePayload_DropsNonTfrRow(): void
+    public function testNotamTfrMapLayerFeatureFromAirspaceRecord_IncludesBannerHeadlineForFireTfr(): void
     {
-        $config = $this->minimalListedAirportConfig();
         $now = time();
-        $this->writePerAirportNotamCache('s83', [
-            [
-                'id' => 'RWY1/2026',
-                'text' => 'RWY 17 CLSD',
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 3600),
-            ],
-        ]);
-
-        $cached = [
-            'type' => 'FeatureCollection',
-            'features' => [
-                [
-                    'type' => 'Feature',
-                    'geometry' => ['type' => 'Point', 'coordinates' => [-116.08, 47.52]],
-                    'properties' => [
-                        'geometry_kind' => 'circle',
-                        'radius_nm' => 7.0,
-                        'status' => 'active',
-                        'map_layer_style' => 'active',
-                        'notam_id' => 'RWY1/2026',
-                        'airport_id' => 's83',
-                    ],
-                ],
-            ],
-            'generated_at' => $now - 500,
-            'cache_ttl_seconds' => 3600,
+        $notam = [
+            'id' => '8339/2026',
+            'text' => 'ID..AIRSPACE 34NM SE COEUR D\'ALENE, ID..TEMPORARY FLIGHT RESTRICTIONS. '
+                . 'PURSUANT TO 14 CFR SECTION 91.137(A)(2) WI AN AREA DEFINED AS 7NM RADIUS OF '
+                . '473130N1160445W SFC-7500FT GOLD RUN FIRE',
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
         ];
+        $record = notamAirspaceRecordFromNotam($notam, 's83', 'UTC');
+        $this->assertNotNull($record);
 
-        $out = notamTfrMapLayerRevalidatePayload($cached, $config, $now);
-
-        $this->assertSame([], $out['features']);
-    }
-
-    public function testNotamTfrMapLayerServeOrRebuild_BuildsFeatureFromListedAirportCache(): void
-    {
-        $config = loadConfig();
-        if ($config === null || !isset($config['airports']['kspb'])) {
-            $this->markTestSkipped('Fixture config missing kspb');
-        }
-
-        $now = time();
-        $tfrText = $this->sampleTfrText();
-        $this->writePerAirportNotamCache('kspb', [
-            [
-                'id' => 'TFR1/2026',
-                'text' => $tfrText,
-                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
-                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
-            ],
-        ]);
-
-        $payload = notamTfrMapLayerServeOrRebuild();
-
-        $this->assertNotEmpty($payload['features']);
-        $this->assertSame('TFR1/2026', $payload['features'][0]['properties']['notam_id'] ?? null);
-        $aggregate = notamTfrMapLayerReadAggregateCache();
-        $this->assertNotNull($aggregate);
-        $this->assertSame(notamTfrMapLayerCurrentBuildToken(), $aggregate['map_layer_build_token'] ?? null);
+        $feature = notamTfrMapLayerFeatureFromAirspaceRecord($record, $now);
+        $this->assertNotNull($feature);
+        $headline = $feature['properties']['banner_headline'] ?? '';
+        $this->assertStringContainsString('Fire TFR', $headline);
+        $this->assertStringContainsString('7 NM radius', $headline);
+        $this->assertStringContainsString('SFC', $headline);
     }
 
     public function testNotamTfrMapLayerGeoJsonRingFromVertices_ClosedSquare_ReturnsClosedRing(): void

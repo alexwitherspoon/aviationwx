@@ -1870,15 +1870,18 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 
 ### Airports directory TFR map layer
 
-The airports network map (`pages/airports.php`, served at `airports.aviationwx.org`) draws geo-relevant TFRs from an aggregated GeoJSON layer. This path is separate from per-airport dashboard banners: banners list every deduplicated event row; the map shows one drawable shape per geometry.
+The airports network map (`pages/airports.php`, served at `airports.aviationwx.org`) draws geo-relevant TFRs from an aggregated GeoJSON layer. This path is separate from per-airport dashboard banners: banners list every deduplicated event row filtered for airport relevance; the map shows drawable TFR geometry from a national side-channel store.
 
-**Build** (`notamTfrMapLayerBuildPayload()` in `lib/notam/map-layer.php`; cache orchestration in `lib/notam/map-layer-cache.php`):
+**Side-channel ingest** (`notamMapAirspaceAggregateUpsertFromFetch()` in `lib/notam/map-aggregate-cache.php`, called from `fetchNotamsForAirport()` in `lib/notam/fetcher.php`):
 
-1. Read each listed airport NOTAM cache (`cache/notam/{airport_id}.json`).
-2. Keep TFR rows where `classifyNotamDisplayStatusAt()` is not `expired` or `unknown`.
-3. Skip duplicate global NOTAM `id` values while scanning caches.
-4. Emit a GeoJSON Feature per row: polygon outer ring from decoded vertices, or a Point + `radius_nm` for circle TFRs (client draws `L.circle` in meters).
-5. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
+1. After NMS parse and dedup, before `filterRelevantNotams()`, upsert drawable TFR rows into `cache/notam/map-airspace.json` as normalized AirspaceRecord entries (`capabilities.map`, embedded `notam`, `field_sources`, `source_airport_id`).
+2. Per-airport banner caches (`cache/notam/{airport_id}.json`) still receive only relevance-filtered rows.
+
+**Project** (`notamTfrMapLayerBuildPayloadFromAirspaceStore()` in `lib/notam/map-layer.php`; serve entry `notamTfrMapLayerServeOrRebuild()` in `lib/notam/map-layer-cache.php`):
+
+1. Read `map-airspace.json` when present, fresh (within `getNotamCacheTtlSeconds()`), and `map_layer_build_token` matches (`{deploy SHA}-v{N}` from {@see getGitSha()} and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}, or `logic-v{N}` when SHA is unavailable). Otherwise fail-closed (empty features, `failclosed: true`).
+2. For each record with `capabilities.map`, revalidate status from the embedded NOTAM (`revalidateNotamStatus()` / `isTfr()` parity with `api/notam.php`), emit a GeoJSON Feature (polygon outer ring or Point + `radius_nm` for circles).
+3. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
 
    | Rank (`NOTAM_TFR_MAP_STATUS_PRIORITY`) | Status |
    |----------------------------------------|--------|
@@ -1895,14 +1898,14 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
 
 **Serve** (`notamTfrMapLayerServeOrRebuild()`):
 
-1. **Shared disk cache** (`cache/notam/tfr-map-layer.json`, `lib/notam/map-layer-cache.php`) stores drawable geometry and `map_layer_build_token` (`{deploy SHA}-v{N}` from {@see getGitSha()} and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}, or `logic-v{N}` when SHA is unavailable). Rebuild when the aggregate file is missing or invalid, older than `getNotamCacheTtlSeconds()`, any listed per-airport NOTAM cache file is newer than the aggregate, the build token no longer matches (code deploy or logic-version bump), or the aggregate has no features while listed sources contain drawable TFR geometry (empty-aggregate gap when source mtimes did not advance).
-2. **Single-flight rebuild**: `flock()` on `tfr-map-layer.rebuild.lock` so concurrent requests do not all parse geometry; waiters serve the existing aggregate when present.
-3. **Serve-time status revalidation** (`notamTfrMapLayerRevalidatePayload()` in `map-layer-cache.php`): one pass over listed airport caches, then `revalidateNotamStatus()` and `isTfr()` parity with `api/notam.php`, refresh `map_layer_style` / `status_line`, drop expired rows, and re-apply geometry dedup.
+1. **National airspace store** (`cache/notam/map-airspace.json`) holds AirspaceRecord rows; upserts use `flock()` on `map-airspace.upsert.lock`.
+2. **Serve-time projection** rebuilds GeoJSON on every origin request from embedded NOTAM rows (status, tooltip lines, dedup).
+3. Responses include `coverage_scope: faa_nms_side_channel` and a `coverage_note` reminding pilots the layer is not exhaustive.
 4. **HTTP cache**: `GET /api/notam-map.php` sends `Cache-Control` with `NOTAM_API_CACHE_TTL_SECONDS` / `NOTAM_API_CACHE_SWR_SECONDS` (same as `api/notam.php`). JSON `cache_ttl_seconds` is the disk/client poll TTL (`getNotamCacheTtlSeconds()`), not the HTTP window.
 
 Production access is browser-only (`lib/notam/map-api-access.php`).
 
-**Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map.
+**Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map. Stale or missing aggregate data fails closed (no shapes drawn).
 
 ---
 

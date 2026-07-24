@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AIXMBasicMessage xmlns="http://www.aixm.aero/schema/5.1/message"
+    xmlns:event="http://www.aixm.aero/schema/5.1/event"
+    xmlns:gml="http://www.opengis.net/gml/3.2"
+    xmlns:fnse="http://www.aixm.aero/schema/5.1/extensions/FAA/FNSE">
+    <hasMember>
+        <event:Event gml:id="Event_tfr_sidechannel_test">
+            <event:timeSlice>
+                <event:EventTimeSlice gml:id="Event_TS_tfr_sidechannel_test">
+                    <gml:validTime>
+                        <gml:TimePeriod gml:id="Event_TP_tfr_sidechannel_test">
+                            <gml:beginPosition>2026-01-01T12:00:00.000Z</gml:beginPosition>
+                            <gml:endPosition>2027-01-01T12:00:00.000Z</gml:endPosition>
+                        </gml:TimePeriod>
+                    </gml:validTime>
+                    <event:textNOTAM>
+                        <event:NOTAM gml:id="NOTAM_tfr_sidechannel_test">
+                            <event:series>F</event:series>
+                            <event:number>9001</event:number>
+                            <event:year>2026</event:year>
+                            <event:type>N</event:type>
+                            <event:text>ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS WITHIN AN AREA DEFINED AS 5NM RADIUS OF 413900N1122300W (OGD319029) STATIC GROUND BASED ROCKET ENGINE TEST.</event:text>
+                        </event:NOTAM>
+                    </event:textNOTAM>
+                </event:EventTimeSlice>
+            </event:timeSlice>
+        </event:Event>
+    </hasMember>
+</AIXMBasicMessage>

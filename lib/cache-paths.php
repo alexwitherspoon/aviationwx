@@ -27,7 +27,9 @@
  * /var/sftp/{username}/            # SFTP chroot (root:root 755)
  * /var/sftp/{username}/files/      # SFTP uploads (ftp:www-data 2775)
  * ├── notam/
- * │   └── {airport}.json           # NOTAM cache
+ * │   ├── {airport}.json           # NOTAM cache
+ * │   ├── map-airspace.json        # National TFR airspace record store (map side-channel)
+ * │   └── map-airspace.upsert.lock # Exclusive flock for map-airspace upserts
  * ├── station-power/
  * │   └── {airport}.json           # Canonical station power snapshot (provider-agnostic)
  * ├── partners/
@@ -599,28 +601,28 @@ function getNotamCachePath(string $airportId): string {
 }
 
 /**
- * Aggregated TFR GeoJSON for the airports directory map (internal use).
+ * National TFR airspace record store for the airports directory map.
  *
  * Uses {@see notamCacheDirectory()} when available so test overrides align
  * with per-airport NOTAM cache paths.
  *
  * @return string Full path to JSON cache file
  */
-function getNotamTfrMapLayerCachePath(): string {
+function getNotamMapAirspaceAggregatePath(): string {
     require_once __DIR__ . '/notam/cache.php';
 
-    return notamCacheDirectory() . '/tfr-map-layer.json';
+    return notamCacheDirectory() . '/map-airspace.json';
 }
 
 /**
- * Exclusive flock target for single-flight NOTAM map layer rebuilds.
+ * Exclusive flock target for map-airspace side-channel upserts.
  *
  * @return string Full path to lock file (created on demand)
  */
-function getNotamTfrMapLayerRebuildLockPath(): string {
+function getNotamMapAirspaceUpsertLockPath(): string {
     require_once __DIR__ . '/notam/cache.php';
 
-    return notamCacheDirectory() . '/tfr-map-layer.rebuild.lock';
+    return notamCacheDirectory() . '/map-airspace.upsert.lock';
 }
 
 /**

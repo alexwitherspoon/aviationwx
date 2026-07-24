@@ -2,12 +2,11 @@
 /**
  * Internal NOTAM TFR map layer API (airports directory map only).
  *
- * Drawable geometry is cached on disk; status and map colors are revalidated
- * at serve time from per-airport NOTAM caches. HTTP Cache-Control uses
- * {@see NOTAM_API_CACHE_TTL_SECONDS} (shared with api/notam.php); JSON
- * cache_ttl_seconds reflects {@see getNotamCacheTtlSeconds()} for client poll.
- * Production access is limited to browser use from the airport map UI; see
- * {@see notamMapLayerApiRequestIsAllowed()}.
+ * Projects drawable TFR geometry from the national map-airspace record store
+ * (NMS side-channel upserts). Status and map colors are revalidated at serve
+ * time from embedded NOTAM rows. HTTP Cache-Control uses
+ * {@see NOTAM_API_CACHE_TTL_SECONDS}; JSON cache_ttl_seconds reflects
+ * {@see getNotamCacheTtlSeconds()} for client poll.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -31,6 +30,7 @@ if (!notamMapLayerApiRequestIsAllowed()) {
         'features' => [],
         'generated_at' => time(),
         'cache_ttl_seconds' => getNotamCacheTtlSeconds(),
+        'coverage_scope' => 'faa_nms_side_channel',
         'error' => 'Forbidden',
     ], JSON_UNESCAPED_SLASHES);
     ob_end_flush();
@@ -52,6 +52,7 @@ try {
         'features' => [],
         'generated_at' => time(),
         'cache_ttl_seconds' => getNotamCacheTtlSeconds(),
+        'coverage_scope' => 'faa_nms_side_channel',
         'error' => 'Map layer unavailable',
     ], JSON_UNESCAPED_SLASHES);
 }

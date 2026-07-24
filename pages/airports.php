@@ -1634,10 +1634,13 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
 
         /**
-         * Map-only title: GeoJSON layer includes TFR NOTAMs only.
+         * Map popup title: same airspace headline as the per-airport NOTAM banner.
          */
         function notamTfrMapLayerTitleHtml(p) {
             p = p || {};
+            if (p.banner_headline) {
+                return '<strong>' + notamTfrMapEscapeTipText(p.banner_headline) + '</strong>';
+            }
             if (!p.notam_id) {
                 return '';
             }
@@ -1653,9 +1656,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
             if (p.status) {
                 lines.push('<div>' + notamTfrMapStatusLineForFeature(p) + '</div>');
-            }
-            if (p.vertical_limits) {
-                lines.push('<div>' + notamTfrMapEscapeTipText(p.vertical_limits) + '</div>');
             }
             if (p.official_link) {
                 lines.push(
