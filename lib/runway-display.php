@@ -82,7 +82,7 @@ function runwayDisplayTrafficNote(array $ends): ?string
         }
         $endId = (string) ($end['end_id'] ?? '');
         if ($endId !== '') {
-            $notes[] = 'Runway ' . $endId . ': Right traffic';
+            $notes[] = 'RWY ' . $endId . ': Right traffic';
         }
     }
 

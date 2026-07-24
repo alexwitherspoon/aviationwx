@@ -195,7 +195,7 @@
         const arrival = end.calm_wind_arrival === true;
         const departure = end.calm_wind_departure === true;
         if (arrival && departure) {
-            return '<span class="runway-calm-wind-badge runway-calm-wind-badge--inline">Calm Wind Runway</span>';
+            return '<span class="runway-calm-wind-badge runway-calm-wind-badge--inline">Calm Wind RWY</span>';
         }
         const tags = [];
         if (arrival) {

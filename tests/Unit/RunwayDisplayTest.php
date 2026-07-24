@@ -379,4 +379,14 @@ class RunwayDisplayTest extends TestCase
         $this->assertFalse($withoutNotam['closed']);
         $this->assertFalse(runwayDisplayFormatRunwayFactsRow($withoutNotam)['closed']);
     }
+
+    public function testRunwayDisplayTrafficNote_UsesRwyAbbreviation(): void
+    {
+        $note = runwayDisplayTrafficNote([
+            ['end_id' => '31L', 'right_hand_traffic' => true],
+            ['end_id' => '13R', 'right_hand_traffic' => false],
+        ]);
+
+        $this->assertSame('RWY 31L: Right traffic', $note);
+    }
 }

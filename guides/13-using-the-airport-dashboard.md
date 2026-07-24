@@ -398,9 +398,9 @@ If something looks wrong, contact the local airport steward or email `contact@av
 
 Runway length, surface, lights, and traffic pattern notes appear in a **Runways** subsection above Frequencies. Each runway pair is shown on its own card with per-end headwind and crosswind components that update with current wind and your unit preferences.
 
-Wind arrows are **aircraft-relative** for each runway end (as if you are on final to that threshold): **↓** green = into the wind along the runway; **↑** red = tailwind; **→** / **←** = crosswind drift to your right or left.
+Wind arrows are **aircraft-relative** for each runway end (as if you are on final to that threshold): **↓** green = into the wind along the runway; **↑** red = tailwind; **→** / **←** = crosswind drift to your right or left. In night mode, into-the-wind components stay red like the rest of the UI and use **bold** instead of green.
 
-When wind is calm (below 3 kt), designated calm wind runway ends may show a tag (`Calm wind arr`, `Calm wind dep`, or `Calm Wind Runway`). Tags hide when wind is 3 kt or above - runway choice is always yours.
+When wind is calm (below 3 kt), designated calm wind runway ends may show a tag (`Calm wind arr`, `Calm wind dep`, or `Calm Wind RWY`). Tags hide when wind is 3 kt or above - runway choice is always yours.
 
 Closed runways show **RWY CLSD**. Missing width is omitted from the dimensions line (length only). Other unknown facts show `---`.
 
