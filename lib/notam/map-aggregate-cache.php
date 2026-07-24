@@ -129,7 +129,15 @@ function notamAirspaceNmsFieldSourcesForNotam(array $notam, bool $hasDrawableGeo
 
     $start = trim((string) ($notam['start_time_utc'] ?? ''));
     $end = trim((string) ($notam['end_time_utc'] ?? ''));
-    if ($start !== '' || $end !== '') {
+    if ($start !== '') {
+        $sources['start_time_utc'] = NOTAM_AIRSPACE_SOURCE_NMS;
+    }
+    if ($end !== '') {
+        $sources['end_time_utc'] = NOTAM_AIRSPACE_SOURCE_NMS;
+    }
+
+    $status = trim((string) ($notam['status'] ?? ''));
+    if ($status !== '' && $status !== 'unknown') {
         $sources['status'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
 

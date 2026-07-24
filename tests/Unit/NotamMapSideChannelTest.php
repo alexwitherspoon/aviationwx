@@ -94,7 +94,12 @@ final class NotamMapSideChannelTest extends TestCase
 
     private function distantCircleTfrAixmXml(): string
     {
-        return (string) file_get_contents(__DIR__ . '/../Fixtures/notam/distant-circle-tfr-ogden.xml');
+        $raw = file_get_contents(__DIR__ . '/../Fixtures/notam/distant-circle-tfr-ogden.xml');
+        if ($raw === false) {
+            self::fail('Could not read distant-circle-tfr-ogden.xml fixture');
+        }
+
+        return $raw;
     }
 
     /**
@@ -200,6 +205,8 @@ final class NotamMapSideChannelTest extends TestCase
 
         $sources = $record['field_sources'];
         $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $sources['geometry'] ?? null);
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $sources['start_time_utc'] ?? null);
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $sources['end_time_utc'] ?? null);
         $this->assertArrayNotHasKey('timezone', $sources, 'timezone comes from airport config, not NMS');
         $this->assertArrayNotHasKey('source_airport_id', $sources, 'source_airport_id is ingest metadata, not an NMS field');
         $this->assertSame('America/Los_Angeles', $record['timezone']);
