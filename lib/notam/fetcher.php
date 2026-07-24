@@ -16,6 +16,7 @@ require_once __DIR__ . '/geo-prefilter.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/http.php';
 require_once __DIR__ . '/../notam-health.php';
+require_once __DIR__ . '/map-aggregate-cache.php';
 
 /**
  * Decode NMS JSON; strips illegal ASCII control characters some payloads embed in strings.
@@ -471,8 +472,11 @@ function fetchNotamsForAirport(
     
     // 4. Deduplicate by NOTAM ID
     $deduplicated = deduplicateNotams($parsedNotams);
-    
-    // 5. Filter for relevant closures and TFRs
+
+    // 5. Side-channel: upsert drawable TFR geometry before airport relevance filter
+    notamMapAirspaceAggregateUpsertFromFetch($airportId, $airport, $deduplicated);
+
+    // 6. Filter for relevant closures and TFRs (banner / per-airport cache)
     $filtered = filterRelevantNotams($deduplicated, $airport);
     
     return $filtered;

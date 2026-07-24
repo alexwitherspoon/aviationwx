@@ -466,6 +466,16 @@ $breadcrumbs = generateBreadcrumbSchema([
         .legend-color.ifr { background: #ef4444; }
         .legend-color.lifr { background: #d946ef; }
         .legend-color.unknown { background: #6b7280; }
+
+        .tfr-map-coverage-note {
+            margin: 10px 0 0;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            font-size: 0.75rem;
+            line-height: 1.35;
+            color: #4b5563;
+            max-width: 260px;
+        }
         
         /* Full-screen mode */
         .map-container.fullscreen {
@@ -1039,6 +1049,11 @@ $breadcrumbs = generateBreadcrumbSchema([
         body.dark-mode .flight-legend .legend-title {
             color: #e0e0e0;
         }
+
+        body.dark-mode .tfr-map-coverage-note {
+            color: #b0b0b0;
+            border-top-color: rgba(255, 255, 255, 0.15);
+        }
         
         body.dark-mode .radar-controls {
             background: #2a2a2a;
@@ -1295,6 +1310,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <span>Not Enough Data</span>
                     </div>
                 </div>
+                <p class="tfr-map-coverage-note">TFR overlays are drawn from FAA NMS fetches near listed airports and may not show every active restriction. Verify on FAA NOTAM Search before flight.</p>
             </div>
             
             <div id="map"></div>
