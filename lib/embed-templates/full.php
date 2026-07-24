@@ -462,7 +462,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 240, $fullModeOptions);
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 300, $fullModeOptions);
 
     return $html;
 }
@@ -627,7 +627,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 240, $fullModeOptions);
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 300, $fullModeOptions);
 
     return $html;
 }
@@ -794,7 +794,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 240, $fullModeOptions);
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 300, $fullModeOptions);
 
     return $html;
 }
