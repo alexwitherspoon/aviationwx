@@ -3,8 +3,8 @@
 /**
  * Runway Geometry Fetcher
  *
- * Merges FAA (US) and OurAirports runway data into normalized segments, writes file cache,
- * warms APCu. Reads OurAirports raw CSVs from disk; downloads FAA NGDA when policy requires.
+ * Merges FAA (US) and OurAirports runway data into normalized segments, streams a single
+ * runways_data.json (chunked write, atomic rename after retention check), warms APCu.
  * Scheduler invokes in background only.
  *
  * Usage: php scripts/fetch-runways.php
@@ -20,9 +20,9 @@ require_once __DIR__ . '/../lib/ourairports/http.php';
 require_once __DIR__ . '/../lib/ourairports/refresh.php';
 require_once __DIR__ . '/../lib/ourairports/urls.php';
 
-// Large runway cache + APCu warm needs extra memory for json_decode
+// Worldwide merge peak exceeds default PHP-FPM/CLI limits; match NASR APT worker headroom.
 // @ suppresses ini_set failure in restricted environments (e.g. disable_functions)
-@ini_set('memory_limit', '256M');
+@ini_set('memory_limit', '1024M');
 
 /**
  * Read a local CSV file or return null.
@@ -110,84 +110,66 @@ function acquireRunwaysFetchLock() {
 }
 
 /**
- * Parse OurAirports runways CSV
+ * Parse OurAirports runways CSV from an open handle (streaming; no full-file string).
  *
- * @param string $csv Raw CSV content
- * @return array<string, array> Runways by airport_ident
+ * @param resource $handle Readable CSV stream positioned at start
+ * @return array<string, array<int, array<string, mixed>>> Runways by airport_ident
  */
-function parseOurAirportsRunways(string $csv): array {
-    $lines = str_getcsv($csv, "\n", '"', '\\');
-    if (count($lines) < 2) {
+function parseOurAirportsRunwaysFromHandle($handle): array
+{
+    $header = fgetcsv($handle, 0, ',', '"', '\\');
+    if (!is_array($header) || $header === []) {
+        return [];
+    }
+    $idx = array_flip(array_map(static fn($h) => trim((string) $h), $header));
+
+    $ident = $idx['airport_ident'] ?? null;
+    if ($ident === null) {
         return [];
     }
 
-    $header = str_getcsv(array_shift($lines), ',', '"', '\\');
-    $idx = array_flip(array_map('trim', $header));
+    $closedIdx = $idx['closed'] ?? null;
+    $leLat = $idx['le_latitude_deg'] ?? null;
+    $leLon = $idx['le_longitude_deg'] ?? null;
+    $heLat = $idx['he_latitude_deg'] ?? null;
+    $heLon = $idx['he_longitude_deg'] ?? null;
+    $leIdent = $idx['le_ident'] ?? null;
+    $heIdent = $idx['he_ident'] ?? null;
+    $lengthIdx = $idx['length_ft'] ?? null;
+    $surfaceIdx = $idx['surface'] ?? null;
+    $widthIdx = $idx['width_ft'] ?? null;
+    $lightedIdx = $idx['lighted'] ?? null;
+    $leHeadingIdx = $idx['le_heading_degT'] ?? null;
+    $heHeadingIdx = $idx['he_heading_degT'] ?? null;
+    $leDisplacedIdx = $idx['le_displaced_threshold_ft'] ?? null;
+    $heDisplacedIdx = $idx['he_displaced_threshold_ft'] ?? null;
 
     $byAirport = [];
-    foreach ($lines as $line) {
-        $row = str_getcsv($line, ',', '"', '\\');
-        if (count($row) < 5) {
+    while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+        if (!is_array($row) || count($row) < 5) {
             continue;
         }
 
-        $closedIdx = $idx['closed'] ?? null;
-        $isClosed = $closedIdx !== null && isset($row[$closedIdx]) && (int) $row[$closedIdx] === 1;
-
-        $ident = $idx['airport_ident'] ?? null;
-        $leLat = $idx['le_latitude_deg'] ?? null;
-        $leLon = $idx['le_longitude_deg'] ?? null;
-        $heLat = $idx['he_latitude_deg'] ?? null;
-        $heLon = $idx['he_longitude_deg'] ?? null;
-        $leIdent = $idx['le_ident'] ?? null;
-        $heIdent = $idx['he_ident'] ?? null;
-        $lengthIdx = $idx['length_ft'] ?? null;
-        $surfaceIdx = $idx['surface'] ?? null;
-        $widthIdx = $idx['width_ft'] ?? null;
-        $lightedIdx = $idx['lighted'] ?? null;
-        $leHeadingIdx = $idx['le_heading_degT'] ?? null;
-        $heHeadingIdx = $idx['he_heading_degT'] ?? null;
-        $leDisplacedIdx = $idx['le_displaced_threshold_ft'] ?? null;
-        $heDisplacedIdx = $idx['he_displaced_threshold_ft'] ?? null;
-
-        if ($ident === null) {
-            continue;
-        }
-
-        $airportId = strtoupper(trim($row[$ident] ?? ''));
+        $airportId = strtoupper(trim((string) ($row[$ident] ?? '')));
         if ($airportId === '') {
             continue;
         }
 
+        $lat1 = $leLat !== null && isset($row[$leLat]) && $row[$leLat] !== '' ? (float) $row[$leLat] : null;
+        $lon1 = $leLon !== null && isset($row[$leLon]) && $row[$leLon] !== '' ? (float) $row[$leLon] : null;
+        $lat2 = $heLat !== null && isset($row[$heLat]) && $row[$heLat] !== '' ? (float) $row[$heLat] : null;
+        $lon2 = $heLon !== null && isset($row[$heLon]) && $row[$heLon] !== '' ? (float) $row[$heLon] : null;
+        if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
+            continue;
+        }
+
+        $isClosed = $closedIdx !== null && isset($row[$closedIdx]) && (int) $row[$closedIdx] === 1;
         $lengthFt = $lengthIdx !== null && isset($row[$lengthIdx]) && is_numeric($row[$lengthIdx])
             ? (int) round((float) $row[$lengthIdx])
             : 0;
         $widthFt = $widthIdx !== null && isset($row[$widthIdx]) && is_numeric($row[$widthIdx])
             ? (int) round((float) $row[$widthIdx])
             : null;
-        $surface = $surfaceIdx !== null ? trim((string) ($row[$surfaceIdx] ?? '')) : '';
-        $lighted = $lightedIdx !== null && isset($row[$lightedIdx]) && (int) $row[$lightedIdx] === 1;
-        $leHeading = $leHeadingIdx !== null && isset($row[$leHeadingIdx]) && is_numeric($row[$leHeadingIdx])
-            ? (int) round((float) $row[$leHeadingIdx])
-            : null;
-        $heHeading = $heHeadingIdx !== null && isset($row[$heHeadingIdx]) && is_numeric($row[$heHeadingIdx])
-            ? (int) round((float) $row[$heHeadingIdx])
-            : null;
-        $leDisplaced = $leDisplacedIdx !== null && isset($row[$leDisplacedIdx]) && is_numeric($row[$leDisplacedIdx])
-            ? (int) round((float) $row[$leDisplacedIdx])
-            : 0;
-        $heDisplaced = $heDisplacedIdx !== null && isset($row[$heDisplacedIdx]) && is_numeric($row[$heDisplacedIdx])
-            ? (int) round((float) $row[$heDisplacedIdx])
-            : 0;
-
-        $lat1 = $leLat !== null && isset($row[$leLat]) && $row[$leLat] !== '' ? (float) $row[$leLat] : null;
-        $lon1 = $leLon !== null && isset($row[$leLon]) && $row[$leLon] !== '' ? (float) $row[$leLon] : null;
-        $lat2 = $heLat !== null && isset($row[$heLat]) && $row[$heLat] !== '' ? (float) $row[$heLat] : null;
-        $lon2 = $heLon !== null && isset($row[$heLon]) && $row[$heLon] !== '' ? (float) $row[$heLon] : null;
-
-        if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            continue;
-        }
 
         if (!isset($byAirport[$airportId])) {
             $byAirport[$airportId] = [];
@@ -197,57 +179,104 @@ function parseOurAirportsRunways(string $csv): array {
             'lon1' => $lon1,
             'lat2' => $lat2,
             'lon2' => $lon2,
-            'le_ident' => $leIdent !== null ? trim($row[$leIdent] ?? '') : '',
-            'he_ident' => $heIdent !== null ? trim($row[$heIdent] ?? '') : '',
+            'le_ident' => $leIdent !== null ? trim((string) ($row[$leIdent] ?? '')) : '',
+            'he_ident' => $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '',
             'length_ft' => $lengthFt,
             'width_ft' => $widthFt,
-            'surface' => $surface,
-            'lighted' => $lighted,
+            'surface' => $surfaceIdx !== null ? trim((string) ($row[$surfaceIdx] ?? '')) : '',
+            'lighted' => $lightedIdx !== null && isset($row[$lightedIdx]) && (int) $row[$lightedIdx] === 1,
             'closed' => $isClosed,
-            'le_heading_degT' => $leHeading,
-            'he_heading_degT' => $heHeading,
-            'le_displaced_threshold_ft' => $leDisplaced,
-            'he_displaced_threshold_ft' => $heDisplaced,
+            'le_heading_degT' => $leHeadingIdx !== null && isset($row[$leHeadingIdx]) && is_numeric($row[$leHeadingIdx])
+                ? (int) round((float) $row[$leHeadingIdx])
+                : null,
+            'he_heading_degT' => $heHeadingIdx !== null && isset($row[$heHeadingIdx]) && is_numeric($row[$heHeadingIdx])
+                ? (int) round((float) $row[$heHeadingIdx])
+                : null,
+            'le_displaced_threshold_ft' => $leDisplacedIdx !== null && isset($row[$leDisplacedIdx]) && is_numeric($row[$leDisplacedIdx])
+                ? (int) round((float) $row[$leDisplacedIdx])
+                : 0,
+            'he_displaced_threshold_ft' => $heDisplacedIdx !== null && isset($row[$heDisplacedIdx]) && is_numeric($row[$heDisplacedIdx])
+                ? (int) round((float) $row[$heDisplacedIdx])
+                : 0,
             'source' => 'ourairports',
         ];
     }
+
     return $byAirport;
 }
 
 /**
- * Parse FAA runways CSV (ArcGIS export format)
- *
- * @param string $csv Raw CSV content
- * @return array<string, array> Runways by ARPT_ID
+ * @return array<string, array<int, array<string, mixed>>>
  */
-function parseFaaRunways(string $csv): array {
-    $lines = str_getcsv($csv, "\n", '"', '\\');
-    if (count($lines) < 2) {
+function parseOurAirportsRunwaysFromPath(string $path): array
+{
+    if (!is_readable($path)) {
         return [];
     }
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) {
+        return [];
+    }
+    try {
+        return parseOurAirportsRunwaysFromHandle($handle);
+    } finally {
+        fclose($handle);
+    }
+}
 
-    $header = str_getcsv(array_shift($lines), ',', '"', '\\');
-    $idx = array_flip(array_map('trim', $header));
+/**
+ * Parse OurAirports runways CSV
+ *
+ * @param string $csv Raw CSV content
+ * @return array<string, array> Runways by airport_ident
+ */
+function parseOurAirportsRunways(string $csv): array
+{
+    $handle = fopen('php://temp', 'r+b');
+    if ($handle === false) {
+        return [];
+    }
+    fwrite($handle, $csv);
+    rewind($handle);
+    try {
+        return parseOurAirportsRunwaysFromHandle($handle);
+    } finally {
+        fclose($handle);
+    }
+}
+
+/**
+ * Parse FAA runways CSV from an open handle (streaming; no full-file string).
+ *
+ * @param resource $handle Readable CSV stream positioned at start
+ * @return array<string, array<int, array<string, mixed>>> Runways by ARPT_ID
+ */
+function parseFaaRunwaysFromHandle($handle): array
+{
+    $header = fgetcsv($handle, 0, ',', '"', '\\');
+    if (!is_array($header) || $header === []) {
+        return [];
+    }
+    $idx = array_flip(array_map(static fn($h) => trim((string) $h), $header));
+
+    $arptKey = 'ARPT_ID';
+    if (!isset($idx[$arptKey])) {
+        return [];
+    }
 
     $lat1Key = 'LAT1_DECIMAL';
     $lon1Key = 'LONG1_DECIMAL';
     $lat2Key = 'LAT2_DECIMAL';
     $lon2Key = 'LONG2_DECIMAL';
-    $arptKey = 'ARPT_ID';
     $rwyKey = 'RWY_ID';
 
-    if (!isset($idx[$arptKey])) {
-        return [];
-    }
-
     $byAirport = [];
-    foreach ($lines as $line) {
-        $row = str_getcsv($line, ',', '"', '\\');
-        if (count($row) < 5) {
+    while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+        if (!is_array($row) || count($row) < 5) {
             continue;
         }
 
-        $airportId = strtoupper(trim($row[$idx[$arptKey]] ?? ''));
+        $airportId = strtoupper(trim((string) ($row[$idx[$arptKey]] ?? '')));
         if ($airportId === '') {
             continue;
         }
@@ -256,12 +285,11 @@ function parseFaaRunways(string $csv): array {
         $lon1 = isset($idx[$lon1Key], $row[$idx[$lon1Key]]) && $row[$idx[$lon1Key]] !== '' ? (float) $row[$idx[$lon1Key]] : null;
         $lat2 = isset($idx[$lat2Key], $row[$idx[$lat2Key]]) && $row[$idx[$lat2Key]] !== '' ? (float) $row[$idx[$lat2Key]] : null;
         $lon2 = isset($idx[$lon2Key], $row[$idx[$lon2Key]]) && $row[$idx[$lon2Key]] !== '' ? (float) $row[$idx[$lon2Key]] : null;
-
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
             continue;
         }
 
-        $rwyId = isset($idx[$rwyKey], $row[$idx[$rwyKey]]) ? trim($row[$idx[$rwyKey]]) : '';
+        $rwyId = isset($idx[$rwyKey], $row[$idx[$rwyKey]]) ? trim((string) $row[$idx[$rwyKey]]) : '';
         $parts = explode('/', $rwyId);
         $leIdent = count($parts) === 2 ? trim($parts[0]) : $rwyId;
         $heIdent = count($parts) === 2 ? trim($parts[1]) : $rwyId;
@@ -279,7 +307,48 @@ function parseFaaRunways(string $csv): array {
             'source' => 'faa',
         ];
     }
+
     return $byAirport;
+}
+
+/**
+ * @return array<string, array<int, array<string, mixed>>>
+ */
+function parseFaaRunwaysFromPath(string $path): array
+{
+    if (!is_readable($path)) {
+        return [];
+    }
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) {
+        return [];
+    }
+    try {
+        return parseFaaRunwaysFromHandle($handle);
+    } finally {
+        fclose($handle);
+    }
+}
+
+/**
+ * Parse FAA runways CSV (ArcGIS export format)
+ *
+ * @param string $csv Raw CSV content
+ * @return array<string, array> Runways by ARPT_ID
+ */
+function parseFaaRunways(string $csv): array
+{
+    $handle = fopen('php://temp', 'r+b');
+    if ($handle === false) {
+        return [];
+    }
+    fwrite($handle, $csv);
+    rewind($handle);
+    try {
+        return parseFaaRunwaysFromHandle($handle);
+    } finally {
+        fclose($handle);
+    }
 }
 
 /**
@@ -369,6 +438,310 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
 }
 
 /**
+ * Prefer configured airport center; otherwise use runway endpoint centroid.
+ *
+ * @param array<int, array<string, mixed>> $runways
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @return array{lat: float, lon: float}
+ */
+function resolveRunwayEntryCenter(array $runways, array $airportCenters, string $primaryId, ?string $altId = null): array
+{
+    $center = $airportCenters[$primaryId] ?? ($altId !== null ? ($airportCenters[$altId] ?? null) : null);
+    if ($center !== null) {
+        return $center;
+    }
+    $lats = array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2'));
+    $lons = array_merge(array_column($runways, 'lon1'), array_column($runways, 'lon2'));
+
+    return [
+        'lat' => array_sum($lats) / count($lats),
+        'lon' => array_sum($lons) / count($lons),
+    ];
+}
+
+/**
+ * Build one FAA-authoritative cache entry (geometry from FAA; OA performance/display when mapped).
+ *
+ * @param array<int, array<string, mixed>> $runways
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @param array<string, array<int, array<string, mixed>>> $ourairports
+ * @param array<string, string> $faaToIcao
+ * @return array<string, mixed>
+ */
+function buildFaaMergedRunwayEntry(
+    string $faaId,
+    array $runways,
+    array $airportCenters,
+    array $ourairports,
+    array $faaToIcao
+): array {
+    $icao = $faaToIcao[$faaId] ?? null;
+    $center = resolveRunwayEntryCenter($runways, $airportCenters, $faaId, $icao);
+    $entry = [
+        'segments' => runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']),
+        'center_lat' => $center['lat'],
+        'center_lon' => $center['lon'],
+    ];
+    $oaRunways = resolveOurAirportsRunwaysForCacheIdent($faaId, $ourairports, $faaToIcao);
+    if ($oaRunways !== null) {
+        $entry['performance_runways'] = buildOurAirportsPerformanceRunways($oaRunways);
+        $entry['display_runways'] = buildOurAirportsDisplayRunways($oaRunways);
+    }
+
+    return $entry;
+}
+
+/**
+ * Build one OurAirports-only cache entry (geometry + performance/display from OA rows).
+ *
+ * @param array<int, array<string, mixed>> $runways
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @return array<string, mixed>
+ */
+function buildOurAirportsMergedRunwayEntry(string $oaId, array $runways, array $airportCenters): array
+{
+    $center = resolveRunwayEntryCenter($runways, $airportCenters, $oaId);
+
+    return [
+        'segments' => runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']),
+        'center_lat' => $center['lat'],
+        'center_lon' => $center['lon'],
+        'performance_runways' => buildOurAirportsPerformanceRunways($runways),
+        'display_runways' => buildOurAirportsDisplayRunways($runways),
+    ];
+}
+
+/**
+ * Previous cache airport count for retention (meta preferred to avoid decoding ~13MB JSON).
+ */
+function readPreviousRunwaysCacheAirportCount(): ?int
+{
+    if (is_readable(CACHE_RUNWAYS_META_FILE)) {
+        $raw = @file_get_contents(CACHE_RUNWAYS_META_FILE);
+        $meta = is_string($raw) ? json_decode($raw, true) : null;
+        if (is_array($meta) && isset($meta['airport_count']) && is_numeric($meta['airport_count'])) {
+            return (int) $meta['airport_count'];
+        }
+    }
+
+    if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
+        return null;
+    }
+
+    // Pre-meta caches: decode once so retention still fail-closed on shrink.
+    $raw = @file_get_contents(CACHE_RUNWAYS_DATA_FILE);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    unset($raw);
+    if (!is_array($data) || !isset($data['airports']) || !is_array($data['airports'])) {
+        return null;
+    }
+
+    return count($data['airports']);
+}
+
+/**
+ * Write runways_meta.json used by retention checks on the next merge.
+ */
+function writeRunwaysCacheMeta(int $airportCount, int $fetchedAt, int $memoryPeakBytes): bool
+{
+    ensureCacheDir(CACHE_RUNWAYS_DIR);
+    $payload = [
+        'airport_count' => $airportCount,
+        'fetched_at' => $fetchedAt,
+        'memory_peak_bytes' => $memoryPeakBytes,
+        'written_at' => time(),
+    ];
+    $tmp = CACHE_RUNWAYS_META_FILE . '.tmp.' . getmypid();
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($tmp, $json, LOCK_EX) === false || !@rename($tmp, CACHE_RUNWAYS_META_FILE)) {
+        @unlink($tmp);
+
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @param resource $handle
+ * @return array{ok: false, count: int, tmp_path: null, error: string}
+ */
+function abortMergedRunwaysStreamWrite($handle, string $tmpPath, int $written, string $error): array
+{
+    if (is_resource($handle)) {
+        fclose($handle);
+    }
+    @unlink($tmpPath);
+
+    return ['ok' => false, 'count' => $written, 'tmp_path' => null, 'error' => $error];
+}
+
+/**
+ * Stream-merge into a temp JSON file. Does not replace the live cache (caller publishes).
+ *
+ * @param array<string, array<int, array<string, mixed>>> $faa
+ * @param array<string, array<int, array<string, mixed>>> $ourairports
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @param array<string, string> $faaToIcao
+ * @return array{ok: bool, count: int, tmp_path: ?string, error: ?string}
+ */
+function writeMergedRunwaysCacheStreaming(
+    array $faa,
+    array $ourairports,
+    array $airportCenters,
+    array $faaToIcao,
+    int $fetchedAt
+): array {
+    ensureCacheDir(CACHE_RUNWAYS_DIR);
+    $tmpPath = CACHE_RUNWAYS_DATA_FILE . '.tmp.' . getmypid();
+    $handle = @fopen($tmpPath, 'wb');
+    if ($handle === false) {
+        return ['ok' => false, 'count' => 0, 'tmp_path' => null, 'error' => 'failed to open temp cache for write'];
+    }
+
+    $chunkSize = max(1, (int) RUNWAYS_MERGE_WRITE_CHUNK_SIZE);
+    $written = 0;
+    $first = true;
+    $coveredByIdent = [];
+
+    $writeEntry = static function (string $ident, array $entry) use ($handle, &$written, &$first): ?string {
+        $keyJson = json_encode($ident, JSON_UNESCAPED_SLASHES);
+        $entryJson = json_encode($entry, JSON_UNESCAPED_SLASHES);
+        if ($keyJson === false || $entryJson === false) {
+            return 'json_encode failed for airport ' . $ident;
+        }
+        // Manual object members: commas between keys; full-file json_encode would spike RAM.
+        $prefix = $first ? '' : ',';
+        if (@fwrite($handle, $prefix . $keyJson . ':' . $entryJson) === false) {
+            return 'fwrite failed for airport ' . $ident;
+        }
+        $first = false;
+        $written++;
+
+        return null;
+    };
+
+    if (@fwrite($handle, '{"fetched_at":' . (int) $fetchedAt . ',"airports":{') === false) {
+        return abortMergedRunwaysStreamWrite($handle, $tmpPath, 0, 'failed to write cache header');
+    }
+
+    foreach (array_chunk(array_keys($faa), $chunkSize) as $chunkIds) {
+        foreach ($chunkIds as $faaId) {
+            $runways = $faa[$faaId] ?? [];
+            if ($runways === []) {
+                continue;
+            }
+            $entry = buildFaaMergedRunwayEntry((string) $faaId, $runways, $airportCenters, $ourairports, $faaToIcao);
+            $err = $writeEntry((string) $faaId, $entry);
+            if ($err !== null) {
+                return abortMergedRunwaysStreamWrite($handle, $tmpPath, $written, $err);
+            }
+            $coveredByIdent[(string) $faaId] = true;
+            if (isset($faaToIcao[$faaId])) {
+                $icao = (string) $faaToIcao[$faaId];
+                $err = $writeEntry($icao, $entry);
+                if ($err !== null) {
+                    return abortMergedRunwaysStreamWrite($handle, $tmpPath, $written, $err);
+                }
+                $coveredByIdent[$icao] = true;
+            }
+        }
+        updateWorkerHeartbeat();
+        gc_collect_cycles();
+    }
+
+    foreach (array_chunk(array_keys($ourairports), $chunkSize) as $chunkIds) {
+        foreach ($chunkIds as $oaId) {
+            if (isset($coveredByIdent[$oaId])) {
+                continue;
+            }
+            $runways = $ourairports[$oaId] ?? [];
+            if ($runways === []) {
+                continue;
+            }
+            $entry = buildOurAirportsMergedRunwayEntry((string) $oaId, $runways, $airportCenters);
+            $err = $writeEntry((string) $oaId, $entry);
+            if ($err !== null) {
+                return abortMergedRunwaysStreamWrite($handle, $tmpPath, $written, $err);
+            }
+        }
+        updateWorkerHeartbeat();
+        gc_collect_cycles();
+    }
+
+    if (@fwrite($handle, '}}') === false) {
+        return abortMergedRunwaysStreamWrite($handle, $tmpPath, $written, 'failed to write cache footer');
+    }
+    if (!fclose($handle)) {
+        @unlink($tmpPath);
+
+        return ['ok' => false, 'count' => $written, 'tmp_path' => null, 'error' => 'failed to close temp cache'];
+    }
+
+    if ($written === 0) {
+        @unlink($tmpPath);
+
+        return ['ok' => false, 'count' => 0, 'tmp_path' => null, 'error' => 'merged airport count is zero'];
+    }
+
+    return ['ok' => true, 'count' => $written, 'tmp_path' => $tmpPath, 'error' => null];
+}
+
+/**
+ * Retention-check a streamed temp cache, then atomically replace the live file.
+ *
+ * Fail-closed: on reject or rename failure the previous live cache is left untouched.
+ *
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @return array{ok: bool, count: int, error: ?string, retained_previous: bool}
+ */
+function publishMergedRunwaysCacheAfterRetentionCheck(
+    string $tmpPath,
+    int $newCount,
+    ?int $previousCount,
+    array $airportCenters,
+    bool $airportsCsvExpected,
+    int $fetchedAt
+): array {
+    $rejectReason = runwaysMergeRejectReasonFromCounts(
+        $newCount,
+        $previousCount,
+        $airportCenters,
+        $airportsCsvExpected
+    );
+    if ($rejectReason !== null) {
+        @unlink($tmpPath);
+
+        return [
+            'ok' => false,
+            'count' => $newCount,
+            'error' => $rejectReason,
+            'retained_previous' => true,
+        ];
+    }
+
+    if (!@rename($tmpPath, CACHE_RUNWAYS_DATA_FILE)) {
+        @unlink($tmpPath);
+
+        return [
+            'ok' => false,
+            'count' => $newCount,
+            'error' => 'failed to publish cache via rename',
+            'retained_previous' => true,
+        ];
+    }
+
+    writeRunwaysCacheMeta($newCount, $fetchedAt, memory_get_peak_usage(true));
+
+    return [
+        'ok' => true,
+        'count' => $newCount,
+        'error' => null,
+        'retained_previous' => false,
+    ];
+}
+
+/**
  * Merge FAA and OurAirports; FAA segments for FAA airports, OurAirports for the rest
  *
  * For airports in the FAA dataset: segment geometry comes from FAA only, output under both
@@ -382,37 +755,16 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
  * @param array $faaToIcao FAA LID -> ICAO mapping for US airports (from OurAirports airports.csv)
  * @return array Merged airports with segments
  */
-function mergeRunwaySources(array $faa, array $ourairports, array $airportCenters, array $faaToIcao = []): array {
+function mergeRunwaySources(array $faa, array $ourairports, array $airportCenters, array $faaToIcao = []): array
+{
     $result = [];
     $coveredByIdent = [];
 
-    // 1. Process FAA airports: use FAA data only, output under FAA ID and ICAO when mapped
     foreach ($faa as $faaId => $runways) {
-        if (empty($runways)) {
+        if ($runways === []) {
             continue;
         }
-        $center = $airportCenters[$faaId] ?? $airportCenters[$faaToIcao[$faaId] ?? ''] ?? null;
-        if ($center === null) {
-            $lats = array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2'));
-            $lons = array_merge(array_column($runways, 'lon1'), array_column($runways, 'lon2'));
-            $center = [
-                'lat' => array_sum($lats) / count($lats),
-                'lon' => array_sum($lons) / count($lons),
-            ];
-        }
-        $segments = runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']);
-        $entry = [
-            'segments' => $segments,
-            'center_lat' => $center['lat'],
-            'center_lon' => $center['lon'],
-        ];
-        // FAA segments stay authoritative for wind compass; attach OurAirports length/surface
-        // separately so DA performance can fall back when NASR has no airport row.
-        $oaRunways = resolveOurAirportsRunwaysForCacheIdent($faaId, $ourairports, $faaToIcao);
-        if ($oaRunways !== null) {
-            $entry['performance_runways'] = buildOurAirportsPerformanceRunways($oaRunways);
-            $entry['display_runways'] = buildOurAirportsDisplayRunways($oaRunways);
-        }
+        $entry = buildFaaMergedRunwayEntry((string) $faaId, $runways, $airportCenters, $ourairports, $faaToIcao);
         $result[$faaId] = $entry;
         $coveredByIdent[$faaId] = true;
         if (isset($faaToIcao[$faaId])) {
@@ -421,29 +773,13 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
         }
     }
 
-    // 2. Process OurAirports airports: use only when not already covered by FAA
     foreach ($ourairports as $oaId => $runways) {
-        if (isset($coveredByIdent[$oaId]) || empty($runways)) {
+        if (isset($coveredByIdent[$oaId]) || $runways === []) {
             continue;
         }
-        $center = $airportCenters[$oaId] ?? null;
-        if ($center === null) {
-            $lats = array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2'));
-            $lons = array_merge(array_column($runways, 'lon1'), array_column($runways, 'lon2'));
-            $center = [
-                'lat' => array_sum($lats) / count($lats),
-                'lon' => array_sum($lons) / count($lons),
-            ];
-        }
-        $segments = runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']);
-        $result[$oaId] = [
-            'segments' => $segments,
-            'center_lat' => $center['lat'],
-            'center_lon' => $center['lon'],
-            'performance_runways' => buildOurAirportsPerformanceRunways($runways),
-            'display_runways' => buildOurAirportsDisplayRunways($runways),
-        ];
+        $result[$oaId] = buildOurAirportsMergedRunwayEntry((string) $oaId, $runways, $airportCenters);
     }
+
     return $result;
 }
 
@@ -455,6 +791,26 @@ if (php_sapi_name() === 'cli') {
     }
 
     initWorkerTimeout(RUNWAYS_MERGE_WORKER_TIMEOUT, 'runways_merge');
+
+    // Scheduler redirects worker stdout/stderr to /dev/null; surface fatals in app.log.
+    register_shutdown_function(static function (): void {
+        $err = error_get_last();
+        if ($err === null) {
+            return;
+        }
+        $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        if (!in_array($err['type'] ?? 0, $fatalTypes, true)) {
+            return;
+        }
+        aviationwx_log('error', 'runways fetch: fatal error', [
+            'type' => $err['type'],
+            'message' => $err['message'] ?? '',
+            'file' => $err['file'] ?? '',
+            'line' => $err['line'] ?? 0,
+            'memory_limit' => ini_get('memory_limit'),
+            'memory_peak_bytes' => memory_get_peak_usage(true),
+        ], 'app', true);
+    });
 
     if (!runwaysMergeWorkerShouldRun()) {
         $reason = runwaysMergeWaitingReason();
@@ -480,59 +836,95 @@ if (php_sapi_name() === 'cli') {
         exit(0);
     }
 
-    aviationwx_log('info', 'runways fetch: starting merge', [], 'app');
+    $oaPath = ourAirportsCsvPath('runways');
+    $faaPath = CACHE_FAA_NGDA_RUNWAYS_CSV;
+    aviationwx_log('info', 'runways fetch: starting merge', [
+        'mode' => 'chunked_stream_write',
+        'chunk_size' => RUNWAYS_MERGE_WRITE_CHUNK_SIZE,
+        'memory_limit' => ini_get('memory_limit'),
+        'oa_runways_bytes' => is_readable($oaPath) ? (int) filesize($oaPath) : 0,
+        'faa_ngda_bytes' => is_readable($faaPath) ? (int) filesize($faaPath) : 0,
+        'previous_cache_bytes' => is_readable(CACHE_RUNWAYS_DATA_FILE) ? (int) filesize(CACHE_RUNWAYS_DATA_FILE) : 0,
+    ], 'app');
 
-    $ourairportsCsv = readLocalCsvFile(ourAirportsCsvPath('runways'));
-    $faaCsv = downloadFaaNgdaRunwaysIfNeeded();
-
-    if ($ourairportsCsv === null && $faaCsv === null) {
+    downloadFaaNgdaRunwaysIfNeeded();
+    $oaReadable = is_readable($oaPath);
+    $faaReadable = is_readable($faaPath);
+    if (!$oaReadable && !$faaReadable) {
         aviationwx_log('error', 'runways fetch: no runway source data available on disk', [], 'app', true);
         flock($fp, LOCK_UN);
         fclose($fp);
         exit(1);
     }
 
-    $ourairports = $ourairportsCsv !== null ? parseOurAirportsRunways($ourairportsCsv) : [];
-    $faa = $faaCsv !== null ? parseFaaRunways($faaCsv) : [];
+    $ourairports = $oaReadable ? parseOurAirportsRunwaysFromPath($oaPath) : [];
+    $faa = $faaReadable ? parseFaaRunwaysFromPath($faaPath) : [];
+    updateWorkerHeartbeat();
 
     $mapping = ourAirportsLoadAirportCentersAndFaaMappingFromDisk();
     $airportCenters = $mapping['centers'];
     $faaToIcao = $mapping['faa_to_icao'];
 
-    $merged = mergeRunwaySources($faa, $ourairports, $airportCenters, $faaToIcao);
-
-    $previousCache = loadRunwaysCacheDataFromDisk();
     $airportsCsvPath = ourAirportsCsvPath('airports');
     $airportsCsvSize = is_readable($airportsCsvPath) ? @filesize($airportsCsvPath) : false;
     $airportsCsvExpected = is_int($airportsCsvSize) && $airportsCsvSize > 200;
-    $rejectReason = runwaysMergeRejectReason($merged, $previousCache, $airportCenters, $airportsCsvExpected);
-    if ($rejectReason !== null) {
+    $previousCount = readPreviousRunwaysCacheAirportCount();
+
+    if ($airportsCsvExpected && $airportCenters === []) {
         aviationwx_log('error', 'runways fetch: retaining previous cache', [
-            'reason' => $rejectReason,
-            'merged_airports' => count($merged),
-            'previous_airports' => is_array($previousCache['airports'] ?? null)
-                ? count($previousCache['airports'])
-                : 0,
+            'reason' => 'airports.csv present but center mapping is empty',
+            'merged_airports' => 0,
+            'previous_airports' => $previousCount,
         ], 'app', true);
         flock($fp, LOCK_UN);
         fclose($fp);
         exit(is_readable(CACHE_RUNWAYS_DATA_FILE) ? 0 : 1);
     }
 
-    $output = [
-        'fetched_at' => time(),
-        'airports' => $merged,
-    ];
+    $fetchedAt = time();
+    $writeResult = writeMergedRunwaysCacheStreaming(
+        $faa,
+        $ourairports,
+        $airportCenters,
+        $faaToIcao,
+        $fetchedAt
+    );
+    unset($faa, $ourairports, $faaToIcao, $mapping);
 
-    ensureCacheDir(CACHE_RUNWAYS_DIR);
-    $tmpPath = CACHE_RUNWAYS_DATA_FILE . '.tmp.' . getmypid();
-    $written = @file_put_contents($tmpPath, json_encode($output, JSON_UNESCAPED_SLASHES));
-    if ($written === false || !@rename($tmpPath, CACHE_RUNWAYS_DATA_FILE)) {
-        @unlink($tmpPath);
-        aviationwx_log('error', 'runways fetch: failed to write cache', [], 'app', true);
+    $tmpPath = $writeResult['tmp_path'] ?? null;
+    if (!$writeResult['ok'] || !is_string($tmpPath) || $tmpPath === '') {
+        aviationwx_log('error', 'runways fetch: retaining previous cache', [
+            'reason' => $writeResult['error'] ?? 'stream write failed',
+            'merged_airports' => $writeResult['count'],
+            'previous_airports' => $previousCount,
+            'memory_peak_bytes' => memory_get_peak_usage(true),
+        ], 'app', true);
         flock($fp, LOCK_UN);
         fclose($fp);
-        exit(1);
+        exit(is_readable(CACHE_RUNWAYS_DATA_FILE) ? 0 : 1);
+    }
+
+    $publish = publishMergedRunwaysCacheAfterRetentionCheck(
+        $tmpPath,
+        (int) $writeResult['count'],
+        $previousCount,
+        $airportCenters,
+        $airportsCsvExpected,
+        $fetchedAt
+    );
+    unset($airportCenters);
+
+    if (!$publish['ok']) {
+        aviationwx_log('error', 'runways fetch: retaining previous cache', [
+            'reason' => $publish['error'] ?? 'publish failed',
+            'merged_airports' => $publish['count'],
+            'previous_airports' => $previousCount,
+            'memory_peak_bytes' => memory_get_peak_usage(true),
+            'retained_previous' => $publish['retained_previous'],
+        ], 'app', true);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        exit(is_readable(CACHE_RUNWAYS_DATA_FILE) ? 0 : 1);
     }
 
     $config = loadConfig(false);
@@ -544,8 +936,10 @@ if (php_sapi_name() === 'cli') {
     @unlink(getRunwaysFetchLockPath());
 
     aviationwx_log('info', 'runways fetch: complete', [
-        'airports' => count($merged),
+        'airports' => $publish['count'],
         'apcu_warmed' => $warmed,
+        'memory_peak_bytes' => memory_get_peak_usage(true),
+        'mode' => 'chunked_stream_write',
     ], 'app');
 
     exit(0);

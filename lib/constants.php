@@ -415,6 +415,10 @@ if (!defined('RUNWAYS_CACHE_MAX_AGE')) {
 if (!defined('RUNWAYS_MERGE_MIN_AIRPORT_RETAIN_RATIO')) {
     define('RUNWAYS_MERGE_MIN_AIRPORT_RETAIN_RATIO', 0.9);
 }
+/** Stream-write batch size for runway merge (heartbeat + GC between chunks). */
+if (!defined('RUNWAYS_MERGE_WRITE_CHUNK_SIZE')) {
+    define('RUNWAYS_MERGE_WRITE_CHUNK_SIZE', 250);
+}
 if (!defined('RUNWAYS_APCU_TTL')) {
     define('RUNWAYS_APCU_TTL', RUNWAYS_CACHE_MAX_AGE);
 }

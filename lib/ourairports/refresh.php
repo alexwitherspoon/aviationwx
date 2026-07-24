@@ -274,6 +274,38 @@ function runwaysMergeFetchInProgress(): bool
 }
 
 /**
+ * Retention / input gate for runway merge using counts only (avoids loading prior cache JSON).
+ *
+ * @param array<string, array{lat: float, lon: float}> $airportCenters
+ * @return string|null Reject reason, or null when merge may publish
+ */
+function runwaysMergeRejectReasonFromCounts(
+    int $newAirportCount,
+    ?int $previousAirportCount,
+    array $airportCenters,
+    bool $airportsCsvExpected
+): ?string {
+    if ($airportsCsvExpected && $airportCenters === []) {
+        return 'airports.csv present but center mapping is empty';
+    }
+
+    if ($newAirportCount === 0) {
+        return 'merged airport count is zero';
+    }
+
+    if ($previousAirportCount === null || $previousAirportCount <= 0) {
+        return null;
+    }
+
+    $minAllowed = (int) floor($previousAirportCount * RUNWAYS_MERGE_MIN_AIRPORT_RETAIN_RATIO);
+    if ($newAirportCount < $minAllowed) {
+        return 'merged airport count below retention threshold';
+    }
+
+    return null;
+}
+
+/**
  * Abort runway merge when inputs look partial or the merged cache would shrink materially.
  *
  * @param array<string, mixed> $merged
@@ -286,31 +318,20 @@ function runwaysMergeRejectReason(
     array $airportCenters,
     bool $airportsCsvExpected
 ): ?string {
-    if ($airportsCsvExpected && $airportCenters === []) {
-        return 'airports.csv present but center mapping is empty';
+    $previousCount = null;
+    if (is_array($previousCache)) {
+        $oldAirports = $previousCache['airports'] ?? null;
+        if (is_array($oldAirports)) {
+            $previousCount = count($oldAirports);
+        }
     }
 
-    $newCount = count($merged);
-    if ($newCount === 0) {
-        return 'merged airport count is zero';
-    }
-
-    if ($previousCache === null) {
-        return null;
-    }
-
-    $oldAirports = $previousCache['airports'] ?? null;
-    if (!is_array($oldAirports) || $oldAirports === []) {
-        return null;
-    }
-
-    $oldCount = count($oldAirports);
-    $minAllowed = (int) floor($oldCount * RUNWAYS_MERGE_MIN_AIRPORT_RETAIN_RATIO);
-    if ($newCount < $minAllowed) {
-        return 'merged airport count below retention threshold';
-    }
-
-    return null;
+    return runwaysMergeRejectReasonFromCounts(
+        count($merged),
+        $previousCount,
+        $airportCenters,
+        $airportsCsvExpected
+    );
 }
 
 function runwaysCacheNeedsRefresh(): bool

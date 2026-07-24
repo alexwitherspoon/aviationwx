@@ -996,6 +996,10 @@ if (!defined('CACHE_RUNWAYS_DATA_FILE')) {
     define('CACHE_RUNWAYS_DATA_FILE', CACHE_RUNWAYS_DIR . '/runways_data.json');
 }
 
+if (!defined('CACHE_RUNWAYS_META_FILE')) {
+    define('CACHE_RUNWAYS_META_FILE', CACHE_RUNWAYS_DIR . '/runways_meta.json');
+}
+
 if (!defined('CACHE_FAA_NGDA_RUNWAYS_CSV')) {
     define('CACHE_FAA_NGDA_RUNWAYS_CSV', CACHE_RUNWAYS_DIR . '/faa_ngda_runways.csv');
 }
