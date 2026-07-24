@@ -758,13 +758,40 @@
             canvas.height = resolved.pixelSize;
         }
 
-        canvas.style.width = resolved.cssSize + 'px';
-        canvas.style.height = resolved.cssSize + 'px';
+        // Dashboard canvas has no width:100% rule; without explicit CSS size the
+        // backing-store dimensions become the displayed size. Embed compasses stay
+        // responsive via container CSS (wf-compass / wind-viz-container).
+        if (shouldPinCanvasDisplaySize(canvas)) {
+            canvas.style.width = resolved.cssSize + 'px';
+            canvas.style.height = resolved.cssSize + 'px';
+        } else {
+            canvas.style.width = '';
+            canvas.style.height = '';
+        }
 
         canvas._aviationwxCssSize = resolved.cssSize;
         canvas._aviationwxDpr = dpr;
 
         return resolved.cssSize;
+    }
+
+    /**
+     * Whether to set inline canvas dimensions after backing-store resize.
+     *
+     * @param {HTMLCanvasElement} canvas
+     * @returns {boolean}
+     */
+    function shouldPinCanvasDisplaySize(canvas) {
+        if (!canvas) {
+            return false;
+        }
+        if (canvas.id === 'windCanvas') {
+            return true;
+        }
+        if (canvas.closest('.wf-compass, .wind-viz-container')) {
+            return false;
+        }
+        return false;
     }
 
     /**
