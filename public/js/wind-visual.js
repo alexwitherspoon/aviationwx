@@ -708,7 +708,7 @@
         const refSize = getFullModeReferenceCssSize();
         const fallbackCss = (options && Number.isFinite(options.cssSize) && options.cssSize > 0)
             ? options.cssSize
-            : (canvas._aviationwxCssSize || canvas.clientWidth || refSize);
+            : (canvas._aviationwxCssSize || canvas.clientWidth || canvas._aviationwxWindCompassFallback || refSize);
         const cssSize = syncWindCompassCanvasPixels(canvas, fallbackCss);
         const dpr = canvas._aviationwxDpr || 1;
         const scale = getFullModeScale(cssSize);
@@ -807,6 +807,7 @@
         }
 
         const fallback = fallbackCssSize || getFullModeReferenceCssSize();
+        canvas._aviationwxWindCompassFallback = fallback;
         canvas._aviationwxWindCompassRedraw = drawFn;
 
         const redraw = function() {
@@ -827,7 +828,6 @@
                 return;
             }
 
-            syncWindCompassCanvasPixels(canvas, fallback);
             latestDraw();
         };
 

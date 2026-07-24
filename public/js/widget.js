@@ -649,10 +649,6 @@
                     if (isFullModeCanvas && window.AviationWX.observeWindCompassCanvas) {
                         window.AviationWX.observeWindCompassCanvas(canvas, renderCompass, 300);
                     } else {
-                        const fallbackCssSize = isFullModeCanvas ? 300 : canvas.width;
-                        if (window.AviationWX.syncWindCompassCanvasPixels && isFullModeCanvas) {
-                            window.AviationWX.syncWindCompassCanvasPixels(canvas, fallbackCssSize);
-                        }
                         renderCompass();
                     }
                 });
