@@ -731,7 +731,12 @@ function publishMergedRunwaysCacheAfterRetentionCheck(
         ];
     }
 
-    writeRunwaysCacheMeta($newCount, $fetchedAt, memory_get_peak_usage(true));
+    if (!writeRunwaysCacheMeta($newCount, $fetchedAt, memory_get_peak_usage(true))) {
+        aviationwx_log('warning', 'runways fetch: failed to write runways meta cache', [
+            'airport_count' => $newCount,
+            'meta_path' => CACHE_RUNWAYS_META_FILE,
+        ], 'app');
+    }
 
     return [
         'ok' => true,
@@ -847,7 +852,9 @@ if (php_sapi_name() === 'cli') {
         'previous_cache_bytes' => is_readable(CACHE_RUNWAYS_DATA_FILE) ? (int) filesize(CACHE_RUNWAYS_DATA_FILE) : 0,
     ], 'app');
 
-    downloadFaaNgdaRunwaysIfNeeded();
+    if (!is_readable($faaPath) || (faaNgdaRunwayCsvNeedsRefresh() && faaNgdaOverdueRefreshShouldTriggerMerge())) {
+        downloadFaaNgdaRunwaysIfNeeded();
+    }
     $oaReadable = is_readable($oaPath);
     $faaReadable = is_readable($faaPath);
     if (!$oaReadable && !$faaReadable) {
