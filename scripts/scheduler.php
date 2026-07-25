@@ -28,9 +28,6 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
-require_once __DIR__ . '/../lib/metrics.php';
-require_once __DIR__ . '/../lib/weather-health.php';
-require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
@@ -40,7 +37,9 @@ require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
-// Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
+require_once __DIR__ . '/../lib/deploy-drain.php';
+require_once __DIR__ . '/../lib/scheduler-work-registry.php';
+// Metrics spill merge, variant-health flush, and related housekeeping: drain-gated background workers.
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -54,8 +53,8 @@ $lastMetricsSpillMerge = 0;
 $lastVariantHealthHttpFlush = 0;
 $lastMetricsHealthCheck = 0; // Separate timestamp for health checks
 $lastMetricsCleanup = 0;
-$lastDailyAggregation = '';
-$lastWeeklyAggregation = '';
+$lastDailySpawnAttempt = 0;
+$lastWeeklySpawnAttempt = 0;
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastRunwaysFetch = 0;
@@ -71,6 +70,7 @@ $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
 $lastNwsPointsRefresh = 0;
 $lastNwsPointsMissingLog = 0;
+$deployDrainAnnounced = false;
 $runwaysFetchOnStartupDone = false;
 $nasrAptFetchOnStartupDone = false;
 $nasrFrqFetchOnStartupDone = false;
@@ -97,27 +97,6 @@ function reapZombies(): int {
         $reaped++;
     }
     return $reaped;
-}
-
-/**
- * Parse spills_merged from aggregate-metrics-spills.php stdout (last JSON object line).
- *
- * @param array<int, string> $lines exec output lines
- * @return int|null spills_merged count, or null if no summary line (legacy CLI)
- */
-function scheduler_parse_metrics_aggregator_stdout(array $lines): ?int {
-    for ($i = count($lines) - 1; $i >= 0; $i--) {
-        $line = trim($lines[$i]);
-        if ($line === '') {
-            continue;
-        }
-        $decoded = json_decode($line, true);
-        if (is_array($decoded) && array_key_exists('spills_merged', $decoded)) {
-            return (int) $decoded['spills_merged'];
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -242,8 +221,448 @@ $weatherPool = null;
 $webcamPool = null;
 $notamPool = null;
 $stationPowerPool = null;
+$workRegistry = new SchedulerWorkRegistry();
 $webcamScheduleQueue = null; // Priority queue for efficient webcam scheduling
 $invocationId = aviationwx_get_invocation_id();
+
+
+// Drain-gated work: register via setPool / registerEnqueueTick (run only when allow_new_work).
+$workRegistry->registerEnqueueTick('metar_bulk', function (int $now) use (&$lastMetarBulkRefresh): void {
+    // METAR bulk gzip download/ingest runs in a background worker (see refresh-metar-bulk.php).
+    if (($now - $lastMetarBulkRefresh) >= METAR_BULK_REFRESH_INTERVAL_SECONDS) {
+        $metarBulkScript = __DIR__ . '/refresh-metar-bulk.php';
+        if (file_exists($metarBulkScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($metarBulkScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+        }
+        $lastMetarBulkRefresh = $now;
+    }
+});
+
+$workRegistry->registerEnqueueTick('nws_points', function (int $now) use (&$lastNwsPointsRefresh, &$lastNwsPointsMissingLog): void {
+    // NWS /points metadata cache warmup (stale entries only; see refresh-nws-points.php).
+    if (($now - $lastNwsPointsRefresh) >= NWS_POINTS_REFRESH_INTERVAL_SECONDS) {
+        $nwsPointsScript = __DIR__ . '/refresh-nws-points.php';
+        if (file_exists($nwsPointsScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nwsPointsScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            $lastNwsPointsRefresh = $now;
+        } elseif (($now - $lastNwsPointsMissingLog) >= 300) {
+            aviationwx_log('warning', 'scheduler: refresh-nws-points.php missing', [
+                'path' => $nwsPointsScript,
+            ], 'app');
+            $lastNwsPointsMissingLog = $now;
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('weather', function (int $now) use (&$weatherPool, &$config): void {
+    if ($weatherPool !== null && isset($config['airports'])) {
+        foreach ($config['airports'] as $airportId => $airport) {
+            if (!is_array($airport) || !isAirportEnabled($airport)) {
+                continue;
+            }
+            // Match api/weather.php: no weather_sources means nothing to refresh.
+            if (!hasWeatherSources($airport)) {
+                continue;
+            }
+            $refreshInterval = isset($airport['weather_refresh_seconds'])
+                ? intval($airport['weather_refresh_seconds'])
+                : getDefaultWeatherRefresh();
+            $refreshInterval = max(getMinimumRefreshInterval(), $refreshInterval);
+            $cacheFile = getWeatherCachePath($airportId);
+            $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
+            if ($cacheAge >= $refreshInterval) {
+                $weatherPool->addJob([$airportId]);
+            }
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('webcam', function (int $now) use (&$webcamPool, &$webcamScheduleQueue): void {
+    // Min-heap schedule: both push and pull cams with per-camera refresh_seconds.
+    if ($webcamPool !== null && $webcamScheduleQueue !== null) {
+        foreach ($webcamScheduleQueue->getReadyCameras() as $entry) {
+            $webcamPool->addJob([$entry->airportId, $entry->camIndex]);
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('notam', function (int $now) use (&$notamPool, &$config): void {
+    // Process NOTAM updates (non-blocking, spread across time - lower urgency than weather/webcams)
+    if ($notamPool !== null && isset($config['airports'])) {
+        require_once __DIR__ . '/../lib/notam/scheduler-queue.php';
+
+        $refreshInterval = getNotamRefreshSeconds();
+        $minRefresh = getMinimumRefreshInterval();
+        $refreshInterval = max($minRefresh, $refreshInterval);
+
+        $notamCandidateIds = [];
+        foreach ($config['airports'] as $airportId => $airport) {
+            if (!is_array($airport) || !isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
+                continue;
+            }
+            $notamCandidateIds[] = (string) $airportId;
+        }
+
+        $notamToEnqueue = notamSelectAirportsToEnqueue(
+            $notamCandidateIds,
+            $refreshInterval,
+            notamSchedulerMaxEnqueuePerLoop(),
+            $now
+        );
+        foreach ($notamToEnqueue as $notamAirportId) {
+            $notamPool->addJob([$notamAirportId]);
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('station_power', function (int $now) use (&$stationPowerPool, &$config): void {
+    // Station power updates (non-blocking)
+    if ($stationPowerPool !== null && isset($config['airports'])) {
+        foreach ($config['airports'] as $airportId => $airport) {
+            if (!is_array($airport) || !shouldFetchStationPowerForAirport($airport)) {
+                continue;
+            }
+            $refreshInterval = STATION_POWER_FETCH_INTERVAL_SECONDS;
+            $minRefresh = getMinimumRefreshInterval();
+            $refreshInterval = max($minRefresh, $refreshInterval);
+            $stagger = crc32((string) $airportId) % max(1, (int) (STATION_POWER_FETCH_INTERVAL_SECONDS / 10));
+            $cacheFile = getStationPowerCachePath($airportId);
+            $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
+            if ($cacheAge >= ($refreshInterval + $stagger)) {
+                $stationPowerPool->addJob([$airportId]);
+            }
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$lastOurAirportsProbe, &$lastOurAirportsBulkFetch, &$lastRunwaysFetch, &$runwaysFetchOnStartupDone, &$lastNasrAptFetch, &$nasrAptFetchOnStartupDone, &$lastNasrFrqFetch, &$nasrFrqFetchOnStartupDone, &$lastCountryResolutionSchedulerCheck, &$countryResolutionSchedulerStartupEval, &$lastConfigSha, &$config): void {
+    // 8. OurAirports upstream probe (daily; background worker only)
+    if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL && ourAirportsProbeWorkerShouldRun()) {
+        $probeScript = __DIR__ . '/probe-ourairports.php';
+        if (file_exists($probeScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($probeScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            aviationwx_log('info', 'scheduler: ourairports probe started', [], 'app');
+        } else {
+            aviationwx_log('warning', 'scheduler: probe-ourairports.php missing', [
+            'path' => $probeScript,
+            ], 'app');
+        }
+        $lastOurAirportsProbe = $now;
+    }
+
+    // 8-i. OurAirports bulk CSV fetch when policy requires
+    if (($now - $lastOurAirportsBulkFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && ourAirportsBulkWorkerShouldRun()) {
+        $bulkScript = __DIR__ . '/fetch-ourairports-bulk.php';
+        if (file_exists($bulkScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($bulkScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            aviationwx_log('info', 'scheduler: ourairports bulk fetch started', [], 'app');
+        } else {
+            aviationwx_log('warning', 'scheduler: fetch-ourairports-bulk.php missing', [
+            'path' => $bulkScript,
+            ], 'app');
+        }
+        $lastOurAirportsBulkFetch = $now;
+    }
+
+    // 8-ii. Runways merge fetch (background; reads OurAirports CSVs from disk)
+    $runwaysScript = __DIR__ . '/fetch-runways.php';
+    if (!$runwaysFetchOnStartupDone) {
+        if (runwaysMergeWorkerShouldRun()) {
+            if (file_exists($runwaysScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+                'path' => $runwaysScript,
+                ], 'app');
+            }
+        }
+        $runwaysFetchOnStartupDone = true;
+        $lastRunwaysFetch = $now;
+    } elseif (($now - $lastRunwaysFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && runwaysMergeWorkerShouldRun()) {
+        if (file_exists($runwaysScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            aviationwx_log('info', 'scheduler: runways fetch started', [], 'app');
+        } else {
+            aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
+            'path' => $runwaysScript,
+            ], 'app');
+        }
+        $lastRunwaysFetch = $now;
+    }
+
+    // 8a. NASR APT cache fetch (weekly check; startup if missing)
+    if (!$nasrAptFetchOnStartupDone) {
+        if (nasrAptWorkerShouldRun()) {
+            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+            if (file_exists($nasrScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+                'path' => $nasrScript,
+                ], 'app');
+            }
+            $lastNasrAptFetch = $now;
+        }
+        $nasrAptFetchOnStartupDone = true;
+    } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptWorkerShouldRun()) {
+        $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
+        if (file_exists($nasrScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            aviationwx_log('info', 'scheduler: nasr apt fetch started (weekly)', [], 'app');
+        } else {
+            aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
+            'path' => $nasrScript,
+            ], 'app');
+        }
+        $lastNasrAptFetch = $now;
+    }
+
+    // 8a-ii. NASR FRQ cache fetch (weekly check; startup if missing)
+    if (!$nasrFrqFetchOnStartupDone) {
+        if (nasrFrqWorkerShouldRun()) {
+            $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
+            if (file_exists($nasrFrqScript)) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: nasr frq fetch started (startup)', [], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
+                'path' => $nasrFrqScript,
+                ], 'app');
+            }
+            $lastNasrFrqFetch = $now;
+        }
+        $nasrFrqFetchOnStartupDone = true;
+    } elseif (($now - $lastNasrFrqFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrFrqWorkerShouldRun()) {
+        $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
+        if (file_exists($nasrFrqScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+            aviationwx_log('info', 'scheduler: nasr frq fetch started (weekly)', [], 'app');
+        } else {
+            aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
+            'path' => $nasrFrqScript,
+            ], 'app');
+        }
+        $lastNasrFrqFetch = $now;
+    }
+
+    // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
+    $countryResolutionScript = __DIR__ . '/refresh-airport-country-resolution.php';
+    $countryResolutionEvalDue = !$countryResolutionSchedulerStartupEval
+    || (($now - $lastCountryResolutionSchedulerCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
+    if ($countryResolutionEvalDue
+    && file_exists($countryResolutionScript)
+    && $config !== null
+    && $lastConfigSha !== null) {
+        $lastCountryResolutionSchedulerCheck = $now;
+        $countryResolutionSchedulerStartupEval = true;
+        $cfgPath = getConfigFilePath();
+        if ($cfgPath !== null && is_readable($cfgPath)) {
+            $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
+            if ($countryNeedsRefresh) {
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($countryResolutionScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: airport country resolution refresh spawned', [], 'app');
+            }
+        }
+    }
+});
+
+$workRegistry->registerEnqueueTick('status_prewarm', function (int $now) use (&$lastCloudflareAnalyticsFetch, &$lastStatusPageCachesFetch, &$lastOperationsSnapshotBuild): void {
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+
+    // 9. Cloudflare analytics pre-warm (every 15 min, non-blocking)
+    // Runs worker in background; page loads read from file cache
+    if (($now - $lastCloudflareAnalyticsFetch) >= CLOUDFLARE_ANALYTICS_FETCH_INTERVAL) {
+        $cloudflareScript = __DIR__ . '/fetch-cloudflare-analytics.php';
+        if (file_exists($cloudflareScript)) {
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
+            reapZombies(); // Reap shell spawned by exec() with &
+            $lastCloudflareAnalyticsFetch = $now;
+        }
+    }
+
+    // 10. Status page caches pre-warm (every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL, non-blocking)
+    // Health, metrics bundle, performance JSON - aligned TTL (STATUS_PAGE_CACHE_TTL)
+    if (($now - $lastStatusPageCachesFetch) >= STATUS_PAGE_BACKGROUND_FETCH_INTERVAL) {
+        $statusScripts = [
+        'fetch-status-health.php',
+        'fetch-status-metrics.php',
+        'fetch-performance-metrics.php',
+        ];
+        foreach ($statusScripts as $script) {
+            $path = __DIR__ . '/' . $script;
+            if (file_exists($path)) {
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
+            }
+        }
+        reapZombies();
+        $lastStatusPageCachesFetch = $now;
+    }
+
+    // 11. Public API operations snapshot (every OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS, non-blocking)
+    if (($now - $lastOperationsSnapshotBuild) >= OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS) {
+        $opsScript = __DIR__ . '/build-operations-snapshot.php';
+        if (file_exists($opsScript)) {
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($opsScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+        }
+        $lastOperationsSnapshotBuild = $now;
+    }
+});
+
+$workRegistry->registerEnqueueTick('metrics_spill', function (int $now) use (&$lastMetricsSpillMerge): void {
+    if (($now - $lastMetricsSpillMerge) < METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
+        return;
+    }
+    $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
+    if (!file_exists($aggScript)) {
+        $lastMetricsSpillMerge = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-spills.php missing', [
+            'path' => $aggScript,
+        ], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsSpillMerge = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_variant_health', function (int $now) use (&$lastVariantHealthHttpFlush): void {
+    if (($now - $lastVariantHealthHttpFlush) < METRICS_FLUSH_INTERVAL_SECONDS) {
+        return;
+    }
+    $script = __DIR__ . '/flush-variant-health.php';
+    if (!file_exists($script)) {
+        $lastVariantHealthHttpFlush = $now;
+        aviationwx_log('warning', 'scheduler: flush-variant-health.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastVariantHealthHttpFlush = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_upstream_health', function (int $now) use (&$lastWeatherHealthUpdate): void {
+    if (($now - $lastWeatherHealthUpdate) < 60) {
+        return;
+    }
+    $script = __DIR__ . '/flush-upstream-health.php';
+    if (!file_exists($script)) {
+        $lastWeatherHealthUpdate = $now;
+        aviationwx_log('warning', 'scheduler: flush-upstream-health.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastWeatherHealthUpdate = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_daily', function (int $now) use (&$lastDailySpawnAttempt): void {
+    $yesterdayId = gmdate('Y-m-d', $now - 86400);
+    $dailyPath = getMetricsDailyPath($yesterdayId);
+    if (is_file($dailyPath)) {
+        return;
+    }
+    if (($now - $lastDailySpawnAttempt) < 60) {
+        return;
+    }
+    $script = __DIR__ . '/aggregate-metrics-daily.php';
+    if (!file_exists($script)) {
+        $lastDailySpawnAttempt = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-daily.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script)
+        . ' --date=' . escapeshellarg($yesterdayId) . ' > /dev/null 2>&1 &';
+    exec($cmd);
+    reapZombies();
+    $lastDailySpawnAttempt = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_weekly', function (int $now) use (&$lastWeeklySpawnAttempt): void {
+    $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
+    if ((int) gmdate('N', $now) !== 1 || (int) gmdate('H', $now) < 2) {
+        return;
+    }
+    $weeklyPath = getMetricsWeeklyPath($lastWeekId);
+    if (is_file($weeklyPath)) {
+        return;
+    }
+    if (($now - $lastWeeklySpawnAttempt) < 60) {
+        return;
+    }
+    $script = __DIR__ . '/aggregate-metrics-weekly.php';
+    if (!file_exists($script)) {
+        $lastWeeklySpawnAttempt = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-weekly.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script)
+        . ' --week=' . escapeshellarg($lastWeekId) . ' > /dev/null 2>&1 &';
+    exec($cmd);
+    reapZombies();
+    $lastWeeklySpawnAttempt = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_cleanup', function (int $now) use (&$lastMetricsCleanup): void {
+    if (($now - $lastMetricsCleanup) < 86400) {
+        return;
+    }
+    $script = __DIR__ . '/cleanup-metrics.php';
+    if (!file_exists($script)) {
+        $lastMetricsCleanup = $now;
+        aviationwx_log('warning', 'scheduler: cleanup-metrics.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsCleanup = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$lastMetricsHealthCheck): void {
+    if (($now - $lastMetricsHealthCheck) < 300) {
+        return;
+    }
+    $script = __DIR__ . '/check-metrics-health.php';
+    if (!file_exists($script)) {
+        $lastMetricsHealthCheck = $now;
+        aviationwx_log('warning', 'scheduler: check-metrics-health.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsHealthCheck = $now;
+});
 
 // Main scheduler loop
 while ($running) {
@@ -297,53 +716,63 @@ while ($running) {
                 $config = $newConfig;
                 $lastConfigReload = $now;
                 $lastConfigMtime = $currentMtime; // Keep for logging/debugging
-                $lastConfigSha = $currentSha;
+                // Keep prior SHA when the config file could not be read this tick.
+                if ($currentSha !== null) {
+                    $lastConfigSha = $currentSha;
+                }
                 
-                // Reinitialize ProcessPools with new config
-                $weatherPoolSize = getWeatherWorkerPoolSize();
-                $webcamPoolSize = getWebcamWorkerPoolSize();
-                $notamPoolSize = getNotamWorkerPoolSize();
-                $stationPowerPoolSize = getStationPowerWorkerPoolSize();
-                $workerTimeout = getWorkerTimeout();
-                
-                $weatherPool = new ProcessPool(
-                    $weatherPoolSize,
-                    $workerTimeout,
-                    'fetch-weather.php',
-                    $invocationId
-                );
-                
-                // Unified webcam worker handles both push and pull webcams
-                $webcamPool = new ProcessPool(
-                    $webcamPoolSize,
-                    $workerTimeout,
-                    'unified-webcam-worker.php',
-                    $invocationId
-                );
-                
-                $notamPool = new ProcessPool(
-                    $notamPoolSize,
-                    $workerTimeout,
-                    'fetch-notam.php',
-                    $invocationId
-                );
+                // Rebuild pools only when config changed or pools were never created.
+                // Recreating every reload tick orphans in-flight ProcessPool children from the registry.
+                if ($configChanged || $weatherPool === null) {
+                    $weatherPoolSize = getWeatherWorkerPoolSize();
+                    $webcamPoolSize = getWebcamWorkerPoolSize();
+                    $notamPoolSize = getNotamWorkerPoolSize();
+                    $stationPowerPoolSize = getStationPowerWorkerPoolSize();
+                    $workerTimeout = getWorkerTimeout();
+                    
+                    $weatherPool = new ProcessPool(
+                        $weatherPoolSize,
+                        $workerTimeout,
+                        'fetch-weather.php',
+                        $invocationId
+                    );
+                    
+                    $webcamPool = new ProcessPool(
+                        $webcamPoolSize,
+                        $workerTimeout,
+                        'unified-webcam-worker.php',
+                        $invocationId
+                    );
+                    
+                    $notamPool = new ProcessPool(
+                        $notamPoolSize,
+                        $workerTimeout,
+                        'fetch-notam.php',
+                        $invocationId
+                    );
 
-                $stationPowerPool = new ProcessPool(
-                    $stationPowerPoolSize,
-                    $workerTimeout,
-                    'fetch-station-power.php',
-                    $invocationId
-                );
-                
-                // Reinitialize webcam schedule queue with new config
-                // This uses a priority queue (min-heap) for O(log N) scheduling
-                $webcamScheduleQueue = new WebcamScheduleQueue();
-                $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
-                
-                aviationwx_log('info', 'scheduler: config reloaded', [
-                    'airports_count' => count($config['airports'] ?? []),
-                    'webcam_count' => $webcamScheduleQueue->count()
-                ], 'app');
+                    $stationPowerPool = new ProcessPool(
+                        $stationPowerPoolSize,
+                        $workerTimeout,
+                        'fetch-station-power.php',
+                        $invocationId
+                    );
+
+                    $workRegistry->setPool('weather', $weatherPool);
+                    $workRegistry->setPool('webcam', $webcamPool);
+                    $workRegistry->setPool('notam', $notamPool);
+                    $workRegistry->setPool('station_power', $stationPowerPool);
+
+                    $webcamScheduleQueue = new WebcamScheduleQueue();
+                    $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
+                    
+                    aviationwx_log('info', 'scheduler: config reloaded', [
+                        'airports_count' => count($config['airports'] ?? []),
+                        'webcam_count' => $webcamScheduleQueue->count(),
+                        'pools_recreated' => true,
+                        'config_changed' => $configChanged,
+                    ], 'app');
+                }
             }
         }
         
@@ -400,7 +829,12 @@ while ($running) {
                 'fetch-station-power.php',
                 $invocationId
             );
-            
+
+            $workRegistry->setPool('weather', $weatherPool);
+            $workRegistry->setPool('webcam', $webcamPool);
+            $workRegistry->setPool('notam', $notamPool);
+            $workRegistry->setPool('station_power', $stationPowerPool);
+
             // Initialize webcam schedule queue with config
             // This uses a priority queue (min-heap) for O(log N) scheduling
             $webcamScheduleQueue = new WebcamScheduleQueue();
@@ -411,270 +845,70 @@ while ($running) {
             ], 'app');
         }
         
-        // METAR bulk gzip download/ingest runs in a background worker (see refresh-metar-bulk.php).
-        if (($now - $lastMetarBulkRefresh) >= METAR_BULK_REFRESH_INTERVAL_SECONDS) {
-            $metarBulkScript = __DIR__ . '/refresh-metar-bulk.php';
-            if (file_exists($metarBulkScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($metarBulkScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-            }
-            $lastMetarBulkRefresh = $now;
-        }
+        // Deploy drain uses registered pools/ticks only.
+        $workRegistry->cleanupFinishedAll();
 
-        // NWS /points metadata cache warmup (stale entries only; see refresh-nws-points.php).
-        if (($now - $lastNwsPointsRefresh) >= NWS_POINTS_REFRESH_INTERVAL_SECONDS) {
-            $nwsPointsScript = __DIR__ . '/refresh-nws-points.php';
-            if (file_exists($nwsPointsScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nwsPointsScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                $lastNwsPointsRefresh = $now;
-            } elseif (($now - $lastNwsPointsMissingLog) >= 300) {
-                aviationwx_log('warning', 'scheduler: refresh-nws-points.php missing', [
-                    'path' => $nwsPointsScript,
-                ], 'app');
-                $lastNwsPointsMissingLog = $now;
-            }
-        }
-
-        // Process weather updates (non-blocking)
-        // Note: METAR refresh is handled as part of weather updates via the weather API endpoint
-        // The global metar_refresh_seconds config is respected by the weather API internally
-        if ($weatherPool !== null && isset($config['airports'])) {
-            foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !isAirportEnabled($airport)) {
-                    continue;
-                }
-
-                // No sensor / no weather_sources: nothing to refresh (matches api/weather.php gate)
-                if (!hasWeatherSources($airport)) {
-                    continue;
-                }
-                
-                // Get refresh interval (per-airport, then global default, then function default)
-                $refreshInterval = isset($airport['weather_refresh_seconds'])
-                    ? intval($airport['weather_refresh_seconds'])
-                    : getDefaultWeatherRefresh();
-                
-                // Enforce minimum (configurable)
-                $minRefresh = getMinimumRefreshInterval();
-                $refreshInterval = max($minRefresh, $refreshInterval);
-                
-                // Check cache age (stateless - use filemtime)
-                $cacheFile = getWeatherCachePath($airportId);
-                $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
-                
-                // Check if update needed
-                if ($cacheAge >= $refreshInterval) {
-                    // Non-blocking: add to pool (ProcessPool handles duplicates)
-                    $weatherPool->addJob([$airportId]);
-                }
-            }
-        }
-        
-        // Process webcam updates using priority queue (non-blocking)
-        // The WebcamScheduleQueue uses a min-heap for O(log N) scheduling efficiency
-        // It handles BOTH push and pull webcams with per-camera refresh_seconds
-        if ($webcamPool !== null && $webcamScheduleQueue !== null) {
-            // Get all cameras that are due for processing (O(k log N) where k is ready cameras)
-            $readyCameras = $webcamScheduleQueue->getReadyCameras();
-            
-            foreach ($readyCameras as $entry) {
-                // Non-blocking: add to pool (ProcessPool handles duplicates)
-                // Unified worker handles both push and pull webcams
-                // ScheduleEntry has airportId and camIndex properties
-                $webcamPool->addJob([$entry->airportId, $entry->camIndex]);
-            }
-        }
-        
-        // Process NOTAM updates (non-blocking, spread across time - lower urgency than weather/webcams)
-        if ($notamPool !== null && isset($config['airports'])) {
-            require_once __DIR__ . '/../lib/notam/scheduler-queue.php';
-
-            $refreshInterval = getNotamRefreshSeconds();
-            $minRefresh = getMinimumRefreshInterval();
-            $refreshInterval = max($minRefresh, $refreshInterval);
-
-            $notamCandidateIds = [];
-            foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !isAirportEnabled($airport) || isAirportInMaintenance($airport)) {
-                    continue;
-                }
-                $notamCandidateIds[] = (string) $airportId;
-            }
-
-            $notamToEnqueue = notamSelectAirportsToEnqueue(
-                $notamCandidateIds,
-                $refreshInterval,
-                notamSchedulerMaxEnqueuePerLoop(),
-                $now
-            );
-            foreach ($notamToEnqueue as $notamAirportId) {
-                $notamPool->addJob([$notamAirportId]);
-            }
-        }
-
-        // Station power updates (non-blocking)
-        if ($stationPowerPool !== null && isset($config['airports'])) {
-            foreach ($config['airports'] as $airportId => $airport) {
-                if (!is_array($airport) || !shouldFetchStationPowerForAirport($airport)) {
-                    continue;
-                }
-                $refreshInterval = STATION_POWER_FETCH_INTERVAL_SECONDS;
-                $minRefresh = getMinimumRefreshInterval();
-                $refreshInterval = max($minRefresh, $refreshInterval);
-                $stagger = crc32((string) $airportId) % max(1, (int) (STATION_POWER_FETCH_INTERVAL_SECONDS / 10));
-                $cacheFile = getStationPowerCachePath($airportId);
-                $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
-                if ($cacheAge >= ($refreshInterval + $stagger)) {
-                    $stationPowerPool->addJob([$airportId]);
-                }
-            }
-        }
-        
-        // Cleanup finished workers (non-blocking)
-        if ($weatherPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
-            $weatherPool->cleanupFinished($dummyStats);
-        }
-        if ($webcamPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
-            $webcamPool->cleanupFinished($dummyStats);
-        }
-        if ($notamPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
-            $notamPool->cleanupFinished($dummyStats);
-        }
-        if ($stationPowerPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
-            $stationPowerPool->cleanupFinished($dummyStats);
-        }
-        
-        // Reap any zombie child processes that proc_close() may have missed
-        // This is a safety net for edge cases where child processes become orphaned
         reapZombies();
-        
-        // Process metrics tasks (non-blocking)
-        // 1. Merge PHP-FPM spill journals into hourly/*.json (APCu is per-worker; spills capture counters at shutdown)
-        if (($now - $lastMetricsSpillMerge) >= METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
-            $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
-            if (file_exists($aggScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                $aggOutput = [];
-                $exitCode = 0;
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' 2>&1', $aggOutput, $exitCode);
-                // Always advance after an attempt so failures do not retry every 1s loop tick.
-                $lastMetricsSpillMerge = $now;
-                if ($exitCode === 0) {
-                    $spillsMerged = scheduler_parse_metrics_aggregator_stdout($aggOutput);
-                    if ($spillsMerged === null || $spillsMerged > 0) {
-                        metrics_status_bundle_mirror_refresh_via_http();
-                    }
-                } else {
-                    aviationwx_log('warning', 'scheduler: metrics spill merge CLI reported failure', [
-                        'exit_code' => $exitCode,
-                        'output_lines' => array_slice($aggOutput, 0, 30),
+
+        $drainActiveWorkers = $workRegistry->sumActiveWorkers();
+        $drainTick = deploy_drain_evaluate_scheduler_tick($drainActiveWorkers, $now);
+        if (!$drainTick['allow_new_work']) {
+            if (!$deployDrainAnnounced) {
+                aviationwx_log('info', 'scheduler: deploy drain active - pausing new workers', [
+                    'active_workers' => $drainActiveWorkers,
+                    'action' => $drainTick['action'],
+                    'elapsed_seconds' => deploy_drain_elapsed_seconds($now),
+                    'max_seconds' => DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+                    'ttl_seconds' => deploy_drain_ttl_seconds(),
+                    'registered_pools' => $workRegistry->registeredPoolNames(),
+                ], 'app');
+                $deployDrainAnnounced = true;
+            }
+        } else {
+            if ($deployDrainAnnounced || $drainTick['action'] === 'abandon_clear') {
+                if ($drainTick['action'] === 'abandon_clear') {
+                    aviationwx_log('warning', 'scheduler: deploy drain abandoned - resuming workers', [
+                        'elapsed_seconds' => deploy_drain_elapsed_seconds($now),
+                        'ttl_seconds' => deploy_drain_ttl_seconds(),
                     ], 'app');
                 }
-            } else {
-                $lastMetricsSpillMerge = $now;
-                aviationwx_log('warning', 'scheduler: aggregate-metrics-spills.php missing', [
-                    'path' => $aggScript,
-                ], 'app');
             }
+            $deployDrainAnnounced = false;
+        }
+        $drainApplied = deploy_drain_apply_scheduler_action(
+            $drainTick['action'],
+            $now,
+            static function () use ($workRegistry, $drainActiveWorkers, $drainTick): void {
+                if ($drainTick['action'] !== 'force_terminate' && $drainTick['action'] !== 'abandon_clear') {
+                    return;
+                }
+                if ($drainActiveWorkers <= 0) {
+                    return;
+                }
+                aviationwx_log('warning', 'scheduler: deploy drain terminating pool workers', [
+                    'active_workers' => $drainActiveWorkers,
+                    'action' => $drainTick['action'],
+                    'max_seconds' => DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+                    'registered_pools' => $workRegistry->registeredPoolNames(),
+                ], 'app');
+                $workRegistry->terminateAll();
+            }
+        );
+        if (!$drainApplied) {
+            aviationwx_log('error', 'scheduler: deploy drain marker update failed', [
+                'action' => $drainTick['action'],
+                'active_workers' => $drainActiveWorkers,
+                'flag' => deploy_drain_flag_path(),
+                'done' => deploy_drain_done_path(),
+            ], 'app', true);
         }
 
-        // 1b. Flush variant-health APCu counters to cache file inside PHP-FPM (CLI cannot see FPM APCu)
-        if (($now - $lastVariantHealthHttpFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
-            if (variant_health_flush_via_http()) {
-                $lastVariantHealthHttpFlush = $now;
-            }
+        if ($drainTick['allow_new_work']) {
+            $workRegistry->runEnqueueTicks($now);
         }
         
-        // 2. Aggregate yesterday's hourly data into daily (once per day, after midnight UTC)
-        $yesterdayId = gmdate('Y-m-d', $now - 86400);
-        if ($lastDailyAggregation !== $yesterdayId) {
-            if (metrics_aggregate_daily($yesterdayId)) {
-                $lastDailyAggregation = $yesterdayId;
-                aviationwx_log('info', 'scheduler: metrics daily aggregation complete', [
-                    'date' => $yesterdayId
-                ], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: metrics daily aggregation failed', [
-                    'date' => $yesterdayId
-                ], 'app');
-            }
-        }
-        
-        // 3. Aggregate last week's daily data into weekly (once per week, on Monday after midnight UTC)
-        $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
-        if ($lastWeeklyAggregation !== $lastWeekId && (int)gmdate('N') === 1 && (int)gmdate('H') >= 2) {
-            if (metrics_aggregate_weekly($lastWeekId)) {
-                $lastWeeklyAggregation = $lastWeekId;
-                aviationwx_log('info', 'scheduler: metrics weekly aggregation complete', [
-                    'week' => $lastWeekId
-                ], 'app');
-            }
-        }
-        
-        // 4. Cleanup old metrics files (once per day)
-        if (($now - $lastMetricsCleanup) >= 86400) {
-            $deletedCount = metrics_cleanup();
-            if ($deletedCount > 0) {
-                aviationwx_log('info', 'scheduler: metrics cleanup complete', [
-                    'deleted_files' => $deletedCount
-                ], 'app');
-            }
-            $lastMetricsCleanup = $now;
-        }
-        
-        // 5. Check metrics system health (every 5 minutes)
-        if (($now - $lastMetricsHealthCheck) >= 300) {
-            $healthStatus = metrics_get_health_status();
-            
-            if (!$healthStatus['healthy']) {
-                foreach ($healthStatus['errors'] as $error) {
-                    aviationwx_log('error', 'scheduler: metrics health check failed', [
-                        'error' => $error
-                    ], 'app');
-                }
-            }
-            
-            if (!empty($healthStatus['warnings'])) {
-                foreach ($healthStatus['warnings'] as $warning) {
-                    aviationwx_log('warning', 'scheduler: metrics health warning', [
-                        'warning' => $warning
-                    ], 'app');
-                }
-            }
-            
-            // Log memory pressure warnings
-            $memInfo = metrics_get_apcu_memory_info();
-            if ($memInfo && $memInfo['used_percent'] > 80) {
-                aviationwx_log('warning', 'scheduler: APCu memory pressure', [
-                    'used_percent' => $memInfo['used_percent'],
-                    'used_mb' => round($memInfo['used_bytes'] / 1048576, 2),
-                    'total_mb' => round($memInfo['total_bytes'] / 1048576, 2)
-                ], 'app');
-            }
-            
-            $lastMetricsHealthCheck = $now;
-        }
-        
-        // 6. Flush weather health counters to cache file (every 60 seconds)
-        // Variant health APCu flush runs via variant_health_flush_via_http() on METRICS_FLUSH_INTERVAL_SECONDS above.
-        // This pre-computes weather fetch health so status page doesn't check file ages
-        if (($now - $lastWeatherHealthUpdate) >= 60) {
-            $weatherFlushed = weatherHealthFlush();
-            $notamFlushed = notamHealthFlush();
-            if ($weatherFlushed || $notamFlushed) {
-                $lastWeatherHealthUpdate = $now;
-            }
-        }
-        
-        // 7. Clean up stuck worker processes (every 60 seconds)
-        // This is a safety net for workers that become stuck despite self-timeout mechanisms
+        // Clean up stuck worker processes (every 60 seconds).
+        // Safety net for workers that become stuck despite self-timeout mechanisms.
         if (($now - $lastStuckWorkerCleanup) >= 60) {
             $stuckPids = cleanupStaleWorkerHeartbeats();
             if (!empty($stuckPids)) {
@@ -687,201 +921,6 @@ while ($running) {
                 }
             }
             $lastStuckWorkerCleanup = $now;
-        }
-        
-        // 8. OurAirports upstream probe (daily; background worker only)
-        if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL && ourAirportsProbeWorkerShouldRun()) {
-            $probeScript = __DIR__ . '/probe-ourairports.php';
-            if (file_exists($probeScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($probeScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: ourairports probe started', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: probe-ourairports.php missing', [
-                    'path' => $probeScript,
-                ], 'app');
-            }
-            $lastOurAirportsProbe = $now;
-        }
-
-        // 8-i. OurAirports bulk CSV fetch when policy requires
-        if (($now - $lastOurAirportsBulkFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && ourAirportsBulkWorkerShouldRun()) {
-            $bulkScript = __DIR__ . '/fetch-ourairports-bulk.php';
-            if (file_exists($bulkScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($bulkScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: ourairports bulk fetch started', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-ourairports-bulk.php missing', [
-                    'path' => $bulkScript,
-                ], 'app');
-            }
-            $lastOurAirportsBulkFetch = $now;
-        }
-
-        // 8-ii. Runways merge fetch (background; reads OurAirports CSVs from disk)
-        $runwaysScript = __DIR__ . '/fetch-runways.php';
-        if (!$runwaysFetchOnStartupDone) {
-            if (runwaysMergeWorkerShouldRun()) {
-                if (file_exists($runwaysScript)) {
-                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
-                    reapZombies();
-                    aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
-                } else {
-                    aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
-                        'path' => $runwaysScript,
-                    ], 'app');
-                }
-            }
-            $runwaysFetchOnStartupDone = true;
-            $lastRunwaysFetch = $now;
-        } elseif (($now - $lastRunwaysFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && runwaysMergeWorkerShouldRun()) {
-            if (file_exists($runwaysScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: runways fetch started', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
-                    'path' => $runwaysScript,
-                ], 'app');
-            }
-            $lastRunwaysFetch = $now;
-        }
-
-        // 8a. NASR APT cache fetch (weekly check; startup if missing)
-        if (!$nasrAptFetchOnStartupDone) {
-            if (nasrAptWorkerShouldRun()) {
-                $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
-                if (file_exists($nasrScript)) {
-                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
-                    reapZombies();
-                    aviationwx_log('info', 'scheduler: nasr apt fetch started (startup)', [], 'app');
-                } else {
-                    aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
-                        'path' => $nasrScript,
-                    ], 'app');
-                }
-                $lastNasrAptFetch = $now;
-            }
-            $nasrAptFetchOnStartupDone = true;
-        } elseif (($now - $lastNasrAptFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrAptWorkerShouldRun()) {
-            $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
-            if (file_exists($nasrScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: nasr apt fetch started (weekly)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
-                    'path' => $nasrScript,
-                ], 'app');
-            }
-            $lastNasrAptFetch = $now;
-        }
-
-        // 8a-ii. NASR FRQ cache fetch (weekly check; startup if missing)
-        if (!$nasrFrqFetchOnStartupDone) {
-            if (nasrFrqWorkerShouldRun()) {
-                $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
-                if (file_exists($nasrFrqScript)) {
-                    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
-                    reapZombies();
-                    aviationwx_log('info', 'scheduler: nasr frq fetch started (startup)', [], 'app');
-                } else {
-                    aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
-                        'path' => $nasrFrqScript,
-                    ], 'app');
-                }
-                $lastNasrFrqFetch = $now;
-            }
-            $nasrFrqFetchOnStartupDone = true;
-        } elseif (($now - $lastNasrFrqFetch) >= NASR_FETCH_CHECK_INTERVAL && nasrFrqWorkerShouldRun()) {
-            $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
-            if (file_exists($nasrFrqScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: nasr frq fetch started (weekly)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
-                    'path' => $nasrFrqScript,
-                ], 'app');
-            }
-            $lastNasrFrqFetch = $now;
-        }
-
-        // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
-        $countryResolutionScript = __DIR__ . '/refresh-airport-country-resolution.php';
-        $countryResolutionEvalDue = !$countryResolutionSchedulerStartupEval
-            || (($now - $lastCountryResolutionSchedulerCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
-        if ($countryResolutionEvalDue
-            && file_exists($countryResolutionScript)
-            && $config !== null
-            && $lastConfigSha !== null) {
-            $lastCountryResolutionSchedulerCheck = $now;
-            $countryResolutionSchedulerStartupEval = true;
-            $cfgPath = getConfigFilePath();
-            if ($cfgPath !== null && is_readable($cfgPath)) {
-                $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
-                if ($countryNeedsRefresh) {
-                    $output = [];
-                    $exitCode = 0;
-                    exec('php ' . escapeshellarg($countryResolutionScript) . ' 2>&1', $output, $exitCode);
-                    if ($exitCode === 0) {
-                        aviationwx_log('info', 'scheduler: airport country resolution refresh complete', [], 'app');
-                    } else {
-                        aviationwx_log('warning', 'scheduler: airport country resolution refresh failed', [
-                            'exit_code' => $exitCode,
-                            'output' => implode("\n", array_slice($output, 0, 20)),
-                        ], 'app');
-                    }
-                }
-            }
-        }
-
-        // 9. Cloudflare analytics pre-warm (every 15 min, non-blocking)
-        // Runs worker in background; page loads read from file cache
-        if (($now - $lastCloudflareAnalyticsFetch) >= CLOUDFLARE_ANALYTICS_FETCH_INTERVAL) {
-            $cloudflareScript = __DIR__ . '/fetch-cloudflare-analytics.php';
-            if (file_exists($cloudflareScript)) {
-                exec('php ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
-                reapZombies(); // Reap shell spawned by exec() with &
-                $lastCloudflareAnalyticsFetch = $now;
-            }
-        }
-
-        // 10. Status page caches pre-warm (every STATUS_PAGE_BACKGROUND_FETCH_INTERVAL, non-blocking)
-        // Health, metrics bundle, performance JSON - aligned TTL (STATUS_PAGE_CACHE_TTL)
-        if (($now - $lastStatusPageCachesFetch) >= STATUS_PAGE_BACKGROUND_FETCH_INTERVAL) {
-            $statusScripts = [
-                'fetch-status-health.php',
-                'fetch-status-metrics.php',
-                'fetch-performance-metrics.php',
-            ];
-            foreach ($statusScripts as $script) {
-                $path = __DIR__ . '/' . $script;
-                if (file_exists($path)) {
-                    exec('php ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
-                }
-            }
-            reapZombies();
-            $lastStatusPageCachesFetch = $now;
-        }
-
-        // 11. Public API operations snapshot (every OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS, non-blocking)
-        if (($now - $lastOperationsSnapshotBuild) >= OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS) {
-            $opsScript = __DIR__ . '/build-operations-snapshot.php';
-            if (file_exists($opsScript)) {
-                exec('php ' . escapeshellarg($opsScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-            }
-            $lastOperationsSnapshotBuild = $now;
         }
 
         // PASV / DDNS: root cron runs /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh (vsftpd needs root).

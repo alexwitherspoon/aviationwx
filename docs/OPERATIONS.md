@@ -123,6 +123,8 @@ Post-deploy verification runs **on the production host over SSH** (container hea
 
 **Startup model:** the `web` container **entrypoint** starts one `scripts/scheduler.php` process after cache permissions are ready. **Cron** runs `scripts/scheduler-health-check.php` every minute as a **watchdog**: it checks the lock file and `/proc`, and starts a replacement only when recovery is needed (for example missing PID, lock health not healthy, or stale lock with no live daemon). It is not meant to compete with the entrypoint for a routine second start when one healthy daemon is already running.
 
+**Deploy worker drain:** CD pauses registered scheduler work before recreating the web container while Apache keeps serving. Behavior (registry gating, ProcessPool wait, force and abandon windows, entrypoint clear) is documented under [Scheduler System](ARCHITECTURE.md#scheduler-system). Operators inspect markers on the host cache mount:
+
 ```bash
 # Check scheduler is running
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep scheduler
@@ -130,7 +132,10 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep schedule
 # Check lock file (shows PID and start time)
 docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Force restart scheduler (auto-restarts within 60s)
+# Inspect deploy drain markers (host cache mount)
+php scripts/deploy-drain.php status --cache-dir=/tmp/aviationwx-cache
+
+# Force restart scheduler (watchdog may restart within about 60s when drain is not active)
 docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 ```
 
@@ -151,7 +156,7 @@ Live counters live in APCu (per PHP-FPM worker). Each worker appends one JSON li
 - **Spill root**: `cache/metrics/spill/`
 - **Aggregator telemetry**: `cache/metrics/aggregator_last_run.json`
 
-Merge cadence is `METRICS_SPILL_MERGE_INTERVAL_SECONDS` (scheduler invokes `scripts/aggregate-metrics-spills.php` via CLI). After a successful merge, the scheduler calls `metrics_status_bundle_mirror_refresh_via_http()` so PHP-FPM rebuilds the status bundle from disk and repopulates the APCu mirror (`METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS`). Web requests also warm the mirror on a cold read. Variant-health APCu counters are flushed over HTTP on `METRICS_FLUSH_INTERVAL_SECONDS` because CLI cannot see FPM APCu.
+Merge cadence is `METRICS_SPILL_MERGE_INTERVAL_SECONDS` (scheduler starts `scripts/aggregate-metrics-spills.php` as a fire-and-forget worker). When spills were merged, that worker calls `metrics_status_bundle_mirror_refresh_via_http()` so PHP-FPM rebuilds the status bundle from disk and repopulates the APCu mirror (`METRICS_STATUS_BUNDLE_MIRROR_TTL_SECONDS`). Web requests also warm the mirror on a cold read. Variant-health APCu counters are flushed by `scripts/flush-variant-health.php` on `METRICS_FLUSH_INTERVAL_SECONDS` because CLI cannot see FPM APCu. Daily/weekly aggregate, metrics cleanup, metrics health logging, and weather/NOTAM health flush are likewise background workers registered on the scheduler work registry (paused during deploy drain). Metrics disk health uses free-byte floors (`METRICS_DISK_CRITICAL_FREE_BYTES`, `METRICS_DISK_LOW_FREE_BYTES`) plus used-percent so large cache volumes with tens of gigabytes free are not marked critical on percent alone.
 
 **Tracked metrics:** (unchanged) airport page views, weather requests, webcam serves, map tiles, browser format support, cache hit/miss, etc.
 

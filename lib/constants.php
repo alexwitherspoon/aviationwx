@@ -35,6 +35,26 @@ if (!defined('WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED')) {
     define('WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED', 'Weather source not configured');
 }
 
+// Deploy worker drain: CD sets a cache flag; scheduler stops new ProcessPool work while
+// Apache keeps serving. Force-SIGTERM at MAX; auto-clear/resume at MAX+ABANDON if CD never recreates.
+if (!defined('DEPLOY_WORKER_DRAIN_MAX_SECONDS')) {
+    define('DEPLOY_WORKER_DRAIN_MAX_SECONDS', 120);
+}
+// Extra wall time after MAX for compose/build before an abandoned drain unsticks the live site.
+if (!defined('DEPLOY_WORKER_DRAIN_ABANDON_SECONDS')) {
+    define('DEPLOY_WORKER_DRAIN_ABANDON_SECONDS', 600);
+}
+// CD wait polls a few seconds past MAX so the scheduler can write .done after force-terminate.
+if (!defined('DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS')) {
+    define('DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS', 5);
+}
+if (!defined('DEPLOY_DRAIN_FLAG_BASENAME')) {
+    define('DEPLOY_DRAIN_FLAG_BASENAME', 'deploy-drain.flag');
+}
+if (!defined('DEPLOY_DRAIN_DONE_BASENAME')) {
+    define('DEPLOY_DRAIN_DONE_BASENAME', 'deploy-drain.done');
+}
+
 // RTSP/ffmpeg timeouts
 if (!defined('RTSP_DEFAULT_TIMEOUT')) {
     define('RTSP_DEFAULT_TIMEOUT', 10);
@@ -610,6 +630,19 @@ if (!defined('ERROR_RATE_DEGRADED_THRESHOLD')) {
 // Metrics collection
 if (!defined('METRICS_RETENTION_DAYS')) {
     define('METRICS_RETENTION_DAYS', 14); // Keep 14 days of metrics
+}
+// Disk health for metrics cache volume: percent alone misleads on multi-TB disks with tens of GB free.
+if (!defined('METRICS_DISK_LOW_USED_PERCENT')) {
+    define('METRICS_DISK_LOW_USED_PERCENT', 90);
+}
+if (!defined('METRICS_DISK_CRITICAL_USED_PERCENT')) {
+    define('METRICS_DISK_CRITICAL_USED_PERCENT', 95);
+}
+if (!defined('METRICS_DISK_LOW_FREE_BYTES')) {
+    define('METRICS_DISK_LOW_FREE_BYTES', 5 * 1024 * 1024 * 1024); // 5 GiB
+}
+if (!defined('METRICS_DISK_CRITICAL_FREE_BYTES')) {
+    define('METRICS_DISK_CRITICAL_FREE_BYTES', 1 * 1024 * 1024 * 1024); // 1 GiB
 }
 if (!defined('METRICS_FLUSH_INTERVAL_SECONDS')) {
     define('METRICS_FLUSH_INTERVAL_SECONDS', 300); // Flush to disk every 5 minutes

@@ -1624,6 +1624,20 @@ jobs:
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             fi
           fi
+
+          clear_deploy_drain_markers() {
+            if [ -f scripts/deploy-drain.php ] && command -v php >/dev/null 2>&1; then
+              php scripts/deploy-drain.php clear --cache-dir="${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}" >/dev/null 2>&1 || true
+            fi
+          }
+          
+          # Drain in-flight workers immediately before recreate; Apache stays up. Soft-fail only.
+          if [ -f scripts/deploy-drain-workers.sh ]; then
+            chmod +x scripts/deploy-drain-workers.sh
+            scripts/deploy-drain-workers.sh || echo "⚠️  Worker drain helper returned non-zero - continuing deploy"
+          else
+            echo "⚠️  deploy-drain-workers.sh missing - skipping worker drain"
+          fi
           
           # Build arguments for cache invalidation
           if [ "$FORCE_REBUILD" = "true" ]; then
@@ -1632,6 +1646,7 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             # Force rebuild without cache
             if ! docker compose -f docker/docker-compose.prod.yml build --no-cache web; then
+              clear_deploy_drain_markers
               deployment_error \
                 "Docker Build (No Cache)" \
                 "Docker build failed when forcing rebuild without cache" \
@@ -1641,6 +1656,7 @@ jobs:
             if ! docker compose -f docker/docker-compose.prod.yml up -d --pull; then
               echo "⚠️  Warning: Start with --pull failed, trying without --pull..."
               if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+                clear_deploy_drain_markers
                 deployment_error \
                   "Container Startup" \
                   "Failed to start containers after build" \
@@ -1651,11 +1667,19 @@ jobs:
           elif ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
             echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
             if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
+              clear_deploy_drain_markers
               deployment_error \
                 "Docker Build/Start" \
                 "Both build attempts (with --pull and without) failed" \
                 "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Verify all required files are present (check Dockerfile COPY commands)\n3. Check network connectivity for pulling base images: ping registry-1.docker.io\n4. Check disk space: df -h\n5. Check Docker daemon: systemctl status docker\n6. Review Docker logs: journalctl -u docker\n7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
             fi
+          fi
+
+          # If compose was a no-op, entrypoint never cleared markers - unstick the live scheduler.
+          if [ -f "${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}/deploy-drain.flag" ] \
+            || [ -f "${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}/deploy-drain.done" ]; then
+            echo "Deploy drain markers still present after compose - clearing for live scheduler"
+            clear_deploy_drain_markers
           fi
           
           echo "✓ Containers built and started successfully"

@@ -18,6 +18,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-utils.php';
+require_once __DIR__ . '/../lib/deploy-drain.php';
 
 $hadFailure = false;
 
@@ -32,6 +33,12 @@ try {
             'daemon_pids' => $daemonPidsSnapshot,
             'hint' => 'Read-only inspect: php scripts/diagnose-scheduler-duplicates.php; then deploy plus web restart (see docs/OPERATIONS.md)'
         ], 'app');
+    }
+
+    // Deploy drain: do not spawn a second daemon while CD waits on a live scheduler.
+    // If the daemon already died mid-drain, recover so a replacement can finish or abandon.
+    if (deploy_drain_should_suppress_scheduler_restart() && count($daemonPidsSnapshot) > 0) {
+        exit(0);
     }
 
     // Check if scheduler is running
