@@ -306,9 +306,12 @@ fi
 DEPLOY_GIT_SHA_FILE="${CACHE_DIR}/.deploy-git-sha"
 if [ -d "${CACHE_DIR}" ]; then
     if [ -n "${GIT_SHA:-}" ]; then
-        printf '%s\n' "${GIT_SHA}" > "${DEPLOY_GIT_SHA_FILE}"
-        chmod 644 "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
-        echo "✓ Persisted deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}"
+        if printf '%s\n' "${GIT_SHA}" > "${DEPLOY_GIT_SHA_FILE}"; then
+            chmod 644 "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
+            echo "✓ Persisted deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}"
+        else
+            echo "⚠️  Failed to persist deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}" >&2
+        fi
     else
         rm -f "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
         echo "⚠️  GIT_SHA unset - removed ${DEPLOY_GIT_SHA_FILE} if present"

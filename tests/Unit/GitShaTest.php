@@ -137,5 +137,6 @@ class GitShaTest extends TestCase
             $entrypoint
         );
         $this->assertStringContainsString('rm -f "${DEPLOY_GIT_SHA_FILE}"', $entrypoint);
+        $this->assertStringContainsString('Failed to persist deploy GIT_SHA', $entrypoint);
     }
 }
