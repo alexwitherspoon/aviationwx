@@ -184,6 +184,10 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('probe_local_upload_path sftp', $contents);
         $this->assertStringContainsString('clear_local_probe_upload_file', $contents);
         $this->assertStringContainsString('probe_curl_fail_detail', $contents);
+        // Remote DELE after FTPS upload is intentionally omitted: curl --fail -X DELE can
+        // exit non-zero after vsftpd already returns 250 on a directory URL.
+        $this->assertStringNotContainsString('-X "DELE', $contents);
+        $this->assertStringNotContainsString('upload ok but delete failed', $contents);
     }
 
     public function testUploadProbeRunner_WaitsForPushConfigSyncBeforeFirstProbe(): void

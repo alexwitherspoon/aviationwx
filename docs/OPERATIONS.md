@@ -569,7 +569,7 @@ ssh-keyscan -p "${SFTP_PORT}" "${UPLOAD_HOST}" | ssh-keygen -lf -
 
 Every `SHA256:` from `ssh-keyscan` must appear in the JSON `sha256[]` array. Fingerprints are computed at request time from `/etc/ssh/ssh_host_*_key.pub` in the web container (same container that runs sshd). After an image rebuild, re-run the comparison to confirm the roster tracks new keys.
 
-**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid.
+**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid. Probes do not require a remote FTP `DELE` for health: vsftpd may accept delete while `curl --fail -X DELE` still exits non-zero on a directory URL, so cleanup is local clear plus overwrite (same for FTPS and SFTP).
 
 ```bash
 # Heartbeat and recent probe log
