@@ -685,11 +685,15 @@ final class DeployDrainTest extends TestCase
         $this->assertStringContainsString("require_once __DIR__ . '/../lib/deploy-drain.php';", $health);
         $this->assertStringContainsString('deploy_drain_should_suppress_scheduler_restart', $health);
         $this->assertStringContainsString('listSchedulerDaemonPids', $health);
-        // Suppress only when a live daemon exists; a dead daemon mid-drain must still be recoverable.
         $this->assertMatchesRegularExpression(
             '/deploy_drain_should_suppress_scheduler_restart\(\).*count\(\$daemonPidsSnapshot\)\s*>\s*0/s',
             $health
         );
+        $dupPos = strpos($health, 'multiple scheduler daemons detected');
+        $suppressPos = strpos($health, 'deploy_drain_should_suppress_scheduler_restart');
+        $this->assertNotFalse($dupPos);
+        $this->assertNotFalse($suppressPos);
+        $this->assertLessThan($suppressPos, $dupPos);
 
         $this->assertStringContainsString('deploy-drain.flag', $entrypoint);
         $this->assertStringContainsString('deploy-drain.done', $entrypoint);

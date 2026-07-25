@@ -53,8 +53,8 @@ $lastMetricsSpillMerge = 0;
 $lastVariantHealthHttpFlush = 0;
 $lastMetricsHealthCheck = 0; // Separate timestamp for health checks
 $lastMetricsCleanup = 0;
-$lastDailyAggregation = '';
-$lastWeeklyAggregation = '';
+$lastDailySpawnAttempt = 0;
+$lastWeeklySpawnAttempt = 0;
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastRunwaysFetch = 0;
@@ -481,17 +481,10 @@ $workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$
         if ($cfgPath !== null && is_readable($cfgPath)) {
             $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
             if ($countryNeedsRefresh) {
-                $output = [];
-                $exitCode = 0;
-                exec('php ' . escapeshellarg($countryResolutionScript) . ' 2>&1', $output, $exitCode);
-                if ($exitCode === 0) {
-                    aviationwx_log('info', 'scheduler: airport country resolution refresh complete', [], 'app');
-                } else {
-                    aviationwx_log('warning', 'scheduler: airport country resolution refresh failed', [
-                    'exit_code' => $exitCode,
-                    'output' => implode("\n", array_slice($output, 0, 20)),
-                    ], 'app');
-                }
+                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($countryResolutionScript) . ' > /dev/null 2>&1 &');
+                reapZombies();
+                aviationwx_log('info', 'scheduler: airport country resolution refresh spawned', [], 'app');
             }
         }
     }
@@ -562,6 +555,8 @@ $workRegistry->registerEnqueueTick('metrics_variant_health', function (int $now)
     }
     $script = __DIR__ . '/flush-variant-health.php';
     if (!file_exists($script)) {
+        $lastVariantHealthHttpFlush = $now;
+        aviationwx_log('warning', 'scheduler: flush-variant-health.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -576,6 +571,8 @@ $workRegistry->registerEnqueueTick('metrics_upstream_health', function (int $now
     }
     $script = __DIR__ . '/flush-upstream-health.php';
     if (!file_exists($script)) {
+        $lastWeatherHealthUpdate = $now;
+        aviationwx_log('warning', 'scheduler: flush-upstream-health.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -584,34 +581,53 @@ $workRegistry->registerEnqueueTick('metrics_upstream_health', function (int $now
     $lastWeatherHealthUpdate = $now;
 });
 
-$workRegistry->registerEnqueueTick('metrics_daily', function (int $now) use (&$lastDailyAggregation): void {
+$workRegistry->registerEnqueueTick('metrics_daily', function (int $now) use (&$lastDailySpawnAttempt): void {
     $yesterdayId = gmdate('Y-m-d', $now - 86400);
-    if ($lastDailyAggregation === $yesterdayId) {
+    $dailyPath = getMetricsDailyPath($yesterdayId);
+    if (is_file($dailyPath)) {
+        return;
+    }
+    if (($now - $lastDailySpawnAttempt) < 60) {
         return;
     }
     $script = __DIR__ . '/aggregate-metrics-daily.php';
     if (!file_exists($script)) {
+        $lastDailySpawnAttempt = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-daily.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script)
+        . ' --date=' . escapeshellarg($yesterdayId) . ' > /dev/null 2>&1 &';
+    exec($cmd);
     reapZombies();
-    $lastDailyAggregation = $yesterdayId;
+    $lastDailySpawnAttempt = $now;
 });
 
-$workRegistry->registerEnqueueTick('metrics_weekly', function (int $now) use (&$lastWeeklyAggregation): void {
+$workRegistry->registerEnqueueTick('metrics_weekly', function (int $now) use (&$lastWeeklySpawnAttempt): void {
     $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
-    if ($lastWeeklyAggregation === $lastWeekId || (int) gmdate('N', $now) !== 1 || (int) gmdate('H', $now) < 2) {
+    if ((int) gmdate('N', $now) !== 1 || (int) gmdate('H', $now) < 2) {
+        return;
+    }
+    $weeklyPath = getMetricsWeeklyPath($lastWeekId);
+    if (is_file($weeklyPath)) {
+        return;
+    }
+    if (($now - $lastWeeklySpawnAttempt) < 60) {
         return;
     }
     $script = __DIR__ . '/aggregate-metrics-weekly.php';
     if (!file_exists($script)) {
+        $lastWeeklySpawnAttempt = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-weekly.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($script)
+        . ' --week=' . escapeshellarg($lastWeekId) . ' > /dev/null 2>&1 &';
+    exec($cmd);
     reapZombies();
-    $lastWeeklyAggregation = $lastWeekId;
+    $lastWeeklySpawnAttempt = $now;
 });
 
 $workRegistry->registerEnqueueTick('metrics_cleanup', function (int $now) use (&$lastMetricsCleanup): void {
@@ -621,6 +637,7 @@ $workRegistry->registerEnqueueTick('metrics_cleanup', function (int $now) use (&
     $script = __DIR__ . '/cleanup-metrics.php';
     if (!file_exists($script)) {
         $lastMetricsCleanup = $now;
+        aviationwx_log('warning', 'scheduler: cleanup-metrics.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -636,6 +653,7 @@ $workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$
     $script = __DIR__ . '/check-metrics-health.php';
     if (!file_exists($script)) {
         $lastMetricsHealthCheck = $now;
+        aviationwx_log('warning', 'scheduler: check-metrics-health.php missing', ['path' => $script], 'app');
         return;
     }
     $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
@@ -698,56 +716,58 @@ while ($running) {
                 $lastConfigMtime = $currentMtime; // Keep for logging/debugging
                 $lastConfigSha = $currentSha;
                 
-                // Reinitialize ProcessPools with new config
-                $weatherPoolSize = getWeatherWorkerPoolSize();
-                $webcamPoolSize = getWebcamWorkerPoolSize();
-                $notamPoolSize = getNotamWorkerPoolSize();
-                $stationPowerPoolSize = getStationPowerWorkerPoolSize();
-                $workerTimeout = getWorkerTimeout();
-                
-                $weatherPool = new ProcessPool(
-                    $weatherPoolSize,
-                    $workerTimeout,
-                    'fetch-weather.php',
-                    $invocationId
-                );
-                
-                // Unified webcam worker handles both push and pull webcams
-                $webcamPool = new ProcessPool(
-                    $webcamPoolSize,
-                    $workerTimeout,
-                    'unified-webcam-worker.php',
-                    $invocationId
-                );
-                
-                $notamPool = new ProcessPool(
-                    $notamPoolSize,
-                    $workerTimeout,
-                    'fetch-notam.php',
-                    $invocationId
-                );
+                // Rebuild pools only when config changed or pools were never created.
+                // Recreating every reload tick orphans in-flight ProcessPool children from the registry.
+                if ($configChanged || $weatherPool === null) {
+                    $weatherPoolSize = getWeatherWorkerPoolSize();
+                    $webcamPoolSize = getWebcamWorkerPoolSize();
+                    $notamPoolSize = getNotamWorkerPoolSize();
+                    $stationPowerPoolSize = getStationPowerWorkerPoolSize();
+                    $workerTimeout = getWorkerTimeout();
+                    
+                    $weatherPool = new ProcessPool(
+                        $weatherPoolSize,
+                        $workerTimeout,
+                        'fetch-weather.php',
+                        $invocationId
+                    );
+                    
+                    $webcamPool = new ProcessPool(
+                        $webcamPoolSize,
+                        $workerTimeout,
+                        'unified-webcam-worker.php',
+                        $invocationId
+                    );
+                    
+                    $notamPool = new ProcessPool(
+                        $notamPoolSize,
+                        $workerTimeout,
+                        'fetch-notam.php',
+                        $invocationId
+                    );
 
-                $stationPowerPool = new ProcessPool(
-                    $stationPowerPoolSize,
-                    $workerTimeout,
-                    'fetch-station-power.php',
-                    $invocationId
-                );
+                    $stationPowerPool = new ProcessPool(
+                        $stationPowerPoolSize,
+                        $workerTimeout,
+                        'fetch-station-power.php',
+                        $invocationId
+                    );
 
-                $workRegistry->setPool('weather', $weatherPool);
-                $workRegistry->setPool('webcam', $webcamPool);
-                $workRegistry->setPool('notam', $notamPool);
-                $workRegistry->setPool('station_power', $stationPowerPool);
+                    $workRegistry->setPool('weather', $weatherPool);
+                    $workRegistry->setPool('webcam', $webcamPool);
+                    $workRegistry->setPool('notam', $notamPool);
+                    $workRegistry->setPool('station_power', $stationPowerPool);
 
-                // Reinitialize webcam schedule queue with new config
-                // This uses a priority queue (min-heap) for O(log N) scheduling
-                $webcamScheduleQueue = new WebcamScheduleQueue();
-                $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
-                
-                aviationwx_log('info', 'scheduler: config reloaded', [
-                    'airports_count' => count($config['airports'] ?? []),
-                    'webcam_count' => $webcamScheduleQueue->count()
-                ], 'app');
+                    $webcamScheduleQueue = new WebcamScheduleQueue();
+                    $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
+                    
+                    aviationwx_log('info', 'scheduler: config reloaded', [
+                        'airports_count' => count($config['airports'] ?? []),
+                        'webcam_count' => $webcamScheduleQueue->count(),
+                        'pools_recreated' => true,
+                        'config_changed' => $configChanged,
+                    ], 'app');
+                }
             }
         }
         
