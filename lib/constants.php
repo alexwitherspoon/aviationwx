@@ -631,6 +631,19 @@ if (!defined('ERROR_RATE_DEGRADED_THRESHOLD')) {
 if (!defined('METRICS_RETENTION_DAYS')) {
     define('METRICS_RETENTION_DAYS', 14); // Keep 14 days of metrics
 }
+// Disk health for metrics cache volume: percent alone misleads on multi-TB disks with tens of GB free.
+if (!defined('METRICS_DISK_LOW_USED_PERCENT')) {
+    define('METRICS_DISK_LOW_USED_PERCENT', 90);
+}
+if (!defined('METRICS_DISK_CRITICAL_USED_PERCENT')) {
+    define('METRICS_DISK_CRITICAL_USED_PERCENT', 95);
+}
+if (!defined('METRICS_DISK_LOW_FREE_BYTES')) {
+    define('METRICS_DISK_LOW_FREE_BYTES', 5 * 1024 * 1024 * 1024); // 5 GiB
+}
+if (!defined('METRICS_DISK_CRITICAL_FREE_BYTES')) {
+    define('METRICS_DISK_CRITICAL_FREE_BYTES', 1 * 1024 * 1024 * 1024); // 1 GiB
+}
 if (!defined('METRICS_FLUSH_INTERVAL_SECONDS')) {
     define('METRICS_FLUSH_INTERVAL_SECONDS', 300); // Flush to disk every 5 minutes
 }

@@ -1905,15 +1905,66 @@ function metrics_get_apcu_memory_info(): ?array {
 }
 
 /**
+ * Evaluate metrics-cache disk pressure from capacity samples.
+ *
+ * Critical when free bytes fall below {@see METRICS_DISK_CRITICAL_FREE_BYTES}, or when
+ * used-percent exceeds {@see METRICS_DISK_CRITICAL_USED_PERCENT} while free bytes are
+ * still below {@see METRICS_DISK_LOW_FREE_BYTES}. Percent alone must not mark a multi-TB
+ * volume critical when tens of gigabytes remain free.
+ *
+ * @param int $totalBytes Total bytes on the filesystem
+ * @param int $freeBytes Free bytes on the filesystem
+ * @return array{
+ *   total_bytes: int,
+ *   free_bytes: int,
+ *   used_bytes: int,
+ *   used_percent: float,
+ *   is_low: bool,
+ *   is_critical: bool
+ * }
+ */
+function metrics_evaluate_disk_space(int $totalBytes, int $freeBytes): array
+{
+    $totalBytes = max(0, $totalBytes);
+    $freeBytes = max(0, $freeBytes);
+    if ($freeBytes > $totalBytes && $totalBytes > 0) {
+        $freeBytes = $totalBytes;
+    }
+
+    $usedBytes = max(0, $totalBytes - $freeBytes);
+    $usedPercent = $totalBytes > 0 ? ($usedBytes / $totalBytes) * 100 : 0.0;
+
+    $isCritical = $freeBytes < METRICS_DISK_CRITICAL_FREE_BYTES
+        || (
+            $usedPercent > METRICS_DISK_CRITICAL_USED_PERCENT
+            && $freeBytes < METRICS_DISK_LOW_FREE_BYTES
+        );
+
+    $isLow = !$isCritical && (
+        $freeBytes < METRICS_DISK_LOW_FREE_BYTES
+        || $usedPercent > METRICS_DISK_LOW_USED_PERCENT
+    );
+
+    return [
+        'total_bytes' => $totalBytes,
+        'free_bytes' => $freeBytes,
+        'used_bytes' => $usedBytes,
+        'used_percent' => round($usedPercent, 2),
+        'is_low' => $isLow,
+        'is_critical' => $isCritical,
+    ];
+}
+
+/**
  * Get disk space information for metrics directory
- * 
+ *
  * @return array Disk space info
  */
 function metrics_get_disk_space_info(): array {
     $metricsDir = CACHE_METRICS_DIR;
     $totalSpace = @disk_total_space($metricsDir);
     $freeSpace = @disk_free_space($metricsDir);
-    
+
     if ($totalSpace === false || $freeSpace === false) {
         return [
             'total_bytes' => 0,
@@ -1925,18 +1976,8 @@ function metrics_get_disk_space_info(): array {
             'error' => 'Unable to determine disk space'
         ];
     }
-    
-    $usedSpace = $totalSpace - $freeSpace;
-    $usedPercent = $totalSpace > 0 ? ($usedSpace / $totalSpace) * 100 : 0;
-    
-    return [
-        'total_bytes' => $totalSpace,
-        'free_bytes' => $freeSpace,
-        'used_bytes' => $usedSpace,
-        'used_percent' => round($usedPercent, 2),
-        'is_low' => $usedPercent > 90,
-        'is_critical' => $usedPercent > 95
-    ];
+
+    return metrics_evaluate_disk_space((int) $totalSpace, (int) $freeSpace);
 }
 
 /**
@@ -1973,13 +2014,15 @@ function metrics_get_health_status(): array {
     if ($diskInfo['is_critical']) {
         $health['healthy'] = false;
         $health['errors'][] = sprintf(
-            'Disk space critical: %.1f%% used',
-            $diskInfo['used_percent']
+            'Disk space critical: %.1f%% used (%s free)',
+            $diskInfo['used_percent'],
+            format_bytes((int) $diskInfo['free_bytes'])
         );
     } elseif ($diskInfo['is_low']) {
         $health['warnings'][] = sprintf(
-            'Disk space low: %.1f%% used',
-            $diskInfo['used_percent']
+            'Disk space low: %.1f%% used (%s free)',
+            $diskInfo['used_percent'],
+            format_bytes((int) $diskInfo['free_bytes'])
         );
     }
     
