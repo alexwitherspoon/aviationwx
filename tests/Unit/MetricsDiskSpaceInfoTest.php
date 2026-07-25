@@ -33,6 +33,18 @@ final class MetricsDiskSpaceInfoTest extends TestCase
                 true,  // is_low
                 false, // is_critical
             ],
+            'small_volume_500mib_total_250mib_free_not_critical' => [
+                (int) (0.5 * $gib),
+                (int) (0.25 * $gib),
+                false,
+                false,
+            ],
+            'small_volume_800mib_total_50mib_free_critical_by_ratio' => [
+                (int) (0.8 * $gib),
+                (int) (0.05 * $gib),
+                false,
+                true,
+            ],
             'under_1gib_free_is_critical' => [
                 100 * $gib,
                 (int) (0.5 * $gib),

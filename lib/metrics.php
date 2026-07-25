@@ -1934,14 +1934,28 @@ function metrics_evaluate_disk_space(int $totalBytes, int $freeBytes): array
     $usedBytes = max(0, $totalBytes - $freeBytes);
     $usedPercent = $totalBytes > 0 ? ($usedBytes / $totalBytes) * 100 : 0.0;
 
-    $isCritical = $freeBytes < METRICS_DISK_CRITICAL_FREE_BYTES
+    // Absolute floors mis-fire on small volumes; clamp to a share of capacity.
+    $criticalFreeFloor = METRICS_DISK_CRITICAL_FREE_BYTES;
+    $lowFreeFloor = METRICS_DISK_LOW_FREE_BYTES;
+    if ($totalBytes > 0) {
+        $criticalFreeFloor = min(
+            METRICS_DISK_CRITICAL_FREE_BYTES,
+            max(1, (int) floor($totalBytes * 0.10))
+        );
+        $lowFreeFloor = min(
+            METRICS_DISK_LOW_FREE_BYTES,
+            max($criticalFreeFloor, (int) floor($totalBytes * 0.20))
+        );
+    }
+
+    $isCritical = $freeBytes < $criticalFreeFloor
         || (
             $usedPercent > METRICS_DISK_CRITICAL_USED_PERCENT
-            && $freeBytes < METRICS_DISK_LOW_FREE_BYTES
+            && $freeBytes < $lowFreeFloor
         );
 
     $isLow = !$isCritical && (
-        $freeBytes < METRICS_DISK_LOW_FREE_BYTES
+        $freeBytes < $lowFreeFloor
         || $usedPercent > METRICS_DISK_LOW_USED_PERCENT
     );
 
