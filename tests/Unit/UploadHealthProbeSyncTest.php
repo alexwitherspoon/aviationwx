@@ -173,6 +173,19 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('ok (plain ftp, ssl_enable=NO)', $contents);
     }
 
+    public function testUploadProbeScript_UsesInsecureTlsForSkippedHostsAndClearsLocalArtifacts(): void
+    {
+        $path = __DIR__ . '/../../scripts/upload-probe.sh';
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('probe_host_skips_tls_verify', $contents);
+        $this->assertStringContainsString('curl_tls_args+=(--insecure)', $contents);
+        $this->assertStringContainsString('probe_local_upload_path ftps', $contents);
+        $this->assertStringContainsString('probe_local_upload_path sftp', $contents);
+        $this->assertStringContainsString('clear_local_probe_upload_file', $contents);
+        $this->assertStringContainsString('probe_curl_fail_detail', $contents);
+    }
+
     public function testUploadProbeRunner_WaitsForPushConfigSyncBeforeFirstProbe(): void
     {
         $path = __DIR__ . '/../../scripts/upload-probe-runner.sh';

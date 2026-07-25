@@ -361,6 +361,8 @@ Credential shape matches push cameras: `username` is alphanumeric, max 14 charac
 
 **Production Docker:** The web container uses host networking. Set `probe_connect_host` to `127.0.0.1` so functional probes connect to local listeners on `network_ports.ftp_control` and `network_ports.sftp`. Cameras still use `upload_hostname` as usual.
 
+FTPS probes to loopback or bare IP addresses skip TLS certificate hostname verification (`curl --insecure`) because the vsftpd certificate SAN matches the public hostname, not `127.0.0.1`. Before each upload, probes remove any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe account directory so a leftover file owned by another uid cannot wedge the check.
+
 **Recommended: Hostname (default)**
 
 Use `upload_hostname` for most deployments. Hostname resolution survives IP changes and works for both static and dynamic IPs:
