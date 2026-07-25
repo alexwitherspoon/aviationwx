@@ -279,6 +279,14 @@ class FetchRunwaysTest extends TestCase
         $this->assertSame(3000, $parsed['KTEST'][0]['length_ft']);
     }
 
+    public function testRunwaysCacheBytesFullyWritten_RejectsShortOrFailedWrites(): void
+    {
+        $this->assertTrue(runwaysCacheBytesFullyWritten(3, 'abc'));
+        $this->assertFalse(runwaysCacheBytesFullyWritten(2, 'abc'));
+        $this->assertFalse(runwaysCacheBytesFullyWritten(false, 'abc'));
+        $this->assertFalse(runwaysCacheBytesFullyWritten(0, 'abc'));
+    }
+
     public function testReadPreviousRunwaysCacheAirportCount_MetaPresent_PrefersMetaOverFile(): void
     {
         file_put_contents(

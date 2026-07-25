@@ -540,6 +540,22 @@ function readPreviousRunwaysCacheAirportCount(): ?int
 }
 
 /**
+ * True only when the write reported every expected byte (rejects short writes).
+ */
+function runwaysCacheBytesFullyWritten(int|false $written, string $payload): bool
+{
+    return is_int($written) && $written === strlen($payload);
+}
+
+/**
+ * @param resource $handle
+ */
+function fwriteExactRunwaysCache($handle, string $data): bool
+{
+    return runwaysCacheBytesFullyWritten(@fwrite($handle, $data), $data);
+}
+
+/**
  * Write runways_meta.json used by retention checks on the next merge.
  */
 function writeRunwaysCacheMeta(int $airportCount, int $fetchedAt, int $memoryPeakBytes): bool
@@ -553,7 +569,9 @@ function writeRunwaysCacheMeta(int $airportCount, int $fetchedAt, int $memoryPea
     ];
     $tmp = CACHE_RUNWAYS_META_FILE . '.tmp.' . getmypid();
     $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents($tmp, $json, LOCK_EX) === false || !@rename($tmp, CACHE_RUNWAYS_META_FILE)) {
+    // Reject short writes so truncated meta cannot poison retention next cycle.
+    $written = $json === false ? false : @file_put_contents($tmp, $json, LOCK_EX);
+    if ($json === false || !runwaysCacheBytesFullyWritten($written, $json) || !@rename($tmp, CACHE_RUNWAYS_META_FILE)) {
         @unlink($tmp);
 
         return false;
@@ -612,7 +630,8 @@ function writeMergedRunwaysCacheStreaming(
         }
         // Manual object members: commas between keys; full-file json_encode would spike RAM.
         $prefix = $first ? '' : ',';
-        if (@fwrite($handle, $prefix . $keyJson . ':' . $entryJson) === false) {
+        $chunk = $prefix . $keyJson . ':' . $entryJson;
+        if (!fwriteExactRunwaysCache($handle, $chunk)) {
             return 'fwrite failed for airport ' . $ident;
         }
         $first = false;
@@ -621,7 +640,7 @@ function writeMergedRunwaysCacheStreaming(
         return null;
     };
 
-    if (@fwrite($handle, '{"fetched_at":' . (int) $fetchedAt . ',"airports":{') === false) {
+    if (!fwriteExactRunwaysCache($handle, '{"fetched_at":' . (int) $fetchedAt . ',"airports":{')) {
         return abortMergedRunwaysStreamWrite($handle, $tmpPath, 0, 'failed to write cache header');
     }
 
@@ -669,7 +688,7 @@ function writeMergedRunwaysCacheStreaming(
         gc_collect_cycles();
     }
 
-    if (@fwrite($handle, '}}') === false) {
+    if (!fwriteExactRunwaysCache($handle, '}}')) {
         return abortMergedRunwaysStreamWrite($handle, $tmpPath, $written, 'failed to write cache footer');
     }
     if (!fclose($handle)) {
