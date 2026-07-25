@@ -3159,23 +3159,85 @@ function getSingleAirportId(): ?string {
 }
 
 /**
+ * Normalize a raw Git SHA to the short (7 character) form used in footers and map tokens.
+ *
+ * @param string $raw Raw SHA from env, file, or git output
+ * @return string Seven-character SHA, or empty string if unusable
+ */
+function normalizeGitShaShort(string $raw): string {
+    $sha = trim($raw);
+    if ($sha === '') {
+        return '';
+    }
+
+    $newlinePos = strpos($sha, "\n");
+    if ($newlinePos !== false) {
+        $sha = trim(substr($sha, 0, $newlinePos));
+    }
+
+    if (strlen($sha) >= 7) {
+        return substr($sha, 0, 7);
+    }
+
+    return '';
+}
+
+/**
+ * Path to the deploy SHA file written at container start.
+ *
+ * Override with AVIATIONWX_DEPLOY_GIT_SHA_FILE for tests.
+ *
+ * @return string Absolute path under the cache mount (or test override)
+ */
+function getDeployGitShaFilePath(): string {
+    $override = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
+    if (is_string($override) && $override !== '') {
+        return $override;
+    }
+
+    require_once __DIR__ . '/cache-paths.php';
+
+    return CACHE_DEPLOY_GIT_SHA_FILE;
+}
+
+/**
+ * Read short deploy SHA from the entrypoint-persisted cache file.
+ *
+ * @return string Seven-character SHA, or empty string if missing/invalid
+ */
+function readDeployGitShaFile(): string {
+    $path = getDeployGitShaFilePath();
+    if (!is_file($path) || !is_readable($path)) {
+        return '';
+    }
+
+    $raw = @file_get_contents($path);
+    if ($raw === false) {
+        return '';
+    }
+
+    return normalizeGitShaShort($raw);
+}
+
+/**
  * Get the current Git commit SHA (short version)
  *
- * Tries multiple methods to get the SHA for display in footers:
- * 1. Environment variable (set during deployment)
- * 2. .git/HEAD file (if in git repository)
- * 3. git command (if available)
+ * Resolution order: GIT_SHA env, cache/.deploy-git-sha (entrypoint), .git/HEAD, git CLI.
+ * The cache file keeps CLI/cron workers aligned with Apache when crontab omits GIT_SHA.
  *
  * @return string Short SHA (7 characters) or empty string if unavailable
  */
 function getGitSha(): string {
-    // Try environment variable first (set during deployment)
-    $sha = getenv('GIT_SHA');
-    if ($sha && strlen($sha) >= 7) {
-        return substr($sha, 0, 7);
+    $fromEnv = normalizeGitShaShort((string) (getenv('GIT_SHA') ?: ''));
+    if ($fromEnv !== '') {
+        return $fromEnv;
     }
-    
-    // Try reading from .git/HEAD (if in a git repository)
+
+    $fromFile = readDeployGitShaFile();
+    if ($fromFile !== '') {
+        return $fromFile;
+    }
+
     $gitHead = __DIR__ . '/.git/HEAD';
     if (file_exists($gitHead)) {
         $headContent = @file_get_contents($gitHead);
@@ -3198,21 +3260,16 @@ function getGitSha(): string {
             }
         }
     }
-    
-    // Try git command as fallback (if git is available)
-    // Use --short=7 to force 7 characters (matching GitHub's short SHA display)
+
+    // Use --short=7 to match GitHub's short SHA display
     if (function_exists('shell_exec')) {
         $sha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse --short=7 HEAD 2>/dev/null');
         if ($sha) {
             $sha = trim($sha);
-            // Always return exactly 7 characters to match GitHub's display
             if (strlen($sha) >= 7) {
                 return substr($sha, 0, 7);
             } elseif (strlen($sha) > 0) {
-                // If we got a shorter SHA, pad it or use full SHA
-                // Fall back to full SHA and take first 7 characters
-                // Use @ to suppress errors for non-critical git operations
-                // We handle failures explicitly with null checks below
+                // @ suppresses non-critical git failures; null-checked below
                 $fullSha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse HEAD 2>/dev/null');
                 if ($fullSha) {
                     $fullSha = trim($fullSha);
@@ -3223,8 +3280,7 @@ function getGitSha(): string {
             }
         }
     }
-    
-    // Return empty string if SHA cannot be determined
+
     return '';
 }
 

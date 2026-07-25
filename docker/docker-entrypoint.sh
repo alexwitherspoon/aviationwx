@@ -301,6 +301,23 @@ if [ -d "${CACHE_DIR}" ]; then
     rm -f "${CACHE_DIR}/deploy-drain.flag" "${CACHE_DIR}/deploy-drain.done" 2>/dev/null || true
 fi
 
+# Persist deploy SHA for CLI/cron: health-check restarts inherit crontab env, not compose GIT_SHA.
+# Refresh every start; remove when unset so a shared cache mount cannot keep a prior container SHA.
+DEPLOY_GIT_SHA_FILE="${CACHE_DIR}/.deploy-git-sha"
+if [ -d "${CACHE_DIR}" ]; then
+    if [ -n "${GIT_SHA:-}" ]; then
+        if printf '%s\n' "${GIT_SHA}" > "${DEPLOY_GIT_SHA_FILE}"; then
+            chmod 644 "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
+            echo "✓ Persisted deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}"
+        else
+            echo "⚠️  Failed to persist deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}" >&2
+        fi
+    else
+        rm -f "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
+        echo "⚠️  GIT_SHA unset - removed ${DEPLOY_GIT_SHA_FILE} if present"
+    fi
+fi
+
 # Scheduler: initial start authority is this entrypoint (one daemon after cache is ready).
 # Cron runs scripts/scheduler-health-check.php every minute as a watchdog only (confirm lock/PID,
 # start a replacement when missing or unhealthy). It must not duplicate a healthy daemon.
