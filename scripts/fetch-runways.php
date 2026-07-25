@@ -548,11 +548,22 @@ function runwaysCacheBytesFullyWritten(int|false $written, string $payload): boo
 }
 
 /**
+ * Write all bytes, retrying short fwrite() returns until complete or hard failure.
+ *
  * @param resource $handle
  */
 function fwriteExactRunwaysCache($handle, string $data): bool
 {
-    return runwaysCacheBytesFullyWritten(@fwrite($handle, $data), $data);
+    $remaining = $data;
+    while ($remaining !== '') {
+        $written = @fwrite($handle, $remaining);
+        if (!is_int($written) || $written <= 0) {
+            return false;
+        }
+        $remaining = substr($remaining, $written);
+    }
+
+    return true;
 }
 
 /**

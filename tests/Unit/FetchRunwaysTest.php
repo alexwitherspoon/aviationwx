@@ -287,6 +287,17 @@ class FetchRunwaysTest extends TestCase
         $this->assertFalse(runwaysCacheBytesFullyWritten(0, 'abc'));
     }
 
+    public function testFwriteExactRunwaysCache_WritesFullPayload(): void
+    {
+        $handle = fopen('php://memory', 'r+b');
+        $this->assertNotFalse($handle);
+        $payload = str_repeat('{"k":"v"}', 50);
+        $this->assertTrue(fwriteExactRunwaysCache($handle, $payload));
+        rewind($handle);
+        $this->assertSame($payload, stream_get_contents($handle));
+        fclose($handle);
+    }
+
     public function testReadPreviousRunwaysCacheAirportCount_MetaPresent_PrefersMetaOverFile(): void
     {
         file_put_contents(
