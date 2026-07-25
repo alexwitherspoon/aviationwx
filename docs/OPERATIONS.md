@@ -132,8 +132,11 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep schedule
 # Check lock file (shows PID and start time)
 docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Inspect deploy drain markers (host cache mount)
-php scripts/deploy-drain.php status --cache-dir=/tmp/aviationwx-cache
+# Inspect deploy drain markers (via web container PHP; host has no PHP)
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/deploy-drain.php status
+
+# Or inspect files on the shared host cache mount
+ls -la /tmp/aviationwx-cache/deploy-drain.* 2>/dev/null || echo 'no drain markers'
 
 # Force restart scheduler (watchdog may restart within about 60s when drain is not active)
 docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php

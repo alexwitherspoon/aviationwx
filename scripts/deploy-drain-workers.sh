@@ -1,52 +1,59 @@
 #!/usr/bin/env bash
-# Pause new scheduler ProcessPool work and wait before container recreate.
-# Apache stays serving. Markers: AVIATIONWX_CACHE_DIR (default /tmp/aviationwx-cache).
+# Host CD wrapper: pause ProcessPool work before container recreate.
+# Runs deploy-drain.php inside the live web container (host has no PHP).
+# Apache stays serving. Markers live on the shared cache volume.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-CACHE_DIR="${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}"
+# Space-separated compose files (prod default; local may add docker-compose.override.yml).
 COMPOSE_FILE="${COMPOSE_FILE:-docker/docker-compose.prod.yml}"
-PHP_BIN="${PHP_BIN:-php}"
-DRAIN_CLI="${ROOT_DIR}/scripts/deploy-drain.php"
-CONSTANTS_PHP="${ROOT_DIR}/lib/constants.php"
+COMPOSE=(docker compose)
+# shellcheck disable=SC2086
+for _compose_file in ${COMPOSE_FILE}; do
+  COMPOSE+=(-f "${_compose_file}")
+done
+WEB_SERVICE="${WEB_SERVICE:-web}"
+# Container path for the shared cache mount (host: AVIATIONWX_CACHE_DIR / /tmp/aviationwx-cache).
+CONTAINER_CACHE_DIR="${CONTAINER_CACHE_DIR:-/var/www/html/cache}"
 
-if [ ! -f "$DRAIN_CLI" ]; then
+if [ ! -f "${ROOT_DIR}/scripts/deploy-drain.php" ]; then
   echo "⚠️  deploy-drain.php missing - skipping worker drain"
   exit 0
 fi
 
-if ! command -v "$PHP_BIN" >/dev/null 2>&1; then
-  echo "⚠️  php not available on host - skipping worker drain"
+if ! command -v docker >/dev/null 2>&1; then
+  echo "⚠️  docker not available - skipping worker drain"
   exit 0
 fi
 
-if [ ! -d "$CACHE_DIR" ]; then
-  echo "⚠️  Cache dir missing (${CACHE_DIR}) - skipping worker drain"
-  exit 0
-fi
-
-if ! docker compose -f "$COMPOSE_FILE" ps web 2>/dev/null | grep -q "Up"; then
+if ! "${COMPOSE[@]}" ps "$WEB_SERVICE" 2>/dev/null | grep -q "Up"; then
   echo "✓ Web container not running - skip worker drain"
   exit 0
 fi
 
-MAX_WAIT="$("$PHP_BIN" -r "require '${CONSTANTS_PHP}'; echo (int) DEPLOY_WORKER_DRAIN_MAX_SECONDS;")"
+run_in_web() {
+  "${COMPOSE[@]}" exec -T "$WEB_SERVICE" "$@"
+}
+
+MAX_WAIT="$(
+  run_in_web php -r 'require "/var/www/html/lib/constants.php"; echo (int) DEPLOY_WORKER_DRAIN_MAX_SECONDS;'
+)"
 if ! [[ "${MAX_WAIT}" =~ ^[0-9]+$ ]] || [ "${MAX_WAIT}" -lt 1 ]; then
-  echo "⚠️  Could not read DEPLOY_WORKER_DRAIN_MAX_SECONDS - skipping worker drain"
+  echo "⚠️  Could not read DEPLOY_WORKER_DRAIN_MAX_SECONDS from container - skipping worker drain"
   exit 0
 fi
 
-echo "Requesting scheduler deploy drain (Apache stays up)..."
-if ! "$PHP_BIN" "$DRAIN_CLI" request --cache-dir="$CACHE_DIR"; then
+echo "Requesting scheduler deploy drain via web container (Apache stays up)..."
+if ! run_in_web php scripts/deploy-drain.php request --cache-dir="$CONTAINER_CACHE_DIR"; then
   echo "⚠️  Failed to write drain flag - continuing deploy"
   exit 0
 fi
 
 echo "Waiting for in-flight ProcessPool workers (max ${MAX_WAIT}s + grace)..."
 set +e
-"$PHP_BIN" "$DRAIN_CLI" wait --cache-dir="$CACHE_DIR" --max-wait="${MAX_WAIT}"
+run_in_web php scripts/deploy-drain.php wait --cache-dir="$CONTAINER_CACHE_DIR" --max-wait="${MAX_WAIT}"
 WAIT_RC=$?
 set -e
 

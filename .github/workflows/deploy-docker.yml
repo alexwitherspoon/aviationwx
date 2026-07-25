@@ -1626,9 +1626,9 @@ jobs:
           fi
 
           clear_deploy_drain_markers() {
-            if [ -f scripts/deploy-drain.php ] && command -v php >/dev/null 2>&1; then
-              php scripts/deploy-drain.php clear --cache-dir="${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}" >/dev/null 2>&1 || true
-            fi
+            # Shared host mount; no host PHP. Entrypoint also clears on successful recreate.
+            CACHE_DIR="${AVIATIONWX_CACHE_DIR:-/tmp/aviationwx-cache}"
+            rm -f "${CACHE_DIR}/deploy-drain.flag" "${CACHE_DIR}/deploy-drain.done" 2>/dev/null || true
           }
           
           # Drain in-flight workers immediately before recreate; Apache stays up. Soft-fail only.

@@ -90,7 +90,13 @@ final class SchedulerDrainWiringContractTest extends TestCase
             'Drain in-flight workers immediately before recreate',
             $workflow
         );
-        $this->assertStringContainsString('deploy-drain.php clear', $workflow);
+        // Clear markers on the shared host cache mount (no host PHP).
+        $clearPos = strpos($workflow, 'clear_deploy_drain_markers()');
+        $this->assertNotFalse($clearPos);
+        $clearChunk = substr($workflow, $clearPos, 400);
+        $this->assertStringContainsString('rm -f', $clearChunk);
+        $this->assertStringContainsString('deploy-drain.flag', $clearChunk);
+        $this->assertStringNotContainsString('command -v php', $clearChunk);
         $this->assertStringContainsString(
             'Deploy drain markers still present after compose',
             $workflow

@@ -705,14 +705,17 @@ final class DeployDrainTest extends TestCase
         $this->assertStringContainsString('deploy-drain-workers.sh', $workflow);
     }
 
-    public function testHostDrainHelper_ReadsPhpMaxConstant(): void
+    public function testHostDrainHelper_RunsPhpInsideWebContainer(): void
     {
         $path = dirname(__DIR__, 2) . '/scripts/deploy-drain-workers.sh';
         $this->assertFileExists($path);
-        $contents = file_get_contents($path);
-        $this->assertIsString($contents);
+        $contents = (string) file_get_contents($path);
+        $this->assertStringContainsString('docker compose', $contents);
+        $this->assertStringContainsString('exec -T', $contents);
+        $this->assertStringContainsString('WEB_SERVICE', $contents);
+        $this->assertStringContainsString('deploy-drain.php', $contents);
         $this->assertStringContainsString('DEPLOY_WORKER_DRAIN_MAX_SECONDS', $contents);
-        $this->assertStringContainsString('lib/constants.php', $contents);
+        $this->assertStringNotContainsString('php not available on host', $contents);
         $this->assertStringContainsString('exit 0', $contents);
     }
 }

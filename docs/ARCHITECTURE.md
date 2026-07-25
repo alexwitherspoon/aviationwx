@@ -75,7 +75,7 @@ aviationwx.org/
 │   ├── scheduler-health-check.php # Cron watchdog: recover if daemon missing or unhealthy (not initial start)
 │   ├── diagnose-scheduler-duplicates.php # Read-only CLI: list scheduler PIDs and lock summary
 │   ├── deploy-drain.php      # CLI: request/wait/status/clear deploy drain markers on cache volume
-│   ├── deploy-drain-workers.sh # Host CD helper: request drain and wait before container recreate
+│   ├── deploy-drain-workers.sh # Host CD wrapper: runs drain CLI inside the live web container before recreate
 │   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
 │   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
@@ -170,7 +170,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - New gated work is added by registering a pool and/or tick; ungated paths stay outside the registry (stuck-worker heartbeat cleanup remains in-process control-plane work)
 
 **Deploy worker drain (`lib/deploy-drain.php`)**: Pause new registered work before container recreate
-- CD writes `cache/deploy-drain.flag` on the shared cache volume (host CLI: `scripts/deploy-drain.php` / `scripts/deploy-drain-workers.sh`) while Apache continues serving clients
+- CD writes `cache/deploy-drain.flag` on the shared cache volume (via `scripts/deploy-drain-workers.sh` running `deploy-drain.php` inside the live web container; host has no PHP) while Apache continues serving clients
 - The scheduler stops running registered enqueue ticks; in-flight ProcessPool workers may finish
 - When pools are idle, the scheduler writes `cache/deploy-drain.done` so CD can proceed
 - After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining registered pool workers are force-terminated (`ProcessPool::cleanup`: SIGTERM, brief wait, then SIGKILL) and `.done` is written
