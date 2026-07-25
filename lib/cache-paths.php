@@ -85,6 +85,11 @@ if (!defined('CACHE_BASE_DIR')) {
     define('CACHE_BASE_DIR', dirname(__DIR__) . '/cache');
 }
 
+/** Deploy GIT_SHA from docker-entrypoint (CLI/cron when env is unset). */
+if (!defined('CACHE_DEPLOY_GIT_SHA_FILE')) {
+    define('CACHE_DEPLOY_GIT_SHA_FILE', CACHE_BASE_DIR . '/.deploy-git-sha');
+}
+
 // =============================================================================
 // WEATHER CACHE PATHS
 // =============================================================================

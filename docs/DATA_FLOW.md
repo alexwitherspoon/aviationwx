@@ -1879,7 +1879,7 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
 
 **Project** (`notamTfrMapLayerBuildPayloadFromAirspaceStore()` in `lib/notam/map-layer.php`; serve entry `notamTfrMapLayerServeOrRebuild()` in `lib/notam/map-layer-cache.php`):
 
-1. Read `map-airspace.json` when present, fresh (within `getNotamCacheTtlSeconds()`), and `map_layer_build_token` matches (`{deploy SHA}-v{N}` from {@see getGitSha()} and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}, or `logic-v{N}` when SHA is unavailable). Otherwise fail-closed (empty features, `failclosed: true`).
+1. Read `map-airspace.json` when present, fresh (within `getNotamCacheTtlSeconds()`), and `map_layer_build_token` matches (`{deploy SHA}-v{N}` from {@see getGitSha()} and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}, or `logic-v{N}` when SHA is unavailable). `getGitSha()` prefers `GIT_SHA`, then the entrypoint-persisted cache file `cache/.deploy-git-sha` (so CLI/cron workers match Apache after health-check restarts), then git metadata. Otherwise fail-closed (empty features, `failclosed: true`).
 2. For each record with `capabilities.map`, revalidate status from the embedded NOTAM (`revalidateNotamStatus()` / `isTfr()` parity with `api/notam.php`), emit a GeoJSON Feature (polygon outer ring or Point + `radius_nm` for circles).
 3. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
 
