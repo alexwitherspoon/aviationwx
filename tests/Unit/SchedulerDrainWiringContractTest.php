@@ -18,6 +18,19 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->root = dirname(__DIR__, 2);
     }
 
+    public function testScheduler_PreservesLastConfigShaWhenCurrentShaUnknown(): void
+    {
+        $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(\s*\$currentSha\s*!==\s*null\s*\)\s*\{\s*\$lastConfigSha\s*=\s*\$currentSha;/s',
+            $scheduler
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\$lastConfigMtime\s*=\s*\$currentMtime;[^\n]*\n\s*\$lastConfigSha\s*=\s*\$currentSha;/s',
+            $scheduler
+        );
+    }
+
     public function testScheduler_LogsWhenDeployDrainMarkerUpdateFails(): void
     {
         $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');

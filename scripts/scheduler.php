@@ -716,7 +716,10 @@ while ($running) {
                 $config = $newConfig;
                 $lastConfigReload = $now;
                 $lastConfigMtime = $currentMtime; // Keep for logging/debugging
-                $lastConfigSha = $currentSha;
+                // Keep prior SHA when the config file could not be read this tick.
+                if ($currentSha !== null) {
+                    $lastConfigSha = $currentSha;
+                }
                 
                 // Rebuild pools only when config changed or pools were never created.
                 // Recreating every reload tick orphans in-flight ProcessPool children from the registry.
