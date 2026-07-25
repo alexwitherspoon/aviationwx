@@ -231,3 +231,77 @@ try_restart_upload_daemon() {
     fi
     return 1
 }
+
+# Loopback/IP probe hosts cannot match the public TLS cert SAN.
+probe_host_skips_tls_verify() {
+    local host="$1"
+    case "$host" in
+        localhost|127.0.0.1|::1)
+            return 0
+            ;;
+    esac
+    if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    fi
+    if [[ "$host" == *:* ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Build pipe-safe curl failure detail for ok|duration|detail heartbeats (no secrets).
+probe_curl_fail_detail() {
+    local prefix="$1"
+    local err_file="$2"
+    local line
+    line="$(tr '\n|' '  ' <"$err_file" 2>/dev/null | sed -E 's/(PASS|password|Password|PASSWORD)[^ ]*/\1 <redacted>/g' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//' | cut -c1-160)"
+    if [ -z "$line" ]; then
+        echo "${prefix} upload failed"
+        return
+    fi
+    echo "${prefix} upload failed: ${line}"
+}
+
+# Drop a prior probe artifact so SFTP/FTPS overwrite cannot fail on foreign uid ownership.
+clear_local_probe_upload_file() {
+    local path="$1"
+    rm -f "$path" 2>/dev/null || true
+}
+
+# Wrap IPv6 literals in brackets for curl URL construction.
+probe_url_host() {
+    local host="$1"
+    if [[ "$host" == \[*\] ]]; then
+        echo "$host"
+        return 0
+    fi
+    if [[ "$host" == *:* ]]; then
+        echo "[${host}]"
+        return 0
+    fi
+    echo "$host"
+}
+
+# Resolve on-disk probe upload path for ftps|sftp when username and filename are safe.
+probe_local_upload_path() {
+    local protocol="$1"
+    local user="$2"
+    local file_name="$3"
+    if ! [[ "$user" =~ ^[A-Za-z0-9]+$ ]]; then
+        return 1
+    fi
+    if ! [[ "$file_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        return 1
+    fi
+    case "$protocol" in
+        ftps)
+            echo "/var/www/html/cache/ftp/_probe/${user}/${file_name}"
+            return 0
+            ;;
+        sftp)
+            echo "/var/sftp/${user}/files/${file_name}"
+            return 0
+            ;;
+    esac
+    return 1
+}

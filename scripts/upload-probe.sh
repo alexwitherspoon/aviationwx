@@ -120,34 +120,41 @@ vsftpd_ssl_enabled() {
 # FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail
+    local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail fail_prefix
     local -a curl_tls_args=()
+    local curl_err local_upload_path
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
+    mkdir -p "$PROBE_TMP_DIR"
+    curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
     # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
-    base_url="ftp://${host}:${port}/"
+    base_url="ftp://$(probe_url_host "$host"):${port}/"
     if vsftpd_ssl_enabled; then
         use_tls="true"
+        fail_prefix="ftps"
         curl_tls_args=(--ftp-ssl-reqd)
+        if probe_host_skips_tls_verify "$host"; then
+            curl_tls_args+=(--insecure)
+        fi
         ok_detail="ok"
     else
         use_tls="false"
+        fail_prefix="ftp"
         ok_detail="ok (plain ftp, ssl_enable=NO)"
     fi
-    mkdir -p "$PROBE_TMP_DIR"
+    if local_upload_path="$(probe_local_upload_path ftps "$user" "$file_name")"; then
+        clear_local_probe_upload_file "$local_upload_path"
+    fi
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
         --connect-timeout 10 --max-time 45 \
-        --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>&1; then
+        --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>"$curl_err"; then
         rm -f "$local_file"
-        if [ "$use_tls" = "true" ]; then
-            echo "false|0|ftps upload failed"
-        else
-            echo "false|0|ftp upload failed"
-        fi
+        echo "false|0|$(probe_curl_fail_detail "$fail_prefix" "$curl_err")"
+        rm -f "$curl_err"
         return 1
     fi
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
@@ -159,7 +166,7 @@ run_ftp_probe() {
             log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
         fi
     fi
-    rm -f "$local_file"
+    rm -f "$local_file" "$curl_err"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
@@ -171,11 +178,16 @@ run_ftp_probe() {
 run_sftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
     local file_name remote_path base_url local_file start_sec end_sec elapsed
+    local curl_err local_upload_path
     file_name="$PROBE_REMOTE_FILENAME"
     remote_path="files/${file_name}"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    base_url="sftp://${host}:${port}/"
     mkdir -p "$PROBE_TMP_DIR"
+    curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
+    base_url="sftp://$(probe_url_host "$host"):${port}/"
+    if local_upload_path="$(probe_local_upload_path sftp "$user" "$file_name")"; then
+        clear_local_probe_upload_file "$local_upload_path"
+    fi
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     ensure_sftp_known_hosts "$host" "$port"
     probe_setup_netrc "$host" "$user" "$pass"
@@ -183,13 +195,14 @@ run_sftp_probe() {
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
         --connect-timeout 10 --max-time 45 \
-        --upload-file "$local_file" "${base_url}${remote_path}" >/dev/null 2>&1; then
+        --upload-file "$local_file" "${base_url}${remote_path}" >/dev/null 2>"$curl_err"; then
         rm -f "$local_file"
-        echo "false|0|sftp upload failed"
+        echo "false|0|$(probe_curl_fail_detail "sftp" "$curl_err")"
+        rm -f "$curl_err"
         return 1
     fi
     # SFTP: curl -X DELE is FTP-only; stable PROBE_REMOTE_FILENAME is overwritten each run.
-    rm -f "$local_file"
+    rm -f "$local_file" "$curl_err"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
