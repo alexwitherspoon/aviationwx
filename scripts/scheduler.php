@@ -28,9 +28,6 @@ require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
-require_once __DIR__ . '/../lib/metrics.php';
-require_once __DIR__ . '/../lib/weather-health.php';
-require_once __DIR__ . '/../lib/notam-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 require_once __DIR__ . '/../lib/nasr/cache.php';
@@ -42,7 +39,7 @@ require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
 require_once __DIR__ . '/../lib/deploy-drain.php';
 require_once __DIR__ . '/../lib/scheduler-work-registry.php';
-// Note: variant-health flush uses variant_health_flush_via_http(); metrics use spill aggregator CLI
+// Metrics spill merge, variant-health flush, and related housekeeping: drain-gated background workers.
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -100,27 +97,6 @@ function reapZombies(): int {
         $reaped++;
     }
     return $reaped;
-}
-
-/**
- * Parse spills_merged from aggregate-metrics-spills.php stdout (last JSON object line).
- *
- * @param array<int, string> $lines exec output lines
- * @return int|null spills_merged count, or null if no summary line (legacy CLI)
- */
-function scheduler_parse_metrics_aggregator_stdout(array $lines): ?int {
-    for ($i = count($lines) - 1; $i >= 0; $i--) {
-        $line = trim($lines[$i]);
-        if ($line === '') {
-            continue;
-        }
-        $decoded = json_decode($line, true);
-        if (is_array($decoded) && array_key_exists('spills_merged', $decoded)) {
-            return (int) $decoded['spills_merged'];
-        }
-    }
-
-    return null;
 }
 
 /**
@@ -562,6 +538,112 @@ $workRegistry->registerEnqueueTick('status_prewarm', function (int $now) use (&$
     }
 });
 
+$workRegistry->registerEnqueueTick('metrics_spill', function (int $now) use (&$lastMetricsSpillMerge): void {
+    if (($now - $lastMetricsSpillMerge) < METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
+        return;
+    }
+    $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
+    if (!file_exists($aggScript)) {
+        $lastMetricsSpillMerge = $now;
+        aviationwx_log('warning', 'scheduler: aggregate-metrics-spills.php missing', [
+            'path' => $aggScript,
+        ], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsSpillMerge = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_variant_health', function (int $now) use (&$lastVariantHealthHttpFlush): void {
+    if (($now - $lastVariantHealthHttpFlush) < METRICS_FLUSH_INTERVAL_SECONDS) {
+        return;
+    }
+    $script = __DIR__ . '/flush-variant-health.php';
+    if (!file_exists($script)) {
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastVariantHealthHttpFlush = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_upstream_health', function (int $now) use (&$lastWeatherHealthUpdate): void {
+    if (($now - $lastWeatherHealthUpdate) < 60) {
+        return;
+    }
+    $script = __DIR__ . '/flush-upstream-health.php';
+    if (!file_exists($script)) {
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastWeatherHealthUpdate = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_daily', function (int $now) use (&$lastDailyAggregation): void {
+    $yesterdayId = gmdate('Y-m-d', $now - 86400);
+    if ($lastDailyAggregation === $yesterdayId) {
+        return;
+    }
+    $script = __DIR__ . '/aggregate-metrics-daily.php';
+    if (!file_exists($script)) {
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastDailyAggregation = $yesterdayId;
+});
+
+$workRegistry->registerEnqueueTick('metrics_weekly', function (int $now) use (&$lastWeeklyAggregation): void {
+    $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
+    if ($lastWeeklyAggregation === $lastWeekId || (int) gmdate('N', $now) !== 1 || (int) gmdate('H', $now) < 2) {
+        return;
+    }
+    $script = __DIR__ . '/aggregate-metrics-weekly.php';
+    if (!file_exists($script)) {
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastWeeklyAggregation = $lastWeekId;
+});
+
+$workRegistry->registerEnqueueTick('metrics_cleanup', function (int $now) use (&$lastMetricsCleanup): void {
+    if (($now - $lastMetricsCleanup) < 86400) {
+        return;
+    }
+    $script = __DIR__ . '/cleanup-metrics.php';
+    if (!file_exists($script)) {
+        $lastMetricsCleanup = $now;
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsCleanup = $now;
+});
+
+$workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$lastMetricsHealthCheck): void {
+    if (($now - $lastMetricsHealthCheck) < 300) {
+        return;
+    }
+    $script = __DIR__ . '/check-metrics-health.php';
+    if (!file_exists($script)) {
+        $lastMetricsHealthCheck = $now;
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMetricsHealthCheck = $now;
+});
+
 // Main scheduler loop
 while ($running) {
     $loopCount++;
@@ -792,126 +874,8 @@ while ($running) {
             $workRegistry->runEnqueueTicks($now);
         }
         
-        // Process metrics tasks (non-blocking)
-        // 1. Merge PHP-FPM spill journals into hourly/*.json (APCu is per-worker; spills capture counters at shutdown)
-        if (($now - $lastMetricsSpillMerge) >= METRICS_SPILL_MERGE_INTERVAL_SECONDS) {
-            $aggScript = __DIR__ . '/aggregate-metrics-spills.php';
-            if (file_exists($aggScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                $aggOutput = [];
-                $exitCode = 0;
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($aggScript) . ' 2>&1', $aggOutput, $exitCode);
-                // Always advance after an attempt so failures do not retry every 1s loop tick.
-                $lastMetricsSpillMerge = $now;
-                if ($exitCode === 0) {
-                    $spillsMerged = scheduler_parse_metrics_aggregator_stdout($aggOutput);
-                    if ($spillsMerged === null || $spillsMerged > 0) {
-                        metrics_status_bundle_mirror_refresh_via_http();
-                    }
-                } else {
-                    aviationwx_log('warning', 'scheduler: metrics spill merge CLI reported failure', [
-                        'exit_code' => $exitCode,
-                        'output_lines' => array_slice($aggOutput, 0, 30),
-                    ], 'app');
-                }
-            } else {
-                $lastMetricsSpillMerge = $now;
-                aviationwx_log('warning', 'scheduler: aggregate-metrics-spills.php missing', [
-                    'path' => $aggScript,
-                ], 'app');
-            }
-        }
-
-        // 1b. Flush variant-health APCu counters to cache file inside PHP-FPM (CLI cannot see FPM APCu)
-        if (($now - $lastVariantHealthHttpFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
-            if (variant_health_flush_via_http()) {
-                $lastVariantHealthHttpFlush = $now;
-            }
-        }
-        
-        // 2. Aggregate yesterday's hourly data into daily (once per day, after midnight UTC)
-        $yesterdayId = gmdate('Y-m-d', $now - 86400);
-        if ($lastDailyAggregation !== $yesterdayId) {
-            if (metrics_aggregate_daily($yesterdayId)) {
-                $lastDailyAggregation = $yesterdayId;
-                aviationwx_log('info', 'scheduler: metrics daily aggregation complete', [
-                    'date' => $yesterdayId
-                ], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: metrics daily aggregation failed', [
-                    'date' => $yesterdayId
-                ], 'app');
-            }
-        }
-        
-        // 3. Aggregate last week's daily data into weekly (once per week, on Monday after midnight UTC)
-        $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
-        if ($lastWeeklyAggregation !== $lastWeekId && (int)gmdate('N') === 1 && (int)gmdate('H') >= 2) {
-            if (metrics_aggregate_weekly($lastWeekId)) {
-                $lastWeeklyAggregation = $lastWeekId;
-                aviationwx_log('info', 'scheduler: metrics weekly aggregation complete', [
-                    'week' => $lastWeekId
-                ], 'app');
-            }
-        }
-        
-        // 4. Cleanup old metrics files (once per day)
-        if (($now - $lastMetricsCleanup) >= 86400) {
-            $deletedCount = metrics_cleanup();
-            if ($deletedCount > 0) {
-                aviationwx_log('info', 'scheduler: metrics cleanup complete', [
-                    'deleted_files' => $deletedCount
-                ], 'app');
-            }
-            $lastMetricsCleanup = $now;
-        }
-        
-        // 5. Check metrics system health (every 5 minutes)
-        if (($now - $lastMetricsHealthCheck) >= 300) {
-            $healthStatus = metrics_get_health_status();
-            
-            if (!$healthStatus['healthy']) {
-                foreach ($healthStatus['errors'] as $error) {
-                    aviationwx_log('error', 'scheduler: metrics health check failed', [
-                        'error' => $error
-                    ], 'app');
-                }
-            }
-            
-            if (!empty($healthStatus['warnings'])) {
-                foreach ($healthStatus['warnings'] as $warning) {
-                    aviationwx_log('warning', 'scheduler: metrics health warning', [
-                        'warning' => $warning
-                    ], 'app');
-                }
-            }
-            
-            // Log memory pressure warnings
-            $memInfo = metrics_get_apcu_memory_info();
-            if ($memInfo && $memInfo['used_percent'] > 80) {
-                aviationwx_log('warning', 'scheduler: APCu memory pressure', [
-                    'used_percent' => $memInfo['used_percent'],
-                    'used_mb' => round($memInfo['used_bytes'] / 1048576, 2),
-                    'total_mb' => round($memInfo['total_bytes'] / 1048576, 2)
-                ], 'app');
-            }
-            
-            $lastMetricsHealthCheck = $now;
-        }
-        
-        // 6. Flush weather health counters to cache file (every 60 seconds)
-        // Variant health APCu flush runs via variant_health_flush_via_http() on METRICS_FLUSH_INTERVAL_SECONDS above.
-        // This pre-computes weather fetch health so status page doesn't check file ages
-        if (($now - $lastWeatherHealthUpdate) >= 60) {
-            $weatherFlushed = weatherHealthFlush();
-            $notamFlushed = notamHealthFlush();
-            if ($weatherFlushed || $notamFlushed) {
-                $lastWeatherHealthUpdate = $now;
-            }
-        }
-        
-        // 7. Clean up stuck worker processes (every 60 seconds)
-        // This is a safety net for workers that become stuck despite self-timeout mechanisms
+        // Clean up stuck worker processes (every 60 seconds).
+        // Safety net for workers that become stuck despite self-timeout mechanisms.
         if (($now - $lastStuckWorkerCleanup) >= 60) {
             $stuckPids = cleanupStaleWorkerHeartbeats();
             if (!empty($stuckPids)) {

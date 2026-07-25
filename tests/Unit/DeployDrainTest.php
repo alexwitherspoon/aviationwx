@@ -675,7 +675,7 @@ final class DeployDrainTest extends TestCase
         $this->assertStringContainsString('SchedulerWorkRegistry', $scheduler);
         $this->assertStringContainsString('deploy_drain_evaluate_scheduler_tick', $scheduler);
         $this->assertStringContainsString('runEnqueueTicks', $scheduler);
-        foreach (['metar_bulk', 'nws_points', 'weather', 'webcam', 'notam', 'station_power', 'reference_data', 'status_prewarm'] as $tickName) {
+        foreach (['metar_bulk', 'nws_points', 'weather', 'webcam', 'notam', 'station_power', 'reference_data', 'status_prewarm', 'metrics_spill', 'metrics_variant_health', 'metrics_upstream_health', 'metrics_daily', 'metrics_weekly', 'metrics_cleanup', 'metrics_health'] as $tickName) {
             $this->assertStringContainsString("registerEnqueueTick('{$tickName}'", $scheduler);
         }
         $this->assertStringContainsString("setPool('weather'", $scheduler);
