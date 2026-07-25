@@ -48,6 +48,8 @@
  * │       └── {fingerprint}.json
  * ├── backoff.json                 # Circuit breaker state
  * ├── operations_snapshot.json   # Public API GET /v1/operations (scheduler)
+ * ├── deploy-drain.flag          # CD worker drain request (scheduler pause)
+ * ├── deploy-drain.done          # CD worker drain complete marker
  * ├── peak_gusts/                  # Per-airport daily peak gust tracking
  * │   └── {airport}.json
  * ├── temp_extremes/               # Per-airport daily temperature extremes
