@@ -27,7 +27,7 @@ if [ ! -d "$CACHE_DIR" ]; then
   exit 0
 fi
 
-if ! docker compose -f "$COMPOSE_FILE" ps web --status running -q 2>/dev/null | grep -q .; then
+if ! docker compose -f "$COMPOSE_FILE" ps web 2>/dev/null | grep -q "Up"; then
   echo "✓ Web container not running - skip worker drain"
   exit 0
 fi
