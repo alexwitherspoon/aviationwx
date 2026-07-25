@@ -29,6 +29,8 @@ aviationwx.org/
 │   ├── seo.php               # SEO utilities (structured data, meta tags)
 │   ├── constants.php         # Application constants
 │   ├── scheduler-daemon-lock.php # Exclusive flock helper for scheduler.php (no path unlink)
+│   ├── deploy-drain.php      # Deploy drain markers and pause/force/abandon decisions
+│   ├── scheduler-work-registry.php # Registered ProcessPools + enqueue ticks for drain gating
 │   ├── circuit-breaker.php   # Circuit breaker for API failures
 │   ├── weather-health.php    # Upstream fetch health counters (weather_health.json)
 │   ├── notam-health.php      # NMS NOTAM fetch health counters (notam_health.json)
@@ -72,6 +74,8 @@ aviationwx.org/
 │   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM); entrypoint starts at boot
 │   ├── scheduler-health-check.php # Cron watchdog: recover if daemon missing or unhealthy (not initial start)
 │   ├── diagnose-scheduler-duplicates.php # Read-only CLI: list scheduler PIDs and lock summary
+│   ├── deploy-drain.php      # CLI: request/wait/status/clear deploy drain markers on cache volume
+│   ├── deploy-drain-workers.sh # Host CD helper: request drain and wait before container recreate
 │   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
 │   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
@@ -147,6 +151,35 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 
 **Observation vs fetch for "Last updated"**: Aggregate weather JSON includes both observation timestamps (`obs_time_*`, `_field_obs_time_map`) and fetch timestamps (`last_updated_*`). The airport UI must label **observation** time for the human "Last updated" line; see [Airport "Last updated": observation time vs fetch time](DATA_FLOW.md#airport-last-updated-observation-vs-fetch-time).
 
+### Scheduler System
+
+**Design**: The scheduler is a dispatcher, not a worker. Its job is to decide *when* refresh is due and to start separate processes that do the work. Fetching, parsing, image processing, and similar I/O stay out of the daemon process so the main loop stays non-blocking and light (short ticks, low memory, one stuck upstream call cannot stall the whole schedule).
+
+**`scripts/scheduler.php`**: Combined scheduler daemon for data refresh
+- Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
+- Dispatches weather, webcam, NOTAM, station power, and related reference-data / status prewarm refresh on configurable intervals (minimum 5 seconds, 1-second granularity)
+- Starts work via **ProcessPool** workers (concurrency-limited, waited on for deploy drain) or fire-and-forget CLI scripts (background `exec`; not waited on)
+- Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - not upstream fetches or image pipelines
+- Automatically reloads configuration changes without restart
+
+**Work registry (`lib/scheduler-work-registry.php`)**: Drain-aware registration of scheduler work
+- ProcessPools register with `setPool` (weather, webcam, NOTAM, station power)
+- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm)
+- Each loop: cleanup finished pool workers, evaluate deploy drain, then run registered enqueue ticks only when new work is allowed
+- Active worker counts and force-terminate iterate registered pools only
+- New gated work is added by registering a pool and/or tick; ungated paths (for example in-process metrics flush) stay outside the registry
+
+**Deploy worker drain (`lib/deploy-drain.php`)**: Pause new registered work before container recreate
+- CD writes `cache/deploy-drain.flag` on the shared cache volume (host CLI: `scripts/deploy-drain.php` / `scripts/deploy-drain-workers.sh`) while Apache continues serving clients
+- The scheduler stops running registered enqueue ticks; in-flight ProcessPool workers may finish
+- When pools are idle, the scheduler writes `cache/deploy-drain.done` so CD can proceed
+- After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining registered pool workers are SIGTERM'd and `.done` is written
+- After `MAX + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS` from drain start (or for an orphan `.done` without a flag), markers are cleared and registered work resumes so a failed recreate cannot leave refresh paused indefinitely
+- While drain is active inside that TTL, `scheduler-health-check.php` does not spawn a second daemon when a live scheduler is already present; if the daemon has died, the watchdog may start a replacement (the new process continues under the same drain markers)
+- Container entrypoint clears both markers before starting the scheduler
+- Registered CLI background ticks are not started during drain; in-flight fire-and-forget CLI processes are not waited on (only ProcessPool workers are)
+- Slight data staleness during the drain window is preferred over killing mid-flight webcam or weather pool workers
+
 ### Webcam System
 
 **`api/webcam.php`** (Internal API): Serves cached webcam images
@@ -155,13 +188,6 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - Supports multiple formats (WebP, JPEG) with content negotiation
 - Format priority: explicit fmt parameter → WebP → JPEG
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
-
-**`scripts/scheduler.php`**: Combined scheduler daemon for data refresh
-- Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
-- Handles weather, webcam, and NOTAM updates with sub-minute granularity
-- Supports configurable refresh intervals (minimum 5 seconds, 1-second granularity)
-- Non-blocking main loop with ProcessPool integration
-- Automatically reloads configuration changes without restart
 
 **`scripts/unified-webcam-worker.php`**: Unified webcam worker (handles both pull and push cameras)
 - Called by scheduler in `--worker` mode for individual airport/camera updates
@@ -387,6 +413,10 @@ Response (JSON) + Cache
 ```
 Scheduler Daemon (runs every 1 second)
   ↓
+SchedulerWorkRegistry (registered pools + enqueue ticks)
+  ↓
+[If deploy drain allows new work] webcam enqueue tick
+  ↓
 WebcamScheduleQueue (priority queue using min-heap)
   ↓
 Check which cameras are due based on refresh_seconds
@@ -424,6 +454,27 @@ Check cache for requested image
 [If stale] Serve stale cache (scheduler handles refresh)
   ↓
 [If too stale (>3 hours)] Return 503 Service Unavailable (fail-closed safety)
+```
+
+### Deploy worker drain flow
+
+```
+CD (before web container recreate)
+  ↓
+Write cache/deploy-drain.flag (shared cache volume)
+  ↓
+Scheduler: stop registered enqueue ticks; Apache keeps serving
+  ↓
+Wait for registered ProcessPool workers (or DEPLOY_WORKER_DRAIN_MAX_SECONDS then SIGTERM)
+  ↓
+Write cache/deploy-drain.done
+  ↓
+CD recreates web container
+  ↓
+Entrypoint clears drain markers, starts scheduler
+
+[If recreate never happens]
+  After MAX + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS: clear markers and resume registered work
 ```
 
 ### NOTAM Data Flow

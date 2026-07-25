@@ -123,6 +123,8 @@ Post-deploy verification runs **on the production host over SSH** (container hea
 
 **Startup model:** the `web` container **entrypoint** starts one `scripts/scheduler.php` process after cache permissions are ready. **Cron** runs `scripts/scheduler-health-check.php` every minute as a **watchdog**: it checks the lock file and `/proc`, and starts a replacement only when recovery is needed (for example missing PID, lock health not healthy, or stale lock with no live daemon). It is not meant to compete with the entrypoint for a routine second start when one healthy daemon is already running.
 
+**Deploy worker drain:** CD pauses registered scheduler work before recreating the web container while Apache keeps serving. Behavior (registry gating, ProcessPool wait, force and abandon windows, entrypoint clear) is documented under [Scheduler System](ARCHITECTURE.md#scheduler-system). Operators inspect markers on the host cache mount:
+
 ```bash
 # Check scheduler is running
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep scheduler
@@ -130,7 +132,10 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep schedule
 # Check lock file (shows PID and start time)
 docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Force restart scheduler (auto-restarts within 60s)
+# Inspect deploy drain markers (host cache mount)
+php scripts/deploy-drain.php status --cache-dir=/tmp/aviationwx-cache
+
+# Force restart scheduler (watchdog may restart within about 60s when drain is not active)
 docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 ```
 
