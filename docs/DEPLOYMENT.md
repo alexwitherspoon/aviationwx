@@ -517,7 +517,7 @@ git push origin main
 
 See `.github/workflows/deploy-docker.yml` for workflow details.
 
-Before recreating the `web` container, CD runs `scripts/deploy-drain-workers.sh` so the scheduler pauses registered work and drains ProcessPool workers while Apache continues serving. Behavior is documented under [Scheduler System](ARCHITECTURE.md#scheduler-system).
+Before recreating the `web` container, CD runs `scripts/deploy-drain-workers.sh`, which executes `deploy-drain.php` inside the live web container (host has no PHP) so the scheduler pauses registered work and drains ProcessPool workers while Apache continues serving. Behavior is documented under [Scheduler System](ARCHITECTURE.md#scheduler-system).
 
 ### Nginx and `embed.aviationwx.org` (CD)
 
