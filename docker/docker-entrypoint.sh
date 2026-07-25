@@ -295,6 +295,12 @@ else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
 fi
 
+# Stale drain markers on the shared cache volume would leave a new scheduler paused.
+# Basenames must match DEPLOY_DRAIN_*_BASENAME in lib/constants.php.
+if [ -d "${CACHE_DIR}" ]; then
+    rm -f "${CACHE_DIR}/deploy-drain.flag" "${CACHE_DIR}/deploy-drain.done" 2>/dev/null || true
+fi
+
 # Scheduler: initial start authority is this entrypoint (one daemon after cache is ready).
 # Cron runs scripts/scheduler-health-check.php every minute as a watchdog only (confirm lock/PID,
 # start a replacement when missing or unhealthy). It must not duplicate a healthy daemon.

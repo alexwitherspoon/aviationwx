@@ -1567,6 +1567,14 @@ jobs:
           # Enable BuildKit for better caching (if not already enabled)
           export DOCKER_BUILDKIT=1
           export COMPOSE_DOCKER_CLI_BUILD=1
+
+          # Drain in-flight workers before recreate; Apache stays up. Soft-fail only.
+          if [ -f scripts/deploy-drain-workers.sh ]; then
+            chmod +x scripts/deploy-drain-workers.sh
+            scripts/deploy-drain-workers.sh || echo "⚠️  Worker drain helper returned non-zero - continuing deploy"
+          else
+            echo "⚠️  deploy-drain-workers.sh missing - skipping worker drain"
+          fi
           
           # Check for Docker config changes on server (fallback if git diff didn't work)
           if [ "$FORCE_REBUILD" = "unknown" ] || [ "$FORCE_REBUILD" = "false" ]; then

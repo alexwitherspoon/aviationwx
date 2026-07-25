@@ -657,4 +657,54 @@ final class DeployDrainTest extends TestCase
         );
         $this->assertSame(2, $rc, implode("\n", $out));
     }
+
+    public function testWiring_SchedulerAndHealthCheckRequireDeployDrain(): void
+    {
+        $scheduler = file_get_contents(dirname(__DIR__, 2) . '/scripts/scheduler.php');
+        $health = file_get_contents(dirname(__DIR__, 2) . '/scripts/scheduler-health-check.php');
+        $entrypoint = file_get_contents(dirname(__DIR__, 2) . '/docker/docker-entrypoint.sh');
+        $workflow = file_get_contents(dirname(__DIR__, 2) . '/.github/workflows/deploy-docker.yml');
+
+        $this->assertIsString($scheduler);
+        $this->assertIsString($health);
+        $this->assertIsString($entrypoint);
+        $this->assertIsString($workflow);
+
+        $this->assertStringContainsString("require_once __DIR__ . '/../lib/deploy-drain.php';", $scheduler);
+        $this->assertStringContainsString('scheduler-work-registry.php', $scheduler);
+        $this->assertStringContainsString('SchedulerWorkRegistry', $scheduler);
+        $this->assertStringContainsString('deploy_drain_evaluate_scheduler_tick', $scheduler);
+        $this->assertStringContainsString('runEnqueueTicks', $scheduler);
+        foreach (['metar_bulk', 'nws_points', 'weather', 'webcam', 'notam', 'station_power', 'reference_data', 'status_prewarm'] as $tickName) {
+            $this->assertStringContainsString("registerEnqueueTick('{$tickName}'", $scheduler);
+        }
+        $this->assertStringContainsString("setPool('weather'", $scheduler);
+        $this->assertStringContainsString('runEnqueueTicks', $scheduler);
+        $this->assertStringContainsString('deploy_drain_apply_scheduler_action', $scheduler);
+
+        $this->assertStringContainsString("require_once __DIR__ . '/../lib/deploy-drain.php';", $health);
+        $this->assertStringContainsString('deploy_drain_should_suppress_scheduler_restart', $health);
+        $this->assertStringContainsString('listSchedulerDaemonPids', $health);
+        // Suppress only when a live daemon exists; a dead daemon mid-drain must still be recoverable.
+        $this->assertMatchesRegularExpression(
+            '/deploy_drain_should_suppress_scheduler_restart\(\).*count\(\$daemonPidsSnapshot\)\s*>\s*0/s',
+            $health
+        );
+
+        $this->assertStringContainsString('deploy-drain.flag', $entrypoint);
+        $this->assertStringContainsString('deploy-drain.done', $entrypoint);
+
+        $this->assertStringContainsString('deploy-drain-workers.sh', $workflow);
+    }
+
+    public function testHostDrainHelper_ReadsPhpMaxConstant(): void
+    {
+        $path = dirname(__DIR__, 2) . '/scripts/deploy-drain-workers.sh';
+        $this->assertFileExists($path);
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('DEPLOY_WORKER_DRAIN_MAX_SECONDS', $contents);
+        $this->assertStringContainsString('lib/constants.php', $contents);
+        $this->assertStringContainsString('exit 0', $contents);
+    }
 }

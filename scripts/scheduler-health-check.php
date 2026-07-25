@@ -18,6 +18,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-utils.php';
+require_once __DIR__ . '/../lib/deploy-drain.php';
 
 $hadFailure = false;
 
@@ -26,7 +27,13 @@ try {
     $schedulerScript = __DIR__ . '/scheduler.php';
     $maxLockAge = 120; // Consider stale if lock >2 minutes old
 
+    // Deploy drain: do not spawn a second daemon while CD waits on a live scheduler.
+    // If the daemon already died mid-drain, recover so refresh can continue under drain rules.
     $daemonPidsSnapshot = listSchedulerDaemonPids();
+    if (deploy_drain_should_suppress_scheduler_restart() && count($daemonPidsSnapshot) > 0) {
+        exit(0);
+    }
+
     if (count($daemonPidsSnapshot) > 1) {
         aviationwx_log('error', 'scheduler health check: multiple scheduler daemons detected', [
             'daemon_pids' => $daemonPidsSnapshot,
