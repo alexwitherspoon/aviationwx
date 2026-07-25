@@ -120,7 +120,7 @@ vsftpd_ssl_enabled() {
 # FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed use_tls ok_detail fail_prefix
+    local file_name base_url local_file start_sec end_sec elapsed ok_detail fail_prefix
     local -a curl_tls_args=()
     local curl_err local_upload_path
     file_name="$PROBE_REMOTE_FILENAME"
@@ -130,7 +130,6 @@ run_ftp_probe() {
     # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
     base_url="ftp://$(probe_url_host "$host"):${port}/"
     if vsftpd_ssl_enabled; then
-        use_tls="true"
         fail_prefix="ftps"
         curl_tls_args=(--ftp-ssl-reqd)
         if probe_host_skips_tls_verify "$host"; then
@@ -138,7 +137,6 @@ run_ftp_probe() {
         fi
         ok_detail="ok"
     else
-        use_tls="false"
         fail_prefix="ftp"
         ok_detail="ok (plain ftp, ssl_enable=NO)"
     fi
@@ -157,15 +155,8 @@ run_ftp_probe() {
         rm -f "$curl_err"
         return 1
     fi
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
-        --connect-timeout 10 --max-time 30 \
-        --fail -X "DELE ${file_name}" "$base_url" >/dev/null 2>&1; then
-        if [ "$use_tls" = "true" ]; then
-            log_probe "WARN" "FTPS upload ok but delete failed for ${file_name}"
-        else
-            log_probe "WARN" "FTP upload ok but delete failed for ${file_name}"
-        fi
-    fi
+    # No remote DELE: curl --fail -X DELE on a directory URL can exit non-zero after
+    # vsftpd already returns 250. Health uses local clear + overwrite (same as SFTP).
     rm -f "$local_file" "$curl_err"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
@@ -201,7 +192,7 @@ run_sftp_probe() {
         rm -f "$curl_err"
         return 1
     fi
-    # SFTP: curl -X DELE is FTP-only; stable PROBE_REMOTE_FILENAME is overwritten each run.
+    # No remote delete: local clear before upload + overwrite of PROBE_REMOTE_FILENAME.
     rm -f "$local_file" "$curl_err"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
