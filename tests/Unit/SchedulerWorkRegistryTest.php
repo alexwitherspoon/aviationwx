@@ -36,11 +36,12 @@ final class SchedulerWorkRegistryTest extends TestCase
         $reg = new SchedulerWorkRegistry();
         $reg->setPool('weather', $this->makePool(2));
         $reg->setPool('weather', $this->makePool(9));
-        $this->assertSame(9, $reg->sumActiveWorkers());
+        // Prior pool still has 2 active workers; keep them in the retiring set for drain.
+        $this->assertSame(11, $reg->sumActiveWorkers());
 
         $reg->setPool('weather', null);
         $this->assertSame([], $reg->registeredPoolNames());
-        $this->assertSame(0, $reg->sumActiveWorkers());
+        $this->assertSame(11, $reg->sumActiveWorkers());
     }
 
     public function testSetPool_BlankNameIgnored(): void

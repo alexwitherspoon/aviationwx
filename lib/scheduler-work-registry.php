@@ -5,6 +5,10 @@
  * ProcessPools (setPool) and enqueue ticks (registerEnqueueTick) register here.
  * Drain counts, force-terminate, and allow_new_work execution iterate the registry
  * so new workers are covered when registered.
+ *
+ * Replacing a pool that still has active children keeps the old pool in a retiring
+ * list until idle (or terminateAll), so deploy drain cannot lose in-flight workers
+ * across config-driven ProcessPool recreation.
  */
 
 declare(strict_types=1);
@@ -18,6 +22,9 @@ final class SchedulerWorkRegistry
 {
     /** @var array<string, object> getActiveCount / cleanupFinished / cleanup */
     private array $pools = [];
+
+    /** @var list<object> Former pools still finishing children after setPool replacement */
+    private array $retiringPools = [];
 
     /** @var array<string, callable(int):void> */
     private array $enqueueTicks = [];
@@ -35,8 +42,16 @@ final class SchedulerWorkRegistry
         if ($name === '') {
             return;
         }
-        if ($pool === null) {
+
+        if (isset($this->pools[$name])) {
+            $previous = $this->pools[$name];
+            if ($pool !== $previous) {
+                $this->retirePoolIfActive($previous);
+            }
             unset($this->pools[$name]);
+        }
+
+        if ($pool === null) {
             return;
         }
         $this->pools[$name] = $pool;
@@ -75,17 +90,27 @@ final class SchedulerWorkRegistry
     }
 
     /**
+     * @return int
+     */
+    public function retiringPoolCount(): int
+    {
+        $this->pruneRetiringPools();
+        return count($this->retiringPools);
+    }
+
+    /**
      * @return void
      */
     public function cleanupFinishedAll(): void
     {
-        foreach ($this->pools as $pool) {
+        foreach ($this->allTrackedPools() as $pool) {
             if (!method_exists($pool, 'cleanupFinished')) {
                 continue;
             }
             $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $pool->cleanupFinished($dummyStats);
         }
+        $this->pruneRetiringPools();
     }
 
     /**
@@ -93,7 +118,8 @@ final class SchedulerWorkRegistry
      */
     public function sumActiveWorkers(): int
     {
-        return deploy_drain_sum_active_workers(array_values($this->pools));
+        $this->pruneRetiringPools();
+        return deploy_drain_sum_active_workers($this->allTrackedPools());
     }
 
     /**
@@ -101,11 +127,12 @@ final class SchedulerWorkRegistry
      */
     public function terminateAll(): void
     {
-        foreach ($this->pools as $pool) {
+        foreach ($this->allTrackedPools() as $pool) {
             if (method_exists($pool, 'cleanup')) {
                 $pool->cleanup();
             }
         }
+        $this->retiringPools = [];
     }
 
     /**
@@ -117,5 +144,53 @@ final class SchedulerWorkRegistry
         foreach ($this->enqueueTicks as $tick) {
             $tick($now);
         }
+    }
+
+    /**
+     * @param object $pool
+     * @return void
+     */
+    private function retirePoolIfActive(object $pool): void
+    {
+        if (!method_exists($pool, 'getActiveCount')) {
+            return;
+        }
+        $count = $pool->getActiveCount();
+        if (!is_int($count) && !is_float($count)) {
+            return;
+        }
+        if ((int) $count <= 0) {
+            return;
+        }
+        $this->retiringPools[] = $pool;
+    }
+
+    /**
+     * @return void
+     */
+    private function pruneRetiringPools(): void
+    {
+        if ($this->retiringPools === []) {
+            return;
+        }
+        $kept = [];
+        foreach ($this->retiringPools as $pool) {
+            if (!method_exists($pool, 'getActiveCount')) {
+                continue;
+            }
+            $count = $pool->getActiveCount();
+            if ((is_int($count) || is_float($count)) && (int) $count > 0) {
+                $kept[] = $pool;
+            }
+        }
+        $this->retiringPools = $kept;
+    }
+
+    /**
+     * @return list<object>
+     */
+    private function allTrackedPools(): array
+    {
+        return array_merge(array_values($this->pools), $this->retiringPools);
     }
 }
