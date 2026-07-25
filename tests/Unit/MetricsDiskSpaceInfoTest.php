@@ -51,7 +51,7 @@ final class MetricsDiskSpaceInfoTest extends TestCase
                 false,
                 true,
             ],
-            'exactly_1gib_free_high_percent_is_critical' => [
+            'just_under_1gib_free_high_percent_is_critical' => [
                 100 * $gib,
                 1 * $gib - 1,
                 false,
