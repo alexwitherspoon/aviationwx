@@ -14,6 +14,7 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
+require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/metrics-spill-aggregator.php';
 
 $stats = metrics_run_spill_aggregator_once();
