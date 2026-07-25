@@ -159,11 +159,11 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
 - Dispatches weather, webcam, NOTAM, station power, reference-data / status prewarm, and metrics housekeeping on configurable intervals (minimum 5 seconds, 1-second granularity)
 - Starts work via **ProcessPool** workers (concurrency-limited, waited on for deploy drain) or fire-and-forget CLI scripts (background `exec`; not waited on)
-- Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - not upstream fetches, image pipelines, or metrics aggregation
+- Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - registered ticks must not block on upstream I/O, image pipelines, geometry builds, or metrics aggregation (fire-and-forget CLI or ProcessPool only)
 - Automatically reloads configuration changes without restart
 
 **Work registry (`lib/scheduler-work-registry.php`)**: Drain-aware registration of scheduler work
-- ProcessPools register with `setPool` (weather, webcam, NOTAM, station power)
+- ProcessPools register with `setPool` (weather, webcam, NOTAM, station power). Replacing a pool that still has active children keeps the prior pool in a retiring set until idle or force-terminate, so drain counts stay accurate across config-driven recreation.
 - Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush)
 - Each loop: cleanup finished pool workers, evaluate deploy drain, then run registered enqueue ticks only when new work is allowed
 - Active worker counts and force-terminate iterate registered pools only
@@ -173,7 +173,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - CD writes `cache/deploy-drain.flag` on the shared cache volume (host CLI: `scripts/deploy-drain.php` / `scripts/deploy-drain-workers.sh`) while Apache continues serving clients
 - The scheduler stops running registered enqueue ticks; in-flight ProcessPool workers may finish
 - When pools are idle, the scheduler writes `cache/deploy-drain.done` so CD can proceed
-- After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining registered pool workers are SIGTERM'd and `.done` is written
+- After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining registered pool workers are force-terminated (`ProcessPool::cleanup`: SIGTERM, brief wait, then SIGKILL) and `.done` is written
 - After `MAX + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS` from drain start (or for an orphan `.done` without a flag), markers are cleared and registered work resumes so a failed recreate cannot leave refresh paused indefinitely
 - While drain is active inside that TTL, `scheduler-health-check.php` does not spawn a second daemon when a live scheduler is already present; if the daemon has died, the watchdog may start a replacement (the new process continues under the same drain markers)
 - Container entrypoint clears both markers before starting the scheduler

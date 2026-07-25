@@ -92,6 +92,7 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $path = $this->root . '/scripts/aggregate-metrics-daily.php';
         $this->assertFileExists($path);
         $contents = (string) file_get_contents($path);
+        $this->assertStringContainsString('--date=', $contents);
         $this->assertStringContainsString('gmdate', $contents);
         $this->assertStringContainsString('86400', $contents);
         $this->assertStringContainsString('metrics_aggregate_daily', $contents);
@@ -102,6 +103,7 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $path = $this->root . '/scripts/aggregate-metrics-weekly.php';
         $this->assertFileExists($path);
         $contents = (string) file_get_contents($path);
+        $this->assertStringContainsString('--week=', $contents);
         $this->assertStringContainsString('Y-\\WW', $contents);
         $this->assertStringContainsString('metrics_aggregate_weekly', $contents);
     }
@@ -111,12 +113,8 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/flush-variant-health.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        // HTTP flush needs PHP-FPM; unit env may return 1. Script must still be runnable CLI.
-        $this->assertContains($rc, [0, 1], implode("\n", $out));
+        [$rc, $joined] = $this->runWorkerCli($script);
+        $this->assertContains($rc, [0, 1], $joined);
     }
 
     public function testUpstreamHealthWorker_ExitsZero(): void
@@ -124,26 +122,18 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/flush-upstream-health.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $this->assertSame(0, $rc, implode("\n", $out));
+        [$rc, $joined] = $this->runWorkerCli($script);
+        $this->assertSame(0, $rc, $joined);
     }
 
     public function testDailyWorker_ExitsZero(): void
     {
-        require_once $this->root . '/lib/config.php';
-        require_once $this->root . '/lib/metrics.php';
-
         $script = $this->root . '/scripts/aggregate-metrics-daily.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $this->assertSame(0, $rc, implode("\n", $out));
+        [$rc, $joined] = $this->runWorkerCli($script, ['--date=2020-01-01']);
+        $this->assertSame(0, $rc, $joined);
+        $this->assertStringContainsString('"date":"2020-01-01"', $joined);
     }
 
     public function testWeeklyWorker_ExitsZero(): void
@@ -151,11 +141,9 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/aggregate-metrics-weekly.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $this->assertSame(0, $rc, implode("\n", $out));
+        [$rc, $joined] = $this->runWorkerCli($script, ['--week=2020-W01']);
+        $this->assertSame(0, $rc, $joined);
+        $this->assertStringContainsString('"week":"2020-W01"', $joined);
     }
 
     public function testCleanupWorker_ExitsZero(): void
@@ -163,11 +151,8 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/cleanup-metrics.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $this->assertSame(0, $rc, implode("\n", $out));
+        [$rc, $joined] = $this->runWorkerCli($script);
+        $this->assertSame(0, $rc, $joined);
     }
 
     public function testHealthWorker_ExitsZero(): void
@@ -175,11 +160,7 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/check-metrics-health.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $joined = implode("\n", $out);
+        [$rc, $joined] = $this->runWorkerCli($script);
         $decoded = json_decode($joined, true);
         $this->assertIsArray($decoded, $joined);
         $this->assertArrayHasKey('healthy', $decoded);
@@ -193,12 +174,8 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $script = $this->root . '/scripts/aggregate-metrics-spills.php';
         $this->assertFileExists($script);
 
-        $out = [];
-        $rc = -1;
-        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1', $out, $rc);
-        $this->assertSame(0, $rc, implode("\n", $out));
-        $joined = implode("\n", $out);
+        [$rc, $joined] = $this->runWorkerCli($script);
+        $this->assertSame(0, $rc, $joined);
         $this->assertStringContainsString('spills_merged', $joined);
     }
 
@@ -257,5 +234,26 @@ final class MetricsSchedulerWorkersTest extends TestCase
             $afterGate,
             'Spill merge must not use blocking exec without &'
         );
+    }
+
+    /**
+     * @param list<string> $args
+     * @return array{0: int, 1: string}
+     */
+    private function runWorkerCli(string $script, array $args = []): array
+    {
+        $php = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+        $prepend = $this->root . '/tests/Fixtures/cli-temp-cache-prepend.php';
+        $cmd = escapeshellarg($php)
+            . ' -d auto_prepend_file=' . escapeshellarg($prepend)
+            . ' ' . escapeshellarg($script);
+        foreach ($args as $arg) {
+            $cmd .= ' ' . escapeshellarg($arg);
+        }
+        $cmd .= ' 2>&1';
+        $out = [];
+        $rc = -1;
+        exec($cmd, $out, $rc);
+        return [$rc, implode("\n", $out)];
     }
 }
