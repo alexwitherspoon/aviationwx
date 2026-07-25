@@ -157,17 +157,17 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 
 **`scripts/scheduler.php`**: Combined scheduler daemon for data refresh
 - Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
-- Dispatches weather, webcam, NOTAM, station power, and related reference-data / status prewarm refresh on configurable intervals (minimum 5 seconds, 1-second granularity)
+- Dispatches weather, webcam, NOTAM, station power, reference-data / status prewarm, and metrics housekeeping on configurable intervals (minimum 5 seconds, 1-second granularity)
 - Starts work via **ProcessPool** workers (concurrency-limited, waited on for deploy drain) or fire-and-forget CLI scripts (background `exec`; not waited on)
-- Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - not upstream fetches or image pipelines
+- Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - not upstream fetches, image pipelines, or metrics aggregation
 - Automatically reloads configuration changes without restart
 
 **Work registry (`lib/scheduler-work-registry.php`)**: Drain-aware registration of scheduler work
 - ProcessPools register with `setPool` (weather, webcam, NOTAM, station power)
-- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm)
+- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush)
 - Each loop: cleanup finished pool workers, evaluate deploy drain, then run registered enqueue ticks only when new work is allowed
 - Active worker counts and force-terminate iterate registered pools only
-- New gated work is added by registering a pool and/or tick; ungated paths (for example in-process metrics flush) stay outside the registry
+- New gated work is added by registering a pool and/or tick; ungated paths stay outside the registry (stuck-worker heartbeat cleanup remains in-process control-plane work)
 
 **Deploy worker drain (`lib/deploy-drain.php`)**: Pause new registered work before container recreate
 - CD writes `cache/deploy-drain.flag` on the shared cache volume (host CLI: `scripts/deploy-drain.php` / `scripts/deploy-drain-workers.sh`) while Apache continues serving clients
