@@ -396,4 +396,26 @@ class OurAirportsRefreshTest extends TestCase
 
         $this->assertNull($reason);
     }
+
+    public function testRunwaysMergeRejectReasonFromCounts_BelowRetainRatio_Rejects(): void
+    {
+        $reason = runwaysMergeRejectReasonFromCounts(
+            80,
+            100,
+            ['KTEST' => ['lat' => 1.0, 'lon' => 2.0]],
+            false
+        );
+
+        $this->assertSame('merged airport count below retention threshold', $reason);
+    }
+
+    public function testRunwaysMergeRejectReasonFromCounts_WithinRetainRatio_Allows(): void
+    {
+        $this->assertNull(runwaysMergeRejectReasonFromCounts(
+            95,
+            100,
+            ['KTEST' => ['lat' => 1.0, 'lon' => 2.0]],
+            false
+        ));
+    }
 }
