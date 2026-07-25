@@ -68,8 +68,14 @@ switch ($command) {
         exit(0);
 
     case 'wait':
-        $waitSeconds = ($maxWait ?? DEPLOY_WORKER_DRAIN_MAX_SECONDS) + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS;
-        $waitSeconds = max(1, (int) $waitSeconds);
+        // Explicit --max-wait=0 is a single poll (tests / check-once). Default adds grace.
+        if ($maxWait === null) {
+            $waitSeconds = DEPLOY_WORKER_DRAIN_MAX_SECONDS + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS;
+        } elseif ($maxWait <= 0) {
+            $waitSeconds = 0;
+        } else {
+            $waitSeconds = $maxWait + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS;
+        }
         $ok = deploy_drain_wait_until_complete($waitSeconds);
         if ($ok) {
             $payload = deploy_drain_read_done_payload();

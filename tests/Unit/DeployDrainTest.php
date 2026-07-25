@@ -650,12 +650,16 @@ final class DeployDrainTest extends TestCase
 
         $out = [];
         $rc = 0;
+        $started = microtime(true);
         exec(
             escapeshellarg($php) . ' ' . escapeshellarg($cli) . ' wait --cache-dir=' . escapeshellarg($cache) . ' --max-wait=0 2>&1',
             $out,
             $rc
         );
+        $elapsed = microtime(true) - $started;
         $this->assertSame(2, $rc, implode("\n", $out));
+        $this->assertStringContainsString('timed out after 0s', implode("\n", $out));
+        $this->assertLessThan(2.0, $elapsed, '--max-wait=0 must not apply the grace window');
     }
 
     public function testWiring_SchedulerAndHealthCheckRequireDeployDrain(): void
