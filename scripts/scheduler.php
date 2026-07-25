@@ -491,12 +491,14 @@ $workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$
 });
 
 $workRegistry->registerEnqueueTick('status_prewarm', function (int $now) use (&$lastCloudflareAnalyticsFetch, &$lastStatusPageCachesFetch, &$lastOperationsSnapshotBuild): void {
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+
     // 9. Cloudflare analytics pre-warm (every 15 min, non-blocking)
     // Runs worker in background; page loads read from file cache
     if (($now - $lastCloudflareAnalyticsFetch) >= CLOUDFLARE_ANALYTICS_FETCH_INTERVAL) {
         $cloudflareScript = __DIR__ . '/fetch-cloudflare-analytics.php';
         if (file_exists($cloudflareScript)) {
-            exec('php ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
             reapZombies(); // Reap shell spawned by exec() with &
             $lastCloudflareAnalyticsFetch = $now;
         }
@@ -513,7 +515,7 @@ $workRegistry->registerEnqueueTick('status_prewarm', function (int $now) use (&$
         foreach ($statusScripts as $script) {
             $path = __DIR__ . '/' . $script;
             if (file_exists($path)) {
-                exec('php ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
+                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
             }
         }
         reapZombies();
@@ -524,7 +526,7 @@ $workRegistry->registerEnqueueTick('status_prewarm', function (int $now) use (&$
     if (($now - $lastOperationsSnapshotBuild) >= OPERATIONS_SNAPSHOT_BUILD_INTERVAL_SECONDS) {
         $opsScript = __DIR__ . '/build-operations-snapshot.php';
         if (file_exists($opsScript)) {
-            exec('php ' . escapeshellarg($opsScript) . ' > /dev/null 2>&1 &');
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($opsScript) . ' > /dev/null 2>&1 &');
             reapZombies();
         }
         $lastOperationsSnapshotBuild = $now;
