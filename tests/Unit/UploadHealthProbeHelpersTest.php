@@ -112,6 +112,40 @@ class UploadHealthProbeHelpersTest extends TestCase
         $this->assertSame('', trim(implode("\n", $output)));
     }
 
+    public function testProbeLocalUploadPath_UnsafeFilename_FailsClosed(): void
+    {
+        $cmd = sprintf(
+            'bash -c %s',
+            escapeshellarg(
+                '. ' . $this->commonScript
+                . ' && probe_local_upload_path sftp awxprobesftp "../passwd"'
+            )
+        );
+        exec($cmd, $output, $code);
+        $this->assertSame(1, $code);
+        $this->assertSame('', trim(implode("\n", $output)));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function urlHostProvider(): array
+    {
+        return [
+            'ipv4' => ['127.0.0.1', '127.0.0.1'],
+            'hostname' => ['upload.example.com', 'upload.example.com'],
+            'ipv6 loopback' => ['::1', '[::1]'],
+            'already bracketed' => ['[::1]', '[::1]'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('urlHostProvider')]
+    public function testProbeUrlHost_FormatsHostForCurlUrls(string $host, string $expected): void
+    {
+        $result = $this->runHelperCapture('probe_url_host ' . escapeshellarg($host));
+        $this->assertSame($expected, $result);
+    }
+
     public function testClearLocalProbeUploadFile_RemovesExistingFile(): void
     {
         $dir = sys_get_temp_dir() . '/probe-clear-' . uniqid('', true);

@@ -159,7 +159,7 @@ class UploadHealthProbeSyncTest extends TestCase
         $path = __DIR__ . '/../../scripts/upload-probe.sh';
         $contents = file_get_contents($path);
         $this->assertIsString($contents);
-        $this->assertStringContainsString('base_url="ftp://${host}:${port}/"', $contents);
+        $this->assertStringContainsString('base_url="ftp://$(probe_url_host "$host"):${port}/"', $contents);
         $this->assertStringNotContainsString('base_url="ftps://${host}:${port}/"', $contents);
     }
 

@@ -128,7 +128,7 @@ run_ftp_probe() {
     mkdir -p "$PROBE_TMP_DIR"
     curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
     # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
-    base_url="ftp://${host}:${port}/"
+    base_url="ftp://$(probe_url_host "$host"):${port}/"
     if vsftpd_ssl_enabled; then
         use_tls="true"
         fail_prefix="ftps"
@@ -184,7 +184,7 @@ run_sftp_probe() {
     local_file="${PROBE_TMP_DIR}/${file_name}"
     mkdir -p "$PROBE_TMP_DIR"
     curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
-    base_url="sftp://${host}:${port}/"
+    base_url="sftp://$(probe_url_host "$host"):${port}/"
     if local_upload_path="$(probe_local_upload_path sftp "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
     fi
