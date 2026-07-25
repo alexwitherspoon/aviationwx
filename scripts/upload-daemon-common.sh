@@ -243,6 +243,9 @@ probe_host_skips_tls_verify() {
     if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         return 0
     fi
+    if [[ "$host" == *:* ]]; then
+        return 0
+    fi
     return 1
 }
 

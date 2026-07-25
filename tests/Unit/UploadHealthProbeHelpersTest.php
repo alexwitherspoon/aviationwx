@@ -28,6 +28,7 @@ class UploadHealthProbeHelpersTest extends TestCase
             'localhost' => ['localhost', 0],
             'loopback ipv6' => ['::1', 0],
             'bare ipv4' => ['10.0.0.5', 0],
+            'bare ipv6' => ['2001:db8::1', 0],
             'public hostname' => ['upload.aviationwx.org', 1],
             'empty' => ['', 1],
         ];
