@@ -18,6 +18,13 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->root = dirname(__DIR__, 2);
     }
 
+    public function testScheduler_LogsWhenDeployDrainMarkerUpdateFails(): void
+    {
+        $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');
+        $this->assertStringContainsString('$drainApplied = deploy_drain_apply_scheduler_action(', $scheduler);
+        $this->assertStringContainsString('deploy drain marker update failed', $scheduler);
+    }
+
     public function testScheduler_RecreatesPoolsOnlyWhenConfigChangedOrFirstInit(): void
     {
         $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');

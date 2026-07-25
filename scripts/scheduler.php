@@ -872,7 +872,7 @@ while ($running) {
             }
             $deployDrainAnnounced = false;
         }
-        deploy_drain_apply_scheduler_action(
+        $drainApplied = deploy_drain_apply_scheduler_action(
             $drainTick['action'],
             $now,
             static function () use ($workRegistry, $drainActiveWorkers, $drainTick): void {
@@ -891,6 +891,14 @@ while ($running) {
                 $workRegistry->terminateAll();
             }
         );
+        if (!$drainApplied) {
+            aviationwx_log('error', 'scheduler: deploy drain marker update failed', [
+                'action' => $drainTick['action'],
+                'active_workers' => $drainActiveWorkers,
+                'flag' => deploy_drain_flag_path(),
+                'done' => deploy_drain_done_path(),
+            ], 'app', true);
+        }
 
         if ($drainTick['allow_new_work']) {
             $workRegistry->runEnqueueTicks($now);
