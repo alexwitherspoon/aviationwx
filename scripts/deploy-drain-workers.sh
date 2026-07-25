@@ -7,8 +7,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Space-separated compose files (prod default; local may add docker-compose.override.yml).
 COMPOSE_FILE="${COMPOSE_FILE:-docker/docker-compose.prod.yml}"
-COMPOSE=(docker compose -f "$COMPOSE_FILE")
+COMPOSE=(docker compose)
+# shellcheck disable=SC2086
+for _compose_file in ${COMPOSE_FILE}; do
+  COMPOSE+=(-f "${_compose_file}")
+done
 WEB_SERVICE="${WEB_SERVICE:-web}"
 # Container path for the shared cache mount (host: AVIATIONWX_CACHE_DIR / /tmp/aviationwx-cache).
 CONTAINER_CACHE_DIR="${CONTAINER_CACHE_DIR:-/var/www/html/cache}"
