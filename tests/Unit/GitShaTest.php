@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../lib/notam/map-layer.php';
  */
 class GitShaTest extends TestCase
 {
-    private string $originalGitSha;
+    private string|false $originalGitSha;
 
     private string|false $originalDeployFileEnv;
 
@@ -21,15 +21,14 @@ class GitShaTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $gitSha = getenv('GIT_SHA');
-        $this->originalGitSha = $gitSha === false ? '' : $gitSha;
+        $this->originalGitSha = getenv('GIT_SHA');
         $this->originalDeployFileEnv = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
         $this->tempFile = sys_get_temp_dir() . '/aviationwx-deploy-git-sha-' . bin2hex(random_bytes(4));
     }
 
     protected function tearDown(): void
     {
-        if ($this->originalGitSha === '') {
+        if ($this->originalGitSha === false) {
             putenv('GIT_SHA');
         } else {
             putenv('GIT_SHA=' . $this->originalGitSha);
