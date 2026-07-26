@@ -1557,6 +1557,9 @@ jobs:
           
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
           set -euo pipefail
+          # deploy-drain-workers.sh uses docker compose exec; without this, exec consumes the
+          # SSH heredoc stdin and the compose build/up below never runs on the server.
+          exec < /dev/null
           cd ~/aviationwx
           # Source deployment helper functions for consistent error handling
           if [ -f scripts/deploy-helpers.sh ]; then

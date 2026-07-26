@@ -103,6 +103,20 @@ final class SchedulerDrainWiringContractTest extends TestCase
         );
     }
 
+    public function testWorkflow_DeployComposeRedirectsSshHeredocStdinBeforeDrain(): void
+    {
+        $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
+        $composeStepPos = strpos($workflow, '- name: Deploy via Docker Compose');
+        $this->assertNotFalse($composeStepPos);
+        $composeChunk = substr($workflow, $composeStepPos, 9000);
+        $this->assertStringContainsString('exec < /dev/null', $composeChunk);
+        $stdinPos = strpos($composeChunk, 'exec < /dev/null');
+        $drainPos = strpos($composeChunk, 'scripts/deploy-drain-workers.sh');
+        $this->assertNotFalse($stdinPos);
+        $this->assertNotFalse($drainPos);
+        $this->assertLessThan($drainPos, $stdinPos, 'stdin redirect must precede worker drain');
+    }
+
     public function testHealthCheck_LogsDuplicateDaemonsBeforeDrainSuppressExit(): void
     {
         $health = (string) file_get_contents($this->root . '/scripts/scheduler-health-check.php');
