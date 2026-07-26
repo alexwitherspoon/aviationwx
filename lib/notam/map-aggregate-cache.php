@@ -488,5 +488,17 @@ function notamMapAirspaceAggregateRepairStaleLogicBuildToken(): bool
 
     $envelope['map_layer_build_token'] = $current;
 
-    return notamMapAirspaceAggregateWrite($envelope);
+    $path = getNotamMapAirspaceAggregatePath();
+    $preserveMtime = is_file($path) ? (int) @filemtime($path) : 0;
+
+    if (!notamMapAirspaceAggregateWrite($envelope)) {
+        return false;
+    }
+
+    if ($preserveMtime > 0) {
+        @touch($path, $preserveMtime);
+        clearstatcache(true, $path);
+    }
+
+    return true;
 }

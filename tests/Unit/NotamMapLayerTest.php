@@ -330,6 +330,37 @@ final class NotamMapLayerTest extends TestCase
         }
     }
 
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_PreservesAggregateMtime(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        $originalDeployFileEnv = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
+        putenv('GIT_SHA');
+        $deployFile = $this->cacheDir . '/.deploy-git-sha';
+        putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $deployFile);
+        file_put_contents($deployFile, "9f3471525bc39e8a\n");
+
+        try {
+            $staleMtime = time() - 4000;
+            $record = $this->drawableTfrAirspaceRecord($staleMtime, 'MTIME1/2026');
+            $this->writeAirspaceAggregate(['MTIME1/2026' => $record], $staleMtime, 'logic-v2');
+
+            $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
+            $this->assertSame($staleMtime, notamMapAirspaceAggregateMtime());
+            $this->assertTrue(notamMapAirspaceAggregateIsStale(3600, time()));
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+            if ($originalDeployFileEnv === false) {
+                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
+            } else {
+                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $originalDeployFileEnv);
+            }
+        }
+    }
+
     public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_SkipsShaOnlyMismatch(): void
     {
         $originalGitSha = getenv('GIT_SHA');
