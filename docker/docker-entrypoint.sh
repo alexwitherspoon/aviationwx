@@ -309,6 +309,11 @@ if [ -d "${CACHE_DIR}" ]; then
         if printf '%s\n' "${GIT_SHA}" > "${DEPLOY_GIT_SHA_FILE}"; then
             chmod 644 "${DEPLOY_GIT_SHA_FILE}" 2>/dev/null || true
             echo "✓ Persisted deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}"
+            if runuser -u www-data -- /usr/local/bin/php /var/www/html/scripts/repair-notam-map-build-token.php; then
+                :
+            else
+                echo "⚠️  NOTAM map build-token repair skipped or failed" >&2
+            fi
         else
             echo "⚠️  Failed to persist deploy GIT_SHA to ${DEPLOY_GIT_SHA_FILE}" >&2
         fi

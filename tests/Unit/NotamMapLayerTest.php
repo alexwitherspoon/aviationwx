@@ -270,6 +270,84 @@ final class NotamMapLayerTest extends TestCase
         $this->assertTrue($payload['failclosed'] ?? false);
     }
 
+    public function testNotamTfrMapLayerServeOrRebuild_LogicTokenMismatch_FailClosed(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        putenv('GIT_SHA=9f34715');
+        try {
+            $now = time();
+            $record = $this->drawableTfrAirspaceRecord($now, 'LOGIC1/2026');
+            $this->writeAirspaceAggregate(['LOGIC1/2026' => $record], $now, 'logic-v2');
+
+            $payload = notamTfrMapLayerServeOrRebuild();
+
+            $this->assertSame([], $payload['features']);
+            $this->assertTrue($payload['failclosed'] ?? false);
+            $this->assertSame('9f34715-v2', $payload['map_layer_build_token'] ?? null);
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+        }
+    }
+
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_RewritesLogicToken(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        $originalDeployFileEnv = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
+        putenv('GIT_SHA');
+        $deployFile = $this->cacheDir . '/.deploy-git-sha';
+        putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $deployFile);
+        file_put_contents($deployFile, "9f3471525bc39e8a\n");
+
+        try {
+            $now = time();
+            $record = $this->drawableTfrAirspaceRecord($now, 'FIX1/2026');
+            $this->writeAirspaceAggregate(['FIX1/2026' => $record], $now, 'logic-v2');
+
+            $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
+
+            $envelope = notamMapAirspaceAggregateRead();
+            $this->assertNotNull($envelope);
+            $this->assertSame('9f34715-v2', $envelope['map_layer_build_token'] ?? null);
+
+            $payload = notamTfrMapLayerServeOrRebuild();
+            $this->assertFalse($payload['failclosed'] ?? false);
+            $this->assertCount(1, $payload['features']);
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+            if ($originalDeployFileEnv === false) {
+                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
+            } else {
+                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $originalDeployFileEnv);
+            }
+        }
+    }
+
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_SkipsShaOnlyMismatch(): void
+    {
+        $originalGitSha = getenv('GIT_SHA');
+        putenv('GIT_SHA=abcdef12');
+        try {
+            $now = time();
+            $this->writeAirspaceAggregate([], $now, 'oldsha1-v2');
+
+            $this->assertFalse(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
+        } finally {
+            if ($originalGitSha === false) {
+                putenv('GIT_SHA');
+            } else {
+                putenv('GIT_SHA=' . $originalGitSha);
+            }
+        }
+    }
+
     public function testNotamTfrMapLayerServeOrRebuild_FreshStore_ReturnsFeature(): void
     {
         $now = time();

@@ -34,7 +34,7 @@ if ! "${COMPOSE[@]}" ps "$WEB_SERVICE" 2>/dev/null | grep -q "Up"; then
 fi
 
 run_in_web() {
-  "${COMPOSE[@]}" exec -T "$WEB_SERVICE" "$@"
+  "${COMPOSE[@]}" exec -T "$WEB_SERVICE" "$@" < /dev/null
 }
 
 MAX_WAIT="$(

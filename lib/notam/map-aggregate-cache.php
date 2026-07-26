@@ -448,3 +448,45 @@ function notamMapAirspaceAggregateBuildTokenMatches(?array $envelope): bool
 
     return $stored === notamTfrMapLayerCurrentBuildToken();
 }
+
+/**
+ * Rewrite logic-vN store tokens when deploy SHA is now available.
+ *
+ * Cron-restarted workers without GIT_SHA label the aggregate logic-vN while Apache
+ * serves {sha}-vN. Records remain valid; only the token label is wrong.
+ *
+ * @return bool True when map-airspace.json was updated on disk
+ */
+function notamMapAirspaceAggregateRepairStaleLogicBuildToken(): bool
+{
+    $envelope = notamMapAirspaceAggregateRead();
+    if ($envelope === null) {
+        return false;
+    }
+
+    $stored = trim((string) ($envelope['map_layer_build_token'] ?? ''));
+    if ($stored === '') {
+        return false;
+    }
+
+    if (preg_match('/^logic-v(\d+)$/', $stored, $matches) !== 1) {
+        return false;
+    }
+
+    if ((int) $matches[1] !== NOTAM_TFR_MAP_LAYER_LOGIC_VERSION) {
+        return false;
+    }
+
+    if (getGitSha() === '') {
+        return false;
+    }
+
+    $current = notamTfrMapLayerCurrentBuildToken();
+    if ($stored === $current) {
+        return false;
+    }
+
+    $envelope['map_layer_build_token'] = $current;
+
+    return notamMapAirspaceAggregateWrite($envelope);
+}

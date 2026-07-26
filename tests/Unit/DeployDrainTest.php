@@ -715,6 +715,7 @@ final class DeployDrainTest extends TestCase
         $this->assertStringContainsString('WEB_SERVICE', $contents);
         $this->assertStringContainsString('deploy-drain.php', $contents);
         $this->assertStringContainsString('DEPLOY_WORKER_DRAIN_MAX_SECONDS', $contents);
+        $this->assertStringContainsString('< /dev/null', $contents);
         $this->assertStringNotContainsString('php not available on host', $contents);
         $this->assertStringContainsString('exit 0', $contents);
     }
