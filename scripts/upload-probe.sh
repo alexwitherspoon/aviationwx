@@ -17,6 +17,7 @@ PROBE_TMP_DIR="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
 PROBE_FILE_PREFIX="${UPLOAD_HEALTH_PROBE_FILE_PREFIX:-aviationwx-probe-}"
 PROBE_REMOTE_FILENAME="${PROBE_FILE_PREFIX}healthcheck.txt"
 PROBE_NETRC_FILE=""
+PASV_PROBE_PASSWORD_ENV="${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}"
 
 log_probe() {
     local level="$1"
@@ -143,13 +144,16 @@ run_ftp_probe() {
     fi
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     start_sec="$(date +%s 2>/dev/null || echo 0)"
+    export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
     if ! python3 "$probe_script" --host "$(probe_url_host "$host")" --port "$port" \
-        --user "$user" --password "$pass" --mode "$probe_mode" \
+        --user "$user" --password-env "$PASV_PROBE_PASSWORD_ENV" --mode "$probe_mode" \
         --stor "$file_name" --stor-data "$(cat "$local_file")" >/dev/null 2>&1; then
+        unset "${PASV_PROBE_PASSWORD_ENV}"
         rm -f "$local_file"
         echo "false|0|${fail_prefix} failed"
         return 1
     fi
+    unset "${PASV_PROBE_PASSWORD_ENV}"
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))

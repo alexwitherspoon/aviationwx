@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from io import BytesIO
@@ -88,17 +89,33 @@ MODES = {
 }
 
 
+def resolve_password(password: str, password_env: str) -> str:
+    if password_env:
+        return os.environ.get(password_env, "")
+    return password
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="FTP PASV/EPSV probe")
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, default=2121)
     parser.add_argument("--user", required=True)
-    parser.add_argument("--password", required=True)
+    parser.add_argument("--password", default="", help="FTP password (avoid on production; prefer --password-env)")
+    parser.add_argument(
+        "--password-env",
+        default="",
+        help="Read password from this environment variable (keeps secrets out of argv)",
+    )
     parser.add_argument("--mode", choices=sorted(MODES.keys()), required=True)
     parser.add_argument("--family", default="ipv4", choices=["ipv4", "ipv6"])
     parser.add_argument("--stor", metavar="REMOTE_NAME", help="After connect/login, STOR this filename (payload from --stor-data or stdin)")
     parser.add_argument("--stor-data", default="", help="Payload bytes for --stor (default: generated timestamp line)")
     args = parser.parse_args()
+
+    password = resolve_password(args.password, args.password_env)
+    if password == "":
+        print(json.dumps({"error": "password required via --password-env or --password"}))
+        return 1
 
     if args.stor:
         payload = args.stor_data.encode("utf-8") if args.stor_data else (
@@ -107,9 +124,9 @@ def main() -> int:
         kind, _epsv = MODES[args.mode]
         try:
             if kind == "plain":
-                probe_stor_plain(args.host, args.port, args.user, args.password, args.stor, payload)
+                probe_stor_plain(args.host, args.port, args.user, password, args.stor, payload)
             else:
-                probe_stor_ftps(args.host, args.port, args.user, args.password, args.stor, payload)
+                probe_stor_ftps(args.host, args.port, args.user, password, args.stor, payload)
         except (error_perm, OSError, TimeoutError) as exc:
             print(json.dumps({"error": str(exc), "mode": args.mode, "stor": args.stor}))
             return 1
@@ -119,9 +136,9 @@ def main() -> int:
     kind, epsv = MODES[args.mode]
     try:
         if kind == "plain":
-            result = probe_plain(args.host, args.port, args.user, args.password, epsv)
+            result = probe_plain(args.host, args.port, args.user, password, epsv)
         else:
-            result = probe_ftps(args.host, args.port, args.user, args.password, epsv)
+            result = probe_ftps(args.host, args.port, args.user, password, epsv)
     except (error_perm, OSError, TimeoutError) as exc:
         print(json.dumps({"error": str(exc), "mode": args.mode, "bad_pasv": False}))
         return 1

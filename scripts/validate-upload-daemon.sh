@@ -12,6 +12,7 @@ fi
 
 CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 VALIDATE_UPLOAD_HOST="${VALIDATE_UPLOAD_HOST:-127.0.0.1}"
+PASV_PROBE_PASSWORD_ENV="${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}"
 
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
@@ -99,8 +100,10 @@ if [ "$tls_enabled" = "true" ]; then
 fi
 
 echo "validate-upload-daemon: host=${host} port=${port} credential_source=${credential_source} modes=${modes[*]}"
+export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
 for mode in "${modes[@]}"; do
-    result="$(python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" --password "$pass" --mode "$mode" 2>&1)" || {
+    result="$(python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" \
+        --password-env "$PASV_PROBE_PASSWORD_ENV" --mode "$mode" 2>&1)" || {
         rc=$?
         if [ "$rc" -eq 2 ]; then
             fail "bad PASV (0,0,0,0) in mode ${mode}"
@@ -122,11 +125,14 @@ stor_mode="pasv-plain"
 if [ "$tls_enabled" = "true" ]; then
     stor_mode="pasv-ftps"
 fi
-if ! python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" --password "$pass" \
+if ! python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" \
+    --password-env "$PASV_PROBE_PASSWORD_ENV" \
     --mode "$stor_mode" --stor "$stor_remote" --stor-data "$(cat "$stor_file")" >/dev/null 2>&1; then
+    unset "${PASV_PROBE_PASSWORD_ENV}"
     rm -f "$stor_file"
     fail "STOR upload failed"
 fi
+unset "${PASV_PROBE_PASSWORD_ENV}"
 rm -f "$stor_file"
 echo "  stor: ok remote=${stor_remote}"
 
