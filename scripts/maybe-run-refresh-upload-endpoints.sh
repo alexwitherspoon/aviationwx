@@ -55,7 +55,17 @@ if [ "${ELAPSED}" -lt "${INTERVAL}" ]; then
     exit 0
 fi
 
+LOG=/var/lib/aviationwx/upload-endpoints-refresh.log
+mkdir -p "$(dirname "${LOG}")" 2>/dev/null || true
+
 if ! pgrep -x proftpd >/dev/null 2>&1; then
+    {
+        echo "===== $(date -u +"%Y-%m-%dT%H:%M:%SZ") maybe-run-refresh-upload-endpoints (interval=${INTERVAL}s) ====="
+        echo "ProFTPD not running; skipping endpoint refresh"
+        echo "exit_code=2"
+        echo
+    } >>"${LOG}" 2>&1 || true
+    echo "${NOW}" >"${STATE}"
     exit 2
 fi
 
@@ -67,9 +77,6 @@ if [ ! -f "$REFRESH_SCRIPT" ]; then
     echo "maybe-run-refresh-upload-endpoints: refresh-upload-endpoints.php not found" >&2
     exit 1
 fi
-
-LOG=/var/lib/aviationwx/upload-endpoints-refresh.log
-mkdir -p "$(dirname "${LOG}")" 2>/dev/null || true
 
 set +e
 OUT="$(CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" "$REFRESH_SCRIPT" 2>&1)"
