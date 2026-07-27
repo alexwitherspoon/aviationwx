@@ -14,6 +14,22 @@ CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 VALIDATE_UPLOAD_HOST="${VALIDATE_UPLOAD_HOST:-127.0.0.1}"
 PASV_PROBE_PASSWORD_ENV="${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}"
 
+probe_skips_tls_verify() {
+    local probe_host="$1"
+    case "$probe_host" in
+        localhost|127.0.0.1|::1)
+            return 0
+            ;;
+    esac
+    if [[ "$probe_host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    fi
+    if [[ "$probe_host" == *:* ]]; then
+        return 0
+    fi
+    return 1
+}
+
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
 else
@@ -101,6 +117,9 @@ fi
 
 echo "validate-upload-daemon: host=${host} port=${port} credential_source=${credential_source} modes=${modes[*]}"
 export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
+if probe_skips_tls_verify "$host"; then
+    export AVWX_FTPS_SKIP_HOSTNAME_VERIFY=1
+fi
 for mode in "${modes[@]}"; do
     result="$(python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" \
         --password-env "$PASV_PROBE_PASSWORD_ENV" --mode "$mode" 2>&1)" || {
@@ -129,10 +148,12 @@ if ! python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" \
     --password-env "$PASV_PROBE_PASSWORD_ENV" \
     --mode "$stor_mode" --stor "$stor_remote" --stor-data "$(cat "$stor_file")" >/dev/null 2>&1; then
     unset "${PASV_PROBE_PASSWORD_ENV}"
+    unset AVWX_FTPS_SKIP_HOSTNAME_VERIFY 2>/dev/null || true
     rm -f "$stor_file"
     fail "STOR upload failed"
 fi
 unset "${PASV_PROBE_PASSWORD_ENV}"
+unset AVWX_FTPS_SKIP_HOSTNAME_VERIFY 2>/dev/null || true
 rm -f "$stor_file"
 echo "  stor: ok remote=${stor_remote}"
 

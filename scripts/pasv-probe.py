@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import ssl
 import sys
 from io import BytesIO
 from ftplib import FTP, FTP_TLS, error_perm
@@ -29,7 +30,28 @@ def bad_pasv(response: str) -> bool:
     return "0,0,0,0" in response
 
 
+def normalize_host(host: str) -> str:
+    host = host.strip()
+    if host.startswith("[") and host.endswith("]"):
+        return host[1:-1]
+    return host
+
+
+def ftps_skip_hostname_verify() -> bool:
+    return os.environ.get("AVWX_FTPS_SKIP_HOSTNAME_VERIFY", "").lower() in ("1", "true", "yes")
+
+
+def ftps_client() -> FTP_TLS:
+    if ftps_skip_hostname_verify():
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return FTP_TLS(context=context)
+    return FTP_TLS()
+
+
 def probe_plain(host: str, port: int, user: str, password: str, use_epsv: bool) -> dict:
+    host = normalize_host(host)
     ftp = FTP()
     ftp.connect(host, port, timeout=15)
     ftp.login(user, password)
@@ -40,7 +62,8 @@ def probe_plain(host: str, port: int, user: str, password: str, use_epsv: bool) 
 
 
 def probe_ftps(host: str, port: int, user: str, password: str, use_epsv: bool) -> dict:
-    ftp = FTP_TLS()
+    host = normalize_host(host)
+    ftp = ftps_client()
     ftp.connect(host, port, timeout=15)
     ftp.auth()
     ftp.login(user, password)
@@ -53,6 +76,7 @@ def probe_ftps(host: str, port: int, user: str, password: str, use_epsv: bool) -
 
 
 def probe_stor_plain(host: str, port: int, user: str, password: str, remote_name: str, payload: bytes) -> None:
+    host = normalize_host(host)
     ftp = FTP()
     ftp.connect(host, port, timeout=15)
     ftp.login(user, password)
@@ -66,7 +90,8 @@ def probe_stor_plain(host: str, port: int, user: str, password: str, remote_name
 
 
 def probe_stor_ftps(host: str, port: int, user: str, password: str, remote_name: str, payload: bytes) -> None:
-    ftp = FTP_TLS()
+    host = normalize_host(host)
+    ftp = ftps_client()
     ftp.connect(host, port, timeout=15)
     ftp.auth()
     ftp.login(user, password)
