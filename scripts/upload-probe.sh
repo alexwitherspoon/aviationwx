@@ -69,7 +69,7 @@ probe_netrc_cleanup() {
 probe_setup_netrc() {
     local host="$1" user="$2" pass="$3"
     probe_netrc_cleanup
-    mkdir -p "$PROBE_TMP_DIR"
+    ensure_probe_tmp_dir || return 1
     PROBE_NETRC_FILE="$(mktemp "${PROBE_TMP_DIR}/curl-netrc.XXXXXX")"
     chmod 600 "$PROBE_NETRC_FILE"
     {
@@ -130,7 +130,7 @@ run_ftp_probe() {
     fi
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    mkdir -p "$PROBE_TMP_DIR"
+    ensure_probe_tmp_dir || return 1
     if proftpd_tls_enabled; then
         fail_prefix="ftps"
         probe_mode="pasv-ftps"
@@ -191,7 +191,7 @@ run_sftp_probe() {
     file_name="$PROBE_REMOTE_FILENAME"
     remote_path="files/${file_name}"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    mkdir -p "$PROBE_TMP_DIR"
+    ensure_probe_tmp_dir || return 1
     curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
     base_url="sftp://$(probe_url_host "$host"):${port}/"
     if local_upload_path="$(probe_local_upload_path sftp "$user" "$file_name")"; then
@@ -250,6 +250,11 @@ main() {
         write_disabled_heartbeat
         exit 0
     fi
+
+    ensure_probe_tmp_dir || {
+        log_probe "ERROR" "could not initialize probe temp directory"
+        exit 1
+    }
 
     connect_host="$(echo "$config" | jq -r '.connect_host // .upload_hostname // empty')"
     ftp_port="$(echo "$config" | jq -r '.ftp_port')"

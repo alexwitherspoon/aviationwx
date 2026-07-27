@@ -329,3 +329,29 @@ probe_local_upload_path() {
     esac
     return 1
 }
+
+# Harden probe temp directory against symlink races when run as root.
+ensure_probe_tmp_dir() {
+    local dir="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
+
+    if [ -L "$dir" ]; then
+        echo "ensure_probe_tmp_dir: refusing symlinked PROBE_TMP_DIR: ${dir}" >&2
+        return 1
+    fi
+    if [ -e "$dir" ] && [ ! -d "$dir" ]; then
+        echo "ensure_probe_tmp_dir: PROBE_TMP_DIR is not a directory: ${dir}" >&2
+        return 1
+    fi
+
+    mkdir -p "$dir" || return 1
+
+    if [ -L "$dir" ]; then
+        echo "ensure_probe_tmp_dir: PROBE_TMP_DIR became a symlink: ${dir}" >&2
+        return 1
+    fi
+
+    chmod 700 "$dir" 2>/dev/null || true
+    chown root:root "$dir" 2>/dev/null || true
+
+    return 0
+}
