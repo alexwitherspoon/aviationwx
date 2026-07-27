@@ -84,7 +84,11 @@ start_proftpd_instance() {
     fi
 
     echo "Starting ProFTPD (dual-stack)..."
-    proftpd -c "$PROFTPD_CONF"
+    if ! proftpd -c "$PROFTPD_CONF"; then
+        echo "⚠️  Warning: ProFTPD failed to start"
+        eval "$pid_var=\"\""
+        return 1
+    fi
 
     local pid="" max_iterations=6 iteration=0 process_ok=false port_ok=false
     local pidfile="/var/run/proftpd.pid"
