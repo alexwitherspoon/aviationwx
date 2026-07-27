@@ -95,6 +95,58 @@ function repairAllSftpChrootPermissions(): bool {
 }
 
 /**
+ * Repair FTP upload inbox ownership for all configured users.
+ *
+ * Runs before the config-unchanged early return so mistaken host chown on the
+ * cache tree cannot leave FTP inboxes root-owned until airports.json changes.
+ *
+ * @return bool True when repair succeeded; false when the script is missing (production) or repair errors
+ */
+function repairAllFtpUploadPermissions(): bool {
+    $candidates = [
+        '/usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh',
+        __DIR__ . '/repair-ftp-upload-permissions.sh',
+    ];
+
+    $script = null;
+    foreach ($candidates as $path) {
+        if (is_file($path) && is_executable($path)) {
+            $script = $path;
+            break;
+        }
+    }
+
+    if ($script === null) {
+        aviationwx_log(
+            isProduction() ? 'error' : 'warning',
+            'sync-push-config: FTP inbox repair script not found',
+            ['candidates' => $candidates],
+            'app'
+        );
+        return !isProduction();
+    }
+
+    $output = [];
+    $code = 0;
+    exec(escapeshellarg($script) . ' 2>&1', $output, $code);
+
+    if ($code !== 0) {
+        aviationwx_log('error', 'sync-push-config: FTP inbox repair failed', [
+            'script' => $script,
+            'exit_code' => $code,
+            'output' => implode("\n", $output),
+        ], 'app');
+        return false;
+    }
+
+    aviationwx_log('debug', 'sync-push-config: FTP inbox permissions repaired', [
+        'script' => $script,
+    ], 'app');
+
+    return true;
+}
+
+/**
  * Verify directory permissions and ownership
  * Returns array with 'success' boolean and 'issues' array
  */
@@ -1402,6 +1454,11 @@ function syncPushConfig() {
 
     if (!repairAllSftpChrootPermissions()) {
         aviationwx_log('error', 'sync-push-config: exiting because SFTP chroot repair failed', [], 'app');
+        exit(1);
+    }
+
+    if (!repairAllFtpUploadPermissions()) {
+        aviationwx_log('error', 'sync-push-config: exiting because FTP inbox repair failed', [], 'app');
         exit(1);
     }
     
