@@ -467,12 +467,14 @@ if [ -f /etc/ssh/sshd_config ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLO
     fi
 fi
 
-if [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
+if [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
     echo "Starting sshd..."
     service ssh start || {
         echo "Error: sshd failed to start"
         exit 1
     }
+elif [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
+    echo "SFTP uploads disabled via upload_capabilities (no address families enabled)"
 else
     echo "SFTP uploads disabled via upload_capabilities.sftp"
 fi
@@ -485,7 +487,7 @@ if [ -n "${PROFTPD_PID:-}" ]; then
     fi
 fi
 
-if [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
+if [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
     if ! pgrep -x sshd > /dev/null; then
         echo "Error: sshd is not running"
         exit 1
