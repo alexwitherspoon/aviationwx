@@ -343,6 +343,7 @@ normalize_pasv_probe_password_env() {
 # Harden probe temp directory against symlink races when run as root.
 ensure_probe_tmp_dir() {
     local dir="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
+    local owner=""
 
     if [ -L "$dir" ]; then
         echo "ensure_probe_tmp_dir: refusing symlinked PROBE_TMP_DIR: ${dir}" >&2
@@ -360,8 +361,23 @@ ensure_probe_tmp_dir() {
         return 1
     fi
 
-    chmod 700 "$dir" 2>/dev/null || true
-    chown root:root "$dir" 2>/dev/null || true
+    if [ "$(id -u)" -eq 0 ]; then
+        chmod 700 "$dir" 2>/dev/null || true
+        chown root:root "$dir" 2>/dev/null || true
+        owner="$(stat -c '%u:%g' "$dir" 2>/dev/null || echo "")"
+        if [ "$owner" != "0:0" ]; then
+            echo "ensure_probe_tmp_dir: refusing non-root-owned PROBE_TMP_DIR: ${dir} (${owner})" >&2
+            return 1
+        fi
+        if find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -print -quit 2>/dev/null | grep -q .; then
+            if ! find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -exec rm -f {} + 2>/dev/null; then
+                echo "ensure_probe_tmp_dir: could not clear stale probe temp entries under ${dir}" >&2
+                return 1
+            fi
+        fi
+    else
+        chmod 700 "$dir" 2>/dev/null || true
+    fi
 
     return 0
 }
