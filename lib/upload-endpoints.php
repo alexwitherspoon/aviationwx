@@ -109,7 +109,7 @@ function getDynamicDnsAcceleratedRefreshSeconds(): int
 
     $seconds = getGlobalConfig('dynamic_dns_accelerated_refresh_seconds');
     if ($seconds === null || !is_int($seconds) || $seconds <= 0) {
-        return 60;
+        return getDynamicDnsRefreshSeconds();
     }
 
     return max(60, $seconds);

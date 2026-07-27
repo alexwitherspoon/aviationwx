@@ -128,6 +128,23 @@ class UploadEndpointsTest extends TestCase
         $this->assertSame(0, getDynamicDnsRefreshSeconds());
     }
 
+    public function testGetDynamicDnsAcceleratedRefreshSeconds_UsesBaselineWhenUnset(): void
+    {
+        $configPath = $this->trackTempFile(sys_get_temp_dir() . '/airports-' . uniqid('', true) . '.json');
+        file_put_contents($configPath, json_encode([
+            'config' => [
+                'base_domain' => 'example.com',
+                'dynamic_dns_refresh_seconds' => 3600,
+            ],
+            'airports' => [],
+        ], JSON_THROW_ON_ERROR));
+
+        putenv('CONFIG_PATH=' . $configPath);
+        clearConfigCache();
+
+        $this->assertSame(3600, getDynamicDnsAcceleratedRefreshSeconds());
+    }
+
     public function testShouldAccelerateUploadEndpointRefresh_WhenFtpsProbeFails(): void
     {
         $path = $this->trackTempFile(sys_get_temp_dir() . '/upload-probe-' . uniqid('', true) . '.json');
