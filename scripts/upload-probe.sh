@@ -142,17 +142,32 @@ run_ftp_probe() {
     if local_upload_path="$(probe_local_upload_path ftps "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
     fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "false|0|${fail_prefix} failed: python3 not found"
+        return 1
+    fi
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
-    if ! python3 "$probe_script" --host "$(probe_url_host "$host")" --port "$port" \
+    probe_err_file="${PROBE_TMP_DIR}/pasv-probe-err-$$"
+    probe_output=""
+    if ! probe_output="$(python3 "$probe_script" --host "$(probe_url_host "$host")" --port "$port" \
         --user "$user" --password-env "$PASV_PROBE_PASSWORD_ENV" --mode "$probe_mode" \
-        --stor "$file_name" --stor-data "$(cat "$local_file")" >/dev/null 2>&1; then
+        --stor "$file_name" --stor-data "$(cat "$local_file")" 2>"$probe_err_file")"; then
+        probe_detail="$(tr -d '\n\r' <"$probe_err_file" 2>/dev/null | head -c 200)"
+        if [ -z "$probe_detail" ] && [ -n "$probe_output" ]; then
+            probe_detail="$(printf '%s' "$probe_output" | tr -d '\n\r' | head -c 200)"
+        fi
         unset "${PASV_PROBE_PASSWORD_ENV}"
-        rm -f "$local_file"
-        echo "false|0|${fail_prefix} failed"
+        rm -f "$local_file" "$probe_err_file"
+        if [ -n "$probe_detail" ]; then
+            echo "false|0|${fail_prefix} failed: ${probe_detail}"
+        else
+            echo "false|0|${fail_prefix} failed"
+        fi
         return 1
     fi
+    rm -f "$probe_err_file"
     unset "${PASV_PROBE_PASSWORD_ENV}"
     rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
