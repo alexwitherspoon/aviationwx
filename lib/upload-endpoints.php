@@ -132,6 +132,10 @@ function isUploadEndpointFullyStatic(): bool
     $needsV4 = $caps['ipv4'];
     $needsV6 = $caps['ipv6'];
 
+    if (!$needsV4 && !$needsV6) {
+        return true;
+    }
+
     if ($needsV4 && getPublicIP() === null) {
         return false;
     }

@@ -69,6 +69,33 @@ class ProftpdAuthTest extends TestCase
         $this->assertSame($hash, $parsed['users']['userone14chars']['password_hash']);
     }
 
+    public function testWriteProftpdPasswdFile_PreservesSha512CryptHash(): void
+    {
+        require_once __DIR__ . '/../../lib/proftpd-auth.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/proftpd-passwd-' . uniqid('', true));
+        $hash = '$6$rounds=5000$saltsaltsalt$abcdefghijklmnopqrstuvwx';
+        $this->assertTrue(writeProftpdPasswdFile([
+            'userone14chars' => [
+                'password' => $hash,
+                'home' => '/tmp/userone14chars',
+            ],
+        ], $path));
+
+        $parsed = parseProftpdPasswdFile($path);
+        $this->assertSame($hash, $parsed['users']['userone14chars']['password_hash']);
+    }
+
+    public function testIsProftpdTlsEnabled_DetectsTlsEngineOnWithVariableSpacing(): void
+    {
+        require_once __DIR__ . '/../../lib/proftpd-auth.php';
+
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/proftpd-tls-' . uniqid('', true) . '.conf');
+        file_put_contents($path, "<IfModule mod_tls.c>\n  TLSEngine on\n</IfModule>\n");
+
+        $this->assertTrue(isProftpdTlsEnabled($path));
+    }
+
     public function testIsProftpdAuthFileMissing_TreatsEmptyFileAsMissing(): void
     {
         require_once __DIR__ . '/../../lib/proftpd-auth.php';

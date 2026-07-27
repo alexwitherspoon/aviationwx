@@ -120,7 +120,7 @@ function writeProftpdPasswdFile(array $accounts, string $path = PROFTPD_AUTH_FIL
 
         $uid = isset($account['uid']) ? (int) $account['uid'] : $defaults['uid'];
         $gid = isset($account['gid']) ? (int) $account['gid'] : $defaults['gid'];
-        $hash = str_contains($password, '$1$') || str_starts_with($password, '{') ?
+        $hash = isProftpdPasswordHash($password) ?
             $password :
             hashProftpdPassword($password);
 
@@ -156,6 +156,39 @@ function writeProftpdPasswdFile(array $accounts, string $path = PROFTPD_AUTH_FIL
     @chmod($path, 0600);
 
     return true;
+}
+
+/**
+ * True when a password string is already a crypt(3) or braced hash for AuthUserFile.
+ */
+function isProftpdPasswordHash(string $password): bool
+{
+    if ($password === '') {
+        return false;
+    }
+    if (str_starts_with($password, '{')) {
+        return true;
+    }
+
+    return (bool) preg_match('/^\$[0-9A-Za-z]+\$/', $password);
+}
+
+/**
+ * Whether ProFTPD explicit TLS (FTPS) is enabled in tls.conf.
+ */
+function isProftpdTlsEnabled(?string $path = null): bool
+{
+    $path = $path ?? PROFTPD_TLS_CONF;
+    if (!is_readable($path)) {
+        return false;
+    }
+
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        return false;
+    }
+
+    return (bool) preg_match('/^\s*TLSEngine\s+on\b/mi', $contents);
 }
 
 /**

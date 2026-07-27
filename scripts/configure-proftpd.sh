@@ -18,8 +18,11 @@ else
 fi
 
 read_upload_daemon_limits() {
-    "$APP_PHP" -r '
-        $config = @json_decode(file_get_contents(getenv("CONFIG_FILE") ?: "/var/www/html/config/airports.json"), true);
+    CONFIG_PATH="${CONFIG_PATH:-${CONFIG_FILE}}" "$APP_PHP" -r '
+        $configPath = getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json";
+        putenv("CONFIG_PATH=" . $configPath);
+        require_once "/var/www/html/lib/config.php";
+        $config = loadConfig();
         $daemon = $config["config"]["upload_daemon"] ?? $config["upload_daemon"] ?? [];
         $maxInstances = (int) ($daemon["max_instances"] ?? 50);
         $maxClients = (int) ($daemon["max_clients"] ?? 40);

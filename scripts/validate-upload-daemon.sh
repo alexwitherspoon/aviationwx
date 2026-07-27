@@ -23,6 +23,7 @@ read_probe_settings() {
     CONFIG_PATH="$CONFIG_PATH" VALIDATE_UPLOAD_HOST="$VALIDATE_UPLOAD_HOST" "$APP_PHP" -r '
         require_once "/var/www/html/lib/config.php";
         require_once "/var/www/html/lib/proftpd-auth.php";
+        require_once "/var/www/html/lib/upload-endpoints.php";
 
         $settings = getUploadHealthProbeSettings();
         $parsed = parseProftpdPasswdFile();
@@ -57,9 +58,8 @@ read_probe_settings() {
             "ftps_pass" => $pass,
             "ftp_home" => $parsed["users"][$user]["home"] ?? "",
             "credential_source" => $credentialSource,
-            "tls_enabled" => is_readable("/etc/proftpd/conf.d/tls.conf")
-                && str_contains((string) file_get_contents("/etc/proftpd/conf.d/tls.conf"), "TLSEngine                      on"),
-            "cached_ipv4" => (readUploadEndpointsCache()["ipv4"] ?? null),
+            "tls_enabled" => isProftpdTlsEnabled(),
+            "cached_ipv4" => (readUploadEndpointsCache() ?? [])["ipv4"] ?? null,
         ], JSON_UNESCAPED_SLASHES);
     ' 2>/dev/null
 }
