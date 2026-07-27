@@ -163,14 +163,14 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringNotContainsString('base_url="ftps://${host}:${port}/"', $contents);
     }
 
-    public function testUploadProbeScript_UsesPlainFtpWhenVsftpdSslDisabled(): void
+    public function testUploadProbeScript_UsesPlainFtpWhenProftpdTlsDisabled(): void
     {
         $path = __DIR__ . '/../../scripts/upload-probe.sh';
         $contents = file_get_contents($path);
         $this->assertIsString($contents);
-        $this->assertStringContainsString('vsftpd_ssl_enabled', $contents);
+        $this->assertStringContainsString('proftpd_tls_enabled', $contents);
         $this->assertStringContainsString('curl_tls_args=(--ftp-ssl-reqd)', $contents);
-        $this->assertStringContainsString('ok (plain ftp, ssl_enable=NO)', $contents);
+        $this->assertStringContainsString('ok (plain ftp, TLSEngine off)', $contents);
     }
 
     public function testUploadProbeScript_UsesInsecureTlsForSkippedHostsAndClearsLocalArtifacts(): void
@@ -185,7 +185,7 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('clear_local_probe_upload_file', $contents);
         $this->assertStringContainsString('probe_curl_fail_detail', $contents);
         // Remote DELE after FTPS upload is intentionally omitted: curl --fail -X DELE can
-        // exit non-zero after vsftpd already returns 250 on a directory URL.
+        // exit non-zero after the server already accepted STOR.
         $this->assertStringNotContainsString('-X "DELE', $contents);
         $this->assertStringNotContainsString('upload ok but delete failed', $contents);
     }

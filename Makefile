@@ -97,6 +97,10 @@ logs: ## View container logs
 shell: ## Open shell in web container
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec web bash
 
+validate-upload: ## PASV/EPSV probe gate for ProFTPD (requires running web container + sync-push-config)
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web \
+		bash /var/www/html/scripts/validate-upload-daemon.sh
+
 # Manual refresh of station power cache (same as scheduler worker; needs containers: make up)
 station-power-fetch: ## Refresh station power for one airport (usage: make station-power-fetch AIRPORT=2u7)
 	@if [ -z "$(AIRPORT)" ]; then \
