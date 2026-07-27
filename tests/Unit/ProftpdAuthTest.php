@@ -50,6 +50,9 @@ class ProftpdAuthTest extends TestCase
             ],
         ], $path));
         $this->assertSame(0600, fileperms($path) & 0777);
+
+        $parsed = parseProftpdPasswdFile($path);
+        $this->assertStringStartsWith('$6$', $parsed['users']['userone14chars']['password_hash']);
     }
 
     public function testWriteProftpdPasswdFile_PreservesExistingPasswordHash(): void

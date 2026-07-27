@@ -35,14 +35,16 @@ function getProftpdFtpUidGid(): array
  */
 function hashProftpdPassword(string $password): string
 {
-    $salt = '$1$' . substr(
-        str_replace(['+', '/'], ['.', '.'], base64_encode(random_bytes(6))),
+    $salt = '$6$' . substr(
+        str_replace(['+', '/'], ['.', '.'], base64_encode(random_bytes(12))),
         0,
-        8
+        16
     );
     $hash = crypt($password, $salt);
 
-    return $hash !== false ? $hash : crypt($password, '$1$aviationwx');
+    return $hash !== false && str_starts_with($hash, '$6$') ?
+        $hash :
+        crypt($password, '$6$aviationwxsalt');
 }
 
 /**
