@@ -440,7 +440,7 @@ if (!defined('CACHE_SFTP_DIR')) {
  * Get FTP upload directory for a push webcam
  * 
  * This is where FTP/FTPS cameras upload files.
- * ProFTPD DefaultRoot (~) homedir points here; cameras upload to /
+ * ProFTPD DefaultChdir (~) homedir points here; cameras upload to /
  * 
  * Directory owned by ftp:www-data with setgid (2775).
  * 

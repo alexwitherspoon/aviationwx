@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Repair FTP push upload inbox ownership (ProFTPD DefaultRoot homedirs).
+# Repair FTP push upload inbox ownership (ProFTPD DefaultChdir homedirs).
 #
 # Required layout:
 #   FTP_DIR/                      root:root 755

@@ -2,7 +2,7 @@
 /**
  * ProFTPD virtual user auth file helpers for push camera FTP uploads.
  *
- * Uses mod_auth_file (ftpd.passwd) with per-user homedir for DefaultRoot isolation.
+ * Uses mod_auth_file (ftpd.passwd) with per-user homedir via DefaultChdir ~.
  */
 
 declare(strict_types=1);
