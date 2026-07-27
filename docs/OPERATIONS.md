@@ -281,11 +281,11 @@ docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/avi
 
 ### FTPS alternate control port (NAT redirect)
 
-Some client networks block non-standard FTP control ports. With host networking, vsftpd binds `config.network_ports.ftp_control` on the host (default 2121). Add a second inbound TCP port that netfilter REDIRECTs to `ftp_control` before traffic reaches vsftpd so logs and fail2ban keep the real client source IP (unlike a userspace forward to `127.0.0.1`).
+Some client networks block non-standard FTP control ports. With host networking, ProFTPD binds `config.network_ports.ftp_control` on the host (default 2121). Add a second inbound TCP port that netfilter REDIRECTs to `ftp_control` before traffic reaches ProFTPD so logs and fail2ban keep the real client source IP (unlike a userspace forward to `127.0.0.1`).
 
 Hostname, credentials, TLS, and passive data ports (`ftp_passive_min` / `ftp_passive_max`) stay as configured; the alternate inbound port is only for the control connection.
 
-**Declarative setup:** On the production host, `~/airports.json` (same file as `CONFIG_PATH`) may include `config.network_ports` (see [Configuration](CONFIGURATION.md#network-configuration)). Set `ftps_alt` to the extra inbound control port; NAT targets `ftp_control`. Each deploy runs `scripts/deploy-configure-firewall.sh` after rsync to apply UFW/iptables and runs `production-ftps-alt-port-nat.sh ensure` with `VSFTPD_LISTEN_PORT` equal to `ftp_control`. If `~/airports.json` is missing, deploy uses built-in port defaults and skips NAT reconciliation.
+**Declarative setup:** On the production host, `~/airports.json` (same file as `CONFIG_PATH`) may include `config.network_ports` (see [Configuration](CONFIGURATION.md#network-configuration)). Set `ftps_alt` to the extra inbound control port; NAT targets `ftp_control`. Each deploy runs `scripts/deploy-configure-firewall.sh` after rsync to apply UFW/iptables and runs `production-ftps-alt-port-nat.sh ensure` with `FTP_CONTROL_PORT` equal to `ftp_control`. If `~/airports.json` is missing, deploy uses built-in port defaults and skips NAT reconciliation.
 
 **Manual (host, not inside Docker):**
 
@@ -300,7 +300,7 @@ The script inserts a marked block into `/etc/ufw/before.rules` and `/etc/ufw/bef
 
 If UFW’s `before.rules` has no `*nat` table (some minimal installs ship filter-only), the script appends a minimal `*nat` block so PREROUTING REDIRECT rules can load. If that still fails, ensure `/etc/ufw/before.rules` is writable and UFW is installed (`sudo ufw status`).
 
-After REDIRECT, vsftpd still listens on `ftp_control` inside the container. When `ftps_alt` is set, `deploy-configure-firewall.sh` adds `ufw allow` for that port so stale-rule cleanup does not drop it.
+After REDIRECT, ProFTPD still listens on `ftp_control` inside the container. When `ftps_alt` is set, `deploy-configure-firewall.sh` adds `ufw allow` for that port so stale-rule cleanup does not drop it.
 
 From another machine (substitute your hostname and port):
 
@@ -470,23 +470,23 @@ Protects FTP/SFTP camera uploads with forgiving policies (10 failures in 1 hour 
 # Check all container jails
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status
 
-# Check vsftpd jail (ports match config.network_ports.ftp_control / ftps_explicit_tls; defaults 2121/2122)
-docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd
+# Check proftpd jail (ports match config.network_ports.ftp_control / ftps_explicit_tls; defaults 2121/2122)
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status proftpd
 
 # Check sshd-sftp jail (port matches config.network_ports.sftp; default 2222)
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status sshd-sftp
 
-# View currently banned IPs for vsftpd
-docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd | grep "Banned IP"
+# View currently banned IPs for proftpd
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status proftpd | grep "Banned IP"
 
-# Unban a camera IP from vsftpd
-docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set vsftpd unbanip <IP_ADDRESS>
+# Unban a camera IP from proftpd
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set proftpd unbanip <IP_ADDRESS>
 
 # Unban a camera IP from sshd-sftp
 docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set sshd-sftp unbanip <IP_ADDRESS>
 
-# View vsftpd authentication log
-docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/vsftpd.log | grep -i "fail\|denied"
+# View ProFTPD authentication log
+docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/proftpd.log | grep -i "fail\|denied"
 ```
 
 ### Troubleshooting Camera Bans
@@ -495,12 +495,12 @@ If a legitimate camera is banned:
 
 1. **Check if banned:**
    ```bash
-   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd
+   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status proftpd
    ```
 
 2. **Unban the IP:**
    ```bash
-   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set vsftpd unbanip <CAMERA_IP>
+   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set proftpd unbanip <CAMERA_IP>
    ```
 
 3. **Fix camera configuration:**
@@ -510,7 +510,7 @@ If a legitimate camera is banned:
 
 4. **Monitor logs:**
    ```bash
-   docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/vsftpd.log
+   docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/proftpd.log
    ```
 
 **Note:** With forgiving policies (10 failures/hour = 1 hour ban), most configuration issues self-heal quickly.
@@ -549,7 +549,7 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 | Component | Interval | Role |
 |-----------|----------|------|
 | `upload-probe-runner.sh` | `config.upload_health_probe.interval_sec` (default 30s) | Passive upload test, writes heartbeat |
-| `service-watchdog.sh` | 50s loop | Reads heartbeat, restarts vsftpd or container sshd when unhealthy |
+| `service-watchdog.sh` | 50s loop | Reads heartbeat, restarts ProFTPD or container sshd when unhealthy |
 
 **Enable:** Set `config.upload_health_probe.enabled` to `true` in production `airports.json` with a **dedicated** probe user (must not match any `push_config.username`). See [Configuration](CONFIGURATION.md#upload-health-probe).
 
@@ -562,9 +562,9 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 | `/var/log/aviationwx/service-watchdog.log` | Watchdog and restart actions |
 | `app.log` | Structured `upload health` events (failures, restarts, throttling) |
 
-**Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one restart per 30 minutes per daemon (vsftpd and container sshd throttled separately). Process death uses the same per-daemon throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
+**Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one restart per 30 minutes per daemon (ProFTPD and container sshd throttled separately). Process death uses the same per-daemon throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
 
-**Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach vsftpd and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`. When the connect host is loopback or a bare IP, FTPS probes use `curl --insecure` so the public vsftpd certificate hostname does not fail the on-box check.
+**Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach ProFTPD and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`. When the connect host is loopback or a bare IP, FTPS probes use `curl --insecure` so the public ProFTPD certificate hostname does not fail the on-box check.
 
 **SFTP host key roster (HTTPS):** Bridge and other SFTP clients can fetch live sshd host key fingerprints from the upload hostname:
 
@@ -577,7 +577,7 @@ ssh-keyscan -p "${SFTP_PORT}" "${UPLOAD_HOST}" | ssh-keygen -lf -
 
 Every `SHA256:` from `ssh-keyscan` must appear in the JSON `sha256[]` array. Fingerprints are computed at request time from `/etc/ssh/ssh_host_*_key.pub` in the web container (same container that runs sshd). After an image rebuild, re-run the comparison to confirm the roster tracks new keys.
 
-**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid. Probes do not require a remote FTP `DELE` for health: vsftpd may accept delete while `curl --fail -X DELE` still exits non-zero on a directory URL, so cleanup is local clear plus overwrite (same for FTPS and SFTP).
+**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid. Probes do not require a remote FTP `DELE` for health: ProFTPD may accept delete while `curl --fail -X DELE` still exits non-zero on a directory URL, so cleanup is local clear plus overwrite (same for FTPS and SFTP).
 
 ```bash
 # Heartbeat and recent probe log

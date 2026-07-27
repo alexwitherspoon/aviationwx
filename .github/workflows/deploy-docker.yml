@@ -468,7 +468,7 @@ jobs:
             "lib/webcam-worker.php"
             "lib/webcam-acquisition.php"
             "lib/webcam-pipeline.php"
-            "docker/vsftpd.conf"
+            "docker/proftpd.conf"
             "docker/sshd_config"
             "docker/docker-compose.prod.yml"
             "docker/Dockerfile"
@@ -1457,24 +1457,24 @@ jobs:
           # Docker config files that require image rebuild
           DOCKER_CONFIG_FILES=(
             "docker/Dockerfile"
-            "docker/vsftpd.conf"
+            "docker/proftpd.conf"
             "docker/sshd_config"
             "docker/docker-entrypoint.sh"
             "scripts/set-cache-permissions.sh"
             "scripts/repair-sftp-chroot-permissions.sh"
             "scripts/maybe-run-update-pasv-address.sh"
             "scripts/update-pasv-address.sh"
-            "docker/pam-vsftpd"
-            "docker/logrotate-vsftpd"
+            "docker/logrotate-proftpd"
             "docker/logrotate-sshd"
             "docker/fail2ban-jail.conf"
-            "docker/fail2ban-vsftpd.conf"
+            "docker/fail2ban-proftpd.conf"
             "docker/fail2ban-sshd.conf"
             "docker/docker-compose.prod.yml"
             "scripts/service-watchdog.sh"
             "scripts/setup-letsencrypt.sh"
             "scripts/certbot-deploy-hook.sh"
-            "scripts/enable-vsftpd-ssl.sh"
+            "scripts/configure-proftpd.sh"
+            "scripts/enable-upload-ftps.sh"
             "scripts/create-sftp-user.sh"
             "config/crontab"
           )
@@ -1579,24 +1579,24 @@ jobs:
             # Docker config files that require image rebuild
             DOCKER_CONFIG_FILES=(
               "docker/Dockerfile"
-              "docker/vsftpd.conf"
+              "docker/proftpd.conf"
               "docker/sshd_config"
               "docker/docker-entrypoint.sh"
               "scripts/set-cache-permissions.sh"
               "scripts/repair-sftp-chroot-permissions.sh"
               "scripts/maybe-run-update-pasv-address.sh"
               "scripts/update-pasv-address.sh"
-              "docker/pam-vsftpd"
-              "docker/logrotate-vsftpd"
+              "docker/logrotate-proftpd"
               "docker/logrotate-sshd"
               "docker/fail2ban-jail.conf"
-              "docker/fail2ban-vsftpd.conf"
+              "docker/fail2ban-proftpd.conf"
               "docker/fail2ban-sshd.conf"
               "docker/docker-compose.prod.yml"
               "scripts/service-watchdog.sh"
               "scripts/setup-letsencrypt.sh"
               "scripts/certbot-deploy-hook.sh"
-              "scripts/enable-vsftpd-ssl.sh"
+              "scripts/configure-proftpd.sh"
+              "scripts/enable-upload-ftps.sh"
               "scripts/create-sftp-user.sh"
               "config/crontab"
             )
@@ -2282,10 +2282,10 @@ jobs:
           echo "✓ push-webcam-validator.php present"
           
           # Check FTP/SFTP services (may not be running if no push cameras configured)
-          if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x vsftpd > /dev/null 2>&1; then
-            echo "✓ vsftpd service running"
+          if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x proftpd > /dev/null 2>&1; then
+            echo "✓ proftpd service running"
           else
-            echo "ℹ️  vsftpd service not running (expected if no push cameras configured)"
+            echo "ℹ️  proftpd service not running (expected if no push cameras configured)"
           fi
           
           if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x sshd > /dev/null 2>&1; then

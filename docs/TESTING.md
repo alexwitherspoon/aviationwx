@@ -606,6 +606,32 @@ This could have led pilots to incorrect performance calculations. The fix adds:
 2. **Bounds validation tests** that would catch similar issues early
 3. **Adapter smoke tests** that verify final values are within physical limits
 
+## Upload daemon validation (ProFTPD)
+
+Push webcam FTP uploads run ProFTPD inside the web container. After `make up` (or `make dev`), provision camera users and run the PASV/EPSV gate:
+
+```bash
+# Maintainer config with real push webcam credentials (see LOCAL_SETUP.md)
+make up
+docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web \
+  php /var/www/html/scripts/sync-push-config.php
+
+make validate-upload
+```
+
+`make validate-upload` runs `scripts/validate-upload-daemon.sh` in the running container. It checks:
+
+| Check | Purpose |
+|-------|---------|
+| ProFTPD process | Daemon is running |
+| PASV / EPSV | Passive address is not `0.0.0.0` (dual-stack MasqueradeAddress) |
+| STOR | Upload path accepts a test file |
+| SIGHUP reload | Auth/runtime reload without restart |
+
+Credentials come from `config.upload_health_probe.ftps` when set; otherwise the script uses the first provisioned push webcam user from config. TLS is probed only when `tls.conf` has `TLSEngine on` (production FTPS via `scripts/enable-upload-ftps.sh`).
+
+Unit tests: `tests/Unit/ProftpdAuthTest.php`, `tests/Unit/ProftpdConfigTest.php` (syntax check when `proftpd` is installed on the host).
+
 ## Related Documentation
 
 - [Development Setup](LOCAL_SETUP.md) - Local environment setup

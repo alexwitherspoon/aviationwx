@@ -326,10 +326,11 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 | `public_ip` | string | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
 | `public_ipv6` | string | Optional: reserved for future IPv6 support |
 | `upload_hostname` | string | Hostname for FTP/SFTP uploads |
-| `network_ports` | object | Optional object defining TCP ports for self-hosted production (all port values must be JSON **numbers**, not strings). `deploy-configure-firewall.sh` applies host UFW/iptables/NAT; the web container entrypoint sets **vsftpd** `listen_port` from **`ftp_control`** only (passive range from the map), **sshd** (SFTP on `sftp`), and **fail2ban** jails. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ftps_explicit_tls`** is used for host firewall/fail2ban when that inbound port differs from `ftp_control`; vsftpd still binds a single control port (`ftp_control`). **`ssh`** opens the host admin SSH port in UFW only. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
+| `network_ports` | object | Optional object defining TCP ports for self-hosted production (all port values must be JSON **numbers**, not strings). `deploy-configure-firewall.sh` applies host UFW/iptables/NAT; the web container entrypoint sets **ProFTPD** `Port` from **`ftp_control`** only (passive range from the map), **sshd** (SFTP on `sftp`), and **fail2ban** jails. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ftps_explicit_tls`** is used for host firewall/fail2ban when that inbound port differs from `ftp_control`; ProFTPD still binds a single control port (`ftp_control`). **`ssh`** opens the host admin SSH port in UFW only. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled). Enforced by root cron + `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` in the container (sources under `scripts/` in the repo). |
+| `upload_daemon` | object | Optional ProFTPD connection limits. OSS defaults: `max_instances` 50, `max_clients` 40, `max_clients_per_user` 2. Production at scale should set explicit values (for example `max_instances` 800 for ~1000 cameras). Written to `/etc/proftpd/conf.d/runtime.conf` at container start. |
 
-**Network ports (`network_ports`):** When `network_ports` is present, it must be a JSON **object** (not an array), and each set port field must be a JSON **number** (not a quoted string); config validation, `deploy-configure-firewall.sh`, and `docker-entrypoint.sh` enforce this. On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and configures **vsftpd** with a **single** control listener on **`ftp_control`** (plus passive ports), **sshd** (SFTP on `sftp`), and **fail2ban**. Host-facing ports such as **`ftps_explicit_tls`** and **`ftps_alt`** are for UFW/NAT/fail2ban when inbound ports differ from the container bind; they do not add a second vsftpd listener. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
+**Network ports (`network_ports`):** When `network_ports` is present, it must be a JSON **object** (not an array), and each set port field must be a JSON **number** (not a quoted string); config validation, `deploy-configure-firewall.sh`, and `docker-entrypoint.sh` enforce this. On deploy, `deploy-configure-firewall.sh` reads `~/airports.json` (or `AIRPORTS_JSON`). At container start, `docker-entrypoint.sh` reads `config.network_ports` from `CONFIG_PATH` / `config/airports.json` and configures **ProFTPD** with a **single** control listener on **`ftp_control`** (plus passive ports), **sshd** (SFTP on `sftp`), and **fail2ban**. Host-facing ports such as **`ftps_explicit_tls`** and **`ftps_alt`** are for UFW/NAT/fail2ban when inbound ports differ from the container bind; they do not add a second ProFTPD listener. **Nginx** uses `docker/nginx.conf`; keep its `listen` ports consistent with `network_ports.http` and `network_ports.https` when you customize them. **Apache** listens on `127.0.0.1:8080` behind nginx and is not configured through `network_ports`.
 
 **FTP Passive Mode Resolution Priority:**
 
@@ -340,13 +341,13 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 
 ### Upload health probe
 
-Production-only functional checks for FTPS and SFTP upload paths. When enabled, `upload-probe-runner.sh` uploads a small test file every `interval_sec` (default 30). `service-watchdog.sh` evaluates the heartbeat every 50 seconds and may restart **vsftpd** or the container **sshd** after consecutive failures (at most once per 30 minutes per daemon).
+Production-only functional checks for FTPS and SFTP upload paths. When enabled, `upload-probe-runner.sh` uploads a small test file every `interval_sec` (default 30). `service-watchdog.sh` evaluates the heartbeat every 50 seconds and may restart **ProFTPD** or the container **sshd** after consecutive failures (at most once per 30 minutes per daemon).
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `enabled` | boolean | Must be `true` to activate (not `1` or `"true"`) |
 | `interval_sec` | integer | Probe period in seconds (15-300, default 30) |
-| `probe_connect_host` | string | Connect host for on-box probes. Empty uses `upload_hostname`. Production Docker (`network_mode: host`) should use `127.0.0.1` so probes hit local vsftpd/sshd without hairpin NAT through the public IP |
+| `probe_connect_host` | string | Connect host for on-box probes. Empty uses `upload_hostname`. Production Docker (`network_mode: host`) should use `127.0.0.1` so probes hit local ProFTPD/sshd without hairpin NAT through the public IP |
 | `ftps` | object | `username` and `password` for FTPS probe (passive TLS upload) |
 | `sftp` | object | `username` and `password` for SFTP probe (upload under `files/`) |
 
@@ -361,7 +362,7 @@ Credential shape matches push cameras: `username` is alphanumeric, max 14 charac
 
 **Production Docker:** The web container uses host networking. Set `probe_connect_host` to `127.0.0.1` so functional probes connect to local listeners on `network_ports.ftp_control` and `network_ports.sftp`. Cameras still use `upload_hostname` as usual.
 
-FTPS probes to loopback or bare IP addresses skip TLS certificate hostname verification (`curl --insecure`) because the vsftpd certificate SAN matches the public hostname, not `127.0.0.1`. Before each upload, probes remove any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe account directory so a leftover file owned by another uid cannot wedge the check. Health does not depend on a remote FTP delete after upload; FTPS and SFTP both use that local clear plus overwrite of the fixed probe filename.
+FTPS probes to loopback or bare IP addresses skip TLS certificate hostname verification (`curl --insecure`) because the ProFTPD certificate SAN matches the public hostname, not `127.0.0.1`. Before each upload, probes remove any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe account directory so a leftover file owned by another uid cannot wedge the check. Health does not depend on a remote FTP delete after upload; FTPS and SFTP both use that local clear plus overwrite of the fixed probe filename.
 
 **Recommended: Hostname (default)**
 
@@ -392,7 +393,7 @@ Set `public_ip` only if DNS is unavailable or unreliable at container startup (e
 
 **Dynamic DNS (DDNS) Support:**
 
-For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only - vsftpd resolves at connection time:
+For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only - ProFTPD resolves `MasqueradeAddress` at PASV time when a hostname is used:
 
 ```json
 {
@@ -406,8 +407,8 @@ For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use 
 
 When `dynamic_dns_refresh_seconds` is enabled:
 - Root cron in the container runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute; it reads `getDynamicDnsRefreshSeconds()` by invoking PHP as `www-data` (`runuser`), then only runs `update-pasv-address.sh` from the same libexec directory when the interval has elapsed (same interval semantics as before; resolution is within one minute because cron is minutely). The throttle timestamp is stored at `/var/lib/aviationwx/pasv-ddns.last` and the wrapper append-only log at `/var/lib/aviationwx/dynamic-dns-pasv.log` (both under the root-only `/var/lib/aviationwx` directory in the image, not world-writable `/tmp` and not under the shared `/var/log/aviationwx` tree).
-- If the IP has changed, vsftpd's `pasv_address` is updated automatically
-- vsftpd is restarted to apply the new IP (brief interruption to active FTP sessions)
+- If the IP has changed, ProFTPD's `MasqueradeAddress` is updated automatically
+- ProFTPD receives SIGHUP to apply the new IP without a full process restart (brief interruption to active FTP sessions)
 - If `public_ip` is set, dynamic DNS refresh is automatically disabled (not needed)
 
 **Self-Hosted/Federation:**
@@ -998,7 +999,7 @@ For cameras that upload images to the server:
 - Restricted client networks: set `config.network_ports.ftps_alt` for an extra inbound control port (NAT to `ftp_control`); `deploy-configure-firewall.sh` applies UFW and NAT on deploy. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 
 **Upload paths:**
-- **FTP**: Upload to `/` (vsftpd lands in FTP directory)
+- **FTP**: Upload to `/` (ProFTPD `DefaultRoot ~` lands in the user homedir)
 - **SFTP**: Upload to `/files/` (chroot requires subdirectory)
 
 Directory structure (separate hierarchies for FTP and SFTP):
@@ -1613,11 +1614,11 @@ FTPS requires the wildcard certificate (`*.aviationwx.org`).
 ls -la /etc/letsencrypt/live/aviationwx.org/
 openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -dates
 
-# Check vsftpd SSL status
-docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd.conf
+# Check ProFTPD TLS status
+docker compose -f docker/docker-compose.prod.yml exec web grep TLSEngine /etc/proftpd/conf.d/tls.conf
 
 # Enable SSL manually if needed
-docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+docker compose -f docker/docker-compose.prod.yml exec web enable-upload-ftps.sh
 ```
 
 ### Certificate Chain
