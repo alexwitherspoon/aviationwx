@@ -54,7 +54,7 @@ if [ ! -f "$REFRESH_SCRIPT" ]; then
     exit 1
 fi
 
-if ! CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}" "$APP_PHP" "$REFRESH_SCRIPT"; then
+if ! CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}" "$APP_PHP" "$REFRESH_SCRIPT" --no-reload; then
     log_message "ERROR: Failed to sync ProFTPD TLS configuration from upload capabilities"
     exit 1
 fi
