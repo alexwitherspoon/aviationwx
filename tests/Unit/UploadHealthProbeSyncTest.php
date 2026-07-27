@@ -159,8 +159,10 @@ class UploadHealthProbeSyncTest extends TestCase
         $path = __DIR__ . '/../../scripts/upload-probe.sh';
         $contents = file_get_contents($path);
         $this->assertIsString($contents);
-        $this->assertStringContainsString('base_url="ftp://$(probe_url_host "$host"):${port}/"', $contents);
-        $this->assertStringNotContainsString('base_url="ftps://${host}:${port}/"', $contents);
+        $this->assertStringContainsString('pasv-probe.py', $contents);
+        $this->assertStringContainsString('probe_mode="pasv-ftps"', $contents);
+        $this->assertStringNotContainsString('base_url="ftps://', $contents);
+        $this->assertStringNotContainsString('ftps://${host}', $contents);
     }
 
     public function testUploadProbeScript_UsesPlainFtpWhenProftpdTlsDisabled(): void
@@ -169,7 +171,7 @@ class UploadHealthProbeSyncTest extends TestCase
         $contents = file_get_contents($path);
         $this->assertIsString($contents);
         $this->assertStringContainsString('proftpd_tls_enabled', $contents);
-        $this->assertStringContainsString('curl_tls_args=(--ftp-ssl-reqd)', $contents);
+        $this->assertStringContainsString('probe_mode="pasv-plain"', $contents);
         $this->assertStringContainsString('ok (plain ftp, TLSEngine off)', $contents);
     }
 
@@ -179,13 +181,13 @@ class UploadHealthProbeSyncTest extends TestCase
         $contents = file_get_contents($path);
         $this->assertIsString($contents);
         $this->assertStringContainsString('probe_host_skips_tls_verify', $contents);
-        $this->assertStringContainsString('curl_tls_args+=(--insecure)', $contents);
+        $this->assertStringContainsString('AVWX_FTPS_SKIP_HOSTNAME_VERIFY', $contents);
         $this->assertStringContainsString('probe_local_upload_path ftps', $contents);
         $this->assertStringContainsString('probe_local_upload_path sftp', $contents);
         $this->assertStringContainsString('clear_local_probe_upload_file', $contents);
         $this->assertStringContainsString('probe_curl_fail_detail', $contents);
-        // Remote DELE after FTPS upload is intentionally omitted: curl --fail -X DELE can
-        // exit non-zero after the server already accepted STOR.
+        $this->assertStringContainsString('pasv-probe.py', $contents);
+        $this->assertStringNotContainsString('curl_tls_args+=(--insecure)', $contents);
         $this->assertStringNotContainsString('-X "DELE', $contents);
         $this->assertStringNotContainsString('upload ok but delete failed', $contents);
     }
