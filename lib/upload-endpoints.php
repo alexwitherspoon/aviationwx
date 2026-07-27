@@ -301,6 +301,46 @@ function readUploadEndpointsCache(?string $path = null): ?array
 }
 
 /**
+ * Apply root:www-data 0640 permissions when running as root (status page reads cache as www-data).
+ */
+function applyUploadEndpointsCachePermissions(string $path): void
+{
+    @chmod($path, 0640);
+    if (!function_exists('posix_getuid') || posix_getuid() !== 0) {
+        return;
+    }
+
+    $wwwData = posix_getpwnam('www-data');
+    if ($wwwData === false) {
+        return;
+    }
+
+    @chown($path, 0);
+    @chgrp($path, (int) $wwwData['gid']);
+}
+
+/**
+ * Ensure upload endpoint cache directory is traversable by www-data when created as root.
+ */
+function ensureUploadEndpointsCacheDirectory(string $dir): bool
+{
+    if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
+        return false;
+    }
+
+    if (function_exists('posix_getuid') && posix_getuid() === 0) {
+        $wwwData = posix_getpwnam('www-data');
+        if ($wwwData !== false) {
+            @chown($dir, 0);
+            @chgrp($dir, (int) $wwwData['gid']);
+            @chmod($dir, 0750);
+        }
+    }
+
+    return is_dir($dir);
+}
+
+/**
  * Atomically write upload endpoint cache.
  *
  * @param array<string, mixed> $state
@@ -309,7 +349,7 @@ function writeUploadEndpointsCache(array $state, ?string $path = null): bool
 {
     $path = $path ?? UPLOAD_ENDPOINTS_CACHE_FILE;
     $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
+    if (!ensureUploadEndpointsCacheDirectory($dir)) {
         return false;
     }
 
@@ -325,7 +365,7 @@ function writeUploadEndpointsCache(array $state, ?string $path = null): bool
 
         return false;
     }
-    @chmod($tmp, 0640);
+    applyUploadEndpointsCachePermissions($tmp);
 
     if (!@rename($tmp, $path)) {
         @unlink($tmp);
@@ -333,7 +373,7 @@ function writeUploadEndpointsCache(array $state, ?string $path = null): bool
         return false;
     }
 
-    @chmod($path, 0640);
+    applyUploadEndpointsCachePermissions($path);
 
     return true;
 }

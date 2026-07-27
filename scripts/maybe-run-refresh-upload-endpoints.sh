@@ -4,7 +4,7 @@
 # Run from root cron every minute; refreshes upload endpoint cache after interval elapsed.
 #
 # Throttle: STATE is written only after refresh exits 0 or 2; exit 1 retries on the next minute.
-# STATE and log: /var/lib/aviationwx (mode 700, root-owned in the image).
+# STATE and log: /var/lib/aviationwx (mode 750 root:www-data in the image).
 #
 # Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron).
 

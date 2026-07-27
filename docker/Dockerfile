@@ -137,8 +137,8 @@ RUN sh scripts/minify-css.sh \
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache \
     && mkdir -p /var/lib/aviationwx \
-    && chown root:root /var/lib/aviationwx \
-    && chmod 700 /var/lib/aviationwx \
+    && chown root:www-data /var/lib/aviationwx \
+    && chmod 750 /var/lib/aviationwx \
     && touch /var/lib/aviationwx/upload-endpoints-refresh.log \
     && chown root:root /var/lib/aviationwx/upload-endpoints-refresh.log \
     && chmod 600 /var/lib/aviationwx/upload-endpoints-refresh.log \
