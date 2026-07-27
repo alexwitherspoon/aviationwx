@@ -49,8 +49,8 @@ read_probe_settings() {
         $credentialSource = "probe";
 
         if ($user === "" || $pass === "") {
+            $config = loadConfig();
             foreach (array_keys($parsed["users"]) as $candidate) {
-                $config = loadConfig();
                 foreach ($config["airports"] ?? [] as $airport) {
                     foreach ($airport["webcams"] ?? [] as $cam) {
                         $push = $cam["push_config"] ?? null;
