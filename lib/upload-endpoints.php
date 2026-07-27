@@ -7,7 +7,8 @@ declare(strict_types=1);
 
 const UPLOAD_ENDPOINTS_CACHE_FILE = '/var/lib/aviationwx/upload-endpoints.json';
 const UPLOAD_ENDPOINTS_PROFTPD_CONF = '/etc/proftpd/conf.d/masquerade.conf';
-const UPLOAD_ENDPOINTS_ACCELERATE_STATE_FILE = '/var/lib/aviationwx/upload-endpoints-accelerate.json';
+const UPLOAD_ENDPOINTS_REFRESH_STATE_FILE = '/var/lib/aviationwx/upload-endpoints-refresh.last';
+const UPLOAD_ENDPOINTS_REFRESH_LOG_FILE = '/var/lib/aviationwx/upload-endpoints-refresh.log';
 
 /** @var list<string> */
 const UPLOAD_CAPABILITY_KEYS = ['plain_ftp', 'ftps', 'sftp', 'ipv4', 'ipv6'];
@@ -726,7 +727,7 @@ function shouldAccelerateUploadEndpointRefresh(?string $probeStatePath = null): 
 }
 
 /**
- * Effective refresh interval for maybe-run-update-pasv-address (baseline or accelerated).
+ * Effective refresh interval for maybe-run-refresh-upload-endpoints (baseline or accelerated).
  */
 function getEffectiveUploadEndpointRefreshSeconds(?string $probeStatePath = null): int
 {

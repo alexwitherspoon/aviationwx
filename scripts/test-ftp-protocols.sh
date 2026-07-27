@@ -80,14 +80,14 @@ get_connection_info() {
         FTP_PORT="2121"
     else
         HOST="localhost"
-        # Local docker-compose.yml maps ports to avoid conflicts
+        # Local docker-compose.local.yml maps ports to avoid conflicts
         SFTP_PORT="12222"
         FTP_PORT="12121"
         
         # Check if local Docker is running
-        if ! docker compose -f "$PROJECT_ROOT/docker/docker-compose.yml" ps web 2>/dev/null | grep -q "Up"; then
+        if ! docker compose -f "$PROJECT_ROOT/docker/docker-compose.local.yml" ps web 2>/dev/null | grep -q "Up"; then
             log_warning "Local Docker container is not running"
-            log_info "Start it with: docker compose -f docker/docker-compose.yml up -d"
+            log_info "Start it with: docker compose -f docker/docker-compose.local.yml up -d"
             log_info "Or test against production with: $0 production"
         fi
     fi
@@ -358,7 +358,7 @@ main() {
     
     if [ "$MODE" = "local" ]; then
         log_info "Note: For local testing, ensure users are created by running:"
-        log_info "  docker compose -f docker/docker-compose.yml exec web php /var/www/html/scripts/sync-push-config.php"
+        log_info "  docker compose -f docker/docker-compose.local.yml exec web php /var/www/html/scripts/sync-push-config.php"
         echo ""
     fi
     

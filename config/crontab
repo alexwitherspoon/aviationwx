@@ -32,9 +32,9 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # (both push and pull) with per-camera refresh_seconds configuration.
 # This cron job has been removed as part of the unified webcam worker refactor.
 
-# Dynamic DNS / PASV (ProFTPD) -- must run as root (edits runtime.conf, SIGHUP reload).
-# Wrapper reads getDynamicDnsRefreshSeconds() (0 = disabled). Cron every minute; wrapper enforces interval.
-* * * * * root cd /var/www/html && /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh >/dev/null 2>&1
+# Dynamic DNS / upload endpoint cache -- must run as root (ProFTPD SIGHUP reload).
+# Wrapper reads getEffectiveUploadEndpointRefreshSeconds() (0 = disabled). Cron every minute; wrapper enforces interval.
+* * * * * root cd /var/www/html && /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh >/dev/null 2>&1
 
 # Cache, FTP parent, and SFTP chroot permissions (same script as docker-entrypoint). Root required.
 0 1 * * * root cd /var/www/html && /usr/local/libexec/aviationwx/set-cache-permissions.sh >> /var/lib/aviationwx/set-cache-permissions.log 2>&1

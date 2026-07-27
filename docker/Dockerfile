@@ -99,9 +99,8 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
 RUN mkdir -p /usr/local/libexec/aviationwx \
     && chown root:root /usr/local/libexec/aviationwx \
     && chmod 755 /usr/local/libexec/aviationwx
-COPY scripts/maybe-run-update-pasv-address.sh scripts/update-pasv-address.sh scripts/refresh-upload-endpoints.php scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh scripts/validate-upload-daemon.sh scripts/pasv-probe.py /usr/local/libexec/aviationwx/
-RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
-    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+COPY scripts/maybe-run-refresh-upload-endpoints.sh scripts/refresh-upload-endpoints.php scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh scripts/validate-upload-daemon.sh scripts/pasv-probe.py /usr/local/libexec/aviationwx/
+RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh \
     /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
@@ -110,8 +109,7 @@ RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
     /usr/local/libexec/aviationwx/upload-probe-runner.sh \
     /usr/local/libexec/aviationwx/validate-upload-daemon.sh \
     /usr/local/libexec/aviationwx/pasv-probe.py \
-    && chown root:root /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
-    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    && chown root:root /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh \
     /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
@@ -139,9 +137,9 @@ RUN mkdir -p /var/www/html/cache/webcams \
     && mkdir -p /var/lib/aviationwx \
     && chown root:root /var/lib/aviationwx \
     && chmod 700 /var/lib/aviationwx \
-    && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && touch /var/lib/aviationwx/upload-endpoints-refresh.log \
+    && chown root:root /var/lib/aviationwx/upload-endpoints-refresh.log \
+    && chmod 600 /var/lib/aviationwx/upload-endpoints-refresh.log \
     && touch /var/lib/aviationwx/set-cache-permissions.log \
     && chown root:root /var/lib/aviationwx/set-cache-permissions.log \
     && chmod 600 /var/lib/aviationwx/set-cache-permissions.log
