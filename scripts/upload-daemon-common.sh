@@ -330,6 +330,16 @@ probe_local_upload_path() {
     return 1
 }
 
+# Validate PASV_PROBE_PASSWORD_ENV for safe indirect export/unset in bash.
+normalize_pasv_probe_password_env() {
+    local name="${1:-AVIATIONWX_FTP_PROBE_PASSWORD}"
+    if [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        printf '%s' "$name"
+        return 0
+    fi
+    printf '%s' 'AVIATIONWX_FTP_PROBE_PASSWORD'
+}
+
 # Harden probe temp directory against symlink races when run as root.
 ensure_probe_tmp_dir() {
     local dir="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"

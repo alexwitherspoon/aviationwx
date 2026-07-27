@@ -5,6 +5,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON_SH="${SCRIPT_DIR}/upload-daemon-common.sh"
+if [ ! -f "$COMMON_SH" ]; then
+    COMMON_SH="/usr/local/libexec/aviationwx/upload-daemon-common.sh"
+fi
+# shellcheck source=upload-daemon-common.sh
+source "$COMMON_SH"
+
 PASV_PROBE="${SCRIPT_DIR}/pasv-probe.py"
 if [ ! -f "$PASV_PROBE" ]; then
     PASV_PROBE="/var/www/html/scripts/pasv-probe.py"
@@ -12,7 +19,7 @@ fi
 
 CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 VALIDATE_UPLOAD_HOST="${VALIDATE_UPLOAD_HOST:-127.0.0.1}"
-PASV_PROBE_PASSWORD_ENV="${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}"
+PASV_PROBE_PASSWORD_ENV="$(normalize_pasv_probe_password_env "${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}")"
 
 probe_skips_tls_verify() {
     local probe_host="$1"
@@ -137,7 +144,7 @@ for mode in "${modes[@]}"; do
 done
 
 # STOR: use ftplib (same as cameras). curl STOR against ProFTPD can create root-owned files.
-stor_file="/tmp/aviationwx-validate-upload-$$.txt"
+stor_file="$(mktemp /tmp/aviationwx-validate-upload.XXXXXX)"
 stor_remote="aviationwx-validate-upload.txt"
 printf 'aviationwx validate upload %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$stor_file"
 stor_mode="pasv-plain"
