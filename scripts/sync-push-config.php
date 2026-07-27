@@ -889,13 +889,13 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
 }
 
 /**
- * Build ProFTPD AuthUserFile account map from the on-disk passwd file.
+ * Build ProFTPD AuthUserFile account map from a parseProftpdPasswdFile() result.
  *
+ * @param array{users: array<string, array{password_hash: string, home: string}>, errors: list<string>} $parsed
  * @return array<string, array{password: string, home: string}>
  */
-function readProftpdAccountMap(): array
+function proftpdAccountMapFromParsed(array $parsed): array
 {
-    $parsed = parseProftpdPasswdFile();
     $accounts = [];
     foreach ($parsed['users'] as $username => $info) {
         $accounts[$username] = [
@@ -905,6 +905,16 @@ function readProftpdAccountMap(): array
     }
 
     return $accounts;
+}
+
+/**
+ * Build ProFTPD AuthUserFile account map from the on-disk passwd file.
+ *
+ * @return array<string, array{password: string, home: string}>
+ */
+function readProftpdAccountMap(): array
+{
+    return proftpdAccountMapFromParsed(parseProftpdPasswdFile());
 }
 
 /**
@@ -924,7 +934,7 @@ function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
         ], 'app');
     }
 
-    $accounts = readProftpdAccountMap();
+    $accounts = proftpdAccountMapFromParsed($parsed);
     $accounts[$username] = [
         'password' => $password,
         'home' => $ftpDir,
@@ -997,7 +1007,7 @@ function removeFtpUser($username) {
         ], 'app');
     }
 
-    $accounts = readProftpdAccountMap();
+    $accounts = proftpdAccountMapFromParsed($parsed);
     unset($accounts[$username]);
 
     if (!writeProftpdPasswdFile($accounts)) {
