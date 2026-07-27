@@ -72,7 +72,7 @@ class ProftpdConfigTest extends TestCase
         $contents = file_get_contents($configPath);
         $this->assertIsString($contents);
         $this->assertStringContainsString('UseIPv6', $contents);
-        $this->assertStringContainsString('on', $contents);
+        $this->assertMatchesRegularExpression('/^UseIPv6\s+on\b/m', $contents);
         $this->assertStringContainsString('DefaultChdir', $contents);
         $this->assertStringContainsString('AuthUserFile', $contents);
         $this->assertStringContainsString('Umask', $contents);
