@@ -968,18 +968,25 @@ function checkFtpSftpServices(): array
     $ftpOk = !$ftpRequired || $ftpRunning;
     $sftpOk = !$sftpRequired || $sshdRunning;
 
+    $messageParts = [];
+    if ($ftpRequired) {
+        $messageParts[] = $ftpRunning ? 'FTP/FTPS running' : 'FTP/FTPS not running';
+    } else {
+        $messageParts[] = 'FTP/FTPS disabled';
+    }
+    if ($sftpRequired) {
+        $messageParts[] = $sftpRunning ? 'SFTP running' : 'SFTP not running';
+    } else {
+        $messageParts[] = 'SFTP disabled';
+    }
+    $message = implode('; ', $messageParts);
+
     if ($ftpOk && $sftpOk) {
         $status = 'operational';
-        $message = 'FTP/FTPS and SFTP servers running';
-    } elseif (!$ftpRunning && !$sshdRunning) {
+    } elseif ($ftpRequired && $sftpRequired && !$ftpRunning && !$sshdRunning) {
         $status = 'down';
-        $message = 'FTP/FTPS and SFTP servers not running';
     } else {
         $status = 'degraded';
-        $runningServices = [];
-        if ($ftpRunning) $runningServices[] = 'FTP/FTPS';
-        if ($sshdRunning) $runningServices[] = 'SFTP';
-        $message = implode(' and ', $runningServices) . ' running';
     }
     
     return [
