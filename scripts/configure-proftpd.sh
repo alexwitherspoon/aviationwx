@@ -8,7 +8,7 @@ PROFTPD_CONF="${PROFTPD_CONF:-/etc/proftpd/proftpd.conf}"
 CONFIG_FILE="${CONFIG_FILE:-/var/www/html/config/airports.json}"
 FTP_CONTROL_PORT="${FTP_CONTROL_PORT:-2121}"
 FTP_PASSIVE_MIN="${FTP_PASSIVE_MIN:-50000}"
-FTP_PASSIVE_MAX="${FTP_PASSIVE_MAX:-50100}"
+FTP_PASSIVE_MAX="${FTP_PASSIVE_MAX:-51000}"
 PROFTPD_RUNTIME_CONF="/etc/proftpd/conf.d/runtime.conf"
 
 if [ -x /usr/local/bin/php ]; then
