@@ -123,6 +123,7 @@ proftpd_tls_enabled() {
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
     local file_name local_file start_sec end_sec elapsed ok_detail fail_prefix probe_mode
+    local local_upload_path probe_err_file probe_output probe_detail
     local probe_script="${SCRIPT_DIR}/pasv-probe.py"
     if [ ! -f "$probe_script" ]; then
         probe_script="/var/www/html/scripts/pasv-probe.py"
