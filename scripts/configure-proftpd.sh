@@ -46,6 +46,7 @@ write_runtime_conf() {
         echo "MaxInstances                    ${max_instances}"
         echo "MaxClients                      ${max_clients}"
         echo "MaxClientsPerUser               ${max_per_user}"
+        echo "Umask                           002"
     } >"$PROFTPD_RUNTIME_CONF"
     echo "✓ ProFTPD runtime: port=${FTP_CONTROL_PORT} pasv ${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX}"
 }

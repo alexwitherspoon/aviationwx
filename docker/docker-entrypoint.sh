@@ -457,14 +457,13 @@ UPLOAD_IPV4_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php
 UPLOAD_IPV6_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv6"] ? "1" : "0";' 2>/dev/null || echo 1)"
 
 if [ -f /etc/ssh/sshd_config ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
-    if grep -qE '^ListenAddress[[:space:]]' /etc/ssh/sshd_config; then
-        sed -i '/^ListenAddress[[:space:]]/d' /etc/ssh/sshd_config
+    sed -i '/^ListenAddress[[:space:]]/d' /etc/ssh/sshd_config
+    # Insert before Match (Match extends to EOF; appending ListenAddress breaks sshd).
+    if [ "$UPLOAD_IPV6_ENABLED" = "1" ]; then
+        sed -i "/^Match /i ListenAddress ::" /etc/ssh/sshd_config
     fi
     if [ "$UPLOAD_IPV4_ENABLED" = "1" ]; then
-        echo "ListenAddress 0.0.0.0" >> /etc/ssh/sshd_config
-    fi
-    if [ "$UPLOAD_IPV6_ENABLED" = "1" ]; then
-        echo "ListenAddress ::" >> /etc/ssh/sshd_config
+        sed -i "/^Match /i ListenAddress 0.0.0.0" /etc/ssh/sshd_config
     fi
 fi
 

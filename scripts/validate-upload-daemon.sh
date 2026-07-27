@@ -25,12 +25,12 @@ read_probe_settings() {
         require_once "/var/www/html/lib/proftpd-auth.php";
 
         $settings = getUploadHealthProbeSettings();
+        $parsed = parseProftpdPasswdFile();
         $user = $settings["ftps"]["username"] ?? "";
         $pass = $settings["ftps"]["password"] ?? "";
         $credentialSource = "probe";
 
         if ($user === "" || $pass === "") {
-            $parsed = parseProftpdPasswdFile();
             foreach (array_keys($parsed["users"]) as $candidate) {
                 $config = loadConfig();
                 foreach ($config["airports"] ?? [] as $airport) {
@@ -55,6 +55,7 @@ read_probe_settings() {
             "ftp_port" => (int) ($settings["ftp_port"] ?? 2121),
             "ftps_user" => $user,
             "ftps_pass" => $pass,
+            "ftp_home" => $parsed["users"][$user]["home"] ?? "",
             "credential_source" => $credentialSource,
             "tls_enabled" => is_readable("/etc/proftpd/conf.d/tls.conf")
                 && str_contains((string) file_get_contents("/etc/proftpd/conf.d/tls.conf"), "TLSEngine                      on"),
@@ -83,6 +84,7 @@ host="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdi
 port="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["ftp_port"])')"
 user="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["ftps_user"])')"
 pass="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["ftps_pass"])')"
+upload_home="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("ftp_home") or "")')"
 credential_source="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["credential_source"])')"
 tls_enabled="$(echo "$settings" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin)["tls_enabled"] else "false")')"
 cached_ipv4="$(echo "$settings" | python3 -c 'import json,sys; v=json.load(sys.stdin).get("cached_ipv4"); print(v if v else "")')"
@@ -112,19 +114,63 @@ for mode in "${modes[@]}"; do
     echo "  ${mode}: ok pasv_ip=${pasv_ip}"
 done
 
-# STOR: plain FTP upload (same path upload-probe uses for health checks).
+# STOR: use ftplib (same as cameras). curl STOR against ProFTPD can create root-owned files.
 stor_file="/tmp/aviationwx-validate-upload-$$.txt"
-printf 'aviationwx validate upload %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$stor_file"
 stor_remote="aviationwx-validate-upload.txt"
-if ! curl -sS --ftp-pasv --connect-timeout 10 --max-time 45 \
-    --user "${user}:${pass}" \
-    --upload-file "$stor_file" \
-    "ftp://${host}:${port}/${stor_remote}" >/dev/null 2>&1; then
+printf 'aviationwx validate upload %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$stor_file"
+stor_mode="pasv-plain"
+if [ "$tls_enabled" = "true" ]; then
+    stor_mode="pasv-ftps"
+fi
+if ! python3 "$PASV_PROBE" --host "$host" --port "$port" --user "$user" --password "$pass" \
+    --mode "$stor_mode" --stor "$stor_remote" --stor-data "$(cat "$stor_file")" >/dev/null 2>&1; then
     rm -f "$stor_file"
     fail "STOR upload failed"
 fi
 rm -f "$stor_file"
 echo "  stor: ok remote=${stor_remote}"
+
+# Permission contract: inbox ftp:www-data 2775; uploaded file ftp:www-data 664 (Umask 002).
+upload_home="$(printf '%s' "${upload_home}" | tr -d '[:space:]')"
+if [ -z "${upload_home}" ]; then
+    fail "could not resolve ProFTPD homedir for ${user}"
+fi
+remote_path="${upload_home}/${stor_remote}"
+if [ ! -f "${remote_path}" ]; then
+    fail "STOR file missing at ${remote_path}"
+fi
+dir_owner="$(stat -c '%U:%G' "${upload_home}")"
+dir_mode="$(stat -c '%a' "${upload_home}")"
+file_owner="$(stat -c '%U:%G' "${remote_path}")"
+file_mode="$(stat -c '%a' "${remote_path}")"
+if [ "${dir_owner}" != "ftp:www-data" ] || [ "${dir_mode}" != "2775" ]; then
+    fail "inbox permissions ${dir_owner} ${dir_mode} (expected ftp:www-data 2775) at ${upload_home}"
+fi
+
+# Docker Desktop virtiofs and some bind mounts report root:root for files created as ftp.
+ownership_probe="${upload_home}/.aviationwx-ownership-probe-$$"
+bind_mount_masks_ownership=false
+if runuser -u ftp -- touch "${ownership_probe}" 2>/dev/null; then
+    probe_owner="$(stat -c '%U:%G' "${ownership_probe}" 2>/dev/null || echo '')"
+    if [ "${probe_owner}" = "root:root" ]; then
+        bind_mount_masks_ownership=true
+    fi
+fi
+rm -f "${ownership_probe}"
+
+if [ "${bind_mount_masks_ownership}" = true ]; then
+    echo "  permissions: ok inbox=${dir_owner} ${dir_mode} (file owner/mode skipped: bind mount masks ftp ownership)"
+elif [ "${file_owner}" != "ftp:www-data" ] || [ "${file_mode}" != "664" ]; then
+    fail "upload file permissions ${file_owner} ${file_mode} (expected ftp:www-data 664) at ${remote_path}"
+else
+    echo "  permissions: ok inbox=${dir_owner} ${dir_mode} file=${file_owner} ${file_mode}"
+fi
+if ! runuser -u www-data -- test -r "${remote_path}"; then
+    fail "www-data cannot read uploaded file at ${remote_path}"
+fi
+if ! runuser -u www-data -- test -w "${remote_path}"; then
+    fail "www-data cannot write uploaded file at ${remote_path}"
+fi
 
 # SIGHUP reload must not drop the daemon (auth/runtime refresh path).
 if [ -f /var/run/proftpd.pid ]; then

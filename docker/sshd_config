@@ -15,6 +15,11 @@ PermitTunnel no
 SyslogFacility LOCAL0
 LogLevel INFO
 
+# Listener addresses (docker-entrypoint.sh replaces when upload_capabilities disable a family).
+# Must stay before Match: Match blocks run to end-of-file.
+ListenAddress 0.0.0.0
+ListenAddress ::
+
 # SFTP subsystem
 Subsystem sftp internal-sftp
 

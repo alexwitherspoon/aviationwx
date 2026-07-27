@@ -99,11 +99,12 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
 RUN mkdir -p /usr/local/libexec/aviationwx \
     && chown root:root /usr/local/libexec/aviationwx \
     && chmod 755 /usr/local/libexec/aviationwx
-COPY scripts/maybe-run-refresh-upload-endpoints.sh scripts/refresh-upload-endpoints.php scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh scripts/validate-upload-daemon.sh scripts/pasv-probe.py /usr/local/libexec/aviationwx/
+COPY scripts/maybe-run-refresh-upload-endpoints.sh scripts/refresh-upload-endpoints.php scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/repair-ftp-upload-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh scripts/validate-upload-daemon.sh scripts/pasv-probe.py /usr/local/libexec/aviationwx/
 RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh \
     /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
+    /usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh \
     /usr/local/libexec/aviationwx/upload-daemon-common.sh \
     /usr/local/libexec/aviationwx/upload-probe.sh \
     /usr/local/libexec/aviationwx/upload-probe-runner.sh \
@@ -113,6 +114,7 @@ RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.s
     /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
+    /usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh \
     /usr/local/libexec/aviationwx/upload-daemon-common.sh \
     /usr/local/libexec/aviationwx/upload-probe.sh \
     /usr/local/libexec/aviationwx/upload-probe-runner.sh \

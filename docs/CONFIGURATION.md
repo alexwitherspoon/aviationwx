@@ -1012,7 +1012,7 @@ For cameras that upload images to the server:
 - Restricted client networks: set `config.network_ports.ftps_alt` for an extra inbound control port (NAT to `ftp_control`); `deploy-configure-firewall.sh` applies UFW and NAT on deploy. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 
 **Upload paths:**
-- **FTP**: Upload to `/` (ProFTPD `DefaultRoot ~` lands in the user homedir)
+- **FTP**: Upload to `/` (ProFTPD `DefaultChdir ~` lands in the user homedir)
 - **SFTP**: Upload to `/files/` (chroot requires subdirectory)
 
 Directory structure (separate hierarchies for FTP and SFTP):
@@ -1025,7 +1025,7 @@ Directory structure (separate hierarchies for FTP and SFTP):
 Note: SFTP uses `/var/sftp/` (outside cache) because SSH chroot requires
 ALL parent directories to be root-owned. `/var/www/html/cache/` is www-data owned.
 
-**Permission maintenance:** `scripts/repair-sftp-chroot-permissions.sh` (installed as `/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh`) restores chroot ownership. It runs from `sync-push-config.php` on every invocation, from `set-cache-permissions.sh` at container start and nightly (01:00 UTC cron), and from `create-sftp-user.sh` when a user is created. On the production host, `/tmp/aviationwx-cache/sftp` is bind-mounted to `/var/sftp`; avoid recursive `chown` on the whole cache tree that includes `sftp/{username}/`. See [Bridge / SFTP uploads fail (chroot permissions)](OPERATIONS.md#bridge--sftp-uploads-fail-chroot-permissions).
+**Permission maintenance:** `scripts/repair-ftp-upload-permissions.sh` and `scripts/repair-sftp-chroot-permissions.sh` (installed under `/usr/local/libexec/aviationwx/`) restore FTP inbox (`ftp:www-data` `2775`) and SFTP chroot ownership. They run from `set-cache-permissions.sh` at container start and nightly (01:00 UTC cron); SFTP repair also runs from `sync-push-config.php` and `create-sftp-user.sh`. FTP uploads use ProFTPD `Umask 002` so new files are `ftp:www-data` `664` and `www-data` can read and rewrite EXIF. On the production host, `/tmp/aviationwx-cache/sftp` is bind-mounted to `/var/sftp`; avoid recursive `chown` on the whole cache tree that includes `sftp/{username}/`. See [Bridge / SFTP uploads fail (chroot permissions)](OPERATIONS.md#bridge--sftp-uploads-fail-chroot-permissions).
 
 The processor checks both FTP and SFTP directories automatically.
 

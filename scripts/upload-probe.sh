@@ -118,45 +118,39 @@ proftpd_tls_enabled() {
 }
 
 # FTP upload probe: plain FTP when TLS is off, explicit TLS (FTPS) when enabled.
+# Uses ftplib via pasv-probe.py (curl STOR against ProFTPD can create root-owned files).
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed ok_detail fail_prefix
-    local -a curl_tls_args=()
-    local curl_err local_upload_path
+    local file_name local_file start_sec end_sec elapsed ok_detail fail_prefix probe_mode
+    local probe_script="${SCRIPT_DIR}/pasv-probe.py"
+    if [ ! -f "$probe_script" ]; then
+        probe_script="/var/www/html/scripts/pasv-probe.py"
+    fi
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
     mkdir -p "$PROBE_TMP_DIR"
-    curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
-    base_url="ftp://$(probe_url_host "$host"):${port}/"
     if proftpd_tls_enabled; then
         fail_prefix="ftps"
-        curl_tls_args=(--ftp-ssl-reqd)
-        if probe_host_skips_tls_verify "$host"; then
-            curl_tls_args+=(--insecure)
-        fi
+        probe_mode="pasv-ftps"
         ok_detail="ok"
     else
         fail_prefix="ftp"
+        probe_mode="pasv-plain"
         ok_detail="ok (plain ftp, TLSEngine off)"
     fi
     if local_upload_path="$(probe_local_upload_path ftps "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
     fi
     printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
-    probe_setup_netrc "$host" "$user" "$pass"
-    trap probe_netrc_cleanup RETURN
     start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
-        --connect-timeout 10 --max-time 45 \
-        --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>"$curl_err"; then
+    if ! python3 "$probe_script" --host "$(probe_url_host "$host")" --port "$port" \
+        --user "$user" --password "$pass" --mode "$probe_mode" \
+        --stor "$file_name" --stor-data "$(cat "$local_file")" >/dev/null 2>&1; then
         rm -f "$local_file"
-        echo "false|0|$(probe_curl_fail_detail "$fail_prefix" "$curl_err")"
-        rm -f "$curl_err"
+        echo "false|0|${fail_prefix} failed"
         return 1
     fi
-    # No remote DELE: curl --fail -X DELE on a directory URL can exit non-zero after
-    # the server already accepted STOR. Health uses local clear + overwrite (same as SFTP).
-    rm -f "$local_file" "$curl_err"
+    rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then

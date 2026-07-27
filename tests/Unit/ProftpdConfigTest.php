@@ -65,7 +65,9 @@ class ProftpdConfigTest extends TestCase
         $this->assertIsString($contents);
         $this->assertStringContainsString('UseIPv6', $contents);
         $this->assertStringContainsString('on', $contents);
-        $this->assertStringContainsString('DefaultRoot', $contents);
+        $this->assertStringContainsString('DefaultChdir', $contents);
         $this->assertStringContainsString('AuthUserFile', $contents);
+        $this->assertStringContainsString('Umask', $contents);
+        $this->assertStringContainsString('002', $contents);
     }
 }
