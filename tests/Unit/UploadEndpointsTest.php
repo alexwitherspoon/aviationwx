@@ -15,6 +15,15 @@ class UploadEndpointsTest extends TestCase
     /** @var list<string> */
     private array $tempPaths = [];
 
+    private ?string $originalConfigPath = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $previous = getenv('CONFIG_PATH');
+        $this->originalConfigPath = $previous === false ? null : $previous;
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->tempPaths as $path) {
@@ -23,6 +32,14 @@ class UploadEndpointsTest extends TestCase
             }
         }
         $this->tempPaths = [];
+
+        if ($this->originalConfigPath !== null && $this->originalConfigPath !== '') {
+            putenv('CONFIG_PATH=' . $this->originalConfigPath);
+        } else {
+            putenv('CONFIG_PATH');
+        }
+        clearConfigCache();
+
         parent::tearDown();
     }
 
