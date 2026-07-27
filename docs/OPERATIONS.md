@@ -564,7 +564,7 @@ Production can run functional FTPS/SFTP upload probes and restart wedged daemons
 
 **Recovery policy:** Two consecutive failed or stale probe evaluations per protocol, then at most one restart per 30 minutes per daemon (ProFTPD and container sshd throttled separately). Process death uses the same per-daemon throttle. Missing `jq` or a corrupt heartbeat is treated as unhealthy (fail closed).
 
-**Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach ProFTPD and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`. When the connect host is loopback or a bare IP, FTPS probes use `curl --insecure` so the public ProFTPD certificate hostname does not fail the on-box check.
+**Probe connect host:** Production Docker uses `network_mode: host`. Set `config.upload_health_probe.probe_connect_host` to `127.0.0.1` so on-box probes reach ProFTPD and sshd locally. Leave empty only if probes succeed via `upload_hostname` without hairpin NAT. External cameras still use `upload_hostname`. When the connect host is loopback or a bare IP, FTPS probes set `AVWX_FTPS_SKIP_HOSTNAME_VERIFY` so the public ProFTPD certificate hostname does not fail the on-box check.
 
 **SFTP host key roster (HTTPS):** Bridge and other SFTP clients can fetch live sshd host key fingerprints from the upload hostname:
 
@@ -577,7 +577,7 @@ ssh-keyscan -p "${SFTP_PORT}" "${UPLOAD_HOST}" | ssh-keygen -lf -
 
 Every `SHA256:` from `ssh-keyscan` must appear in the JSON `sha256[]` array. Fingerprints are computed at request time from `/etc/ssh/ssh_host_*_key.pub` in the web container (same container that runs sshd). After an image rebuild, re-run the comparison to confirm the roster tracks new keys.
 
-**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid. Probes do not require a remote FTP `DELE` for health: ProFTPD may accept delete while `curl --fail -X DELE` still exits non-zero on a directory URL, so cleanup is local clear plus overwrite (same for FTPS and SFTP).
+**Probe files:** Each run clears any prior on-disk `aviationwx-probe-healthcheck.txt` under the probe FTPS/SFTP upload directories, then uploads a fresh copy (no per-run timestamp filenames). Clearing first avoids permission-denied overwrites when a leftover file is owned by another uid. Probes do not require a remote FTP `DELE` for health: cleanup is local clear plus overwrite via `pasv-probe.py` (FTPS) or SFTP upload (same flow for both).
 
 ```bash
 # Heartbeat and recent probe log
