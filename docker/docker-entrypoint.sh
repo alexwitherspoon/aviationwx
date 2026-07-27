@@ -446,12 +446,37 @@ else
     echo "⚠️  Warning: /etc/ssh/sshd_config not found - SFTP port not applied"
 fi
 
-# Start sshd (if not already running)
-echo "Starting sshd..."
-service ssh start || {
-    echo "Error: sshd failed to start"
-    exit 1
-}
+# Start sshd when SFTP uploads are enabled (upload_capabilities.sftp)
+if [ -x /usr/local/bin/php ]; then
+    APP_PHP=/usr/local/bin/php
+else
+    APP_PHP=php
+fi
+SFTP_UPLOAD_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["sftp"] ? "1" : "0";' 2>/dev/null || echo 1)"
+UPLOAD_IPV4_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv4"] ? "1" : "0";' 2>/dev/null || echo 1)"
+UPLOAD_IPV6_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv6"] ? "1" : "0";' 2>/dev/null || echo 1)"
+
+if [ -f /etc/ssh/sshd_config ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
+    if grep -qE '^ListenAddress[[:space:]]' /etc/ssh/sshd_config; then
+        sed -i '/^ListenAddress[[:space:]]/d' /etc/ssh/sshd_config
+    fi
+    if [ "$UPLOAD_IPV4_ENABLED" = "1" ]; then
+        echo "ListenAddress 0.0.0.0" >> /etc/ssh/sshd_config
+    fi
+    if [ "$UPLOAD_IPV6_ENABLED" = "1" ]; then
+        echo "ListenAddress ::" >> /etc/ssh/sshd_config
+    fi
+fi
+
+if [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
+    echo "Starting sshd..."
+    service ssh start || {
+        echo "Error: sshd failed to start"
+        exit 1
+    }
+else
+    echo "SFTP uploads disabled via upload_capabilities.sftp"
+fi
 
 # Verify ProFTPD is running (non-fatal - web service is more critical)
 if [ -n "${PROFTPD_PID:-}" ]; then
@@ -461,9 +486,11 @@ if [ -n "${PROFTPD_PID:-}" ]; then
     fi
 fi
 
-if ! pgrep -x sshd > /dev/null; then
-    echo "Error: sshd is not running"
-    exit 1
+if [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
+    if ! pgrep -x sshd > /dev/null; then
+        echo "Error: sshd is not running"
+        exit 1
+    fi
 fi
 
 # Verify ports are listening (give services a moment to bind)

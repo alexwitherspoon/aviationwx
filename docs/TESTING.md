@@ -630,6 +630,8 @@ make validate-upload
 
 Credentials come from `config.upload_health_probe.ftps` when set; otherwise the script uses the first provisioned push webcam user from config. TLS is probed only when `tls.conf` has `TLSEngine on` (production FTPS via `scripts/enable-upload-ftps.sh`).
 
+The gate also checks PASV IPv4 against `/var/lib/aviationwx/upload-endpoints.json` when present. Run `php scripts/refresh-upload-endpoints.php` after `sync-push-config.php` if the cache is missing.
+
 Unit tests: `tests/Unit/ProftpdAuthTest.php`, `tests/Unit/ProftpdConfigTest.php` (syntax check when `proftpd` is installed on the host).
 
 ## Related Documentation

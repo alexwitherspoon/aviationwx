@@ -22,6 +22,16 @@
       "ftps_alt": null
     },
     "dynamic_dns_refresh_seconds": 0,
+    "dynamic_dns_accelerated_refresh_seconds": 60,
+
+    "_comment_upload_capabilities": "Optional per-protocol and per-family toggles (default all true). Disabling ipv4/ipv6 removes listeners on that family for FTP/FTPS and SFTP.",
+    "upload_capabilities": {
+      "plain_ftp": true,
+      "ftps": true,
+      "sftp": true,
+      "ipv4": true,
+      "ipv6": true
+    },
 
     "_comment_upload_daemon": "ProFTPD connection limits (OSS defaults). Production at scale should set explicit values (for example max_instances 800 for ~1000 cameras).",
     "upload_daemon": {

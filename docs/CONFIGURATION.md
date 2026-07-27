@@ -27,7 +27,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `default_timezone` | `UTC` | Fallback timezone for airports |
 | `base_domain` | `aviationwx.org` | Base domain for subdomains. Used for CORS allowlist on M2M API (*.aviationwx.org). |
 | `public_ip` | - | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
-| `public_ipv6` | - | Optional: reserved for future IPv6 support |
+| `public_ipv6` | - | Optional static IPv6 override for upload endpoint cache (family-aware PASV) |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads (recommended) |
 | `upload_health_probe` | disabled | Production: functional FTPS/SFTP probes and automatic daemon recovery; see [Upload health probe](#upload-health-probe) |
 | `network_ports` | - | Optional (self-hosted prod): TCP ports for the app stack, UFW, and in-container services; see [Network configuration](#network-configuration). |
@@ -324,7 +324,7 @@ Configure the server's public network identity for FTP/SFTP services and URL gen
 |--------|------|-------------|
 | `base_domain` | string | Base domain for URL generation (e.g., `aviationwx.org`) |
 | `public_ip` | string | Optional: explicit IPv4 for FTP passive mode (use only if DNS unavailable at startup) |
-| `public_ipv6` | string | Optional: reserved for future IPv6 support |
+| `public_ipv6` | string | Optional static IPv6 override for upload endpoint cache |
 | `upload_hostname` | string | Hostname for FTP/SFTP uploads |
 | `network_ports` | object | Optional object defining TCP ports for self-hosted production (all port values must be JSON **numbers**, not strings). `deploy-configure-firewall.sh` applies host UFW/iptables/NAT; the web container entrypoint sets **ProFTPD** `Port` from **`ftp_control`** only (passive range from the map), **sshd** (SFTP on `sftp`), and **fail2ban** jails. Omitted keys use defaults: `http` 80, `https` 443, `ftp_control` 2121, `ftps_explicit_tls` 2122, `sftp` 2222, `ftp_passive_min`/`max` 50000–51000, `ssh` 22, `ftps_alt` null. **`ftps_explicit_tls`** is used for host firewall/fail2ban when that inbound port differs from `ftp_control`; ProFTPD still binds a single control port (`ftp_control`). **`ssh`** opens the host admin SSH port in UFW only. **`ftps_alt`**: optional extra inbound control port on the host; NAT REDIRECT targets **`ftp_control`**. |
 | `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled). Enforced by root cron + `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` in the container (sources under `scripts/` in the repo). |
@@ -391,29 +391,39 @@ Set `public_ip` only if DNS is unavailable or unreliable at container startup (e
 }
 ```
 
-**Dynamic DNS (DDNS) Support:**
+**Dynamic DNS (DDNS) and endpoint cache:**
 
-For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), use hostname only - ProFTPD resolves `MasqueradeAddress` at PASV time when a hostname is used:
+Upload endpoints (IPv4 and IPv6) are resolved into `/var/lib/aviationwx/upload-endpoints.json` and applied to ProFTPD `masquerade.conf` (family-aware when both families are active). Refresh via `scripts/refresh-upload-endpoints.php` or root cron when `dynamic_dns_refresh_seconds` is enabled.
 
 ```json
 {
   "config": {
     "base_domain": "weather.myairport.org",
     "upload_hostname": "upload.weather.myairport.org",
-    "dynamic_dns_refresh_seconds": 300
+    "dynamic_dns_refresh_seconds": 3600,
+    "dynamic_dns_accelerated_refresh_seconds": 60
   }
 }
 ```
 
 When `dynamic_dns_refresh_seconds` is enabled:
-- Root cron in the container runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute; it reads `getDynamicDnsRefreshSeconds()` by invoking PHP as `www-data` (`runuser`), then only runs `update-pasv-address.sh` from the same libexec directory when the interval has elapsed (same interval semantics as before; resolution is within one minute because cron is minutely). The throttle timestamp is stored at `/var/lib/aviationwx/pasv-ddns.last` and the wrapper append-only log at `/var/lib/aviationwx/dynamic-dns-pasv.log` (both under the root-only `/var/lib/aviationwx` directory in the image, not world-writable `/tmp` and not under the shared `/var/log/aviationwx` tree).
-- If the IP has changed, ProFTPD's `MasqueradeAddress` is updated automatically
-- ProFTPD receives SIGHUP to apply the new IP without a full process restart (brief interruption to active FTP sessions)
-- If `public_ip` is set, dynamic DNS refresh is automatically disabled (not needed)
+- Root cron runs `/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh` every minute; it uses `getEffectiveUploadEndpointRefreshSeconds()` (baseline interval, or `dynamic_dns_accelerated_refresh_seconds` when the fleet upload probe is unhealthy).
+- Endpoint changes rewrite `upload-endpoints.json` and ProFTPD `conf.d/masquerade.conf`, then SIGHUP reload (no full daemon restart).
+- When every enabled address family has a static override (`public_ip` / `public_ipv6`), DNS refresh is disabled for that deployment.
+
+**Upload capabilities** (`config.upload_capabilities`, all default `true`):
+
+| Key | Effect |
+|-----|--------|
+| `plain_ftp` | Allow cleartext FTP auth (legacy cameras) |
+| `ftps` | Enable explicit TLS on the FTP control port |
+| `sftp` | Start sshd SFTP listener |
+| `ipv4` | Listen for FTP/FTPS and SFTP on IPv4 |
+| `ipv6` | Listen for FTP/FTPS and SFTP on IPv6 |
+
+When `plain_ftp` is `false` and `ftps` is `true`, ProFTPD sets `TLSRequired on` (credentials must use TLS).
 
 **Self-Hosted/Federation:**
-
-For self-hosted instances, configure your own domain. Hostname is recommended:
 
 ```json
 {

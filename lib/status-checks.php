@@ -950,14 +950,28 @@ function checkFtpSftpServices(): array
         $sshdRunning = ($code === 0 && !empty($output));
     }
     $services['sshd']['running'] = $sshdRunning;
-    
-    $allRunning = $ftpRunning && $sshdRunning;
-    $noneRunning = !$ftpRunning && !$sshdRunning;
-    
-    if ($allRunning) {
+
+    $endpoints = readUploadEndpointsCache();
+    if (is_array($endpoints)) {
+        $services['proftpd']['endpoints'] = [
+            'hostname' => $endpoints['hostname'] ?? null,
+            'ipv4' => $endpoints['ipv4'] ?? null,
+            'ipv6' => $endpoints['ipv6'] ?? null,
+            'resolved_at' => $endpoints['resolved_at'] ?? null,
+        ];
+    }
+
+    $caps = getUploadCapabilities();
+    $ftpRequired = $caps['plain_ftp'] || $caps['ftps'];
+    $sftpRequired = $caps['sftp'];
+
+    $ftpOk = !$ftpRequired || $ftpRunning;
+    $sftpOk = !$sftpRequired || $sshdRunning;
+
+    if ($ftpOk && $sftpOk) {
         $status = 'operational';
         $message = 'FTP/FTPS and SFTP servers running';
-    } elseif ($noneRunning) {
+    } elseif (!$ftpRunning && !$sshdRunning) {
         $status = 'down';
         $message = 'FTP/FTPS and SFTP servers not running';
     } else {

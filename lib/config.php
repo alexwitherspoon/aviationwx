@@ -602,42 +602,6 @@ function getSftpPort(): int {
 }
 
 /**
- * Get dynamic DNS refresh interval from global config
- * 
- * When set to a positive value, the system will periodically re-resolve
- * the upload hostname and update ProFTPD MasqueradeAddress if it changes.
- * Useful for sites with dynamic DNS (DDNS) where the public IP may change.
- * 
- * When public_ip is explicitly set, this setting has no effect (static IP
- * doesn't need DNS refresh).
- * 
- * @return int Refresh interval in seconds (0 = disabled, minimum 60 when enabled)
- */
-function getDynamicDnsRefreshSeconds(): int {
-    // If public_ip is explicitly set, dynamic DNS refresh is not needed
-    if (getPublicIP() !== null) {
-        return 0;
-    }
-    
-    $seconds = getGlobalConfig('dynamic_dns_refresh_seconds');
-    if ($seconds === null || !is_int($seconds) || $seconds <= 0) {
-        return 0; // Disabled by default
-    }
-    
-    // Enforce minimum of 60 seconds to prevent excessive DNS lookups
-    return max(60, $seconds);
-}
-
-/**
- * Check if dynamic DNS refresh is enabled
- * 
- * @return bool True if dynamic DNS refresh is enabled and applicable
- */
-function isDynamicDnsEnabled(): bool {
-    return getDynamicDnsRefreshSeconds() > 0;
-}
-
-/**
  * Stale threshold for upload probe heartbeat (watchdog): 2x interval plus grace.
  */
 function getUploadHealthProbeStaleSeconds(?int $intervalSec = null): int
@@ -3932,6 +3896,19 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
 
+            if (isset($cfg['dynamic_dns_accelerated_refresh_seconds'])) {
+                if (!is_int($cfg['dynamic_dns_accelerated_refresh_seconds'])) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be an integer';
+                } elseif ($cfg['dynamic_dns_accelerated_refresh_seconds'] < 0) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be >= 0';
+                } elseif ($cfg['dynamic_dns_accelerated_refresh_seconds'] > 0
+                    && $cfg['dynamic_dns_accelerated_refresh_seconds'] < 60) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be >= 60 when enabled';
+                }
+            }
+
+            $errors = array_merge($errors, validateUploadCapabilitiesConfig($cfg));
+
             // Optional global allowlist for push FTP/SFTP inbox debris cleanup (union with per-push-camera allowed_extensions)
             if (isset($cfg['push_upload_allowed_extensions'])) {
                 if (!is_array($cfg['push_upload_allowed_extensions'])) {
@@ -5289,3 +5266,5 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         'warnings' => $warnings
     ];
 }
+
+require_once __DIR__ . '/upload-endpoints.php';

@@ -18,7 +18,7 @@ cd /var/www/html
 export CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 
 INTERVAL="$(
-    runuser -u www-data -- /usr/local/bin/php -r 'require_once "/var/www/html/lib/config.php"; echo (int) getDynamicDnsRefreshSeconds();' 2>/dev/null || echo 0
+    runuser -u www-data -- /usr/local/bin/php -r 'require_once "/var/www/html/lib/config.php"; echo (int) getEffectiveUploadEndpointRefreshSeconds();' 2>/dev/null || echo 0
 )"
 INTERVAL="$(printf '%s' "${INTERVAL}" | tr -d '[:space:]')"
 

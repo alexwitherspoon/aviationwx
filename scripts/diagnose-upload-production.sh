@@ -15,8 +15,10 @@ echo "   $COMPOSE exec web pgrep -a proftpd"
 echo "   $COMPOSE exec web proftpd -t -c /etc/proftpd/proftpd.conf"
 echo ""
 
-echo "2. Runtime ports and passive address (conf.d/runtime.conf):"
-echo "   $COMPOSE exec web grep -E '^(Port|PassivePorts|MasqueradeAddress|MaxInstances)' /etc/proftpd/conf.d/runtime.conf"
+echo "2. Runtime ports (conf.d/runtime.conf) and endpoint cache:"
+echo "   $COMPOSE exec web grep -E '^(Port|PassivePorts|MaxInstances)' /etc/proftpd/conf.d/runtime.conf"
+echo "   $COMPOSE exec web cat /var/lib/aviationwx/upload-endpoints.json"
+echo "   $COMPOSE exec web cat /etc/proftpd/conf.d/masquerade.conf"
 echo ""
 
 echo "3. TLS configuration (conf.d/tls.conf):"

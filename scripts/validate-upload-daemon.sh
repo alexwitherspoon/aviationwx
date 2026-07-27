@@ -58,6 +58,7 @@ read_probe_settings() {
             "credential_source" => $credentialSource,
             "tls_enabled" => is_readable("/etc/proftpd/conf.d/tls.conf")
                 && str_contains((string) file_get_contents("/etc/proftpd/conf.d/tls.conf"), "TLSEngine                      on"),
+            "cached_ipv4" => (readUploadEndpointsCache()["ipv4"] ?? null),
         ], JSON_UNESCAPED_SLASHES);
     ' 2>/dev/null
 }
@@ -84,6 +85,7 @@ user="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdi
 pass="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["ftps_pass"])')"
 credential_source="$(echo "$settings" | python3 -c 'import json,sys; print(json.load(sys.stdin)["credential_source"])')"
 tls_enabled="$(echo "$settings" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin)["tls_enabled"] else "false")')"
+cached_ipv4="$(echo "$settings" | python3 -c 'import json,sys; v=json.load(sys.stdin).get("cached_ipv4"); print(v if v else "")')"
 
 if [ -z "$user" ] || [ -z "$pass" ]; then
     fail "no FTP credentials available (run sync-push-config.php first)"
@@ -104,6 +106,9 @@ for mode in "${modes[@]}"; do
         fail "probe failed for mode ${mode}"
     }
     pasv_ip="$(echo "$result" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("pasv_ip") or j.get("response") or "")')"
+    if [ -n "$cached_ipv4" ] && [ "$mode" = "pasv-plain" ] && [ "$pasv_ip" != "$cached_ipv4" ]; then
+        fail "PASV ip ${pasv_ip} does not match endpoint cache ${cached_ipv4}"
+    fi
     echo "  ${mode}: ok pasv_ip=${pasv_ip}"
 done
 
