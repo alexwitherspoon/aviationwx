@@ -6,7 +6,7 @@
 # Throttle: STATE is written only after update-pasv-address.sh exits 0 or 2; exit 1 retries on the next minute.
 # STATE and wrapper log: /var/lib/aviationwx (mode 700, root-owned in the image) so unprivileged users cannot pre-create those paths as symlinks.
 #
-# Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Root edits vsftpd.conf and restarts vsftpd.
+# Requires CONFIG_PATH (see /etc/cron.d/aviationwx-cron). Root edits runtime.conf and reloads ProFTPD.
 # Interval: PHP CLI as user www-data via runuser(8), reading CONFIG_PATH.
 
 set -euo pipefail
@@ -60,7 +60,7 @@ set -e
     echo
 } >>"${LOG}" 2>&1 || true
 
-# Exit 0: ok. Exit 2: vsftpd not running (skip). Exit 1: error; leave STATE unchanged for sooner retry.
+# Exit 0: ok. Exit 2: ProFTPD not running (skip). Exit 1: error; leave STATE unchanged for sooner retry.
 if [ "${RC}" -eq 0 ] || [ "${RC}" -eq 2 ]; then
     echo "${NOW}" >"${STATE}"
 fi

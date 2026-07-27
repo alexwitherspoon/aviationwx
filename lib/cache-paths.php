@@ -424,7 +424,7 @@ function getWebcamStagingPath(string $airportId, int $camIndex, string $format =
 // PUSH WEBCAM UPLOAD PATHS (FTP and SFTP - separate directories)
 // =============================================================================
 
-// FTP uploads - simple directory structure (no chroot needed for vsftpd)
+// FTP uploads - simple directory structure (no chroot needed for ProFTPD)
 if (!defined('CACHE_UPLOADS_DIR')) {
     define('CACHE_UPLOADS_DIR', CACHE_BASE_DIR . '/ftp');
 }
@@ -440,7 +440,7 @@ if (!defined('CACHE_SFTP_DIR')) {
  * Get FTP upload directory for a push webcam
  * 
  * This is where FTP/FTPS cameras upload files.
- * vsftpd local_root points here, users upload to /
+ * ProFTPD DefaultRoot (~) homedir points here; cameras upload to /
  * 
  * Directory owned by ftp:www-data with setgid (2775).
  * 
@@ -453,7 +453,7 @@ function getWebcamFtpUploadDir(string $airportId, string $username): string {
 }
 
 /**
- * FTP local_root for upload health probe accounts (isolated from camera inboxes).
+ * FTP homedir for upload health probe accounts (isolated from camera inboxes).
  *
  * @param string $username Probe FTPS username from config.upload_health_probe.ftps
  * @return string Full path to probe-only FTP directory
@@ -469,7 +469,7 @@ function getUploadHealthProbeFtpDir(string $username): string {
 /**
  * Whether a top-level FTP upload cache directory basename is reserved for upload health probes.
  *
- * cleanup-cache.php must preserve this tree even when empty (vsftpd local_root).
+ * cleanup-cache.php must preserve this tree even when empty (ProFTPD homedir).
  */
 function isUploadHealthProbeFtpCacheNamespace(string $basename): bool {
     if (!defined('UPLOAD_HEALTH_PROBE_FTP_NAMESPACE')) {

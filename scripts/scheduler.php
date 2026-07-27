@@ -923,7 +923,7 @@ while ($running) {
             $lastStuckWorkerCleanup = $now;
         }
 
-        // PASV / DDNS: root cron runs /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh (vsftpd needs root).
+        // PASV / DDNS: root cron runs /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh (ProFTPD needs root).
 
         // Update health status (only scheduler errors affect this)
         $healthStatus = 'healthy';

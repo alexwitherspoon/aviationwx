@@ -86,7 +86,7 @@ done
 echo "✓ Config files secured (640 root:www-data)"
 
 # TCP port map: optional config.network_ports (defaults match deploy-configure-firewall.sh).
-# Applies to vsftpd, sshd (SFTP), and fail2ban inside this container.
+# Applies to ProFTPD, sshd (SFTP), and fail2ban inside this container.
 HOST_HTTP_PORT=80
 HOST_HTTPS_PORT=443
 FTP_CONTROL_PORT=2121
@@ -160,9 +160,9 @@ load_network_ports_from_config() {
 
     echo "✓ Network ports from config: http=${HOST_HTTP_PORT} https=${HOST_HTTPS_PORT} ftp_control=${FTP_CONTROL_PORT} ftps_explicit_tls=${FTPS_EXPLICIT_TLS_PORT} sftp=${SFTP_PORT} passive=${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX} ssh=${SSH_PORT}"
     if [ "$FTP_CONTROL_PORT" -eq "$FTPS_EXPLICIT_TLS_PORT" ]; then
-        echo "  (ftp_control equals ftps_explicit_tls: one vsftpd control listener; fail2ban uses that port set)"
+        echo "  (ftp_control equals ftps_explicit_tls: one ProFTPD control listener; fail2ban uses that port set)"
     else
-        echo "  ⚠️  ftps_explicit_tls differs from ftp_control: vsftpd listens on ftp_control only."
+        echo "  ⚠️  ftps_explicit_tls differs from ftp_control: ProFTPD listens on ftp_control only."
         echo "     UFW/fail2ban still track both values from network_ports; use NAT (e.g. ftps_alt) if clients need another inbound control port."
     fi
 }
@@ -387,346 +387,20 @@ fi
 
 # FTP/SFTP parent dirs: libexec set-cache-permissions (called with cache init above)
 
-# Sync vsftpd listen_port and passive range with network_ports (ftp_control, ftp_passive_*)
-VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
-if [ -f "$VSFTPD_CONF" ]; then
-    if grep -q "^listen_port=" "$VSFTPD_CONF"; then
-        sed -i "s/^listen_port=.*/listen_port=${FTP_CONTROL_PORT}/" "$VSFTPD_CONF"
-    else
-        echo "listen_port=${FTP_CONTROL_PORT}" >> "$VSFTPD_CONF"
-    fi
-    if grep -q "^pasv_min_port=" "$VSFTPD_CONF"; then
-        sed -i "s/^pasv_min_port=.*/pasv_min_port=${FTP_PASSIVE_MIN}/" "$VSFTPD_CONF"
-    else
-        echo "pasv_min_port=${FTP_PASSIVE_MIN}" >> "$VSFTPD_CONF"
-    fi
-    if grep -q "^pasv_max_port=" "$VSFTPD_CONF"; then
-        sed -i "s/^pasv_max_port=.*/pasv_max_port=${FTP_PASSIVE_MAX}/" "$VSFTPD_CONF"
-    else
-        echo "pasv_max_port=${FTP_PASSIVE_MAX}" >> "$VSFTPD_CONF"
-    fi
-    echo "✓ vsftpd listen_port=${FTP_CONTROL_PORT} pasv ${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX}"
+# Configure and start ProFTPD (dual-stack; MasqueradeAddress + TLS in conf.d)
+PROFTPD_PID=""
+if [ -f /usr/local/bin/configure-proftpd.sh ]; then
+    # shellcheck source=/dev/null
+    source /usr/local/bin/configure-proftpd.sh
+    CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
+elif [ -f /var/www/html/scripts/configure-proftpd.sh ]; then
+    # shellcheck source=/dev/null
+    source /var/www/html/scripts/configure-proftpd.sh
+    CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
 else
-    echo "⚠️  Warning: vsftpd config not found at $VSFTPD_CONF"
+    echo "⚠️  Warning: configure-proftpd.sh not found - FTP service will not be available"
 fi
 
-# Configure vsftpd pasv_address
-# Priority: 1) config.public_ip (if set, for DNS-unavailable-at-startup), 2) config.upload_hostname, 3) default
-# Hostname + pasv_addr_resolve=YES recommended; avoids 0,0,0,0 bug with dual-stack (listen_ipv6=YES)
-echo "Configuring pasv_address..."
-VSFTPD_PID=""
-PASV_ADDRESS=""
-PASV_ADDR_RESOLVE="NO"
-
-# Step 1: Optional explicit IP (use only when DNS unavailable at startup)
-if [ -f "$CONFIG_FILE" ]; then
-    CONFIG_PUBLIC_IP=$(php -r "
-        \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
-        if (\$config && isset(\$config['config']['public_ip'])) {
-            \$ip = \$config['config']['public_ip'];
-            if (filter_var(\$ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-                echo \$ip;
-            }
-        }
-    " 2>/dev/null || true)
-    
-    if [ -n "$CONFIG_PUBLIC_IP" ]; then
-        PASV_ADDRESS="$CONFIG_PUBLIC_IP"
-        PASV_ADDR_RESOLVE="NO"
-        echo "✓ Using explicit public_ip from config: $PASV_ADDRESS"
-    fi
-fi
-
-# Step 2: If no explicit IP, use upload_hostname from config (hostname + pasv_addr_resolve=YES)
-if [ -z "$PASV_ADDRESS" ] && [ -f "$CONFIG_FILE" ]; then
-    CONFIG_UPLOAD_HOSTNAME=$(php -r "
-        \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
-        if (\$config && isset(\$config['config']['upload_hostname']) && !empty(\$config['config']['upload_hostname'])) {
-            echo \$config['config']['upload_hostname'];
-        } elseif (\$config && isset(\$config['config']['base_domain']) && !empty(\$config['config']['base_domain'])) {
-            echo 'upload.' . \$config['config']['base_domain'];
-        }
-    " 2>/dev/null || true)
-    
-    if [ -n "$CONFIG_UPLOAD_HOSTNAME" ]; then
-        PASV_ADDRESS="$CONFIG_UPLOAD_HOSTNAME"
-        PASV_ADDR_RESOLVE="YES"
-        echo "✓ Using upload_hostname for pasv_address (pasv_addr_resolve=YES): $PASV_ADDRESS"
-    fi
-fi
-
-# Step 3: Fallback to default hostname (upload.aviationwx.org)
-if [ -z "$PASV_ADDRESS" ]; then
-    PASV_ADDRESS="upload.aviationwx.org"
-    PASV_ADDR_RESOLVE="YES"
-    echo "✓ Using default pasv_address (pasv_addr_resolve=YES): $PASV_ADDRESS"
-fi
-
-# Update vsftpd.conf with pasv_address and pasv_addr_resolve
-if [ -f "$VSFTPD_CONF" ]; then
-    if [ -n "$PASV_ADDRESS" ]; then
-        # Add or update pasv_address
-        if grep -q "^pasv_address=" "$VSFTPD_CONF"; then
-            sed -i "s|^pasv_address=.*|pasv_address=$PASV_ADDRESS|" "$VSFTPD_CONF"
-        else
-            echo "pasv_address=$PASV_ADDRESS" >> "$VSFTPD_CONF"
-        fi
-        # Add or update pasv_addr_resolve
-        if grep -q "^pasv_addr_resolve=" "$VSFTPD_CONF"; then
-            sed -i "s|^pasv_addr_resolve=.*|pasv_addr_resolve=$PASV_ADDR_RESOLVE|" "$VSFTPD_CONF"
-        else
-            echo "pasv_addr_resolve=$PASV_ADDR_RESOLVE" >> "$VSFTPD_CONF"
-        fi
-        echo "✓ Updated vsftpd pasv_address=$PASV_ADDRESS pasv_addr_resolve=$PASV_ADDR_RESOLVE"
-    fi
-else
-    echo "Error: vsftpd config not found at $VSFTPD_CONF"
-    exit 1
-fi
-
-# Enable SSL in vsftpd configs if certificates are available and valid
-# Start without SSL if certs don't exist or are invalid to allow vsftpd to start
-# on first deployment; SSL can be enabled later via enable-vsftpd-ssl.sh
-# Uses wildcard certificate (*.aviationwx.org) which covers upload.aviationwx.org
-CERT_DIR="/etc/letsencrypt/live/aviationwx.org"
-CERT_FILE="${CERT_DIR}/fullchain.pem"
-KEY_FILE="${CERT_DIR}/privkey.pem"
-SSL_ENABLED=false
-
-if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
-    # Validate certificates before enabling SSL to prevent vsftpd from crashing
-    if [ ! -r "$CERT_FILE" ] || [ ! -r "$KEY_FILE" ]; then
-        echo "⚠️  Warning: SSL certificate files exist but are not readable"
-        echo "   vsftpd will start without SSL - certificates can be enabled later"
-        echo "   Certificate file: $CERT_FILE"
-        echo "   Key file: $KEY_FILE"
-        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
-    elif ! openssl x509 -in "$CERT_FILE" -noout -text >/dev/null 2>&1; then
-        echo "⚠️  Warning: SSL certificate file appears to be invalid or corrupted"
-        echo "   vsftpd will start without SSL - certificates can be enabled later"
-        echo "   Certificate file: $CERT_FILE"
-        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
-    else
-        # Validate private key - try multiple methods for compatibility
-        # Try openssl rsa first (most compatible), then pkey (newer OpenSSL)
-        # Note: openssl binary is already verified to exist (used in x509 check above)
-        KEY_VALID=false
-        if openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
-            KEY_VALID=true
-        elif openssl rsa -in "$KEY_FILE" -noout >/dev/null 2>&1; then
-            KEY_VALID=true
-        elif openssl pkey -in "$KEY_FILE" -noout >/dev/null 2>&1; then
-            KEY_VALID=true
-        fi
-        
-        if [ "$KEY_VALID" = false ]; then
-            echo "⚠️  Warning: SSL private key file appears to be invalid or corrupted"
-            echo "   vsftpd will start without SSL - certificates can be enabled later"
-            echo "   Key file: $KEY_FILE"
-            echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
-        else
-            SSL_ENABLED=true
-            enable_ssl_in_config() {
-            local config_file="$1"
-            if [ ! -f "$config_file" ]; then
-                return 0
-            fi
-            
-            # Enable SSL
-            sed -i 's/^ssl_enable=NO/ssl_enable=YES/' "$config_file"
-            sed -i 's/^# ssl_enable=YES/ssl_enable=YES/' "$config_file"
-            
-            # Allow both FTP and FTPS (optional encryption)
-            # Ensure these are explicitly set to NO for compatibility with various clients
-            sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
-            sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
-            sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
-            sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
-            
-            # Ensure these settings exist (add if missing)
-            if ! grep -q "^force_local_data_ssl=" "$config_file" 2>/dev/null; then
-                echo "force_local_data_ssl=NO" >> "$config_file"
-            fi
-            if ! grep -q "^force_local_logins_ssl=" "$config_file" 2>/dev/null; then
-                echo "force_local_logins_ssl=NO" >> "$config_file"
-            fi
-            
-            # Enable TLS versions for camera compatibility
-            # Note: Only ssl_tlsv1 is widely supported; ssl_tlsv1_1 and ssl_tlsv1_2 are not supported by all vsftpd versions
-            sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$config_file"
-            sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$config_file"
-            # Remove unsupported TLS version settings if present
-            sed -i '/^ssl_tlsv1_1=/d' "$config_file" 2>/dev/null || true
-            sed -i '/^ssl_tlsv1_2=/d' "$config_file" 2>/dev/null || true
-            
-            # Disable insecure SSL versions (security requirement)
-            sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$config_file"
-            sed -i 's/^ssl_sslv2=YES/ssl_sslv2=NO/' "$config_file"
-            sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$config_file"
-            sed -i 's/^ssl_sslv3=YES/ssl_sslv3=NO/' "$config_file"
-            
-            # Ensure these are explicitly set (add if missing)
-            if ! grep -q "^ssl_sslv2=" "$config_file" 2>/dev/null; then
-                echo "ssl_sslv2=NO" >> "$config_file"
-            fi
-            if ! grep -q "^ssl_sslv3=" "$config_file" 2>/dev/null; then
-                echo "ssl_sslv3=NO" >> "$config_file"
-            fi
-            
-            # SSL/TLS settings - require_ssl_reuse=NO for broad client compatibility
-            sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$config_file"
-            sed -i 's/^require_ssl_reuse=YES/require_ssl_reuse=NO/' "$config_file"
-            if ! grep -q "^require_ssl_reuse=" "$config_file" 2>/dev/null; then
-                echo "require_ssl_reuse=NO" >> "$config_file"
-            fi
-            
-            sed -i 's/^# ssl_ciphers=HIGH/ssl_ciphers=HIGH/' "$config_file"
-            sed -i "s|^# rsa_cert_file=.*|rsa_cert_file=$CERT_DIR/fullchain.pem|" "$config_file"
-            sed -i "s|^# rsa_private_key_file=.*|rsa_private_key_file=$CERT_DIR/privkey.pem|" "$config_file"
-            
-            # Remove commented SSL lines
-            sed -i '/^# ssl_enable=/d' "$config_file"
-            sed -i '/^# force_local_data_ssl=/d' "$config_file"
-            sed -i '/^# force_local_logins_ssl=/d' "$config_file"
-            sed -i '/^# ssl_tlsv/d' "$config_file"
-            sed -i '/^# ssl_sslv/d' "$config_file"
-            sed -i '/^# require_ssl_reuse=/d' "$config_file"
-            sed -i '/^# ssl_ciphers=/d' "$config_file"
-            sed -i '/^# rsa_cert_file=/d' "$config_file"
-            sed -i '/^# rsa_private_key_file=/d' "$config_file"
-            
-            # Ensure ssl_tlsv1 is set (only TLS version widely supported across vsftpd versions)
-            if ! grep -q "^ssl_tlsv1=" "$config_file" 2>/dev/null; then
-                echo "ssl_tlsv1=YES" >> "$config_file"
-            fi
-        }
-        
-            echo "SSL certificates found and validated, enabling SSL in vsftpd config..."
-            enable_ssl_in_config "/etc/vsftpd/vsftpd.conf"
-            echo "✓ SSL enabled in vsftpd config"
-        fi
-    fi
-else
-    echo "SSL certificates not found - vsftpd will run without SSL/TLS"
-    echo "   Expected certificate: $CERT_FILE"
-    echo "   Expected key: $KEY_FILE"
-    echo "   vsftpd will start without SSL - SSL can be enabled later when certificates are available"
-    echo "   Run enable-vsftpd-ssl.sh or restart container after obtaining certificates"
-fi
-
-# Disable SSL in config if certificates are invalid/missing to prevent vsftpd crashes
-if [ "$SSL_ENABLED" = false ]; then
-    if [ -f "/etc/vsftpd/vsftpd.conf" ]; then
-        sed -i 's/^ssl_enable=YES/ssl_enable=NO/' "/etc/vsftpd/vsftpd.conf" 2>/dev/null || true
-        sed -i 's|^rsa_cert_file=.*|# rsa_cert_file=|' "/etc/vsftpd/vsftpd.conf" 2>/dev/null || true
-        sed -i 's|^rsa_private_key_file=.*|# rsa_private_key_file=|' "/etc/vsftpd/vsftpd.conf" 2>/dev/null || true
-    fi
-fi
-
-# Start vsftpd (dual-stack listener; PASV address configured above)
-echo "Starting vsftpd..."
-
-# Start vsftpd instance and verify it's healthy
-# Uses process check + port listening check instead of config validation
-# (config validation with vsftpd -olisten=NO hangs indefinitely)
-start_vsftpd_instance() {
-    local config_file="$1"
-    local instance_name="$2"
-    local pid_var="$3"
-    local listen_port="${4:-2121}"  # Default to 2121, can be overridden
-    
-    # Validate port number (1-65535)
-    if ! [[ "$listen_port" =~ ^[0-9]+$ ]] || [ "$listen_port" -lt 1 ] || [ "$listen_port" -gt 65535 ]; then
-        echo "⚠️  Warning: Invalid port number: $listen_port, using default 2121"
-        listen_port=2121
-    fi
-    
-    # Basic config file validation (exists and readable)
-    if [ ! -f "$config_file" ]; then
-        echo "⚠️  Warning: Config file not found: $config_file"
-        return 1
-    fi
-    
-    if [ ! -r "$config_file" ]; then
-        echo "⚠️  Warning: Config file not readable: $config_file"
-        return 1
-    fi
-    
-    echo "Starting $instance_name instance..."
-    vsftpd "$config_file" &
-    local pid=$!
-    eval "$pid_var=$pid"
-    
-    # Wait for vsftpd to start and bind to port
-    # Poll up to 3 seconds (6 iterations of 0.5s)
-    local max_iterations=6
-    local iteration=0
-    local process_ok=false
-    local port_ok=false
-    
-    # Determine which port check command to use (ss preferred, netstat fallback)
-    local port_check_cmd=""
-    if command -v ss >/dev/null 2>&1; then
-        port_check_cmd="ss -tuln"
-    elif command -v netstat >/dev/null 2>&1; then
-        port_check_cmd="netstat -tuln"
-    else
-        echo "⚠️  Warning: Neither ss nor netstat available, skipping port check"
-        port_ok=true  # Assume OK if we can't check
-    fi
-    
-    while [ $iteration -lt $max_iterations ]; do
-        # Check if process is still running
-        if kill -0 $pid 2>/dev/null; then
-            process_ok=true
-            
-            # Check if port is listening (more reliable than just process check)
-            # Use flexible regex to match port at end of line or followed by space
-            if [ -n "$port_check_cmd" ]; then
-                if $port_check_cmd 2>/dev/null | grep -qE ":$listen_port[[:space:]]|:$listen_port\$"; then
-                    port_ok=true
-                    break
-                fi
-            fi
-        else
-            # Process died - check why
-            echo "⚠️  Warning: $instance_name process exited during startup"
-            echo "   This may indicate a configuration error or port conflict"
-            eval "$pid_var=\"\""
-            return 1
-        fi
-        
-        sleep 0.5
-        iteration=$((iteration + 1))
-    done
-    
-    # Final verification
-    if [ "$process_ok" = true ] && [ "$port_ok" = true ]; then
-        echo "✓ $instance_name started and listening on port $listen_port (PID: $pid)"
-        return 0
-    elif [ "$process_ok" = true ]; then
-        echo "⚠️  Warning: $instance_name process is running but port $listen_port is not listening"
-        echo "   vsftpd may still be initializing, or there may be a port binding issue"
-        echo "   This is non-fatal - container will continue to start"
-        # Keep PID - process is running, may bind later
-        return 0
-    else
-        echo "⚠️  Warning: $instance_name failed to start"
-        echo "   This is non-fatal - container will continue to start"
-        eval "$pid_var=\"\""
-        return 1
-    fi
-}
-
-# Start single dual-stack vsftpd instance (handles both IPv4 and IPv6)
-if [ -f "/etc/vsftpd/vsftpd.conf" ]; then
-    start_vsftpd_instance "/etc/vsftpd/vsftpd.conf" "vsftpd (dual-stack)" "VSFTPD_PID" "${FTP_CONTROL_PORT}" || true
-else
-    echo "⚠️  Warning: vsftpd config not found - FTP service will not be available"
-    echo "   Web service will continue to function normally"
-fi
-
-# Give vsftpd a moment to start
 sleep 1
 
 # Configure and start rsyslog for sshd dedicated logging
@@ -779,11 +453,11 @@ service ssh start || {
     exit 1
 }
 
-# Verify vsftpd is running (non-fatal - web service is more critical)
-if [ -n "$VSFTPD_PID" ]; then
-    if ! kill -0 $VSFTPD_PID 2>/dev/null; then
-        echo "⚠️  Warning: vsftpd is not running (non-fatal)"
-        VSFTPD_PID=""
+# Verify ProFTPD is running (non-fatal - web service is more critical)
+if [ -n "${PROFTPD_PID:-}" ]; then
+    if ! kill -0 "$PROFTPD_PID" 2>/dev/null; then
+        echo "⚠️  Warning: ProFTPD is not running (non-fatal)"
+        PROFTPD_PID=""
     fi
 fi
 
@@ -839,15 +513,15 @@ destemail = root@localhost
 sendername = Fail2Ban
 action = %(action_)s
 
-[vsftpd]
+[proftpd]
 enabled = true
 port = ${FTP_FAIL2BAN_PORTS}
-filter = vsftpd
-logpath = /var/log/vsftpd.log
+filter = proftpd
+logpath = /var/log/proftpd.log
 maxretry = 10
 findtime = 3600
 bantime = 3600
-action = iptables-multiport[name=VSFTPD, port="${FTP_FAIL2BAN_PORTS}", protocol=tcp]
+action = iptables-multiport[name=PROFTPD, port="${FTP_FAIL2BAN_PORTS}", protocol=tcp]
 
 [sshd-sftp]
 enabled = true
@@ -871,13 +545,13 @@ failregex = ^.*Failed password for .* from <HOST> port [0-9]+.*$
 
 ignoreregex =
 EOF
-echo "✓ fail2ban: vsftpd ports=${FTP_FAIL2BAN_PORTS} sshd-sftp port=${SFTP_PORT}"
+echo "✓ fail2ban: proftpd ports=${FTP_FAIL2BAN_PORTS} sshd-sftp port=${SFTP_PORT}"
 
 # Start fail2ban
 echo "Starting fail2ban..."
 # Ensure log files exist
-touch /var/log/vsftpd.log /var/log/auth.log
-chmod 644 /var/log/vsftpd.log /var/log/auth.log
+touch /var/log/proftpd.log /var/log/auth.log
+chmod 644 /var/log/proftpd.log /var/log/auth.log
 
 # Start fail2ban server in background
 # Use systemd service if available, otherwise start directly

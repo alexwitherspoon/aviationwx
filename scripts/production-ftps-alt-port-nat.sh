@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Optional production helper: netfilter NAT REDIRECT from an alternate inbound TCP port
-# to vsftpd's control port (VSFTPD_LISTEN_PORT, default 2121). Preserves the real
+# to ProFTPD's control port (FTP_CONTROL_PORT, default 2121). Preserves the real
 # client source IP (unlike a userspace TCP proxy to 127.0.0.1).
 #
 # Persistence: rules are written into UFW's before.rules / before6.rules so they
@@ -19,8 +19,8 @@
 
 set -euo pipefail
 
-# REDIRECT target is vsftpd's listen port; production sets VSFTPD_LISTEN_PORT from config.network_ports.ftp_control.
-VSFTPD_LISTEN_PORT="${VSFTPD_LISTEN_PORT:-2121}"
+# REDIRECT target is ProFTPD's listen port; production sets FTP_CONTROL_PORT from config.network_ports.ftp_control.
+FTP_CONTROL_PORT="${FTP_CONTROL_PORT:-2121}"
 
 MARKER_BEGIN='# BEGIN AVIATIONWX_FTPS_ALT_NAT'
 MARKER_END='# END AVIATIONWX_FTPS_ALT_NAT'
@@ -29,7 +29,7 @@ BEFORE6_RULES='/etc/ufw/before6.rules'
 
 usage() {
     echo "Usage: $0 install <alt_port> | ensure [<alt_port>] | remove | status" >&2
-    echo "  install <port>  Insert NAT REDIRECT (IPv4+IPv6) alt_port -> ${VSFTPD_LISTEN_PORT} (VSFTPD_LISTEN_PORT) in UFW before*.rules" >&2
+    echo "  install <port>  Insert NAT REDIRECT (IPv4+IPv6) alt_port -> ${FTP_CONTROL_PORT} (FTP_CONTROL_PORT) in UFW before*.rules" >&2
     echo "  ensure [port]   Idempotent: set redirect to port, or clear if port empty (deployments)" >&2
     echo "  remove          Delete the marked block from before*.rules and reload ufw" >&2
     echo "  status          Show whether the marker is present and list nat PREROUTING redirects" >&2
@@ -42,8 +42,8 @@ validate_port() {
         echo "❌ Invalid port: $p" >&2
         exit 1
     fi
-    if [ "$p" -eq "$VSFTPD_LISTEN_PORT" ]; then
-        echo "❌ Alt port must differ from vsftpd listen port (${VSFTPD_LISTEN_PORT})." >&2
+    if [ "$p" -eq "$FTP_CONTROL_PORT" ]; then
+        echo "❌ Alt port must differ from FTP control port (${FTP_CONTROL_PORT})." >&2
         exit 1
     fi
 }
@@ -125,8 +125,8 @@ assert_prereq_nat_tables() {
 insert_redirect_block() {
     local file="$1"
     local alt_port="$2"
-    local begin="${MARKER_BEGIN} (${alt_port}->${VSFTPD_LISTEN_PORT})"
-    local rule="-A PREROUTING -p tcp --dport ${alt_port} -j REDIRECT --to-ports ${VSFTPD_LISTEN_PORT}"
+    local begin="${MARKER_BEGIN} (${alt_port}->${FTP_CONTROL_PORT})"
+    local rule="-A PREROUTING -p tcp --dport ${alt_port} -j REDIRECT --to-ports ${FTP_CONTROL_PORT}"
 
     if ! file_has_nat_table "$file"; then
         echo "❌ No *nat table in $file — add NAT REDIRECT manually (see docs/OPERATIONS.md)." >&2
@@ -206,26 +206,26 @@ cmd_ensure() {
     fi
 
     local need_update=true
-    if [ -n "$cur_alt4" ] && [ "$cur_alt4" = "$want" ] && [ "$cur_tgt4" = "$VSFTPD_LISTEN_PORT" ]; then
+    if [ -n "$cur_alt4" ] && [ "$cur_alt4" = "$want" ] && [ "$cur_tgt4" = "$FTP_CONTROL_PORT" ]; then
         if [ ! -f "$BEFORE6_RULES" ]; then
             need_update=false
-        elif [ -n "$cur_alt6" ] && [ "$cur_alt6" = "$want" ] && [ "$cur_tgt6" = "$VSFTPD_LISTEN_PORT" ]; then
+        elif [ -n "$cur_alt6" ] && [ "$cur_alt6" = "$want" ] && [ "$cur_tgt6" = "$FTP_CONTROL_PORT" ]; then
             need_update=false
         fi
     fi
     if [ "$need_update" = false ]; then
-        echo "✓ FTPS NAT redirect already set to ${want} -> ${VSFTPD_LISTEN_PORT}"
+        echo "✓ FTPS NAT redirect already set to ${want} -> ${FTP_CONTROL_PORT}"
         return 0
     fi
 
     if [ -n "$cur_v4" ] || [ -n "$cur_v6" ]; then
-        echo "Applying FTPS NAT redirect ${want} -> ${VSFTPD_LISTEN_PORT}..."
+        echo "Applying FTPS NAT redirect ${want} -> ${FTP_CONTROL_PORT}..."
         remove_marked_block "$BEFORE_RULES"
         if [ -f "$BEFORE6_RULES" ]; then
             remove_marked_block "$BEFORE6_RULES"
         fi
     else
-        echo "Adding FTPS NAT redirect ${want} -> ${VSFTPD_LISTEN_PORT}..."
+        echo "Adding FTPS NAT redirect ${want} -> ${FTP_CONTROL_PORT}..."
     fi
 
     cp -a "$BEFORE_RULES" "${BEFORE_RULES}.bak.$(date +%Y%m%d%H%M%S)"
@@ -239,7 +239,7 @@ cmd_ensure() {
     fi
 
     ufw reload
-    echo "✓ FTPS NAT redirect ensured: ${want} -> ${VSFTPD_LISTEN_PORT}"
+    echo "✓ FTPS NAT redirect ensured: ${want} -> ${FTP_CONTROL_PORT}"
 }
 
 remove_marked_block() {
@@ -297,7 +297,7 @@ cmd_install() {
     echo "Reloading ufw..."
     ufw reload
     echo ""
-    echo "Done. Cameras can use FTPS/FTP control port ${alt_port} (same host and credentials as port ${VSFTPD_LISTEN_PORT})."
+    echo "Done. Cameras can use FTPS/FTP control port ${alt_port} (same host and credentials as port ${FTP_CONTROL_PORT})."
     echo "Passive data ports follow config.network_ports.ftp_passive_min/max on the host (defaults 50000–51000)."
     echo "CD: set config.network_ports.ftps_alt; deploy-configure-firewall.sh allows the port and runs ensure each deploy."
 }

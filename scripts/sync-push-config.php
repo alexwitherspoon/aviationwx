@@ -7,13 +7,14 @@
  * Runs on container startup (docker-entrypoint.sh) and during deployment (GitHub Actions).
  * Always repairs SFTP chroot ownership first (sshd requires root:root on /var/sftp/{user}/).
  * Reprovisions upload health probe accounts on every run (container-local /etc state).
- * Full user/directory sync is skipped when config is unchanged unless vsftpd DB is missing.
+ * Full user/directory sync is skipped when config is unchanged unless ProFTPD auth file is missing.
  */
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/push-webcam-validator.php';
+require_once __DIR__ . '/../lib/proftpd-auth.php';
 
 /**
  * Check if script is running as root (required for system operations)
@@ -314,121 +315,6 @@ function backupConfigFile($configFile) {
 }
 
 /**
- * Check if vsftpd database is corrupted or invalid
- * 
- * Performs multiple checks to detect vsftpd Berkeley DB corruption:
- * - Missing database with non-empty users file
- * - Zero-size database file
- * - Invalid magic bytes
- * - db_verify and db_dump validation
- * - Size heuristics
- * 
- * @return bool True if database appears corrupted, false otherwise
- */
-function isVsftpdDatabaseCorrupted() {
-    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
-    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-    
-    // Check if users file exists and has content
-    $usersFileExists = file_exists($vsftpdUserFile);
-    $usersFileHasContent = false;
-    if ($usersFileExists) {
-        $content = @file_get_contents($vsftpdUserFile);
-        $usersFileHasContent = ($content && trim($content) !== '');
-    }
-    
-    // If no users are configured, there's no corruption - just a clean/initial state
-    // Delete any stale database from a previous run and return false
-    if (!$usersFileHasContent) {
-        if (file_exists($vsftpdDbFile)) {
-            aviationwx_log('debug', 'sync-push-config: removing stale vsftpd database (no users configured)', [
-                'db_file' => $vsftpdDbFile
-            ], 'app');
-            @unlink($vsftpdDbFile);
-        }
-        return false;
-    }
-    
-    // Missing database with non-empty users file indicates corruption
-    if (!file_exists($vsftpdDbFile)) {
-        return true;
-    }
-    
-    if (file_exists($vsftpdDbFile)) {
-        if (filesize($vsftpdDbFile) === 0) {
-            return true;
-        }
-        
-        // Check Berkeley DB magic number (first 4 bytes should be non-zero)
-        $header = @file_get_contents($vsftpdDbFile, false, null, 0, 12);
-        if ($header === false || strlen($header) < 12) {
-            return true;
-        }
-        
-        $magicBytes = unpack('C*', substr($header, 0, 4));
-        // All zeros in first 4 bytes indicates corruption
-        if (isset($magicBytes[1]) && $magicBytes[1] === 0 && 
-            isset($magicBytes[2]) && $magicBytes[2] === 0 &&
-            isset($magicBytes[3]) && $magicBytes[3] === 0 &&
-            isset($magicBytes[4]) && $magicBytes[4] === 0) {
-            return true;
-        }
-        
-        // Verify using db_verify (most reliable check)
-        if (function_exists('exec')) {
-            $output = [];
-            $returnCode = 0;
-            @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
-            if ($returnCode !== 0) {
-                aviationwx_log('warning', 'sync-push-config: db_verify failed, database corrupted', [
-                    'db_file' => $vsftpdDbFile,
-                    'output' => implode("\n", $output),
-                    'return_code' => $returnCode
-                ], 'app');
-                return true;
-            }
-        }
-        
-        // Secondary check: test readability with db_dump
-        if (function_exists('exec')) {
-            $output = [];
-            $returnCode = 0;
-            @exec("db_dump -p " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
-            if ($returnCode !== 0) {
-                $errorOutput = implode("\n", $output);
-                if (preg_match('/BDB\d+|unexpected file type|corrupt|invalid/i', $errorOutput)) {
-                    aviationwx_log('warning', 'sync-push-config: db_dump failed with corruption error', [
-                        'db_file' => $vsftpdDbFile,
-                        'output' => $errorOutput,
-                        'return_code' => $returnCode
-                    ], 'app');
-                    return true;
-                }
-            }
-        }
-        
-        // Heuristic: verify database size matches expected user count
-        // Berkeley DB hash files are typically at least 8KB for small datasets
-        if (file_exists($vsftpdUserFile)) {
-            $userContent = @file_get_contents($vsftpdUserFile);
-            if ($userContent && trim($userContent) !== '') {
-                $userLines = array_filter(explode("\n", $userContent), function($line) {
-                    return trim($line) !== '';
-                });
-                $expectedUsers = count($userLines) / 2;
-                
-                // Flag if database is suspiciously small (< 4KB) with users present
-                if ($expectedUsers > 0 && filesize($vsftpdDbFile) < 4096) {
-                    return true;
-                }
-            }
-        }
-    }
-    
-    return false;
-}
-
-/**
  * Validate config before applying
  *
  * Validates JSON syntax, basic structure, and runtime schema (including unique push usernames)
@@ -487,8 +373,7 @@ function ensureWebcamsBaseDirectory() {
  * Creates airport-scoped FTP upload directory:
  *   /ftp/{airport}/{username}/    ← FTP upload dir (ftp:www-data 2775)
  * 
- * FTP uses a simple flat structure - no chroot needed for vsftpd virtual users.
- * vsftpd local_root points here, users upload to /
+ * FTP uses a simple flat structure. ProFTPD DefaultRoot ~ uses each user's homedir.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
@@ -952,219 +837,51 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
 }
 
 /**
- * Parse vsftpd virtual_users.txt (alternating username/password lines).
+ * Build ProFTPD AuthUserFile account map from the on-disk passwd file.
  *
- * Shared passwords across different usernames are valid; duplicate usernames are not.
- *
- * @param string $path Path to virtual_users.txt
- * @return array{users: array<string, string>, errors: list<string>}
+ * @return array<string, array{password: string, home: string}>
  */
-function parseVsftpdVirtualUsersFile(string $path = '/etc/vsftpd/virtual_users.txt'): array {
-    $users = [];
-    $errors = [];
-
-    if (!file_exists($path)) {
-        return ['users' => [], 'errors' => []];
+function readProftpdAccountMap(): array
+{
+    $parsed = parseProftpdPasswdFile();
+    $accounts = [];
+    foreach ($parsed['users'] as $username => $info) {
+        $accounts[$username] = [
+            'password' => $info['password_hash'],
+            'home' => $info['home'],
+        ];
     }
 
-    $rawLines = @file($path, FILE_IGNORE_NEW_LINES);
-    if ($rawLines === false) {
-        return ['users' => [], 'errors' => ["Cannot read vsftpd users file: {$path}"]];
-    }
-
-    $lineCount = count($rawLines);
-    if ($lineCount % 2 !== 0) {
-        $errors[] = 'vsftpd virtual_users.txt has odd line count (incomplete username/password pair)';
-    }
-
-    for ($i = 0; $i + 1 < $lineCount; $i += 2) {
-        $username = trim($rawLines[$i]);
-        $password = trim($rawLines[$i + 1]);
-        $lineNum = $i + 1;
-
-        if ($username === '' || $password === '') {
-            if ($username === '' && $password === '') {
-                $errors[] = 'vsftpd virtual_users.txt has empty username/password pair at lines '
-                    . $lineNum . '-' . ($lineNum + 1);
-            } elseif ($username === '') {
-                $errors[] = 'vsftpd virtual_users.txt has empty username at line ' . $lineNum;
-            } else {
-                $errors[] = "vsftpd virtual_users.txt has empty password for '{$username}' at line "
-                    . ($lineNum + 1);
-            }
-            continue;
-        }
-
-        if (isset($users[$username])) {
-            $errors[] = "Duplicate vsftpd username '{$username}' at line {$lineNum}";
-            continue;
-        }
-
-        $users[$username] = $password;
-    }
-
-    return ['users' => $users, 'errors' => $errors];
+    return $accounts;
 }
 
 /**
- * Write vsftpd virtual_users.txt from a username => password map.
- *
- * @param array<string, string> $users Username to password map
- * @param string $path Path to virtual_users.txt
- * @return bool True when the file was written successfully
- */
-function writeVsftpdVirtualUsersFile(array $users, string $path = '/etc/vsftpd/virtual_users.txt'): bool {
-    $content = '';
-    foreach ($users as $user => $pass) {
-        $content .= $user . "\n" . $pass . "\n";
-    }
-
-    $dir = dirname($path);
-    $tmpPath = $dir . '/.' . basename($path) . '.tmp.' . getmypid();
-    if (@file_put_contents($tmpPath, $content, LOCK_EX) === false) {
-        @unlink($tmpPath);
-        return false;
-    }
-    @chmod($tmpPath, 0600);
-
-    if (!@rename($tmpPath, $path)) {
-        @unlink($tmpPath);
-        return false;
-    }
-
-    @chmod($path, 0600);
-
-    return true;
-}
-
-/**
- * Rebuild vsftpd Berkeley DB from virtual_users.txt.
- *
- * @param string $context Short label for logs (for example upsert, removal, rebuild)
- * @param string $failureLevel Log level when db_load fails (error or warning)
- * @return bool True when db_load produced a non-empty database file
- */
-function loadVsftpdDatabaseFromUsersFile(string $context, string $failureLevel = 'error'): bool {
-    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
-
-    if (file_exists($vsftpdDbFile)) {
-        @unlink($vsftpdDbFile);
-    }
-
-    $output = [];
-    $code = 0;
-    exec(
-        'db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1',
-        $output,
-        $code
-    );
-
-    if ($code !== 0) {
-        aviationwx_log($failureLevel, 'sync-push-config: db_load failed during ' . $context, [
-            'output' => implode("\n", $output),
-            'return_code' => $code,
-        ], 'app');
-        return false;
-    }
-
-    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
-        aviationwx_log($failureLevel, 'sync-push-config: database file not created or is empty after db_load', [
-            'context' => $context,
-            'db_file' => $vsftpdDbFile,
-            'exists' => file_exists($vsftpdDbFile),
-            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0,
-        ], 'app');
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Rebuild vsftpd database from users file
- * 
- * Rebuilds the vsftpd Berkeley DB database from the virtual_users.txt file.
- * Called when database corruption is detected. Verifies database after rebuild.
- * 
- * @return bool True on success, false on failure
- */
-function rebuildVsftpdDatabase() {
-    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
-    
-    if (!file_exists($vsftpdUserFile)) {
-        aviationwx_log('warning', 'sync-push-config: Cannot rebuild database, users file does not exist', [
-            'user_file' => $vsftpdUserFile
-        ], 'app');
-        return false;
-    }
-    
-    $userContent = @file_get_contents($vsftpdUserFile);
-    if (!$userContent || trim($userContent) === '') {
-        // Empty users file is normal during startup before sync completes
-        aviationwx_log('debug', 'sync-push-config: No users to rebuild database from (users file empty)', [
-            'user_file' => $vsftpdUserFile
-        ], 'app');
-        if (file_exists($vsftpdDbFile)) {
-            @unlink($vsftpdDbFile);
-        }
-        return true;
-    }
-
-    if (!loadVsftpdDatabaseFromUsersFile('database rebuild')) {
-        return false;
-    }
-
-    $output = [];
-    $returnCode = 0;
-    @exec('db_verify ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $returnCode);
-    if ($returnCode !== 0) {
-        aviationwx_log('error', 'sync-push-config: database verification failed after rebuild', [
-            'output' => implode("\n", $output),
-            'return_code' => $returnCode
-        ], 'app');
-        return false;
-    }
-    
-    aviationwx_log('info', 'sync-push-config: vsftpd database rebuilt successfully', [
-        'db_file' => $vsftpdDbFile,
-        'size' => filesize($vsftpdDbFile)
-    ], 'app');
-    
-    return true;
-}
-
-/**
- * Upsert vsftpd virtual user with local_root and writable upload directory.
+ * Upsert ProFTPD virtual user with homedir and writable upload directory.
  *
  * @param string $username Username (up to 14 alphanumeric characters)
  * @param string $password Password (14 alphanumeric characters)
- * @param string $ftpDir Absolute local_root for this user
+ * @param string $ftpDir Absolute homedir for this user (DefaultRoot ~)
  * @param array<string, mixed> $logContext Extra fields for success log context
  * @return bool True on success, false on failure
  */
 function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
-    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-
-    $parsed = parseVsftpdVirtualUsersFile($vsftpdUserFile);
+    $parsed = parseProftpdPasswdFile();
     if ($parsed['errors'] !== []) {
-        aviationwx_log('warning', 'sync-push-config: vsftpd users file parse issues', [
+        aviationwx_log('warning', 'sync-push-config: ProFTPD auth file parse issues', [
             'errors' => $parsed['errors'],
         ], 'app');
     }
-    $users = $parsed['users'];
 
-    $users[$username] = $password;
+    $accounts = readProftpdAccountMap();
+    $accounts[$username] = [
+        'password' => $password,
+        'home' => $ftpDir,
+    ];
 
-    if (!writeVsftpdVirtualUsersFile($users, $vsftpdUserFile)) {
-        aviationwx_log('error', 'sync-push-config: Cannot write vsftpd users file', [
-            'file' => $vsftpdUserFile
+    if (!writeProftpdPasswdFile($accounts)) {
+        aviationwx_log('error', 'sync-push-config: Cannot write ProFTPD auth file', [
+            'file' => PROFTPD_AUTH_FILE,
         ], 'app');
-        return false;
-    }
-
-    if (!loadVsftpdDatabaseFromUsersFile('ftp user upsert')) {
         return false;
     }
 
@@ -1180,30 +897,16 @@ function upsertFtpVirtualUser($username, $password, $ftpDir, $logContext = []) {
     @chgrp($ftpDir, $wwwDataGid);
     @chmod($ftpDir, 02775);
 
-    $userConfigDir = '/etc/vsftpd/users';
-    if (!is_dir($userConfigDir)) {
-        @mkdir($userConfigDir, 0755, true);
-    }
-    $userConfigFile = $userConfigDir . '/' . $username;
-    $userConfig = "local_root={$ftpDir}\n";
-
-    if (@file_put_contents($userConfigFile, $userConfig) === false) {
-        aviationwx_log('error', 'sync-push-config: Cannot write user config file', [
-            'file' => $userConfigFile
-        ], 'app');
-        return false;
-    }
-
     aviationwx_log('info', 'sync-push-config: FTP user created/updated', array_merge([
         'username' => $username,
-        'local_root' => $ftpDir,
+        'homedir' => $ftpDir,
     ], $logContext), 'app');
 
     return true;
 }
 
 /**
- * Create FTP user (vsftpd virtual user) for a push camera inbox.
+ * Create FTP user (ProFTPD virtual user) for a push camera inbox.
  *
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
@@ -1228,45 +931,32 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
 }
 
 /**
- * Remove FTP user from vsftpd virtual users and per-user config.
+ * Remove FTP user from ProFTPD auth file.
  *
  * @param string $username FTP username to remove
  * @return void
  */
 function removeFtpUser($username) {
-    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
-    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
-    $userConfigFile = '/etc/vsftpd/users/' . $username;
-
-    $parsed = parseVsftpdVirtualUsersFile($vsftpdUserFile);
+    $parsed = parseProftpdPasswdFile();
     if ($parsed['errors'] !== []) {
-        aviationwx_log('warning', 'sync-push-config: vsftpd users file parse issues during removal', [
+        aviationwx_log('warning', 'sync-push-config: ProFTPD auth file parse issues during removal', [
             'errors' => $parsed['errors'],
             'username' => $username,
         ], 'app');
     }
-    $users = $parsed['users'];
-    unset($users[$username]);
 
-    if (!writeVsftpdVirtualUsersFile($users, $vsftpdUserFile)) {
-        aviationwx_log('warning', 'sync-push-config: Cannot write vsftpd users file during removal', [
-            'file' => $vsftpdUserFile,
-            'username' => $username
+    $accounts = readProftpdAccountMap();
+    unset($accounts[$username]);
+
+    if (!writeProftpdPasswdFile($accounts)) {
+        aviationwx_log('warning', 'sync-push-config: Cannot write ProFTPD auth file during removal', [
+            'file' => PROFTPD_AUTH_FILE,
+            'username' => $username,
         ], 'app');
     }
-    
-    if (count($users) > 0) {
-        loadVsftpdDatabaseFromUsersFile('ftp user removal', 'warning');
-    } else {
-        @unlink($vsftpdDbFile);
-    }
-    
-    if (file_exists($userConfigFile)) {
-        @unlink($userConfigFile);
-    }
-    
+
     aviationwx_log('info', 'sync-push-config: FTP user removed', [
-        'username' => $username
+        'username' => $username,
     ], 'app');
 }
 
@@ -1725,37 +1415,27 @@ function syncPushConfig() {
     $configMtime = filemtime($configFile);
     $lastSync = getLastSyncTimestamp();
     
-    $databaseCorrupted = isVsftpdDatabaseCorrupted();
-    $databaseMissing = !file_exists('/etc/vsftpd/virtual_users.db');
-    
-    if ($databaseCorrupted) {
-        aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, attempting rebuild', [
-            'db_file' => '/etc/vsftpd/virtual_users.db',
-            'user_file' => '/etc/vsftpd/virtual_users.txt'
+    $authCorrupted = isProftpdAuthFileCorrupted();
+    $authMissing = isProftpdAuthFileMissing();
+
+    if ($authCorrupted && !$authMissing) {
+        aviationwx_log('warning', 'sync-push-config: ProFTPD auth file appears invalid, forcing full sync', [
+            'auth_file' => PROFTPD_AUTH_FILE,
         ], 'app');
-        
-        if (rebuildVsftpdDatabase()) {
-            aviationwx_log('info', 'sync-push-config: Database rebuilt successfully, continuing with sync', [], 'app');
-        } else {
-            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [], 'app');
-        }
     } else {
-        // Skip sync if config hasn't changed AND database exists
-        // Force sync if database is missing (first run or after deletion)
-        if ($configMtime <= $lastSync && !$databaseMissing) {
+        if ($configMtime <= $lastSync && !$authMissing) {
             aviationwx_log('debug', 'sync-push-config: config unchanged since last sync, skipping', [
                 'last_sync' => $lastSync,
-                'config_mtime' => $configMtime
+                'config_mtime' => $configMtime,
             ], 'app');
-            // Probe accounts live in container-local /etc and must be reprovisioned each startup.
             if (!syncUploadHealthProbeUsers()) {
                 aviationwx_log('warning', 'sync-push-config: upload health probe user sync incomplete', [], 'app');
             }
             return;
         }
-        
-        if ($databaseMissing) {
-            aviationwx_log('info', 'sync-push-config: database missing, forcing sync', [], 'app');
+
+        if ($authMissing) {
+            aviationwx_log('info', 'sync-push-config: ProFTPD auth file missing, forcing sync', [], 'app');
         }
     }
     
@@ -1781,7 +1461,13 @@ function syncPushConfig() {
         aviationwx_log('warning', 'sync-push-config: upload health probe user sync incomplete', [], 'app');
     }
     updateLastSyncTimestamp();
-    
+
+    if (!reloadProftpdDaemon()) {
+        aviationwx_log('debug', 'sync-push-config: ProFTPD reload skipped (daemon not running yet)', [], 'app');
+    } else {
+        aviationwx_log('info', 'sync-push-config: ProFTPD reloaded after auth sync', [], 'app');
+    }
+
     aviationwx_log('info', 'push-config sync completed', [], 'app');
 }
 

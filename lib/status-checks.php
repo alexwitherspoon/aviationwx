@@ -922,12 +922,12 @@ function getNetworkPortsForStatusDisplay(): array
 function checkFtpSftpServices(): array
 {
     $np = getNetworkPortsForStatusDisplay();
-    $vsftpdPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
+    $ftpPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
     $services = [
-        'vsftpd' => [
+        'proftpd' => [
             'name' => 'FTP/FTPS Server',
             'running' => false,
-            'ports' => $vsftpdPorts,
+            'ports' => $ftpPorts,
         ],
         'sshd' => [
             'name' => 'SFTP Server',
@@ -937,12 +937,12 @@ function checkFtpSftpServices(): array
     ];
     
     // Use @ to suppress errors for non-critical process checks
-    $vsftpdRunning = false;
+    $ftpRunning = false;
     if (function_exists('exec')) {
-        @exec('pgrep -x vsftpd 2>/dev/null', $output, $code);
-        $vsftpdRunning = ($code === 0 && !empty($output));
+        @exec('pgrep -x proftpd 2>/dev/null', $output, $code);
+        $ftpRunning = ($code === 0 && !empty($output));
     }
-    $services['vsftpd']['running'] = $vsftpdRunning;
+    $services['proftpd']['running'] = $ftpRunning;
     
     $sshdRunning = false;
     if (function_exists('exec')) {
@@ -951,8 +951,8 @@ function checkFtpSftpServices(): array
     }
     $services['sshd']['running'] = $sshdRunning;
     
-    $allRunning = $vsftpdRunning && $sshdRunning;
-    $noneRunning = !$vsftpdRunning && !$sshdRunning;
+    $allRunning = $ftpRunning && $sshdRunning;
+    $noneRunning = !$ftpRunning && !$sshdRunning;
     
     if ($allRunning) {
         $status = 'operational';
@@ -963,7 +963,7 @@ function checkFtpSftpServices(): array
     } else {
         $status = 'degraded';
         $runningServices = [];
-        if ($vsftpdRunning) $runningServices[] = 'FTP/FTPS';
+        if ($ftpRunning) $runningServices[] = 'FTP/FTPS';
         if ($sshdRunning) $runningServices[] = 'SFTP';
         $message = implode(' and ', $runningServices) . ' running';
     }

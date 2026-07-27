@@ -428,7 +428,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 cleanupEmptyDirectories(CACHE_WEBCAMS_DIR, $stats, $dryRun, $verbose);
 // Note: We intentionally do NOT clean up empty directories in CACHE_UPLOADS_DIR or CACHE_SFTP_DIR
 // Push webcam upload directories must exist even when empty (waiting for FTP/SFTP uploads)
-// The vsftpd per-user config points to FTP directories, and SFTP users are chrooted to SFTP directories
+// ProFTPD homedirs and SFTP chroots must exist even when empty
 cleanupEmptyDirectoriesExcludingUploads(CACHE_UPLOADS_DIR, $configuredAirports, $stats, $dryRun, $verbose);
 cleanupEmptyDirectoriesExcludingSftp(CACHE_SFTP_DIR, $configuredAirports, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_DIR, $stats, $dryRun, $verbose);
@@ -1108,7 +1108,7 @@ function cleanupEmptyDirectories(
  * Cleanup empty directories in uploads, but preserve push webcam directories
  * 
  * Push webcam upload directories (e.g., /cache/ftp/keul/keulcam1/) must exist
- * even when empty because vsftpd per-user configs point to them. Deleting them
+ * even when empty because ProFTPD homedirs point to them. Deleting them
  * breaks FTP uploads until the directory is recreated.
  * 
  * This function only removes directories for airports NOT in the configuration,
@@ -1137,7 +1137,7 @@ function cleanupEmptyDirectoriesExcludingUploads(
     foreach ($airportDirs as $airportDir) {
         $airportId = strtolower(basename($airportDir));
 
-        // Upload health probe FTPS local_root lives under /cache/ftp/_probe/ (not an airport ID)
+        // Upload health probe FTP homedir lives under /cache/ftp/_probe/ (not an airport ID)
         if (isUploadHealthProbeFtpCacheNamespace($airportId)) {
             if ($verbose) {
                 echo "  ℹ️  Preserving upload health probe FTP namespace: {$airportId}\n";
@@ -1453,7 +1453,7 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
             
             // Check FTP upload directory
             // Note: Do NOT create here - cleanup-cache runs as www-data and cannot chown to ftp:www-data.
-            // vsftpd requires ftp:www-data ownership for uploads. Use sync-push-config.php (runs as root).
+            // ProFTPD requires ftp:www-data ownership for uploads. Use sync-push-config.php (runs as root).
             $ftpDir = getWebcamFtpUploadDir($airportId, $username);
             if (!is_dir($ftpDir)) {
                 $ftpCreated++;

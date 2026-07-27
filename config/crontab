@@ -32,7 +32,7 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # (both push and pull) with per-camera refresh_seconds configuration.
 # This cron job has been removed as part of the unified webcam worker refactor.
 
-# Dynamic DNS / PASV (vsftpd) -- must run as root (edits /etc/vsftpd, restarts vsftpd).
+# Dynamic DNS / PASV (ProFTPD) -- must run as root (edits runtime.conf, SIGHUP reload).
 # Wrapper reads getDynamicDnsRefreshSeconds() (0 = disabled). Cron every minute; wrapper enforces interval.
 * * * * * root cd /var/www/html && /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh >/dev/null 2>&1
 

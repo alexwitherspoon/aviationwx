@@ -536,7 +536,7 @@ function getBaseDomain(): string {
 /**
  * Get public IPv4 address from global config
  * 
- * Used for FTP passive mode (pasv_address) and other services that need
+ * Used for FTP passive mode (MasqueradeAddress) and other services that need
  * to advertise the server's public IP address.
  * 
  * @return string|null Public IPv4 address, or null if not configured
@@ -605,7 +605,7 @@ function getSftpPort(): int {
  * Get dynamic DNS refresh interval from global config
  * 
  * When set to a positive value, the system will periodically re-resolve
- * the upload hostname and update vsftpd's pasv_address if it changes.
+ * the upload hostname and update ProFTPD MasqueradeAddress if it changes.
  * Useful for sites with dynamic DNS (DDNS) where the public IP may change.
  * 
  * When public_ip is explicitly set, this setting has no effect (static IP
@@ -3879,7 +3879,7 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
 
-            // Optional TCP port map: config.network_ports (UFW/deploy scripts, vsftpd, sshd SFTP, fail2ban).
+            // Optional TCP port map: config.network_ports (UFW/deploy scripts, ProFTPD, sshd SFTP, fail2ban).
             if (array_key_exists('host_firewall', $cfg)) {
                 $errors[] = 'config.host_firewall is not a valid key; TCP ports are configured in config.network_ports';
             }

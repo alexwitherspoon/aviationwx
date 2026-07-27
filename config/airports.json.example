@@ -9,7 +9,7 @@
     "public_ip": "",
     "public_ipv6": "",
     "upload_hostname": "",
-    "_comment_network_ports": "Self-hosted production TCP port map: UFW/deploy (deploy-configure-firewall.sh), vsftpd, container SFTP (sshd), and fail2ban. Omitted keys use defaults. ssh opens the host admin SSH port in the firewall; sftp is the SFTP listener inside the web container. ftps_alt is an optional extra inbound FTP control port on the host (NAT to ftp_control).",
+    "_comment_network_ports": "Self-hosted production TCP port map: UFW/deploy (deploy-configure-firewall.sh), ProFTPD, container SFTP (sshd), and fail2ban. Omitted keys use defaults. ssh opens the host admin SSH port in the firewall; sftp is the SFTP listener inside the web container. ftps_alt is an optional extra inbound FTP control port on the host (NAT to ftp_control).",
     "network_ports": {
       "http": 80,
       "https": 443,
@@ -22,6 +22,13 @@
       "ftps_alt": null
     },
     "dynamic_dns_refresh_seconds": 0,
+
+    "_comment_upload_daemon": "ProFTPD connection limits (OSS defaults). Production at scale should set explicit values (for example max_instances 800 for ~1000 cameras).",
+    "upload_daemon": {
+      "max_instances": 50,
+      "max_clients": 40,
+      "max_clients_per_user": 2
+    },
 
     "_comment_upload_health_probe": "Production only. Probe every interval_sec (default 30); service-watchdog runs every 50s. Dedicated probe user must not match any push camera username. Production Docker (host networking): set probe_connect_host to 127.0.0.1.",
     "upload_health_probe": {

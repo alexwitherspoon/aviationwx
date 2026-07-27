@@ -4,7 +4,7 @@
 # by adding missing rules AND removing stale/orphaned rules.
 #
 # Production host firewall: reads optional config.network_ports from airports.json (defaults
-# match docker/nginx/vsftpd/sshd). Exits with error if config.host_firewall is present.
+# match docker/nginx/ProFTPD/sshd). Exits with error if config.host_firewall is present.
 # Override path: AIRPORTS_JSON=/path/to/airports.json
 
 set -e
@@ -428,15 +428,15 @@ if [ "$AIRPORTS_CONFIG_READABLE" = true ] && [ -f "$NAT_SCRIPT" ]; then
     chmod +x "$NAT_SCRIPT" 2>/dev/null || true
     if [ "$DRY_RUN" = "true" ]; then
         if [ -n "$FTPS_ALT" ]; then
-            echo "  [DRY RUN] Would run: $SUDO env VSFTPD_LISTEN_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure $FTPS_ALT"
+            echo "  [DRY RUN] Would run: $SUDO env FTP_CONTROL_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure $FTPS_ALT"
         else
-            echo "  [DRY RUN] Would run: $SUDO env VSFTPD_LISTEN_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure '' (clear NAT)"
+            echo "  [DRY RUN] Would run: $SUDO env FTP_CONTROL_PORT=${FTP_CONTROL} $NAT_SCRIPT ensure '' (clear NAT)"
         fi
     else
         if [ -n "$FTPS_ALT" ]; then
-            $SUDO env VSFTPD_LISTEN_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure "$FTPS_ALT"
+            $SUDO env FTP_CONTROL_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure "$FTPS_ALT"
         else
-            $SUDO env VSFTPD_LISTEN_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure ""
+            $SUDO env FTP_CONTROL_PORT="${FTP_CONTROL}" "$NAT_SCRIPT" ensure ""
         fi
     fi
     echo ""

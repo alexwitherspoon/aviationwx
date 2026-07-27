@@ -106,18 +106,18 @@ ensure_sftp_known_hosts() {
     ssh-keyscan -T 5 -p "$port" "$host" >>"$known_hosts" 2>/dev/null || true
 }
 
-vsftpd_ssl_enabled() {
-    local conf="${VSFTPD_CONF:-/etc/vsftpd/vsftpd.conf}"
+proftpd_tls_enabled() {
+    local conf="${PROFTPD_TLS_CONF:-/etc/proftpd/conf.d/tls.conf}"
     if [ ! -f "$conf" ]; then
         return 1
     fi
-    if grep -qE '^[[:space:]]*ssl_enable[[:space:]]*=[[:space:]]*YES' "$conf" 2>/dev/null; then
+    if grep -qE '^[[:space:]]*TLSEngine[[:space:]]+on' "$conf" 2>/dev/null; then
         return 0
     fi
     return 1
 }
 
-# FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
+# FTP upload probe: plain FTP when TLS is off, explicit TLS (FTPS) when enabled.
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
     local file_name base_url local_file start_sec end_sec elapsed ok_detail fail_prefix
@@ -127,9 +127,8 @@ run_ftp_probe() {
     local_file="${PROBE_TMP_DIR}/${file_name}"
     mkdir -p "$PROBE_TMP_DIR"
     curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
-    # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
     base_url="ftp://$(probe_url_host "$host"):${port}/"
-    if vsftpd_ssl_enabled; then
+    if proftpd_tls_enabled; then
         fail_prefix="ftps"
         curl_tls_args=(--ftp-ssl-reqd)
         if probe_host_skips_tls_verify "$host"; then
@@ -138,7 +137,7 @@ run_ftp_probe() {
         ok_detail="ok"
     else
         fail_prefix="ftp"
-        ok_detail="ok (plain ftp, ssl_enable=NO)"
+        ok_detail="ok (plain ftp, TLSEngine off)"
     fi
     if local_upload_path="$(probe_local_upload_path ftps "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
@@ -156,7 +155,7 @@ run_ftp_probe() {
         return 1
     fi
     # No remote DELE: curl --fail -X DELE on a directory URL can exit non-zero after
-    # vsftpd already returns 250. Health uses local clear + overwrite (same as SFTP).
+    # the server already accepted STOR. Health uses local clear + overwrite (same as SFTP).
     rm -f "$local_file" "$curl_err"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
@@ -254,7 +253,7 @@ main() {
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
         local ftp_probe_label="FTP"
         local ftp_probe_fail_detail="ftp failed"
-        if vsftpd_ssl_enabled; then
+        if proftpd_tls_enabled; then
             ftp_probe_label="FTPS"
             ftp_probe_fail_detail="ftps failed"
         fi

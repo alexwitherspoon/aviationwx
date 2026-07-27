@@ -53,7 +53,7 @@ services:
       - GIT_SHA=${GIT_SHA:-}
     healthcheck:
       # Override Dockerfile healthcheck with longer start_period
-      # Dockerfile has 5s which is too short for all services (cron, vsftpd, sshd, fail2ban, Apache)
+      # Dockerfile has 5s which is too short for all services (cron, ProFTPD, sshd, fail2ban, Apache)
       # Check Apache on port 8080 (internal port, behind nginx on port 80)
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s

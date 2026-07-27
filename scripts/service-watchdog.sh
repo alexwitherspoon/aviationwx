@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monitors vsftpd, container sshd (SFTP), and cron; evaluates upload-probe heartbeats.
+# Monitors ProFTPD, container sshd (SFTP), and cron; evaluates upload-probe heartbeats.
 # Loop interval: WATCHDOG_LOOP_SEC (default 50). Probes publish per config interval_sec.
 
 set -u
@@ -180,10 +180,10 @@ watchdog_log "INFO" "Service watchdog started (loop=${WATCHDOG_LOOP_SEC}s)"
 while true; do
     set +e
 
-    if ! pgrep -x vsftpd >/dev/null 2>&1; then
-        handle_upload_daemon_down "ftps" "vsftpd" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_vsftpd_daemon
+    if ! pgrep -x proftpd >/dev/null 2>&1; then
+        handle_upload_daemon_down "ftps" "proftpd" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
     else
-        evaluate_probe_protocol "ftps" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_vsftpd_daemon
+        evaluate_probe_protocol "ftps" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
     fi
 
     if ! pgrep -x sshd >/dev/null 2>&1; then

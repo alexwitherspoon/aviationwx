@@ -1,0 +1,15 @@
+/var/log/proftpd.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+    sharedscripts
+    postrotate
+        if [ -f /var/run/proftpd.pid ]; then
+            kill -HUP "$(cat /var/run/proftpd.pid)" 2>/dev/null || true
+        fi
+    endscript
+}

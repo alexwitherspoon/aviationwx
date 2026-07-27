@@ -79,17 +79,16 @@ else
     log_message "⚠️  nginx container not running - skipping reload"
 fi
 
-# Signal vsftpd to reload certificates (SIGHUP)
-# Note: vsftpd may not support hot-reload of certs; container restart may be needed
+# Signal ProFTPD to reload certificates (SIGHUP)
 if docker ps --format '{{.Names}}' | grep -q '^aviationwx-web$'; then
-    log_message "Signaling vsftpd to reload..."
-    if docker exec aviationwx-web pkill -HUP vsftpd 2>/dev/null; then
-        log_message "✓ vsftpd signaled successfully"
+    log_message "Signaling ProFTPD to reload..."
+    if docker exec aviationwx-web bash -c 'test -f /var/run/proftpd.pid && kill -HUP "$(cat /var/run/proftpd.pid)"'; then
+        log_message "✓ ProFTPD signaled successfully"
     else
-        log_message "⚠️  Failed to signal vsftpd (may not support hot-reload)"
+        log_message "⚠️  Failed to signal ProFTPD (daemon may not be running yet)"
     fi
 else
-    log_message "⚠️  web container not running - skipping vsftpd signal"
+    log_message "⚠️  web container not running - skipping ProFTPD signal"
 fi
 
 log_message "✓ Certificate deployment complete for $DOMAIN"

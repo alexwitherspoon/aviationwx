@@ -64,12 +64,12 @@ if [ $? -eq 0 ]; then
     
     log_message "Certificate setup complete"
     
-    # Enable SSL in vsftpd if the script exists
-    if [ -f "/usr/local/bin/enable-vsftpd-ssl.sh" ]; then
-        log_message "Enabling SSL in vsftpd..."
-        /usr/local/bin/enable-vsftpd-ssl.sh || {
-            log_message "Warning: Failed to enable SSL in vsftpd, but certificate is installed"
-            log_message "You can manually enable SSL by running: /usr/local/bin/enable-vsftpd-ssl.sh"
+    # Enable TLS in ProFTPD if the script exists
+    if [ -f "/usr/local/bin/enable-upload-ftps.sh" ]; then
+        log_message "Enabling TLS in ProFTPD..."
+        /usr/local/bin/enable-upload-ftps.sh || {
+            log_message "Warning: Failed to enable TLS in ProFTPD, but certificate is installed"
+            log_message "You can manually enable TLS by running: /usr/local/bin/enable-upload-ftps.sh"
         }
     fi
 else
