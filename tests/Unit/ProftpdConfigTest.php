@@ -24,6 +24,8 @@ class ProftpdConfigTest extends TestCase
             $this->markTestSkipped('proftpd modules.conf not available in CI host');
         }
 
+        $whichOutput = [];
+        $whichCode = 0;
         exec('command -v proftpd 2>/dev/null', $whichOutput, $whichCode);
         if ($whichCode !== 0 || $whichOutput === []) {
             $this->markTestSkipped('proftpd binary not available in CI host');
