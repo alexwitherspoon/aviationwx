@@ -257,5 +257,9 @@ function reloadProftpdDaemon(): bool
         return false;
     }
 
+    if (!defined('SIGHUP')) {
+        return false;
+    }
+
     return posix_kill((int) $pid, SIGHUP);
 }
