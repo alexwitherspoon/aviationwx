@@ -591,7 +591,7 @@ function buildProftpdListenersConf(?array $capabilities = null): string
 }
 
 /**
- * @param array<string, mixed> $endpoints
+ * @param array<string, bool>|null $capabilities
  */
 function writeProftpdListenersConf(?array $capabilities = null, ?string $path = null): bool
 {
