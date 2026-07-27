@@ -145,6 +145,55 @@ class UploadEndpointsTest extends TestCase
         $this->assertSame(0, getDynamicDnsRefreshSeconds());
     }
 
+    public function testValidateUploadEndpointsForCapabilities_FailsWhenIpv6OnlyAndMissing(): void
+    {
+        $configPath = $this->trackTempFile(sys_get_temp_dir() . '/airports-' . uniqid('', true) . '.json');
+        file_put_contents($configPath, json_encode([
+            'config' => [
+                'base_domain' => 'example.com',
+                'upload_capabilities' => [
+                    'plain_ftp' => true,
+                    'ftps' => true,
+                    'sftp' => true,
+                    'ipv4' => false,
+                    'ipv6' => true,
+                ],
+            ],
+            'airports' => [],
+        ], JSON_THROW_ON_ERROR));
+
+        putenv('CONFIG_PATH=' . $configPath);
+        clearConfigCache();
+
+        $error = validateUploadEndpointsForCapabilities([
+            'hostname' => 'upload.example.com',
+            'ipv4' => null,
+            'ipv6' => null,
+        ]);
+
+        $this->assertSame(
+            'IPv6 upload endpoint unavailable (IPv6-only capability enabled)',
+            $error
+        );
+    }
+
+    public function testValidateUploadEndpointsForCapabilities_WarnsOnMissingIpv6WhenDualStack(): void
+    {
+        $error = validateUploadEndpointsForCapabilities([
+            'hostname' => 'upload.example.com',
+            'ipv4' => '51.81.243.160',
+            'ipv6' => null,
+        ]);
+
+        $this->assertNull($error);
+        $warnings = collectUploadEndpointWarnings([
+            'hostname' => 'upload.example.com',
+            'ipv4' => '51.81.243.160',
+            'ipv6' => null,
+        ]);
+        $this->assertContains('IPv6 upload endpoint unavailable (capability enabled)', $warnings);
+    }
+
     public function testGetDynamicDnsAcceleratedRefreshSeconds_UsesBaselineWhenUnset(): void
     {
         $configPath = $this->trackTempFile(sys_get_temp_dir() . '/airports-' . uniqid('', true) . '.json');

@@ -469,6 +469,10 @@ function validateUploadEndpointsForCapabilities(array $endpoints): ?string
         return 'IPv4 upload endpoint unavailable (capability enabled)';
     }
 
+    if ($caps['ipv6'] && !$caps['ipv4'] && ($endpoints['ipv6'] ?? null) === null) {
+        return 'IPv6 upload endpoint unavailable (IPv6-only capability enabled)';
+    }
+
     return null;
 }
 
@@ -480,7 +484,7 @@ function collectUploadEndpointWarnings(array $endpoints): array
 {
     $warnings = [];
     $caps = getUploadCapabilities();
-    if ($caps['ipv6'] && ($endpoints['ipv6'] ?? null) === null) {
+    if ($caps['ipv6'] && $caps['ipv4'] && ($endpoints['ipv6'] ?? null) === null) {
         $warnings[] = 'IPv6 upload endpoint unavailable (capability enabled)';
     }
 
