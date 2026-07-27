@@ -635,6 +635,20 @@ function buildProftpdListenersConf(?array $capabilities = null): string
 }
 
 /**
+ * Whether generated ProFTPD conf content differs from the on-disk file.
+ */
+function proftpdGeneratedConfChanged(string $path, string $content): bool
+{
+    if (!is_readable($path)) {
+        return true;
+    }
+
+    $existing = @file_get_contents($path);
+
+    return $existing !== $content;
+}
+
+/**
  * @param array<string, bool>|null $capabilities
  */
 function writeProftpdListenersConf(?array $capabilities = null, ?string $path = null): bool
@@ -702,6 +716,9 @@ function syncProftpdUploadDaemonConfig(bool $reloadDaemon = true): array
         return $result;
     }
 
+    $listenersPath = '/etc/proftpd/conf.d/listeners.conf';
+    $listenersContent = buildProftpdListenersConf();
+    $listenersChanged = proftpdGeneratedConfChanged($listenersPath, $listenersContent);
     if (!writeProftpdListenersConf()) {
         return [
             'ok' => false,
@@ -713,6 +730,9 @@ function syncProftpdUploadDaemonConfig(bool $reloadDaemon = true): array
 
     $certFile = '/etc/letsencrypt/live/aviationwx.org/fullchain.pem';
     $keyFile = '/etc/letsencrypt/live/aviationwx.org/privkey.pem';
+    $tlsPath = '/etc/proftpd/conf.d/tls.conf';
+    $tlsContent = buildProftpdTlsCapabilityConf($certFile, $keyFile);
+    $tlsChanged = proftpdGeneratedConfChanged($tlsPath, $tlsContent);
     if (!writeProftpdTlsCapabilityConf($certFile, $keyFile)) {
         return [
             'ok' => false,
@@ -722,11 +742,16 @@ function syncProftpdUploadDaemonConfig(bool $reloadDaemon = true): array
         ];
     }
 
-    if ($reloadDaemon && $result['changed'] && function_exists('reloadProftpdDaemon')) {
+    $configChanged = $result['changed'] || $listenersChanged || $tlsChanged;
+    if ($reloadDaemon && $configChanged && function_exists('reloadProftpdDaemon')) {
         reloadProftpdDaemon();
     }
 
-    return $result;
+    return [
+        'ok' => true,
+        'changed' => $configChanged,
+        'endpoints' => $result['endpoints'],
+    ];
 }
 
 /**

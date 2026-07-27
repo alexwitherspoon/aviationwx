@@ -194,6 +194,22 @@ class UploadEndpointsTest extends TestCase
         $this->assertContains('IPv6 upload endpoint unavailable (capability enabled)', $warnings);
     }
 
+    public function testProftpdGeneratedConfChanged_DetectsContentMismatch(): void
+    {
+        $path = $this->trackTempFile(sys_get_temp_dir() . '/listeners-' . uniqid('', true) . '.conf');
+        file_put_contents($path, "old\n");
+
+        $this->assertTrue(proftpdGeneratedConfChanged($path, "new\n"));
+        $this->assertFalse(proftpdGeneratedConfChanged($path, "old\n"));
+    }
+
+    public function testProftpdGeneratedConfChanged_TreatsMissingFileAsChanged(): void
+    {
+        $path = sys_get_temp_dir() . '/missing-listeners-' . uniqid('', true) . '.conf';
+
+        $this->assertTrue(proftpdGeneratedConfChanged($path, "# generated\n"));
+    }
+
     public function testGetDynamicDnsAcceleratedRefreshSeconds_UsesBaselineWhenUnset(): void
     {
         $configPath = $this->trackTempFile(sys_get_temp_dir() . '/airports-' . uniqid('', true) . '.json');
