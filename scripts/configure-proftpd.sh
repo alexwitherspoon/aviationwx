@@ -133,6 +133,20 @@ configure_and_start_proftpd() {
         return 1
     fi
 
+    ftp_listener_enabled="$(
+        CONFIG_PATH="${CONFIG_PATH:-${CONFIG_FILE}}" "$APP_PHP" -r '
+            require_once "/var/www/html/lib/config.php";
+            $caps = getUploadCapabilities();
+            $protocols = ($caps["plain_ftp"] ?? false) || ($caps["ftps"] ?? false);
+            $families = ($caps["ipv4"] ?? false) || ($caps["ipv6"] ?? false);
+            echo ($protocols && $families) ? "1" : "0";
+        ' 2>/dev/null || echo "1"
+    )"
+    if [ "$ftp_listener_enabled" != "1" ]; then
+        echo "FTP uploads disabled via upload_capabilities (skipping ProFTPD start)"
+        return 0
+    fi
+
     mkdir -p /etc/proftpd/conf.d
     touch /var/log/proftpd.log
     chmod 644 /var/log/proftpd.log
