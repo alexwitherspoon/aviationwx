@@ -50,6 +50,7 @@ write_runtime_conf() {
         echo "MaxClients                      ${max_clients}"
         echo "MaxClientsPerUser               ${max_per_user}"
         echo "Umask                           002"
+        echo "PidFile                         /var/run/proftpd.pid"
     } >"$PROFTPD_RUNTIME_CONF"
     echo "✓ ProFTPD runtime: port=${FTP_CONTROL_PORT} pasv ${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX}"
 }
@@ -83,11 +84,10 @@ start_proftpd_instance() {
     fi
 
     echo "Starting ProFTPD (dual-stack)..."
-    proftpd -c "$PROFTPD_CONF" &
-    local pid=$!
-    eval "$pid_var=$pid"
+    proftpd -c "$PROFTPD_CONF"
 
-    local max_iterations=6 iteration=0 process_ok=false port_ok=false
+    local pid="" max_iterations=6 iteration=0 process_ok=false port_ok=false
+    local pidfile="/var/run/proftpd.pid"
     local port_check_cmd=""
     if command -v ss >/dev/null 2>&1; then
         port_check_cmd="ss -tuln"
@@ -98,16 +98,31 @@ start_proftpd_instance() {
     fi
 
     while [ $iteration -lt $max_iterations ]; do
-        if kill -0 "$pid" 2>/dev/null; then
+        pid=""
+        if [ -r "$pidfile" ]; then
+            pid="$(tr -d '[:space:]' <"$pidfile" 2>/dev/null || true)"
+        fi
+        if { [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; } && command -v pgrep >/dev/null 2>&1; then
+            pid="$(pgrep -x proftpd 2>/dev/null | head -1 || true)"
+        fi
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             process_ok=true
+            eval "$pid_var=$pid"
             if [ -n "$port_check_cmd" ]; then
                 if $port_check_cmd 2>/dev/null | grep -qE ":${listen_port}[[:space:]]|:${listen_port}\$"; then
                     port_ok=true
                     break
                 fi
+            else
+                port_ok=true
+                break
             fi
+        elif command -v pgrep >/dev/null 2>&1 && pgrep -x proftpd >/dev/null 2>&1; then
+            process_ok=true
+            pid="$(pgrep -x proftpd 2>/dev/null | head -1 || true)"
+            eval "$pid_var=$pid"
         else
-            echo "⚠️  Warning: ProFTPD process exited during startup"
+            echo "⚠️  Warning: ProFTPD process not found during startup"
             eval "$pid_var=\"\""
             return 1
         fi
