@@ -30,6 +30,7 @@ class ProftpdConfigTest extends TestCase
         register_shutdown_function(static function () use ($runtimeDir): void {
             @unlink($runtimeDir . '/runtime.conf');
             @unlink($runtimeDir . '/tls.conf');
+            @unlink($runtimeDir . '/proftpd-test.conf');
             @rmdir($runtimeDir);
         });
 
