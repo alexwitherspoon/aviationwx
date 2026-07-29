@@ -975,7 +975,7 @@ function checkFtpSftpServices(): array
         $messageParts[] = 'FTP/FTPS disabled';
     }
     if ($sftpRequired) {
-        $messageParts[] = $sftpRunning ? 'SFTP running' : 'SFTP not running';
+        $messageParts[] = $sshdRunning ? 'SFTP running' : 'SFTP not running';
     } else {
         $messageParts[] = 'SFTP disabled';
     }
