@@ -13,6 +13,8 @@ require_once __DIR__ . '/../notam/cache.php';
 require_once __DIR__ . '/../notam/filter.php';
 require_once __DIR__ . '/../notam/schedule.php';
 require_once __DIR__ . '/../notam/banner.php';
+require_once __DIR__ . '/../notam/airspace/consumers.php';
+require_once __DIR__ . '/../notam/fetcher.php';
 
 /**
  * Normalize a runway pair designator for order-insensitive comparison.
@@ -77,6 +79,15 @@ function loadNotamRowsForDensityAltitudePerformance(string $airportId, ?int $now
     foreach ($payload['notams'] as $notam) {
         if (is_array($notam)) {
             $rows[] = $notam;
+        }
+    }
+
+    $config = loadConfig();
+    $airport = is_array($config['airports'][$airportId] ?? null) ? $config['airports'][$airportId] : null;
+    if (is_array($airport)) {
+        $storeRows = notamAirspaceStoreRelevantNotamsForAirport($airport, 'runway_closure', $now);
+        if ($storeRows !== []) {
+            $rows = notamMergeAirportAndStoreNotamRows($rows, $storeRows);
         }
     }
 

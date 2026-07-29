@@ -1928,6 +1928,12 @@ Production access is browser-only (`lib/notam/map-api-access.php`).
 
 **Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map. Stale or missing aggregate data fails closed (no shapes drawn). Thin WFS-only rows never satisfy banner or runway_closure capability gates.
 
+**Dashboard consumers** (capability + relevance):
+
+1. TFR/airspace banners (`api/notam.php`) may include unified-store rows where `capabilities.banner` is true and airport relevance passes (`filterRelevantNotams()`). Per-airport NMS cache remains the primary ingest path for aerodrome NOTAMs.
+2. Runway closure / density-altitude paths may merge unified-store rows where `capabilities.runway_closure` is true and relevance passes, only when the per-airport NOTAM cache is within the failclosed threshold.
+3. When the national store is missing or stale, dashboard consumers continue from per-airport caches alone (store unavailability does not blank banners).
+
 **Adapter platform** (`lib/notam/airspace/`):
 
 1. Sources implement `NotamSourceAdapter` (`getSourceType`, `buildUrl`, `parseResponse`, update-frequency metadata).
