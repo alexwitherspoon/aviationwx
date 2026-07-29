@@ -75,6 +75,9 @@ assert_runtime_conf_matches_config() {
     if [ ! -f "$PROFTPD_RUNTIME_CONF" ]; then
         fail "missing ${PROFTPD_RUNTIME_CONF}"
     fi
+    if [ ! -r "$PROFTPD_RUNTIME_CONF" ]; then
+        fail "cannot read ${PROFTPD_RUNTIME_CONF}"
+    fi
 
     local expected
     expected="$(read_proftpd_runtime_expectations)"

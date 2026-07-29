@@ -41,6 +41,7 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $this->assertIsString($contents);
         $this->assertStringContainsString('assert_runtime_conf_matches_config', $contents);
         $this->assertStringContainsString('read_proftpd_runtime_directive', $contents);
+        $this->assertStringContainsString('cannot read ${PROFTPD_RUNTIME_CONF}', $contents);
     }
 
     public function testDeployFirewallScript_SkipsDuplicateFtpsExplicitTlsAllow(): void
