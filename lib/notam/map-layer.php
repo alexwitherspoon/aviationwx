@@ -526,7 +526,7 @@ function notamTfrMapLayerHeadlineForRecord(array $record, string $nmsText): stri
         $fromNms = notamBuildAirspaceTfrHeadlineFromText($nmsText);
         if ($fromNms !== '') {
             if ($kind === 'fis_b') {
-                return 'FIS-B: ' . $wfsTitle;
+                return $wfsTitle !== '' ? ('FIS-B: ' . $wfsTitle) : $fromNms;
             }
             if ($kind === 'airshow' && $wfsTitle !== '') {
                 return 'Airshow: ' . $wfsTitle;
@@ -540,7 +540,13 @@ function notamTfrMapLayerHeadlineForRecord(array $record, string $nmsText): stri
     }
 
     if ($wfsTitle === '') {
-        return $kind === 'tfr' ? 'Temporary flight restriction' : 'Airspace restriction';
+        return match ($kind) {
+            'fis_b' => 'FIS-B service outage',
+            'airshow' => 'Airshow restriction',
+            'security' => 'Security restriction',
+            'tfr' => 'Temporary flight restriction',
+            default => 'Airspace restriction',
+        };
     }
 
     return match ($kind) {

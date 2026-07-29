@@ -34,7 +34,7 @@ function notamTfrMapLayerServeOrRebuild(): array
         return notamTfrMapLayerEmptyPayload($now, $ttl, true, 'merge_logic_mismatch');
     }
 
-    if (notamMapAirspaceAggregateIsStale($ttl, $now)) {
+    if (notamMapAirspaceAggregateEnvelopeIsStale($envelope, $ttl, $now)) {
         return notamTfrMapLayerEmptyPayload($now, $ttl, true, 'store_stale');
     }
 
