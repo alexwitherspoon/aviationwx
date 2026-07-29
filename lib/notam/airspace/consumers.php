@@ -14,21 +14,65 @@ require_once __DIR__ . '/../filter.php';
 require_once __DIR__ . '/../fetcher.php';
 
 /**
+ * Read the national store when it is usable for consumer merges.
+ *
+ * Single disk read: merge-logic and staleness are evaluated from the same envelope.
+ *
+ * @return array<string, mixed>|null Null when missing, mismatched, or stale
+ */
+function notamAirspaceStoreReadForConsumers(?int $nowUnix = null): ?array
+{
+    $envelope = notamMapAirspaceAggregateRead();
+    if ($envelope === null) {
+        return null;
+    }
+    if (!notamMapAirspaceAggregateMergeLogicMatches($envelope)) {
+        return null;
+    }
+
+    $ttl = getNotamCacheTtlSeconds();
+    if (notamMapAirspaceAggregateEnvelopeIsStale($envelope, $ttl, $nowUnix)) {
+        return null;
+    }
+
+    return $envelope;
+}
+
+/**
  * Whether the national store is usable for consumer reads.
  */
 function notamAirspaceStoreIsReadableForConsumers(?int $nowUnix = null): bool
 {
-    $envelope = notamMapAirspaceAggregateRead();
-    if ($envelope === null) {
-        return false;
-    }
-    if (!notamMapAirspaceAggregateMergeLogicMatches($envelope)) {
-        return false;
+    return notamAirspaceStoreReadForConsumers($nowUnix) !== null;
+}
+
+/**
+ * Whether a store NOTAM matches the airport for a consumer capability.
+ *
+ * Applies capability-appropriate airport relevance only. Status / time windows
+ * remain the caller's responsibility (banner API revalidates; DA/runway paths
+ * apply their own active-closure filters).
+ *
+ * @param array<string, mixed> $notam Parsed NOTAM row
+ * @param array<string, mixed> $airport Airport configuration
+ * @param 'banner'|'runway_closure' $capability
+ */
+function notamAirspaceStoreNotamMatchesAirport(
+    array $notam,
+    array $airport,
+    string $capability
+): bool {
+    if ($capability === 'runway_closure') {
+        return isAerodromeClosure($notam, $airport)
+            || isRunwayAffectingRestrictionNotam($notam, $airport);
     }
 
-    $ttl = getNotamCacheTtlSeconds();
+    if (isTfr($notam)) {
+        return isTfrRelevantToAirport($notam, $airport);
+    }
 
-    return !notamMapAirspaceAggregateIsStale($ttl, $nowUnix);
+    return isAerodromeClosure($notam, $airport)
+        || isRunwayAffectingRestrictionNotam($notam, $airport);
 }
 
 /**
@@ -47,11 +91,7 @@ function notamAirspaceStoreRelevantNotamsForAirport(
         return [];
     }
 
-    if (!notamAirspaceStoreIsReadableForConsumers($nowUnix)) {
-        return [];
-    }
-
-    $envelope = notamMapAirspaceAggregateRead();
+    $envelope = notamAirspaceStoreReadForConsumers($nowUnix);
     if ($envelope === null) {
         return [];
     }
@@ -77,18 +117,16 @@ function notamAirspaceStoreRelevantNotamsForAirport(
             continue;
         }
 
-        $filtered = filterRelevantNotams([$notam], $airport);
-        if ($filtered === []) {
+        if (!notamAirspaceStoreNotamMatchesAirport($notam, $airport, $capability)) {
             continue;
         }
 
-        $row = $filtered[0];
-        $key = notamCanonicalDedupKey($row);
+        $key = notamCanonicalDedupKey($notam);
         if (isset($seen[$key])) {
             continue;
         }
         $seen[$key] = true;
-        $out[] = $row;
+        $out[] = $notam;
     }
 
     return $out;
