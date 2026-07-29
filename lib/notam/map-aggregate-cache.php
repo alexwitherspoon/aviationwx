@@ -437,6 +437,7 @@ function notamMapAirspaceAggregateUpsertFromFetch(string $airportId, array $airp
 }
 
 /**
+<<<<<<< HEAD
  * Merge candidate records into the national store and mark a source healthy.
  *
  * @param list<array<string, mixed>> $records
@@ -457,6 +458,22 @@ function notamMapAirspaceAggregateMergeRecords(array $records, string $sourceSta
 
         $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
         $sourceStatus[$sourceStatusKey] = ['ok' => true, 'updated_at' => $now];
+=======
+ * Merge WFS records into the national store (national worker).
+ *
+ * @param list<array<string, mixed>> $wfsRecords
+ */
+function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
+{
+    return notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($wfsRecords): array {
+        $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
+        $existing = array_values($normalized['records']);
+        $merged = AirspaceAggregator::merge(array_merge($existing, $wfsRecords));
+        $now = time();
+
+        $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
+        $sourceStatus[FaaTfrWfsAdapter::SOURCE_TYPE] = ['ok' => true, 'updated_at' => $now];
+>>>>>>> origin/main
 
         $normalized['records'] = $merged;
         $normalized['data_updated_at'] = $now;
@@ -472,6 +489,7 @@ function notamMapAirspaceAggregateMergeRecords(array $records, string $sourceSta
 }
 
 /**
+<<<<<<< HEAD
  * Merge WFS records into the national store (national worker).
  *
  * @param list<array<string, mixed>> $wfsRecords
@@ -482,6 +500,8 @@ function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
 }
 
 /**
+=======
+>>>>>>> origin/main
  * Mark a source unhealthy without clearing existing records (fail-soft degrade).
  */
 function notamMapAirspaceAggregateMarkSourceStatus(string $source, bool $ok, string $error = ''): bool

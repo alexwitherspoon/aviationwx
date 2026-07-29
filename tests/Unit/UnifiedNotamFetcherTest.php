@@ -23,10 +23,15 @@ final class UnifiedNotamFetcherTest extends TestCase
         $map = UnifiedNotamFetcher::adapterMap();
         $this->assertArrayHasKey('nms', $map);
         $this->assertArrayHasKey('faa_tfr_wfs', $map);
+<<<<<<< HEAD
         $this->assertArrayHasKey('nms_fdc_bulk', $map);
         $this->assertTrue(is_a($map['nms'], NotamSourceAdapter::class, true));
         $this->assertTrue(is_a($map['faa_tfr_wfs'], NotamSourceAdapter::class, true));
         $this->assertTrue(is_a($map['nms_fdc_bulk'], NotamSourceAdapter::class, true));
+=======
+        $this->assertTrue(is_a($map['nms'], NotamSourceAdapter::class, true));
+        $this->assertTrue(is_a($map['faa_tfr_wfs'], NotamSourceAdapter::class, true));
+>>>>>>> origin/main
     }
 
     public function testFetchSource_UnknownType_FailsClosed(): void

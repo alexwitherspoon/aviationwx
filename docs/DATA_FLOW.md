@@ -1883,7 +1883,10 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
 
 1. **NMS side-channel** (`notamMapAirspaceAggregateUpsertFromFetch()` from `fetchNotamsForAirport()`): after parse and dedup, before `filterRelevantNotams()`, upsert drawable TFR rows as NMS-sourced AirspaceRecord entries.
 2. **FAA TFR WFS** (`scripts/fetch-faa-tfr-wfs.php`, scheduler tick `faa_tfr_wfs`): public `V_TFR_LOC` GeoJSON via `FaaTfrWfsAdapter`. Raw payload cached at `cache/notam/faa-tfr-wfs.json`. On WFS failure, mark `source_status.faa_tfr_wfs.ok=false` and retain prior records (NMS-only degrade).
+<<<<<<< HEAD
 3. **NMS FDC airspace bulk** (`scripts/fetch-nms-fdc-airspace.php`, scheduler tick `nms_fdc_airspace`): credentialed NMS query `classification=FDC&feature=AIRSPACE` via `NmsFdcAirspaceAdapter`. Rows remain NMS-sourced for merge correlation; `source_status.nms_fdc_bulk` tracks bulk health. On failure, retain prior records.
+=======
+>>>>>>> origin/main
 
 **Merge policy** (`AirspaceAggregator`):
 
