@@ -20,11 +20,17 @@ function notamAirspaceOfficialLinkForRecord(array $record): array
         $sources = [];
     }
 
-    $isFaa = $authority === 'faa'
-        || $authority === ''
-        || in_array('nms', $sources, true)
+    $custom = trim((string) ($record['official_search_url'] ?? ''));
+    $custom = notamAirspaceSanitizeOfficialSearchUrl($custom);
+
+    $knownFaaSource = in_array('nms', $sources, true)
         || in_array('faa_tfr_wfs', $sources, true)
         || in_array('nms_fdc_bulk', $sources, true);
+
+    // Explicit FAA, known FAA sources, or legacy empty-authority rows without a custom URL.
+    $isFaa = $authority === 'faa'
+        || $knownFaaSource
+        || ($authority === '' && $custom === '');
 
     if ($isFaa) {
         $url = 'https://notams.aim.faa.gov/notamSearch/search';
@@ -38,8 +44,7 @@ function notamAirspaceOfficialLinkForRecord(array $record): array
         ];
     }
 
-    // Future international authorities: adapters set authority + optional official_search_url.
-    $custom = trim((string) ($record['official_search_url'] ?? ''));
+    // Non-FAA authorities: adapters set authority and/or official_search_url.
     if ($custom !== '') {
         return [
             'url' => $custom,
@@ -51,4 +56,26 @@ function notamAirspaceOfficialLinkForRecord(array $record): array
         'url' => '',
         'label' => 'Verify with the issuing aviation authority',
     ];
+}
+
+/**
+ * Allow only http(s) official-search URLs for map popup CTAs.
+ */
+function notamAirspaceSanitizeOfficialSearchUrl(string $url): string
+{
+    if ($url === '') {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return '';
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return '';
+    }
+
+    return $url;
 }
