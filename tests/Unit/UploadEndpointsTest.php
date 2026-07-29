@@ -62,7 +62,21 @@ class UploadEndpointsTest extends TestCase
         ]);
 
         $this->assertStringContainsString('MasqueradeAddress               51.81.243.160', $conf);
-        $this->assertStringNotContainsString('mod_ifsession', $conf);
+        $this->assertStringContainsString('mod_ifsession', $conf);
+        $this->assertStringContainsString('ForcePassiveIP                  127.0.0.1', $conf);
+        $this->assertStringContainsString('upload_local_client', $conf);
+    }
+
+    public function testBuildProftpdMasqueradeConf_RemoteMasqueradeSkippedForLoopback(): void
+    {
+        $conf = buildProftpdMasqueradeConf([
+            'hostname' => 'upload.example.com',
+            'ipv4' => '51.81.243.160',
+            'ipv6' => null,
+        ]);
+
+        $this->assertStringContainsString('<IfClass !upload_local_client>', $conf);
+        $this->assertStringContainsString('<IfClass !upload_local_client_v6>', $conf);
     }
 
     public function testBuildProftpdMasqueradeConf_DualStackUsesIfsession(): void
@@ -77,6 +91,8 @@ class UploadEndpointsTest extends TestCase
         $this->assertStringContainsString('51.81.243.160', $conf);
         $this->assertStringContainsString('2001:db8::1', $conf);
         $this->assertStringContainsString('upload_ipv4_mapped', $conf);
+        $this->assertStringContainsString('ForcePassiveIP                  127.0.0.1', $conf);
+        $this->assertStringContainsString('ForcePassiveIP                  ::1', $conf);
     }
 
     public function testWriteUploadEndpointsCache_AtomicRoundTrip(): void

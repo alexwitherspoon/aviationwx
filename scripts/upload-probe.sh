@@ -197,10 +197,10 @@ run_sftp_probe() {
     if local_upload_path="$(probe_local_upload_path sftp "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
     fi
-    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     ensure_sftp_known_hosts "$host" "$port"
     probe_setup_netrc "$host" "$user" "$pass"
     trap probe_netrc_cleanup RETURN
+    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
     start_sec="$(date +%s 2>/dev/null || echo 0)"
     if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc \
         --connect-timeout 10 --max-time 45 \

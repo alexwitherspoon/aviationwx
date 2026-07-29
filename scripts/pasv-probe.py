@@ -10,7 +10,7 @@ import re
 import ssl
 import sys
 from io import BytesIO
-from ftplib import FTP, FTP_TLS, error_perm
+from ftplib import FTP, FTP_TLS, error_perm, error_temp
 
 
 def parse_pasv_ip(response: str) -> str | None:
@@ -152,7 +152,7 @@ def main() -> int:
                 probe_stor_plain(args.host, args.port, args.user, password, args.stor, payload)
             else:
                 probe_stor_ftps(args.host, args.port, args.user, password, args.stor, payload)
-        except (error_perm, OSError, TimeoutError) as exc:
+        except (error_perm, error_temp, OSError, TimeoutError) as exc:
             print(json.dumps({"error": str(exc), "mode": args.mode, "stor": args.stor}))
             return 1
         print(json.dumps({"mode": args.mode, "stor": args.stor, "ok": True}))
@@ -164,7 +164,7 @@ def main() -> int:
             result = probe_plain(args.host, args.port, args.user, password, epsv)
         else:
             result = probe_ftps(args.host, args.port, args.user, password, epsv)
-    except (error_perm, OSError, TimeoutError) as exc:
+    except (error_perm, error_temp, OSError, TimeoutError) as exc:
         print(json.dumps({"error": str(exc), "mode": args.mode, "bad_pasv": False}))
         return 1
 

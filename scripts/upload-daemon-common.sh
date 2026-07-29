@@ -361,6 +361,18 @@ ensure_probe_tmp_dir() {
         return 1
     fi
 
+    # Remove only ephemeral probe artifacts; keep healthcheck upload files (SFTP/FTPS probes create them here).
+    local stale_entry
+    shopt -s nullglob
+    for stale_entry in "$dir"/curl-netrc.* "$dir"/curl-err.* "$dir"/pasv-probe-err-*; do
+        rm -f "$stale_entry" 2>/dev/null || true
+    done
+    for stale_entry in "$dir"/*; do
+        [ -L "$stale_entry" ] || continue
+        rm -f "$stale_entry" 2>/dev/null || true
+    done
+    shopt -u nullglob
+
     if [ "$(id -u)" -eq 0 ]; then
         chmod 700 "$dir" 2>/dev/null || true
         chown root:root "$dir" 2>/dev/null || true
@@ -368,12 +380,6 @@ ensure_probe_tmp_dir() {
         if [ "$owner" != "0:0" ]; then
             echo "ensure_probe_tmp_dir: refusing non-root-owned PROBE_TMP_DIR: ${dir} (${owner})" >&2
             return 1
-        fi
-        if find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -print -quit 2>/dev/null | grep -q .; then
-            if ! find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -exec rm -f {} + 2>/dev/null; then
-                echo "ensure_probe_tmp_dir: could not clear stale probe temp entries under ${dir}" >&2
-                return 1
-            fi
         fi
     else
         chmod 700 "$dir" 2>/dev/null || true
