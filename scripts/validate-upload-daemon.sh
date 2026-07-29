@@ -117,7 +117,7 @@ assert_runtime_conf_matches_config() {
     fi
 
     local expected
-    expected="$(read_proftpd_runtime_expectations)"
+    expected="$(read_proftpd_runtime_expectations || true)"
     if [ -z "$expected" ]; then
         fail "could not read ProFTPD runtime expectations from config"
     fi
@@ -238,7 +238,7 @@ fi
 
 assert_runtime_conf_matches_config
 
-settings="$(read_probe_settings)"
+settings="$(read_probe_settings || true)"
 if [ -z "$settings" ]; then
     fail "could not read validation settings"
 fi

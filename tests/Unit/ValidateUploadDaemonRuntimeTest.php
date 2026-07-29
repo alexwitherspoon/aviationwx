@@ -105,6 +105,14 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $this->assertStringContainsString('missing PassivePorts directive', $result['stderr']);
     }
 
+    public function testValidateScript_GuardsEmbeddedPhpFailuresUnderSetE(): void
+    {
+        $contents = file_get_contents($this->validateScript);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('read_proftpd_runtime_expectations || true', $contents);
+        $this->assertStringContainsString('read_probe_settings || true', $contents);
+    }
+
     public function testDeployFirewallScript_SkipsDuplicateFtpsExplicitTlsAllow(): void
     {
         $script = dirname(__DIR__, 2) . '/scripts/deploy-configure-firewall.sh';
@@ -206,10 +214,12 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $proc = proc_open($cmd, $descriptors, $pipes);
         $this->assertIsResource($proc);
         fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
         fclose($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
         fclose($pipes[2]);
         $exit = proc_close($proc);
+        unset($stdout);
 
         return [
             'exit' => $exit,
