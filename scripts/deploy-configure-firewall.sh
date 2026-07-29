@@ -120,10 +120,15 @@ fi
 # DESIRED STATE: built from config.network_ports (or defaults above)
 # =============================================================================
 # Format: PORT:PROTOCOL:DESCRIPTION or START:END:PROTOCOL:DESCRIPTION for ranges
+if [ "$FTPS_EXPLICIT_TLS" -eq "$FTP_CONTROL" ]; then
+    FTP_CONTROL_LABEL="FTP/FTPS (Push webcams)"
+else
+    FTP_CONTROL_LABEL="FTP (Push webcams)"
+fi
 PORTS=(
     "${HTTP_PORT}:tcp:HTTP (Nginx)"
     "${HTTPS_PORT}:tcp:HTTPS (Nginx)"
-    "${FTP_CONTROL}:tcp:FTP/FTPS (Push webcams)"
+    "${FTP_CONTROL}:tcp:${FTP_CONTROL_LABEL}"
     "${SFTP_PORT}:tcp:SFTP (Push webcams)"
     "${FTP_PASSIVE_MIN}:${FTP_PASSIVE_MAX}:tcp:FTP passive mode (Push webcams)"
     "${SSH_PORT}:tcp:SSH (System access)"

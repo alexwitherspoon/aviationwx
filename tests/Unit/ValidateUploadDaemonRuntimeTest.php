@@ -120,7 +120,9 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $contents = file_get_contents($script);
         $this->assertIsString($contents);
         $this->assertStringContainsString('if [ "$FTPS_EXPLICIT_TLS" -ne "$FTP_CONTROL" ]; then', $contents);
-        $this->assertStringContainsString('FTP/FTPS (Push webcams)', $contents);
+        $this->assertStringContainsString('FTP_CONTROL_LABEL="FTP/FTPS (Push webcams)"', $contents);
+        $this->assertStringContainsString('FTP_CONTROL_LABEL="FTP (Push webcams)"', $contents);
+        $this->assertStringContainsString('${FTP_CONTROL}:tcp:${FTP_CONTROL_LABEL}', $contents);
     }
 
     private function createRuntimeFixture(string $contents): string
