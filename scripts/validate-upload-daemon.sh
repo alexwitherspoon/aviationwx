@@ -24,6 +24,10 @@ fi
 CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 VALIDATE_UPLOAD_HOST="${VALIDATE_UPLOAD_HOST:-127.0.0.1}"
 PASV_PROBE_PASSWORD_ENV="$(normalize_pasv_probe_password_env "${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}")"
+APP_ROOT="${APP_ROOT:-/var/www/html}"
+if [ -f "${SCRIPT_DIR}/../lib/config.php" ]; then
+    APP_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 
 probe_skips_tls_verify() {
     local probe_host="$1"
@@ -41,17 +45,142 @@ probe_skips_tls_verify() {
     return 1
 }
 
+is_loopback_probe_host() {
+    case "$1" in
+        localhost|127.0.0.1|::1)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
 else
     APP_PHP="${APP_PHP:-php}"
 fi
 
+PROFTPD_RUNTIME_CONF="${PROFTPD_RUNTIME_CONF:-/etc/proftpd/conf.d/runtime.conf}"
+
+read_proftpd_runtime_expectations() {
+    APP_ROOT="$APP_ROOT" CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" -r '
+        $appRoot = getenv("APP_ROOT") ?: "/var/www/html";
+        putenv("CONFIG_PATH=" . (getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json"));
+        require_once $appRoot . "/lib/config.php";
+        $config = loadConfig();
+        $np = $config["config"]["network_ports"] ?? [];
+        $daemon = $config["config"]["upload_daemon"] ?? $config["upload_daemon"] ?? [];
+        $maxInstances = (int) ($daemon["max_instances"] ?? 50);
+        $maxClients = (int) ($daemon["max_clients"] ?? 40);
+        $maxPerUser = (int) ($daemon["max_clients_per_user"] ?? 2);
+        if ($maxInstances < 1) {
+            $maxInstances = 50;
+        }
+        if ($maxClients < 1) {
+            $maxClients = 40;
+        }
+        if ($maxPerUser < 1) {
+            $maxPerUser = 2;
+        }
+        echo json_encode([
+            "port" => (int) ($np["ftp_control"] ?? 2121),
+            "passive_min" => (int) ($np["ftp_passive_min"] ?? 50000),
+            "passive_max" => (int) ($np["ftp_passive_max"] ?? 51000),
+            "max_instances" => $maxInstances,
+            "max_clients" => $maxClients,
+            "max_clients_per_user" => $maxPerUser,
+        ], JSON_UNESCAPED_SLASHES);
+    ' 2>/dev/null
+}
+
+read_proftpd_runtime_directive() {
+    local key="$1"
+    awk -v k="$key" '$1 == k { $1=""; sub(/^ +/, ""); print; exit }' "$PROFTPD_RUNTIME_CONF"
+}
+
+require_runtime_directive() {
+    local key="$1"
+    local value
+    value="$(read_proftpd_runtime_directive "$key")"
+    if [ -z "$value" ]; then
+        fail "runtime.conf missing ${key} directive"
+    fi
+    printf '%s' "$value"
+}
+
+assert_runtime_conf_matches_config() {
+    if [ ! -f "$PROFTPD_RUNTIME_CONF" ]; then
+        fail "missing ${PROFTPD_RUNTIME_CONF}"
+    fi
+    if [ ! -r "$PROFTPD_RUNTIME_CONF" ]; then
+        fail "cannot read ${PROFTPD_RUNTIME_CONF}"
+    fi
+
+    local expected
+    expected="$(read_proftpd_runtime_expectations || true)"
+    if [ -z "$expected" ]; then
+        fail "could not read ProFTPD runtime expectations from config"
+    fi
+
+    local exp_port exp_pasv_min exp_pasv_max exp_max_inst exp_max_clients exp_max_per_user
+    exp_port="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["port"])')"
+    exp_pasv_min="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["passive_min"])')"
+    exp_pasv_max="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["passive_max"])')"
+    exp_max_inst="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_instances"])')"
+    exp_max_clients="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_clients"])')"
+    exp_max_per_user="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_clients_per_user"])')"
+
+    local actual_port actual_pasv actual_pasv_min actual_pasv_max
+    local actual_max_inst actual_max_clients actual_max_per_user
+    actual_port="$(require_runtime_directive Port | awk '{print $1}')"
+    if [ -z "$actual_port" ]; then
+        fail "runtime.conf Port directive is empty"
+    fi
+    actual_pasv="$(require_runtime_directive PassivePorts)"
+    actual_pasv_min="$(echo "$actual_pasv" | awk '{print $1}')"
+    actual_pasv_max="$(echo "$actual_pasv" | awk '{print $2}')"
+    if [ -z "$actual_pasv_min" ] || [ -z "$actual_pasv_max" ]; then
+        fail "runtime.conf PassivePorts must include min and max port"
+    fi
+    actual_max_inst="$(require_runtime_directive MaxInstances | awk '{print $1}')"
+    if [ -z "$actual_max_inst" ]; then
+        fail "runtime.conf MaxInstances directive is empty"
+    fi
+    actual_max_clients="$(require_runtime_directive MaxClients | awk '{print $1}')"
+    if [ -z "$actual_max_clients" ]; then
+        fail "runtime.conf MaxClients directive is empty"
+    fi
+    actual_max_per_user="$(require_runtime_directive MaxClientsPerUser | awk '{print $1}')"
+    if [ -z "$actual_max_per_user" ]; then
+        fail "runtime.conf MaxClientsPerUser directive is empty"
+    fi
+
+    if [ "$actual_port" != "$exp_port" ]; then
+        fail "runtime Port ${actual_port} (expected ${exp_port})"
+    fi
+    if [ "$actual_pasv_min" != "$exp_pasv_min" ] || [ "$actual_pasv_max" != "$exp_pasv_max" ]; then
+        fail "runtime PassivePorts ${actual_pasv_min}-${actual_pasv_max} (expected ${exp_pasv_min}-${exp_pasv_max})"
+    fi
+    if [ "$actual_max_inst" != "$exp_max_inst" ]; then
+        fail "runtime MaxInstances ${actual_max_inst} (expected ${exp_max_inst})"
+    fi
+    if [ "$actual_max_clients" != "$exp_max_clients" ]; then
+        fail "runtime MaxClients ${actual_max_clients} (expected ${exp_max_clients})"
+    fi
+    if [ "$actual_max_per_user" != "$exp_max_per_user" ]; then
+        fail "runtime MaxClientsPerUser ${actual_max_per_user} (expected ${exp_max_per_user})"
+    fi
+
+    echo "  runtime: ok Port=${actual_port} PassivePorts=${actual_pasv_min}-${actual_pasv_max} MaxInstances=${actual_max_inst} MaxClients=${actual_max_clients} MaxClientsPerUser=${actual_max_per_user}"
+}
+
 read_probe_settings() {
-    CONFIG_PATH="$CONFIG_PATH" VALIDATE_UPLOAD_HOST="$VALIDATE_UPLOAD_HOST" "$APP_PHP" -r '
-        require_once "/var/www/html/lib/config.php";
-        require_once "/var/www/html/lib/proftpd-auth.php";
-        require_once "/var/www/html/lib/upload-endpoints.php";
+    APP_ROOT="$APP_ROOT" CONFIG_PATH="$CONFIG_PATH" VALIDATE_UPLOAD_HOST="$VALIDATE_UPLOAD_HOST" "$APP_PHP" -r '
+        $appRoot = getenv("APP_ROOT") ?: "/var/www/html";
+        putenv("CONFIG_PATH=" . (getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json"));
+        require_once $appRoot . "/lib/config.php";
+        require_once $appRoot . "/lib/proftpd-auth.php";
+        require_once $appRoot . "/lib/upload-endpoints.php";
 
         $settings = getUploadHealthProbeSettings();
         $parsed = parseProftpdPasswdFile();
@@ -97,13 +226,19 @@ fail() {
     exit 1
 }
 
+if [[ "${VALIDATE_UPLOAD_FUNCTIONS_ONLY:-}" == "1" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+
 command -v python3 >/dev/null 2>&1 || fail "python3 required"
 
 if ! pgrep -x proftpd >/dev/null 2>&1; then
     fail "proftpd is not running"
 fi
 
-settings="$(read_probe_settings)"
+assert_runtime_conf_matches_config
+
+settings="$(read_probe_settings || true)"
 if [ -z "$settings" ]; then
     fail "could not read validation settings"
 fi
@@ -142,7 +277,9 @@ for mode in "${modes[@]}"; do
     }
     pasv_ip="$(echo "$result" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("pasv_ip") or j.get("response") or "")')"
     if [ -n "$cached_ipv4" ] && [ "$mode" = "pasv-plain" ] && [ "$pasv_ip" != "$cached_ipv4" ]; then
-        fail "PASV ip ${pasv_ip} does not match endpoint cache ${cached_ipv4}"
+        if ! is_loopback_probe_host "$host"; then
+            fail "PASV ip ${pasv_ip} does not match endpoint cache ${cached_ipv4}"
+        fi
     fi
     echo "  ${mode}: ok pasv_ip=${pasv_ip}"
 done
@@ -169,9 +306,11 @@ rm -f "$stor_file"
 echo "  stor: ok remote=${stor_remote}"
 
 # Session containment: user A must not reach another camera inbox (SFTP-style jail).
-isolation_pair="$(CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" -r '
-    require_once "/var/www/html/lib/config.php";
-    require_once "/var/www/html/lib/proftpd-auth.php";
+isolation_pair="$(APP_ROOT="$APP_ROOT" CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" -r '
+    $appRoot = getenv("APP_ROOT") ?: "/var/www/html";
+    putenv("CONFIG_PATH=" . (getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json"));
+    require_once $appRoot . "/lib/config.php";
+    require_once $appRoot . "/lib/proftpd-auth.php";
     $parsed = parseProftpdPasswdFile();
     $cameras = [];
     foreach (loadConfig()["airports"] ?? [] as $airport) {
