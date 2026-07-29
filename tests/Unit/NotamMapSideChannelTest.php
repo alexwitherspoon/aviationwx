@@ -246,6 +246,9 @@ final class NotamMapSideChannelTest extends TestCase
         $this->assertSame('N:8339', notamAirspaceNormNumberFromId('8339/2026'));
         $this->assertSame('N:543', notamAirspaceNormNumberFromId('6/0543'));
         $this->assertSame('N:543', notamAirspaceNormNumberFromId('6/0543-1-FDC-F'));
+        // Multi-digit WFS series prefix (aligned with FaaTfrWfsAdapter::identityFromNotamKey)
+        $this->assertSame('N:543', notamAirspaceNormNumberFromId('12/0543'));
+        $this->assertSame('N:543', notamAirspaceNormNumberFromId('12/0543-1-FDC-F'));
         $this->assertNull(notamAirspaceNormNumberFromId(''));
         $this->assertNull(notamAirspaceNormNumberFromId('invalid'));
     }
