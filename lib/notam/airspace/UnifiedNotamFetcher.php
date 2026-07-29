@@ -115,7 +115,7 @@ final class UnifiedNotamFetcher
             'ok' => false,
             'source' => $sourceType,
             'records' => [],
-            'error' => 'HTTP fetch for source ' . $sourceType . ' is owned by the NMS fetcher; use parseResponse or recordsFromParsedNotams',
+            'error' => 'HTTP fetch for source ' . $sourceType . ' is owned by the NMS fetcher; use parseSource or recordsFromNmsNotams',
             'http_code' => 0,
         ];
     }
