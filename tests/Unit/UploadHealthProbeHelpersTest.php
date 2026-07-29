@@ -160,6 +160,34 @@ class UploadHealthProbeHelpersTest extends TestCase
         @rmdir($dir);
     }
 
+    public function testEnsureProbeTmpDir_PreservesHealthcheckUploadFile(): void
+    {
+        $dir = sys_get_temp_dir() . '/probe-tmp-' . uniqid('', true);
+        $this->assertTrue(mkdir($dir, 0700, true));
+        $healthcheck = $dir . '/aviationwx-probe-healthcheck.txt';
+        file_put_contents($healthcheck, 'probe payload');
+        $stale = $dir . '/curl-netrc.abc123';
+        file_put_contents($stale, 'machine localhost');
+
+        $cmd = sprintf(
+            'bash -c %s',
+            escapeshellarg(
+                '. ' . $this->commonScript
+                . ' && PROBE_TMP_DIR=' . escapeshellarg($dir)
+                . ' ensure_probe_tmp_dir'
+            )
+        );
+        exec($cmd, $output, $code);
+        $this->assertSame(0, $code, implode("\n", $output));
+
+        $this->assertFileExists($healthcheck);
+        $this->assertSame('probe payload', file_get_contents($healthcheck));
+        $this->assertFileDoesNotExist($stale);
+
+        @unlink($healthcheck);
+        @rmdir($dir);
+    }
+
     private function runHelperCapture(string $helperInvocation): string
     {
         $cmd = sprintf(

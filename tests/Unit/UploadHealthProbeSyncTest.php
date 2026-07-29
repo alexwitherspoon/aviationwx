@@ -222,6 +222,23 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringContainsString('localhost|127.0.0.1|::1', $contents);
     }
 
+    public function testUploadProbeScript_PreparesSftpNetrcBeforeWritingHealthcheckFile(): void
+    {
+        $path = __DIR__ . '/../../scripts/upload-probe.sh';
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+
+        $fnPos = strpos($contents, 'run_sftp_probe()');
+        $this->assertNotFalse($fnPos);
+        $fnBody = substr($contents, $fnPos, 2500);
+
+        $netrcPos = strpos($fnBody, 'probe_setup_netrc');
+        $printfPos = strpos($fnBody, 'printf \'aviationwx upload probe');
+        $this->assertNotFalse($netrcPos);
+        $this->assertNotFalse($printfPos);
+        $this->assertLessThan($printfPos, $netrcPos, 'SFTP netrc setup must run before writing the local healthcheck file');
+    }
+
     /**
      * @param array<string, mixed> $config
      */
