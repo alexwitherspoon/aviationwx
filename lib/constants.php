@@ -282,14 +282,11 @@ if (!defined('FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS')) {
     define('FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS', 900); // 15 minutes
 }
 
-<<<<<<< HEAD
 // National NMS FDC + AIRSPACE bulk (credentialed; rate-limited)
 if (!defined('NMS_FDC_AIRSPACE_REFRESH_INTERVAL_SECONDS')) {
     define('NMS_FDC_AIRSPACE_REFRESH_INTERVAL_SECONDS', 1800); // 30 minutes
 }
 
-=======
->>>>>>> origin/main
 if (!defined('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS')) {
     define('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS', 300); // 5 minutes between retries after NMS failure
 }

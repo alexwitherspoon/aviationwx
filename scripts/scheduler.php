@@ -70,10 +70,7 @@ $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
 $lastNwsPointsRefresh = 0;
 $lastFaaTfrWfsRefresh = 0;
-<<<<<<< HEAD
 $lastNmsFdcAirspaceRefresh = 0;
-=======
->>>>>>> origin/main
 $lastNwsPointsMissingLog = 0;
 $lastNmsFdcAirspaceMissingLog = 0;
 $deployDrainAnnounced = false;
@@ -259,7 +256,6 @@ $workRegistry->registerEnqueueTick('faa_tfr_wfs', function (int $now) use (&$las
     }
 });
 
-<<<<<<< HEAD
 $workRegistry->registerEnqueueTick('nms_fdc_airspace', function (int $now) use (&$lastNmsFdcAirspaceRefresh, &$lastNmsFdcAirspaceMissingLog): void {
     // National NMS FDC + AIRSPACE bulk → unified airspace store.
     if (($now - $lastNmsFdcAirspaceRefresh) >= NMS_FDC_AIRSPACE_REFRESH_INTERVAL_SECONDS) {
@@ -278,8 +274,6 @@ $workRegistry->registerEnqueueTick('nms_fdc_airspace', function (int $now) use (
     }
 });
 
-=======
->>>>>>> origin/main
 $workRegistry->registerEnqueueTick('nws_points', function (int $now) use (&$lastNwsPointsRefresh, &$lastNwsPointsMissingLog): void {
     // NWS /points metadata cache warmup (stale entries only; see refresh-nws-points.php).
     if (($now - $lastNwsPointsRefresh) >= NWS_POINTS_REFRESH_INTERVAL_SECONDS) {
