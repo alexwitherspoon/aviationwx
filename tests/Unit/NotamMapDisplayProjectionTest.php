@@ -119,40 +119,179 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertCount(2, $out);
     }
 
-    public function testProjectDisplayFeatures_PassesCirclesThrough(): void
-    {
-        $circle = [
+    /**
+     * @return array<string, mixed>
+     */
+    private function circleFeature(
+        string $notamId,
+        float $lon,
+        float $lat,
+        float $radiusNm,
+        string $headline,
+        string $status = 'active'
+    ): array {
+        return [
             'type' => 'Feature',
-            'id' => 'tfr-circle',
+            'id' => 'tfr-' . $notamId,
             'geometry' => [
                 'type' => 'Point',
-                'coordinates' => [-121.0, 45.0],
+                'coordinates' => [$lon, $lat],
             ],
             'properties' => [
-                'notam_id' => '3000/2026',
-                'status' => 'active',
-                'map_layer_style' => 'active',
+                'notam_id' => $notamId,
+                'status' => $status,
+                'map_layer_style' => $status === 'active' ? 'active' : 'upcoming',
                 'geometry_kind' => 'circle',
                 'restriction_kind' => 'tfr',
-                'banner_headline' => 'Fire TFR - 5 NM radius - SFC - 9000 ft',
-                'radius_nm' => 5.0,
-                'radius_m' => 5.0 * 1852.0,
+                'banner_headline' => $headline,
+                'radius_nm' => $radiusNm,
+                'radius_m' => $radiusNm * 1852.0,
+                'official_link' => 'https://notams.aim.faa.gov/notamSearch/search?notamNumber=' . rawurlencode($notamId),
+                'official_link_label' => 'Details on FAA Notam Search',
             ],
         ];
+    }
+
+    public function testProjectDisplayFeatures_MergesConcentricCirclesSameVertical(): void
+    {
+        $outer = $this->circleFeature(
+            '8495/2026',
+            -115.73333333333333,
+            45.358333333333334,
+            7.0,
+            'Daily fire TFR - 7 NM radius - SFC - 12000 ft'
+        );
+        $inner = $this->circleFeature(
+            '8874/2026',
+            -115.73333333333333,
+            45.35,
+            4.0,
+            'Daily fire TFR - 4 NM radius - SFC - 12000 ft'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$outer, $inner]);
+        $this->assertCount(1, $out);
+        $props = $out[0]['properties'];
+        $this->assertTrue($props['display_merged']);
+        $this->assertSame('circle', $props['geometry_kind']);
+        $this->assertSame(2, $props['member_count']);
+        $this->assertGreaterThanOrEqual(7.0, (float) $props['radius_nm']);
+        $this->assertStringContainsString('7 NM', (string) $props['banner_headline']);
+        $this->assertStringContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
+    }
+
+    public function testProjectDisplayFeatures_MergesOverlappingCircleAndPolygon(): void
+    {
+        $circle = $this->circleFeature(
+            '8654/2026',
+            -117.2,
+            44.5,
+            14.0,
+            'Fire TFR - 14 NM radius - SFC - 11500 ft'
+        );
+        // Nested well inside the 14 NM circle bbox.
+        $poly = $this->polygonFeature(
+            '9532/2026',
+            [[-117.25, 44.45], [-117.15, 44.45], [-117.15, 44.55], [-117.25, 44.55]],
+            'Fire TFR - polygon area - SFC - 11500 ft'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$circle, $poly]);
+        $this->assertCount(1, $out);
+        $props = $out[0]['properties'];
+        $this->assertTrue($props['display_merged']);
+        $this->assertSame('circle', $props['geometry_kind']);
+        $this->assertSame('Point', $out[0]['geometry']['type']);
+        $this->assertSame(2, $props['member_count']);
+        $this->assertGreaterThanOrEqual(14.0, (float) $props['radius_nm']);
+        $this->assertStringContainsString('14 NM', (string) $props['banner_headline']);
+    }
+
+    public function testProjectDisplayFeatures_LeavesLaterallyOverlappingCirclesSeparate(): void
+    {
+        // Mount Hood-style peers: same vertical band, overlap, neither contains the other.
+        $a = $this->circleFeature(
+            '4000/2026',
+            -121.70,
+            45.30,
+            5.0,
+            'Fire TFR - 5 NM radius - SFC - 10000 ft'
+        );
+        $b = $this->circleFeature(
+            '4001/2026',
+            -121.62,
+            45.30,
+            5.0,
+            'Fire TFR - 5 NM radius - SFC - 10000 ft'
+        );
+        $c = $this->circleFeature(
+            '4002/2026',
+            -121.66,
+            45.36,
+            3.0,
+            'Fire TFR - 3 NM radius - SFC - 10000 ft'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$a, $b, $c]);
+        $this->assertCount(3, $out);
+        foreach ($out as $feature) {
+            $this->assertSame('circle', $feature['properties']['geometry_kind']);
+            $this->assertArrayNotHasKey('display_merged', $feature['properties']);
+        }
+    }
+
+    public function testProjectDisplayFeatures_RewritesRadiusPolygonRingToCircle(): void
+    {
+        $centerLon = -121.34;
+        $centerLat = 45.25;
+        $radiusNm = 10.0;
+        $ring = [];
+        $dLat = $radiusNm / 60.0;
+        $dLon = $radiusNm / (60.0 * cos(deg2rad($centerLat)));
+        for ($i = 0; $i < 36; $i++) {
+            $theta = (2.0 * M_PI * $i) / 36.0;
+            $ring[] = [
+                $centerLon + ($dLon * cos($theta)),
+                $centerLat + ($dLat * sin($theta)),
+            ];
+        }
+
+        $feature = $this->polygonFeature(
+            '8888/2026',
+            $ring,
+            'Fire TFR - 10 NM radius - SFC - 10500 ft'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(1, $out);
+        $this->assertSame('Point', $out[0]['geometry']['type']);
+        $props = $out[0]['properties'];
+        $this->assertSame('circle', $props['geometry_kind']);
+        $this->assertEqualsWithDelta(10.0, (float) $props['radius_nm'], 0.01);
+        $this->assertEqualsWithDelta($centerLon, (float) $out[0]['geometry']['coordinates'][0], 0.02);
+        $this->assertEqualsWithDelta($centerLat, (float) $out[0]['geometry']['coordinates'][1], 0.02);
+    }
+
+    public function testProjectDisplayFeatures_LeavesDistantCircleAndPolygonSeparate(): void
+    {
+        $circle = $this->circleFeature(
+            '3000/2026',
+            -121.0,
+            45.0,
+            5.0,
+            'Fire TFR - 5 NM radius - SFC - 9000 ft'
+        );
         $poly = $this->polygonFeature(
             '3001/2026',
-            [[-121.1, 44.9], [-120.9, 44.9], [-120.9, 45.1], [-121.1, 45.1]],
+            [[-117.1, 44.9], [-116.9, 44.9], [-116.9, 45.1], [-117.1, 45.1]],
             'Fire TFR - polygon area - SFC - 9000 ft'
         );
 
         $out = notamTfrMapLayerProjectDisplayFeatures([$circle, $poly]);
         $this->assertCount(2, $out);
-        $kinds = array_map(
-            static fn(array $f): string => (string) ($f['properties']['geometry_kind'] ?? ''),
-            $out
-        );
-        sort($kinds);
-        $this->assertSame(['circle', 'polygon'], $kinds);
+        foreach ($out as $feature) {
+            $this->assertArrayNotHasKey('display_merged', $feature['properties']);
+        }
     }
 
     public function testBuildPayload_DisplayProjectionDoesNotRewriteStore(): void
