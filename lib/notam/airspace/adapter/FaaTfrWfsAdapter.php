@@ -13,11 +13,12 @@ namespace AviationWX\Notam\Airspace\Adapter;
 require_once __DIR__ . '/../../../logger.php';
 require_once __DIR__ . '/../../../cache-paths.php';
 require_once __DIR__ . '/../identity.php';
+require_once __DIR__ . '/NotamSourceAdapter.php';
 
 /**
  * Parse and classify FAA TFR WFS GeoJSON into canonical airspace records.
  */
-final class FaaTfrWfsAdapter
+final class FaaTfrWfsAdapter implements NotamSourceAdapter
 {
     public const SOURCE_TYPE = 'faa_tfr_wfs';
 
@@ -34,12 +35,24 @@ final class FaaTfrWfsAdapter
         return self::SOURCE_TYPE;
     }
 
+    public static function getTypicalUpdateFrequency(): int
+    {
+        return defined('FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS')
+            ? (int) FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS
+            : 900;
+    }
+
+    public static function getMaxAcceptableAge(): int
+    {
+        return self::getTypicalUpdateFrequency();
+    }
+
     /**
      * Build the public WFS GetFeature URL.
      *
      * @param array<string, mixed> $config Optional overrides (url, max_features)
      */
-    public static function buildUrl(array $config = []): string
+    public static function buildUrl(array $config = []): ?string
     {
         $url = trim((string) ($config['url'] ?? ''));
         if ($url !== '') {

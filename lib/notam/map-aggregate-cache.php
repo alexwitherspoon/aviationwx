@@ -395,21 +395,13 @@ function notamMapAirspaceAggregateWithLock(callable $mutator): bool
  */
 function notamMapAirspaceAggregateUpsertFromFetch(string $airportId, array $airport, array $notams): void
 {
-    $timezone = getAirportTimezone($airport);
-    $candidates = [];
+    require_once __DIR__ . '/airspace/UnifiedNotamFetcher.php';
 
-    foreach ($notams as $notam) {
-        if (!is_array($notam)) {
-            continue;
-        }
-
-        $record = notamAirspaceRecordFromNotam($notam, $airportId, $timezone);
-        if ($record === null) {
-            continue;
-        }
-
-        $candidates[] = $record;
-    }
+    $candidates = \AviationWX\Notam\Airspace\UnifiedNotamFetcher::recordsFromNmsNotams($notams, [
+        'airport_id' => $airportId,
+        'airport' => $airport,
+        'timezone' => getAirportTimezone($airport),
+    ]);
 
     if ($candidates === []) {
         return;
