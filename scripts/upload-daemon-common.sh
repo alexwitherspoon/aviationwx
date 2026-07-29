@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared helpers for upload health probe and service-watchdog (vsftpd / container sshd).
+# Shared helpers for upload health probe and service-watchdog (ProFTPD / container sshd).
 # Sourced by scripts under /usr/local/libexec/aviationwx/ at runtime.
 
 UPLOAD_PROBE_INTERVAL_SEC="${UPLOAD_PROBE_INTERVAL_SEC:-30}"
@@ -8,9 +8,11 @@ UPLOAD_PROBE_FAIL_STREAK_THRESHOLD="${UPLOAD_PROBE_FAIL_STREAK_THRESHOLD:-2}"
 UPLOAD_DAEMON_RESTART_MIN_INTERVAL_SEC="${UPLOAD_DAEMON_RESTART_MIN_INTERVAL_SEC:-1800}"
 
 UPLOAD_PROBE_STATE_FILE="${UPLOAD_PROBE_STATE_FILE:-/var/lib/aviationwx/upload-probe.json}"
-VSFTPD_RESTART_LOCK="${VSFTPD_RESTART_LOCK:-/var/lib/aviationwx/vsftpd.restart.lock}"
+PROFTPD_RESTART_LOCK="${PROFTPD_RESTART_LOCK:-/var/lib/aviationwx/proftpd.restart.lock}"
 SSHD_RESTART_LOCK="${SSHD_RESTART_LOCK:-/var/lib/aviationwx/sshd.restart.lock}"
-VSFTPD_CONF="${VSFTPD_CONF:-/etc/vsftpd/vsftpd.conf}"
+PROFTPD_CONF="${PROFTPD_CONF:-/etc/proftpd/proftpd.conf}"
+PROFTPD_RUNTIME_CONF="${PROFTPD_RUNTIME_CONF:-/etc/proftpd/conf.d/runtime.conf}"
+PROFTPD_PID_FILE="${PROFTPD_PID_FILE:-/var/run/proftpd.pid}"
 
 CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 if [ -x /usr/local/bin/php ]; then
@@ -40,7 +42,7 @@ watchdog_log() {
 
 ensure_aviationwx_state_dir() {
     mkdir -p "$(dirname "$UPLOAD_PROBE_STATE_FILE")" 2>/dev/null || true
-    mkdir -p "$(dirname "$VSFTPD_RESTART_LOCK")" 2>/dev/null || true
+    mkdir -p "$(dirname "$PROFTPD_RESTART_LOCK")" 2>/dev/null || true
     mkdir -p "$(dirname "$SSHD_RESTART_LOCK")" 2>/dev/null || true
 }
 
@@ -140,40 +142,62 @@ record_daemon_restart() {
     write_int_file "$1" "$(date +%s)"
 }
 
-restart_vsftpd_daemon() {
+reload_proftpd_daemon() {
+    local reason="${1:-unspecified}"
+    if [ ! -f "$PROFTPD_PID_FILE" ]; then
+        watchdog_log "ERROR" "ProFTPD pid file missing; cannot reload ($reason)"
+        return 1
+    fi
+    local pid
+    pid="$(tr -d '[:space:]' <"$PROFTPD_PID_FILE" 2>/dev/null || true)"
+    if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        watchdog_log "ERROR" "ProFTPD pid file invalid; cannot reload ($reason)"
+        return 1
+    fi
+    if kill -HUP "$pid" 2>/dev/null; then
+        watchdog_log "INFO" "ProFTPD reloaded ($reason)"
+        log_upload_health_app "info" "ProFTPD reloaded" "{\"reason\":\"${reason}\"}"
+        return 0
+    fi
+    watchdog_log "ERROR" "ProFTPD reload failed ($reason)"
+    log_upload_health_app "error" "ProFTPD reload failed" "{\"reason\":\"${reason}\"}"
+    return 1
+}
+
+restart_proftpd_daemon() {
     local reason="${1:-unspecified}"
     ensure_aviationwx_state_dir
     if ! command -v flock >/dev/null 2>&1; then
-        watchdog_log "ERROR" "flock not available; skipping vsftpd restart ($reason)"
-        log_upload_health_app "error" "vsftpd restart skipped: flock unavailable" "{\"reason\":\"${reason}\"}"
+        watchdog_log "ERROR" "flock not available; skipping ProFTPD restart ($reason)"
+        log_upload_health_app "error" "ProFTPD restart skipped: flock unavailable" "{\"reason\":\"${reason}\"}"
         return 1
     fi
-    if ! flock -n "$VSFTPD_RESTART_LOCK" bash -c "
+    if ! flock -n "$PROFTPD_RESTART_LOCK" bash -c "
         set -euo pipefail
-        if [ ! -f \"$VSFTPD_CONF\" ]; then
-            echo 'vsftpd.conf missing' >&2
+        if [ ! -f \"$PROFTPD_CONF\" ]; then
+            echo 'proftpd.conf missing' >&2
             exit 1
         fi
-        pkill -x vsftpd 2>/dev/null || true
+        pkill -x proftpd 2>/dev/null || true
         sleep 1
         for _ in 1 2 3 4 5; do
-            pgrep -x vsftpd >/dev/null 2>&1 || break
+            pgrep -x proftpd >/dev/null 2>&1 || break
             sleep 1
         done
-        if pgrep -x vsftpd >/dev/null 2>&1; then
-            pkill -9 -x vsftpd 2>/dev/null || true
+        if pgrep -x proftpd >/dev/null 2>&1; then
+            pkill -9 -x proftpd 2>/dev/null || true
             sleep 1
         fi
-        /usr/sbin/vsftpd \"$VSFTPD_CONF\" &
+        /usr/sbin/proftpd -c \"$PROFTPD_CONF\" &
         sleep 2
-        pgrep -x vsftpd >/dev/null 2>&1
+        pgrep -x proftpd >/dev/null 2>&1
     "; then
-        watchdog_log "ERROR" "vsftpd restart failed or lock held ($reason)"
-        log_upload_health_app "error" "vsftpd restart failed" "{\"reason\":\"${reason}\"}"
+        watchdog_log "ERROR" "ProFTPD restart failed or lock held ($reason)"
+        log_upload_health_app "error" "ProFTPD restart failed" "{\"reason\":\"${reason}\"}"
         return 1
     fi
-    watchdog_log "INFO" "vsftpd restarted ($reason)"
-    log_upload_health_app "warning" "vsftpd restarted" "{\"reason\":\"${reason}\"}"
+    watchdog_log "INFO" "ProFTPD restarted ($reason)"
+    log_upload_health_app "warning" "ProFTPD restarted" "{\"reason\":\"${reason}\"}"
     return 0
 }
 
@@ -204,7 +228,7 @@ restart_container_sshd() {
     return 0
 }
 
-# Throttled daemon restart after probe failure streak (shared by vsftpd and container sshd).
+# Throttled daemon restart after probe failure streak (shared by ProFTPD and container sshd).
 try_restart_upload_daemon() {
     local protocol="$1"
     local streak_file="$2"
@@ -304,4 +328,56 @@ probe_local_upload_path() {
             ;;
     esac
     return 1
+}
+
+# Validate PASV_PROBE_PASSWORD_ENV for safe indirect export/unset in bash.
+normalize_pasv_probe_password_env() {
+    local name="${1:-AVIATIONWX_FTP_PROBE_PASSWORD}"
+    if [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        printf '%s' "$name"
+        return 0
+    fi
+    printf '%s' 'AVIATIONWX_FTP_PROBE_PASSWORD'
+}
+
+# Harden probe temp directory against symlink races when run as root.
+ensure_probe_tmp_dir() {
+    local dir="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
+    local owner=""
+
+    if [ -L "$dir" ]; then
+        echo "ensure_probe_tmp_dir: refusing symlinked PROBE_TMP_DIR: ${dir}" >&2
+        return 1
+    fi
+    if [ -e "$dir" ] && [ ! -d "$dir" ]; then
+        echo "ensure_probe_tmp_dir: PROBE_TMP_DIR is not a directory: ${dir}" >&2
+        return 1
+    fi
+
+    mkdir -p "$dir" || return 1
+
+    if [ -L "$dir" ]; then
+        echo "ensure_probe_tmp_dir: PROBE_TMP_DIR became a symlink: ${dir}" >&2
+        return 1
+    fi
+
+    if [ "$(id -u)" -eq 0 ]; then
+        chmod 700 "$dir" 2>/dev/null || true
+        chown root:root "$dir" 2>/dev/null || true
+        owner="$(stat -c '%u:%g' "$dir" 2>/dev/null || echo "")"
+        if [ "$owner" != "0:0" ]; then
+            echo "ensure_probe_tmp_dir: refusing non-root-owned PROBE_TMP_DIR: ${dir} (${owner})" >&2
+            return 1
+        fi
+        if find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -print -quit 2>/dev/null | grep -q .; then
+            if ! find "$dir" -mindepth 1 -maxdepth 1 \( -type l -o -type f \) -exec rm -f {} + 2>/dev/null; then
+                echo "ensure_probe_tmp_dir: could not clear stale probe temp entries under ${dir}" >&2
+                return 1
+            fi
+        fi
+    else
+        chmod 700 "$dir" 2>/dev/null || true
+    fi
+
+    return 0
 }

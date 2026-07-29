@@ -490,7 +490,7 @@ jobs:
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
           
           # Check for push webcam dependencies
-          grep -q "vsftpd" docker/Dockerfile || (echo "❌ vsftpd not found in Dockerfile (required for push webcams)" && exit 1)
+          grep -q "proftpd" docker/Dockerfile || (echo "❌ proftpd not found in Dockerfile (required for push webcams)" && exit 1)
           grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
           grep -q "certbot" docker/Dockerfile || (echo "⚠️  certbot not found in Dockerfile (required for FTPS)" || true)
           grep -q "logrotate" docker/Dockerfile || (echo "⚠️  logrotate not found in Dockerfile (recommended for FTP/SFTP logs)" || true)

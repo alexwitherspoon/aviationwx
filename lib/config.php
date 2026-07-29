@@ -536,7 +536,7 @@ function getBaseDomain(): string {
 /**
  * Get public IPv4 address from global config
  * 
- * Used for FTP passive mode (pasv_address) and other services that need
+ * Used for FTP passive mode (MasqueradeAddress) and other services that need
  * to advertise the server's public IP address.
  * 
  * @return string|null Public IPv4 address, or null if not configured
@@ -599,42 +599,6 @@ function getSftpPort(): int {
     }
 
     return 2222;
-}
-
-/**
- * Get dynamic DNS refresh interval from global config
- * 
- * When set to a positive value, the system will periodically re-resolve
- * the upload hostname and update vsftpd's pasv_address if it changes.
- * Useful for sites with dynamic DNS (DDNS) where the public IP may change.
- * 
- * When public_ip is explicitly set, this setting has no effect (static IP
- * doesn't need DNS refresh).
- * 
- * @return int Refresh interval in seconds (0 = disabled, minimum 60 when enabled)
- */
-function getDynamicDnsRefreshSeconds(): int {
-    // If public_ip is explicitly set, dynamic DNS refresh is not needed
-    if (getPublicIP() !== null) {
-        return 0;
-    }
-    
-    $seconds = getGlobalConfig('dynamic_dns_refresh_seconds');
-    if ($seconds === null || !is_int($seconds) || $seconds <= 0) {
-        return 0; // Disabled by default
-    }
-    
-    // Enforce minimum of 60 seconds to prevent excessive DNS lookups
-    return max(60, $seconds);
-}
-
-/**
- * Check if dynamic DNS refresh is enabled
- * 
- * @return bool True if dynamic DNS refresh is enabled and applicable
- */
-function isDynamicDnsEnabled(): bool {
-    return getDynamicDnsRefreshSeconds() > 0;
 }
 
 /**
@@ -3879,7 +3843,7 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
 
-            // Optional TCP port map: config.network_ports (UFW/deploy scripts, vsftpd, sshd SFTP, fail2ban).
+            // Optional TCP port map: config.network_ports (UFW/deploy scripts, ProFTPD, sshd SFTP, fail2ban).
             if (array_key_exists('host_firewall', $cfg)) {
                 $errors[] = 'config.host_firewall is not a valid key; TCP ports are configured in config.network_ports';
             }
@@ -3931,6 +3895,19 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.dynamic_dns_refresh_seconds must be >= 60 seconds when enabled (or 0 to disable)";
                 }
             }
+
+            if (isset($cfg['dynamic_dns_accelerated_refresh_seconds'])) {
+                if (!is_int($cfg['dynamic_dns_accelerated_refresh_seconds'])) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be an integer';
+                } elseif ($cfg['dynamic_dns_accelerated_refresh_seconds'] < 0) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be >= 0';
+                } elseif ($cfg['dynamic_dns_accelerated_refresh_seconds'] > 0
+                    && $cfg['dynamic_dns_accelerated_refresh_seconds'] < 60) {
+                    $errors[] = 'config.dynamic_dns_accelerated_refresh_seconds must be >= 60 when enabled';
+                }
+            }
+
+            $errors = array_merge($errors, validateUploadCapabilitiesConfig($cfg));
 
             // Optional global allowlist for push FTP/SFTP inbox debris cleanup (union with per-push-camera allowed_extensions)
             if (isset($cfg['push_upload_allowed_extensions'])) {
@@ -5289,3 +5266,5 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         'warnings' => $warnings
     ];
 }
+
+require_once __DIR__ . '/upload-endpoints.php';

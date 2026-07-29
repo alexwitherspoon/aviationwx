@@ -922,12 +922,12 @@ function getNetworkPortsForStatusDisplay(): array
 function checkFtpSftpServices(): array
 {
     $np = getNetworkPortsForStatusDisplay();
-    $vsftpdPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
+    $ftpPorts = array_values(array_unique([$np['ftp_control'], $np['ftps_explicit_tls']]));
     $services = [
-        'vsftpd' => [
+        'proftpd' => [
             'name' => 'FTP/FTPS Server',
             'running' => false,
-            'ports' => $vsftpdPorts,
+            'ports' => $ftpPorts,
         ],
         'sshd' => [
             'name' => 'SFTP Server',
@@ -937,12 +937,12 @@ function checkFtpSftpServices(): array
     ];
     
     // Use @ to suppress errors for non-critical process checks
-    $vsftpdRunning = false;
+    $ftpRunning = false;
     if (function_exists('exec')) {
-        @exec('pgrep -x vsftpd 2>/dev/null', $output, $code);
-        $vsftpdRunning = ($code === 0 && !empty($output));
+        @exec('pgrep -x proftpd 2>/dev/null', $output, $code);
+        $ftpRunning = ($code === 0 && !empty($output));
     }
-    $services['vsftpd']['running'] = $vsftpdRunning;
+    $services['proftpd']['running'] = $ftpRunning;
     
     $sshdRunning = false;
     if (function_exists('exec')) {
@@ -950,22 +950,43 @@ function checkFtpSftpServices(): array
         $sshdRunning = ($code === 0 && !empty($output));
     }
     $services['sshd']['running'] = $sshdRunning;
-    
-    $allRunning = $vsftpdRunning && $sshdRunning;
-    $noneRunning = !$vsftpdRunning && !$sshdRunning;
-    
-    if ($allRunning) {
+
+    $endpoints = readUploadEndpointsCache();
+    if (is_array($endpoints)) {
+        $services['proftpd']['endpoints'] = [
+            'hostname' => $endpoints['hostname'] ?? null,
+            'ipv4' => $endpoints['ipv4'] ?? null,
+            'ipv6' => $endpoints['ipv6'] ?? null,
+            'resolved_at' => $endpoints['resolved_at'] ?? null,
+        ];
+    }
+
+    $caps = getUploadCapabilities();
+    $ftpRequired = $caps['plain_ftp'] || $caps['ftps'];
+    $sftpRequired = $caps['sftp'];
+
+    $ftpOk = !$ftpRequired || $ftpRunning;
+    $sftpOk = !$sftpRequired || $sshdRunning;
+
+    $messageParts = [];
+    if ($ftpRequired) {
+        $messageParts[] = $ftpRunning ? 'FTP/FTPS running' : 'FTP/FTPS not running';
+    } else {
+        $messageParts[] = 'FTP/FTPS disabled';
+    }
+    if ($sftpRequired) {
+        $messageParts[] = $sftpRunning ? 'SFTP running' : 'SFTP not running';
+    } else {
+        $messageParts[] = 'SFTP disabled';
+    }
+    $message = implode('; ', $messageParts);
+
+    if ($ftpOk && $sftpOk) {
         $status = 'operational';
-        $message = 'FTP/FTPS and SFTP servers running';
-    } elseif ($noneRunning) {
+    } elseif ($ftpRequired && $sftpRequired && !$ftpRunning && !$sshdRunning) {
         $status = 'down';
-        $message = 'FTP/FTPS and SFTP servers not running';
     } else {
         $status = 'degraded';
-        $runningServices = [];
-        if ($vsftpdRunning) $runningServices[] = 'FTP/FTPS';
-        if ($sshdRunning) $runningServices[] = 'SFTP';
-        $message = implode(' and ', $runningServices) . ' running';
     }
     
     return [

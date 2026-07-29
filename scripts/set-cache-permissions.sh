@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Apply cache bind-mount ownership and modes, including webcams setgid layout,
-# plus FTP and SFTP parent directories required by vsftpd and sshd chroot.
+# plus FTP and SFTP parent directories required by ProFTPD and sshd chroot.
 #
 # Invoked from docker/docker-entrypoint.sh and config/crontab (daily 01:00 UTC).
 # Ends with repair-sftp-chroot-permissions.sh for per-user /var/sftp chroots.
@@ -63,7 +63,7 @@ if [ -d "${CACHE_DIR}" ]; then
     if [ -d "${WEATHER_CACHE_DIR}" ]; then
         chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
     fi
-    # Writable app data under cache (www-data); ftp/ is re-owned root below for vsftpd
+    # Writable app data under cache (www-data); ftp/ is re-owned root below for ProFTPD
     for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
         if [ -d "${_d}" ]; then
             chmod 775 "${_d}" 2>/dev/null || true
@@ -90,8 +90,26 @@ if [ -d "${CACHE_DIR}" ]; then
     chown root:root "${FTP_DIR}" 2>/dev/null || true
     chmod 755 "${FTP_DIR}" 2>/dev/null || true
     echo "set-cache-permissions: FTP parent ${FTP_DIR}"
+
+    REPAIR_EXIT=0
+    REPAIR_FTP_SCRIPT="/usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh"
+    if [ ! -x "${REPAIR_FTP_SCRIPT}" ]; then
+        REPAIR_FTP_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repair-ftp-upload-permissions.sh"
+    fi
+    if [ -x "${REPAIR_FTP_SCRIPT}" ]; then
+        if FTP_DIR="${FTP_DIR}" "${REPAIR_FTP_SCRIPT}"; then
+            echo "set-cache-permissions: FTP upload inboxes repaired"
+        else
+            echo "set-cache-permissions: error: FTP upload inbox repair failed" >&2
+            REPAIR_EXIT=1
+        fi
+    else
+        echo "set-cache-permissions: error: repair-ftp-upload-permissions.sh not found" >&2
+        REPAIR_EXIT=1
+    fi
 else
     echo "set-cache-permissions: skipping FTP parent (CACHE_DIR not a directory)"
+    REPAIR_EXIT=0
 fi
 
 # SFTP chroot parent: root:root 755
@@ -108,7 +126,6 @@ REPAIR_SFTP_SCRIPT="/usr/local/libexec/aviationwx/repair-sftp-chroot-permissions
 if [ ! -x "${REPAIR_SFTP_SCRIPT}" ]; then
     REPAIR_SFTP_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repair-sftp-chroot-permissions.sh"
 fi
-REPAIR_EXIT=0
 if [ -x "${REPAIR_SFTP_SCRIPT}" ]; then
     if SFTP_DIR="${SFTP_DIR}" "${REPAIR_SFTP_SCRIPT}"; then
         echo "set-cache-permissions: SFTP chroot directories repaired"

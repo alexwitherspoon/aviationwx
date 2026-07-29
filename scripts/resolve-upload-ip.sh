@@ -1,5 +1,5 @@
 #!/bin/bash
-# Resolve DNS hostname to get pasv_address for vsftpd dual-stack support
+# Resolve upload hostname for ProFTPD MasqueradeAddress (dual-stack).
 #
 # Usage: resolve-upload-ip.sh [hostname] [mode]
 #   hostname: DNS hostname to resolve (default: upload.aviationwx.org)

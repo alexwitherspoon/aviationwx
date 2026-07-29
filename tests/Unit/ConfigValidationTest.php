@@ -3639,6 +3639,101 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('dynamic_dns_refresh_seconds must be an integer', implode(' ', $result['errors']));
     }
 
+    public function testGlobalConfig_ValidDynamicDnsAcceleratedRefreshSeconds()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_accelerated_refresh_seconds' => 120
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid dynamic_dns_accelerated_refresh_seconds should pass');
+    }
+
+    public function testGlobalConfig_InvalidDynamicDnsAcceleratedRefreshSecondsTooLow()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_accelerated_refresh_seconds' => 30
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with dynamic_dns_accelerated_refresh_seconds < 60 should fail');
+        $this->assertStringContainsString('dynamic_dns_accelerated_refresh_seconds must be >= 60', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_ValidUploadCapabilities()
+    {
+        $config = [
+            'config' => [
+                'upload_capabilities' => [
+                    'plain_ftp' => false,
+                    'ftps' => true,
+                    'sftp' => true,
+                    'ipv4' => true,
+                    'ipv6' => false
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid upload_capabilities should pass');
+    }
+
+    public function testGlobalConfig_InvalidUploadCapabilitiesUnknownKey()
+    {
+        $config = [
+            'config' => [
+                'upload_capabilities' => [
+                    'plain_ftp' => true,
+                    'unknown_cap' => true
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with unknown upload_capabilities key should fail');
+        $this->assertStringContainsString("upload_capabilities: unknown key 'unknown_cap'", implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_InvalidWebcamRefreshDefault()
     {
         $config = [

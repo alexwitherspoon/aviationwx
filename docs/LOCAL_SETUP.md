@@ -85,6 +85,17 @@ make config-check
 # Airports: 5 (kspb, kczk, kpfc, cust, 4or9)
 ```
 
+Maintainers with production secrets can validate the ProFTPD upload daemon after containers are running:
+
+```bash
+make up
+docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web \
+  php /var/www/html/scripts/sync-push-config.php
+make validate-upload
+```
+
+See [Testing Guide](TESTING.md#upload-daemon-validation-proftpd) for what the gate checks.
+
 ## Access the Application
 
 Visit in your browser:
@@ -105,6 +116,7 @@ make restart-env # Restart and recreate containers (picks up env var changes)
 make logs        # View logs (Ctrl+C to exit)
 make shell       # Open shell in container
 make test        # Test the application
+make validate-upload  # ProFTPD PASV/EPSV gate (maintainers; see TESTING.md)
 make clean       # Remove containers and cleanup
 ```
 

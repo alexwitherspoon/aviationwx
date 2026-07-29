@@ -35,8 +35,8 @@
     endscript
 }
 
-# Root PASV/DDNS wrapper (/usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh); must stay root-owned (not under /var/log/aviationwx glob).
-/var/lib/aviationwx/dynamic-dns-pasv.log {
+# Root upload endpoint refresh wrapper (/usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh); must stay root-owned (not under /var/log/aviationwx glob).
+/var/lib/aviationwx/upload-endpoints-refresh.log {
     daily
     rotate 1
     compress

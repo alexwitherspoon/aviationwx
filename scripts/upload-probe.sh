@@ -17,6 +17,7 @@ PROBE_TMP_DIR="${PROBE_TMP_DIR:-/tmp/aviationwx-upload-probe}"
 PROBE_FILE_PREFIX="${UPLOAD_HEALTH_PROBE_FILE_PREFIX:-aviationwx-probe-}"
 PROBE_REMOTE_FILENAME="${PROBE_FILE_PREFIX}healthcheck.txt"
 PROBE_NETRC_FILE=""
+PASV_PROBE_PASSWORD_ENV="$(normalize_pasv_probe_password_env "${PASV_PROBE_PASSWORD_ENV:-AVIATIONWX_FTP_PROBE_PASSWORD}")"
 
 log_probe() {
     local level="$1"
@@ -68,7 +69,7 @@ probe_netrc_cleanup() {
 probe_setup_netrc() {
     local host="$1" user="$2" pass="$3"
     probe_netrc_cleanup
-    mkdir -p "$PROBE_TMP_DIR"
+    ensure_probe_tmp_dir || return 1
     PROBE_NETRC_FILE="$(mktemp "${PROBE_TMP_DIR}/curl-netrc.XXXXXX")"
     chmod 600 "$PROBE_NETRC_FILE"
     {
@@ -106,58 +107,75 @@ ensure_sftp_known_hosts() {
     ssh-keyscan -T 5 -p "$port" "$host" >>"$known_hosts" 2>/dev/null || true
 }
 
-vsftpd_ssl_enabled() {
-    local conf="${VSFTPD_CONF:-/etc/vsftpd/vsftpd.conf}"
+proftpd_tls_enabled() {
+    local conf="${PROFTPD_TLS_CONF:-/etc/proftpd/conf.d/tls.conf}"
     if [ ! -f "$conf" ]; then
         return 1
     fi
-    if grep -qE '^[[:space:]]*ssl_enable[[:space:]]*=[[:space:]]*YES' "$conf" 2>/dev/null; then
+    if grep -qE '^[[:space:]]*TLSEngine[[:space:]]+on' "$conf" 2>/dev/null; then
         return 0
     fi
     return 1
 }
 
-# FTP upload probe: plain FTP when ssl_enable=NO, explicit TLS (FTPS) when enabled.
+# FTP upload probe: plain FTP when TLS is off, explicit TLS (FTPS) when enabled.
+# Uses ftplib via pasv-probe.py (curl STOR against ProFTPD can create root-owned files).
 run_ftp_probe() {
     local host="$1" port="$2" user="$3" pass="$4"
-    local file_name base_url local_file start_sec end_sec elapsed ok_detail fail_prefix
-    local -a curl_tls_args=()
-    local curl_err local_upload_path
+    local file_name local_file start_sec end_sec elapsed ok_detail fail_prefix probe_mode
+    local local_upload_path probe_err_file probe_output probe_detail
+    local probe_script="${SCRIPT_DIR}/pasv-probe.py"
+    if [ ! -f "$probe_script" ]; then
+        probe_script="/var/www/html/scripts/pasv-probe.py"
+    fi
     file_name="$PROBE_REMOTE_FILENAME"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    mkdir -p "$PROBE_TMP_DIR"
-    curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
-    # ftp:// with --ftp-ssl-reqd uses explicit TLS (AUTH); vsftpd does not use implicit FTPS.
-    base_url="ftp://$(probe_url_host "$host"):${port}/"
-    if vsftpd_ssl_enabled; then
+    ensure_probe_tmp_dir || return 1
+    if proftpd_tls_enabled; then
         fail_prefix="ftps"
-        curl_tls_args=(--ftp-ssl-reqd)
-        if probe_host_skips_tls_verify "$host"; then
-            curl_tls_args+=(--insecure)
-        fi
+        probe_mode="pasv-ftps"
         ok_detail="ok"
     else
         fail_prefix="ftp"
-        ok_detail="ok (plain ftp, ssl_enable=NO)"
+        probe_mode="pasv-plain"
+        ok_detail="ok (plain ftp, TLSEngine off)"
     fi
     if local_upload_path="$(probe_local_upload_path ftps "$user" "$file_name")"; then
         clear_local_probe_upload_file "$local_upload_path"
     fi
-    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
-    probe_setup_netrc "$host" "$user" "$pass"
-    trap probe_netrc_cleanup RETURN
-    start_sec="$(date +%s 2>/dev/null || echo 0)"
-    if ! curl -sS --netrc-file "$PROBE_NETRC_FILE" --netrc "${curl_tls_args[@]}" --ftp-pasv \
-        --connect-timeout 10 --max-time 45 \
-        --upload-file "$local_file" "${base_url}${file_name}" >/dev/null 2>"$curl_err"; then
-        rm -f "$local_file"
-        echo "false|0|$(probe_curl_fail_detail "$fail_prefix" "$curl_err")"
-        rm -f "$curl_err"
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "false|0|${fail_prefix} failed: python3 not found"
         return 1
     fi
-    # No remote DELE: curl --fail -X DELE on a directory URL can exit non-zero after
-    # vsftpd already returns 250. Health uses local clear + overwrite (same as SFTP).
-    rm -f "$local_file" "$curl_err"
+    printf 'aviationwx upload probe %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$local_file"
+    start_sec="$(date +%s 2>/dev/null || echo 0)"
+    export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
+    if probe_host_skips_tls_verify "$host"; then
+        export AVWX_FTPS_SKIP_HOSTNAME_VERIFY=1
+    fi
+    probe_err_file="${PROBE_TMP_DIR}/pasv-probe-err-$$"
+    probe_output=""
+    if ! probe_output="$(python3 "$probe_script" --host "$host" --port "$port" \
+        --user "$user" --password-env "$PASV_PROBE_PASSWORD_ENV" --mode "$probe_mode" \
+        --stor "$file_name" --stor-data "$(cat "$local_file")" 2>"$probe_err_file")"; then
+        probe_detail="$(tr -d '\n\r' <"$probe_err_file" 2>/dev/null | head -c 200)"
+        if [ -z "$probe_detail" ] && [ -n "$probe_output" ]; then
+            probe_detail="$(printf '%s' "$probe_output" | tr -d '\n\r' | head -c 200)"
+        fi
+        unset "${PASV_PROBE_PASSWORD_ENV}"
+        unset AVWX_FTPS_SKIP_HOSTNAME_VERIFY 2>/dev/null || true
+        rm -f "$local_file" "$probe_err_file"
+        if [ -n "$probe_detail" ]; then
+            echo "false|0|${fail_prefix} failed: ${probe_detail}"
+        else
+            echo "false|0|${fail_prefix} failed"
+        fi
+        return 1
+    fi
+    rm -f "$probe_err_file"
+    unset "${PASV_PROBE_PASSWORD_ENV}"
+    unset AVWX_FTPS_SKIP_HOSTNAME_VERIFY 2>/dev/null || true
+    rm -f "$local_file"
     end_sec="$(date +%s 2>/dev/null || echo 0)"
     elapsed=$((end_sec - start_sec))
     if [ "$elapsed" -lt 0 ]; then
@@ -173,7 +191,7 @@ run_sftp_probe() {
     file_name="$PROBE_REMOTE_FILENAME"
     remote_path="files/${file_name}"
     local_file="${PROBE_TMP_DIR}/${file_name}"
-    mkdir -p "$PROBE_TMP_DIR"
+    ensure_probe_tmp_dir || return 1
     curl_err="$(mktemp "${PROBE_TMP_DIR}/curl-err.XXXXXX")"
     base_url="sftp://$(probe_url_host "$host"):${port}/"
     if local_upload_path="$(probe_local_upload_path sftp "$user" "$file_name")"; then
@@ -233,6 +251,11 @@ main() {
         exit 0
     fi
 
+    ensure_probe_tmp_dir || {
+        log_probe "ERROR" "could not initialize probe temp directory"
+        exit 1
+    }
+
     connect_host="$(echo "$config" | jq -r '.connect_host // .upload_hostname // empty')"
     ftp_port="$(echo "$config" | jq -r '.ftp_port')"
     sftp_port="$(echo "$config" | jq -r '.sftp_port')"
@@ -254,7 +277,7 @@ main() {
     if [ -n "$ftps_user" ] && [ -n "$ftps_pass" ]; then
         local ftp_probe_label="FTP"
         local ftp_probe_fail_detail="ftp failed"
-        if vsftpd_ssl_enabled; then
+        if proftpd_tls_enabled; then
             ftp_probe_label="FTPS"
             ftp_probe_fail_detail="ftps failed"
         fi

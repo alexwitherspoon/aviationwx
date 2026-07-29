@@ -19,17 +19,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ffmpeg \
     libimage-exiftool-perl \
     cron \
-    vsftpd \
+    proftpd-core \
+    proftpd-mod-crypto \
     openssh-server \
     certbot \
     openssl \
     logrotate \
     rsyslog \
-    db-util \
     net-tools \
     fail2ban \
     iptables \
     jq \
+    python3 \
     libcap2-bin \
     tini \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -58,21 +59,21 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 # Copy configuration files (rarely change)
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/
-# vsftpd dual-stack configuration (single instance handles both IPv4 and IPv6)
-COPY docker/vsftpd.conf /etc/vsftpd/vsftpd.conf
-COPY docker/pam-vsftpd /etc/pam.d/vsftpd
+# ProFTPD dual-stack configuration (single instance handles both IPv4 and IPv6)
+COPY docker/proftpd.conf /etc/proftpd/proftpd.conf
 COPY docker/sshd_config /etc/ssh/sshd_config
-COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
+COPY docker/logrotate-proftpd /etc/logrotate.d/proftpd
 COPY docker/logrotate-sshd /etc/logrotate.d/sshd
 COPY docker/logrotate-aviationwx /etc/logrotate.d/aviationwx
 COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
-COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
+COPY docker/fail2ban-proftpd.conf /etc/fail2ban/filter.d/proftpd.conf
 COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
 
 # Copy scripts (change less frequently than application code)
 COPY scripts/service-watchdog.sh /usr/local/bin/
 COPY scripts/setup-letsencrypt.sh /usr/local/bin/
-COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
+COPY scripts/configure-proftpd.sh /usr/local/bin/
+COPY scripts/enable-upload-ftps.sh /usr/local/bin/
 COPY scripts/create-sftp-user.sh /usr/local/bin/
 COPY scripts/resolve-upload-ip.sh /usr/local/bin/
 
@@ -82,14 +83,15 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/service-watchdog.sh \
     && chmod +x /usr/local/bin/setup-letsencrypt.sh \
-    && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
+    && chmod +x /usr/local/bin/configure-proftpd.sh \
+    && chmod +x /usr/local/bin/enable-upload-ftps.sh \
     && chmod +x /usr/local/bin/create-sftp-user.sh \
     && chmod +x /usr/local/bin/resolve-upload-ip.sh \
-    && chmod 644 /etc/vsftpd/vsftpd.conf \
+    && chmod 644 /etc/proftpd/proftpd.conf \
     && chmod 644 /etc/ssh/sshd_config \
-    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
+    && chmod 644 /etc/logrotate.d/proftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
-    && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
+    && chmod 644 /etc/fail2ban/filter.d/proftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
 
 # Root cron and entrypoint use copies under /usr/local/libexec/aviationwx (root-owned) before the
@@ -97,21 +99,29 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
 RUN mkdir -p /usr/local/libexec/aviationwx \
     && chown root:root /usr/local/libexec/aviationwx \
     && chmod 755 /usr/local/libexec/aviationwx
-COPY scripts/maybe-run-update-pasv-address.sh scripts/update-pasv-address.sh scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh /usr/local/libexec/aviationwx/
-RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
-    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+COPY scripts/maybe-run-refresh-upload-endpoints.sh scripts/refresh-upload-endpoints.php scripts/set-cache-permissions.sh scripts/repair-sftp-chroot-permissions.sh scripts/repair-ftp-upload-permissions.sh scripts/upload-daemon-common.sh scripts/upload-probe.sh scripts/upload-probe-runner.sh scripts/validate-upload-daemon.sh scripts/pasv-probe.py scripts/ftp-isolation-probe.py /usr/local/libexec/aviationwx/
+RUN chmod 755 /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh \
+    /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
+    /usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh \
     /usr/local/libexec/aviationwx/upload-daemon-common.sh \
     /usr/local/libexec/aviationwx/upload-probe.sh \
     /usr/local/libexec/aviationwx/upload-probe-runner.sh \
-    && chown root:root /usr/local/libexec/aviationwx/maybe-run-update-pasv-address.sh \
-    /usr/local/libexec/aviationwx/update-pasv-address.sh \
+    /usr/local/libexec/aviationwx/validate-upload-daemon.sh \
+    /usr/local/libexec/aviationwx/pasv-probe.py \
+    /usr/local/libexec/aviationwx/ftp-isolation-probe.py \
+    && chown root:root /usr/local/libexec/aviationwx/maybe-run-refresh-upload-endpoints.sh \
+    /usr/local/libexec/aviationwx/refresh-upload-endpoints.php \
     /usr/local/libexec/aviationwx/set-cache-permissions.sh \
     /usr/local/libexec/aviationwx/repair-sftp-chroot-permissions.sh \
+    /usr/local/libexec/aviationwx/repair-ftp-upload-permissions.sh \
     /usr/local/libexec/aviationwx/upload-daemon-common.sh \
     /usr/local/libexec/aviationwx/upload-probe.sh \
-    /usr/local/libexec/aviationwx/upload-probe-runner.sh
+    /usr/local/libexec/aviationwx/upload-probe-runner.sh \
+    /usr/local/libexec/aviationwx/validate-upload-daemon.sh \
+    /usr/local/libexec/aviationwx/pasv-probe.py \
+    /usr/local/libexec/aviationwx/ftp-isolation-probe.py
 
 # Copy application files LAST (changes most frequently)
 # This ensures code changes don't invalidate earlier layers
@@ -129,21 +139,20 @@ RUN sh scripts/minify-css.sh \
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache \
     && mkdir -p /var/lib/aviationwx \
-    && chown root:root /var/lib/aviationwx \
-    && chmod 700 /var/lib/aviationwx \
-    && touch /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chown root:root /var/lib/aviationwx/dynamic-dns-pasv.log \
-    && chmod 600 /var/lib/aviationwx/dynamic-dns-pasv.log \
+    && chown root:www-data /var/lib/aviationwx \
+    && chmod 750 /var/lib/aviationwx \
+    && touch /var/lib/aviationwx/upload-endpoints-refresh.log \
+    && chown root:root /var/lib/aviationwx/upload-endpoints-refresh.log \
+    && chmod 600 /var/lib/aviationwx/upload-endpoints-refresh.log \
     && touch /var/lib/aviationwx/set-cache-permissions.log \
     && chown root:root /var/lib/aviationwx/set-cache-permissions.log \
     && chmod 600 /var/lib/aviationwx/set-cache-permissions.log
 
 # Create directories for FTP/SFTP uploads
-# Uses cache/uploads/ to match vsftpd local_root configuration
+# Uses cache/uploads/ to match ProFTPD per-user homedir configuration
 # Parent directories must be root-owned for SFTP chroot to work
 RUN mkdir -p /var/www/html/cache/uploads \
-    && mkdir -p /etc/vsftpd/users \
-    && mkdir -p /var/run/vsftpd/empty \
+    && mkdir -p /etc/proftpd/conf.d \
     && mkdir -p /var/backups/aviationwx \
     && chown root:root /var/www/html/cache/uploads \
     && chmod 755 /var/www/html/cache/uploads
@@ -154,7 +163,7 @@ RUN mkdir -p /var/www/html/cache/uploads \
 RUN groupadd -f webcam_users
 
 # Add ftp user to www-data group for push webcam uploads
-# This allows vsftpd (running as ftp) to write to www-data owned directories
+# This allows ProFTPD (ftp uid in AuthUserFile) to write to www-data owned directories
 # and allows www-data (PHP processor) to read/write files created by ftp
 RUN usermod -aG www-data ftp
 
@@ -163,11 +172,11 @@ RUN mkdir -p /etc/fail2ban/jail.d \
     && mkdir -p /var/log/fail2ban \
     && mkdir -p /var/run/fail2ban
 
-RUN touch /var/log/vsftpd.log /var/log/auth.log \
-    && chmod 644 /var/log/vsftpd.log /var/log/auth.log
+RUN touch /var/log/proftpd.log /var/log/auth.log \
+    && chmod 644 /var/log/proftpd.log /var/log/auth.log
 
-# Create vsftpd virtual users database directory
-RUN mkdir -p /etc/vsftpd && touch /etc/vsftpd/virtual_users.txt /etc/vsftpd/virtual_users.db
+# ProFTPD virtual users auth file (sync-push-config.php maintains entries)
+RUN mkdir -p /etc/proftpd && touch /etc/proftpd/ftpd.passwd && chmod 600 /etc/proftpd/ftpd.passwd
 
 # PHP configuration
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
@@ -211,7 +220,7 @@ EXPOSE 80
 
 # Health check
 # Note: start-period is 15s to allow time for all services to initialize
-# (cron, vsftpd, sshd, fail2ban, then Apache)
+# (cron, ProFTPD, sshd, fail2ban, then Apache)
 # Production docker-compose.prod.yml overrides this to 20s for extra safety
 # Default healthcheck uses port 80 (local/CI), production overrides to port 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
