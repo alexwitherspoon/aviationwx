@@ -72,6 +72,7 @@ $lastNwsPointsRefresh = 0;
 $lastFaaTfrWfsRefresh = 0;
 $lastNmsFdcAirspaceRefresh = 0;
 $lastNwsPointsMissingLog = 0;
+$lastNmsFdcAirspaceMissingLog = 0;
 $deployDrainAnnounced = false;
 $runwaysFetchOnStartupDone = false;
 $nasrAptFetchOnStartupDone = false;
@@ -255,7 +256,7 @@ $workRegistry->registerEnqueueTick('faa_tfr_wfs', function (int $now) use (&$las
     }
 });
 
-$workRegistry->registerEnqueueTick('nms_fdc_airspace', function (int $now) use (&$lastNmsFdcAirspaceRefresh): void {
+$workRegistry->registerEnqueueTick('nms_fdc_airspace', function (int $now) use (&$lastNmsFdcAirspaceRefresh, &$lastNmsFdcAirspaceMissingLog): void {
     // National NMS FDC + AIRSPACE bulk → unified airspace store.
     if (($now - $lastNmsFdcAirspaceRefresh) >= NMS_FDC_AIRSPACE_REFRESH_INTERVAL_SECONDS) {
         $fdcScript = __DIR__ . '/fetch-nms-fdc-airspace.php';
@@ -263,8 +264,13 @@ $workRegistry->registerEnqueueTick('nms_fdc_airspace', function (int $now) use (
             $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
             exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($fdcScript) . ' > /dev/null 2>&1 &');
             reapZombies();
+            $lastNmsFdcAirspaceRefresh = $now;
+        } elseif (($now - $lastNmsFdcAirspaceMissingLog) >= 300) {
+            aviationwx_log('warning', 'scheduler: fetch-nms-fdc-airspace.php missing', [
+                'path' => $fdcScript,
+            ], 'app');
+            $lastNmsFdcAirspaceMissingLog = $now;
         }
-        $lastNmsFdcAirspaceRefresh = $now;
     }
 });
 

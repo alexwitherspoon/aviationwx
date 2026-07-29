@@ -20,7 +20,9 @@ final class NmsFdcAirspaceBulkTest extends TestCase
     protected function setUp(): void
     {
         $this->cacheDir = sys_get_temp_dir() . '/aviationwx-fdc-bulk-' . bin2hex(random_bytes(4));
-        mkdir($this->cacheDir, 0755, true);
+        if (!mkdir($this->cacheDir, 0755, true) && !is_dir($this->cacheDir)) {
+            self::fail('Failed to create test cache directory: ' . $this->cacheDir);
+        }
         $GLOBALS['notamCacheTestDirectory'] = $this->cacheDir;
     }
 
