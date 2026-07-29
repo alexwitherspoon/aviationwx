@@ -63,7 +63,7 @@ class UploadEndpointsTest extends TestCase
 
         $this->assertStringContainsString('MasqueradeAddress               51.81.243.160', $conf);
         $this->assertStringContainsString('mod_ifsession', $conf);
-        $this->assertStringContainsString('ForcePassiveIP                  127.0.0.1', $conf);
+        $this->assertStringContainsString('MasqueradeAddress               127.0.0.1', $conf);
         $this->assertStringContainsString('upload_local_client', $conf);
     }
 
@@ -91,8 +91,8 @@ class UploadEndpointsTest extends TestCase
         $this->assertStringContainsString('51.81.243.160', $conf);
         $this->assertStringContainsString('2001:db8::1', $conf);
         $this->assertStringContainsString('upload_ipv4_mapped', $conf);
-        $this->assertStringContainsString('ForcePassiveIP                  127.0.0.1', $conf);
-        $this->assertStringContainsString('ForcePassiveIP                  ::1', $conf);
+        $this->assertStringContainsString('MasqueradeAddress               127.0.0.1', $conf);
+        $this->assertStringContainsString('MasqueradeAddress               ::1', $conf);
     }
 
     public function testWriteUploadEndpointsCache_AtomicRoundTrip(): void
