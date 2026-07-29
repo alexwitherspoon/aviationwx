@@ -18,6 +18,7 @@ require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/tfr-category.php';
 require_once __DIR__ . '/airspace/official-links.php';
+require_once __DIR__ . '/map-display-projection.php';
 
 /** Segments on approximate circle rings (visual only, not for navigation). */
 const NOTAM_TFR_MAP_CIRCLE_SEGMENTS = 64;
@@ -32,7 +33,7 @@ const NOTAM_MAP_COVERAGE_NOTE_NMS_ONLY = 'Airspace restriction geometry from FAA
  * Bump when map build, dedup, or serve-time revalidation logic changes.
  * Kept for diagnostics; serve eligibility uses store merge_logic_version.
  */
-const NOTAM_TFR_MAP_LAYER_LOGIC_VERSION = 2;
+const NOTAM_TFR_MAP_LAYER_LOGIC_VERSION = 3;
 
 /**
  * Diagnostics token for responses (not used for store serve eligibility).
@@ -590,6 +591,8 @@ function notamTfrMapLayerBuildPayloadFromAirspaceStore(array $envelope, ?int $no
     }
 
     $features = notamTfrMapLayerDeduplicateFeaturesByGeometry($features);
+    // Display-only projection: does not mutate the unified store.
+    $features = notamTfrMapLayerProjectDisplayFeatures($features);
 
     return array_merge([
         'type' => 'FeatureCollection',
@@ -599,6 +602,7 @@ function notamTfrMapLayerBuildPayloadFromAirspaceStore(array $envelope, ?int $no
         'data_updated_at' => (int) ($envelope['data_updated_at'] ?? $envelope['updated_at'] ?? $nowUnix),
         'merge_logic_version' => (int) ($envelope['merge_logic_version'] ?? 0),
         'map_layer_build_token' => (string) ($envelope['map_layer_build_token'] ?? notamTfrMapLayerCurrentBuildToken()),
+        'display_projection_version' => NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION,
     ], notamTfrMapLayerResponseMetadata($envelope));
 }
 
