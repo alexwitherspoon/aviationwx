@@ -39,7 +39,7 @@ final class UnifiedNotamFetcherTest extends TestCase
     {
         $fixture = file_get_contents(__DIR__ . '/../Fixtures/notam/faa-tfr-wfs-sample.json');
         $this->assertNotFalse($fixture);
-        $GLOBALS['faaTfrWfsHttpHandler'] = static function () use ($fixture): array {
+        $GLOBALS['faaTfrWfsHttpHandler'] = static function (string $url) use ($fixture): array {
             return ['ok' => true, 'body' => $fixture, 'http_code' => 200, 'error' => ''];
         };
 
