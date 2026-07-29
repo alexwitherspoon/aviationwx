@@ -103,18 +103,19 @@ final class SchedulerDrainWiringContractTest extends TestCase
         );
     }
 
-    public function testWorkflow_DeployComposeRedirectsSshHeredocStdinBeforeDrain(): void
+    public function testWorkflow_DeployComposeDoesNotRedirectSshHeredocStdin(): void
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
         $composeStepPos = strpos($workflow, '- name: Deploy via Docker Compose');
         $this->assertNotFalse($composeStepPos);
         $composeChunk = substr($workflow, $composeStepPos, 9000);
-        $this->assertStringContainsString('exec < /dev/null', $composeChunk);
-        $stdinPos = strpos($composeChunk, 'exec < /dev/null');
-        $drainPos = strpos($composeChunk, 'scripts/deploy-drain-workers.sh');
-        $this->assertNotFalse($stdinPos);
-        $this->assertNotFalse($drainPos);
-        $this->assertLessThan($drainPos, $stdinPos, 'stdin redirect must precede worker drain');
+        $this->assertStringNotContainsString(
+            'exec < /dev/null',
+            $composeChunk,
+            'Global stdin redirect truncates the SSH heredoc before docker compose build/up'
+        );
+        $this->assertStringContainsString('scripts/deploy-drain-workers.sh', $composeChunk);
+        $this->assertStringContainsString('sync-push-config.php < /dev/null', $composeChunk);
     }
 
     public function testHealthCheck_LogsDuplicateDaemonsBeforeDrainSuppressExit(): void
