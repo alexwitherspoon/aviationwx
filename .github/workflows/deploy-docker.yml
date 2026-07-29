@@ -1559,9 +1559,9 @@ jobs:
           
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
           set -euo pipefail
-          # deploy-drain-workers.sh uses docker compose exec; without this, exec consumes the
-          # SSH heredoc stdin and the compose build/up below never runs on the server.
-          exec < /dev/null
+          # Do not run "exec < /dev/null" here: the remote shell reads this SSH heredoc from
+          # stdin, so redirecting stdin would drop the rest of the deploy script (no build/up).
+          # deploy-drain-workers.sh and compose exec calls below use their own stdin redirects.
           cd ~/aviationwx
           # Source deployment helper functions for consistent error handling
           if [ -f scripts/deploy-helpers.sh ]; then
@@ -1725,7 +1725,7 @@ jobs:
           # Sync FTP/SFTP/FTPS configuration (runs on every deployment)
           # This ensures users and directories are created/updated immediately after deployment
           echo "Syncing FTP/SFTP/FTPS configuration..."
-          if docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php /var/www/html/scripts/sync-push-config.php 2>&1; then
+          if docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php /var/www/html/scripts/sync-push-config.php < /dev/null 2>&1; then
             echo "✓ FTP/SFTP/FTPS configuration synced successfully"
           else
             echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed"
@@ -1742,7 +1742,7 @@ jobs:
           echo "Verifying embed nginx.conf in deployed web image (Public API v1 routing)..."
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php \
             /var/www/html/scripts/verify-embed-nginx-conf.php \
-            /var/www/html/docker/nginx.conf; then
+            /var/www/html/docker/nginx.conf < /dev/null; then
             deployment_error \
               "Embed nginx verification" \
               "docker/nginx.conf in the web container failed embed Public API v1 checks" \
@@ -1753,7 +1753,7 @@ jobs:
           echo "Verifying ops nginx.conf in deployed web image (ops.aviationwx.org proxy)..."
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php \
             /var/www/html/scripts/verify-ops-nginx-conf.php \
-            /var/www/html/docker/nginx.conf; then
+            /var/www/html/docker/nginx.conf < /dev/null; then
             deployment_error \
               "Ops nginx verification" \
               "docker/nginx.conf in the web container failed ops.aviationwx.org proxy checks" \

@@ -103,18 +103,26 @@ final class SchedulerDrainWiringContractTest extends TestCase
         );
     }
 
-    public function testWorkflow_DeployComposeRedirectsSshHeredocStdinBeforeDrain(): void
+    public function testWorkflow_DeployComposeDoesNotRedirectSshHeredocStdin(): void
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
         $composeStepPos = strpos($workflow, '- name: Deploy via Docker Compose');
         $this->assertNotFalse($composeStepPos);
-        $composeChunk = substr($workflow, $composeStepPos, 9000);
-        $this->assertStringContainsString('exec < /dev/null', $composeChunk);
-        $stdinPos = strpos($composeChunk, 'exec < /dev/null');
-        $drainPos = strpos($composeChunk, 'scripts/deploy-drain-workers.sh');
-        $this->assertNotFalse($stdinPos);
-        $this->assertNotFalse($drainPos);
-        $this->assertLessThan($drainPos, $stdinPos, 'stdin redirect must precede worker drain');
+        $composeStepEnd = strpos($workflow, '- name: Restart Nginx container', $composeStepPos);
+        $this->assertNotFalse($composeStepEnd, 'Deploy via Docker Compose step must be followed by Nginx restart step');
+        $composeChunk = substr($workflow, $composeStepPos, $composeStepEnd - $composeStepPos);
+        $heredocStart = strpos($composeChunk, 'ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF');
+        $this->assertNotFalse($heredocStart, 'Deploy step must use SSH heredoc');
+        $heredocEnd = strpos($composeChunk, "\n          EOF", $heredocStart);
+        $this->assertNotFalse($heredocEnd, 'Deploy SSH heredoc must close with EOF');
+        $heredocBody = substr($composeChunk, $heredocStart, $heredocEnd - $heredocStart);
+        $this->assertDoesNotMatchRegularExpression(
+            '/^\s*exec\s+<\/dev\/null\s*$/m',
+            $heredocBody,
+            'Global stdin redirect truncates the SSH heredoc before docker compose build/up'
+        );
+        $this->assertStringContainsString('scripts/deploy-drain-workers.sh', $heredocBody);
+        $this->assertStringContainsString('sync-push-config.php < /dev/null', $heredocBody);
     }
 
     public function testHealthCheck_LogsDuplicateDaemonsBeforeDrainSuppressExit(): void
