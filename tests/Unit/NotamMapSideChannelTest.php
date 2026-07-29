@@ -156,10 +156,11 @@ final class NotamMapSideChannelTest extends TestCase
 
         $envelope = notamMapAirspaceAggregateRead();
         $this->assertNotNull($envelope);
-        $this->assertArrayHasKey('F9001/2026', $envelope['records'] ?? []);
-        $record = $envelope['records']['F9001/2026'];
+        $this->assertArrayHasKey('N:9001', $envelope['records'] ?? []);
+        $record = $envelope['records']['N:9001'];
         $this->assertTrue($record['capabilities']['map'] ?? false);
         $this->assertSame('s83', $record['source_airport_id'] ?? null);
+        $this->assertSame('F9001/2026', $record['notam_id'] ?? null);
 
         $payload = notamTfrMapLayerServeOrRebuild();
         $this->assertCount(1, $payload['features']);
@@ -243,6 +244,8 @@ final class NotamMapSideChannelTest extends TestCase
         $this->assertSame('N:3389', notamAirspaceNormNumberFromId('A3389/2026'));
         $this->assertSame('N:2698', notamAirspaceNormNumberFromId('2698/2026'));
         $this->assertSame('N:8339', notamAirspaceNormNumberFromId('8339/2026'));
+        $this->assertSame('N:543', notamAirspaceNormNumberFromId('6/0543'));
+        $this->assertSame('N:543', notamAirspaceNormNumberFromId('6/0543-1-FDC-F'));
         $this->assertNull(notamAirspaceNormNumberFromId(''));
         $this->assertNull(notamAirspaceNormNumberFromId('invalid'));
     }

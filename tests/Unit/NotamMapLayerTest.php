@@ -49,9 +49,15 @@ final class NotamMapLayerTest extends TestCase
         $path = getNotamMapAirspaceAggregatePath();
         $json = json_encode([
             'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
-            'records' => $recordsById,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'data_updated_at' => $mtime,
             'updated_at' => $mtime,
-            'map_layer_build_token' => $buildToken ?? notamTfrMapLayerCurrentBuildToken(),
+            'coverage_sources' => ['nms'],
+            'source_status' => [
+                'nms' => ['ok' => true, 'updated_at' => $mtime],
+            ],
+            'records' => $recordsById,
+            'map_layer_build_token' => $buildToken ?? ('merge-v' . NOTAM_AIRSPACE_MERGE_LOGIC_VERSION),
         ], JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             self::fail('Could not encode map-airspace test aggregate JSON');
@@ -129,13 +135,13 @@ final class NotamMapLayerTest extends TestCase
         @rmdir($dir);
     }
 
-    public function testNotamTfrMapLayerCurrentBuildToken_WithGitSha_IncludesLogicVersion(): void
+    public function testNotamTfrMapLayerCurrentBuildToken_IsMergeLogicNotGitSha(): void
     {
         $originalGitSha = getenv('GIT_SHA');
         putenv('GIT_SHA=abcdef12');
         try {
             $this->assertSame(
-                'abcdef1-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION,
+                'merge-v' . NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
                 notamTfrMapLayerCurrentBuildToken()
             );
         } finally {
@@ -147,27 +153,17 @@ final class NotamMapLayerTest extends TestCase
         }
     }
 
-    public function testNotamMapAirspaceAggregateBuildTokenMatches_RejectsLegacyShaOnlyToken(): void
+    public function testNotamMapAirspaceAggregateMergeLogicMatches_AcceptsCurrentVersion(): void
     {
-        $originalGitSha = getenv('GIT_SHA');
-        putenv('GIT_SHA=abcdef12');
-        try {
-            $legacy = [
-                'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
-                'records' => [],
-                'map_layer_build_token' => 'abcdef1',
-            ];
-            $this->assertFalse(notamMapAirspaceAggregateBuildTokenMatches($legacy));
+        $envelope = [
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'records' => [],
+        ];
+        $this->assertTrue(notamMapAirspaceAggregateMergeLogicMatches($envelope));
 
-            $legacy['map_layer_build_token'] = notamTfrMapLayerCurrentBuildToken();
-            $this->assertTrue(notamMapAirspaceAggregateBuildTokenMatches($legacy));
-        } finally {
-            if ($originalGitSha === false) {
-                putenv('GIT_SHA');
-            } else {
-                putenv('GIT_SHA=' . $originalGitSha);
-            }
-        }
+        $envelope['merge_logic_version'] = NOTAM_AIRSPACE_MERGE_LOGIC_VERSION + 99;
+        $this->assertFalse(notamMapAirspaceAggregateMergeLogicMatches($envelope));
     }
 
     public function testNotamMapAirspaceAggregateIsStale_MissingFile_ReturnsTrue(): void
@@ -207,12 +203,14 @@ final class NotamMapLayerTest extends TestCase
         $config = $this->minimalListedAirportConfig();
         $airport = $config['airports']['s83'];
 
-        notamMapAirspaceAggregateUpsertFromFetch('s83', $airport, $this->drawableTfrNotamRows($now, 'UPS1/2026'));
+        notamMapAirspaceAggregateUpsertFromFetch('s83', $airport, $this->drawableTfrNotamRows($now, 'A9001/2026'));
 
         $envelope = notamMapAirspaceAggregateRead();
         $this->assertNotNull($envelope);
-        $this->assertArrayHasKey('UPS1/2026', $envelope['records']);
-        $this->assertSame(notamTfrMapLayerCurrentBuildToken(), $envelope['map_layer_build_token'] ?? null);
+        $this->assertSame(NOTAM_MAP_AIRSPACE_SCHEMA_VERSION, $envelope['schema_version'] ?? null);
+        $this->assertSame(NOTAM_AIRSPACE_MERGE_LOGIC_VERSION, $envelope['merge_logic_version'] ?? null);
+        $this->assertArrayHasKey('N:9001', $envelope['records']);
+        $this->assertSame('merge-v' . NOTAM_AIRSPACE_MERGE_LOGIC_VERSION, $envelope['map_layer_build_token'] ?? null);
     }
 
     public function testSideChannel_DrawableTfrNotAirportRelevant_AppearsOnMapNotInBannerFilter(): void
@@ -243,77 +241,53 @@ final class NotamMapLayerTest extends TestCase
 
         $this->assertSame([], $payload['features']);
         $this->assertTrue($payload['failclosed'] ?? false);
+        $this->assertSame('store_missing', $payload['failclosed_reason'] ?? null);
         $this->assertSame('faa_nms_side_channel', $payload['coverage_scope'] ?? null);
     }
 
     public function testNotamTfrMapLayerServeOrRebuild_StaleStore_FailClosed(): void
     {
         $now = time();
-        $record = $this->drawableTfrAirspaceRecord($now, 'OLD1/2026');
-        $this->writeAirspaceAggregate(['OLD1/2026' => $record], $now - 4000);
+        $record = $this->drawableTfrAirspaceRecord($now, 'A8001/2026');
+        $this->writeAirspaceAggregate(['N:8001' => $record], $now - 4000);
 
         $payload = notamTfrMapLayerServeOrRebuild();
 
         $this->assertSame([], $payload['features']);
         $this->assertTrue($payload['failclosed'] ?? false);
+        $this->assertSame('store_stale', $payload['failclosed_reason'] ?? null);
     }
 
-    public function testNotamTfrMapLayerServeOrRebuild_StaleBuildToken_FailClosed(): void
+    public function testNotamTfrMapLayerServeOrRebuild_MergeLogicMismatch_FailClosed(): void
     {
         $now = time();
-        $record = $this->drawableTfrAirspaceRecord($now, 'TOK1/2026');
-        $this->writeAirspaceAggregate(['TOK1/2026' => $record], $now, 'stale-token');
+        $record = $this->drawableTfrAirspaceRecord($now, 'A8002/2026');
+        $path = getNotamMapAirspaceAggregatePath();
+        file_put_contents($path, json_encode([
+            'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION + 50,
+            'data_updated_at' => $now,
+            'records' => ['N:8002' => $record],
+        ], JSON_UNESCAPED_SLASHES));
 
         $payload = notamTfrMapLayerServeOrRebuild();
 
         $this->assertSame([], $payload['features']);
         $this->assertTrue($payload['failclosed'] ?? false);
+        $this->assertSame('merge_logic_mismatch', $payload['failclosed_reason'] ?? null);
     }
 
-    public function testNotamTfrMapLayerServeOrRebuild_LogicTokenMismatch_FailClosed(): void
+    public function testNotamTfrMapLayerServeOrRebuild_IgnoresDeployShaMismatch(): void
     {
         $originalGitSha = getenv('GIT_SHA');
         putenv('GIT_SHA=9f34715');
         try {
             $now = time();
-            $record = $this->drawableTfrAirspaceRecord($now, 'LOGIC1/2026');
-            $this->writeAirspaceAggregate(['LOGIC1/2026' => $record], $now, 'logic-v2');
+            $record = $this->drawableTfrAirspaceRecord($now, 'A8003/2026');
+            $this->writeAirspaceAggregate(['N:8003' => $record], $now);
 
             $payload = notamTfrMapLayerServeOrRebuild();
 
-            $this->assertSame([], $payload['features']);
-            $this->assertTrue($payload['failclosed'] ?? false);
-            $this->assertSame('9f34715-v2', $payload['map_layer_build_token'] ?? null);
-        } finally {
-            if ($originalGitSha === false) {
-                putenv('GIT_SHA');
-            } else {
-                putenv('GIT_SHA=' . $originalGitSha);
-            }
-        }
-    }
-
-    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_RewritesLogicToken(): void
-    {
-        $originalGitSha = getenv('GIT_SHA');
-        $originalDeployFileEnv = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
-        putenv('GIT_SHA');
-        $deployFile = $this->cacheDir . '/.deploy-git-sha';
-        putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $deployFile);
-        file_put_contents($deployFile, "9f3471525bc39e8a\n");
-
-        try {
-            $now = time();
-            $record = $this->drawableTfrAirspaceRecord($now, 'FIX1/2026');
-            $this->writeAirspaceAggregate(['FIX1/2026' => $record], $now, 'logic-v2');
-
-            $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
-
-            $envelope = notamMapAirspaceAggregateRead();
-            $this->assertNotNull($envelope);
-            $this->assertSame('9f34715-v2', $envelope['map_layer_build_token'] ?? null);
-
-            $payload = notamTfrMapLayerServeOrRebuild();
             $this->assertFalse($payload['failclosed'] ?? false);
             $this->assertCount(1, $payload['features']);
         } finally {
@@ -322,61 +296,59 @@ final class NotamMapLayerTest extends TestCase
             } else {
                 putenv('GIT_SHA=' . $originalGitSha);
             }
-            if ($originalDeployFileEnv === false) {
-                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
-            } else {
-                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $originalDeployFileEnv);
-            }
         }
     }
 
-    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_PreservesAggregateMtime(): void
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_MigratesLegacyV1(): void
     {
-        $originalGitSha = getenv('GIT_SHA');
-        $originalDeployFileEnv = getenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
-        putenv('GIT_SHA');
-        $deployFile = $this->cacheDir . '/.deploy-git-sha';
-        putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $deployFile);
-        file_put_contents($deployFile, "9f3471525bc39e8a\n");
+        $now = time();
+        $record = $this->drawableTfrAirspaceRecord($now, 'A8004/2026');
+        $path = getNotamMapAirspaceAggregatePath();
+        file_put_contents($path, json_encode([
+            'schema_version' => 1,
+            'records' => ['A8004/2026' => $record],
+            'updated_at' => $now,
+            'map_layer_build_token' => 'logic-v2',
+        ], JSON_UNESCAPED_SLASHES));
+        touch($path, $now);
 
-        try {
-            $staleMtime = time() - 4000;
-            $record = $this->drawableTfrAirspaceRecord($staleMtime, 'MTIME1/2026');
-            $this->writeAirspaceAggregate(['MTIME1/2026' => $record], $staleMtime, 'logic-v2');
+        $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
 
-            $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
-            $this->assertSame($staleMtime, notamMapAirspaceAggregateMtime());
-            $this->assertTrue(notamMapAirspaceAggregateIsStale(3600, time()));
-        } finally {
-            if ($originalGitSha === false) {
-                putenv('GIT_SHA');
-            } else {
-                putenv('GIT_SHA=' . $originalGitSha);
-            }
-            if ($originalDeployFileEnv === false) {
-                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE');
-            } else {
-                putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $originalDeployFileEnv);
-            }
-        }
+        $envelope = notamMapAirspaceAggregateRead();
+        $this->assertNotNull($envelope);
+        $this->assertSame(NOTAM_MAP_AIRSPACE_SCHEMA_VERSION, $envelope['schema_version'] ?? null);
+        $this->assertSame(NOTAM_AIRSPACE_MERGE_LOGIC_VERSION, $envelope['merge_logic_version'] ?? null);
+
+        $payload = notamTfrMapLayerServeOrRebuild();
+        $this->assertFalse($payload['failclosed'] ?? false);
+        $this->assertCount(1, $payload['features']);
     }
 
-    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_SkipsShaOnlyMismatch(): void
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_PreservesDataUpdatedAtOnMigrate(): void
     {
-        $originalGitSha = getenv('GIT_SHA');
-        putenv('GIT_SHA=abcdef12');
-        try {
-            $now = time();
-            $this->writeAirspaceAggregate([], $now, 'oldsha1-v2');
+        $staleUpdated = time() - 4000;
+        $record = $this->drawableTfrAirspaceRecord($staleUpdated, 'A8005/2026');
+        $path = getNotamMapAirspaceAggregatePath();
+        file_put_contents($path, json_encode([
+            'schema_version' => 1,
+            'records' => ['A8005/2026' => $record],
+            'updated_at' => $staleUpdated,
+            'map_layer_build_token' => 'logic-v2',
+        ], JSON_UNESCAPED_SLASHES));
+        touch($path, $staleUpdated);
 
-            $this->assertFalse(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
-        } finally {
-            if ($originalGitSha === false) {
-                putenv('GIT_SHA');
-            } else {
-                putenv('GIT_SHA=' . $originalGitSha);
-            }
-        }
+        $this->assertTrue(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
+        $envelope = notamMapAirspaceAggregateRead();
+        $this->assertNotNull($envelope);
+        $this->assertSame($staleUpdated, (int) ($envelope['data_updated_at'] ?? 0));
+        $this->assertTrue(notamMapAirspaceAggregateIsStale(3600, time()));
+    }
+
+    public function testNotamMapAirspaceAggregateRepairStaleLogicBuildToken_NoOpOnCurrentV2(): void
+    {
+        $now = time();
+        $this->writeAirspaceAggregate([], $now);
+        $this->assertFalse(notamMapAirspaceAggregateRepairStaleLogicBuildToken());
     }
 
     public function testNotamTfrMapLayerServeOrRebuild_FreshStore_ReturnsFeature(): void
@@ -409,6 +381,9 @@ final class NotamMapLayerTest extends TestCase
 
         $envelope = [
             'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'data_updated_at' => $now,
+            'coverage_sources' => ['nms'],
             'records' => ['CACHE1/2026' => $record],
             'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
         ];
@@ -435,6 +410,9 @@ final class NotamMapLayerTest extends TestCase
 
         $envelope = [
             'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'data_updated_at' => $now,
+            'coverage_sources' => ['nms'],
             'records' => ['CACHE2/2026' => $record],
             'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
         ];
@@ -464,6 +442,9 @@ final class NotamMapLayerTest extends TestCase
 
         $envelope = [
             'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'data_updated_at' => $now,
+            'coverage_sources' => ['nms'],
             'records' => ['T1/2026' => $record],
             'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
         ];
@@ -503,6 +484,9 @@ final class NotamMapLayerTest extends TestCase
 
         $envelope = [
             'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+            'merge_logic_version' => NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
+            'data_updated_at' => $now,
+            'coverage_sources' => ['nms'],
             'records' => [
                 'A3389/2026' => notamAirspaceRecordFromNotam($activeNotam, 's83', 'UTC'),
                 '8821/2026' => notamAirspaceRecordFromNotam($upcomingNotam, 's83', 'UTC'),

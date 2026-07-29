@@ -1,10 +1,10 @@
 <?php
 /**
- * National airspace map aggregate (NMS side-channel).
+ * National airspace map aggregate (unified store).
  *
- * Stores normalized AirspaceRecord rows upserted during per-airport NMS fetch
- * before airport relevance filtering. Map layer projects records to GeoJSON;
- * per-airport banner caches remain separate.
+ * NMS side-channel upserts and FAA TFR WFS ingest merge into AirspaceRecord
+ * rows keyed by norm_number. Map layer projects records to GeoJSON; per-airport
+ * banner caches remain separate until consumer coupling.
  */
 
 declare(strict_types=1);
@@ -18,91 +18,15 @@ require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/map-layer.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/closure-parse.php';
+require_once __DIR__ . '/airspace/identity.php';
+require_once __DIR__ . '/airspace/capabilities.php';
+require_once __DIR__ . '/airspace/AirspaceAggregator.php';
+
+use AviationWX\Notam\Airspace\AirspaceAggregator;
+use AviationWX\Notam\Airspace\Adapter\FaaTfrWfsAdapter;
 
 /** @var int Schema version for map-airspace.json envelope */
-const NOTAM_MAP_AIRSPACE_SCHEMA_VERSION = 1;
-
-/** @var string Source type written into field_sources for NMS-ingested rows */
-const NOTAM_AIRSPACE_SOURCE_NMS = 'nms';
-
-/**
- * Extract normalized NOTAM number bucket key from a public id.
- *
- * @param string $notamId Public NOTAM id (e.g. A3389/2026, 2698/2026)
- * @return string|null Bucket such as N:3389, or null when not parseable
- */
-function notamAirspaceNormNumberFromId(string $notamId): ?string
-{
-    $notamId = trim($notamId);
-    if ($notamId === '') {
-        return null;
-    }
-
-    if (preg_match('/^([A-Za-z]?\d+)\/(\d{4})$/', $notamId, $matches) === 1) {
-        if (preg_match('/(\d+)/', $matches[1], $numberMatch) !== 1) {
-            return null;
-        }
-
-        return 'N:' . (int) $numberMatch[1];
-    }
-
-    return null;
-}
-
-/**
- * Whether a parsed NMS row has enough schedule metadata for banner revalidation.
- *
- * @param array<string, mixed> $notam Parsed NOTAM row
- */
-function notamAirspaceRecordBannerCapable(array $notam): bool
-{
-    if (!isTfr($notam)) {
-        return false;
-    }
-
-    if (trim((string) ($notam['id'] ?? '')) === '') {
-        return false;
-    }
-
-    if (trim((string) ($notam['text'] ?? '')) === '') {
-        return false;
-    }
-
-    $status = trim((string) ($notam['status'] ?? ''));
-    if ($status !== '' && $status !== 'unknown') {
-        return true;
-    }
-
-    $start = trim((string) ($notam['start_time_utc'] ?? ''));
-    if ($start !== '') {
-        return true;
-    }
-
-    notamEnsureEffectiveSegments($notam);
-    $segments = $notam['effective_segments'] ?? null;
-
-    return is_array($segments) && $segments !== [];
-}
-
-/**
- * Whether a parsed NMS row has closure-parse inputs (data sufficiency only).
- *
- * @param array<string, mixed> $notam Parsed NOTAM row
- */
-function notamAirspaceRecordRunwayClosureCapable(array $notam): bool
-{
-    if (isNotamCancellation($notam)) {
-        return false;
-    }
-
-    if (!notamRestrictionScopeIsRunwayOrAerodrome($notam)) {
-        return false;
-    }
-
-    $text = notamNormalizeProse((string) ($notam['text'] ?? ''));
-
-    return notamProseHasClosureKeyword($text);
-}
+const NOTAM_MAP_AIRSPACE_SCHEMA_VERSION = 2;
 
 /**
  * Per-field provenance map for a fully NMS-sourced airspace record.
@@ -122,8 +46,9 @@ function notamAirspaceNmsFieldSourcesForNotam(array $notam, bool $hasDrawableGeo
         $sources['geometry'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
 
-    notamEnsureEffectiveSegments($notam);
-    if (isset($notam['effective_segments']) && is_array($notam['effective_segments']) && $notam['effective_segments'] !== []) {
+    $probe = $notam;
+    notamEnsureEffectiveSegments($probe);
+    if (isset($probe['effective_segments']) && is_array($probe['effective_segments']) && $probe['effective_segments'] !== []) {
         $sources['effective_segments'] = NOTAM_AIRSPACE_SOURCE_NMS;
     }
 
@@ -201,7 +126,7 @@ function notamAirspaceRecordFromNotam(array $notam, string $sourceAirportId, str
 }
 
 /**
- * Whether the decoded map-airspace envelope has the expected shape.
+ * Whether the decoded map-airspace envelope has a supported shape.
  *
  * @param array<string, mixed>|null $decoded Decoded JSON
  */
@@ -211,13 +136,81 @@ function notamMapAirspaceAggregateEnvelopeIsValid(?array $decoded): bool
         return false;
     }
 
-    if ((int) ($decoded['schema_version'] ?? 0) !== NOTAM_MAP_AIRSPACE_SCHEMA_VERSION) {
+    $schema = (int) ($decoded['schema_version'] ?? 0);
+    if ($schema !== 1 && $schema !== NOTAM_MAP_AIRSPACE_SCHEMA_VERSION) {
         return false;
     }
 
     $records = $decoded['records'] ?? null;
 
     return is_array($records);
+}
+
+/**
+ * True when envelope merge_logic_version matches the running aggregator.
+ *
+ * @param array<string, mixed>|null $envelope Decoded map-airspace.json
+ */
+function notamMapAirspaceAggregateMergeLogicMatches(?array $envelope): bool
+{
+    if ($envelope === null) {
+        return false;
+    }
+
+    $schema = (int) ($envelope['schema_version'] ?? 0);
+    if ($schema === 1) {
+        // Legacy side-channel stores are readable; migrate on next write.
+        return true;
+    }
+
+    if ($schema !== NOTAM_MAP_AIRSPACE_SCHEMA_VERSION) {
+        return false;
+    }
+
+    return (int) ($envelope['merge_logic_version'] ?? -1) === AirspaceAggregator::MERGE_LOGIC_VERSION;
+}
+
+/**
+ * Normalize a disk envelope to schema v2 shape (in memory).
+ *
+ * @param array<string, mixed> $envelope
+ * @return array<string, mixed>
+ */
+function notamMapAirspaceAggregateNormalizeEnvelope(array $envelope): array
+{
+    $recordsIn = is_array($envelope['records'] ?? null) ? $envelope['records'] : [];
+    $candidates = [];
+    foreach ($recordsIn as $record) {
+        if (is_array($record)) {
+            $candidates[] = $record;
+        }
+    }
+
+    $mergedRecords = AirspaceAggregator::merge($candidates);
+    $now = time();
+    $dataUpdatedAt = (int) ($envelope['data_updated_at'] ?? $envelope['updated_at'] ?? $now);
+    if ($dataUpdatedAt <= 0) {
+        $dataUpdatedAt = $now;
+    }
+
+    $sourceStatus = is_array($envelope['source_status'] ?? null) ? $envelope['source_status'] : [];
+    if ($sourceStatus === []) {
+        $sourceStatus = [
+            'nms' => ['ok' => true, 'updated_at' => $dataUpdatedAt],
+        ];
+    }
+
+    return [
+        'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+        'merge_logic_version' => AirspaceAggregator::MERGE_LOGIC_VERSION,
+        'data_updated_at' => $dataUpdatedAt,
+        'updated_at' => $dataUpdatedAt,
+        'coverage_sources' => notamMapAirspaceAggregateCoverageSourcesFromStatus($sourceStatus),
+        'source_status' => $sourceStatus,
+        'records' => $mergedRecords,
+        // Diagnostics only - never used for serve eligibility.
+        'map_layer_build_token' => 'merge-v' . AirspaceAggregator::MERGE_LOGIC_VERSION,
+    ];
 }
 
 /**
@@ -313,24 +306,88 @@ function notamMapAirspaceAggregateWrite(array $envelope): bool
 }
 
 /**
- * Empty aggregate envelope with current build token.
+ * Empty aggregate envelope (aggregator-owned metadata).
  *
  * @return array<string, mixed>
  */
 function notamMapAirspaceAggregateEmptyEnvelope(): array
 {
+    $now = time();
+
     return [
         'schema_version' => NOTAM_MAP_AIRSPACE_SCHEMA_VERSION,
+        'merge_logic_version' => AirspaceAggregator::MERGE_LOGIC_VERSION,
+        'data_updated_at' => $now,
+        'updated_at' => $now,
+        'coverage_sources' => ['nms'],
+        'source_status' => [
+            'nms' => ['ok' => true, 'updated_at' => $now],
+        ],
         'records' => [],
-        'updated_at' => time(),
-        'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
+        'map_layer_build_token' => 'merge-v' . AirspaceAggregator::MERGE_LOGIC_VERSION,
     ];
+}
+
+/**
+ * Acquire the national store lock and run a writer callback.
+ *
+ * @param callable $mutator Receives current envelope; returns envelope to write or null to abort
+ */
+function notamMapAirspaceAggregateWithLock(callable $mutator): bool
+{
+    $lockPath = getNotamMapAirspaceUpsertLockPath();
+    $lockDir = dirname($lockPath);
+    if (!is_dir($lockDir) && !@mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
+        aviationwx_log('warning', 'notam map airspace: cannot create upsert lock directory', [
+            'path' => $lockDir,
+        ], 'app');
+
+        return false;
+    }
+
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        aviationwx_log('warning', 'notam map airspace: upsert lock open failed', [
+            'path' => $lockPath,
+        ], 'app');
+
+        return false;
+    }
+
+    if (!@flock($fp, LOCK_EX)) {
+        fclose($fp);
+        aviationwx_log('warning', 'notam map airspace: upsert lock acquire failed', [
+            'path' => $lockPath,
+        ], 'app');
+
+        return false;
+    }
+
+    try {
+        $current = notamMapAirspaceAggregateRead() ?? notamMapAirspaceAggregateEmptyEnvelope();
+        $next = $mutator($current);
+        if (!is_array($next)) {
+            return false;
+        }
+
+        if (!notamMapAirspaceAggregateWrite($next)) {
+            aviationwx_log('warning', 'notam map airspace: write failed under lock', [], 'app');
+
+            return false;
+        }
+
+        return true;
+    } finally {
+        @flock($fp, LOCK_UN);
+        fclose($fp);
+    }
 }
 
 /**
  * Upsert drawable TFR rows from a per-airport fetch (side-channel).
  *
- * Called after parse + dedup and before relevance filtering.
+ * Called after parse + dedup and before relevance filtering. Merges candidates
+ * into the national store; envelope metadata is aggregator-owned (no deploy SHA).
  *
  * @param string $airportId Airport config key
  * @param array<string, mixed> $airport Airport configuration
@@ -351,109 +408,159 @@ function notamMapAirspaceAggregateUpsertFromFetch(string $airportId, array $airp
             continue;
         }
 
-        $notamId = (string) $record['notam_id'];
-        $candidates[$notamId] = $record;
+        $candidates[] = $record;
     }
 
     if ($candidates === []) {
         return;
     }
 
-    $lockPath = getNotamMapAirspaceUpsertLockPath();
-    $lockDir = dirname($lockPath);
-    if (!is_dir($lockDir) && !@mkdir($lockDir, 0755, true) && !is_dir($lockDir)) {
-        aviationwx_log('warning', 'notam map airspace: cannot create upsert lock directory', [
-            'path' => $lockDir,
+    $ok = notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($candidates): array {
+        $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
+        $existing = array_values($normalized['records']);
+        $merged = AirspaceAggregator::merge(array_merge($existing, $candidates));
+        $now = time();
+
+        $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
+        $sourceStatus['nms'] = ['ok' => true, 'updated_at' => $now];
+
+        $normalized['records'] = $merged;
+        $normalized['data_updated_at'] = $now;
+        $normalized['updated_at'] = $now;
+        $normalized['source_status'] = $sourceStatus;
+        $normalized['coverage_sources'] = notamMapAirspaceAggregateCoverageSourcesFromStatus($sourceStatus);
+        $normalized['schema_version'] = NOTAM_MAP_AIRSPACE_SCHEMA_VERSION;
+        $normalized['merge_logic_version'] = AirspaceAggregator::MERGE_LOGIC_VERSION;
+        $normalized['map_layer_build_token'] = 'merge-v' . AirspaceAggregator::MERGE_LOGIC_VERSION;
+
+        return $normalized;
+    });
+
+    if (!$ok) {
+        aviationwx_log('warning', 'notam map airspace: upsert merge failed', [
+            'airport' => $airportId,
+            'candidate_count' => count($candidates),
         ], 'app');
-
-        return;
-    }
-
-    $fp = @fopen($lockPath, 'c+');
-    if ($fp === false) {
-        aviationwx_log('warning', 'notam map airspace: upsert lock open failed', [
-            'path' => $lockPath,
-        ], 'app');
-
-        return;
-    }
-
-    if (!@flock($fp, LOCK_EX)) {
-        fclose($fp);
-        aviationwx_log('warning', 'notam map airspace: upsert lock acquire failed', [
-            'path' => $lockPath,
-        ], 'app');
-
-        return;
-    }
-
-    try {
-        $envelope = notamMapAirspaceAggregateRead() ?? notamMapAirspaceAggregateEmptyEnvelope();
-        $records = is_array($envelope['records'] ?? null) ? $envelope['records'] : [];
-
-        foreach ($candidates as $notamId => $record) {
-            $records[$notamId] = $record;
-        }
-
-        $envelope['records'] = $records;
-        $envelope['updated_at'] = time();
-        $envelope['map_layer_build_token'] = notamTfrMapLayerCurrentBuildToken();
-
-        if (!notamMapAirspaceAggregateWrite($envelope)) {
-            aviationwx_log('warning', 'notam map airspace: upsert write failed', [
-                'airport' => $airportId,
-                'candidate_count' => count($candidates),
-            ], 'app');
-        }
-    } finally {
-        @flock($fp, LOCK_UN);
-        fclose($fp);
     }
 }
 
 /**
+ * Merge WFS records into the national store (national worker).
+ *
+ * @param list<array<string, mixed>> $wfsRecords
+ */
+function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
+{
+    return notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($wfsRecords): array {
+        $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
+        $existing = array_values($normalized['records']);
+        $merged = AirspaceAggregator::merge(array_merge($existing, $wfsRecords));
+        $now = time();
+
+        $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
+        $sourceStatus[FaaTfrWfsAdapter::SOURCE_TYPE] = ['ok' => true, 'updated_at' => $now];
+
+        $normalized['records'] = $merged;
+        $normalized['data_updated_at'] = $now;
+        $normalized['updated_at'] = $now;
+        $normalized['source_status'] = $sourceStatus;
+        $normalized['coverage_sources'] = notamMapAirspaceAggregateCoverageSourcesFromStatus($sourceStatus);
+        $normalized['schema_version'] = NOTAM_MAP_AIRSPACE_SCHEMA_VERSION;
+        $normalized['merge_logic_version'] = AirspaceAggregator::MERGE_LOGIC_VERSION;
+        $normalized['map_layer_build_token'] = 'merge-v' . AirspaceAggregator::MERGE_LOGIC_VERSION;
+
+        return $normalized;
+    });
+}
+
+/**
+ * Mark a source unhealthy without clearing existing records (fail-soft degrade).
+ */
+function notamMapAirspaceAggregateMarkSourceStatus(string $source, bool $ok, string $error = ''): bool
+{
+    $source = trim($source);
+    if ($source === '') {
+        return false;
+    }
+
+    return notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($source, $ok, $error): array {
+        $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
+        $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
+        $entry = [
+            'ok' => $ok,
+            'updated_at' => time(),
+        ];
+        if (!$ok && $error !== '') {
+            $entry['error'] = $error;
+        }
+        $sourceStatus[$source] = $entry;
+        $normalized['source_status'] = $sourceStatus;
+        $normalized['coverage_sources'] = notamMapAirspaceAggregateCoverageSourcesFromStatus($sourceStatus);
+
+        return $normalized;
+    });
+}
+
+/**
+ * @param array<string, mixed> $sourceStatus
+ * @return list<string>
+ */
+function notamMapAirspaceAggregateCoverageSourcesFromStatus(array $sourceStatus): array
+{
+    $out = [];
+    foreach ($sourceStatus as $name => $status) {
+        if (!is_string($name) || $name === '') {
+            continue;
+        }
+        if (is_array($status) && ($status['ok'] ?? false) === true) {
+            $out[] = $name;
+        }
+    }
+
+    return $out !== [] ? $out : ['nms'];
+}
+
+/**
  * Whether the map-airspace store is older than the NOTAM cache TTL.
+ *
+ * Uses envelope data_updated_at when present; falls back to file mtime for legacy files.
  *
  * @param int $ttl Seconds from {@see getNotamCacheTtlSeconds()}
  * @param int|null $nowUnix Optional clock for tests
  */
 function notamMapAirspaceAggregateIsStale(int $ttl, ?int $nowUnix = null): bool
 {
-    $mtime = notamMapAirspaceAggregateMtime();
-    if ($mtime <= 0) {
+    $nowUnix = $nowUnix ?? time();
+    $envelope = notamMapAirspaceAggregateRead();
+    if ($envelope === null) {
         return true;
     }
 
-    $nowUnix = $nowUnix ?? time();
-    $age = $nowUnix - $mtime;
+    $updatedAt = (int) ($envelope['data_updated_at'] ?? $envelope['updated_at'] ?? 0);
+    if ($updatedAt <= 0) {
+        $updatedAt = notamMapAirspaceAggregateMtime();
+    }
+    if ($updatedAt <= 0) {
+        return true;
+    }
+
+    $age = $nowUnix - $updatedAt;
 
     return $age < 0 || $age >= $ttl;
 }
 
 /**
- * True when the airspace store build token matches the current deploy/logic version.
+ * Legacy name: build-token matching is retired. Delegates to merge_logic_version.
  *
  * @param array<string, mixed>|null $envelope Decoded map-airspace.json
  */
 function notamMapAirspaceAggregateBuildTokenMatches(?array $envelope): bool
 {
-    if ($envelope === null) {
-        return false;
-    }
-
-    $stored = trim((string) ($envelope['map_layer_build_token'] ?? ''));
-    if ($stored === '') {
-        return false;
-    }
-
-    return $stored === notamTfrMapLayerCurrentBuildToken();
+    return notamMapAirspaceAggregateMergeLogicMatches($envelope);
 }
 
 /**
- * Rewrite logic-vN store tokens when deploy SHA is now available.
- *
- * Cron-restarted workers without GIT_SHA label the aggregate logic-vN while Apache
- * serves {sha}-vN. Records remain valid; only the token label is wrong.
+ * Migrate legacy envelopes to schema v2. Serve eligibility no longer depends on deploy SHA.
  *
  * @return bool True when map-airspace.json was updated on disk
  */
@@ -464,34 +571,18 @@ function notamMapAirspaceAggregateRepairStaleLogicBuildToken(): bool
         return false;
     }
 
-    $stored = trim((string) ($envelope['map_layer_build_token'] ?? ''));
-    if ($stored === '') {
+    $schema = (int) ($envelope['schema_version'] ?? 0);
+    if ($schema === NOTAM_MAP_AIRSPACE_SCHEMA_VERSION
+        && (int) ($envelope['merge_logic_version'] ?? -1) === AirspaceAggregator::MERGE_LOGIC_VERSION
+    ) {
         return false;
     }
-
-    if (preg_match('/^logic-v(\d+)$/', $stored, $matches) !== 1) {
-        return false;
-    }
-
-    if ((int) $matches[1] !== NOTAM_TFR_MAP_LAYER_LOGIC_VERSION) {
-        return false;
-    }
-
-    if (getGitSha() === '') {
-        return false;
-    }
-
-    $current = notamTfrMapLayerCurrentBuildToken();
-    if ($stored === $current) {
-        return false;
-    }
-
-    $envelope['map_layer_build_token'] = $current;
 
     $path = getNotamMapAirspaceAggregatePath();
     $preserveMtime = is_file($path) ? (int) @filemtime($path) : 0;
+    $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
 
-    if (!notamMapAirspaceAggregateWrite($envelope)) {
+    if (!notamMapAirspaceAggregateWrite($normalized)) {
         return false;
     }
 

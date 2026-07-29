@@ -107,18 +107,22 @@ class GitShaTest extends TestCase
     }
 
     /**
-     * Cron-restarted workers lack GIT_SHA; map tokens must still match Apache via the file.
+     * Map diagnostics token is merge-logic based; deploy SHA is not required.
      */
-    public function testNotamMapBuildToken_UsesDeployFileWhenEnvMissing(): void
+    public function testNotamMapBuildToken_IsMergeLogicVersionNotDeploySha(): void
     {
         putenv('GIT_SHA');
         putenv('AVIATIONWX_DEPLOY_GIT_SHA_FILE=' . $this->tempFile);
         file_put_contents($this->tempFile, "abcdef12\n");
 
+        require_once dirname(__DIR__, 2) . '/lib/notam/map-layer.php';
+        require_once dirname(__DIR__, 2) . '/lib/notam/airspace/identity.php';
+
         $this->assertSame(
-            'abcdef1-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION,
+            'merge-v' . NOTAM_AIRSPACE_MERGE_LOGIC_VERSION,
             notamTfrMapLayerCurrentBuildToken()
         );
+        $this->assertSame('abcdef1', getGitSha());
     }
 
     public function testEntrypoint_PersistsDeployGitShaFile(): void

@@ -22,28 +22,27 @@ require_once __DIR__ . '/tfr-category.php';
 const NOTAM_TFR_MAP_CIRCLE_SEGMENTS = 64;
 
 /** User-facing note on map layer API coverage (also in JSON coverage_note). */
-const NOTAM_MAP_COVERAGE_NOTE = 'TFR geometry from FAA NMS per-airport fetches; not exhaustive. Verify via official NOTAMs before flight.';
+const NOTAM_MAP_COVERAGE_NOTE = 'Airspace restriction geometry from FAA NMS and public TFR WFS; not exhaustive. Verify via official NOTAMs before flight.';
+
+/** NMS-only degrade note when WFS is unavailable. */
+const NOTAM_MAP_COVERAGE_NOTE_NMS_ONLY = 'Airspace restriction geometry from FAA NMS per-airport fetches; WFS unavailable. Not exhaustive. Verify via official NOTAMs before flight.';
 
 /**
  * Bump when map build, dedup, or serve-time revalidation logic changes.
- * Included in {@see notamTfrMapLayerCurrentBuildToken()} and map-airspace aggregate.
+ * Kept for diagnostics; serve eligibility uses store merge_logic_version.
  */
 const NOTAM_TFR_MAP_LAYER_LOGIC_VERSION = 2;
 
 /**
- * Build token for map layer and airspace aggregate cache invalidation on deploy.
+ * Diagnostics token for responses (not used for store serve eligibility).
  *
- * @return string Token such as `abc1234-v2`, or `logic-v2` when SHA is unavailable
+ * @return string Token such as `merge-v1`
  */
 function notamTfrMapLayerCurrentBuildToken(): string
 {
-    $versionSuffix = '-v' . NOTAM_TFR_MAP_LAYER_LOGIC_VERSION;
-    $sha = getGitSha();
-    if ($sha !== '') {
-        return $sha . $versionSuffix;
-    }
+    require_once __DIR__ . '/airspace/identity.php';
 
-    return 'logic' . $versionSuffix;
+    return 'merge-v' . NOTAM_AIRSPACE_MERGE_LOGIC_VERSION;
 }
 
 /** @var array<string, int> Lower value = higher priority when geometry overlaps */
@@ -422,26 +421,24 @@ function notamTfrMapLayerTooltipStatusLine(array &$notam, string $status, string
 /**
  * Build one GeoJSON feature from an AirspaceRecord row.
  *
+ * Supports NMS-embedded rows (schedule revalidation) and thin WFS-only rows.
+ *
  * @param array<string, mixed> $record Airspace record from map-airspace store
  * @param int $nowUnix Current Unix time for status revalidation
  * @return array<string, mixed>|null Null when row should not be served
  */
 function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix): ?array
 {
+    if (($record['capabilities']['map'] ?? false) !== true) {
+        return null;
+    }
+
+    $id = trim((string) ($record['notam_id'] ?? ''));
     $notam = $record['notam'] ?? null;
-    if (!is_array($notam) || !isTfr($notam)) {
-        return null;
+    if ($id === '' && is_array($notam)) {
+        $id = trim((string) ($notam['id'] ?? ''));
     }
-
-    $id = trim((string) ($record['notam_id'] ?? $notam['id'] ?? ''));
     if ($id === '') {
-        return null;
-    }
-
-    $timezone = (string) ($record['timezone'] ?? 'UTC');
-    notamEnsureEffectiveSegments($notam);
-    $status = revalidateNotamStatus($notam, $timezone, $nowUnix);
-    if ($status === 'expired' || $status === 'unknown') {
         return null;
     }
 
@@ -450,11 +447,34 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         return null;
     }
 
-    $geometryKind = (string) ($record['geometry_kind'] ?? '');
+    $geometryKind = strtolower((string) ($record['geometry_kind'] ?? ''));
+    if (!in_array($geometryKind, ['polygon', 'circle', 'multipolygon'], true)) {
+        return null;
+    }
+
+    $timezone = (string) ($record['timezone'] ?? 'UTC');
+    $restrictionKind = (string) ($record['restriction_kind'] ?? 'tfr');
+    $status = 'active';
+    $text = '';
+    $statusLine = null;
+
+    if (is_array($notam)) {
+        if (!isTfr($notam) && $restrictionKind === 'tfr') {
+            // NMS rows without TFR classification should not force tfr labeling;
+            // still allow map draw when restriction_kind came from another source.
+        }
+        notamEnsureEffectiveSegments($notam);
+        $status = revalidateNotamStatus($notam, $timezone, $nowUnix);
+        if ($status === 'expired' || $status === 'unknown') {
+            return null;
+        }
+        $text = (string) ($notam['text'] ?? '');
+        $statusLine = notamTfrMapLayerTooltipStatusLine($notam, $status, $timezone, $nowUnix);
+    }
+
     $bucket = notamTfrMapLayerStyleBucket($status);
     $official = 'https://notams.aim.faa.gov/notamSearch/search?notamNumber=' . rawurlencode($id);
-
-    $text = (string) ($notam['text'] ?? '');
+    $headline = notamTfrMapLayerHeadlineForRecord($record, $text);
 
     $baseProps = [
         'notam_id' => $id,
@@ -463,10 +483,10 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         'map_layer_style' => $bucket,
         'official_link' => $official,
         'geometry_kind' => $geometryKind,
-        'banner_headline' => notamBuildAirspaceTfrHeadlineFromText($text),
+        'restriction_kind' => $restrictionKind,
+        'banner_headline' => $headline,
     ];
 
-    $statusLine = notamTfrMapLayerTooltipStatusLine($notam, $status, $timezone, $nowUnix);
     if ($statusLine !== null && $statusLine !== '') {
         $baseProps['status_line'] = $statusLine;
     }
@@ -480,16 +500,54 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         $baseProps['radius_m'] = $radiusNm * METERS_PER_NAUTICAL_MILE;
     }
 
-    if ($geometryKind !== 'polygon' && $geometryKind !== 'circle') {
-        return null;
-    }
+    $featurePrefix = ($restrictionKind === 'tfr') ? 'tfr-' : 'airspace-';
 
     return [
         'type' => 'Feature',
-        'id' => 'tfr-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $id),
+        'id' => $featurePrefix . preg_replace('/[^A-Za-z0-9_-]+/', '-', $id),
         'geometry' => $geometry,
         'properties' => $baseProps,
     ];
+}
+
+/**
+ * Map popup headline from NMS text or WFS title; avoid forcing "TFR" for non-TFR kinds.
+ *
+ * @param array<string, mixed> $record
+ */
+function notamTfrMapLayerHeadlineForRecord(array $record, string $nmsText): string
+{
+    $kind = (string) ($record['restriction_kind'] ?? 'tfr');
+    $wfsTitle = trim((string) ($record['wfs_title'] ?? ''));
+
+    if ($nmsText !== '') {
+        $fromNms = notamBuildAirspaceTfrHeadlineFromText($nmsText);
+        if ($fromNms !== '') {
+            if ($kind === 'fis_b') {
+                return 'FIS-B: ' . $wfsTitle;
+            }
+            if ($kind === 'airshow' && $wfsTitle !== '') {
+                return 'Airshow: ' . $wfsTitle;
+            }
+            if ($kind === 'security' && $wfsTitle !== '' && !str_contains(strtoupper($fromNms), 'TFR')) {
+                return $fromNms;
+            }
+
+            return $fromNms;
+        }
+    }
+
+    if ($wfsTitle === '') {
+        return $kind === 'tfr' ? 'Temporary flight restriction' : 'Airspace restriction';
+    }
+
+    return match ($kind) {
+        'fis_b' => 'FIS-B: ' . $wfsTitle,
+        'airshow' => 'Airshow: ' . $wfsTitle,
+        'security' => 'Security restriction: ' . $wfsTitle,
+        'tfr' => $wfsTitle,
+        default => $wfsTitle,
+    };
 }
 
 /**
@@ -530,20 +588,62 @@ function notamTfrMapLayerBuildPayloadFromAirspaceStore(array $envelope, ?int $no
         'features' => $features,
         'generated_at' => $nowUnix,
         'cache_ttl_seconds' => $ttl,
+        'data_updated_at' => (int) ($envelope['data_updated_at'] ?? $envelope['updated_at'] ?? $nowUnix),
+        'merge_logic_version' => (int) ($envelope['merge_logic_version'] ?? 0),
         'map_layer_build_token' => (string) ($envelope['map_layer_build_token'] ?? notamTfrMapLayerCurrentBuildToken()),
-    ], notamTfrMapLayerResponseMetadata());
+    ], notamTfrMapLayerResponseMetadata($envelope));
 }
 
 /**
  * Shared map-layer metadata fields for FeatureCollection responses.
  *
+ * @param array<string, mixed>|null $envelope Optional store envelope for coverage_scope
  * @return array{coverage_scope: string, coverage_note: string}
  */
-function notamTfrMapLayerResponseMetadata(): array
+function notamTfrMapLayerResponseMetadata(?array $envelope = null): array
 {
+    $sources = [];
+    if (is_array($envelope)) {
+        $raw = $envelope['coverage_sources'] ?? null;
+        if (is_array($raw)) {
+            foreach ($raw as $s) {
+                if (is_string($s) && $s !== '') {
+                    $sources[] = $s;
+                }
+            }
+        }
+        if ($sources === []) {
+            $status = $envelope['source_status'] ?? null;
+            if (is_array($status)) {
+                foreach ($status as $name => $entry) {
+                    if (is_string($name) && is_array($entry) && ($entry['ok'] ?? false) === true) {
+                        $sources[] = $name;
+                    }
+                }
+            }
+        }
+    }
+
+    $hasWfs = in_array('faa_tfr_wfs', $sources, true);
+    $hasNms = in_array('nms', $sources, true) || $sources === [];
+
+    if ($hasWfs && $hasNms) {
+        return [
+            'coverage_scope' => 'faa_nms_wfs',
+            'coverage_note' => NOTAM_MAP_COVERAGE_NOTE,
+        ];
+    }
+
+    if ($hasWfs) {
+        return [
+            'coverage_scope' => 'faa_tfr_wfs',
+            'coverage_note' => NOTAM_MAP_COVERAGE_NOTE,
+        ];
+    }
+
     return [
         'coverage_scope' => 'faa_nms_side_channel',
-        'coverage_note' => NOTAM_MAP_COVERAGE_NOTE,
+        'coverage_note' => $hasWfs ? NOTAM_MAP_COVERAGE_NOTE : NOTAM_MAP_COVERAGE_NOTE_NMS_ONLY,
     ];
 }
 
@@ -553,10 +653,15 @@ function notamTfrMapLayerResponseMetadata(): array
  * @param int $nowUnix Current Unix time
  * @param int|null $ttl Optional TTL override
  * @param bool $failclosed When true, aggregate was stale or missing
+ * @param string|null $failclosedReason Machine-readable reason when fail-closed
  * @return array<string, mixed>
  */
-function notamTfrMapLayerEmptyPayload(int $nowUnix, ?int $ttl = null, bool $failclosed = false): array
-{
+function notamTfrMapLayerEmptyPayload(
+    int $nowUnix,
+    ?int $ttl = null,
+    bool $failclosed = false,
+    ?string $failclosedReason = null
+): array {
     $ttl = $ttl ?? getNotamCacheTtlSeconds();
 
     $payload = array_merge([
@@ -565,10 +670,13 @@ function notamTfrMapLayerEmptyPayload(int $nowUnix, ?int $ttl = null, bool $fail
         'generated_at' => $nowUnix,
         'cache_ttl_seconds' => $ttl,
         'map_layer_build_token' => notamTfrMapLayerCurrentBuildToken(),
-    ], notamTfrMapLayerResponseMetadata());
+    ], notamTfrMapLayerResponseMetadata(null));
 
     if ($failclosed) {
         $payload['failclosed'] = true;
+        if ($failclosedReason !== null && $failclosedReason !== '') {
+            $payload['failclosed_reason'] = $failclosedReason;
+        }
     }
 
     return $payload;

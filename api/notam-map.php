@@ -2,9 +2,9 @@
 /**
  * Internal NOTAM TFR map layer API (airports directory map only).
  *
- * Projects drawable TFR geometry from the national map-airspace record store
- * (NMS side-channel upserts). Status and map colors are revalidated at serve
- * time from embedded NOTAM rows. HTTP Cache-Control uses
+ * Projects drawable airspace restriction geometry from the national
+ * map-airspace record store (NMS side-channel + FAA TFR WFS). Status and map
+ * colors are revalidated at serve time. HTTP Cache-Control uses
  * {@see NOTAM_API_CACHE_TTL_SECONDS}; JSON cache_ttl_seconds reflects
  * {@see getNotamCacheTtlSeconds()} for client poll.
  */
