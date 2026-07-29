@@ -120,15 +120,23 @@ fi
 # DESIRED STATE: built from config.network_ports (or defaults above)
 # =============================================================================
 # Format: PORT:PROTOCOL:DESCRIPTION or START:END:PROTOCOL:DESCRIPTION for ranges
+if [ "$FTPS_EXPLICIT_TLS" -eq "$FTP_CONTROL" ]; then
+    FTP_CONTROL_LABEL="FTP/FTPS (Push webcams)"
+else
+    FTP_CONTROL_LABEL="FTP (Push webcams)"
+fi
 PORTS=(
     "${HTTP_PORT}:tcp:HTTP (Nginx)"
     "${HTTPS_PORT}:tcp:HTTPS (Nginx)"
-    "${FTP_CONTROL}:tcp:FTP (Push webcams)"
-    "${FTPS_EXPLICIT_TLS}:tcp:FTPS (Push webcams - explicit TLS)"
+    "${FTP_CONTROL}:tcp:${FTP_CONTROL_LABEL}"
     "${SFTP_PORT}:tcp:SFTP (Push webcams)"
     "${FTP_PASSIVE_MIN}:${FTP_PASSIVE_MAX}:tcp:FTP passive mode (Push webcams)"
     "${SSH_PORT}:tcp:SSH (System access)"
 )
+# ftps_explicit_tls is for UFW/fail2ban when inbound differs from ftp_control; skip duplicate allow.
+if [ "$FTPS_EXPLICIT_TLS" -ne "$FTP_CONTROL" ]; then
+    PORTS+=( "${FTPS_EXPLICIT_TLS}:tcp:FTPS (Push webcams - explicit TLS)" )
+fi
 if [ -n "$FTPS_ALT" ]; then
     PORTS+=( "${FTPS_ALT}:tcp:FTPS alt control (NAT to ${FTP_CONTROL})" )
 fi
@@ -156,6 +164,9 @@ echo "Cleanup stale rules: ${CLEANUP_STALE_RULES}"
 echo "Dry run: ${DRY_RUN}"
 echo "airports.json: ${AIRPORTS_JSON}"
 echo "network_ports: http=${HTTP_PORT} https=${HTTPS_PORT} ftp=${FTP_CONTROL} ftps_tls=${FTPS_EXPLICIT_TLS} sftp=${SFTP_PORT} passive=${FTP_PASSIVE_MIN}-${FTP_PASSIVE_MAX} ssh=${SSH_PORT}"
+if [ "$FTPS_EXPLICIT_TLS" -eq "$FTP_CONTROL" ]; then
+    echo "ftps_explicit_tls: same as ftp_control (single ProFTPD listener; one UFW allow)"
+fi
 if [ -n "$FTPS_ALT" ]; then
     echo "ftps_alt (NAT to ${FTP_CONTROL}): ${FTPS_ALT}"
 else

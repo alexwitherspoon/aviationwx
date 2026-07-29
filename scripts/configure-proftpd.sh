@@ -17,6 +17,29 @@ else
     APP_PHP="${APP_PHP:-php}"
 fi
 
+read_network_ports_from_config() {
+    CONFIG_PATH="${CONFIG_PATH:-${CONFIG_FILE}}" "$APP_PHP" -r '
+        $configPath = getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json";
+        putenv("CONFIG_PATH=" . $configPath);
+        require_once "/var/www/html/lib/config.php";
+        $config = loadConfig();
+        $ports = $config["config"]["network_ports"] ?? [];
+        $control = (int) ($ports["ftp_control"] ?? 2121);
+        $passiveMin = (int) ($ports["ftp_passive_min"] ?? 50000);
+        $passiveMax = (int) ($ports["ftp_passive_max"] ?? 51000);
+        if ($control < 1) {
+            $control = 2121;
+        }
+        if ($passiveMin < 1) {
+            $passiveMin = 50000;
+        }
+        if ($passiveMax < $passiveMin) {
+            $passiveMax = $passiveMin;
+        }
+        echo $control . " " . $passiveMin . " " . $passiveMax;
+    ' 2>/dev/null || echo ""
+}
+
 read_upload_daemon_limits() {
     CONFIG_PATH="${CONFIG_PATH:-${CONFIG_FILE}}" "$APP_PHP" -r '
         $configPath = getenv("CONFIG_PATH") ?: "/var/www/html/config/airports.json";
@@ -35,11 +58,18 @@ read_upload_daemon_limits() {
 }
 
 write_runtime_conf() {
-    local limits max_instances max_clients max_per_user
+    local limits max_instances max_clients max_per_user ports
     limits="$(read_upload_daemon_limits)"
     max_instances="$(echo "$limits" | awk '{print $1}')"
     max_clients="$(echo "$limits" | awk '{print $2}')"
     max_per_user="$(echo "$limits" | awk '{print $3}')"
+
+    ports="$(read_network_ports_from_config)"
+    if [ -n "$ports" ]; then
+        FTP_CONTROL_PORT="$(echo "$ports" | awk '{print $1}')"
+        FTP_PASSIVE_MIN="$(echo "$ports" | awk '{print $2}')"
+        FTP_PASSIVE_MAX="$(echo "$ports" | awk '{print $3}')"
+    fi
 
     mkdir -p /etc/proftpd/conf.d
     {

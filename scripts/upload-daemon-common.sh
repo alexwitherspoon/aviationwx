@@ -188,8 +188,22 @@ restart_proftpd_daemon() {
             pkill -9 -x proftpd 2>/dev/null || true
             sleep 1
         fi
-        /usr/sbin/proftpd -c \"$PROFTPD_CONF\" &
-        sleep 2
+        if [ -f /usr/local/bin/configure-proftpd.sh ]; then
+            # shellcheck source=/dev/null
+            source /usr/local/bin/configure-proftpd.sh
+            CONFIG_FILE=\"\${CONFIG_PATH:-/var/www/html/config/airports.json}\"
+            CONFIG_PATH=\"\$CONFIG_FILE\"
+            configure_and_start_proftpd
+        elif [ -f /var/www/html/scripts/configure-proftpd.sh ]; then
+            # shellcheck source=/dev/null
+            source /var/www/html/scripts/configure-proftpd.sh
+            CONFIG_FILE=\"\${CONFIG_PATH:-/var/www/html/config/airports.json}\"
+            CONFIG_PATH=\"\$CONFIG_FILE\"
+            configure_and_start_proftpd
+        else
+            /usr/sbin/proftpd -c \"$PROFTPD_CONF\" &
+            sleep 2
+        fi
         pgrep -x proftpd >/dev/null 2>&1
     "; then
         watchdog_log "ERROR" "ProFTPD restart failed or lock held ($reason)"
