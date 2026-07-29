@@ -437,20 +437,26 @@ function notamMapAirspaceAggregateUpsertFromFetch(string $airportId, array $airp
 }
 
 /**
- * Merge WFS records into the national store (national worker).
+ * Merge candidate records into the national store and mark a source healthy.
  *
- * @param list<array<string, mixed>> $wfsRecords
+ * @param list<array<string, mixed>> $records
+ * @param string $sourceStatusKey source_status key (e.g. faa_tfr_wfs, nms_fdc_bulk)
  */
-function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
+function notamMapAirspaceAggregateMergeRecords(array $records, string $sourceStatusKey): bool
 {
-    return notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($wfsRecords): array {
+    $sourceStatusKey = trim($sourceStatusKey);
+    if ($sourceStatusKey === '') {
+        return false;
+    }
+
+    return notamMapAirspaceAggregateWithLock(static function (array $envelope) use ($records, $sourceStatusKey): array {
         $normalized = notamMapAirspaceAggregateNormalizeEnvelope($envelope);
         $existing = array_values($normalized['records']);
-        $merged = AirspaceAggregator::merge(array_merge($existing, $wfsRecords));
+        $merged = AirspaceAggregator::merge(array_merge($existing, $records));
         $now = time();
 
         $sourceStatus = is_array($normalized['source_status'] ?? null) ? $normalized['source_status'] : [];
-        $sourceStatus[FaaTfrWfsAdapter::SOURCE_TYPE] = ['ok' => true, 'updated_at' => $now];
+        $sourceStatus[$sourceStatusKey] = ['ok' => true, 'updated_at' => $now];
 
         $normalized['records'] = $merged;
         $normalized['data_updated_at'] = $now;
@@ -463,6 +469,16 @@ function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
 
         return $normalized;
     });
+}
+
+/**
+ * Merge WFS records into the national store (national worker).
+ *
+ * @param list<array<string, mixed>> $wfsRecords
+ */
+function notamMapAirspaceAggregateMergeWfsRecords(array $wfsRecords): bool
+{
+    return notamMapAirspaceAggregateMergeRecords($wfsRecords, FaaTfrWfsAdapter::SOURCE_TYPE);
 }
 
 /**

@@ -13,9 +13,11 @@ namespace AviationWX\Notam\Airspace;
 require_once __DIR__ . '/adapter/NotamSourceAdapter.php';
 require_once __DIR__ . '/adapter/FaaTfrWfsAdapter.php';
 require_once __DIR__ . '/adapter/NmsAixmAdapter.php';
+require_once __DIR__ . '/adapter/NmsFdcAirspaceAdapter.php';
 
 use AviationWX\Notam\Airspace\Adapter\FaaTfrWfsAdapter;
 use AviationWX\Notam\Airspace\Adapter\NmsAixmAdapter;
+use AviationWX\Notam\Airspace\Adapter\NmsFdcAirspaceAdapter;
 use AviationWX\Notam\Airspace\Adapter\NotamSourceAdapter;
 
 /**
@@ -31,6 +33,7 @@ final class UnifiedNotamFetcher
         return [
             NmsAixmAdapter::SOURCE_TYPE => NmsAixmAdapter::class,
             FaaTfrWfsAdapter::SOURCE_TYPE => FaaTfrWfsAdapter::class,
+            NmsFdcAirspaceAdapter::SOURCE_TYPE => NmsFdcAirspaceAdapter::class,
         ];
     }
 
@@ -84,7 +87,19 @@ final class UnifiedNotamFetcher
             ];
         }
 
-        // NMS and future adapters that only expose parse + URL (HTTP owned elsewhere).
+        if ($sourceType === NmsFdcAirspaceAdapter::SOURCE_TYPE) {
+            $result = NmsFdcAirspaceAdapter::fetchAndParse($config);
+
+            return [
+                'ok' => $result['ok'],
+                'source' => $sourceType,
+                'records' => $result['records'],
+                'error' => $result['error'],
+                'http_code' => $result['http_code'],
+            ];
+        }
+
+        // NMS per-airport and future adapters that only expose parse + URL (HTTP owned elsewhere).
         $url = $adapter::buildUrl($config);
         if ($url === null || $url === '') {
             return [
