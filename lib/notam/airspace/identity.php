@@ -33,8 +33,8 @@ function notamAirspaceNormNumberFromId(string $notamId): ?string
         return 'N:' . (int) $numberMatch[1];
     }
 
-    // WFS NOTAM_KEY / short form: 6/0543 or 6/0543-1-FDC-F (single-digit year series)
-    if (preg_match('/^(\d)\/(\d+)(?:-|$)/', $notamId, $wfsMatches) === 1) {
+    // WFS NOTAM_KEY / short form: 6/0543 or 6/0543-1-FDC-F (series prefix may be multi-digit)
+    if (preg_match('/^(\d+)\/(\d+)(?:-|$)/', $notamId, $wfsMatches) === 1) {
         return 'N:' . (int) $wfsMatches[2];
     }
 

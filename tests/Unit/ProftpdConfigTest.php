@@ -7,6 +7,11 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/logger.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/upload-endpoints.php';
+
 class ProftpdConfigTest extends TestCase
 {
     /**
@@ -36,12 +41,21 @@ class ProftpdConfigTest extends TestCase
         $this->addToAssertionCount(0);
         register_shutdown_function(static function () use ($runtimeDir): void {
             @unlink($runtimeDir . '/runtime.conf');
+            @unlink($runtimeDir . '/masquerade.conf');
             @unlink($runtimeDir . '/tls.conf');
             @unlink($runtimeDir . '/proftpd-test.conf');
             @rmdir($runtimeDir);
         });
 
-        file_put_contents($runtimeDir . '/runtime.conf', "Port 2121\nPassivePorts 50000 50010\n");
+        file_put_contents($runtimeDir . '/runtime.conf', "Port 2121\nPassivePorts 49152 49160\n");
+        file_put_contents(
+            $runtimeDir . '/masquerade.conf',
+            buildProftpdMasqueradeConf([
+                'hostname' => 'upload.example.com',
+                'ipv4' => '51.81.243.160',
+                'ipv6' => '2001:db8::1',
+            ])
+        );
         file_put_contents($runtimeDir . '/tls.conf', "<IfModule mod_tls.c>\n  TLSEngine off\n</IfModule>\n");
 
         $testConf = $runtimeDir . '/proftpd-test.conf';
@@ -74,6 +88,7 @@ class ProftpdConfigTest extends TestCase
         $this->assertStringContainsString('UseIPv6', $contents);
         $this->assertMatchesRegularExpression('/^UseIPv6\s+on\b/m', $contents);
         $this->assertStringContainsString('AuthUserFile', $contents);
+        $this->assertStringContainsString('mod_ifsession.c', $contents);
         $this->assertStringContainsString('Umask', $contents);
         $this->assertStringContainsString('002', $contents);
     }
