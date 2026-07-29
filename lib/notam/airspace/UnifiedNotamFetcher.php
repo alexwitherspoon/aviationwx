@@ -43,10 +43,17 @@ final class UnifiedNotamFetcher
                 if (!is_string($type) || $type === '' || !is_string($className) || $className === '') {
                     continue;
                 }
+                // Built-ins win: plugins must not silently override known source types.
+                if (isset($map[$type])) {
+                    continue;
+                }
                 if (!class_exists($className)) {
                     continue;
                 }
                 if (!is_a($className, NotamSourceAdapter::class, true)) {
+                    continue;
+                }
+                if ($className::getSourceType() !== $type) {
                     continue;
                 }
                 $map[$type] = $className;
