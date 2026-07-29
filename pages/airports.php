@@ -1636,6 +1636,14 @@ $breadcrumbs = generateBreadcrumbSchema([
                 .replace(/>/g, '&gt;');
         }
 
+        function notamTfrMapEscapeAttr(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
         /**
          * Map popup title: same airspace headline as the per-airport NOTAM banner.
          */
@@ -1663,7 +1671,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             if (p.official_link) {
                 var linkLabel = p.official_link_label || 'Details on FAA Notam Search';
                 lines.push(
-                    '<div><a class="tfr-map-popup-cta" href="' + String(p.official_link).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">' + notamTfrMapEscapeTipText(linkLabel) + '</a></div>'
+                    '<div><a class="tfr-map-popup-cta" href="' + notamTfrMapEscapeAttr(p.official_link) + '" target="_blank" rel="noopener">' + notamTfrMapEscapeTipText(linkLabel) + '</a></div>'
                 );
             }
             if (lines.length) {
