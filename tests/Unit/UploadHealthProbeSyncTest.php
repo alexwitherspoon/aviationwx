@@ -165,6 +165,16 @@ class UploadHealthProbeSyncTest extends TestCase
         $this->assertStringNotContainsString('ftps://${host}', $contents);
     }
 
+    public function testPasvProbeScript_ReusesTlsSessionForProtPDataChannels(): void
+    {
+        $path = __DIR__ . '/../../scripts/pasv-probe.py';
+        $contents = file_get_contents($path);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('class ReusedTlsSessionFtp', $contents);
+        $this->assertStringContainsString('def ntransfercmd', $contents);
+        $this->assertStringContainsString('session=session', $contents);
+    }
+
     public function testUploadProbeScript_UsesPlainFtpWhenProftpdTlsDisabled(): void
     {
         $path = __DIR__ . '/../../scripts/upload-probe.sh';

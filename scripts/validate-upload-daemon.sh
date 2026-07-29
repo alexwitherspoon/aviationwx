@@ -41,6 +41,15 @@ probe_skips_tls_verify() {
     return 1
 }
 
+is_loopback_probe_host() {
+    case "$1" in
+        localhost|127.0.0.1|::1)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
 else
@@ -219,7 +228,9 @@ for mode in "${modes[@]}"; do
     }
     pasv_ip="$(echo "$result" | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j.get("pasv_ip") or j.get("response") or "")')"
     if [ -n "$cached_ipv4" ] && [ "$mode" = "pasv-plain" ] && [ "$pasv_ip" != "$cached_ipv4" ]; then
-        fail "PASV ip ${pasv_ip} does not match endpoint cache ${cached_ipv4}"
+        if ! is_loopback_probe_host "$host"; then
+            fail "PASV ip ${pasv_ip} does not match endpoint cache ${cached_ipv4}"
+        fi
     fi
     echo "  ${mode}: ok pasv_ip=${pasv_ip}"
 done

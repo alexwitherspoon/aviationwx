@@ -22,7 +22,7 @@ echo "   $COMPOSE exec web cat /etc/proftpd/conf.d/masquerade.conf"
 echo ""
 
 echo "3. TLS configuration (conf.d/tls.conf):"
-echo "   $COMPOSE exec web grep -E 'TLSEngine|TLSCertificate' /etc/proftpd/conf.d/tls.conf"
+echo "   $COMPOSE exec web grep -E 'TLSEngine|TLS(RSA|EC)?Certificate' /etc/proftpd/conf.d/tls.conf"
 echo ""
 
 echo "4. Certificate files:"
@@ -64,7 +64,7 @@ docker compose -f docker/docker-compose.prod.yml exec web bash -c '
   cat /etc/proftpd/conf.d/runtime.conf
   echo ""
   echo "=== TLS ==="
-  grep -E "TLSEngine|TLSCertificate" /etc/proftpd/conf.d/tls.conf
+  grep -E "TLSEngine|TLS(RSA|EC)?Certificate" /etc/proftpd/conf.d/tls.conf
   echo ""
   echo "=== Auth users ==="
   wc -l /etc/proftpd/ftpd.passwd

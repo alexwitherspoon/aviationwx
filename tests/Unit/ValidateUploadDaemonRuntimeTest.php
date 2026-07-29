@@ -44,6 +44,14 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $this->assertStringContainsString('cannot read ${PROFTPD_RUNTIME_CONF}', $contents);
     }
 
+    public function testValidateScript_SkipsEndpointCachePasvCheckForLoopbackHost(): void
+    {
+        $contents = file_get_contents($this->validateScript);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('is_loopback_probe_host', $contents);
+        $this->assertStringContainsString('does not match endpoint cache', $contents);
+    }
+
     public function testDeployFirewallScript_SkipsDuplicateFtpsExplicitTlsAllow(): void
     {
         $script = dirname(__DIR__, 2) . '/scripts/deploy-configure-firewall.sh';

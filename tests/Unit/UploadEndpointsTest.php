@@ -278,6 +278,75 @@ class UploadEndpointsTest extends TestCase
         );
 
         $this->assertStringContainsString('TLSRequired                    on', $conf);
+        $this->assertStringContainsString('TLSRSACertificateFile', $conf);
+        $this->assertStringContainsString('TLSRSACertificateKeyFile', $conf);
+    }
+
+    public function testResolveProftpdTlsCertificateDirectives_UsesEcForEcCertificate(): void
+    {
+        [$cert, $key] = $this->createSelfSignedCertificate(OPENSSL_KEYTYPE_EC, 'prime256v1');
+
+        [$certDirective, $keyDirective] = resolveProftpdTlsCertificateDirectives($cert);
+
+        $this->assertSame('TLSECCertificateFile', $certDirective);
+        $this->assertSame('TLSECCertificateKeyFile', $keyDirective);
+
+        $conf = buildProftpdTlsCapabilityConf($cert, $key);
+        $this->assertStringContainsString('TLSECCertificateFile', $conf);
+        $this->assertStringContainsString('TLSECCertificateKeyFile', $conf);
+        $this->assertStringNotContainsString('TLSRSACertificateFile', $conf);
+    }
+
+    public function testResolveProftpdTlsCertificateDirectives_UsesRsaForRsaCertificate(): void
+    {
+        [$cert, $key] = $this->createSelfSignedCertificate(OPENSSL_KEYTYPE_RSA);
+
+        [$certDirective, $keyDirective] = resolveProftpdTlsCertificateDirectives($cert);
+
+        $this->assertSame('TLSRSACertificateFile', $certDirective);
+        $this->assertSame('TLSRSACertificateKeyFile', $keyDirective);
+
+        $conf = buildProftpdTlsCapabilityConf($cert, $key);
+        $this->assertStringContainsString('TLSRSACertificateFile', $conf);
+        $this->assertStringContainsString('TLSRSACertificateKeyFile', $conf);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function createSelfSignedCertificate(int $type, ?string $curve = null): array
+    {
+        $config = ['private_key_type' => $type];
+        if ($type === OPENSSL_KEYTYPE_EC && $curve !== null) {
+            $config['curve_name'] = $curve;
+        }
+
+        $privateKey = openssl_pkey_new($config);
+        if ($privateKey === false) {
+            $this->markTestSkipped('openssl_pkey_new unavailable');
+        }
+
+        $csr = openssl_csr_new(['CN' => 'upload-endpoints-test'], $privateKey);
+        if ($csr === false) {
+            $this->markTestSkipped('openssl_csr_new unavailable');
+        }
+
+        $certificate = openssl_csr_sign($csr, null, $privateKey, 1);
+        if ($certificate === false) {
+            $this->markTestSkipped('openssl_csr_sign unavailable');
+        }
+
+        $certPath = $this->trackTempFile(sys_get_temp_dir() . '/upload-tls-cert-' . uniqid('', true) . '.pem');
+        $keyPath = $this->trackTempFile(sys_get_temp_dir() . '/upload-tls-key-' . uniqid('', true) . '.pem');
+
+        $certPem = '';
+        $keyPem = '';
+        $this->assertTrue(openssl_x509_export($certificate, $certPem));
+        $this->assertTrue(openssl_pkey_export($privateKey, $keyPem));
+        file_put_contents($certPath, $certPem);
+        file_put_contents($keyPath, $keyPem);
+
+        return [$certPath, $keyPath];
     }
 
     public function testBuildProftpdListenersConf_Ipv4OnlyDisablesIpv6(): void
