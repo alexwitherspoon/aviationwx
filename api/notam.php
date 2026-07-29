@@ -19,6 +19,7 @@ require_once __DIR__ . '/../lib/notam/schedule.php';
 require_once __DIR__ . '/../lib/notam/cache.php';
 require_once __DIR__ . '/../lib/notam/banner.php';
 require_once __DIR__ . '/../lib/notam/http-cache-headers.php';
+require_once __DIR__ . '/../lib/notam/airspace/consumers.php';
 
 // Start output buffering
 ob_start();
@@ -132,6 +133,24 @@ foreach ($notams as $notam) {
     $notam['status'] = $currentStatus;
     $bannerCandidates[] = $notam;
 }
+
+// Capability-gated unified-store airspace rows (WFS-only never qualifies).
+$storeBannerNotams = notamAirspaceStoreRelevantNotamsForAirport($airport, 'banner', $nowUnix);
+$storeBannerCandidates = [];
+foreach ($storeBannerNotams as $notam) {
+    if (!is_array($notam)) {
+        continue;
+    }
+    notamEnsureEffectiveSegments($notam);
+    $currentStatus = revalidateNotamStatus($notam, $timezone);
+    if (!notamIsBannerRelevantStatus($currentStatus, $notam, $nowUnix)) {
+        continue;
+    }
+    $notam['status'] = $currentStatus;
+    $storeBannerCandidates[] = $notam;
+}
+
+$bannerCandidates = notamMergeAirportAndStoreNotamRows($bannerCandidates, $storeBannerCandidates);
 
 $bannerRows = notamPrepareDashboardBannerRows($bannerCandidates, $airport, $timezone, $nowUnix);
 
