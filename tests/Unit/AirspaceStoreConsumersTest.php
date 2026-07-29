@@ -158,6 +158,46 @@ final class AirspaceStoreConsumersTest extends TestCase
         $this->assertSame([], $rows);
     }
 
+    public function testRunwayClosureCapableStoreRow_RelevantToAirport_IsReturned(): void
+    {
+        $now = time();
+        $notam = [
+            'id' => 'A9203/2026',
+            'text' => 'RWY 03/21 CLSD',
+            'location' => 'KOGD',
+            'scenario' => '86',
+            'aixm_runway_event' => true,
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now - 3600),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $now + 7200),
+        ];
+        $this->assertTrue(notamAirspaceRecordRunwayClosureCapable($notam));
+        $this->assertTrue(isAerodromeClosure($notam, $this->airportNearOgden()));
+
+        $record = [
+            'notam_id' => 'A9203/2026',
+            'norm_number' => 'N:9203',
+            'restriction_kind' => 'runway_closure',
+            'notam' => $notam,
+            'timezone' => 'UTC',
+            'source_airport_id' => 'ogd',
+            'capabilities' => [
+                'map' => false,
+                'banner' => false,
+                'runway_closure' => true,
+            ],
+            'record_sources' => ['nms'],
+            'field_sources' => ['notam_id' => 'nms', 'text' => 'nms'],
+        ];
+        $this->writeStore(['N:9203' => $record], $now);
+
+        $rows = notamAirspaceStoreRelevantNotamsForAirport($this->airportNearOgden(), 'runway_closure', $now);
+        $this->assertNotEmpty($rows);
+        $this->assertSame('A9203/2026', $rows[0]['id'] ?? null);
+
+        $far = notamAirspaceStoreRelevantNotamsForAirport($this->airportFarAway(), 'runway_closure', $now);
+        $this->assertSame([], $far);
+    }
+
     public function testMergeDedupsAirportAndStoreRows(): void
     {
         $a = ['id' => 'A1/2026', 'text' => 'one'];
