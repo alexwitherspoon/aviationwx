@@ -1927,6 +1927,14 @@ Production access is browser-only (`lib/notam/map-api-access.php`).
 
 **Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map. Stale or missing aggregate data fails closed (no shapes drawn). Thin WFS-only rows never satisfy banner or runway_closure capability gates.
 
+**Adapter platform** (`lib/notam/airspace/`):
+
+1. Sources implement `NotamSourceAdapter` (`getSourceType`, `buildUrl`, `parseResponse`, update-frequency metadata).
+2. `UnifiedNotamFetcher` dispatches known adapters (NMS AIXM, FAA TFR WFS) into AirspaceRecord lists.
+3. `AirspaceAggregator` performs record-level merge with `field_sources` integrity before store write.
+4. New providers add an adapter and merge rule; they do not create a parallel map pipeline.
+
+
 ## Data Display on Dashboard
 
 ### Airport "Last updated": observation time vs fetch time

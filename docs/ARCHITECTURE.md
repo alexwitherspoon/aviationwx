@@ -54,7 +54,12 @@ aviationwx.org/
 │   │   ├── auth.php          # NMS API authentication (OAuth bearer token)
 │   │   ├── fetcher.php       # NOTAM fetching (location + geospatial queries)
 │   │   ├── parser.php        # AIXM XML parsing
-│   │   └── filter.php        # Relevance filtering (closures, TFR circle and polygon geometry)
+│   │   ├── filter.php        # Relevance filtering (closures, TFR circle and polygon geometry)
+│   │   ├── map-aggregate-cache.php # Unified national airspace store I/O
+│   │   └── airspace/         # Normalized airspace ingest platform
+│   │       ├── UnifiedNotamFetcher.php # Adapter dispatch entry
+│   │       ├── AirspaceAggregator.php  # Record-level merge + field_sources
+│   │       └── adapter/      # NMS AIXM, FAA TFR WFS, future providers
 │   └── weather/
 │       ├── UnifiedFetcher.php # Unified weather fetch pipeline
 │       ├── WeatherAggregator.php # Multi-source aggregation logic
@@ -79,6 +84,7 @@ aviationwx.org/
 │   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
 │   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
+│   ├── fetch-faa-tfr-wfs.php # National FAA TFR WFS → unified airspace store
 │   ├── refresh-metar-bulk.php # AWC national METAR bulk gzip refresh (background)
 │   └── refresh-nws-points.php # NWS /points cache warmup (background)
 ├── admin/
@@ -654,6 +660,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 3. Add adapter to `buildSourceList()` in `lib/weather/UnifiedFetcher.php`
 4. Add source type to `parseSourceResponse()` switch statement
 5. Update configuration documentation in `CONFIGURATION.md`
+
+### Adding a New Airspace / NOTAM Source
+
+1. Implement `NotamSourceAdapter` in `lib/notam/airspace/adapter/` (see `FaaTfrWfsAdapter`, `NmsAixmAdapter`)
+2. Register the source type in `UnifiedNotamFetcher::adapterMap()`
+3. Emit AirspaceRecord rows with `record_sources`, `field_sources`, and accurate capability flags
+4. Extend `AirspaceAggregator` merge rules only when the new source can correlate with existing buckets (`norm_number`)
+5. Document coverage expectations in `DATA_FLOW.md` (map vs banner vs runway gates)
 
 ### Adding a New Airport
 

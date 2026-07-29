@@ -15,13 +15,14 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/notam/map-aggregate-cache.php';
-require_once __DIR__ . '/../lib/notam/airspace/adapter/FaaTfrWfsAdapter.php';
+require_once __DIR__ . '/../lib/notam/airspace/UnifiedNotamFetcher.php';
 
 use AviationWX\Notam\Airspace\Adapter\FaaTfrWfsAdapter;
+use AviationWX\Notam\Airspace\UnifiedNotamFetcher;
 
 $started = microtime(true);
 
-$result = FaaTfrWfsAdapter::fetchAndParse([
+$result = UnifiedNotamFetcher::fetchSource(FaaTfrWfsAdapter::SOURCE_TYPE, [
     'persist_raw' => true,
     'max_features' => 500,
 ]);
