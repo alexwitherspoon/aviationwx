@@ -1334,7 +1334,12 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <div class="airport-code"><?= htmlspecialchars($formalIdentifier) ?></div>
                         <?php endif; ?>
                         <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
-                        <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
+                        <?php
+                        $airportAddress = trim((string) ($airport['address'] ?? ''));
+                        if ($airportAddress !== ''):
+                        ?>
+                        <div class="airport-location"><?= htmlspecialchars($airportAddress) ?></div>
+                        <?php endif; ?>
                         
                         <?php if ($hasAnyWeather): ?>
                         <div class="airport-metrics">
