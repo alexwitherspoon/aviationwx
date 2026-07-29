@@ -147,7 +147,15 @@ final class AirspaceAggregator
     {
         $merged = $nms;
 
-        if (isset($wfs['geometry']) && is_array($wfs['geometry'])) {
+        // Prefer NMS native circles over coarse WFS polygon approximations (Disney, VIP rings).
+        $nmsIsCircle = (($nms['geometry_kind'] ?? null) === 'circle')
+            && isset($nms['geometry']['type'])
+            && $nms['geometry']['type'] === 'Point'
+            && isset($nms['radius_nm'])
+            && is_numeric($nms['radius_nm'])
+            && (float) $nms['radius_nm'] > 0.0;
+
+        if (!$nmsIsCircle && isset($wfs['geometry']) && is_array($wfs['geometry'])) {
             $merged['geometry'] = $wfs['geometry'];
             $merged['geometry_kind'] = $wfs['geometry_kind'] ?? $merged['geometry_kind'] ?? null;
             unset($merged['radius_nm']);
@@ -188,6 +196,9 @@ final class AirspaceAggregator
             }
         }
         foreach (['geometry', 'wfs_title', 'wfs_legal'] as $field) {
+            if ($field === 'geometry' && $nmsIsCircle) {
+                continue;
+            }
             if (isset($wfsFields[$field]) && is_string($wfsFields[$field])) {
                 $fieldSources[$field] = $wfsFields[$field];
             } elseif ($field === 'geometry' && isset($wfs['geometry'])) {

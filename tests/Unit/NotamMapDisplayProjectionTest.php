@@ -312,6 +312,56 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertEqualsWithDelta($centerLat, (float) $out[0]['geometry']['coordinates'][1], 0.02);
     }
 
+    public function testProjectDisplayFeatures_RewritesNearCircularPolygonWithoutNmHeadline(): void
+    {
+        // Disney-style standing TFR: WFS polygon ring, map title has no "NM radius".
+        $centerLon = -81.58;
+        $centerLat = 28.38;
+        $radiusNm = 3.0;
+        $ring = [];
+        $dLat = $radiusNm / 60.0;
+        $dLon = $radiusNm / (60.0 * cos(deg2rad($centerLat)));
+        for ($i = 0; $i < 36; $i++) {
+            $theta = (2.0 * M_PI * $i) / 36.0;
+            $ring[] = [
+                $centerLon + ($dLon * cos($theta)),
+                $centerLat + ($dLat * sin($theta)),
+            ];
+        }
+
+        $feature = $this->polygonFeature(
+            '4/3634',
+            $ring,
+            'Security restriction: DISNEY WORLD THEME PARK, ORLANDO, FL',
+            'active',
+            'security'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(1, $out);
+        $this->assertSame('Point', $out[0]['geometry']['type']);
+        $props = $out[0]['properties'];
+        $this->assertSame('circle', $props['geometry_kind']);
+        $this->assertEqualsWithDelta(3.0, (float) $props['radius_nm'], 0.05);
+        $this->assertEqualsWithDelta($centerLon, (float) $out[0]['geometry']['coordinates'][0], 0.02);
+        $this->assertEqualsWithDelta($centerLat, (float) $out[0]['geometry']['coordinates'][1], 0.02);
+    }
+
+    public function testProjectDisplayFeatures_LeavesIrregularPolygonAsPolygon(): void
+    {
+        $feature = $this->polygonFeature(
+            '5000/2026',
+            [[-117.5, 44.2], [-117.0, 44.2], [-117.2, 44.9], [-117.5, 44.2]],
+            'Fire TFR - polygon area - SFC - 9000 ft'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(1, $out);
+        $this->assertSame('Polygon', $out[0]['geometry']['type']);
+        $this->assertSame('polygon', $out[0]['properties']['geometry_kind']);
+        $this->assertArrayNotHasKey('radius_nm', $out[0]['properties']);
+    }
+
     public function testProjectDisplayFeatures_LeavesDistantCircleAndPolygonSeparate(): void
     {
         $circle = $this->circleFeature(

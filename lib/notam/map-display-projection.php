@@ -32,7 +32,13 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 5;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 6;
+
+/**
+ * Max coefficient of variation of vertex radii for geometric circle rewrite.
+ * Disney-style standing TFRs are near-perfect rings (CV ≪ 0.01).
+ */
+const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX = 0.05;
 
 /**
  * Project per-NOTAM map features into a map-ready display Feature list.
@@ -130,24 +136,21 @@ function notamTfrMapLayerDisplayNormalizeRadiusPolygonToCircle(array $feature): 
 }
 
 /**
- * Infer a display circle from a polygon whose headline declares an NM radius.
+ * Infer a display circle from a polygon ring.
+ *
+ * Prefers headline "N NM radius" when present and consistent with the footprint.
+ * Otherwise fits a circle geometrically when the ring is nearly circular
+ * (standing security TFRs like Disney often lack an NM radius in the map title).
+ *
+ * MultiPolygon: uses the largest exterior ring only so extra WFS lobes do not
+ * skew the center or invent internal chords.
  *
  * @param array<string, mixed> $feature
  * @return array{lon: float, lat: float, radius_nm: float}|null
  */
 function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?array
 {
-    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
-    $headline = (string) ($props['banner_headline'] ?? '');
-    if (preg_match('/\b(\d+(?:\.\d+)?)\s*NM\s+radius\b/i', $headline, $m) !== 1) {
-        return null;
-    }
-    $radiusNm = (float) $m[1];
-    if ($radiusNm <= 0.0) {
-        return null;
-    }
-
-    $pts = notamTfrMapLayerDisplayFeatureVertices($feature);
+    $pts = notamTfrMapLayerDisplayPrimaryRingVertices($feature);
     if (count($pts) < 8) {
         return null;
     }
@@ -161,12 +164,37 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
     $lon = $sumLon / count($pts);
     $lat = $sumLat / count($pts);
 
-    $box = notamTfrMapLayerDisplayFeatureBBox($feature);
-    if ($box === null) {
+    $cosLat = max(0.2, cos(deg2rad($lat)));
+    $radiiNm = [];
+    foreach ($pts as $pt) {
+        $dxNm = ($pt[0] - $lon) * 60.0 * $cosLat;
+        $dyNm = ($pt[1] - $lat) * 60.0;
+        $radiiNm[] = hypot($dxNm, $dyNm);
+    }
+    $meanRadiusNm = array_sum($radiiNm) / count($radiiNm);
+    if ($meanRadiusNm <= 0.0) {
         return null;
     }
-    $widthNm = ($box[2] - $box[0]) * 60.0 * max(0.2, cos(deg2rad($lat)));
-    $heightNm = ($box[3] - $box[1]) * 60.0;
+    $variance = 0.0;
+    foreach ($radiiNm as $r) {
+        $d = $r - $meanRadiusNm;
+        $variance += $d * $d;
+    }
+    $variance /= count($radiiNm);
+    $cv = sqrt($variance) / $meanRadiusNm;
+
+    $minLon = $pts[0][0];
+    $minLat = $pts[0][1];
+    $maxLon = $pts[0][0];
+    $maxLat = $pts[0][1];
+    foreach ($pts as $pt) {
+        $minLon = min($minLon, $pt[0]);
+        $minLat = min($minLat, $pt[1]);
+        $maxLon = max($maxLon, $pt[0]);
+        $maxLat = max($maxLat, $pt[1]);
+    }
+    $widthNm = ($maxLon - $minLon) * 60.0 * $cosLat;
+    $heightNm = ($maxLat - $minLat) * 60.0;
     if ($widthNm <= 0.0 || $heightNm <= 0.0) {
         return null;
     }
@@ -174,17 +202,101 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
     if ($aspect < 0.7 || $aspect > 1.43) {
         return null;
     }
+
+    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+    $headline = (string) ($props['banner_headline'] ?? '');
+    $headlineRadiusNm = null;
+    if (preg_match('/\b(\d+(?:\.\d+)?)\s*NM\s+radius\b/i', $headline, $m) === 1) {
+        $candidate = (float) $m[1];
+        if ($candidate > 0.0) {
+            $headlineRadiusNm = $candidate;
+        }
+    }
+
     $bboxRadiusNm = max($widthNm, $heightNm) / 2.0;
-    // Headline radius should roughly match the ring footprint.
-    if ($bboxRadiusNm < ($radiusNm * 0.7) || $bboxRadiusNm > ($radiusNm * 1.35)) {
+    if ($headlineRadiusNm !== null
+        && $bboxRadiusNm >= ($headlineRadiusNm * 0.7)
+        && $bboxRadiusNm <= ($headlineRadiusNm * 1.35)
+    ) {
+        // Coarse WFS rings still declare an NM radius in the map title.
+        return [
+            'lon' => $lon,
+            'lat' => $lat,
+            'radius_nm' => $headlineRadiusNm,
+        ];
+    }
+
+    // No usable headline radius: only rewrite when the ring is geometrically circular
+    // (standing security TFRs like Disney often omit "NM radius" from the title).
+    if ($cv > NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX) {
         return null;
     }
 
     return [
         'lon' => $lon,
         'lat' => $lat,
-        'radius_nm' => $radiusNm,
+        'radius_nm' => $meanRadiusNm,
     ];
+}
+
+/**
+ * Vertices of the largest exterior ring (MultiPolygon-safe), excluding the closing duplicate.
+ *
+ * @param array<string, mixed> $feature
+ * @return list<array{0: float, 1: float}>
+ */
+function notamTfrMapLayerDisplayPrimaryRingVertices(array $feature): array
+{
+    $geometry = $feature['geometry'] ?? null;
+    if (!is_array($geometry)) {
+        return [];
+    }
+    $type = (string) ($geometry['type'] ?? '');
+    $coordinates = $geometry['coordinates'] ?? null;
+    if (!is_array($coordinates)) {
+        return [];
+    }
+
+    $rings = [];
+    if ($type === 'Polygon') {
+        $rings[] = $coordinates[0] ?? null;
+    } elseif ($type === 'MultiPolygon') {
+        foreach ($coordinates as $polygon) {
+            if (!is_array($polygon)) {
+                continue;
+            }
+            $rings[] = $polygon[0] ?? null;
+        }
+    }
+
+    $best = [];
+    foreach ($rings as $ring) {
+        if (!is_array($ring) || count($ring) < 3) {
+            continue;
+        }
+        $pts = [];
+        foreach ($ring as $coord) {
+            if (!is_array($coord) || count($coord) < 2) {
+                continue;
+            }
+            if (!is_numeric($coord[0]) || !is_numeric($coord[1])) {
+                continue;
+            }
+            $pts[] = [(float) $coord[0], (float) $coord[1]];
+        }
+        if (count($pts) >= 2) {
+            $first = $pts[0];
+            $last = $pts[count($pts) - 1];
+            if ($first[0] === $last[0] && $first[1] === $last[1]) {
+                array_pop($pts);
+            }
+        }
+        if (count($pts) > count($best)) {
+            $best = $pts;
+        }
+    }
+
+    return $best;
 }
 
 /**
