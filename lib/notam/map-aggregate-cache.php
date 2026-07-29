@@ -521,20 +521,18 @@ function notamMapAirspaceAggregateCoverageSourcesFromStatus(array $sourceStatus)
 }
 
 /**
- * Whether the map-airspace store is older than the NOTAM cache TTL.
+ * Whether an already-decoded map-airspace envelope is older than the NOTAM cache TTL.
  *
- * Uses envelope data_updated_at when present; falls back to file mtime for legacy files.
+ * Prefer this when the caller already holds `$envelope` so serve paths do not re-read disk.
+ * Falls back to file mtime only when the envelope lacks usable timestamps (legacy files).
  *
+ * @param array<string, mixed> $envelope Decoded map-airspace.json
  * @param int $ttl Seconds from {@see getNotamCacheTtlSeconds()}
  * @param int|null $nowUnix Optional clock for tests
  */
-function notamMapAirspaceAggregateIsStale(int $ttl, ?int $nowUnix = null): bool
+function notamMapAirspaceAggregateEnvelopeIsStale(array $envelope, int $ttl, ?int $nowUnix = null): bool
 {
     $nowUnix = $nowUnix ?? time();
-    $envelope = notamMapAirspaceAggregateRead();
-    if ($envelope === null) {
-        return true;
-    }
 
     $updatedAt = (int) ($envelope['data_updated_at'] ?? $envelope['updated_at'] ?? 0);
     if ($updatedAt <= 0) {
@@ -547,6 +545,24 @@ function notamMapAirspaceAggregateIsStale(int $ttl, ?int $nowUnix = null): bool
     $age = $nowUnix - $updatedAt;
 
     return $age < 0 || $age >= $ttl;
+}
+
+/**
+ * Whether the map-airspace store is older than the NOTAM cache TTL.
+ *
+ * Reads the store when the caller does not already hold an envelope.
+ *
+ * @param int $ttl Seconds from {@see getNotamCacheTtlSeconds()}
+ * @param int|null $nowUnix Optional clock for tests
+ */
+function notamMapAirspaceAggregateIsStale(int $ttl, ?int $nowUnix = null): bool
+{
+    $envelope = notamMapAirspaceAggregateRead();
+    if ($envelope === null) {
+        return true;
+    }
+
+    return notamMapAirspaceAggregateEnvelopeIsStale($envelope, $ttl, $nowUnix);
 }
 
 /**
