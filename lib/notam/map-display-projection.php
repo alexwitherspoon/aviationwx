@@ -32,7 +32,7 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 4;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 5;
 
 /**
  * Project per-NOTAM map features into a map-ready display Feature list.
@@ -284,7 +284,9 @@ function notamTfrMapLayerDisplayBucketKey(array $feature): ?string
 }
 
 /**
- * Normalized vertical band key such as `SFC-9000`, or null when unknown.
+ * Normalized vertical band key such as `SFC-9000` or `SFC-5000-AGL`, or null when unknown.
+ *
+ * Includes AGL/MSL (and FL/UNL when present) so distinct datums never share a merge bucket.
  *
  * @param array<string, mixed> $feature
  */
@@ -292,10 +294,14 @@ function notamTfrMapLayerDisplayVerticalKey(array $feature): ?string
 {
     $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
     $headline = (string) ($props['banner_headline'] ?? '');
-    if (preg_match('/\b(SFC|\d+)\s*-\s*(\d+)\s*ft\b/i', $headline, $m) === 1) {
+    if (preg_match('/\b(SFC|\d+)\s*-\s*(\d+)\s*ft(?:\s+(AGL|MSL|FL|UNL))?\b/i', $headline, $m) === 1) {
         $lo = strtoupper($m[1]);
+        $key = $lo . '-' . $m[2];
+        if (isset($m[3]) && $m[3] !== '') {
+            $key .= '-' . strtoupper($m[3]);
+        }
 
-        return $lo . '-' . $m[2];
+        return $key;
     }
 
     return null;

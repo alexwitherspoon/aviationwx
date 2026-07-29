@@ -59,6 +59,46 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertSame('SFC-9000', notamTfrMapLayerDisplayVerticalKey($feature));
     }
 
+    public function testVerticalKey_IncludesDatumSuffix(): void
+    {
+        $agl = $this->polygonFeature(
+            '2/2026',
+            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            'Fire TFR - polygon area - SFC - 5000 ft AGL'
+        );
+        $msl = $this->polygonFeature(
+            '3/2026',
+            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            'Fire TFR - polygon area - SFC - 5000 ft MSL'
+        );
+        $this->assertSame('SFC-5000-AGL', notamTfrMapLayerDisplayVerticalKey($agl));
+        $this->assertSame('SFC-5000-MSL', notamTfrMapLayerDisplayVerticalKey($msl));
+        $this->assertNotSame(
+            notamTfrMapLayerDisplayVerticalKey($agl),
+            notamTfrMapLayerDisplayVerticalKey($msl)
+        );
+    }
+
+    public function testProjectDisplayFeatures_DoesNotMergeAglVsMslSameAltitude(): void
+    {
+        $a = $this->polygonFeature(
+            '2000/2026',
+            [[-117.5, 44.2], [-117.0, 44.2], [-117.0, 44.8], [-117.5, 44.8]],
+            'Fire TFR - polygon area - SFC - 5000 ft AGL'
+        );
+        $b = $this->polygonFeature(
+            '2001/2026',
+            [[-117.5, 44.2], [-117.0, 44.2], [-117.0, 44.8], [-117.5, 44.8]],
+            'Fire TFR - polygon area - SFC - 5000 ft MSL'
+        );
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$a, $b]);
+        $this->assertCount(2, $out);
+        foreach ($out as $feature) {
+            $this->assertFalse(($feature['properties']['display_merged'] ?? false));
+        }
+    }
+
     public function testProjectDisplayFeatures_MergesOverlappingSameVertical(): void
     {
         $a = $this->polygonFeature(
