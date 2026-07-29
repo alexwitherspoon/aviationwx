@@ -9,15 +9,15 @@
     "public_ip": "",
     "public_ipv6": "",
     "upload_hostname": "",
-    "_comment_network_ports": "Self-hosted production TCP port map: UFW/deploy (deploy-configure-firewall.sh), ProFTPD, container SFTP (sshd), and fail2ban. Omitted keys use defaults. ssh opens the host admin SSH port in the firewall; sftp is the SFTP listener inside the web container. ftps_alt is an optional extra inbound FTP control port on the host (NAT to ftp_control).",
+    "_comment_network_ports": "Self-hosted production TCP port map: UFW/deploy (deploy-configure-firewall.sh), ProFTPD, container SFTP (sshd), and fail2ban. Set ftps_explicit_tls equal to ftp_control when ProFTPD uses a single control listener (recommended). ftps_alt is optional NAT for an extra inbound control port. Passive range 49152-65535 is IANA ephemeral / ProFTPD standard; narrower ranges (e.g. 50000-51000) are fine for dev.",
     "network_ports": {
       "http": 80,
       "https": 443,
       "ftp_control": 2121,
-      "ftps_explicit_tls": 2122,
+      "ftps_explicit_tls": 2121,
       "sftp": 2222,
-      "ftp_passive_min": 50000,
-      "ftp_passive_max": 51000,
+      "ftp_passive_min": 49152,
+      "ftp_passive_max": 65535,
       "ssh": 22,
       "ftps_alt": null
     },
@@ -33,10 +33,10 @@
       "ipv6": true
     },
 
-    "_comment_upload_daemon": "ProFTPD connection limits (OSS defaults). Production at scale should set explicit values (for example max_instances 800 for ~1000 cameras).",
+    "_comment_upload_daemon": "ProFTPD connection limits (OSS defaults when omitted: 50/40/2). Production at scale should set explicit values; example below suits ~100 push cameras.",
     "upload_daemon": {
-      "max_instances": 50,
-      "max_clients": 40,
+      "max_instances": 200,
+      "max_clients": 150,
       "max_clients_per_user": 2
     },
 

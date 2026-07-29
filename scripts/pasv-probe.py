@@ -41,13 +41,37 @@ def ftps_skip_hostname_verify() -> bool:
     return os.environ.get("AVWX_FTPS_SKIP_HOSTNAME_VERIFY", "").lower() in ("1", "true", "yes")
 
 
+class ReusedTlsSessionFtp(FTP_TLS):
+    """Reuse the control TLS session on PROT P data channels (required by ProFTPD mod_tls)."""
+
+    def ntransfercmd(self, cmd, rest=None):
+        conn, size = FTP.ntransfercmd(self, cmd, rest)
+        if not self._prot_p:
+            return conn, size
+
+        session = None
+        control = getattr(self, "sock", None)
+        if control is not None:
+            session = getattr(control, "session", None)
+
+        if session is not None:
+            conn = self.context.wrap_socket(
+                conn,
+                server_hostname=self.host,
+                session=session,
+            )
+        else:
+            conn = self.context.wrap_socket(conn, server_hostname=self.host)
+        return conn, size
+
+
 def ftps_client() -> FTP_TLS:
     if ftps_skip_hostname_verify():
         context = ssl.create_default_context()
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
-        return FTP_TLS(context=context)
-    return FTP_TLS()
+        return ReusedTlsSessionFtp(context=context)
+    return ReusedTlsSessionFtp()
 
 
 def probe_plain(host: str, port: int, user: str, password: str, use_epsv: bool) -> dict:
