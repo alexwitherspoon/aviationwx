@@ -13,6 +13,7 @@ namespace AviationWX\Notam\Airspace\Adapter;
 require_once __DIR__ . '/../../../logger.php';
 require_once __DIR__ . '/../../../cache-paths.php';
 require_once __DIR__ . '/../identity.php';
+require_once __DIR__ . '/../classification.php';
 require_once __DIR__ . '/NotamSourceAdapter.php';
 
 /**
@@ -296,22 +297,10 @@ final class FaaTfrWfsAdapter implements NotamSourceAdapter
      */
     public static function restrictionKindFromWfs(array $props): string
     {
-        $legal = strtoupper(trim((string) ($props['LEGAL'] ?? '')));
-        $title = strtoupper(trim((string) ($props['TITLE'] ?? '')));
-
-        if ($legal === 'FIS-B' || str_contains($title, 'FIS-B')) {
-            return 'fis_b';
-        }
-
-        if ($legal === 'SECURITY' || $legal === 'VIP') {
-            return 'security';
-        }
-
-        if ($legal === 'AIR SHOWS/SPORTS' || str_contains($legal, 'AIR SHOW')) {
-            return 'airshow';
-        }
-
-        return 'tfr';
+        return notamAirspaceRestrictionKindFromHints([
+            'legal' => $props['LEGAL'] ?? null,
+            'title' => $props['TITLE'] ?? null,
+        ]);
     }
 
     /**

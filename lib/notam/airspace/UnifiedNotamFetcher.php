@@ -30,11 +30,30 @@ final class UnifiedNotamFetcher
      */
     public static function adapterMap(): array
     {
-        return [
+        $map = [
             NmsAixmAdapter::SOURCE_TYPE => NmsAixmAdapter::class,
             FaaTfrWfsAdapter::SOURCE_TYPE => FaaTfrWfsAdapter::class,
             NmsFdcAirspaceAdapter::SOURCE_TYPE => NmsFdcAirspaceAdapter::class,
         ];
+
+        // Optional plugin adapters (tests / future config). Values are FQCN strings.
+        $plugins = $GLOBALS['aviationwxAirspaceAdapterPlugins'] ?? null;
+        if (is_array($plugins)) {
+            foreach ($plugins as $type => $className) {
+                if (!is_string($type) || $type === '' || !is_string($className) || $className === '') {
+                    continue;
+                }
+                if (!class_exists($className)) {
+                    continue;
+                }
+                if (!is_a($className, NotamSourceAdapter::class, true)) {
+                    continue;
+                }
+                $map[$type] = $className;
+            }
+        }
+
+        return $map;
     }
 
     /**

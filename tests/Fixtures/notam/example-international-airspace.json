@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [2.29, 48.85],
+            [2.36, 48.85],
+            [2.36, 48.88],
+            [2.29, 48.88],
+            [2.29, 48.85]
+          ]
+        ]
+      },
+      "properties": {
+        "notam_id": "B1234/26",
+        "title": "Paris temporary restricted area (example fixture)",
+        "restriction_kind": "tfr",
+        "authority": "example",
+        "official_search_url": "https://example.com/notam-search?id=B1234%2F26"
+      }
+    }
+  ]
+}
