@@ -47,6 +47,78 @@ else
     APP_PHP="${APP_PHP:-php}"
 fi
 
+PROFTPD_RUNTIME_CONF="${PROFTPD_RUNTIME_CONF:-/etc/proftpd/conf.d/runtime.conf}"
+
+read_proftpd_runtime_expectations() {
+    CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" -r '
+        require_once "/var/www/html/lib/config.php";
+        $config = loadConfig();
+        $np = $config["config"]["network_ports"] ?? [];
+        $daemon = $config["config"]["upload_daemon"] ?? [];
+        echo json_encode([
+            "port" => (int) ($np["ftp_control"] ?? 2121),
+            "passive_min" => (int) ($np["ftp_passive_min"] ?? 50000),
+            "passive_max" => (int) ($np["ftp_passive_max"] ?? 51000),
+            "max_instances" => (int) ($daemon["max_instances"] ?? 50),
+            "max_clients" => (int) ($daemon["max_clients"] ?? 40),
+            "max_clients_per_user" => (int) ($daemon["max_clients_per_user"] ?? 2),
+        ], JSON_UNESCAPED_SLASHES);
+    ' 2>/dev/null
+}
+
+read_proftpd_runtime_directive() {
+    local key="$1"
+    awk -v k="$key" '$1 == k { $1=""; sub(/^ +/, ""); print; exit }' "$PROFTPD_RUNTIME_CONF"
+}
+
+assert_runtime_conf_matches_config() {
+    if [ ! -f "$PROFTPD_RUNTIME_CONF" ]; then
+        fail "missing ${PROFTPD_RUNTIME_CONF}"
+    fi
+
+    local expected
+    expected="$(read_proftpd_runtime_expectations)"
+    if [ -z "$expected" ]; then
+        fail "could not read ProFTPD runtime expectations from config"
+    fi
+
+    local exp_port exp_pasv_min exp_pasv_max exp_max_inst exp_max_clients exp_max_per_user
+    exp_port="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["port"])')"
+    exp_pasv_min="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["passive_min"])')"
+    exp_pasv_max="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["passive_max"])')"
+    exp_max_inst="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_instances"])')"
+    exp_max_clients="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_clients"])')"
+    exp_max_per_user="$(echo "$expected" | python3 -c 'import json,sys; print(json.load(sys.stdin)["max_clients_per_user"])')"
+
+    local actual_port actual_pasv actual_pasv_min actual_pasv_max
+    local actual_max_inst actual_max_clients actual_max_per_user
+    actual_port="$(read_proftpd_runtime_directive Port | awk '{print $1}')"
+    actual_pasv="$(read_proftpd_runtime_directive PassivePorts)"
+    actual_pasv_min="$(echo "$actual_pasv" | awk '{print $1}')"
+    actual_pasv_max="$(echo "$actual_pasv" | awk '{print $2}')"
+    actual_max_inst="$(read_proftpd_runtime_directive MaxInstances | awk '{print $1}')"
+    actual_max_clients="$(read_proftpd_runtime_directive MaxClients | awk '{print $1}')"
+    actual_max_per_user="$(read_proftpd_runtime_directive MaxClientsPerUser | awk '{print $1}')"
+
+    if [ "$actual_port" != "$exp_port" ]; then
+        fail "runtime Port ${actual_port} (expected ${exp_port})"
+    fi
+    if [ "$actual_pasv_min" != "$exp_pasv_min" ] || [ "$actual_pasv_max" != "$exp_pasv_max" ]; then
+        fail "runtime PassivePorts ${actual_pasv_min}-${actual_pasv_max} (expected ${exp_pasv_min}-${exp_pasv_max})"
+    fi
+    if [ "$actual_max_inst" != "$exp_max_inst" ]; then
+        fail "runtime MaxInstances ${actual_max_inst} (expected ${exp_max_inst})"
+    fi
+    if [ "$actual_max_clients" != "$exp_max_clients" ]; then
+        fail "runtime MaxClients ${actual_max_clients} (expected ${exp_max_clients})"
+    fi
+    if [ "$actual_max_per_user" != "$exp_max_per_user" ]; then
+        fail "runtime MaxClientsPerUser ${actual_max_per_user} (expected ${exp_max_per_user})"
+    fi
+
+    echo "  runtime: ok Port=${actual_port} PassivePorts=${actual_pasv_min}-${actual_pasv_max} MaxInstances=${actual_max_inst} MaxClients=${actual_max_clients} MaxClientsPerUser=${actual_max_per_user}"
+}
+
 read_probe_settings() {
     CONFIG_PATH="$CONFIG_PATH" VALIDATE_UPLOAD_HOST="$VALIDATE_UPLOAD_HOST" "$APP_PHP" -r '
         require_once "/var/www/html/lib/config.php";
@@ -102,6 +174,8 @@ command -v python3 >/dev/null 2>&1 || fail "python3 required"
 if ! pgrep -x proftpd >/dev/null 2>&1; then
     fail "proftpd is not running"
 fi
+
+assert_runtime_conf_matches_config
 
 settings="$(read_probe_settings)"
 if [ -z "$settings" ]; then
