@@ -359,6 +359,88 @@ function queryNotamsByCoordinates(
 }
 
 /**
+ * Build NMS query params for national FDC airspace bulk ingest.
+ *
+ * @param array<string, string> $extra Optional extra NMS query parameters
+ * @return array<string, string>
+ */
+function notamBuildFdcAirspaceQueryParams(array $extra = []): array
+{
+    return array_merge([
+        'classification' => 'FDC',
+        'feature' => NOTAM_GEO_QUERY_FEATURE,
+    ], $extra);
+}
+
+/**
+ * Query NMS for FDC + AIRSPACE NOTAMs (national bulk gap-filler).
+ *
+ * Uses the shared NMS rate limiter and credential stack. Response format is
+ * the standard NMS AIXM JSON envelope (same as location/geo queries).
+ *
+ * @param float &$lastRequestTime Last request timestamp (for rate limiting)
+ * @param bool|null $querySucceeded When passed, true on HTTP 200 with a valid NMS payload
+ * @return array<int, string> Array of AIXM XML strings
+ */
+function queryNotamsFdcAirspace(
+    float &$lastRequestTime,
+    ?bool &$querySucceeded = null,
+): array {
+    $reportQueryOutcome = func_num_args() >= 2;
+
+    $token = getNotamBearerToken();
+    if ($token === null) {
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
+        return [];
+    }
+
+    $baseUrl = getNotamApiBaseUrl();
+    $url = rtrim($baseUrl, '/') . '/nmsapi/v1/notams?' . http_build_query(
+        notamBuildFdcAirspaceQueryParams(),
+    );
+
+    $queryResult = notamExecuteNmsQuery($url, 'fdc_airspace', $lastRequestTime, $token);
+    if (!$queryResult['ok']) {
+        notamRecordNmsQueryFailure(
+            'fdc_airspace',
+            'notam fetcher: FDC airspace bulk query failed',
+            [],
+            $queryResult,
+            $reportQueryOutcome,
+            $querySucceeded,
+        );
+
+        return [];
+    }
+
+    $response = $queryResult['body'];
+    $httpCode = (int) ($queryResult['http_code'] ?? 0);
+
+    $data = notamDecodeNmsJsonResponse($response);
+    $aixmRows = notamExtractAixmRowsFromNmsResponse($data);
+    if ($aixmRows === null) {
+        notamLogInvalidNmsPayload('fdc_airspace', [], $response, $data);
+        notamHealthTrackRequest('fdc_airspace', false, $httpCode);
+        if ($reportQueryOutcome) {
+            $querySucceeded = false;
+        }
+
+        return [];
+    }
+
+    notamHealthTrackRequest('fdc_airspace', true, $httpCode);
+
+    if ($reportQueryOutcome) {
+        $querySucceeded = true;
+    }
+
+    return $aixmRows;
+}
+
+/**
  * Deduplicate NOTAMs by canonical key ({@see notamCanonicalDedupKey()}).
  *
  * Merges duplicate payloads (location + geo queries) so the richest NOTAM text survives
