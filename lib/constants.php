@@ -277,6 +277,11 @@ if (!defined('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE')) {
     define('NOTAM_FAA_SCENARIO_RUNWAY_CLOSURE', '86');
 }
 
+// National FAA TFR WFS refresh (public GeoJSON; no NMS credential)
+if (!defined('FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS')) {
+    define('FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS', 900); // 15 minutes
+}
+
 if (!defined('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS')) {
     define('NOTAM_FETCH_FAILURE_BACKOFF_SECONDS', 300); // 5 minutes between retries after NMS failure
 }

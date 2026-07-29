@@ -1,0 +1,200 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -77.05,
+              38.85
+            ],
+            [
+              -77.0,
+              38.85
+            ],
+            [
+              -77.0,
+              38.9
+            ],
+            [
+              -77.05,
+              38.9
+            ],
+            [
+              -77.05,
+              38.85
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "GID": 1001,
+        "NOTAM_KEY": "6/0543-1-FDC-F",
+        "LEGAL": "SECURITY",
+        "TITLE": "WASHINGTON, DC., USA",
+        "STATE": "USA",
+        "CNS_LOCATION_ID": "ZDC",
+        "LAST_MODIFICATION_DATETIME": "202409032112"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -77.1,
+              38.8
+            ],
+            [
+              -77.06,
+              38.8
+            ],
+            [
+              -77.06,
+              38.84
+            ],
+            [
+              -77.1,
+              38.84
+            ],
+            [
+              -77.1,
+              38.8
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "GID": 1002,
+        "NOTAM_KEY": "6/0543-1-FDC-F",
+        "LEGAL": "SECURITY",
+        "TITLE": "WASHINGTON, DC., USA",
+        "STATE": "USA",
+        "CNS_LOCATION_ID": "ZDC",
+        "LAST_MODIFICATION_DATETIME": "202409032112"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -112.4,
+              41.6
+            ],
+            [
+              -112.3,
+              41.6
+            ],
+            [
+              -112.3,
+              41.7
+            ],
+            [
+              -112.4,
+              41.7
+            ],
+            [
+              -112.4,
+              41.6
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "GID": 2001,
+        "NOTAM_KEY": "6/2698-1-FDC-F",
+        "LEGAL": "HAZARDS",
+        "TITLE": "OGDEN, UT HAZARD AREA",
+        "STATE": "UT",
+        "CNS_LOCATION_ID": "ZLC",
+        "LAST_MODIFICATION_DATETIME": "202601131445"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -100.0,
+              40.0
+            ],
+            [
+              -99.9,
+              40.0
+            ],
+            [
+              -99.9,
+              40.1
+            ],
+            [
+              -100.0,
+              40.1
+            ],
+            [
+              -100.0,
+              40.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "GID": 3001,
+        "NOTAM_KEY": "6/1111-1-FDC-F",
+        "LEGAL": "FIS-B",
+        "TITLE": "FIS-B SERVICE OUTAGE EXAMPLE",
+        "STATE": "USA",
+        "CNS_LOCATION_ID": "ZDV",
+        "LAST_MODIFICATION_DATETIME": "202607280000"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -122.4,
+              47.5
+            ],
+            [
+              -122.3,
+              47.5
+            ],
+            [
+              -122.3,
+              47.6
+            ],
+            [
+              -122.4,
+              47.6
+            ],
+            [
+              -122.4,
+              47.5
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "GID": 4001,
+        "NOTAM_KEY": "6/8576-1-FDC-F",
+        "LEGAL": "AIR SHOWS/SPORTS",
+        "TITLE": "SEATTLE AIRSHOW",
+        "STATE": "WA",
+        "CNS_LOCATION_ID": "ZSE",
+        "LAST_MODIFICATION_DATETIME": "202607280000"
+      }
+    }
+  ]
+}

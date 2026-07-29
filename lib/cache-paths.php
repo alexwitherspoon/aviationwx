@@ -28,8 +28,9 @@
  * /var/sftp/{username}/files/      # SFTP uploads (ftp:www-data 2775)
  * ├── notam/
  * │   ├── {airport}.json           # NOTAM cache
- * │   ├── map-airspace.json        # National TFR airspace record store (map side-channel)
- * │   └── map-airspace.upsert.lock # Exclusive flock for map-airspace upserts
+ * │   ├── map-airspace.json        # National unified airspace record store (NMS + WFS)
+ * │   ├── map-airspace.upsert.lock # Exclusive flock for map-airspace writes
+ * │   └── faa-tfr-wfs.json         # Raw FAA TFR WFS GeoJSON cache
  * ├── station-power/
  * │   └── {airport}.json           # Canonical station power snapshot (provider-agnostic)
  * ├── partners/
@@ -608,7 +609,7 @@ function getNotamCachePath(string $airportId): string {
 }
 
 /**
- * National TFR airspace record store for the airports directory map.
+ * National unified airspace record store for the airports directory map.
  *
  * Uses {@see notamCacheDirectory()} when available so test overrides align
  * with per-airport NOTAM cache paths.
@@ -622,7 +623,7 @@ function getNotamMapAirspaceAggregatePath(): string {
 }
 
 /**
- * Exclusive flock target for map-airspace side-channel upserts.
+ * Exclusive flock target for map-airspace unified-store writes.
  *
  * @return string Full path to lock file (created on demand)
  */
@@ -630,6 +631,17 @@ function getNotamMapAirspaceUpsertLockPath(): string {
     require_once __DIR__ . '/notam/cache.php';
 
     return notamCacheDirectory() . '/map-airspace.upsert.lock';
+}
+
+/**
+ * Raw FAA TFR WFS GeoJSON cache (survives restarts; separate from unified store).
+ *
+ * @return string Full path to JSON cache file
+ */
+function getNotamFaaTfrWfsCachePath(): string {
+    require_once __DIR__ . '/notam/cache.php';
+
+    return notamCacheDirectory() . '/faa-tfr-wfs.json';
 }
 
 /**

@@ -1870,17 +1870,40 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 
 ### Airports directory TFR map layer
 
-The airports network map (`pages/airports.php`, served at `airports.aviationwx.org`) draws geo-relevant TFRs from an aggregated GeoJSON layer. This path is separate from per-airport dashboard banners: banners list every deduplicated event row filtered for airport relevance; the map shows drawable TFR geometry from a national side-channel store.
+The airports network map (`pages/airports.php`, served at `airports.aviationwx.org`) draws geo-relevant airspace restrictions from an aggregated GeoJSON layer. This path is separate from per-airport dashboard banners: banners list every deduplicated event row filtered for airport relevance; the map shows drawable geometry from the national unified airspace store.
 
-**Side-channel ingest** (`notamMapAirspaceAggregateUpsertFromFetch()` in `lib/notam/map-aggregate-cache.php`, called from `fetchNotamsForAirport()` in `lib/notam/fetcher.php`):
+**Unified store** (`cache/notam/map-airspace.json`):
 
-1. After NMS parse and dedup, before `filterRelevantNotams()`, upsert drawable TFR rows into `cache/notam/map-airspace.json` as normalized AirspaceRecord entries (`capabilities.map`, embedded `notam`, `field_sources`, `source_airport_id`).
-2. Per-airport banner caches (`cache/notam/{airport_id}.json`) still receive only relevance-filtered rows.
+1. Envelope fields: `schema_version`, `merge_logic_version`, `data_updated_at`, `coverage_sources`, `source_status`, and `records` keyed by `norm_number` (or `ID:{notam_id}` when a number cannot be derived).
+2. Only the aggregator write path sets envelope metadata. Per-airport NMS workers submit candidate records and re-merge under `map-airspace.upsert.lock`; they do not stamp deploy SHA into serve eligibility.
+3. Serve eligibility uses envelope `data_updated_at` against `getNotamCacheTtlSeconds()` and a matching `merge_logic_version`. Deploy identity (`getGitSha()`) is not used for fail-closed decisions.
+4. Attribution: every record carries `record_sources` and `field_sources`. Merged attributes keep per-field provenance.
 
-**Project** (`notamTfrMapLayerBuildPayloadFromAirspaceStore()` in `lib/notam/map-layer.php`; serve entry `notamTfrMapLayerServeOrRebuild()` in `lib/notam/map-layer-cache.php`):
+**Ingest paths**:
 
-1. Read `map-airspace.json` when present, fresh (within `getNotamCacheTtlSeconds()`), and `map_layer_build_token` matches (`{deploy SHA}-v{N}` from {@see getGitSha()} and {@see NOTAM_TFR_MAP_LAYER_LOGIC_VERSION}, or `logic-v{N}` when SHA is unavailable). `getGitSha()` prefers `GIT_SHA`, then the entrypoint-persisted cache file `cache/.deploy-git-sha` (so CLI/cron workers match Apache after health-check restarts), then git metadata. Otherwise fail-closed (empty features, `failclosed: true`).
-2. For each record with `capabilities.map`, revalidate status from the embedded NOTAM (`revalidateNotamStatus()` / `isTfr()` parity with `api/notam.php`), emit a GeoJSON Feature (polygon outer ring or Point + `radius_nm` for circles).
+1. **NMS side-channel** (`notamMapAirspaceAggregateUpsertFromFetch()` from `fetchNotamsForAirport()`): after parse and dedup, before `filterRelevantNotams()`, upsert drawable TFR rows as NMS-sourced AirspaceRecord entries.
+2. **FAA TFR WFS** (`scripts/fetch-faa-tfr-wfs.php`, scheduler tick `faa_tfr_wfs`): public `V_TFR_LOC` GeoJSON via `FaaTfrWfsAdapter`. Raw payload cached at `cache/notam/faa-tfr-wfs.json`. On WFS failure, mark `source_status.faa_tfr_wfs.ok=false` and retain prior records (NMS-only degrade).
+
+**Merge policy** (`AirspaceAggregator`):
+
+1. Bucket by `N:{int}` with leading-zero normalization (`0543` → `543`).
+2. Emit one record per bucket - never two shapes for the same restriction.
+3. When NMS and WFS match on number: WFS geometry, NMS schedule and text; update `field_sources` per attribute.
+4. Secondary geometry-key dedup for unmatched spatial duplicates (prefer NMS-bearing / richer provenance).
+5. Forbidden: larger-area-wins, show-both-shapes, newest-geometry-only.
+
+**Capabilities** (data sufficiency, not display permission):
+
+| Flag | Map | Banner | Runway / DA |
+|------|-----|--------|-------------|
+| Typical NMS drawable TFR | yes | when schedule/text sufficient | usually no |
+| WFS-only thin row | yes | never | never |
+| Merged WFS geom + NMS schedule | yes | yes when NMS banner-capable | no |
+
+**Project** (`notamTfrMapLayerBuildPayloadFromAirspaceStore()`; serve entry `notamTfrMapLayerServeOrRebuild()`):
+
+1. Fail-closed with empty features and `failclosed_reason` when the store is missing (`store_missing`), stale (`store_stale`), or on merge-logic mismatch (`merge_logic_mismatch`).
+2. For each record with `capabilities.map`, project a GeoJSON Feature (polygon, multipolygon, or Point + `radius_nm` for circles). NMS embeds use `revalidateNotamStatus()`; WFS-only standing rows serve as `active` with title-based headlines (do not force "TFR" labeling for `fis_b` / `airshow` / `security` kinds).
 3. **Geometry deduplication** (`notamTfrMapLayerDeduplicateFeaturesByGeometry()`): features that share the same drawable geometry key collapse to one feature. When keys collide, keep the highest-priority status:
 
    | Rank (`NOTAM_TFR_MAP_STATUS_PRIORITY`) | Status |
@@ -1890,24 +1913,19 @@ The airports network map (`pages/airports.php`, served at `airports.aviationwx.o
    | 2 | `upcoming_today` |
    | 3 | `upcoming_future` |
 
-   Lower rank wins (`notamTfrMapLayerStatusPriority()`).
-
-   Equal-priority ties break on lower `notam_id` (lexicographic). This is **not** the dashboard banner event fingerprint (`notamBannerEventFingerprint()`): map keys use rounded circle center + radius, or polygon ring vertices in ring order, so paired A/numeric NOTAMs and same-shape upcoming series merge for display only.
+   Lower rank wins (`notamTfrMapLayerStatusPriority()`). Equal-priority ties break on lower `notam_id` (lexicographic).
 
 **Style bucket** (`notamTfrMapLayerStyleBucket()`): `active` (red stroke/fill) only when status is `active`; all other retained statuses map to `upcoming` (amber), including `inactive_scheduled`.
 
-**Serve** (`notamTfrMapLayerServeOrRebuild()`):
+**Coverage metadata**:
 
-1. **National airspace store** (`cache/notam/map-airspace.json`) holds AirspaceRecord rows; upserts use `flock()` on `map-airspace.upsert.lock`.
-2. **Serve-time projection** rebuilds GeoJSON on every origin request from embedded NOTAM rows (status, tooltip lines, dedup).
-3. Responses include `coverage_scope: faa_nms_side_channel` and a `coverage_note` reminding pilots the layer is not exhaustive.
-4. **HTTP cache**: `GET /api/notam-map.php` sends `Cache-Control` with `NOTAM_API_CACHE_TTL_SECONDS` / `NOTAM_API_CACHE_SWR_SECONDS` (same as `api/notam.php`). JSON `cache_ttl_seconds` is the disk/client poll TTL (`getNotamCacheTtlSeconds()`), not the HTTP window.
+1. `coverage_scope` is `faa_nms_wfs` when both NMS and WFS sources are healthy, `faa_tfr_wfs` when only WFS is healthy, and `faa_nms_side_channel` for NMS-only degrade.
+2. `coverage_note` reminds pilots the layer is not exhaustive.
+3. **HTTP cache**: `GET /api/notam-map.php` sends `Cache-Control` with `NOTAM_API_CACHE_TTL_SECONDS` / `NOTAM_API_CACHE_SWR_SECONDS` (same as `api/notam.php`). JSON `cache_ttl_seconds` is the disk/client poll TTL (`getNotamCacheTtlSeconds()`), not the HTTP window.
 
 Production access is browser-only (`lib/notam/map-api-access.php`).
 
-**Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map. Stale or missing aggregate data fails closed (no shapes drawn).
-
----
+**Safety**: Geometry dedup prefers the currently active restriction so an overlapping upcoming NOTAM cannot mask an active TFR on the directory map. Stale or missing aggregate data fails closed (no shapes drawn). Thin WFS-only rows never satisfy banner or runway_closure capability gates.
 
 ## Data Display on Dashboard
 

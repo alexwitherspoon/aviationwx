@@ -69,6 +69,7 @@ $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
 $lastNwsPointsRefresh = 0;
+$lastFaaTfrWfsRefresh = 0;
 $lastNwsPointsMissingLog = 0;
 $deployDrainAnnounced = false;
 $runwaysFetchOnStartupDone = false;
@@ -237,6 +238,19 @@ $workRegistry->registerEnqueueTick('metar_bulk', function (int $now) use (&$last
             reapZombies();
         }
         $lastMetarBulkRefresh = $now;
+    }
+});
+
+$workRegistry->registerEnqueueTick('faa_tfr_wfs', function (int $now) use (&$lastFaaTfrWfsRefresh): void {
+    // National FAA TFR WFS → unified airspace store (see fetch-faa-tfr-wfs.php).
+    if (($now - $lastFaaTfrWfsRefresh) >= FAA_TFR_WFS_REFRESH_INTERVAL_SECONDS) {
+        $wfsScript = __DIR__ . '/fetch-faa-tfr-wfs.php';
+        if (file_exists($wfsScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($wfsScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+        }
+        $lastFaaTfrWfsRefresh = $now;
     }
 });
 
