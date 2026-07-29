@@ -425,7 +425,7 @@ function ensureWebcamsBaseDirectory() {
  * Creates airport-scoped FTP upload directory:
  *   /ftp/{airport}/{username}/    ← FTP upload dir (ftp:www-data 2775)
  * 
- * FTP uses a simple flat structure. ProFTPD DefaultChdir ~ uses each user's homedir.
+ * FTP uses a simple flat structure. ProFTPD DefaultRoot ~ chroots each user to homedir.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
@@ -922,7 +922,7 @@ function readProftpdAccountMap(): array
  *
  * @param string $username Username (up to 14 alphanumeric characters)
  * @param string $password Password (14 alphanumeric characters)
- * @param string $ftpDir Absolute homedir for this user (DefaultChdir ~)
+ * @param string $ftpDir Absolute homedir for this user (DefaultRoot ~ jail root)
  * @param array<string, mixed> $logContext Extra fields for success log context
  * @return bool True on success, false on failure
  */

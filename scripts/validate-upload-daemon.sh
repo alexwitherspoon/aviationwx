@@ -16,6 +16,10 @@ PASV_PROBE="${SCRIPT_DIR}/pasv-probe.py"
 if [ ! -f "$PASV_PROBE" ]; then
     PASV_PROBE="/var/www/html/scripts/pasv-probe.py"
 fi
+ISOLATION_PROBE="${SCRIPT_DIR}/ftp-isolation-probe.py"
+if [ ! -f "$ISOLATION_PROBE" ]; then
+    ISOLATION_PROBE="/var/www/html/scripts/ftp-isolation-probe.py"
+fi
 
 CONFIG_PATH="${CONFIG_PATH:-/var/www/html/config/airports.json}"
 VALIDATE_UPLOAD_HOST="${VALIDATE_UPLOAD_HOST:-127.0.0.1}"
@@ -163,6 +167,57 @@ unset "${PASV_PROBE_PASSWORD_ENV}"
 unset AVWX_FTPS_SKIP_HOSTNAME_VERIFY 2>/dev/null || true
 rm -f "$stor_file"
 echo "  stor: ok remote=${stor_remote}"
+
+# Session containment: user A must not reach another camera inbox (SFTP-style jail).
+isolation_pair="$(CONFIG_PATH="$CONFIG_PATH" "$APP_PHP" -r '
+    require_once "/var/www/html/lib/config.php";
+    require_once "/var/www/html/lib/proftpd-auth.php";
+    $parsed = parseProftpdPasswdFile();
+    $cameras = [];
+    foreach (loadConfig()["airports"] ?? [] as $airport) {
+        foreach ($airport["webcams"] ?? [] as $cam) {
+            $push = $cam["push_config"] ?? null;
+            if (!is_array($push)) {
+                continue;
+            }
+            $candidate = $push["username"] ?? "";
+            $candidatePass = $push["password"] ?? "";
+            if ($candidate === "" || $candidatePass === "") {
+                continue;
+            }
+            $home = $parsed["users"][$candidate]["home"] ?? "";
+            if ($home === "") {
+                continue;
+            }
+            $cameras[] = ["user" => $candidate, "home" => $home];
+        }
+    }
+    if (count($cameras) < 2) {
+        echo "";
+        exit(0);
+    }
+    echo json_encode([
+        "user_b" => $cameras[1]["user"],
+        "home_b" => $cameras[1]["home"],
+    ], JSON_UNESCAPED_SLASHES);
+' 2>/dev/null || echo "")"
+if [ -n "$isolation_pair" ] && [ -f "$ISOLATION_PROBE" ]; then
+  user_b="$(echo "$isolation_pair" | python3 -c 'import json,sys; print(json.load(sys.stdin)["user_b"])')"
+  home_b="$(echo "$isolation_pair" | python3 -c 'import json,sys; print(json.load(sys.stdin)["home_b"])')"
+  export "${PASV_PROBE_PASSWORD_ENV}=${pass}"
+  if ! isolation_out="$(python3 "$ISOLATION_PROBE" --host "$host" --port "$port" \
+      --user-a "$user" --user-b "$user_b" --home-b "$home_b" \
+      --password-env "$PASV_PROBE_PASSWORD_ENV" --json 2>&1)"; then
+    unset "${PASV_PROBE_PASSWORD_ENV}"
+    fail "FTP session isolation failed for ${user} vs ${user_b}: ${isolation_out}"
+  fi
+  unset "${PASV_PROBE_PASSWORD_ENV}"
+  echo "  isolation: ok user=${user} cannot reach ${user_b}"
+elif [ ! -f "$ISOLATION_PROBE" ]; then
+  echo "  isolation: skipped (ftp-isolation-probe.py not found)"
+else
+  echo "  isolation: skipped (need two push cameras in config)"
+fi
 
 # Permission contract: inbox ftp:www-data 2775; uploaded file ftp:www-data 664 (Umask 002).
 upload_home="$(printf '%s' "${upload_home}" | tr -d '[:space:]')"

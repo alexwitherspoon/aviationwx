@@ -1012,7 +1012,7 @@ For cameras that upload images to the server:
 - Restricted client networks: set `config.network_ports.ftps_alt` for an extra inbound control port (NAT to `ftp_control`); `deploy-configure-firewall.sh` applies UFW and NAT on deploy. See [FTPS alternate control port (NAT redirect)](OPERATIONS.md#ftps-alternate-control-port-nat-redirect).
 
 **Upload paths:**
-- **FTP**: Upload to `/` (ProFTPD `DefaultChdir ~` lands in the user homedir)
+- **FTP**: Upload to `/` (ProFTPD `DefaultRoot ~` chroots to the user homedir)
 - **SFTP**: Upload to `/files/` (chroot requires subdirectory)
 
 Directory structure (separate hierarchies for FTP and SFTP):
