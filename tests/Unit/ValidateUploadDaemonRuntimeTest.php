@@ -52,6 +52,59 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
         $this->assertStringContainsString('does not match endpoint cache', $contents);
     }
 
+    public function testValidateScript_MatchesConfigureProftpdLegacyUploadDaemonFallback(): void
+    {
+        $contents = file_get_contents($this->validateScript);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString(
+            '$config["config"]["upload_daemon"] ?? $config["upload_daemon"] ?? []',
+            $contents
+        );
+    }
+
+    public function testValidateScript_RequiresRuntimeDirectivesBeforeComparingValues(): void
+    {
+        $contents = file_get_contents($this->validateScript);
+        $this->assertIsString($contents);
+        $this->assertStringContainsString('require_runtime_directive', $contents);
+        $this->assertStringContainsString('runtime.conf missing ${key} directive', $contents);
+        $this->assertStringContainsString('PassivePorts must include min and max port', $contents);
+    }
+
+    public function testRuntimeExpectations_ReadLegacyTopLevelUploadDaemon(): void
+    {
+        $configPath = $this->createConfigFixture([
+            'upload_daemon' => [
+                'max_instances' => 175,
+                'max_clients' => 125,
+                'max_clients_per_user' => 3,
+            ],
+            'config' => [
+                'base_domain' => 'example.com',
+                'network_ports' => [
+                    'ftp_control' => 2121,
+                    'ftp_passive_min' => 49152,
+                    'ftp_passive_max' => 65535,
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $json = $this->readRuntimeExpectationsFromConfig($configPath);
+        $this->assertSame(175, $json['max_instances']);
+        $this->assertSame(125, $json['max_clients']);
+        $this->assertSame(3, $json['max_clients_per_user']);
+        $this->assertSame(49152, $json['passive_min']);
+    }
+
+    public function testAssertRuntimeConf_FailsClearlyWhenDirectiveMissing(): void
+    {
+        $runtime = $this->createRuntimeFixture("Port                            2121\n");
+        $result = $this->runAssertRuntimeConfMatchesConfig($runtime);
+        $this->assertSame(1, $result['exit']);
+        $this->assertStringContainsString('missing PassivePorts directive', $result['stderr']);
+    }
+
     public function testDeployFirewallScript_SkipsDuplicateFtpsExplicitTlsAllow(): void
     {
         $script = dirname(__DIR__, 2) . '/scripts/deploy-configure-firewall.sh';
@@ -66,13 +119,102 @@ class ValidateUploadDaemonRuntimeTest extends TestCase
     {
         $path = tempnam(sys_get_temp_dir(), 'proftpd-runtime-');
         $this->assertNotFalse($path);
-        file_put_contents($path, $contents);
+        $written = file_put_contents($path, $contents);
+        $this->assertNotFalse($written);
         $this->addToAssertionCount(0);
         register_shutdown_function(static function () use ($path): void {
             @unlink($path);
         });
 
         return $path;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function createConfigFixture(array $config): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'upload-config-');
+        $this->assertNotFalse($path);
+        $written = file_put_contents($path, json_encode($config, JSON_THROW_ON_ERROR));
+        $this->assertNotFalse($written);
+        $this->addToAssertionCount(0);
+        register_shutdown_function(static function () use ($path): void {
+            @unlink($path);
+        });
+
+        return $path;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function readRuntimeExpectationsFromConfig(string $configPath): array
+    {
+        $repoRoot = dirname(__DIR__, 2);
+        $cmd = sprintf(
+            'cd %s && CONFIG_PATH=%s VALIDATE_UPLOAD_FUNCTIONS_ONLY=1 bash -c %s',
+            escapeshellarg($repoRoot),
+            escapeshellarg($configPath),
+            escapeshellarg('. scripts/validate-upload-daemon.sh; read_proftpd_runtime_expectations')
+        );
+        $output = shell_exec($cmd);
+        $this->assertIsString($output);
+        $this->assertNotSame('', trim($output));
+
+        /** @var array<string, int> $decoded */
+        $decoded = json_decode(trim($output), true, 512, JSON_THROW_ON_ERROR);
+
+        return $decoded;
+    }
+
+    /**
+     * @return array{exit: int, stderr: string}
+     */
+    private function runAssertRuntimeConfMatchesConfig(string $runtimePath): array
+    {
+        $configPath = $this->createConfigFixture([
+            'config' => [
+                'base_domain' => 'example.com',
+                'network_ports' => [
+                    'ftp_control' => 2121,
+                    'ftp_passive_min' => 49152,
+                    'ftp_passive_max' => 65535,
+                ],
+                'upload_daemon' => [
+                    'max_instances' => 200,
+                    'max_clients' => 150,
+                    'max_clients_per_user' => 2,
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $repoRoot = dirname(__DIR__, 2);
+        $cmd = sprintf(
+            'cd %s && CONFIG_PATH=%s PROFTPD_RUNTIME_CONF=%s VALIDATE_UPLOAD_FUNCTIONS_ONLY=1 bash -c %s',
+            escapeshellarg($repoRoot),
+            escapeshellarg($configPath),
+            escapeshellarg($runtimePath),
+            escapeshellarg('. scripts/validate-upload-daemon.sh; assert_runtime_conf_matches_config')
+        );
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        $this->assertIsResource($proc);
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+
+        return [
+            'exit' => $exit,
+            'stderr' => is_string($stderr) ? $stderr : '',
+        ];
     }
 
     private function readDirective(string $runtimePath, string $key): string
