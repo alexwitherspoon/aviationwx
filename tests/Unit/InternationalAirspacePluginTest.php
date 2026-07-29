@@ -61,6 +61,22 @@ final class InternationalAirspacePluginTest extends TestCase
         $this->assertNotEmpty($parsed);
     }
 
+    public function testPluginRegistry_DoesNotOverrideBuiltInSourceTypes(): void
+    {
+        require_once __DIR__ . '/../../lib/notam/airspace/adapter/ExampleInternationalAirspaceAdapter.php';
+        $GLOBALS['aviationwxAirspaceAdapterPlugins'] = [
+            'faa_tfr_wfs' => ExampleInternationalAirspaceAdapter::class,
+            'mismatched_key' => ExampleInternationalAirspaceAdapter::class,
+        ];
+
+        $map = UnifiedNotamFetcher::adapterMap();
+        $this->assertSame(
+            \AviationWX\Notam\Airspace\Adapter\FaaTfrWfsAdapter::class,
+            $map['faa_tfr_wfs'] ?? null
+        );
+        $this->assertArrayNotHasKey('mismatched_key', $map);
+    }
+
     public function testOfficialLink_FaaVsAuthorityUrl(): void
     {
         $faa = notamAirspaceOfficialLinkForRecord([
@@ -78,6 +94,28 @@ final class InternationalAirspacePluginTest extends TestCase
         ]);
         $this->assertSame('https://example.com/notam-search?id=B1234%2F26', $intl['url']);
         $this->assertStringContainsString('authority', strtolower($intl['label']));
+    }
+
+    public function testOfficialLink_EmptyAuthorityWithCustomUrl_UsesCustom(): void
+    {
+        $link = notamAirspaceOfficialLinkForRecord([
+            'notam_id' => 'B9999/26',
+            'authority' => '',
+            'record_sources' => ['example_international'],
+            'official_search_url' => 'https://example.com/notam/B9999',
+        ]);
+        $this->assertSame('https://example.com/notam/B9999', $link['url']);
+    }
+
+    public function testOfficialLink_RejectsNonHttpSchemes(): void
+    {
+        $link = notamAirspaceOfficialLinkForRecord([
+            'notam_id' => 'B9999/26',
+            'authority' => 'example',
+            'record_sources' => ['example_international'],
+            'official_search_url' => 'javascript:alert(1)',
+        ]);
+        $this->assertSame('', $link['url']);
     }
 
     public function testMapFeature_UsesAuthorityLinkLabel(): void
