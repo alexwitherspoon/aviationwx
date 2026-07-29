@@ -663,11 +663,12 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 
 ### Adding a New Airspace / NOTAM Source
 
-1. Implement `NotamSourceAdapter` in `lib/notam/airspace/adapter/` (see `FaaTfrWfsAdapter`, `NmsAixmAdapter`)
-2. Register the source type in `UnifiedNotamFetcher::adapterMap()`
-3. Emit AirspaceRecord rows with `record_sources`, `field_sources`, and accurate capability flags
-4. Extend `AirspaceAggregator` merge rules only when the new source can correlate with existing buckets (`norm_number`)
-5. Document coverage expectations in `DATA_FLOW.md` (map vs banner vs runway gates)
+1. Implement `NotamSourceAdapter` in `lib/notam/airspace/adapter/` (see `FaaTfrWfsAdapter`, `NmsAixmAdapter`, and the fixture-backed `ExampleInternationalAirspaceAdapter`)
+2. Register built-in sources in `UnifiedNotamFetcher::adapterMap()`, or register plugins at runtime via `$GLOBALS['aviationwxAirspaceAdapterPlugins']` (source type => FQCN)
+3. Emit AirspaceRecord rows with `record_sources`, `field_sources`, accurate capability flags, and optional `authority` / `official_search_url` for non-FAA links
+4. Use `notamAirspaceRestrictionKindFromHints()` for classification when provider metadata is available (do not rely only on US `isTfr()` keywords)
+5. Extend `AirspaceAggregator` merge rules only when the new source can correlate with existing buckets (`norm_number`)
+6. Document coverage expectations in `DATA_FLOW.md` (map vs banner vs runway gates). International sources must keep `coverage_scope` honest (`multi_authority_partial` when non-US sources contribute)
 
 ### Adding a New Airport
 

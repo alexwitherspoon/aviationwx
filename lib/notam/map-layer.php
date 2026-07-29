@@ -17,6 +17,7 @@ require_once __DIR__ . '/cache.php';
 require_once __DIR__ . '/filter.php';
 require_once __DIR__ . '/schedule.php';
 require_once __DIR__ . '/tfr-category.php';
+require_once __DIR__ . '/airspace/official-links.php';
 
 /** Segments on approximate circle rings (visual only, not for navigation). */
 const NOTAM_TFR_MAP_CIRCLE_SEGMENTS = 64;
@@ -473,7 +474,7 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
     }
 
     $bucket = notamTfrMapLayerStyleBucket($status);
-    $official = 'https://notams.aim.faa.gov/notamSearch/search?notamNumber=' . rawurlencode($id);
+    $official = notamAirspaceOfficialLinkForRecord($record);
     $headline = notamTfrMapLayerHeadlineForRecord($record, $text);
 
     $baseProps = [
@@ -481,7 +482,8 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         'airport_id' => (string) ($record['source_airport_id'] ?? ''),
         'status' => $status,
         'map_layer_style' => $bucket,
-        'official_link' => $official,
+        'official_link' => $official['url'],
+        'official_link_label' => $official['label'],
         'geometry_kind' => $geometryKind,
         'restriction_kind' => $restrictionKind,
         'banner_headline' => $headline,
@@ -631,7 +633,24 @@ function notamTfrMapLayerResponseMetadata(?array $envelope = null): array
     }
 
     $hasWfs = in_array('faa_tfr_wfs', $sources, true);
-    $hasNms = in_array('nms', $sources, true) || $sources === [];
+    $hasNms = in_array('nms', $sources, true)
+        || in_array('nms_fdc_bulk', $sources, true)
+        || $sources === [];
+    $hasInternational = false;
+    foreach ($sources as $sourceName) {
+        if ($sourceName === 'nms' || $sourceName === 'faa_tfr_wfs' || $sourceName === 'nms_fdc_bulk') {
+            continue;
+        }
+        $hasInternational = true;
+        break;
+    }
+
+    if ($hasInternational) {
+        return [
+            'coverage_scope' => 'multi_authority_partial',
+            'coverage_note' => 'Airspace restriction geometry from configured authority sources; coverage is partial and not exhaustive. Verify via official NOTAMs before flight.',
+        ];
+    }
 
     if ($hasWfs && $hasNms) {
         return [
@@ -649,7 +668,7 @@ function notamTfrMapLayerResponseMetadata(?array $envelope = null): array
 
     return [
         'coverage_scope' => 'faa_nms_side_channel',
-        'coverage_note' => $hasWfs ? NOTAM_MAP_COVERAGE_NOTE : NOTAM_MAP_COVERAGE_NOTE_NMS_ONLY,
+        'coverage_note' => NOTAM_MAP_COVERAGE_NOTE_NMS_ONLY,
     ];
 }
 
