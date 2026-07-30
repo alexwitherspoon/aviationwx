@@ -79,6 +79,18 @@ final class NotamMapDisplayProjectionTest extends TestCase
         );
     }
 
+    public function testVerticalKey_MissingBandUsesUnknownSlot(): void
+    {
+        $feature = $this->circleFeature(
+            '4/9383',
+            -77.0,
+            38.9,
+            30.0,
+            'Security restriction: WASHINGTON, DC., USA'
+        );
+        $this->assertSame('unknown', notamTfrMapLayerDisplayVerticalKey($feature));
+    }
+
     public function testProjectDisplayFeatures_DoesNotMergeAglVsMslSameAltitude(): void
     {
         $a = $this->polygonFeature(
@@ -497,6 +509,100 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertEqualsWithDelta(4.2, (float) $circle['properties']['radius_nm'], 0.01);
         $this->assertEqualsWithDelta($centerLon, (float) $circle['geometry']['coordinates'][0], 0.01);
         $this->assertEqualsWithDelta($centerLat, (float) $circle['geometry']['coordinates'][1], 0.01);
+    }
+
+    public function testProjectDisplayFeatures_CollapsesVipConcentricAndDuplicateMultiPolygons(): void
+    {
+        // Two VIP sites with nested 10/30 NM rings, triplicated across schedule windows.
+        $centerA = [-77.46666667, 39.64714288611111];
+        $centerB = [-77.72638889, 39.70769650305557];
+        $mkRing = static function (array $center, float $radiusNm): array {
+            $lon = $center[0];
+            $lat = $center[1];
+            $dLat = $radiusNm / 60.0;
+            $dLon = $radiusNm / (60.0 * cos(deg2rad($lat)));
+            $ring = [];
+            for ($i = 0; $i < 36; $i++) {
+                $theta = (2.0 * M_PI * $i) / 36.0;
+                $ring[] = [$lon + ($dLon * cos($theta)), $lat + ($dLat * sin($theta))];
+            }
+            $ring[] = $ring[0];
+
+            return $ring;
+        };
+
+        $coords = [
+            [$mkRing($centerA, 30.0)],
+            [$mkRing($centerA, 10.0)],
+            [$mkRing($centerB, 30.0)],
+            [$mkRing($centerB, 10.0)],
+        ];
+        $mkFeature = static function (string $notamId) use ($coords): array {
+            return [
+                'type' => 'Feature',
+                'id' => 'tfr-' . str_replace('/', '-', $notamId),
+                'geometry' => [
+                    'type' => 'MultiPolygon',
+                    'coordinates' => $coords,
+                ],
+                'properties' => [
+                    'notam_id' => $notamId,
+                    'status' => 'upcoming_future',
+                    'map_layer_style' => 'upcoming',
+                    'geometry_kind' => 'multipolygon',
+                    'restriction_kind' => 'tfr',
+                    'banner_headline' => 'VIP TFR - 30 NM radius - SFC - 17999 ft',
+                ],
+            ];
+        };
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([
+            $mkFeature('9918/2026'),
+            $mkFeature('9920/2026'),
+            $mkFeature('9921/2026'),
+        ]);
+
+        // Two centers remain; inner rings and duplicate NOTAM copies collapse.
+        $this->assertCount(2, $out);
+        foreach ($out as $feature) {
+            $this->assertSame('circle', $feature['properties']['geometry_kind']);
+            $this->assertSame('Point', $feature['geometry']['type']);
+            $this->assertTrue($feature['properties']['display_merged'] ?? false);
+            $this->assertGreaterThanOrEqual(30.0, (float) $feature['properties']['radius_nm']);
+            $this->assertGreaterThanOrEqual(2, (int) $feature['properties']['member_count']);
+        }
+    }
+
+    public function testProjectDisplayFeatures_CollapsesDcFrzIntoSfraCoveringCircle(): void
+    {
+        // Same standing security NOTAM: FRZ + SFRA rings with offset centers, no altitude text.
+        $frz = $this->circleFeature(
+            '4/9383',
+            -76.98579013450704,
+            38.8487201071831,
+            11.767392442312183,
+            'Security restriction: WASHINGTON, DC., USA'
+        );
+        $sfra = $this->circleFeature(
+            '4/9383',
+            -77.03638888999997,
+            38.85855664944444,
+            29.959201481515166,
+            'Security restriction: WASHINGTON, DC., USA'
+        );
+        $frz['properties']['display_part_index'] = 0;
+        $frz['properties']['restriction_kind'] = 'security';
+        $sfra['properties']['display_part_index'] = 1;
+        $sfra['properties']['restriction_kind'] = 'security';
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$frz, $sfra]);
+        $this->assertCount(1, $out);
+        $props = $out[0]['properties'];
+        $this->assertSame('circle', $props['geometry_kind']);
+        $this->assertGreaterThanOrEqual(29.9, (float) $props['radius_nm']);
+        $this->assertSame(1, (int) $props['member_count']);
+        $this->assertStringContainsString('WASHINGTON', (string) $props['banner_headline']);
+        $this->assertStringNotContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
     }
 
     public function testArcHintsFromText_ParsesNmArcCenteredOn(): void

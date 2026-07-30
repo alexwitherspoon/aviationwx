@@ -147,7 +147,7 @@ final class AirspaceAggregator
     {
         $merged = $nms;
 
-        // Prefer NMS native circles over coarse WFS polygon approximations (Disney, VIP rings).
+        // Prefer NMS native circles over coarse WFS polygon approximations.
         $nmsIsCircle = (($nms['geometry_kind'] ?? null) === 'circle')
             && isset($nms['geometry']['type'])
             && $nms['geometry']['type'] === 'Point'

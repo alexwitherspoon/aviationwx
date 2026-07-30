@@ -2,19 +2,15 @@
 /**
  * Map-ready TFR display projection.
  *
- * Builds a draw-oriented GeoJSON feature list from per-NOTAM map features.
- * Does not read or write the unified airspace store. Overlapping footprints that
- * share restriction kind, map style bucket, and vertical limits collapse into one
- * outline so the directory map signals "research TFRs here" without stacking
- * near-duplicate circles or polygons.
+ * Response-only GeoJSON shaping for the directory map. Does not read or write
+ * the unified airspace store. Overlapping footprints that share restriction kind,
+ * map style, and vertical limits collapse into one outline.
  *
- * Clustering: polygons use bbox IoU / containment / coverage. Circles only
- * nest with circles that fully contain them (lateral circle peers stay separate).
- * Circle-dominated merges keep a covering circle; hull polygons are used only
- * when a polygon sticks outside that cover.
- *
- * Source "N NM radius" footprints sometimes arrive as polygon rings; the display
- * path rewrites those to true circle features so the map keeps a smooth outline.
+ * Circles nest only when co-located (see
+ * {@see NOTAM_TFR_MAP_DISPLAY_CIRCLE_NEST_CENTER_MAX_NM}); lateral peers stay
+ * separate. Exploded MultiPolygon polygons stay unmerged; exploded circles still
+ * nest. Near-circular "N NM radius" / standing-security rings rewrite to Point
+ * circles for smooth Leaflet draw.
  */
 
 declare(strict_types=1);
@@ -23,8 +19,7 @@ declare(strict_types=1);
 const NOTAM_TFR_MAP_DISPLAY_IOU_THRESHOLD = 0.5;
 
 /**
- * Intersection / min(area) at or above this value may join a display cluster.
- * Catches nested footprints where IoU stays low.
+ * Intersection / min(area) threshold for nested footprints where IoU stays low.
  */
 const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 
@@ -32,22 +27,24 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 7;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 9;
 
-/**
- * Max coefficient of variation of vertex radii for geometric circle rewrite.
- * Disney-style standing TFRs are near-perfect rings (CV ≪ 0.01).
- */
+/** Max radius CV for geometric circle rewrite of near-perfect rings. */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX = 0.05;
 
 /**
- * Looser CV for dense WFS rings that approximate FAA "N NM ARC CENTERED ON" areas
- * (Mayport-style security volumes often land near 0.15–0.20).
+ * Looser CV for dense WFS rings that approximate FAA "N NM ARC CENTERED ON" areas.
  */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX_DENSE = 0.20;
 
 /** Minimum vertices to use the dense-ring CV allowance. */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_DENSE_MIN_VERTICES = 24;
+
+/**
+ * Max center separation (NM) for circle nest/duplicate collapse.
+ * Allows FRZ/SFRA-style offset centers without bridging separate VIP sites.
+ */
+const NOTAM_TFR_MAP_DISPLAY_CIRCLE_NEST_CENTER_MAX_NM = 3.0;
 
 /**
  * Project per-NOTAM map features into a map-ready display Feature list.
@@ -80,17 +77,16 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
             $passthrough[] = $feature;
             continue;
         }
-        // Keep exploded MultiPolygon volumes separate (Mayport arc + corridor + ocean).
+        // Exploded MultiPolygon polygons stay separate; circles still nest/dedup.
         $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
-        if (array_key_exists('display_part_index', $props)) {
+        if (
+            array_key_exists('display_part_index', $props)
+            && !notamTfrMapLayerDisplayFeatureIsMergeableCircle($feature)
+        ) {
             $passthrough[] = $feature;
             continue;
         }
         $bucketKey = notamTfrMapLayerDisplayBucketKey($feature);
-        if ($bucketKey === null) {
-            $passthrough[] = $feature;
-            continue;
-        }
         $buckets[$bucketKey][] = $feature;
     }
 
@@ -115,10 +111,10 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
 }
 
 /**
- * Explode MultiPolygon features into per-part Polygon features for cleaner Leaflet draw.
+ * Explode MultiPolygon features into per-part Polygon features.
  *
- * Overlapping WFS volumes (Mayport arc + ocean + corridor) keep separate outlines instead
- * of one multipolygon path that visually webs through the circle.
+ * Overlapping WFS volumes (arc + corridor + ocean) keep separate outlines instead
+ * of one multipolygon path that visually webs through circular parts.
  *
  * @param array<string, mixed> $feature
  * @return list<array<string, mixed>>
@@ -199,12 +195,9 @@ function notamTfrMapLayerDisplayNormalizeRadiusPolygonToCircle(array $feature): 
 /**
  * Infer a display circle from a polygon ring.
  *
- * Prefers headline "N NM radius" when present and consistent with the footprint.
- * Otherwise fits a circle geometrically when the ring is nearly circular
- * (standing security TFRs like Disney often lack an NM radius in the map title).
- *
- * MultiPolygon: uses the largest exterior ring only so extra WFS lobes do not
- * skew the center or invent internal chords.
+ * Prefers a headline "N NM radius" when consistent with the footprint; otherwise
+ * rewrites only when the ring is geometrically near-circular. MultiPolygon uses
+ * the largest exterior ring so extra WFS lobes do not skew the fit.
  *
  * @param array<string, mixed> $feature
  * @return array{lon: float, lat: float, radius_nm: float}|null
@@ -312,7 +305,6 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
         && $bboxRadiusNm >= ($headlineRadiusNm * 0.7)
         && $bboxRadiusNm <= ($headlineRadiusNm * 1.35)
     ) {
-        // Coarse WFS rings still declare an NM radius in the map title.
         return [
             'lon' => $lon,
             'lat' => $lat,
@@ -320,8 +312,7 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
         ];
     }
 
-    // No usable headline radius: only rewrite when the ring is geometrically circular
-    // (standing security TFRs like Disney often omit "NM radius" from the title).
+    // Geometric rewrite when title has no usable NM radius (standing security rings).
     $cvMax = count($pts) >= NOTAM_TFR_MAP_DISPLAY_CIRCLE_DENSE_MIN_VERTICES
         ? NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX_DENSE
         : NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX;
@@ -475,17 +466,12 @@ function notamTfrMapLayerDisplayFeatureRadiusNm(array $feature): float
 /**
  * Bucket key: restriction kind + vertical limits + style bucket.
  *
- * Features without a parseable vertical band are not display-merged.
- *
  * @param array<string, mixed> $feature
  */
-function notamTfrMapLayerDisplayBucketKey(array $feature): ?string
+function notamTfrMapLayerDisplayBucketKey(array $feature): string
 {
     $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
     $vertical = notamTfrMapLayerDisplayVerticalKey($feature);
-    if ($vertical === null || $vertical === '') {
-        return null;
-    }
     $restriction = strtolower((string) ($props['restriction_kind'] ?? 'tfr'));
     $style = strtolower((string) ($props['map_layer_style'] ?? $props['status'] ?? 'active'));
 
@@ -493,13 +479,15 @@ function notamTfrMapLayerDisplayBucketKey(array $feature): ?string
 }
 
 /**
- * Normalized vertical band key such as `SFC-9000` or `SFC-5000-AGL`, or null when unknown.
+ * Normalized vertical band key such as `SFC-9000` or `SFC-5000-AGL`.
  *
- * Includes AGL/MSL (and FL/UNL when present) so distinct datums never share a merge bucket.
+ * Includes AGL/MSL (and FL/UNL when present) so distinct datums never share a
+ * merge bucket. Headlines without a parseable band use `unknown` so nested
+ * standing-security rings can still collapse with each other.
  *
  * @param array<string, mixed> $feature
  */
-function notamTfrMapLayerDisplayVerticalKey(array $feature): ?string
+function notamTfrMapLayerDisplayVerticalKey(array $feature): string
 {
     $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
     $headline = (string) ($props['banner_headline'] ?? '');
@@ -513,7 +501,7 @@ function notamTfrMapLayerDisplayVerticalKey(array $feature): ?string
         return $key;
     }
 
-    return null;
+    return 'unknown';
 }
 
 /**
@@ -575,8 +563,8 @@ function notamTfrMapLayerDisplayClusterByOverlap(array $features): array
 /**
  * Whether two features should join the same display cluster.
  *
- * Circle peers merge only when one circle fully contains the other. Lateral
- * overlaps that merely touch stay as separate circles.
+ * Circles nest only when one contains the other and centers are co-located.
+ * Lateral overlaps that merely touch stay as separate circles.
  *
  * @param array<string, mixed> $featureA
  * @param array<string, mixed> $featureB
@@ -592,8 +580,21 @@ function notamTfrMapLayerDisplayFeaturesShouldCluster(
     $aCircle = notamTfrMapLayerDisplayFeatureIsMergeableCircle($featureA);
     $bCircle = notamTfrMapLayerDisplayFeatureIsMergeableCircle($featureB);
     if ($aCircle && $bCircle) {
-        return notamTfrMapLayerDisplayCircleContainsCircle($featureA, $featureB)
-            || notamTfrMapLayerDisplayCircleContainsCircle($featureB, $featureA);
+        if (
+            !notamTfrMapLayerDisplayCircleContainsCircle($featureA, $featureB)
+            && !notamTfrMapLayerDisplayCircleContainsCircle($featureB, $featureA)
+        ) {
+            return false;
+        }
+        $centerA = notamTfrMapLayerDisplayFeatureCenter($featureA);
+        $centerB = notamTfrMapLayerDisplayFeatureCenter($featureB);
+        if ($centerA === null || $centerB === null) {
+            return false;
+        }
+        $dist = notamTfrMapLayerDisplayDistanceNm($centerA[0], $centerA[1], $centerB[0], $centerB[1]);
+
+        // Avoid union-find bridging separate VIP sites via each other's inner rings.
+        return $dist <= NOTAM_TFR_MAP_DISPLAY_CIRCLE_NEST_CENTER_MAX_NM;
     }
 
     return notamTfrMapLayerDisplayBBoxesShouldCluster($boxA, $boxB);
@@ -715,12 +716,10 @@ function notamTfrMapLayerDisplayMergeCluster(array $cluster): ?array
         }
     }
 
-    // Prefer a covering circle whenever circle members can cover the cluster.
-    // Nested circle-in-circle and circle-with-contained-polygon stay circular.
+    // Prefer a covering circle when circle members can cover the full cluster.
     if ($circleMembers !== []) {
         $circle = notamTfrMapLayerDisplayMergeCircleCluster($circleMembers);
         if ($circle !== null && notamTfrMapLayerDisplayClusterCoveredByCircle($cluster, $circle)) {
-            // Headline / style from the largest circle footprint.
             $primary = $circleMembers[0];
             $bestRadius = -1.0;
             foreach ($circleMembers as $feature) {
