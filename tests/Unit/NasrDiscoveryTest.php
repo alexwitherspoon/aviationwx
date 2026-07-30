@@ -128,6 +128,29 @@ class NasrDiscoveryTest extends TestCase
         $this->assertSame(1, $rangeChecks);
     }
 
+    public function testFinalizeProbedCyclesRetriesTransientNextCycleProbe(): void
+    {
+        $attempts = 0;
+        $this->setTransport(static function (string $url, array $options) use (&$attempts): array {
+            if (!isset($options['range_bytes']) || !str_contains($url, '06_Aug_2026_APT_CSV.zip')) {
+                return ['ok' => false, 'http_code' => 404, 'body' => null, 'retryable' => false];
+            }
+
+            $attempts++;
+            if ($attempts < 2) {
+                return ['ok' => false, 'http_code' => 503, 'body' => null, 'retryable' => true];
+            }
+
+            return ['ok' => true, 'http_code' => 206, 'body' => 'P', 'retryable' => false];
+        });
+
+        $final = nasrFinalizeProbedCycles(['2026-07-09'], strtotime('2026-07-14 UTC'));
+
+        $this->assertSame('2026-07-09', $final['current_cycle_date']);
+        $this->assertSame('2026-08-06', $final['next_cycle_date']);
+        $this->assertGreaterThanOrEqual(2, $attempts);
+    }
+
     public function testNasrHttpThrottleSpacesRequestsWhenEnforced(): void
     {
         $dir = sys_get_temp_dir() . '/nasr-http-throttle-' . bin2hex(random_bytes(4));

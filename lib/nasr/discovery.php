@@ -740,10 +740,14 @@ function nasrEstimateNextCycleDate(?string $currentCycleDate): ?string
  * Stops early once current and next cycles are both found.
  *
  * @param list<string> $probeDates YYYY-MM-DD
+ * @param bool $allowRetry Retry transient NFDC failures (use for small AIRAC sets only)
  * @return list<string> YYYY-MM-DD dates with a reachable APT zip
  */
-function probeNasrCycleDates(array $probeDates, ?int $referenceTimestamp = null): array
-{
+function probeNasrCycleDates(
+    array $probeDates,
+    ?int $referenceTimestamp = null,
+    bool $allowRetry = false
+): array {
     $referenceTimestamp = $referenceTimestamp ?? time();
     $found = [];
 
@@ -752,7 +756,7 @@ function probeNasrCycleDates(array $probeDates, ?int $referenceTimestamp = null)
             continue;
         }
         $url = buildNasrAptZipUrl($dateYmd);
-        if ($url !== '' && nasrRemoteZipExists($url)) {
+        if ($url !== '' && nasrRemoteZipExists($url, $allowRetry)) {
             $found[] = $dateYmd;
         }
 
@@ -775,7 +779,8 @@ function probeNasrCycleDatesNearAnchor(?string $anchorDateYmd, ?int $referenceTi
 {
     return probeNasrCycleDates(
         generateNasrCycleProbeCandidates($anchorDateYmd),
-        $referenceTimestamp
+        $referenceTimestamp,
+        false
     );
 }
 
@@ -804,7 +809,8 @@ function nasrFinalizeProbedCycles(array $probed, ?int $referenceTimestamp = null
                     $currentTs + ($mult * NASR_CYCLE_PERIOD_DAYS * 86400)
                 );
                 $candidateUrl = buildNasrAptZipUrl($candidate);
-                if ($candidateUrl !== '' && nasrRemoteZipExists($candidateUrl)) {
+                // Small chase set: retry transient NFDC errors so next_cycle is not dropped.
+                if ($candidateUrl !== '' && nasrRemoteZipExists($candidateUrl, true)) {
                     $probed[] = $candidate;
                     $next = selectNextNasrCycleDate($probed, $current);
                     if ($next !== null) {
@@ -877,7 +883,8 @@ function discoverNasrTrackedCycles(?array $cachedMeta = null, ?int $referenceTim
 
     $airacProbed = probeNasrCycleDates(
         generateNasrAiracAlignedProbeCandidates($referenceTimestamp),
-        $referenceTimestamp
+        $referenceTimestamp,
+        true
     );
     $airacFinal = nasrFinalizeProbedCycles($airacProbed, $referenceTimestamp);
     if ($airacFinal['current_cycle_date'] !== null) {
