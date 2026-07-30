@@ -494,6 +494,13 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         $baseProps['status_line'] = $statusLine;
     }
 
+    if ($text !== '') {
+        $arcHints = notamTfrMapLayerArcHintsFromText($text);
+        if ($arcHints !== []) {
+            $baseProps['arc_hints'] = $arcHints;
+        }
+    }
+
     if ($geometryKind === 'circle') {
         $radiusNm = (float) ($record['radius_nm'] ?? 0);
         if ($radiusNm <= 0) {
@@ -511,6 +518,53 @@ function notamTfrMapLayerFeatureFromAirspaceRecord(array $record, int $nowUnix):
         'geometry' => $geometry,
         'properties' => $baseProps,
     ];
+}
+
+/**
+ * Extract FAA "N NM ARC CENTERED ON latlon" hints for display circle rewrite.
+ *
+ * @return list<array{lon: float, lat: float, radius_nm: float}>
+ */
+function notamTfrMapLayerArcHintsFromText(string $text): array
+{
+    if ($text === '') {
+        return [];
+    }
+
+    $pattern = '/(\d+(?:\.\d+)?)\s*NM\s+ARC\s+CENTERED\s+ON\s+'
+        . '(\d{2})(\d{2})(\d{2})([NS])\s*(\d{2,3})(\d{2})(\d{2})([EW])/i';
+    if (preg_match_all($pattern, $text, $matches, PREG_SET_ORDER) < 1) {
+        return [];
+    }
+
+    $hints = [];
+    foreach ($matches as $m) {
+        $radiusNm = (float) $m[1];
+        if ($radiusNm <= 0.0 || $radiusNm > TFR_RADIUS_MAX_NM) {
+            continue;
+        }
+        $decoded = tfrDecodeCoordinateGroups([
+            0 => $m[0],
+            1 => $m[2],
+            2 => $m[3],
+            3 => $m[4],
+            4 => $m[5],
+            5 => $m[6],
+            6 => $m[7],
+            7 => $m[8],
+            8 => $m[9],
+        ]);
+        if ($decoded === null) {
+            continue;
+        }
+        $hints[] = [
+            'lon' => (float) $decoded['lon'],
+            'lat' => (float) $decoded['lat'],
+            'radius_nm' => $radiusNm,
+        ];
+    }
+
+    return $hints;
 }
 
 /**

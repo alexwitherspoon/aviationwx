@@ -32,13 +32,22 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 6;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 7;
 
 /**
  * Max coefficient of variation of vertex radii for geometric circle rewrite.
  * Disney-style standing TFRs are near-perfect rings (CV ≪ 0.01).
  */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX = 0.05;
+
+/**
+ * Looser CV for dense WFS rings that approximate FAA "N NM ARC CENTERED ON" areas
+ * (Mayport-style security volumes often land near 0.15–0.20).
+ */
+const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX_DENSE = 0.20;
+
+/** Minimum vertices to use the dense-ring CV allowance. */
+const NOTAM_TFR_MAP_DISPLAY_CIRCLE_DENSE_MIN_VERTICES = 24;
 
 /**
  * Project per-NOTAM map features into a map-ready display Feature list.
@@ -57,7 +66,9 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
         if (!is_array($feature)) {
             continue;
         }
-        $normalized[] = notamTfrMapLayerDisplayNormalizeRadiusPolygonToCircle($feature);
+        foreach (notamTfrMapLayerDisplayExplodeMultiPolygon($feature) as $part) {
+            $normalized[] = notamTfrMapLayerDisplayNormalizeRadiusPolygonToCircle($part);
+        }
     }
 
     $passthrough = [];
@@ -66,6 +77,12 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
 
     foreach ($normalized as $feature) {
         if (!notamTfrMapLayerDisplayFeatureIsMergeable($feature)) {
+            $passthrough[] = $feature;
+            continue;
+        }
+        // Keep exploded MultiPolygon volumes separate (Mayport arc + corridor + ocean).
+        $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+        if (array_key_exists('display_part_index', $props)) {
             $passthrough[] = $feature;
             continue;
         }
@@ -95,6 +112,50 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
     }
 
     return array_merge($projected, $passthrough);
+}
+
+/**
+ * Explode MultiPolygon features into per-part Polygon features for cleaner Leaflet draw.
+ *
+ * Overlapping WFS volumes (Mayport arc + ocean + corridor) keep separate outlines instead
+ * of one multipolygon path that visually webs through the circle.
+ *
+ * @param array<string, mixed> $feature
+ * @return list<array<string, mixed>>
+ */
+function notamTfrMapLayerDisplayExplodeMultiPolygon(array $feature): array
+{
+    $geometry = $feature['geometry'] ?? null;
+    if (!is_array($geometry) || (($geometry['type'] ?? null) !== 'MultiPolygon')) {
+        return [$feature];
+    }
+    $coordinates = $geometry['coordinates'] ?? null;
+    if (!is_array($coordinates) || $coordinates === []) {
+        return [$feature];
+    }
+
+    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+    $baseId = (string) ($feature['id'] ?? ('tfr-' . ($props['notam_id'] ?? 'unknown')));
+    $parts = [];
+    foreach ($coordinates as $i => $poly) {
+        if (!is_array($poly) || $poly === []) {
+            continue;
+        }
+        $partProps = $props;
+        $partProps['geometry_kind'] = 'polygon';
+        $partProps['display_part_index'] = (int) $i;
+        $parts[] = [
+            'type' => 'Feature',
+            'id' => $baseId . '-p' . (int) $i,
+            'geometry' => [
+                'type' => 'Polygon',
+                'coordinates' => $poly,
+            ],
+            'properties' => $partProps,
+        ];
+    }
+
+    return $parts === [] ? [$feature] : $parts;
 }
 
 /**
@@ -175,6 +236,11 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
     if ($meanRadiusNm <= 0.0) {
         return null;
     }
+    sort($radiiNm);
+    $mid = intdiv(count($radiiNm), 2);
+    $medianRadiusNm = (count($radiiNm) % 2 === 1)
+        ? $radiiNm[$mid]
+        : (($radiiNm[$mid - 1] + $radiiNm[$mid]) / 2.0);
     $variance = 0.0;
     foreach ($radiiNm as $r) {
         $d = $r - $meanRadiusNm;
@@ -182,6 +248,35 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
     }
     $variance /= count($radiiNm);
     $cv = sqrt($variance) / $meanRadiusNm;
+
+    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+    $arcHints = is_array($props['arc_hints'] ?? null) ? $props['arc_hints'] : [];
+    foreach ($arcHints as $hint) {
+        if (!is_array($hint)) {
+            continue;
+        }
+        $hintLon = isset($hint['lon']) && is_numeric($hint['lon']) ? (float) $hint['lon'] : null;
+        $hintLat = isset($hint['lat']) && is_numeric($hint['lat']) ? (float) $hint['lat'] : null;
+        $hintR = isset($hint['radius_nm']) && is_numeric($hint['radius_nm']) ? (float) $hint['radius_nm'] : null;
+        if ($hintLon === null || $hintLat === null || $hintR === null || $hintR <= 0.0) {
+            continue;
+        }
+        $dxNm = ($lon - $hintLon) * 60.0 * $cosLat;
+        $dyNm = ($lat - $hintLat) * 60.0;
+        $centerDistNm = hypot($dxNm, $dyNm);
+        if ($centerDistNm > max(1.5, $hintR * 0.35)) {
+            continue;
+        }
+        if ($medianRadiusNm < ($hintR * 0.65) || $medianRadiusNm > ($hintR * 1.4)) {
+            continue;
+        }
+
+        return [
+            'lon' => $hintLon,
+            'lat' => $hintLat,
+            'radius_nm' => $hintR,
+        ];
+    }
 
     $minLon = $pts[0][0];
     $minLat = $pts[0][1];
@@ -203,7 +298,6 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
         return null;
     }
 
-    $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
     $headline = (string) ($props['banner_headline'] ?? '');
     $headlineRadiusNm = null;
     if (preg_match('/\b(\d+(?:\.\d+)?)\s*NM\s+radius\b/i', $headline, $m) === 1) {
@@ -228,14 +322,17 @@ function notamTfrMapLayerDisplayInferCircleFromRadiusPolygon(array $feature): ?a
 
     // No usable headline radius: only rewrite when the ring is geometrically circular
     // (standing security TFRs like Disney often omit "NM radius" from the title).
-    if ($cv > NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX) {
+    $cvMax = count($pts) >= NOTAM_TFR_MAP_DISPLAY_CIRCLE_DENSE_MIN_VERTICES
+        ? NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX_DENSE
+        : NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX;
+    if ($cv > $cvMax) {
         return null;
     }
 
     return [
         'lon' => $lon,
         'lat' => $lat,
-        'radius_nm' => $meanRadiusNm,
+        'radius_nm' => $medianRadiusNm,
     ];
 }
 

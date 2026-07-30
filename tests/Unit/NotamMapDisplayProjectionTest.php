@@ -435,4 +435,78 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertArrayHasKey('N:8885', $envelope['records']);
         $this->assertArrayHasKey('N:9227', $envelope['records']);
     }
+
+    public function testProjectDisplayFeatures_ExplodesMultiPolygonAndRewritesDenseArcRing(): void
+    {
+        $centerLon = -81.42444444444445;
+        $centerLat = 30.391388888888887;
+        $radiusNm = 4.2;
+        $ring = [];
+        $dLat = $radiusNm / 60.0;
+        $dLon = $radiusNm / (60.0 * cos(deg2rad($centerLat)));
+        for ($i = 0; $i < 48; $i++) {
+            $theta = (2.0 * M_PI * $i) / 48.0;
+            // Slight radial noise like WFS arc approximations.
+            $jitter = 1.0 + ((($i % 5) - 2) * 0.03);
+            $ring[] = [
+                $centerLon + ($dLon * cos($theta) * $jitter),
+                $centerLat + ($dLat * sin($theta) * $jitter),
+            ];
+        }
+        $tail = [[-81.58, 30.30], [-81.50, 30.30], [-81.50, 30.34], [-81.58, 30.34], [-81.58, 30.30]];
+
+        $feature = [
+            'type' => 'Feature',
+            'id' => 'tfr-8418-2026',
+            'geometry' => [
+                'type' => 'MultiPolygon',
+                'coordinates' => [[$ring], [$tail]],
+            ],
+            'properties' => [
+                'notam_id' => '8418/2026',
+                'status' => 'active',
+                'map_layer_style' => 'active',
+                'geometry_kind' => 'multipolygon',
+                'restriction_kind' => 'security',
+                'banner_headline' => 'Security TFR - polygon area - SFC - 2500 ft',
+                'arc_hints' => [[
+                    'lon' => $centerLon,
+                    'lat' => $centerLat,
+                    'radius_nm' => $radiusNm,
+                ]],
+            ],
+        ];
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(2, $out);
+        $kinds = array_map(
+            static fn (array $f): string => (string) ($f['properties']['geometry_kind'] ?? ''),
+            $out
+        );
+        $this->assertContains('circle', $kinds);
+        $this->assertContains('polygon', $kinds);
+        $circle = null;
+        foreach ($out as $f) {
+            if (($f['properties']['geometry_kind'] ?? null) === 'circle') {
+                $circle = $f;
+                break;
+            }
+        }
+        $this->assertNotNull($circle);
+        $this->assertSame('Point', $circle['geometry']['type']);
+        $this->assertEqualsWithDelta(4.2, (float) $circle['properties']['radius_nm'], 0.01);
+        $this->assertEqualsWithDelta($centerLon, (float) $circle['geometry']['coordinates'][0], 0.01);
+        $this->assertEqualsWithDelta($centerLat, (float) $circle['geometry']['coordinates'][1], 0.01);
+    }
+
+    public function testArcHintsFromText_ParsesNmArcCenteredOn(): void
+    {
+        $text = 'WI AN AREA DEFINED AS 301918N0812606W THEN COUNTERCLOCKWISE ON A '
+            . '4.2 NM ARC CENTERED ON 302329N0812528W (CRG058005) TO THE POINT OF ORIGIN SFC-2500FT';
+        $hints = notamTfrMapLayerArcHintsFromText($text);
+        $this->assertCount(1, $hints);
+        $this->assertEqualsWithDelta(4.2, $hints[0]['radius_nm'], 0.001);
+        $this->assertEqualsWithDelta(-81.42444444444445, $hints[0]['lon'], 0.0001);
+        $this->assertEqualsWithDelta(30.391388888888887, $hints[0]['lat'], 0.0001);
+    }
 }
