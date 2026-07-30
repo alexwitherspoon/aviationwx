@@ -8,9 +8,9 @@
  *
  * Circles nest only when co-located (see
  * {@see NOTAM_TFR_MAP_DISPLAY_CIRCLE_NEST_CENTER_MAX_NM}); lateral peers stay
- * separate. Exploded MultiPolygon polygons stay unmerged; exploded circles still
- * nest. Near-circular "N NM radius" / standing-security rings rewrite to Point
- * circles for smooth Leaflet draw.
+ * separate. Exploded MultiPolygon parts nest only on full containment so
+ * lateral arc/corridor volumes stay separate while FRZ-in-SFRA style nests
+ * collapse. Near-circular rings rewrite to Point circles for smooth Leaflet draw.
  */
 
 declare(strict_types=1);
@@ -27,7 +27,7 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 9;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 10;
 
 /** Max radius CV for geometric circle rewrite of near-perfect rings. */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX = 0.05;
@@ -74,15 +74,6 @@ function notamTfrMapLayerProjectDisplayFeatures(array $features): array
 
     foreach ($normalized as $feature) {
         if (!notamTfrMapLayerDisplayFeatureIsMergeable($feature)) {
-            $passthrough[] = $feature;
-            continue;
-        }
-        // Exploded MultiPolygon polygons stay separate; circles still nest/dedup.
-        $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
-        if (
-            array_key_exists('display_part_index', $props)
-            && !notamTfrMapLayerDisplayFeatureIsMergeableCircle($feature)
-        ) {
             $passthrough[] = $feature;
             continue;
         }
@@ -564,7 +555,9 @@ function notamTfrMapLayerDisplayClusterByOverlap(array $features): array
  * Whether two features should join the same display cluster.
  *
  * Circles nest only when one contains the other and centers are co-located.
- * Lateral overlaps that merely touch stay as separate circles.
+ * Exploded MultiPolygon peers nest only on full bbox containment so lateral
+ * volumes (arc + corridor + ocean) stay separate. Other polygon peers still use
+ * IoU / containment / coverage.
  *
  * @param array<string, mixed> $featureA
  * @param array<string, mixed> $featureB
@@ -595,6 +588,16 @@ function notamTfrMapLayerDisplayFeaturesShouldCluster(
 
         // Avoid union-find bridging separate VIP sites via each other's inner rings.
         return $dist <= NOTAM_TFR_MAP_DISPLAY_CIRCLE_NEST_CENTER_MAX_NM;
+    }
+
+    $propsA = is_array($featureA['properties'] ?? null) ? $featureA['properties'] : [];
+    $propsB = is_array($featureB['properties'] ?? null) ? $featureB['properties'] : [];
+    if (
+        array_key_exists('display_part_index', $propsA)
+        && array_key_exists('display_part_index', $propsB)
+    ) {
+        return notamTfrMapLayerDisplayBBoxContains($boxA, $boxB)
+            || notamTfrMapLayerDisplayBBoxContains($boxB, $boxA);
     }
 
     return notamTfrMapLayerDisplayBBoxesShouldCluster($boxA, $boxB);

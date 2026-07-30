@@ -605,6 +605,73 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertStringNotContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
     }
 
+    public function testProjectDisplayFeatures_CollapsesNestedExplodedPolygonsSameVertical(): void
+    {
+        // Grand Forks-style security MultiPolygon: outer D contains inner rectangle.
+        $outer = [
+            [-97.65, 47.78], [-97.375, 47.78], [-97.375, 48.14], [-97.65, 48.14], [-97.65, 47.78],
+        ];
+        $inner = [
+            [-97.45, 47.91], [-97.39, 47.91], [-97.39, 48.02], [-97.45, 48.02], [-97.45, 47.91],
+        ];
+        $feature = [
+            'type' => 'Feature',
+            'id' => 'tfr-4348-2026',
+            'geometry' => [
+                'type' => 'MultiPolygon',
+                'coordinates' => [[$outer], [$inner]],
+            ],
+            'properties' => [
+                'notam_id' => '4348/2026',
+                'status' => 'active',
+                'map_layer_style' => 'active',
+                'geometry_kind' => 'multipolygon',
+                'restriction_kind' => 'tfr',
+                'banner_headline' => 'Security TFR - polygon area - SFC - 2400 ft',
+            ],
+        ];
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(1, $out);
+        $this->assertSame('polygon', $out[0]['properties']['geometry_kind']);
+        $this->assertTrue($out[0]['properties']['display_merged'] ?? false);
+        $this->assertSame(1, (int) $out[0]['properties']['member_count']);
+    }
+
+    public function testProjectDisplayFeatures_LeavesLateralExplodedPolygonsSeparate(): void
+    {
+        // Adjacent MultiPolygon lobes can share bbox coverage without nesting.
+        $west = [
+            [-81.58, 30.22], [-81.42, 30.22], [-81.42, 30.35], [-81.58, 30.35], [-81.58, 30.22],
+        ];
+        $east = [
+            [-81.48, 30.31], [-81.15, 30.31], [-81.15, 30.57], [-81.48, 30.57], [-81.48, 30.31],
+        ];
+        $feature = [
+            'type' => 'Feature',
+            'id' => 'tfr-8418-2026-lateral',
+            'geometry' => [
+                'type' => 'MultiPolygon',
+                'coordinates' => [[$west], [$east]],
+            ],
+            'properties' => [
+                'notam_id' => '8418/2026',
+                'status' => 'active',
+                'map_layer_style' => 'active',
+                'geometry_kind' => 'multipolygon',
+                'restriction_kind' => 'security',
+                'banner_headline' => 'Security TFR - polygon area - SFC - 2500 ft',
+            ],
+        ];
+
+        $out = notamTfrMapLayerProjectDisplayFeatures([$feature]);
+        $this->assertCount(2, $out);
+        foreach ($out as $part) {
+            $this->assertSame('polygon', $part['properties']['geometry_kind']);
+            $this->assertArrayNotHasKey('display_merged', $part['properties']);
+        }
+    }
+
     public function testArcHintsFromText_ParsesNmArcCenteredOn(): void
     {
         $text = 'WI AN AREA DEFINED AS 301918N0812606W THEN COUNTERCLOCKWISE ON A '
