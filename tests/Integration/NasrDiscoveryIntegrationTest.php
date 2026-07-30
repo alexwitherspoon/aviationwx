@@ -1,6 +1,9 @@
 <?php
 /**
- * Live NASR/FAA discovery integration tests (network-dependent).
+ * Live NASR/FAA discovery smoke tests (network-dependent).
+ *
+ * Default unit coverage uses `$GLOBALS['nasrHttpTestTransport']` in
+ * tests/Unit/NasrDiscoveryTest.php (no outbound FAA/NFDC calls).
  *
  * Not part of the default Integration suite (see phpunit.xml exclude).
  * Opt-in via RUN_EXTERNAL_UPSTREAM_TESTS=1 (make test-external-apis).

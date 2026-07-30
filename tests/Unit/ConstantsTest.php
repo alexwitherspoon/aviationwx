@@ -248,8 +248,14 @@ class ConstantsTest extends TestCase
             NASR_CYCLE_PERIOD_SECONDS + REFERENCE_DATA_WEEK_SECONDS,
             NASR_CACHE_MAX_AGE
         );
-        $this->assertSame((int) (NASR_CYCLE_PERIOD_DAYS / 2), NASR_PROBE_DAYS_BEFORE);
+        $this->assertSame(NASR_CYCLE_PERIOD_DAYS, NASR_PROBE_DAYS_BEFORE);
         $this->assertSame((int) (NASR_CYCLE_PERIOD_DAYS / 2), NASR_PROBE_DAYS_AFTER);
+        $this->assertSame('2024-01-25', NASR_AIRAC_EPOCH_DATE);
+        $this->assertSame(2, NASR_AIRAC_PROBE_CYCLES_BEFORE);
+        $this->assertSame(2, NASR_AIRAC_PROBE_CYCLES_AFTER);
+        $this->assertSame(60, NASR_HTTP_MIN_INTERVAL_SECONDS);
+        $this->assertSame(7200, NASR_APT_WORKER_TIMEOUT);
+        $this->assertSame(3600, NASR_FRQ_WORKER_TIMEOUT);
         $this->assertSame(
             REFERENCE_DATA_SPAWN_CHECK_INTERVAL,
             OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL

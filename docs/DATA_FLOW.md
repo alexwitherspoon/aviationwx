@@ -699,7 +699,7 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 **Configured runtime slice**: Weather formatting loads `cache/nasr/nasr_apt_configured.json`, a subset containing only NASR records referenced by `airports.json`. The slice rebuilds automatically when the config file or full NASR cache changes (tracked via config SHA and source mtime in `nasr_meta.json`).
 
-**NASR cycle discovery**: The fetcher tracks the active cycle (`tracked_current_cycle_date`) and the next preview cycle (`tracked_next_cycle_date`) in `nasr_meta.json`. It downloads only the active cycle (largest effective date on or before today). When the next cycle date passes, or when no tracked cycles exist, discovery re-runs via the FAA subscription index; if the index is unreachable, NFDC is probed in a narrow window around the expected next cycle. Failed fetches retain the last-good cache and record `last_fetch_error` for the status page.
+**NASR cycle discovery**: The fetcher tracks the active cycle (`tracked_current_cycle_date`) and the next preview cycle (`tracked_next_cycle_date`) in `nasr_meta.json`. It downloads only the active cycle (largest effective date on or before today). When the next cycle date passes, or when no tracked cycles exist, discovery re-runs in order: FAA subscription index; then a small set of AIRAC-aligned NFDC zip probes derived from a fixed 28-day epoch; then a dense daily NFDC probe window as last resort. All FAA/NFDC NASR HTTP (index, probes, and zip downloads) is paced at one attempt per minute host-wide. Failed fetches retain the last-good cache and record `last_fetch_error` for the status page.
 
 **Full model** (runway data available):
 

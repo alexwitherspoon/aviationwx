@@ -463,8 +463,10 @@ if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
 if (!defined('NASR_CACHE_MAX_AGE')) {
     define('NASR_CACHE_MAX_AGE', NASR_CYCLE_PERIOD_SECONDS + REFERENCE_DATA_WEEK_SECONDS);
 }
+// Dense last-resort lookback must cover a full cycle; half-cycle misses current
+// late in the AIRAC period when the FAA index is unavailable.
 if (!defined('NASR_PROBE_DAYS_BEFORE')) {
-    define('NASR_PROBE_DAYS_BEFORE', (int) (NASR_CYCLE_PERIOD_DAYS / 2));
+    define('NASR_PROBE_DAYS_BEFORE', NASR_CYCLE_PERIOD_DAYS);
 }
 if (!defined('NASR_PROBE_DAYS_AFTER')) {
     define('NASR_PROBE_DAYS_AFTER', (int) (NASR_CYCLE_PERIOD_DAYS / 2));
@@ -474,6 +476,20 @@ if (!defined('NASR_HTTP_MAX_ATTEMPTS')) {
 }
 if (!defined('NASR_HTTP_RETRY_DELAYS_SECONDS')) {
     define('NASR_HTTP_RETRY_DELAYS_SECONDS', [5, 30]);
+}
+// Any historical NASR effective date on the 28-day AIRAC lattice.
+if (!defined('NASR_AIRAC_EPOCH_DATE')) {
+    define('NASR_AIRAC_EPOCH_DATE', '2024-01-25');
+}
+if (!defined('NASR_AIRAC_PROBE_CYCLES_BEFORE')) {
+    define('NASR_AIRAC_PROBE_CYCLES_BEFORE', 2);
+}
+if (!defined('NASR_AIRAC_PROBE_CYCLES_AFTER')) {
+    define('NASR_AIRAC_PROBE_CYCLES_AFTER', 2);
+}
+// Host-wide FAA/NFDC NASR HTTP pacing (cross-process).
+if (!defined('NASR_HTTP_MIN_INTERVAL_SECONDS')) {
+    define('NASR_HTTP_MIN_INTERVAL_SECONDS', 60);
 }
 if (!defined('NASR_CONFIG_ELEVATION_TOLERANCE_FT')) {
     define('NASR_CONFIG_ELEVATION_TOLERANCE_FT', 2);
@@ -493,11 +509,12 @@ if (!defined('NASR_FRQ_SCHEMA_VERSION')) {
 if (!defined('NASR_FRQ_MIN_AIRPORT_COUNT')) {
     define('NASR_FRQ_MIN_AIRPORT_COUNT', 5000);
 }
+// Covers last-resort dense probes at 1 req/min plus download/parse.
 if (!defined('NASR_APT_WORKER_TIMEOUT')) {
-    define('NASR_APT_WORKER_TIMEOUT', 1800);
+    define('NASR_APT_WORKER_TIMEOUT', 7200);
 }
 if (!defined('NASR_FRQ_WORKER_TIMEOUT')) {
-    define('NASR_FRQ_WORKER_TIMEOUT', 900);
+    define('NASR_FRQ_WORKER_TIMEOUT', 3600);
 }
 
 // Density altitude performance (reference AFM models, not a go/no-go judgment)

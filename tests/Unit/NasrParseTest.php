@@ -130,6 +130,47 @@ class NasrParseTest extends TestCase
         $this->assertSame('2026-07-09', $current);
     }
 
+    public function testGenerateNasrAiracAlignedProbeCandidatesLateInCycle(): void
+    {
+        $reference = strtotime('2026-07-30 UTC');
+        $candidates = generateNasrAiracAlignedProbeCandidates($reference);
+
+        $this->assertSame(
+            ['2026-05-14', '2026-06-11', '2026-07-09', '2026-08-06', '2026-09-03'],
+            $candidates
+        );
+
+        $current = selectCurrentNasrCycleDate($candidates, $reference);
+        $next = selectNextNasrCycleDate($candidates, $current);
+        $this->assertSame('2026-07-09', $current);
+        $this->assertSame('2026-08-06', $next);
+    }
+
+    public function testGenerateNasrCycleProbeCandidatesIncludesCurrentLateInCycle(): void
+    {
+        // Day 21 of the 2026-07-09 cycle: half-cycle lookback (14d) misses current.
+        $candidates = generateNasrCycleProbeCandidates('2026-07-30');
+
+        $this->assertContains('2026-07-09', $candidates);
+        $this->assertContains('2026-08-06', $candidates);
+    }
+
+    public function testSelectCurrentFromLateCycleProbeHits(): void
+    {
+        $reference = strtotime('2026-07-30 UTC');
+        $candidates = generateNasrCycleProbeCandidates('2026-07-30');
+        // NFDC only returns zips for real AIRAC dates; others 404.
+        $found = array_values(array_intersect(
+            $candidates,
+            ['2026-06-11', '2026-07-09', '2026-08-06']
+        ));
+        $current = selectCurrentNasrCycleDate($found, $reference);
+        $next = selectNextNasrCycleDate($found, $current);
+
+        $this->assertSame('2026-07-09', $current);
+        $this->assertSame('2026-08-06', $next);
+    }
+
     public function testSelectNextNasrCycleDateReturnsEarliestFutureCycle(): void
     {
         $next = selectNextNasrCycleDate(
