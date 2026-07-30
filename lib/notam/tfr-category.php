@@ -63,8 +63,14 @@ function notamClassifyAirspaceTfrCategory(string $text): string
         return 'security';
     }
 
-    // Rocket / space launch or static engine tests.
-    if (preg_match('/\b(ROCKET|SPACE\s+LAUNCH|LAUNCH\s+OPS|LAUNCH\s+ACT|GROUND\s+BASED\s+ROCKET)\b/', $upper) === 1
+    // Rocket / space launch / missile / shuttle (14 CFR 91.143 space ops areas).
+    if (preg_match(
+        '/\b(ROCKET|SPACE\s+LAUNCH|SPACE\s+OPS(?:\s+AREA)?|SPACE\s+OPERATIONS?|'
+        . 'LAUNCH\s+OPS|LAUNCH\s+ACT|LAUNCH\s+VEHICLE|MISSILE(?:\s+LAUNCH)?|'
+        . 'SHUTTLE(?:\s*\/\s*MISSILE)?(?:\s+LAUNCH)?|GROUND\s+BASED\s+ROCKET)\b/',
+        $upper
+    ) === 1
+        || preg_match('/\b91\.143\b/', $upper) === 1
         || str_contains($upper, 'GROUND BASED ROCKET')
     ) {
         return 'space_launch';
@@ -163,7 +169,10 @@ function notamTfrCategorySpaceLaunchLabel(string $upper): string
     if (preg_match('/\b(STATIC|ENGINE\s+TEST|GROUND\s+BASED\s+ROCKET)\b/', $upper) === 1) {
         return 'Rocket test TFR';
     }
-    if (preg_match('/\b(SPACE\s+LAUNCH|ROCKET\s+LAUNCH|LAUNCH\s+OPS|LAUNCH\s+ACT)\b/', $upper) === 1) {
+    if (preg_match('/\b(SHUTTLE|MISSILE)\b/', $upper) === 1) {
+        return 'Space launch TFR';
+    }
+    if (preg_match('/\b(SPACE\s+LAUNCH|SPACE\s+OPS|SPACE\s+OPERATIONS?|ROCKET\s+LAUNCH|LAUNCH\s+OPS|LAUNCH\s+ACT|91\.143)\b/', $upper) === 1) {
         return 'Space launch TFR';
     }
 

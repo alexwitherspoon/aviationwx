@@ -112,6 +112,19 @@ final class NotamTfrCategoryTest extends TestCase
         $this->assertStringStartsWith('Space launch TFR', notamBuildAirspaceTfrHeadlineFromText($text));
     }
 
+    public function testSpaceLaunch_CapeCanaveralSpaceOpsArea_NotGenericTfr(): void
+    {
+        $text = 'FL..AIRSPACE CAPE CANAVERAL, FL..TEMPORARY FLIGHT RESTRICTION. '
+            . 'PURSUANT TO 14 CFR SECTION 91.143, SPACE OPS AREA, ACFT OPS ARE PROHIBITED '
+            . 'WI AN AREA DEFINED AS 285116N0804219W TO 290730N0803000W TO 283625N0800242W '
+            . 'TO POINT OF ORIGIN SFC-FL180.';
+        $this->assertSame('space_launch', notamClassifyAirspaceTfrCategory($text));
+        $headline = notamBuildAirspaceTfrHeadlineFromText($text);
+        $this->assertStringStartsWith('Space launch TFR', $headline);
+        $this->assertDoesNotMatchRegularExpression('/^TFR - /', $headline);
+        $this->assertStringContainsString('FL180', $headline);
+    }
+
     public function testSpaceLaunch_RocketEngineTest_LabeledRocketTest(): void
     {
         $text = 'ZLC UT..AIRSPACE OGDEN, UT..TEMPORARY FLIGHT RESTRICTIONS WITHIN AN AREA '
