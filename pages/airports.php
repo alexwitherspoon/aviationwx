@@ -1684,6 +1684,175 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         }
 
+        /**
+         * Footprint size for stack/hit order - smaller nested rings stay clickable.
+         */
+        function notamTfrMapFeatureFootprintScore(feature) {
+            var p = feature && feature.properties ? feature.properties : {};
+            if (typeof p.radius_m === 'number' && p.radius_m > 0) {
+                return p.radius_m;
+            }
+            if (typeof p.radius_nm === 'number' && p.radius_nm > 0) {
+                return p.radius_nm * 1852.0;
+            }
+            var geometry = feature && feature.geometry ? feature.geometry : null;
+            if (!geometry || !geometry.coordinates) {
+                return Number.POSITIVE_INFINITY;
+            }
+            var minLon = Infinity;
+            var minLat = Infinity;
+            var maxLon = -Infinity;
+            var maxLat = -Infinity;
+            function walk(node) {
+                if (!Array.isArray(node) || node.length === 0) {
+                    return;
+                }
+                if (typeof node[0] === 'number' && typeof node[1] === 'number') {
+                    minLon = Math.min(minLon, node[0]);
+                    maxLon = Math.max(maxLon, node[0]);
+                    minLat = Math.min(minLat, node[1]);
+                    maxLat = Math.max(maxLat, node[1]);
+                    return;
+                }
+                for (var i = 0; i < node.length; i++) {
+                    walk(node[i]);
+                }
+            }
+            walk(geometry.coordinates);
+            if (!isFinite(minLon) || !isFinite(minLat) || !isFinite(maxLon) || !isFinite(maxLat)) {
+                return Number.POSITIVE_INFINITY;
+            }
+            return Math.max(1e-12, (maxLon - minLon) * (maxLat - minLat));
+        }
+
+        function notamTfrMapLayerFootprintScore(layer) {
+            if (layer && typeof layer.getRadius === 'function' && typeof layer.getLatLng === 'function') {
+                var radius = layer.getRadius();
+                if (typeof radius === 'number' && radius > 0) {
+                    return radius;
+                }
+            }
+            if (layer && layer.feature) {
+                return notamTfrMapFeatureFootprintScore(layer.feature);
+            }
+            return Number.POSITIVE_INFINITY;
+        }
+
+        function notamTfrMapPointInLatLngRing(latlng, ring) {
+            if (!latlng || !Array.isArray(ring) || ring.length < 3) {
+                return false;
+            }
+            var x = latlng.lng;
+            var y = latlng.lat;
+            var inside = false;
+            for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                var xi = ring[i].lng;
+                var yi = ring[i].lat;
+                var xj = ring[j].lng;
+                var yj = ring[j].lat;
+                var intersect = ((yi > y) !== (yj > y))
+                    && (x < ((xj - xi) * (y - yi) / ((yj - yi) || 1e-12) + xi));
+                if (intersect) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        function notamTfrMapLayerContainsLatLng(layer, latlng) {
+            if (!layer || !latlng) {
+                return false;
+            }
+            if (typeof layer.getRadius === 'function' && typeof layer.getLatLng === 'function') {
+                var radius = layer.getRadius();
+                if (typeof radius === 'number' && radius > 0) {
+                    return map.distance(layer.getLatLng(), latlng) <= (radius + 0.5);
+                }
+            }
+            if (typeof layer.getLatLngs !== 'function') {
+                return false;
+            }
+            var latlngs = layer.getLatLngs();
+            if (!Array.isArray(latlngs) || latlngs.length === 0) {
+                return false;
+            }
+            // First ring is outer; later rings are holes. MultiPolygon is polygons[].
+            var polys = Array.isArray(latlngs[0]) && latlngs[0].length && Array.isArray(latlngs[0][0])
+                ? latlngs
+                : [latlngs];
+            for (var p = 0; p < polys.length; p++) {
+                var rings = polys[p];
+                if (!Array.isArray(rings) || rings.length === 0) {
+                    continue;
+                }
+                if (!notamTfrMapPointInLatLngRing(latlng, rings[0])) {
+                    continue;
+                }
+                var inHole = false;
+                for (var h = 1; h < rings.length; h++) {
+                    if (notamTfrMapPointInLatLngRing(latlng, rings[h])) {
+                        inHole = true;
+                        break;
+                    }
+                }
+                if (!inHole) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function notamTfrMapBringSmallerFootprintsToFront(layerGroup) {
+            if (!layerGroup) {
+                return;
+            }
+            var layers = [];
+            layerGroup.eachLayer(function(layer) {
+                layers.push(layer);
+            });
+            layers.sort(function(a, b) {
+                return notamTfrMapLayerFootprintScore(b) - notamTfrMapLayerFootprintScore(a);
+            });
+            for (var i = 0; i < layers.length; i++) {
+                if (typeof layers[i].bringToFront === 'function') {
+                    layers[i].bringToFront();
+                }
+            }
+        }
+
+        /**
+         * Prefer the smallest containing footprint when a larger ring wins the hit test.
+         */
+        function notamTfrMapPreferSmallestContainingPopup(layerGroup) {
+            if (!layerGroup) {
+                return;
+            }
+            layerGroup.eachLayer(function(layer) {
+                layer.on('click', function(e) {
+                    if (!e || !e.latlng) {
+                        return;
+                    }
+                    var best = null;
+                    var bestScore = Infinity;
+                    layerGroup.eachLayer(function(other) {
+                        if (!notamTfrMapLayerContainsLatLng(other, e.latlng)) {
+                            return;
+                        }
+                        var score = notamTfrMapLayerFootprintScore(other);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            best = other;
+                        }
+                    });
+                    if (!best || best === layer || typeof best.openPopup !== 'function') {
+                        return;
+                    }
+                    L.DomEvent.stop(e);
+                    best.openPopup(e.latlng);
+                });
+            });
+        }
+
         function pointToLayerNotamMap(feature, latlng) {
             var p = feature.properties || {};
             var gk = p.geometry_kind;
@@ -1717,7 +1886,14 @@ $breadcrumbs = generateBreadcrumbSchema([
                 map.removeLayer(tfrMapLayer);
                 tfrMapLayer = null;
             }
-            tfrMapLayer = L.geoJSON(data, {
+            // Largest first so smaller nested rings end up on top.
+            var sortedFeatures = data.features.slice().sort(function(a, b) {
+                return notamTfrMapFeatureFootprintScore(b) - notamTfrMapFeatureFootprintScore(a);
+            });
+            tfrMapLayer = L.geoJSON({
+                type: 'FeatureCollection',
+                features: sortedFeatures
+            }, {
                 pane: 'tfrMapPane',
                 interactive: true,
                 pointToLayer: pointToLayerNotamMap,
@@ -1725,6 +1901,8 @@ $breadcrumbs = generateBreadcrumbSchema([
                 onEachFeature: onEachTfrFeature
             });
             tfrMapLayer.addTo(map);
+            notamTfrMapBringSmallerFootprintsToFront(tfrMapLayer);
+            notamTfrMapPreferSmallestContainingPopup(tfrMapLayer);
         }
 
         function loadTfrMapLayer() {

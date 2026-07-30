@@ -81,7 +81,7 @@ final class AirspaceWfsMergeTest extends TestCase
         $this->assertSame('airshow', $byNorm['N:8576']['restriction_kind']);
     }
 
-    public function testAirspaceAggregator_MergesNmsAndWfs_WfsGeometryNmsSchedule(): void
+    public function testAirspaceAggregator_MergesNmsAndWfs_PrefersNmsCircleGeometry(): void
     {
         $now = time();
         $nmsNotam = [
@@ -113,8 +113,10 @@ final class AirspaceWfsMergeTest extends TestCase
             static fn (array $r): bool => ($r['norm_number'] ?? null) === 'N:543'
         ));
         $row = $merged['N:543'];
-        $this->assertSame('multipolygon', $row['geometry_kind']);
-        $this->assertSame(FaaTfrWfsAdapter::SOURCE_TYPE, $row['field_sources']['geometry'] ?? null);
+        $this->assertSame('circle', $row['geometry_kind']);
+        $this->assertSame('Point', $row['geometry']['type'] ?? null);
+        $this->assertGreaterThan(0.0, (float) ($row['radius_nm'] ?? 0));
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $row['field_sources']['geometry'] ?? null);
         $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $row['field_sources']['text'] ?? null);
         $this->assertTrue($row['capabilities']['banner']);
         $this->assertFalse($row['capabilities']['runway_closure']);
