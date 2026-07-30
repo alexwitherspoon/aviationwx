@@ -131,7 +131,8 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertSame(2, $props['member_count']);
         $this->assertSame(['9227/2026', '8885/2026'], $props['member_notam_ids']);
         $this->assertSame('Polygon', $out[0]['geometry']['type']);
-        $this->assertStringContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
+        $this->assertStringNotContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
+        $this->assertStringContainsString('Fire TFR', (string) $props['banner_headline']);
     }
 
     public function testProjectDisplayFeatures_DoesNotMergeDifferentVertical(): void
@@ -229,7 +230,7 @@ final class NotamMapDisplayProjectionTest extends TestCase
         $this->assertSame(2, $props['member_count']);
         $this->assertGreaterThanOrEqual(7.0, (float) $props['radius_nm']);
         $this->assertStringContainsString('7 NM', (string) $props['banner_headline']);
-        $this->assertStringContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
+        $this->assertStringNotContainsString('overlapping NOTAMs', (string) $props['banner_headline']);
     }
 
     public function testProjectDisplayFeatures_MergesOverlappingCircleAndPolygon(): void

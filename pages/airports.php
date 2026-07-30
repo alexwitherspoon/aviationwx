@@ -1673,19 +1673,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             if (p.status) {
                 lines.push('<div>' + notamTfrMapStatusLineForFeature(p) + '</div>');
             }
-            if (p.display_merged && p.member_count > 1) {
-                var memberIds = Array.isArray(p.member_notam_ids) ? p.member_notam_ids : [];
-                var memberPreview = memberIds.slice(0, 4).join(', ');
-                if (memberIds.length > 4) {
-                    memberPreview += ', ...';
-                }
-                lines.push(
-                    '<div>' + notamTfrMapEscapeTipText(String(p.member_count) + ' overlapping NOTAMs (same vertical limits)') + '</div>'
-                );
-                if (memberPreview) {
-                    lines.push('<div>' + notamTfrMapEscapeTipText(memberPreview) + '</div>');
-                }
-            }
             if (p.official_link) {
                 var linkLabel = p.official_link_label || 'Details on FAA Notam Search';
                 lines.push(

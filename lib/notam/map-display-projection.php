@@ -27,7 +27,7 @@ const NOTAM_TFR_MAP_DISPLAY_COVERAGE_THRESHOLD = 0.5;
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_SEGMENTS = 32;
 
 /** Diagnostics version for the display projection step. */
-const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 10;
+const NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION = 11;
 
 /** Max radius CV for geometric circle rewrite of near-perfect rings. */
 const NOTAM_TFR_MAP_DISPLAY_CIRCLE_RADIUS_CV_MAX = 0.05;
@@ -704,11 +704,6 @@ function notamTfrMapLayerDisplayMergeCluster(array $cluster): ?array
     $props['display_merged'] = true;
     $props['display_projection_version'] = NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION;
 
-    $headline = trim((string) ($props['banner_headline'] ?? ''));
-    if ($headline !== '' && count($memberList) > 1) {
-        $props['banner_headline'] = $headline . ' (' . count($memberList) . ' overlapping NOTAMs)';
-    }
-
     $featurePrefix = (($props['restriction_kind'] ?? 'tfr') === 'tfr') ? 'tfr-display-' : 'airspace-display-';
     $featureId = $featurePrefix . preg_replace('/[^A-Za-z0-9_-]+/', '-', $primaryId);
 
@@ -740,10 +735,6 @@ function notamTfrMapLayerDisplayMergeCluster(array $cluster): ?array
             $props['member_count'] = count($memberList);
             $props['display_merged'] = true;
             $props['display_projection_version'] = NOTAM_TFR_MAP_DISPLAY_PROJECTION_VERSION;
-            $headline = trim((string) ($props['banner_headline'] ?? ''));
-            if ($headline !== '' && count($memberList) > 1) {
-                $props['banner_headline'] = $headline . ' (' . count($memberList) . ' overlapping NOTAMs)';
-            }
             $props['geometry_kind'] = 'circle';
             $props['radius_nm'] = $circle['radius_nm'];
             $props['radius_m'] = $circle['radius_nm'] * 1852.0;
