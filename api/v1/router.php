@@ -26,8 +26,15 @@ if (empty($path)) {
     $path = '/';
 }
 
-// Process through middleware (checks API enabled, auth, rate limits)
-$context = processPublicApiRequest();
+$isBridgePath = str_starts_with($path, '/bridge');
+
+// Bridge routes require awxb_ keys (dedicated middleware). Other v1 routes use partner/anonymous auth.
+if ($isBridgePath) {
+    require_once __DIR__ . '/../../lib/bridge/middleware.php';
+    $context = processBridgeApiRequest($path);
+} else {
+    $context = processPublicApiRequest();
+}
 
 // /version.php: deployment metadata JSON; uses the same middleware and rate limits as other v1 routes.
 if ($path === '/version.php') {
@@ -44,7 +51,7 @@ try {
         'path' => $path,
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
-    ], 'api');
+    ], $isBridgePath ? 'bridge' : 'api');
     
     ob_clean();
     sendPublicApiError(
@@ -64,6 +71,15 @@ function routePublicApiRequest(string $path, array $context): void
 {
     // Pattern matching for routes
     $routes = [
+        // GET /v1/bridge/bootstrap
+        '#^/bridge/bootstrap$#' => ['file' => 'bridge-bootstrap.php', 'handler' => 'handleBridgeBootstrap'],
+
+        // POST /v1/bridge/health
+        '#^/bridge/health$#' => ['file' => 'bridge-health.php', 'handler' => 'handleBridgeHealth'],
+
+        // POST /v1/bridge/weather
+        '#^/bridge/weather$#' => ['file' => 'bridge-weather.php', 'handler' => 'handleBridgeWeather'],
+
         // GET /v1/airports
         '#^/airports$#' => ['file' => 'airports.php', 'handler' => 'handleListAirports'],
         

@@ -33,6 +33,12 @@
  * │   └── faa-tfr-wfs.json         # Raw FAA TFR WFS GeoJSON cache
  * ├── station-power/
  * │   └── {airport}.json           # Canonical station power snapshot (provider-agnostic)
+ * ├── bridges/
+ * │   └── {airport}/{bridge_id}/
+ * │       ├── health.json          # Latest bridge heartbeat (+ inventory)
+ * │       ├── health_history.jsonl # Bounded heartbeat ring
+ * │       ├── meta.json            # first_seen / last_* timestamps
+ * │       └── weather/{source_id}/ # latest sample, samples ring, 60s buckets
  * ├── partners/
  * │   ├── {hash}.{ext}             # Partner logo image cache (remote URLs)
  * │   └── lum/                     # Logo luminance metadata (contrast tiles)
@@ -672,6 +678,162 @@ function getStationPowerCachePath(string $airportId): string {
 }
 
 // =============================================================================
+// BRIDGE FLEET OPS CACHE PATHS
+// =============================================================================
+
+if (!defined('CACHE_BRIDGES_DIR')) {
+    define('CACHE_BRIDGES_DIR', CACHE_BASE_DIR . '/bridges');
+}
+
+/**
+ * Effective bridges cache root (overrideable in tests via $GLOBALS['bridgeTestCacheRoot']).
+ *
+ * @return string Absolute directory path without trailing slash
+ */
+function getBridgesCacheRoot(): string
+{
+    if (isset($GLOBALS['bridgeTestCacheRoot'])
+        && is_string($GLOBALS['bridgeTestCacheRoot'])
+        && $GLOBALS['bridgeTestCacheRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['bridgeTestCacheRoot'], '/');
+    }
+
+    return CACHE_BRIDGES_DIR;
+}
+
+/**
+ * Sanitize a path segment for bridge cache paths (reject traversal / separators).
+ *
+ * @param string $segment Raw airport_id, bridge_id, or source_id
+ * @return string Lowercased safe segment, or empty string if invalid
+ */
+function sanitizeBridgeCachePathSegment(string $segment): string
+{
+    $segment = trim($segment);
+    if ($segment === '' || str_contains($segment, '..') || str_contains($segment, '/') || str_contains($segment, '\\')) {
+        return '';
+    }
+    return strtolower($segment);
+}
+
+/**
+ * Directory for one bridge's fleet ops cache.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @return string Absolute directory path, or empty string if ids are unsafe
+ */
+function getBridgeCacheDir(string $airportId, string $bridgeId): string
+{
+    $airport = sanitizeBridgeCachePathSegment($airportId);
+    $bridge = sanitizeBridgeCachePathSegment($bridgeId);
+    if ($airport === '' || $bridge === '') {
+        return '';
+    }
+    return getBridgesCacheRoot() . '/' . $airport . '/' . $bridge;
+}
+
+/**
+ * Path to latest health.json for a bridge.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeHealthCachePath(string $airportId, string $bridgeId): string
+{
+    $dir = getBridgeCacheDir($airportId, $bridgeId);
+    return $dir === '' ? '' : $dir . '/health.json';
+}
+
+/**
+ * Path to bounded health_history.jsonl for a bridge.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeHealthHistoryCachePath(string $airportId, string $bridgeId): string
+{
+    $dir = getBridgeCacheDir($airportId, $bridgeId);
+    return $dir === '' ? '' : $dir . '/health_history.jsonl';
+}
+
+/**
+ * Path to meta.json for a bridge (bootstrap/health/weather timestamps).
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeMetaCachePath(string $airportId, string $bridgeId): string
+{
+    $dir = getBridgeCacheDir($airportId, $bridgeId);
+    return $dir === '' ? '' : $dir . '/meta.json';
+}
+
+/**
+ * Directory for one bridge weather source's sample/bucket cache.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @param string $sourceId Bridge-local station id
+ * @return string Absolute directory path, or empty string if ids are unsafe
+ */
+function getBridgeWeatherSourceCacheDir(string $airportId, string $bridgeId, string $sourceId): string
+{
+    $dir = getBridgeCacheDir($airportId, $bridgeId);
+    $source = sanitizeBridgeCachePathSegment($sourceId);
+    if ($dir === '' || $source === '') {
+        return '';
+    }
+    return $dir . '/weather/' . $source;
+}
+
+/**
+ * Path to latest accepted weather sample for a bridge source.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @param string $sourceId Bridge-local station id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeWeatherLatestCachePath(string $airportId, string $bridgeId, string $sourceId): string
+{
+    $dir = getBridgeWeatherSourceCacheDir($airportId, $bridgeId, $sourceId);
+    return $dir === '' ? '' : $dir . '/latest.json';
+}
+
+/**
+ * Path to bounded raw samples ring for a bridge source.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @param string $sourceId Bridge-local station id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeWeatherSamplesCachePath(string $airportId, string $bridgeId, string $sourceId): string
+{
+    $dir = getBridgeWeatherSourceCacheDir($airportId, $bridgeId, $sourceId);
+    return $dir === '' ? '' : $dir . '/samples.jsonl';
+}
+
+/**
+ * Path to 60s weather buckets JSON for a bridge source.
+ *
+ * @param string $airportId Airport id
+ * @param string $bridgeId Bridge id
+ * @param string $sourceId Bridge-local station id
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getBridgeWeatherBucketsCachePath(string $airportId, string $bridgeId, string $sourceId): string
+{
+    $dir = getBridgeWeatherSourceCacheDir($airportId, $bridgeId, $sourceId);
+    return $dir === '' ? '' : $dir . '/buckets.json';
+}
+
+// =============================================================================
 // PARTNER LOGO CACHE PATHS
 // =============================================================================
 
@@ -1187,6 +1349,7 @@ function ensureAllCacheDirs(): array {
         CACHE_SFTP_DIR,
         CACHE_NOTAM_DIR,
         CACHE_STATION_POWER_DIR,
+        CACHE_BRIDGES_DIR,
         CACHE_PARTNERS_DIR,
         CACHE_PARTNERS_LUM_DIR,
         CACHE_RATE_LIMITS_DIR,
@@ -1222,6 +1385,7 @@ function getAirportCachePaths(string $airportId): array {
         'sftp_dir' => CACHE_SFTP_DIR,  // SFTP uses flat structure by username
         'notam' => getNotamCachePath($airportId),
         'station_power' => getStationPowerCachePath($airportId),
+        'bridges_dir' => getBridgesCacheRoot() . '/' . $airportId,
         'outage' => getOutageStatePath($airportId),
         'peak_gusts' => getPeakGustTrackingPath($airportId),
         'temp_extremes' => getTempExtremesTrackingPath($airportId),

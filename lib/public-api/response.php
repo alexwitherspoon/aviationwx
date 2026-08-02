@@ -45,6 +45,9 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
 
     if (isset($data['airports'])) {
         $response['airports'] = $data['airports'];
+    } elseif (isset($data['bridge_id'])) {
+        // Bridge bootstrap / bridge-scoped payloads keep all fields under data
+        $response['data'] = $data;
     } elseif (isset($data['airport'])) {
         $response['airport'] = $data['airport'];
     } elseif (isset($data['weather'])) {
@@ -143,8 +146,10 @@ function sendPublicApiResponse(array $response, int $httpCode = 200, array $extr
         if ($allowedOrigin !== null) {
             header('Access-Control-Allow-Origin: ' . $allowedOrigin);
         }
-        header('Access-Control-Allow-Methods: GET, OPTIONS');
-        header('Access-Control-Allow-Headers: X-API-Key');
+        $uri = $_SERVER['REQUEST_URI'] ?? $_SERVER['HTTP_X_ORIGINAL_URI'] ?? '';
+        $isBridge = (strpos($uri, '/bridge') !== false);
+        header('Access-Control-Allow-Methods: ' . ($isBridge ? 'GET, POST, OPTIONS' : 'GET, OPTIONS'));
+        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
         header('Access-Control-Max-Age: 86400');
     }
     
@@ -219,6 +224,7 @@ function handlePublicApiCorsPreflightIfNeeded(): bool
 
     $uri = $_SERVER['REQUEST_URI'] ?? $_SERVER['HTTP_X_ORIGINAL_URI'] ?? '';
     $useEmbedCors = (strpos($uri, '/embed') !== false);
+    $isBridge = (strpos($uri, '/bridge') !== false);
 
     http_response_code(204);
     if ($useEmbedCors) {
@@ -228,8 +234,8 @@ function handlePublicApiCorsPreflightIfNeeded(): bool
         if ($allowedOrigin !== null) {
             header('Access-Control-Allow-Origin: ' . $allowedOrigin);
         }
-        header('Access-Control-Allow-Methods: GET, OPTIONS');
-        header('Access-Control-Allow-Headers: X-API-Key');
+        header('Access-Control-Allow-Methods: ' . ($isBridge ? 'GET, POST, OPTIONS' : 'GET, OPTIONS'));
+        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
         header('Access-Control-Max-Age: 86400');
     }
     header('Content-Length: 0');

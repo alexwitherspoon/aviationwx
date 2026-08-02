@@ -1610,6 +1610,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
             'cache_stats' => $airportCacheStats
         ];
     }
+
+    require_once __DIR__ . '/bridge/status.php';
+    $bridgeHostsComponent = buildAirportBridgeHostsComponent($airportId, $airport);
+    if ($bridgeHostsComponent !== null) {
+        $health['components']['bridge_hosts'] = $bridgeHostsComponent;
+    }
     
     // Determine overall airport status: any component down = down, any degraded = degraded
     // Check all components including nested sources/cameras for complete status picture
@@ -1634,6 +1640,18 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $hasDown = true;
                     break 2; // Break out of both loops
                 } elseif ($camera['status'] === 'degraded') {
+                    $hasDegraded = true;
+                }
+            }
+        }
+        elseif (isset($comp['hosts']) && is_array($comp['hosts'])) {
+            foreach ($comp['hosts'] as $hostRow) {
+                $hostStatus = $hostRow['status'] ?? '';
+                if ($hostStatus === 'down') {
+                    $hasDown = true;
+                    break 2;
+                }
+                if ($hostStatus === 'degraded') {
                     $hasDegraded = true;
                 }
             }

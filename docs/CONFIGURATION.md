@@ -127,6 +127,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `ourairports_id` | - | Optional stable OurAirports integer id from `airports.csv` when set alongside `ourairports_ident`. |
 | **Data Sources** |||
 | `weather_sources` | `[]` | Array of weather source configurations (see Weather Sources section) |
+| `bridges` | `[]` | Optional AviationWX Bridge rows (`id`, `api_key`, optional `label`). Auth only; publish via `aviationwx_bridge` weather_sources. |
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
@@ -609,8 +610,51 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `swob_man` | Nav Canada Weather (manned stations) | ~5 minutes |
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
+| `aviationwx_bridge` | Bridge-local LAN station via HTTPS push (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
+
+### AviationWX Bridge (local LAN weather)
+
+Field bridges push host heartbeats and weather samples to the Public API under `/v1/bridge/*`. Images continue to use SFTP. Core owns show, trust, and dedupe when both WeatherLink.com cloud and bridge-local Davis (or other LAN adapters) are configured.
+
+**Trust vs publish (Option B enable gate):**
+
+| Layer | Meaning |
+|-------|---------|
+| `bridges[].api_key` | Device may call bootstrap / health / weather. Samples are stored for diagnostics. |
+| `weather_sources` row `type: aviationwx_bridge` | Named `bridge_id` + `bridge_source_id` may enter `WeatherSnapshot` / dashboard / Public weather. |
+
+A bridge key alone never publishes weather.
+
+**Ops checklist:**
+
+1. Generate a key: `php scripts/generate-bridge-api-key.php` (prefix `awxb_` + 48 alphanumeric; do not invent keys by hand).
+2. Add a `bridges[]` row on the airport (`id`, `api_key`, optional `label`).
+3. Install the key on the appliance; wait for heartbeats.
+4. Discover stations: `php scripts/bridge-inventory.php --airport kspb` (or Bridge Host lines on the status page).
+5. Enable publish: `php scripts/bridge-enable-weather.php --airport kspb --bridge bridge-spb-1 --source station-… [--station-id wx-…]` and paste the printed object into `weather_sources[]`.
+6. Prefer one Davis path (cloud **or** local) for ops clarity; dual ingest is allowed - the aggregator chooses freshest fields as usual.
+
+```json
+"bridges": [
+  {
+    "id": "bridge-spb-1",
+    "api_key": "awxb_…",
+    "label": "Scappoose Pi"
+  }
+],
+"weather_sources": [
+  {
+    "type": "aviationwx_bridge",
+    "bridge_id": "bridge-spb-1",
+    "bridge_source_id": "station-scappoose-davis",
+    "station_id": "wx-spb-bridge-davis"
+  }
+]
+```
+
+Wire units are °C, knots, and inHg. See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
 
 ### Tempest Weather
 

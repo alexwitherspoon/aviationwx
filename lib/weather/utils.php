@@ -413,6 +413,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'DyaconLive',
                 'url' => 'https://dyacon.net/'
             ];
+        case 'aviationwx_bridge':
+            return [
+                'name' => 'AviationWX Bridge',
+                'url' => null
+            ];
         default:
             return null;
     }

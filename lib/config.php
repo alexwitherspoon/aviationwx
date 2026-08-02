@@ -1043,12 +1043,28 @@ function getStalenessThresholds(?array $airport = null): array {
  */
 function getMagneticDeclination(?array $airport = null): float
 {
+    return getMagneticDeclinationWithSource($airport)['declination_deg'];
+}
+
+/**
+ * Magnetic declination with cascade source label for bridge bootstrap and diagnostics.
+ *
+ * Cascade: airport override → global override → WMM → 0 (source "none").
+ *
+ * @param array|null $airport Airport config
+ * @return array{declination_deg: float, declination_source: string}
+ */
+function getMagneticDeclinationWithSource(?array $airport = null): array
+{
     $decl = 0.0;
+    $source = 'none';
 
     if ($airport !== null && isset($airport['magnetic_declination']) && is_numeric($airport['magnetic_declination'])) {
         $decl = (float) $airport['magnetic_declination'];
+        $source = 'override';
     } elseif (($global = getGlobalConfig('magnetic_declination')) !== null && is_numeric($global)) {
         $decl = (float) $global;
+        $source = 'global';
     } elseif ($airport !== null) {
         if (
             isset($airport['lat'], $airport['lon'])
@@ -1061,11 +1077,16 @@ function getMagneticDeclination(?array $airport = null): float
             $wmmDecl = fetchMagneticDeclinationFromWmm($lat, $lon);
             if ($wmmDecl !== null) {
                 $decl = $wmmDecl;
+                $source = 'wmm';
             }
         }
     }
 
-    return max(-180.0, min(180.0, $decl));
+    $decl = max(-180.0, min(180.0, $decl));
+    return [
+        'declination_deg' => $decl,
+        'declination_source' => $source,
+    ];
 }
 
 /**
@@ -2299,6 +2320,12 @@ function validateRuntimeConfigSchema(array $config): array {
     $probeErrors = validateUploadHealthProbeConfig($config);
     if ($probeErrors !== []) {
         $errors = array_merge($errors, $probeErrors);
+    }
+
+    require_once __DIR__ . '/bridge/config.php';
+    $bridgeResult = validateBridgeConfig($config);
+    if ($bridgeResult['errors'] !== []) {
+        $errors = array_merge($errors, $bridgeResult['errors']);
     }
 
     return [
@@ -4741,7 +4768,7 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['weather_sources'])) {
                 $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'aviationwx_bridge'];
                 foreach ($airport['weather_sources'] as $idx => $ws) {
                     $label = "weather_sources[{$idx}]";
                     if (!is_array($ws)) {
@@ -4848,6 +4875,7 @@ function validateAirportsJsonStructure(array $config): array {
                             $warnings[] = "Airport '{$airportCode}' {$label} (dyaconlive): missing airport elevation_ft; pressure will be omitted";
                         }
                     }
+                    // aviationwx_bridge: fields + bridges[].id binding enforced in validateBridgeConfig()
                     // metar: station_id optional (nearby_stations can provide fallback)
                 }
             }
@@ -5142,6 +5170,15 @@ function validateAirportsJsonStructure(array $config): array {
         if (count($airportIds) > 1) {
             $errors[] = "Duplicate FAA identifier found: '" . $faaKey . "' used by airports: " . implode(', ', $airportIds);
         }
+    }
+
+    require_once __DIR__ . '/bridge/config.php';
+    $bridgeValidation = validateBridgeConfig($config);
+    foreach ($bridgeValidation['errors'] as $bridgeError) {
+        $errors[] = $bridgeError;
+    }
+    foreach ($bridgeValidation['warnings'] as $bridgeWarning) {
+        $warnings[] = $bridgeWarning;
     }
     
     return [

@@ -177,6 +177,15 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 - **Not provided**: ceiling, visibility, or cloud cover (advisory Dyacon hardware is not METAR-class). Pair with `metar` or another aviation source when those fields are required.
 - **Parsing rule**: All sensor values are read at the anchor bucket timestamp (matched by ISO datetime across series), not by independent trailing array indices.
 
+#### AviationWX Bridge push {#aviationwx-bridge-push}
+
+- **Transport**: HTTPS JSON only on Public API `/v1/bridge/bootstrap`, `/v1/bridge/health`, `/v1/bridge/weather` with required `X-Api-Key` (`awxb_…`). Images remain on SFTP.
+- **Identity**: The API key alone authorizes airport + `bridge_id`. Body ids may disagree; core attributes to the key and logs a warning.
+- **Health**: ~60s heartbeats persist host/NTP/subsystem status, source inventory, and scrubbed error fingerprints under `cache/bridges/{airport}/{bridge_id}/`. Status **Bridge Host** lines use heartbeat age with `DEFAULT_STALE_*` plus NTP rules (brief NTP failure → degraded; long-lived ≈ `DEFAULT_STALE_ERROR_SECONDS` → down contribution).
+- **Weather ingest**: Keyed weather POSTs are always stored (latest + samples ring + 60-second buckets) for diagnostics and installer verification. Units on the wire are °C, kt, inHg.
+- **Publish gate**: Only `weather_sources` entries with `type: aviationwx_bridge` (matching `bridge_id` + `bridge_source_id`) enter UnifiedFetcher / `WeatherSnapshot`. The adapter reads local cache (no upstream HTTP), similar to DyaconLive skip-HTTP reuse.
+- **Aggregation**: Bridge samples participate in the same freshest-wins aggregator as other sources. Prefer documenting one Davis path (cloud or local) for ops; dual ingest is not refused at the wire.
+
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
 - **Bulk cache (multi-airport only):** When **more than one airport** is enabled in config, the scheduler starts `scripts/refresh-metar-bulk.php` in the background on `METAR_BULK_REFRESH_INTERVAL_SECONDS` (see `lib/constants.php`); download, CSV ingest, and slice writes run inside that worker so the scheduler loop stays non-blocking. It downloads AWC `metars.cache.csv.gz`, maps each configured METAR `station_id` (plus `nearby_stations`) to a one-station JSON envelope under `cache/metar-bulk/stations/{ICAO}.json`, and `fetchMETARFromStation` prefers that file when its mtime is within `METAR_BULK_STATION_FILE_MAX_AGE_SECONDS`. Ingest **rejects the gzip** unless the CSV header row matches the canonical 44-column AWC layout in `lib/metar-bulk-csv-schema.php` (and `tests/Fixtures/metar-bulk-csv-header-line.txt`); a mismatch is logged with a short column diff summary and workers fall back to per-station HTTP. Rows shorter than 44 columns are skipped (`skipped_short_rows` in refresh logs). With **only one enabled airport**, bulk download and slice reads are skipped; per-station METAR HTTP is used. Stale or missing slices always fall back to the JSON endpoint above so METAR still serves when bulk ingest fails or a slice ages out.

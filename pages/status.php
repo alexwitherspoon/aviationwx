@@ -1338,6 +1338,7 @@ if (php_sapi_name() === 'cli') {
                     // Check if this is weather or webcams (which have individual sources)
                     $isWeather = ($component['name'] === 'Weather Sources' && isset($component['sources']));
                     $isWebcams = (isset($component['cameras']) && is_array($component['cameras']) && !empty($component['cameras']));
+                    $isBridgeHosts = ($component['name'] === 'Bridge Hosts' && isset($component['hosts']) && is_array($component['hosts']));
                     ?>
                     <?php if ($isWeather): ?>
                         <!-- Weather Sources - show individual sources -->
@@ -1359,6 +1360,28 @@ if (php_sapi_name() === 'cli') {
                                     <?php echo getStatusIcon($source['status']); ?>
                                 </span>
                                 <?php echo ucfirst($source['status']); ?>
+                            </div>
+                        </li>
+                        <?php endforeach; ?>
+                    <?php elseif ($isBridgeHosts): ?>
+                        <?php foreach ($component['hosts'] as $bridgeHost): ?>
+                        <li class="component-item">
+                            <div class="component-info">
+                                <div class="component-name"><?php echo htmlspecialchars($bridgeHost['name'] ?? 'Bridge host'); ?></div>
+                                <div class="component-message"><?php echo htmlspecialchars($bridgeHost['message'] ?? ''); ?></div>
+                                <?php if (isset($bridgeHost['lastChanged']) && $bridgeHost['lastChanged'] > 0): ?>
+                                <div class="component-timestamp">
+                                    Last changed: <?php echo formatRelativeTime($bridgeHost['lastChanged']); ?>
+                                    <span style="color: #ccc;"> • </span>
+                                    <?php echo formatAbsoluteTime($bridgeHost['lastChanged']); ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="component-status">
+                                <span class="status-indicator <?php echo getStatusColor($bridgeHost['status'] ?? 'down'); ?>">
+                                    <?php echo getStatusIcon($bridgeHost['status'] ?? 'down'); ?>
+                                </span>
+                                <?php echo ucfirst((string) ($bridgeHost['status'] ?? 'down')); ?>
                             </div>
                         </li>
                         <?php endforeach; ?>
