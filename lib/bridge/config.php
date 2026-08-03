@@ -280,12 +280,9 @@ function validateBridgeConfig(array $config): array
             if (isset($ws['txid']) && !is_numeric($ws['txid'])) {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) txid must be numeric when set";
             }
-            if (
-                isset($ws['wind_reference'])
-                && $ws['wind_reference'] !== 'true'
-                && $ws['wind_reference'] !== 'magnetic'
-            ) {
-                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) wind_reference must be 'true' or 'magnetic'";
+            if (array_key_exists('wind_reference', $ws)) {
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) must not set wind_reference; "
+                    . 'install the vane to true north (core does not convert magnetic wind)';
             }
         }
     }

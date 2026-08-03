@@ -167,6 +167,26 @@ class BridgeConfigAuthTest extends TestCase
         $this->assertTrue(isBridgeWeatherSourceEnabled($airport, 'bridge-spb-1', 'station-scappoose-davis'));
     }
 
+    public function testValidateBridgeConfig_RejectsWindReferenceOnEnableRow(): void
+    {
+        $key = $this->validKey();
+        $airport = $this->baseAirport($key);
+        $airport['weather_sources'] = [
+            [
+                'type' => 'davis_weatherlink_live',
+                'bridge_id' => 'bridge-spb-1',
+                'bridge_source_id' => 'station-scappoose-davis',
+                'wind_reference' => 'magnetic',
+            ],
+        ];
+        $result = validateBridgeConfig(['airports' => ['kspb' => $airport]]);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertTrue(
+            (bool) array_filter($result['errors'], static fn ($e) => str_contains($e, 'wind_reference')),
+            implode('; ', $result['errors'])
+        );
+    }
+
     public function testResolveBridgeApiKey_FindsBinding(): void
     {
         $key = $this->validKey();

@@ -142,8 +142,9 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         $this->assertNull(davisWeatherlinkLiveResolveSnapshot('kspb', $source, $disabledAirport));
     }
 
-    public function testSnapshot_AppliesMagneticDeclinationWhenConfigured(): void
+    public function testSnapshot_IgnoresMagneticWindReference(): void
     {
+        // Mis-aimed / magnetic vane must not be corrected in software.
         $post = $this->loadGoldenPost();
         $post['provider_meta']['wind_reference'] = 'magnetic';
         $n = bridgeNormalizeWeatherItem($post);
@@ -155,7 +156,6 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
             'bridge_source_id' => 'station-davis-wll',
             'txid' => 1,
         ];
-        // Force known declination via airport override
         $airport = [
             'weather_sources' => [$source],
             'magnetic_declination' => -15.0,
@@ -164,8 +164,7 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         ];
         $snap = davisWeatherlinkLiveResolveSnapshot('kspb', $source, $airport);
         $this->assertNotNull($snap);
-        // Magnetic 270 + (-15) = 255 true
-        $this->assertEqualsWithDelta(255.0, $snap->wind->direction->value, 0.1);
+        $this->assertEqualsWithDelta(270.0, $snap->wind->direction->value, 0.1);
     }
 
     public function testRainfallDailyInches_RainSizeVariants(): void

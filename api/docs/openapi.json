@@ -751,7 +751,7 @@
       "BridgeWeatherProviderMeta": {
         "type": "object",
         "required": ["raw"],
-        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object). Optional keys such as api, path, txid, wind_reference, did are stored when present.",
+        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object). Optional keys such as api, path, txid, did are stored when present. Core treats wind as true north from a properly installed vane; wind_reference is ignored if present.",
         "properties": {
           "raw": {
             "type": "object",
@@ -761,7 +761,6 @@
           "api": {"type": "string"},
           "path": {"type": "string"},
           "txid": {"type": "integer"},
-          "wind_reference": {"type": "string", "enum": ["true", "magnetic"]},
           "did": {"type": "string"},
           "host": {"type": "string"}
         },

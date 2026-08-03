@@ -16,8 +16,6 @@ require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../bridge/weather-store.php';
 require_once __DIR__ . '/../../bridge/config.php';
-require_once __DIR__ . '/../../heading-conversion.php';
-require_once __DIR__ . '/../../config.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
@@ -60,11 +58,7 @@ function davisWeatherlinkLiveResolveSnapshot(
         return null;
     }
 
-    return DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord(
-        $latest,
-        $source,
-        is_array($airport) ? $airport : []
-    );
+    return DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($latest, $source);
 }
 
 /**
@@ -109,16 +103,14 @@ class DavisWeatherlinkLiveBridgeAdapter
     /**
      * Build WeatherSnapshot from a stored bridge latest.json record.
      *
+     * Wind direction is assumed true north (properly installed vane).
+     *
      * @param array $record Stored observation (provider_meta.raw required)
      * @param array $config weather_sources row
-     * @param array $airport Airport config for declination when wind is magnetic
      * @return WeatherSnapshot|null
      */
-    public static function snapshotFromLatestRecord(
-        array $record,
-        array $config = [],
-        array $airport = []
-    ): ?WeatherSnapshot {
+    public static function snapshotFromLatestRecord(array $record, array $config = []): ?WeatherSnapshot
+    {
         $meta = $record['provider_meta'] ?? null;
         if (!is_array($meta)) {
             return null;
@@ -143,11 +135,8 @@ class DavisWeatherlinkLiveBridgeAdapter
         }
 
         $windDir = $parsed['wind_direction'];
-        $windRef = self::resolveWindReference($meta, $config);
-        if ($windDir !== null && $windRef === 'magnetic' && $airport !== []) {
-            $declination = getMagneticDeclination($airport);
-            $windDir = convertMagneticToTrue($windDir, $declination);
-        }
+        // Assume a properly installed station reports true-north wind. Do not
+        // apply declination from provider_meta.wind_reference or config.
 
         $source = self::SOURCE_TYPE;
         $stationId = isset($config['station_id']) && is_string($config['station_id']) && $config['station_id'] !== ''
@@ -349,21 +338,6 @@ class DavisWeatherlinkLiveBridgeAdapter
             return null;
         }
         return $clicks * $inchesPerClick;
-    }
-
-    /**
-     * @param array $meta provider_meta
-     * @param array $config weather_sources
-     * @return string true|magnetic
-     */
-    private static function resolveWindReference(array $meta, array $config): string
-    {
-        foreach ([$meta['wind_reference'] ?? null, $config['wind_reference'] ?? null] as $ref) {
-            if (is_string($ref) && ($ref === 'true' || $ref === 'magnetic')) {
-                return $ref;
-            }
-        }
-        return 'true';
     }
 
     /**
