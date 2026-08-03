@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for bridges[] / aviationwx_bridge config validation and auth resolution.
+ * Unit tests for bridges[] / cache-backed weather_sources config validation and auth.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -85,13 +85,13 @@ class BridgeConfigAuthTest extends TestCase
         );
     }
 
-    public function testValidateBridgeConfig_AviationwxBridgeRequiresMatchingBridgeId(): void
+    public function testValidateBridgeConfig_DavisRequiresMatchingBridgeId(): void
     {
         $key = $this->validKey();
         $airport = $this->baseAirport($key);
         $airport['weather_sources'] = [
             [
-                'type' => 'aviationwx_bridge',
+                'type' => 'davis_weatherlink_live',
                 'bridge_id' => 'bridge-missing',
                 'bridge_source_id' => 'station-scappoose-davis',
             ],
@@ -104,22 +104,6 @@ class BridgeConfigAuthTest extends TestCase
         );
     }
 
-    public function testValidateBridgeConfig_AviationwxBridgeAcceptsWhenBound(): void
-    {
-        $key = $this->validKey();
-        $airport = $this->baseAirport($key);
-        $airport['weather_sources'] = [
-            [
-                'type' => 'aviationwx_bridge',
-                'bridge_id' => 'bridge-spb-1',
-                'bridge_source_id' => 'station-scappoose-davis',
-                'station_id' => 'wx-spb-bridge-davis',
-            ],
-        ];
-        $result = validateBridgeConfig(['airports' => ['kspb' => $airport]]);
-        $this->assertSame([], $result['errors'], implode('; ', $result['errors']));
-    }
-
     public function testIsBridgeWeatherSourceEnabled_OptionB(): void
     {
         $key = $this->validKey();
@@ -128,7 +112,7 @@ class BridgeConfigAuthTest extends TestCase
 
         $airport['weather_sources'] = [
             [
-                'type' => 'aviationwx_bridge',
+                'type' => 'davis_weatherlink_live',
                 'bridge_id' => 'bridge-spb-1',
                 'bridge_source_id' => 'station-scappoose-davis',
             ],
@@ -224,7 +208,36 @@ class BridgeConfigAuthTest extends TestCase
         $this->assertFalse($result['valid']);
     }
 
-    public function testValidateAirportsJsonStructure_AcceptsAviationwxBridgeType(): void
+    public function testValidateAirportsJsonStructure_AcceptsDavisWeatherlinkLiveType(): void
+    {
+        $key = $this->validKey();
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Scappoose',
+                    'icao' => 'KSPB',
+                    'lat' => 45.771,
+                    'lon' => -122.862,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'bridges' => [
+                        ['id' => 'bridge-spb-1', 'api_key' => $key],
+                    ],
+                    'weather_sources' => [
+                        [
+                            'type' => 'davis_weatherlink_live',
+                            'bridge_id' => 'bridge-spb-1',
+                            'bridge_source_id' => 'station-scappoose-davis',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+    }
+
+    public function testValidateAirportsJsonStructure_RejectsRetiredAviationwxBridgeType(): void
     {
         $key = $this->validKey();
         $config = [
@@ -250,6 +263,10 @@ class BridgeConfigAuthTest extends TestCase
             ],
         ];
         $result = validateAirportsJsonStructure($config);
-        $this->assertTrue($result['valid'], implode('; ', $result['errors']));
+        $this->assertFalse($result['valid']);
+        $this->assertTrue(
+            (bool) array_filter($result['errors'], static fn ($e) => str_contains($e, 'aviationwx_bridge')),
+            implode('; ', $result['errors'])
+        );
     }
 }

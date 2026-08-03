@@ -36,7 +36,6 @@ require_once __DIR__ . '/adapter/swob-helper.php';
 require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
 require_once __DIR__ . '/adapter/dyaconlive-v1.php';
-require_once __DIR__ . '/adapter/aviationwx-bridge-v1.php';
 require_once __DIR__ . '/adapter/davis-weatherlink-live-bridge.php';
 require_once __DIR__ . '/dyaconlive-state.php';
 require_once __DIR__ . '/dyaconlive-fetch.php';
@@ -259,18 +258,6 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
         // Local-cache push sources: no upstream HTTP
         if ($sourceType === 'davis_weatherlink_live') {
             $snap = davisWeatherlinkLiveResolveSnapshot($airportId, $source, $airport);
-            if ($snap !== null && $snap->isValid) {
-                $skippedSnapshots[$sourceKey] = $snap;
-                recordWeatherSuccess($airportId, $sourceType, $source);
-                weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
-            } else {
-                weatherHealthTrackFetch($airportId, $sourceType, false, null);
-            }
-            continue;
-        }
-
-        if ($sourceType === 'aviationwx_bridge') {
-            $snap = aviationwxBridgeResolveSnapshot($airportId, $source, $airport);
             if ($snap !== null && $snap->isValid) {
                 $skippedSnapshots[$sourceKey] = $snap;
                 recordWeatherSuccess($airportId, $sourceType, $source);
@@ -589,7 +576,6 @@ function buildSourceUrl(array $source, array $airport = []): ?string {
         'swob_man' => SwobManAdapter::buildUrl($source),
         'dyaconlive' => DyaconLiveAdapter::buildUrl($source, dyaconliveResolveTimezone($source, $airport)),
         'davis_weatherlink_live' => null,
-        'aviationwx_bridge' => null,
         default => null,
     };
 }

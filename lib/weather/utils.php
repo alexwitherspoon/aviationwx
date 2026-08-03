@@ -418,11 +418,6 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Davis WeatherLink Live (Bridge)',
                 'url' => 'https://weatherlink.github.io/weatherlink-live-local-api/'
             ];
-        case 'aviationwx_bridge':
-            return [
-                'name' => 'AviationWX Bridge',
-                'url' => null
-            ];
         default:
             return null;
     }

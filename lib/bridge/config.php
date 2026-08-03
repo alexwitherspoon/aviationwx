@@ -24,7 +24,7 @@ function bridgeConfigAllowedFields(): array
  */
 function bridgeCacheBackedWeatherSourceTypes(): array
 {
-    return ['davis_weatherlink_live', 'aviationwx_bridge'];
+    return ['davis_weatherlink_live'];
 }
 
 /**
@@ -133,17 +133,6 @@ function listBridgeCacheWeatherSources(array $airport, ?string $bridgeId = null)
         $out[] = $ws;
     }
     return $out;
-}
-
-/**
- * @deprecated Use listBridgeCacheWeatherSources()
- * @param array $airport Airport config
- * @param string|null $bridgeId When set, only rows for this bridge
- * @return list<array>
- */
-function listAviationwxBridgeWeatherSources(array $airport, ?string $bridgeId = null): array
-{
-    return listBridgeCacheWeatherSources($airport, $bridgeId);
 }
 
 /**

@@ -7,7 +7,7 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/bridge/weather-store.php';
 require_once __DIR__ . '/../../lib/bridge/config.php';
-require_once __DIR__ . '/../../lib/weather/adapter/aviationwx-bridge-v1.php';
+require_once __DIR__ . '/../../lib/weather/adapter/davis-weatherlink-live-bridge.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 
 class BridgeWeatherIngestTest extends TestCase
@@ -163,7 +163,7 @@ class BridgeWeatherIngestTest extends TestCase
         $this->assertArrayNotHasKey('sample', $latest);
     }
 
-    public function testEnableGate_AdapterNullWhenNotInWeatherSources(): void
+    public function testEnableGate_ResolveNullWhenNotInWeatherSources(): void
     {
         $n = bridgeNormalizeWeatherItem($this->rawObservation());
         bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
@@ -173,34 +173,32 @@ class BridgeWeatherIngestTest extends TestCase
                 ['type' => 'tempest', 'station_id' => '1', 'api_key' => 'x'],
             ],
         ];
-        $snap = aviationwxBridgeResolveSnapshot('kspb', [
-            'type' => 'aviationwx_bridge',
+        $snap = davisWeatherlinkLiveResolveSnapshot('kspb', [
+            'type' => 'davis_weatherlink_live',
             'bridge_id' => 'bridge-spb-1',
             'bridge_source_id' => 'station-scappoose-davis',
         ], $airport);
         $this->assertNull($snap);
     }
 
-    public function testEnableGate_LegacySampleAdapterNullForRawOnlyCache(): void
+    public function testEnableGate_DavisResolveWhenEnabled(): void
     {
-        // aviationwx_bridge mapper only reads a legacy sample object; raw-only records
-        // stay in cache for diagnostics until a provider-specific adapter parses them.
         $n = bridgeNormalizeWeatherItem($this->rawObservation());
         bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
 
         $source = [
-            'type' => 'aviationwx_bridge',
+            'type' => 'davis_weatherlink_live',
             'bridge_id' => 'bridge-spb-1',
             'bridge_source_id' => 'station-scappoose-davis',
             'station_id' => 'wx-spb-bridge-davis',
+            'txid' => 1,
         ];
         $airport = ['weather_sources' => [$source]];
         $this->assertTrue(isBridgeWeatherSourceEnabled($airport, 'bridge-spb-1', 'station-scappoose-davis'));
-        $this->assertNull(aviationwxBridgeResolveSnapshot('kspb', $source, $airport));
-
-        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-spb-1', 'station-scappoose-davis');
-        $this->assertNotNull($latest);
-        $this->assertArrayHasKey('raw', $latest['provider_meta']);
+        $snap = davisWeatherlinkLiveResolveSnapshot('kspb', $source, $airport);
+        $this->assertNotNull($snap);
+        $this->assertTrue($snap->isValid);
+        $this->assertSame('davis_weatherlink_live', $snap->source);
     }
 
     public function testBatchExtract(): void

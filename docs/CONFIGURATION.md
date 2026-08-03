@@ -610,7 +610,6 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `swob_man` | Nav Canada Weather (manned stations) | ~5 minutes |
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
-| `aviationwx_bridge` | Legacy bridge cache mapper (canonical sample only; prefer `davis_weatherlink_live`) | Adapter rate (typically ≤10s) |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
