@@ -22,6 +22,11 @@ if (!defined('BRIDGE_WEATHER_BATCH_MAX')) {
     define('BRIDGE_WEATHER_BATCH_MAX', 60);
 }
 
+/** Reject observed_at more than this many seconds in the future (clock skew headroom). */
+if (!defined('BRIDGE_WEATHER_FUTURE_SKEW_SECONDS')) {
+    define('BRIDGE_WEATHER_FUTURE_SKEW_SECONDS', 60);
+}
+
 /**
  * Validate a wire provider token (e.g. davis_weatherlink_live).
  *
@@ -53,6 +58,14 @@ function bridgeNormalizeWeatherItem(array $item): array
     $observedTs = strtotime($item['observed_at']);
     if ($observedTs === false) {
         return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'observed_at must be a valid timestamp'];
+    }
+    // Future timestamps would bypass WeatherReading staleness (negative age looks fresh)
+    if ($observedTs > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+        return [
+            'ok' => false,
+            'code' => 'INVALID_REQUEST',
+            'error' => 'observed_at is too far in the future',
+        ];
     }
 
     if (!isset($item['source_id']) || !is_string($item['source_id']) || $item['source_id'] === '') {
@@ -125,7 +138,6 @@ function bridgeExtractWeatherItems(array $body): array
             if (!is_array($sampleItem)) {
                 return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => "samples[{$idx}] must be an object"];
             }
-            // Inherit top-level identity fields when omitted per item
             foreach (['bridge_id', 'source_id', 'provider'] as $inheritKey) {
                 if (!isset($sampleItem[$inheritKey]) && isset($body[$inheritKey])) {
                     $sampleItem[$inheritKey] = $body[$inheritKey];
@@ -229,6 +241,9 @@ function bridgeWeatherAppendObservationLine(string $path, array $record): void
 /**
  * Persist one accepted weather observation (diagnostics always; enable gate is separate).
  *
+ * latest.json keeps the newest observation by observed_unix so delayed/replayed
+ * POSTs cannot replace fresher data.
+ *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
  * @param array $record Normalized record from bridgeNormalizeWeatherItem
@@ -255,9 +270,21 @@ function bridgeStoreWeatherObservation(
     $stored['airport_id'] = $airportId;
     $stored['bridge_id'] = $bridgeId;
 
-    if (!bridgeWriteJsonFile($latestPath, $stored)) {
-        return false;
+    $existing = bridgeReadJsonFile($latestPath);
+    $newObs = isset($stored['observed_unix']) && is_numeric($stored['observed_unix'])
+        ? (int) $stored['observed_unix']
+        : 0;
+    $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
+        ? (int) $existing['observed_unix']
+        : 0;
+    $shouldReplaceLatest = $existing === null || $newObs >= $existingObs;
+
+    if ($shouldReplaceLatest) {
+        if (!bridgeWriteJsonFile($latestPath, $stored)) {
+            return false;
+        }
     }
+
     bridgeWeatherAppendObservationLine($samplesPath, $stored);
     bridgeWeatherUpdateBuckets($bucketsPath, $stored);
     bridgeTouchMeta($airportId, $bridgeId, 'weather', $receivedAt);

@@ -61,7 +61,6 @@ class BridgeWeatherIngestTest extends TestCase
                 'api' => 'weatherlink_live_local_v1',
                 'path' => '/v1/current_conditions',
                 'txid' => 1,
-                'wind_reference' => 'true',
                 'did' => '001D0A700002',
                 'raw' => [
                     'did' => '001D0A700002',
@@ -130,6 +129,38 @@ class BridgeWeatherIngestTest extends TestCase
         $n = bridgeNormalizeWeatherItem($item);
         $this->assertTrue($n['ok']);
         $this->assertArrayNotHasKey('sample', $n['record']);
+    }
+
+    public function testNormalize_RejectsFarFutureObservedAt(): void
+    {
+        $item = $this->rawObservation();
+        $item['observed_at'] = gmdate('c', time() + 120);
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('future', $n['error']);
+    }
+
+    public function testNormalize_AcceptsObservedAtWithinSixtySecondSkew(): void
+    {
+        $item = $this->rawObservation();
+        $item['observed_at'] = gmdate('c', time() + 30);
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+    }
+
+    public function testStore_KeepsNewerLatestOnOutOfOrderPost(): void
+    {
+        $newer = $this->rawObservation('station-a', strtotime('2026-07-29T23:01:00Z'));
+        $nNew = bridgeNormalizeWeatherItem($newer);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $nNew['record']));
+
+        $older = $this->rawObservation('station-a', strtotime('2026-07-29T23:00:00Z'));
+        $nOld = bridgeNormalizeWeatherItem($older);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $nOld['record']));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($latest);
+        $this->assertSame(strtotime('2026-07-29T23:01:00Z'), (int) $latest['observed_unix']);
     }
 
     public function testStore_PersistsRawAndCountBuckets(): void
