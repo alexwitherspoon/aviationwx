@@ -63,7 +63,10 @@ config-example: ## Copy example config for local development (mock mode)
 		echo "   Remove it first if you want to reset: rm config/airports.json"; \
 	else \
 		cp config/airports.json.example config/airports.json; \
+		KEY=$$(php scripts/generate-bridge-api-key.php); \
+		php -r '$$path=$$argv[1]; $$key=$$argv[2]; $$placeholder="awxb_EXAMPLEDONOTUSE000000000000000000000000000000000"; $$raw=file_get_contents($$path); if ($$raw===false || strpos($$raw, $$placeholder)===false) { fwrite(STDERR, "ERROR: example bridge api_key placeholder missing\n"); exit(1);} file_put_contents($$path, str_replace($$placeholder, $$key, $$raw));' config/airports.json "$$KEY"; \
 		echo "✓ Created config/airports.json from example"; \
+		echo "  Generated a fresh bridges[].api_key (do not commit it)"; \
 		echo "  Mock mode will auto-activate (test API keys detected)"; \
 		echo "  Run 'make dev' to start development server"; \
 	fi

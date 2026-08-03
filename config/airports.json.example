@@ -204,6 +204,7 @@
           "label": "Example Bridge Pi"
         }
       ],
+      "_comment_bridges": "bridges[].api_key placeholder is intentionally non-secret. make config-example replaces it with a freshly generated awxb_ key in the local copy.",
       "weather_sources": [
         {
           "type": "tempest",
