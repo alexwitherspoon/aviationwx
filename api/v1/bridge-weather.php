@@ -90,7 +90,7 @@ function handleBridgeWeather(array $params, array $context): void
     }
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
     header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
-    // Diagnostic headers for installer verification (not required by contract)
+    // Installer verification only - not part of the public wire contract
     header('X-Bridge-Weather-Accepted: ' . (string) $accepted);
     header('X-Bridge-Weather-Enabled: ' . (string) $enabledHits);
     exit;
