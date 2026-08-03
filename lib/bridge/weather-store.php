@@ -1,6 +1,6 @@
 <?php
 /**
- * Bridge weather ingest: latest + observation ring + 60s receipt buckets.
+ * Bridge weather ingest: latest + observation ring + 60s observation-time buckets.
  *
  * Wire contract: provider-tagged observations with provider_meta.raw (station-native).
  * Keyed POSTs are always stored for diagnostics. Public weather requires an explicit
@@ -163,9 +163,10 @@ function bridgeWeatherBucketStartUnix(int $unix): int
 }
 
 /**
- * Merge one observation into buckets.json as a receipt count window (no unit conversion).
+ * Merge one observation into buckets.json as an observation-time count window.
  *
- * Numeric weather aggregates belong in provider adapters after parsing provider_meta.raw.
+ * Buckets are keyed by observed_at (not receive time). Numeric weather aggregates
+ * belong in provider adapters after parsing provider_meta.raw.
  *
  * @param string $path buckets.json path
  * @param array $record Normalized weather record
@@ -206,36 +207,26 @@ function bridgeWeatherUpdateBuckets(string $path, array $record): bool
  *
  * @param string $path samples.jsonl path
  * @param array $record Normalized record
- * @return void
+ * @return bool
  */
-function bridgeWeatherAppendObservationLine(string $path, array $record): void
+function bridgeWeatherAppendObservationLine(string $path, array $record): bool
 {
-    $dir = dirname($path);
-    if (!bridgeEnsureCacheDir($dir)) {
-        return;
-    }
-    $line = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    if ($line === false) {
-        return;
-    }
-    @file_put_contents($path, $line . "\n", FILE_APPEND | LOCK_EX);
+    return bridgeAppendJsonlRing($path, $record, BRIDGE_WEATHER_SAMPLES_MAX_LINES);
+}
 
-    $raw = @file_get_contents($path);
-    if ($raw === false || $raw === '') {
-        return;
-    }
-    $lines = preg_split("/\r\n|\n|\r/", trim($raw)) ?: [];
-    $lines = array_values(array_filter($lines, static fn ($l) => $l !== ''));
-    if (count($lines) <= BRIDGE_WEATHER_SAMPLES_MAX_LINES) {
-        return;
-    }
-    $lines = array_slice($lines, -BRIDGE_WEATHER_SAMPLES_MAX_LINES);
-    $tmp = $path . '.tmp.' . getmypid();
-    if (@file_put_contents($tmp, implode("\n", $lines) . "\n", LOCK_EX) !== false) {
-        @rename($tmp, $path);
-    } else {
-        @unlink($tmp);
-    }
+/**
+ * Whether a POST provider is allowed for a source given its enable type.
+ *
+ * Unenabled sources (null) accept any valid provider for installer diagnostics.
+ * Enabled sources require an exact match so latest cannot be overwritten by the wrong adapter family.
+ *
+ * @param string|null $enabledType weather_sources.type or null when not enabled
+ * @param string $provider Wire provider token
+ * @return bool
+ */
+function bridgeWeatherProviderMatchesEnable(?string $enabledType, string $provider): bool
+{
+    return $enabledType === null || $enabledType === $provider;
 }
 
 /**
@@ -270,23 +261,29 @@ function bridgeStoreWeatherObservation(
     $stored['airport_id'] = $airportId;
     $stored['bridge_id'] = $bridgeId;
 
-    $existing = bridgeReadJsonFile($latestPath);
     $newObs = isset($stored['observed_unix']) && is_numeric($stored['observed_unix'])
         ? (int) $stored['observed_unix']
         : 0;
-    $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
-        ? (int) $existing['observed_unix']
-        : 0;
-    $shouldReplaceLatest = $existing === null || $newObs >= $existingObs;
 
-    if ($shouldReplaceLatest) {
-        if (!bridgeWriteJsonFile($latestPath, $stored)) {
-            return false;
+    // Exclusive lock so concurrent POSTs cannot lose a newer latest
+    if (!bridgeUpdateJsonFileLocked($latestPath, static function (?array $existing) use ($stored, $newObs): ?array {
+        $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
+            ? (int) $existing['observed_unix']
+            : 0;
+        if ($existing !== null && $newObs < $existingObs) {
+            return null;
         }
+        return $stored;
+    })) {
+        return false;
     }
 
-    bridgeWeatherAppendObservationLine($samplesPath, $stored);
-    bridgeWeatherUpdateBuckets($bucketsPath, $stored);
+    if (!bridgeWeatherAppendObservationLine($samplesPath, $stored)) {
+        return false;
+    }
+    if (!bridgeWeatherUpdateBuckets($bucketsPath, $stored)) {
+        return false;
+    }
     bridgeTouchMeta($airportId, $bridgeId, 'weather', $receivedAt);
     return true;
 }

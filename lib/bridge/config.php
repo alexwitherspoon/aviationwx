@@ -136,6 +136,28 @@ function listBridgeCacheWeatherSources(array $airport, ?string $bridgeId = null)
 }
 
 /**
+ * Return the weather_sources.type for an enabled bridge station, or null if not enabled.
+ *
+ * @param array $airport Airport config
+ * @param string $bridgeId Bridge id
+ * @param string $bridgeSourceId Bridge-local station id
+ * @return string|null Enable type (e.g. davis_weatherlink_live)
+ */
+function getBridgeEnabledWeatherSourceType(
+    array $airport,
+    string $bridgeId,
+    string $bridgeSourceId
+): ?string {
+    foreach (listBridgeCacheWeatherSources($airport, $bridgeId) as $ws) {
+        if (($ws['bridge_source_id'] ?? null) === $bridgeSourceId) {
+            $type = $ws['type'] ?? null;
+            return is_string($type) && $type !== '' ? $type : null;
+        }
+    }
+    return null;
+}
+
+/**
  * Return true when weather_sources enables this bridge station for public weather.
  *
  * @param array $airport Airport config
@@ -145,12 +167,7 @@ function listBridgeCacheWeatherSources(array $airport, ?string $bridgeId = null)
  */
 function isBridgeWeatherSourceEnabled(array $airport, string $bridgeId, string $bridgeSourceId): bool
 {
-    foreach (listBridgeCacheWeatherSources($airport, $bridgeId) as $ws) {
-        if (($ws['bridge_source_id'] ?? null) === $bridgeSourceId) {
-            return true;
-        }
-    }
-    return false;
+    return getBridgeEnabledWeatherSourceType($airport, $bridgeId, $bridgeSourceId) !== null;
 }
 
 /**
@@ -187,6 +204,7 @@ function validateBridgeConfig(array $config): array
         }
 
         $seenIdsOnAirport = [];
+        $seenIdsOnAirportLower = [];
         foreach ($airport['bridges'] as $idx => $bridge) {
             $label = "bridges[{$idx}]";
             if (!is_array($bridge)) {
@@ -208,10 +226,13 @@ function validateBridgeConfig(array $config): array
                 $errors[] = "Airport '{$airportCode}' {$label} has invalid 'id' "
                     . '(alphanumeric, hyphens/underscores, 1-64 chars)';
             } else {
-                if (isset($seenIdsOnAirport[$bridge['id']])) {
-                    $errors[] = "Airport '{$airportCode}' duplicate bridges id '{$bridge['id']}'";
+                $idLower = strtolower($bridge['id']);
+                if (isset($seenIdsOnAirport[$bridge['id']]) || isset($seenIdsOnAirportLower[$idLower])) {
+                    $errors[] = "Airport '{$airportCode}' duplicate bridges id '{$bridge['id']}' "
+                        . '(ids are case-insensitive for cache paths)';
                 }
                 $seenIdsOnAirport[$bridge['id']] = true;
+                $seenIdsOnAirportLower[$idLower] = true;
                 $bridgeIdsByAirport[$airportCode][$bridge['id']] = true;
             }
 
@@ -246,22 +267,37 @@ function validateBridgeConfig(array $config): array
             continue;
         }
         $knownBridges = $bridgeIdsByAirport[$airportCode] ?? [];
+        $seenEnableBindings = [];
         foreach ($airport['weather_sources'] as $idx => $ws) {
             if (!is_array($ws) || !isBridgeCacheBackedWeatherSourceType($ws['type'] ?? null)) {
                 continue;
             }
             $type = (string) $ws['type'];
             $label = "weather_sources[{$idx}]";
+            $bridgeIdOk = false;
             if (!isset($ws['bridge_id']) || !is_string($ws['bridge_id']) || $ws['bridge_id'] === '') {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) missing 'bridge_id'";
             } elseif (!isset($knownBridges[$ws['bridge_id']])) {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) bridge_id "
                     . "'{$ws['bridge_id']}' does not match any bridges[].id on this airport";
+            } else {
+                $bridgeIdOk = true;
             }
+            $sourceIdOk = false;
             if (!isset($ws['bridge_source_id']) || !is_string($ws['bridge_source_id']) || $ws['bridge_source_id'] === '') {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) missing 'bridge_source_id'";
             } elseif (!isValidBridgeResourceId($ws['bridge_source_id'])) {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) invalid 'bridge_source_id'";
+            } else {
+                $sourceIdOk = true;
+            }
+            if ($bridgeIdOk && $sourceIdOk) {
+                $bindKey = strtolower($ws['bridge_id']) . "\0" . strtolower($ws['bridge_source_id']);
+                if (isset($seenEnableBindings[$bindKey])) {
+                    $errors[] = "Airport '{$airportCode}' {$label} ({$type}) duplicate enable binding "
+                        . "for bridge_id '{$ws['bridge_id']}' bridge_source_id '{$ws['bridge_source_id']}'";
+                }
+                $seenEnableBindings[$bindKey] = true;
             }
             if (isset($ws['station_id']) && (!is_string($ws['station_id']) || $ws['station_id'] === '')) {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) station_id must be a non-empty string when set";

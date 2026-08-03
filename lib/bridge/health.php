@@ -1,10 +1,17 @@
 <?php
 /**
  * Normalize and validate bridge health POST bodies for fleet ops cache.
+ *
+ * When optional sections (subsystems, inventory, errors) are present, every
+ * entry must be well-formed - malformed rows are rejected rather than dropped.
  */
 
 require_once __DIR__ . '/store.php';
 require_once __DIR__ . '/config.php';
+
+if (!defined('BRIDGE_HEALTH_ERRORS_MAX')) {
+    define('BRIDGE_HEALTH_ERRORS_MAX', 50);
+}
 
 /**
  * Allowed host.status / subsystem status values.
@@ -38,7 +45,11 @@ function bridgeNormalizeHealthPayload(array $body): array
     $host = $body['host'];
     $status = $host['status'] ?? null;
     if (!is_string($status) || !in_array($status, bridgeAllowedStatusValues(), true)) {
-        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'host.status must be operational|degraded|down|maintenance'];
+        return [
+            'ok' => false,
+            'code' => 'INVALID_REQUEST',
+            'error' => 'host.status must be operational|degraded|down|maintenance',
+        ];
     }
 
     $normalizedHost = [
@@ -56,17 +67,35 @@ function bridgeNormalizeHealthPayload(array $body): array
     }
 
     $subsystems = [];
-    if (isset($body['subsystems']) && is_array($body['subsystems'])) {
+    if (array_key_exists('subsystems', $body)) {
+        if (!is_array($body['subsystems'])) {
+            return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'subsystems must be an object'];
+        }
         foreach ($body['subsystems'] as $name => $sub) {
-            if (!is_string($name) || !is_array($sub)) {
-                continue;
+            if (!is_string($name) || $name === '' || !is_array($sub)) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => 'subsystems entries must be named objects',
+                ];
             }
             $subStatus = $sub['status'] ?? null;
             if (!is_string($subStatus) || !in_array($subStatus, bridgeAllowedStatusValues(), true)) {
-                continue;
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => "subsystems.{$name}.status must be operational|degraded|down|maintenance",
+                ];
             }
             $entry = ['status' => $subStatus];
-            if (isset($sub['detail']) && is_array($sub['detail'])) {
+            if (array_key_exists('detail', $sub)) {
+                if (!is_array($sub['detail'])) {
+                    return [
+                        'ok' => false,
+                        'code' => 'INVALID_REQUEST',
+                        'error' => "subsystems.{$name}.detail must be an object when set",
+                    ];
+                }
                 $entry['detail'] = bridgeScrubValue($sub['detail']);
             }
             $subsystems[$name] = $entry;
@@ -74,26 +103,60 @@ function bridgeNormalizeHealthPayload(array $body): array
     }
 
     $inventory = ['cameras' => [], 'stations' => []];
-    if (isset($body['inventory']) && is_array($body['inventory'])) {
+    if (array_key_exists('inventory', $body)) {
+        if (!is_array($body['inventory'])) {
+            return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'inventory must be an object'];
+        }
         foreach (['cameras', 'stations'] as $kind) {
-            if (!isset($body['inventory'][$kind]) || !is_array($body['inventory'][$kind])) {
+            if (!array_key_exists($kind, $body['inventory'])) {
                 continue;
             }
-            foreach ($body['inventory'][$kind] as $item) {
-                if (!is_array($item) || !isset($item['id']) || !is_string($item['id']) || $item['id'] === '') {
-                    continue;
+            if (!is_array($body['inventory'][$kind])) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => "inventory.{$kind} must be an array",
+                ];
+            }
+            foreach ($body['inventory'][$kind] as $idx => $item) {
+                if (!is_array($item)) {
+                    return [
+                        'ok' => false,
+                        'code' => 'INVALID_REQUEST',
+                        'error' => "inventory.{$kind}[{$idx}] must be an object",
+                    ];
+                }
+                if (!isset($item['id']) || !is_string($item['id']) || $item['id'] === '') {
+                    return [
+                        'ok' => false,
+                        'code' => 'INVALID_REQUEST',
+                        'error' => "inventory.{$kind}[{$idx}].id is required",
+                    ];
                 }
                 if (!isValidBridgeResourceId($item['id'])) {
-                    continue;
+                    return [
+                        'ok' => false,
+                        'code' => 'INVALID_REQUEST',
+                        'error' => "inventory.{$kind}[{$idx}].id is invalid",
+                    ];
                 }
                 $row = [
                     'id' => $item['id'],
-                    'name' => isset($item['name']) && is_string($item['name']) ? $item['name'] : $item['id'],
+                    'name' => isset($item['name']) && is_string($item['name']) && $item['name'] !== ''
+                        ? $item['name']
+                        : $item['id'],
                     'enabled_on_bridge' => array_key_exists('enabled_on_bridge', $item)
                         ? (bool) $item['enabled_on_bridge']
                         : null,
                 ];
-                if ($kind === 'stations' && isset($item['type']) && is_string($item['type'])) {
+                if ($kind === 'stations' && array_key_exists('type', $item)) {
+                    if (!is_string($item['type']) || $item['type'] === '') {
+                        return [
+                            'ok' => false,
+                            'code' => 'INVALID_REQUEST',
+                            'error' => "inventory.stations[{$idx}].type must be a non-empty string when set",
+                        ];
+                    }
                     $row['type'] = $item['type'];
                 }
                 $inventory[$kind][] = $row;
@@ -102,14 +165,31 @@ function bridgeNormalizeHealthPayload(array $body): array
     }
 
     $errors = [];
-    if (isset($body['errors']) && is_array($body['errors'])) {
-        $cap = 50;
-        foreach ($body['errors'] as $err) {
-            if (count($errors) >= $cap) {
-                break;
+    if (array_key_exists('errors', $body)) {
+        if (!is_array($body['errors'])) {
+            return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'errors must be an array'];
+        }
+        if (count($body['errors']) > BRIDGE_HEALTH_ERRORS_MAX) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'errors exceeds max of ' . BRIDGE_HEALTH_ERRORS_MAX,
+            ];
+        }
+        foreach ($body['errors'] as $idx => $err) {
+            if (!is_array($err)) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => "errors[{$idx}] must be an object",
+                ];
             }
-            if (!is_array($err) || !isset($err['fingerprint']) || !is_string($err['fingerprint'])) {
-                continue;
+            if (!isset($err['fingerprint']) || !is_string($err['fingerprint']) || $err['fingerprint'] === '') {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => "errors[{$idx}].fingerprint is required",
+                ];
             }
             $errors[] = bridgeScrubValue([
                 'fingerprint' => substr($err['fingerprint'], 0, 128),

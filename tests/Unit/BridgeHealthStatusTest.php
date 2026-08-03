@@ -156,4 +156,59 @@ class BridgeHealthStatusTest extends TestCase
         $this->assertStringNotContainsString('supersecret', $msg);
         $this->assertStringContainsString('[redacted]', $msg);
     }
+
+    public function testNormalize_RejectsInventoryStationWithoutId(): void
+    {
+        $result = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'operational'],
+            'inventory' => [
+                'stations' => [
+                    ['name' => 'missing id'],
+                ],
+            ],
+        ]);
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('id is required', $result['error'] ?? '');
+    }
+
+    public function testNormalize_RejectsBadSubsystemStatus(): void
+    {
+        $result = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'operational'],
+            'subsystems' => [
+                'weather' => ['status' => 'ok'],
+            ],
+        ]);
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('subsystems.weather.status', $result['error'] ?? '');
+    }
+
+    public function testNormalize_RejectsErrorsWithoutFingerprint(): void
+    {
+        $result = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'operational'],
+            'errors' => [
+                ['count' => 1, 'last_message' => 'oops'],
+            ],
+        ]);
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('fingerprint', $result['error'] ?? '');
+    }
+
+    public function testHistoryAppend_RetainsLinesUnderLock(): void
+    {
+        $path = $this->tmpRoot . '/health_history.jsonl';
+        $this->assertTrue(bridgeAppendJsonlRing($path, ['n' => 1], 10));
+        $this->assertTrue(bridgeAppendJsonlRing($path, ['n' => 2], 10));
+        $this->assertTrue(bridgeAppendJsonlRing($path, ['n' => 3], 2));
+        $raw = file_get_contents($path);
+        $this->assertNotFalse($raw);
+        $lines = array_values(array_filter(explode("\n", trim($raw))));
+        $this->assertCount(2, $lines);
+        $this->assertSame(2, json_decode($lines[0], true)['n'] ?? null);
+        $this->assertSame(3, json_decode($lines[1], true)['n'] ?? null);
+    }
 }

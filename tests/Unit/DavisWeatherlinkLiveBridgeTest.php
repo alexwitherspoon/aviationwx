@@ -135,6 +135,32 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         $this->assertEqualsWithDelta(90.0, $parsed['wind_direction'], 0.01);
     }
 
+    public function testParseRaw_RejectsMissingStationTs(): void
+    {
+        $raw = [
+            'conditions' => [
+                [
+                    'data_structure_type' => 1,
+                    'txid' => 1,
+                    'temp' => 60,
+                ],
+            ],
+        ];
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::parseRawData($raw, ['txid' => 1], []));
+    }
+
+    public function testSnapshot_RejectsWrongProvider(): void
+    {
+        $post = $this->loadGoldenPost();
+        $n = bridgeNormalizeWeatherItem($post);
+        $this->assertTrue($n['ok']);
+        $record = $n['record'];
+        $record['provider'] = 'other_provider';
+        $this->assertNull(
+            DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($record, ['txid' => 1])
+        );
+    }
+
     public function testResolveSnapshot_FromStoredGoldenAndEnableGate(): void
     {
         $post = $this->loadGoldenPost();

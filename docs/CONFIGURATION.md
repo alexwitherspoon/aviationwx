@@ -625,7 +625,7 @@ Wind from bridge-local Davis is treated as **true north**. Install and calibrate
 | Layer | Meaning |
 |-------|---------|
 | `bridges[].api_key` | Device may call bootstrap / health / weather. Observations are stored for diagnostics. |
-| `weather_sources` enable row | Named `bridge_id` + `bridge_source_id` (provider-specific adapter type) may enter `WeatherSnapshot` / dashboard / Public weather. |
+| `weather_sources` enable row | Named `bridge_id` + `bridge_source_id` (provider-specific adapter type) may enter `WeatherSnapshot` / dashboard / Public weather. POST `provider` must match the enable row's `type`. |
 
 A bridge key alone never publishes weather.
 

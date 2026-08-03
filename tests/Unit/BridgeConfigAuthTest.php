@@ -171,6 +171,37 @@ class BridgeConfigAuthTest extends TestCase
         );
     }
 
+    public function testValidateBridgeConfig_RejectsCaseCollidingBridgeIds(): void
+    {
+        $airport = $this->baseAirport($this->validKey(), 'bridge-spb-1');
+        $airport['bridges'][] = [
+            'id' => 'Bridge-SPB-1',
+            'api_key' => $this->validKey(),
+        ];
+        $result = validateBridgeConfig(['airports' => ['kspb' => $airport]]);
+        $this->assertTrue(
+            (bool) array_filter($result['errors'], static fn ($e) => str_contains($e, 'case-insensitive')),
+            implode('; ', $result['errors'])
+        );
+    }
+
+    public function testValidateBridgeConfig_RejectsDuplicateEnableBindings(): void
+    {
+        $key = $this->validKey();
+        $airport = $this->baseAirport($key);
+        $row = [
+            'type' => 'davis_weatherlink_live',
+            'bridge_id' => 'bridge-spb-1',
+            'bridge_source_id' => 'station-scappoose-davis',
+        ];
+        $airport['weather_sources'] = [$row, $row];
+        $result = validateBridgeConfig(['airports' => ['kspb' => $airport]]);
+        $this->assertTrue(
+            (bool) array_filter($result['errors'], static fn ($e) => str_contains($e, 'duplicate enable binding')),
+            implode('; ', $result['errors'])
+        );
+    }
+
     public function testResolveBridgeApiKey_FindsBinding(): void
     {
         $key = $this->validKey();

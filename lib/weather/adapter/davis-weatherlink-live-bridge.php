@@ -85,9 +85,6 @@ class DavisWeatherlinkLiveBridgeAdapter
     /**
      * @return list<string>
      */
-    /**
-     * @return list<string>
-     */
     public static function getFieldsProvided(): array
     {
         return self::FIELDS_PROVIDED;
@@ -122,6 +119,10 @@ class DavisWeatherlinkLiveBridgeAdapter
      */
     public static function snapshotFromLatestRecord(array $record, array $config = []): ?WeatherSnapshot
     {
+        if (($record['provider'] ?? null) !== self::SOURCE_TYPE) {
+            return null;
+        }
+
         $meta = $record['provider_meta'] ?? null;
         if (!is_array($meta)) {
             return null;
@@ -136,7 +137,7 @@ class DavisWeatherlinkLiveBridgeAdapter
             return null;
         }
 
-        // Prefer station raw ts for WeatherSnapshot age; wrapper observed_at is transport metadata
+        // Station raw.ts only - never wall clock (would mask staleness)
         $obsTime = $parsed['obs_time'];
 
         $windDir = $parsed['wind_direction'];
@@ -238,7 +239,14 @@ class DavisWeatherlinkLiveBridgeAdapter
         }
         $iss = $issByTxid[$wantedTxid];
 
-        $obsTime = isset($raw['ts']) && is_numeric($raw['ts']) ? (int) $raw['ts'] : time();
+        // Fail closed without station ts - wall clock would make stale cache look fresh
+        if (!isset($raw['ts']) || !is_numeric($raw['ts'])) {
+            return null;
+        }
+        $obsTime = (int) $raw['ts'];
+        if ($obsTime <= 0) {
+            return null;
+        }
 
         $tempF = self::numericOrNull($iss, 'temp');
         $hum = self::numericOrNull($iss, 'hum');

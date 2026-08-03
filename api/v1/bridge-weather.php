@@ -55,8 +55,8 @@ function handleBridgeWeather(array $params, array $context): void
     $config = loadConfig();
     $airport = is_array($config) ? ($config['airports'][$airportId] ?? null) : null;
 
-    $accepted = 0;
-    $enabledHits = 0;
+    // Validate the full batch before any write so a late 400 cannot leave partial samples
+    $pending = [];
     foreach ($extracted['items'] as $item) {
         $normalized = bridgeNormalizeWeatherItem($item);
         if (!$normalized['ok']) {
@@ -73,12 +73,32 @@ function handleBridgeWeather(array $params, array $context): void
             warnIfBridgeBodyIdMismatch($context, $itemBodyBridge);
         }
 
-        if (!bridgeStoreWeatherObservation($airportId, $bridgeId, $record)) {
+        // Enabled sources must POST the enable type so latest cannot be overwritten by a mismatched provider
+        $enabledType = is_array($airport)
+            ? getBridgeEnabledWeatherSourceType($airport, $bridgeId, $record['source_id'])
+            : null;
+        if (!bridgeWeatherProviderMatchesEnable($enabledType, $record['provider'])) {
+            sendPublicApiError(
+                'PROVIDER_MISMATCH',
+                'provider must match weather_sources.type for enabled source '
+                    . $record['source_id'] . ' (expected ' . $enabledType . ')',
+                400
+            );
+            return;
+        }
+
+        $pending[] = ['record' => $record, 'enabled' => $enabledType !== null];
+    }
+
+    $accepted = 0;
+    $enabledHits = 0;
+    foreach ($pending as $row) {
+        if (!bridgeStoreWeatherObservation($airportId, $bridgeId, $row['record'])) {
             sendPublicApiError(PUBLIC_API_ERROR_SERVICE_UNAVAILABLE, 'Failed to persist weather observation', 503);
             return;
         }
         $accepted++;
-        if (is_array($airport) && isBridgeWeatherSourceEnabled($airport, $bridgeId, $record['source_id'])) {
+        if ($row['enabled']) {
             $enabledHits++;
         }
     }

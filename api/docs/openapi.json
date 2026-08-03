@@ -578,7 +578,7 @@
     "/bridge/health": {
       "post": {
         "summary": "Bridge health heartbeat",
-        "description": "Fleet heartbeat (~60s) with host health, subsystems, source inventory, and error fingerprints. Persisted for status Bridge Host lines and ops discovery. Body bridge_id may disagree with the key binding; core attributes to the key and logs a warning.",
+        "description": "Fleet heartbeat (~60s) with host health, subsystems, source inventory, and error fingerprints. Persisted for status Bridge Host lines and ops discovery. When subsystems, inventory, or errors are present, every entry must be well-formed (malformed rows are rejected, not dropped). Body bridge_id may disagree with the key binding; core attributes to the key and logs a warning.",
         "operationId": "bridgeHealth",
         "tags": ["Bridge"],
         "security": [{"BridgeApiKeyAuth": []}],
@@ -594,14 +594,15 @@
           "204": {"description": "Accepted"},
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
     },
     "/bridge/weather": {
       "post": {
         "summary": "Bridge weather observation ingest",
-        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are always stored for diagnostics. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). Supports a single observation or a bounded `samples` batch (max 60).",
+        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are always stored for diagnostics. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
         "operationId": "bridgeWeather",
         "tags": ["Bridge"],
         "security": [{"BridgeApiKeyAuth": []}],
@@ -615,9 +616,17 @@
         },
         "responses": {
           "204": {"description": "Accepted"},
-          "400": {"$ref": "#/components/responses/BadRequest"},
+          "400": {
+            "description": "Invalid request (including PROVIDER_MISMATCH when an enabled source posts a different provider than weather_sources.type)",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
           "401": {"$ref": "#/components/responses/Unauthorized"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
         }
       }
     }
@@ -775,7 +784,7 @@
           "source_id": {"type": "string"},
           "provider": {
             "type": "string",
-            "description": "Provider family token (e.g. davis_weatherlink_live). Must match health inventory station type when advertised.",
+            "description": "Provider family token (e.g. davis_weatherlink_live). When the source is enabled in weather_sources, must equal that row's type.",
             "pattern": "^[a-z][a-z0-9_]*$"
           },
           "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}

@@ -259,4 +259,64 @@ class BridgeWeatherIngestTest extends TestCase
         // Empty conditions array is fine; raw itself is non-empty
         $this->assertTrue($n['ok']);
     }
+
+    public function testEnabledType_ReturnsNullWhenNotEnabled(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '1'],
+            ],
+        ];
+        $this->assertNull(getBridgeEnabledWeatherSourceType($airport, 'bridge-1', 'station-a'));
+        $this->assertFalse(isBridgeWeatherSourceEnabled($airport, 'bridge-1', 'station-a'));
+    }
+
+    public function testEnabledType_ReturnsDavisWhenEnabled(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                [
+                    'type' => 'davis_weatherlink_live',
+                    'bridge_id' => 'bridge-1',
+                    'bridge_source_id' => 'station-a',
+                ],
+            ],
+        ];
+        $this->assertSame(
+            'davis_weatherlink_live',
+            getBridgeEnabledWeatherSourceType($airport, 'bridge-1', 'station-a')
+        );
+    }
+
+    public function testProviderMismatch_EnabledSourceTypeDiffersFromPost(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                [
+                    'type' => 'davis_weatherlink_live',
+                    'bridge_id' => 'bridge-1',
+                    'bridge_source_id' => 'station-a',
+                ],
+            ],
+        ];
+        $enabled = getBridgeEnabledWeatherSourceType($airport, 'bridge-1', 'station-a');
+        $this->assertTrue(bridgeWeatherProviderMatchesEnable($enabled, 'davis_weatherlink_live'));
+        $this->assertFalse(bridgeWeatherProviderMatchesEnable($enabled, 'other_provider'));
+        $this->assertTrue(bridgeWeatherProviderMatchesEnable(null, 'other_provider'));
+    }
+
+    public function testStore_AppendsSamplesJsonl(): void
+    {
+        $n1 = bridgeNormalizeWeatherItem($this->rawObservation('station-a', strtotime('2026-07-29T23:00:00Z')));
+        $n2 = bridgeNormalizeWeatherItem($this->rawObservation('station-a', strtotime('2026-07-29T23:00:01Z')));
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n1['record']));
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n2['record']));
+
+        $path = getBridgeWeatherSamplesCachePath('kspb', 'bridge-1', 'station-a');
+        $this->assertNotSame('', $path);
+        $raw = file_get_contents($path);
+        $this->assertNotFalse($raw);
+        $lines = array_values(array_filter(explode("\n", trim($raw))));
+        $this->assertCount(2, $lines);
+    }
 }

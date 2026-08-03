@@ -66,6 +66,63 @@ function bridgeWriteJsonFile(string $path, array $data): bool
 }
 
 /**
+ * Atomically write JSON under an exclusive lock (read-modify-write safe).
+ *
+ * Used when the writer must compare existing content before replacing.
+ *
+ * @param string $path Absolute file path
+ * @param callable(array|null): (array|null) $mutator Receives current decoded
+ *        data (or null). Return the new document to write, or null to skip write.
+ * @return bool True when lock/read/write succeeded (including intentional skip)
+ */
+function bridgeUpdateJsonFileLocked(string $path, callable $mutator): bool
+{
+    $dir = dirname($path);
+    if (!bridgeEnsureCacheDir($dir)) {
+        aviationwx_log('error', 'bridge cache dir create failed', ['dir' => $dir], 'bridge');
+        return false;
+    }
+
+    $fp = @fopen($path, 'c+');
+    if ($fp === false) {
+        aviationwx_log('error', 'bridge cache open failed', ['path' => $path], 'bridge');
+        return false;
+    }
+    if (!flock($fp, LOCK_EX)) {
+        fclose($fp);
+        aviationwx_log('error', 'bridge cache lock failed', ['path' => $path], 'bridge');
+        return false;
+    }
+
+    $ok = true;
+    rewind($fp);
+    $raw = stream_get_contents($fp);
+    $existing = null;
+    if ($raw !== false && $raw !== '') {
+        $decoded = json_decode($raw, true);
+        $existing = is_array($decoded) ? $decoded : null;
+    }
+
+    $next = $mutator($existing);
+    if ($next !== null) {
+        $json = json_encode($next, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            aviationwx_log('error', 'bridge cache json encode failed', ['path' => $path], 'bridge');
+            $ok = false;
+        } elseif (ftruncate($fp, 0) === false || rewind($fp) === false || fwrite($fp, $json) === false) {
+            aviationwx_log('error', 'bridge cache locked write failed', ['path' => $path], 'bridge');
+            $ok = false;
+        } else {
+            fflush($fp);
+        }
+    }
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return $ok;
+}
+
+/**
  * Read a JSON cache file.
  *
  * @param string $path Absolute file path
@@ -133,6 +190,71 @@ function bridgeScrubValue(mixed $value, int $depth = 0): mixed
         $out[$k] = bridgeScrubValue($v, $depth + 1);
     }
     return $out;
+}
+
+/**
+ * Append one JSON object as a line to a jsonl ring under an exclusive lock.
+ *
+ * Lock spans append and trim so concurrent writers cannot drop each other's lines.
+ *
+ * @param string $path Absolute jsonl path
+ * @param array $entry Object to encode as one line
+ * @param int $maxLines Max lines to retain (newest)
+ * @return bool True on success
+ */
+function bridgeAppendJsonlRing(string $path, array $entry, int $maxLines): bool
+{
+    $dir = dirname($path);
+    if (!bridgeEnsureCacheDir($dir)) {
+        aviationwx_log('error', 'bridge jsonl dir create failed', ['dir' => $dir], 'bridge');
+        return false;
+    }
+    $line = json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if ($line === false) {
+        aviationwx_log('error', 'bridge jsonl encode failed', ['path' => $path], 'bridge');
+        return false;
+    }
+
+    $fp = @fopen($path, 'c+');
+    if ($fp === false) {
+        aviationwx_log('error', 'bridge jsonl open failed', ['path' => $path], 'bridge');
+        return false;
+    }
+    if (!flock($fp, LOCK_EX)) {
+        fclose($fp);
+        aviationwx_log('error', 'bridge jsonl lock failed', ['path' => $path], 'bridge');
+        return false;
+    }
+
+    $ok = true;
+    if (fseek($fp, 0, SEEK_END) !== 0 || fwrite($fp, $line . "\n") === false) {
+        aviationwx_log('error', 'bridge jsonl append failed', ['path' => $path], 'bridge');
+        $ok = false;
+    } else {
+        fflush($fp);
+        if ($maxLines > 0) {
+            rewind($fp);
+            $raw = stream_get_contents($fp);
+            if ($raw !== false && $raw !== '') {
+                $lines = preg_split("/\r\n|\n|\r/", trim($raw)) ?: [];
+                $lines = array_values(array_filter($lines, static fn ($l) => $l !== ''));
+                if (count($lines) > $maxLines) {
+                    $lines = array_slice($lines, -$maxLines);
+                    $trimmed = implode("\n", $lines) . "\n";
+                    if (ftruncate($fp, 0) === false || rewind($fp) === false || fwrite($fp, $trimmed) === false) {
+                        aviationwx_log('error', 'bridge jsonl trim failed', ['path' => $path], 'bridge');
+                        $ok = false;
+                    } else {
+                        fflush($fp);
+                    }
+                }
+            }
+        }
+    }
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return $ok;
 }
 
 /**
@@ -225,36 +347,11 @@ function bridgeLoadHealth(string $airportId, string $bridgeId): ?array
  *
  * @param string $path History file path
  * @param array $entry Scrubbed health summary entry
- * @return void
+ * @return bool
  */
-function bridgeAppendHealthHistory(string $path, array $entry): void
+function bridgeAppendHealthHistory(string $path, array $entry): bool
 {
-    $dir = dirname($path);
-    if (!bridgeEnsureCacheDir($dir)) {
-        return;
-    }
-    $line = json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    if ($line === false) {
-        return;
-    }
-    @file_put_contents($path, $line . "\n", FILE_APPEND | LOCK_EX);
-
-    $raw = @file_get_contents($path);
-    if ($raw === false || $raw === '') {
-        return;
-    }
-    $lines = preg_split("/\r\n|\n|\r/", trim($raw)) ?: [];
-    $lines = array_values(array_filter($lines, static fn ($l) => $l !== ''));
-    if (count($lines) <= BRIDGE_HEALTH_HISTORY_MAX_ENTRIES) {
-        return;
-    }
-    $lines = array_slice($lines, -BRIDGE_HEALTH_HISTORY_MAX_ENTRIES);
-    $tmp = $path . '.tmp.' . getmypid();
-    if (@file_put_contents($tmp, implode("\n", $lines) . "\n", LOCK_EX) !== false) {
-        @rename($tmp, $path);
-    } else {
-        @unlink($tmp);
-    }
+    return bridgeAppendJsonlRing($path, $entry, BRIDGE_HEALTH_HISTORY_MAX_ENTRIES);
 }
 
 /**
@@ -279,21 +376,24 @@ function bridgeStoreHealth(string $airportId, string $bridgeId, array $health, ?
     }
 
     $historyPath = getBridgeHealthHistoryCachePath($airportId, $bridgeId);
-    if ($historyPath !== '') {
-        bridgeAppendHealthHistory($historyPath, [
-            'received_at' => $health['received_at'],
-            'observed_at' => $health['observed_at'] ?? null,
-            'host_status' => $health['host']['status'] ?? null,
-            'ntp_ok' => $health['host']['ntp_ok'] ?? null,
-            'ntp_failure_seconds' => $health['host']['ntp_failure_seconds'] ?? null,
-            'inventory_stations' => isset($health['inventory']['stations']) && is_array($health['inventory']['stations'])
-                ? count($health['inventory']['stations'])
-                : 0,
-            'inventory_cameras' => isset($health['inventory']['cameras']) && is_array($health['inventory']['cameras'])
-                ? count($health['inventory']['cameras'])
-                : 0,
-            'error_count' => isset($health['errors']) && is_array($health['errors']) ? count($health['errors']) : 0,
-        ]);
+    if ($historyPath === '') {
+        return false;
+    }
+    if (!bridgeAppendHealthHistory($historyPath, [
+        'received_at' => $health['received_at'],
+        'observed_at' => $health['observed_at'] ?? null,
+        'host_status' => $health['host']['status'] ?? null,
+        'ntp_ok' => $health['host']['ntp_ok'] ?? null,
+        'ntp_failure_seconds' => $health['host']['ntp_failure_seconds'] ?? null,
+        'inventory_stations' => isset($health['inventory']['stations']) && is_array($health['inventory']['stations'])
+            ? count($health['inventory']['stations'])
+            : 0,
+        'inventory_cameras' => isset($health['inventory']['cameras']) && is_array($health['inventory']['cameras'])
+            ? count($health['inventory']['cameras'])
+            : 0,
+        'error_count' => isset($health['errors']) && is_array($health['errors']) ? count($health['errors']) : 0,
+    ])) {
+        return false;
     }
 
     bridgeTouchMeta($airportId, $bridgeId, 'health', $receivedAt);
