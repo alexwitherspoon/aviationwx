@@ -79,6 +79,27 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         $this->assertSame(1531754005, $parsed['obs_time']);
     }
 
+    public function testParseRaw_IgnoresBarAbsoluteFallback(): void
+    {
+        $raw = [
+            'ts' => 1,
+            'conditions' => [
+                [
+                    'data_structure_type' => 1,
+                    'txid' => 1,
+                    'temp' => 60,
+                ],
+                [
+                    'data_structure_type' => 3,
+                    'bar_absolute' => 29.5,
+                ],
+            ],
+        ];
+        $parsed = DavisWeatherlinkLiveBridgeAdapter::parseRawData($raw, ['txid' => 1], []);
+        $this->assertNotNull($parsed);
+        $this->assertNull($parsed['pressure']);
+    }
+
     public function testParseRaw_RejectsMissingTxidWhenMultipleIss(): void
     {
         $raw = [

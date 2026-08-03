@@ -85,16 +85,27 @@ class DavisWeatherlinkLiveBridgeAdapter
     /**
      * @return list<string>
      */
+    /**
+     * @return list<string>
+     */
     public static function getFieldsProvided(): array
     {
         return self::FIELDS_PROVIDED;
     }
 
+    /**
+     * Typical LAN poll interval in seconds (Davis Local API minimum).
+     *
+     * @return int
+     */
     public static function getTypicalUpdateFrequency(): int
     {
         return self::UPDATE_FREQUENCY;
     }
 
+    /**
+     * @return string
+     */
     public static function getSourceType(): string
     {
         return self::SOURCE_TYPE;
@@ -125,18 +136,11 @@ class DavisWeatherlinkLiveBridgeAdapter
             return null;
         }
 
+        // Prefer station raw ts for WeatherSnapshot age; wrapper observed_at is transport metadata
         $obsTime = $parsed['obs_time'];
-        if (
-            isset($record['observed_unix'])
-            && is_numeric($record['observed_unix'])
-            && (int) $record['observed_unix'] > 0
-        ) {
-            $obsTime = (int) $record['observed_unix'];
-        }
 
         $windDir = $parsed['wind_direction'];
-        // Assume a properly installed station reports true-north wind. Do not
-        // apply declination from provider_meta.wind_reference or config.
+        // Properly installed Davis vanes report true north; do not apply declination.
 
         $source = self::SOURCE_TYPE;
         $stationId = isset($config['station_id']) && is_string($config['station_id']) && $config['station_id'] !== ''
@@ -260,7 +264,8 @@ class DavisWeatherlinkLiveBridgeAdapter
 
         $pressure = null;
         if (is_array($bar)) {
-            $pressure = self::firstNumeric($bar, ['bar_sea_level', 'bar_absolute']);
+            // bar_absolute is station pressure - never use as altimeter/sea-level substitute
+            $pressure = self::numericOrNull($bar, 'bar_sea_level');
         }
 
         $precip = self::rainfallDailyInches($iss);
