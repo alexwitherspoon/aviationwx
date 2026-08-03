@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../lib/bridge/auth.php';
 require_once __DIR__ . '/../../lib/bridge/weather-store.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/logger.php';
 
 /**
  * Handle POST /v1/bridge/weather
@@ -56,43 +57,36 @@ function handleBridgeWeather(array $params, array $context): void
     $airport = is_array($config) ? ($config['airports'][$airportId] ?? null) : null;
 
     // Validate the full batch before any write so a late 400 cannot leave partial samples
-    $pending = [];
-    foreach ($extracted['items'] as $item) {
-        $normalized = bridgeNormalizeWeatherItem($item);
-        if (!$normalized['ok']) {
-            sendPublicApiError(
-                $normalized['code'] ?? PUBLIC_API_ERROR_INVALID_REQUEST,
-                $normalized['error'] ?? 'Invalid weather item',
-                400
-            );
-            return;
-        }
-        $record = $normalized['record'];
-        $itemBodyBridge = $record['body_bridge_id'] ?? null;
+    $prepared = bridgePrepareWeatherIngestBatch($extracted['items'], $bridgeId, $airport);
+    if (!$prepared['ok']) {
+        sendPublicApiError(
+            $prepared['code'] ?? PUBLIC_API_ERROR_INVALID_REQUEST,
+            $prepared['error'] ?? 'Invalid weather item',
+            400
+        );
+        return;
+    }
+
+    foreach ($prepared['pending'] as $row) {
+        $itemBodyBridge = $row['record']['body_bridge_id'] ?? null;
         if (is_string($itemBodyBridge)) {
             warnIfBridgeBodyIdMismatch($context, $itemBodyBridge);
         }
-
-        $enabledType = is_array($airport)
-            ? getBridgeEnabledWeatherSourceType($airport, $bridgeId, $record['source_id'])
-            : null;
-        if (!bridgeWeatherProviderMatchesEnable($enabledType, $record['provider'])) {
-            sendPublicApiError(
-                'PROVIDER_MISMATCH',
-                'provider must match weather_sources.type for enabled source '
-                    . $record['source_id'] . ' (expected ' . $enabledType . ')',
-                400
-            );
-            return;
-        }
-
-        $pending[] = ['record' => $record, 'enabled' => $enabledType !== null];
     }
 
     $accepted = 0;
     $enabledHits = 0;
+    $pending = $prepared['pending'];
     foreach ($pending as $row) {
         if (!bridgeStoreWeatherObservation($airportId, $bridgeId, $row['record'])) {
+            // Prior items in this request may already be on disk; client should retry the batch
+            aviationwx_log('error', 'bridge weather persist failed mid-batch', [
+                'airport_id' => $airportId,
+                'bridge_id' => $bridgeId,
+                'source_id' => $row['record']['source_id'] ?? null,
+                'accepted_before_failure' => $accepted,
+                'batch_size' => count($pending),
+            ], 'bridge');
             sendPublicApiError(PUBLIC_API_ERROR_SERVICE_UNAVAILABLE, 'Failed to persist weather observation', 503);
             return;
         }

@@ -258,6 +258,48 @@ function bridgeWeatherProviderMatchesEnable(?string $enabledType, string $provid
 }
 
 /**
+ * Normalize and enable-check extracted weather items before any cache write.
+ *
+ * @param list<array> $items Items from bridgeExtractWeatherItems()
+ * @param string $bridgeId Authenticated bridge id
+ * @param array|null $airport Airport config (for enable lookup)
+ * @return array{
+ *   ok: bool,
+ *   pending?: list<array{record: array, enabled: bool}>,
+ *   code?: string,
+ *   error?: string
+ * }
+ */
+function bridgePrepareWeatherIngestBatch(array $items, string $bridgeId, ?array $airport): array
+{
+    $pending = [];
+    foreach ($items as $item) {
+        $normalized = bridgeNormalizeWeatherItem($item);
+        if (!$normalized['ok']) {
+            return [
+                'ok' => false,
+                'code' => $normalized['code'] ?? 'INVALID_REQUEST',
+                'error' => $normalized['error'] ?? 'Invalid weather item',
+            ];
+        }
+        $record = $normalized['record'];
+        $enabledType = is_array($airport)
+            ? getBridgeEnabledWeatherSourceType($airport, $bridgeId, $record['source_id'])
+            : null;
+        if (!bridgeWeatherProviderMatchesEnable($enabledType, $record['provider'])) {
+            return [
+                'ok' => false,
+                'code' => 'PROVIDER_MISMATCH',
+                'error' => 'provider must match weather_sources.type for enabled source '
+                    . $record['source_id'] . ' (expected ' . $enabledType . ')',
+            ];
+        }
+        $pending[] = ['record' => $record, 'enabled' => $enabledType !== null];
+    }
+    return ['ok' => true, 'pending' => $pending];
+}
+
+/**
  * Persist one accepted weather observation (diagnostics always; enable gate is separate).
  *
  * latest.json keeps the newest observation by observed_unix (locked compare-and-swap)

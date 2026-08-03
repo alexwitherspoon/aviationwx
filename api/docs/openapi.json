@@ -790,9 +790,10 @@
           "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}
         }
       },
-      "BridgeWeatherRequest": {
+      "BridgeWeatherBatchItem": {
         "type": "object",
-        "description": "Single observation or batch (`samples` array, max 60). Top-level bridge_id / source_id / provider may be inherited by batch items. A legacy `sample` key is ignored if present.",
+        "required": ["observed_at", "provider_meta"],
+        "description": "Batch sample; source_id / provider / bridge_id may be inherited from the request top level.",
         "properties": {
           "observed_at": {"type": "string", "format": "date-time"},
           "bridge_id": {"type": "string"},
@@ -801,13 +802,39 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]*$"
           },
-          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"},
-          "samples": {
-            "type": "array",
-            "maxItems": 60,
-            "items": {"$ref": "#/components/schemas/BridgeWeatherObservation"}
-          }
+          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}
         }
+      },
+      "BridgeWeatherRequest": {
+        "oneOf": [
+          {
+            "title": "SingleObservation",
+            "allOf": [
+              {"$ref": "#/components/schemas/BridgeWeatherObservation"}
+            ]
+          },
+          {
+            "title": "BatchSamples",
+            "type": "object",
+            "required": ["samples"],
+            "description": "Bounded batch (max 60). Top-level bridge_id / source_id / provider may be inherited by items.",
+            "properties": {
+              "bridge_id": {"type": "string"},
+              "source_id": {"type": "string"},
+              "provider": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "samples": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 60,
+                "items": {"$ref": "#/components/schemas/BridgeWeatherBatchItem"}
+              }
+            }
+          }
+        ],
+        "description": "Single observation or batch (`samples` array, max 60). A legacy `sample` key is ignored if present."
       },
       "ErrorResponse": {
         "type": "object",

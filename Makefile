@@ -134,24 +134,24 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "2️⃣  Running Unit Tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage; \
 	exit_code=$$?; \
-	if [ "$$exit_code" -gt 1 ]; then echo "❌ Unit tests failed"; exit 1; elif [ "$$exit_code" -eq 1 ]; then echo "⚠️  Unit tests passed with warnings"; else echo "✓ Unit tests passed"; fi
+	if [ "$$exit_code" -ne 0 ]; then echo "❌ Unit tests failed (exit $$exit_code)"; exit 1; else echo "✓ Unit tests passed"; fi
 	@echo ""
 	@echo "3️⃣  Running Integration Tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage; \
 	exit_code=$$?; \
-	if [ "$$exit_code" -gt 1 ]; then echo "❌ Integration tests failed"; exit 1; elif [ "$$exit_code" -eq 1 ]; then echo "⚠️  Integration tests passed with warnings"; else echo "✓ Integration tests passed"; fi
+	if [ "$$exit_code" -ne 0 ]; then echo "❌ Integration tests failed (exit $$exit_code)"; exit 1; else echo "✓ Integration tests passed"; fi
 	@echo ""
 	@echo "4️⃣  Running Critical Safety Tests..."
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherCalculationsTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WeatherCalculationsTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/MagneticDeclinationSafetyTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WindRoseSafetyTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WindRoseSafetyTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WindRoseSafetyTest failed"; exit 1; fi
 	@echo "✓ Critical safety tests passed"
 	@echo ""
 	@echo "5️⃣  Validating JavaScript..."

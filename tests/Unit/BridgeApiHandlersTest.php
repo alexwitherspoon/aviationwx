@@ -92,6 +92,8 @@ class BridgeApiHandlersTest extends TestCase
         $this->assertArrayHasKey('declination_source', $json['data']);
         $this->assertSame(60, $json['data']['heartbeat_interval_seconds'] ?? null);
         $this->assertIsArray($json['data']['enabled_sources'] ?? null);
+        $enabledProviders = array_column($json['data']['enabled_sources'], 'provider');
+        $this->assertContains('davis_weatherlink_live', $enabledProviders);
     }
 
     public function testHealthPersistsInventory(): void

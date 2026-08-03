@@ -76,6 +76,13 @@
           "type": "metar",
           "station_id": "KSPB",
           "nearby_stations": ["KVUO", "KHIO"]
+        },
+        {
+          "type": "davis_weatherlink_live",
+          "bridge_id": "bridge-spb-test-1",
+          "bridge_source_id": "station-davis-wll",
+          "station_id": "wx-spb-bridge-davis",
+          "txid": 1
         }
       ],
       "webcams": [

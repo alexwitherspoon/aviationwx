@@ -16,6 +16,7 @@ require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../bridge/weather-store.php';
 require_once __DIR__ . '/../../bridge/config.php';
+require_once __DIR__ . '/../../logger.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
@@ -118,20 +119,24 @@ class DavisWeatherlinkLiveBridgeAdapter
     public static function snapshotFromLatestRecord(array $record, array $config = []): ?WeatherSnapshot
     {
         if (($record['provider'] ?? null) !== self::SOURCE_TYPE) {
-            return null;
+            return self::reject('provider_mismatch', [
+                'provider' => $record['provider'] ?? null,
+                'expected' => self::SOURCE_TYPE,
+            ]);
         }
 
         $meta = $record['provider_meta'] ?? null;
         if (!is_array($meta)) {
-            return null;
+            return self::reject('missing_provider_meta');
         }
         $raw = $meta['raw'] ?? null;
         if (!is_array($raw) || $raw === []) {
-            return null;
+            return self::reject('missing_provider_meta_raw');
         }
 
         $parsed = self::parseRawData($raw, $meta, $config);
         if ($parsed === null) {
+            // parseRawData already logged the concrete reject reason
             return null;
         }
 
@@ -151,7 +156,7 @@ class DavisWeatherlinkLiveBridgeAdapter
             || $hasCompleteWind;
 
         if (!$hasAny) {
-            return null;
+            return self::reject('no_usable_fields', ['obs_time' => $obsTime]);
         }
 
         return new WeatherSnapshot(
@@ -203,6 +208,7 @@ class DavisWeatherlinkLiveBridgeAdapter
     {
         $conditions = $raw['conditions'] ?? null;
         if (!is_array($conditions) || $conditions === []) {
+            self::logReject('empty_conditions');
             return null;
         }
 
@@ -225,25 +231,35 @@ class DavisWeatherlinkLiveBridgeAdapter
         }
 
         if ($issByTxid === []) {
+            self::logReject('no_iss_packets');
             return null;
         }
 
         $wantedTxid = self::resolveTxid($meta, $config, $issByTxid);
         if ($wantedTxid === null || !isset($issByTxid[$wantedTxid])) {
+            self::logReject('txid_unresolved', [
+                'wanted_txid' => $wantedTxid,
+                'available_txids' => array_keys($issByTxid),
+                'config_txid' => $config['txid'] ?? null,
+                'meta_txid' => $meta['txid'] ?? null,
+            ]);
             return null;
         }
         $iss = $issByTxid[$wantedTxid];
 
         // Fail closed without station ts - wall clock would make stale cache look fresh
         if (!isset($raw['ts']) || !is_numeric($raw['ts'])) {
+            self::logReject('missing_raw_ts');
             return null;
         }
         $obsTime = (int) $raw['ts'];
         if ($obsTime <= 0) {
+            self::logReject('invalid_raw_ts', ['raw_ts' => $obsTime]);
             return null;
         }
         // Future station ts bypasses WeatherReading staleness (negative age looks fresh)
         if ($obsTime > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+            self::logReject('future_raw_ts', ['raw_ts' => $obsTime]);
             return null;
         }
 
@@ -350,6 +366,31 @@ class DavisWeatherlinkLiveBridgeAdapter
             return null;
         }
         return $clicks * $inchesPerClick;
+    }
+
+    /**
+     * Log a Davis adapter reject and return null (snapshot callers).
+     *
+     * @param string $reason Stable reject token
+     * @param array<string, mixed> $context Extra fields
+     * @return null
+     */
+    private static function reject(string $reason, array $context = []): ?WeatherSnapshot
+    {
+        self::logReject($reason, $context);
+        return null;
+    }
+
+    /**
+     * @param string $reason Stable reject token
+     * @param array<string, mixed> $context Extra fields
+     * @return void
+     */
+    private static function logReject(string $reason, array $context = []): void
+    {
+        aviationwx_log('warning', 'davis_weatherlink_live reject', array_merge([
+            'reason' => $reason,
+        ], $context), 'app');
     }
 
     /**

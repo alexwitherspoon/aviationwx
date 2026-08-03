@@ -341,6 +341,65 @@ class BridgeWeatherIngestTest extends TestCase
         $this->assertTrue(bridgeWeatherProviderMatchesEnable(null, 'other_provider'));
     }
 
+    public function testPrepareBatch_ProviderMismatchOnEnabledFixtureSource(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                [
+                    'type' => 'davis_weatherlink_live',
+                    'bridge_id' => 'bridge-spb-test-1',
+                    'bridge_source_id' => 'station-davis-wll',
+                    'station_id' => 'wx-spb-bridge-davis',
+                    'txid' => 1,
+                ],
+            ],
+        ];
+        $item = $this->rawObservation('station-davis-wll', time() - 10);
+        $item['provider'] = 'other_provider';
+        $prepared = bridgePrepareWeatherIngestBatch([$item], 'bridge-spb-test-1', $airport);
+        $this->assertFalse($prepared['ok']);
+        $this->assertSame('PROVIDER_MISMATCH', $prepared['code'] ?? null);
+        $this->assertStringContainsString('station-davis-wll', $prepared['error'] ?? '');
+    }
+
+    public function testPrepareBatch_AcceptsMatchingEnabledDavisProvider(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                [
+                    'type' => 'davis_weatherlink_live',
+                    'bridge_id' => 'bridge-spb-test-1',
+                    'bridge_source_id' => 'station-davis-wll',
+                    'station_id' => 'wx-spb-bridge-davis',
+                    'txid' => 1,
+                ],
+            ],
+        ];
+        $item = $this->rawObservation('station-davis-wll', time() - 10);
+        $prepared = bridgePrepareWeatherIngestBatch([$item], 'bridge-spb-test-1', $airport);
+        $this->assertTrue($prepared['ok'], $prepared['error'] ?? '');
+        $this->assertCount(1, $prepared['pending']);
+        $this->assertTrue($prepared['pending'][0]['enabled']);
+        $this->assertSame('davis_weatherlink_live', $prepared['pending'][0]['record']['provider']);
+    }
+
+    public function testPrepareBatch_AllowsUnenabledMismatchedProvider(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                [
+                    'type' => 'tempest',
+                    'station_id' => '1',
+                ],
+            ],
+        ];
+        $item = $this->rawObservation('station-unenabled', time() - 10);
+        $item['provider'] = 'other_provider';
+        $prepared = bridgePrepareWeatherIngestBatch([$item], 'bridge-spb-test-1', $airport);
+        $this->assertTrue($prepared['ok'], $prepared['error'] ?? '');
+        $this->assertFalse($prepared['pending'][0]['enabled']);
+    }
+
     public function testStore_AppendsSamplesJsonl(): void
     {
         $n1 = bridgeNormalizeWeatherItem($this->rawObservation('station-a', strtotime('2026-07-29T23:00:00Z')));
