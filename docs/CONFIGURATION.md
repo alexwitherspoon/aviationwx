@@ -619,7 +619,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 
 Field bridges push host heartbeats and provider-tagged weather observations to the Public API under `/v1/bridge/*`. Images continue to use SFTP. Core owns parse, show, trust, and dedupe when both WeatherLink.com cloud and bridge-local Davis (or other LAN adapters) are configured.
 
-Wind from bridge-local Davis is treated as **true north**. Install and calibrate the vane to true north; core does not accept a magnetic wind reference or apply declination to “fix” a misaligned sensor.
+Wind from bridge-local Davis is treated as **true north**. Install and calibrate the vane to true north; core does not accept a magnetic wind reference or apply declination to "fix" a misaligned sensor.
 
 **Trust vs publish (Option B enable gate):**
 
