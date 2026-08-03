@@ -220,8 +220,10 @@ class PublicApiAirportTest extends TestCase
     public function testFormatAirportDetails_ServicesAndFrequenciesReturnObjectWhenEmpty(): void
     {
         self::loadFormatAirportDetails();
-        $airport = $this->getTestAirport('pdx');
-        $formatted = formatAirportDetails('pdx', $airport);
+        // No FAA/ICAO identifiers so NASR/OurAirports cannot fill frequencies
+        $formatted = formatAirportDetails('synthetic-empty', [
+            'name' => 'Synthetic Empty Airport',
+        ]);
 
         $this->assertArrayHasKey('services', $formatted);
         $this->assertIsObject($formatted['services']);

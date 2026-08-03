@@ -219,58 +219,75 @@ function getMockWeatherLinkResponse() {
 
 /**
  * Mock DyaconLive GET /data/{stationid} response (KAOC-shaped fixture).
+ *
+ * Bucket timestamps follow `$GLOBALS['dyaconliveTestNowUnix']` when set so
+ * unified-fetch tests are not fail-closed stale against wall clock.
  */
 function getMockDyaconLiveDataResponse(): string
 {
+    $tzName = 'America/Boise';
+    $nowUnix = (isset($GLOBALS['dyaconliveTestNowUnix']) && is_int($GLOBALS['dyaconliveTestNowUnix']))
+        ? $GLOBALS['dyaconliveTestNowUnix']
+        : time();
+    $tz = new DateTimeZone($tzName);
+    $anchor = (new DateTimeImmutable('@' . $nowUnix))->setTimezone($tz);
+    // Floor to 10-minute DyaconLive buckets
+    $minute = (int) $anchor->format('i');
+    $bucketMinute = $minute - ($minute % 10);
+    $latest = $anchor->setTime((int) $anchor->format('H'), $bucketMinute, 0);
+    $previous = $latest->modify('-10 minutes');
+    $t0 = $previous->format('Y-m-d\TH:i:s');
+    $t1 = $latest->format('Y-m-d\TH:i:s');
+
     return json_encode([
         [
             'variable_name' => 'air_temp',
             'units' => 'F',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [71.0, 72.356],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'humidity',
             'units' => '%',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [52.0, 50.9],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'air_pressure',
             'units' => 'inHg',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [24.74, 24.75586096108245],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'wind10m_speed',
             'units' => 'mph',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [3.5, 3.8029],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'wind10m_direction',
             'units' => 'degrees',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [185.0, 187.7],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'wind_gust',
             'units' => 'mph',
-            'datetimes' => ['2026-07-07T09:30:00', '2026-07-07T09:40:00'],
+            'datetimes' => [$t0, $t1],
             'values' => [0.0, 0.0],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
         [
             'variable_name' => 'rainday_cumul',
             'units' => 'in',
             'datetimes' => [],
             'values' => [],
-            'timezone' => 'America/Boise',
+            'timezone' => $tzName,
         ],
     ], JSON_THROW_ON_ERROR);
 }

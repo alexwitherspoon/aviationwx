@@ -35,6 +35,8 @@ class EmbedWeatherEnrichmentTest extends TestCase
             'density_altitude' => 5342,
             'pressure_altitude' => 3408,
             'temperature' => 24.3,
+            'pressure' => 30.12,
+            'last_updated_primary' => time(),
         ];
 
         $enriched = enrichEmbedWeatherForDisplay($weather, $airport, '12id');
@@ -92,6 +94,8 @@ class EmbedWeatherEnrichmentTest extends TestCase
             'density_altitude' => 5342,
             'pressure_altitude' => 3408,
             'temperature' => 24.3,
+            'pressure' => 30.12,
+            'last_updated_primary' => time(),
             'obs_time_primary' => 1708000000,
         ];
 
@@ -132,6 +136,8 @@ class EmbedWeatherEnrichmentTest extends TestCase
             'density_altitude' => 5342,
             'pressure_altitude' => 3408,
             'temperature' => 24.3,
+            'pressure' => 30.12,
+            'last_updated_primary' => time(),
         ], $airport, '12id');
 
         $metrics = getCompactWidgetMetrics($weather, [

@@ -191,6 +191,8 @@ class DaPerformanceBestEndSafetyTest extends TestCase
             'density_altitude' => 5342,
             'pressure_altitude' => 3408,
             'temperature' => 24.3,
+            'pressure' => 30.12,
+            'last_updated_primary' => time(),
         ];
 
         $attached = attachDensityAltitudePerformance($weather, [

@@ -74,29 +74,37 @@ class DyaconLiveAdapterTest extends TestCase
 
     public function testParseToSnapshot_MockResponse_MapsFieldsAndObservationTime(): void
     {
-        $response = getMockDyaconLiveDataResponse();
-        $snapshot = DyaconLiveAdapter::parseToSnapshot($response, [
-            'station_id' => 130114,
-            'timezone' => 'America/Boise',
-            'elevation_ft' => 5335,
-        ]);
-        $this->assertNotNull($snapshot);
-        $this->assertTrue($snapshot->isValid);
-        $this->assertTrue($snapshot->temperature->hasValue());
-        $this->assertEqualsWithDelta(22.42, $snapshot->temperature->value, 0.05);
-        $this->assertTrue($snapshot->humidity->hasValue());
-        $this->assertEqualsWithDelta(50.9, $snapshot->humidity->value, 0.1);
-        $this->assertTrue($snapshot->pressure->hasValue());
-        $this->assertGreaterThan(29.5, $snapshot->pressure->value);
-        $this->assertLessThan(30.5, $snapshot->pressure->value);
-        $this->assertTrue($snapshot->wind->speed->hasValue());
-        $this->assertTrue($snapshot->wind->direction->hasValue());
-        $this->assertFalse($snapshot->ceiling->hasValue());
-        $this->assertFalse($snapshot->visibility->hasValue());
-        $obs = $snapshot->getFieldObservationTime('temperature');
-        $this->assertIsInt($obs);
-        $dt = (new DateTimeImmutable('@' . $obs))->setTimezone(new DateTimeZone('America/Boise'));
-        $this->assertSame('2026-07-07 09:40:00', $dt->format('Y-m-d H:i:s'));
+        $tz = new DateTimeZone('America/Boise');
+        $pinned = (new DateTimeImmutable('2026-07-07 09:47:00', $tz))->getTimestamp();
+        $GLOBALS['dyaconliveTestNowUnix'] = $pinned;
+
+        try {
+            $response = getMockDyaconLiveDataResponse();
+            $snapshot = DyaconLiveAdapter::parseToSnapshot($response, [
+                'station_id' => 130114,
+                'timezone' => 'America/Boise',
+                'elevation_ft' => 5335,
+            ]);
+            $this->assertNotNull($snapshot);
+            $this->assertTrue($snapshot->isValid);
+            $this->assertTrue($snapshot->temperature->hasValue());
+            $this->assertEqualsWithDelta(22.42, $snapshot->temperature->value, 0.05);
+            $this->assertTrue($snapshot->humidity->hasValue());
+            $this->assertEqualsWithDelta(50.9, $snapshot->humidity->value, 0.1);
+            $this->assertTrue($snapshot->pressure->hasValue());
+            $this->assertGreaterThan(29.5, $snapshot->pressure->value);
+            $this->assertLessThan(30.5, $snapshot->pressure->value);
+            $this->assertTrue($snapshot->wind->speed->hasValue());
+            $this->assertTrue($snapshot->wind->direction->hasValue());
+            $this->assertFalse($snapshot->ceiling->hasValue());
+            $this->assertFalse($snapshot->visibility->hasValue());
+            $obs = $snapshot->getFieldObservationTime('temperature');
+            $this->assertIsInt($obs);
+            $dt = (new DateTimeImmutable('@' . $obs))->setTimezone($tz);
+            $this->assertSame('2026-07-07 09:40:00', $dt->format('Y-m-d H:i:s'));
+        } finally {
+            unset($GLOBALS['dyaconliveTestNowUnix']);
+        }
     }
 
     public function testParseToSnapshot_MissingElevation_PressureNull(): void
