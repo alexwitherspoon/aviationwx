@@ -1,9 +1,10 @@
 <?php
 /**
- * Bridge weather sample ingest: latest + samples ring + 60s buckets.
+ * Bridge weather ingest: latest + observation ring + 60s receipt buckets.
  *
- * Keyed POSTs are always stored for diagnostics. Public weather uses only
- * weather_sources type aviationwx_bridge (Option B enable gate).
+ * Wire contract: provider-tagged observations with provider_meta.raw (station-native).
+ * Keyed POSTs are always stored for diagnostics. Public weather requires an explicit
+ * weather_sources enable row (Option B); adapters parse raw cache, not this store.
  */
 
 require_once __DIR__ . '/store.php';
@@ -22,47 +23,24 @@ if (!defined('BRIDGE_WEATHER_BATCH_MAX')) {
 }
 
 /**
- * Normalize one weather sample object from the wire (°C, kt, inHg).
+ * Validate a wire provider token (e.g. davis_weatherlink_live).
  *
- * @param array $sample Raw sample object
- * @return array|null Normalized sample fields or null if empty/invalid
+ * @param string $provider Candidate provider id
+ * @return bool
  */
-function bridgeNormalizeWeatherSampleFields(array $sample): ?array
+function isValidBridgeProviderToken(string $provider): bool
 {
-    $out = [];
-    $map = [
-        'temp_c' => 'temp_c',
-        'humidity_pct' => 'humidity_pct',
-        'wind_speed_kt' => 'wind_speed_kt',
-        'wind_gust_kt' => 'wind_gust_kt',
-        'wind_dir_deg' => 'wind_dir_deg',
-        'pressure_inhg' => 'pressure_inhg',
-        'rain_in' => 'rain_in',
-    ];
-    foreach ($map as $wire => $canon) {
-        if (!array_key_exists($wire, $sample)) {
-            continue;
-        }
-        if (!is_numeric($sample[$wire])) {
-            continue;
-        }
-        $out[$canon] = (float) $sample[$wire];
+    if ($provider === '' || strlen($provider) > 64) {
+        return false;
     }
-    if (isset($out['humidity_pct'])) {
-        $out['humidity_pct'] = max(0.0, min(100.0, $out['humidity_pct']));
-    }
-    if (isset($out['wind_dir_deg'])) {
-        $dir = fmod($out['wind_dir_deg'], 360.0);
-        if ($dir < 0) {
-            $dir += 360.0;
-        }
-        $out['wind_dir_deg'] = $dir;
-    }
-    return $out === [] ? null : $out;
+    return (bool) preg_match('/^[a-z][a-z0-9_]*$/', $provider);
 }
 
 /**
- * Parse a single weather POST item (top-level fields + sample).
+ * Parse one weather POST observation into a cache record.
+ *
+ * Requires observed_at, source_id, provider, and provider_meta.raw (object).
+ * A legacy "sample" key is ignored and never stored.
  *
  * @param array $item Decoded item
  * @return array{ok: bool, record?: array, error?: string, code?: string}
@@ -84,24 +62,38 @@ function bridgeNormalizeWeatherItem(array $item): array
         return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'source_id is invalid'];
     }
 
-    if (!isset($item['sample']) || !is_array($item['sample'])) {
-        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'sample object is required'];
+    if (!isset($item['provider']) || !is_string($item['provider']) || $item['provider'] === '') {
+        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'provider is required'];
     }
-    $fields = bridgeNormalizeWeatherSampleFields($item['sample']);
-    if ($fields === null) {
-        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'sample must include at least one numeric field'];
+    if (!isValidBridgeProviderToken($item['provider'])) {
+        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'provider is invalid'];
+    }
+
+    if (!isset($item['provider_meta']) || !is_array($item['provider_meta'])) {
+        return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'provider_meta object is required'];
+    }
+    if (!isset($item['provider_meta']['raw']) || !is_array($item['provider_meta']['raw'])) {
+        return [
+            'ok' => false,
+            'code' => 'INVALID_REQUEST',
+            'error' => 'provider_meta.raw object is required',
+        ];
+    }
+    if ($item['provider_meta']['raw'] === []) {
+        return [
+            'ok' => false,
+            'code' => 'INVALID_REQUEST',
+            'error' => 'provider_meta.raw must not be empty',
+        ];
     }
 
     $record = [
         'observed_at' => gmdate('c', $observedTs),
         'observed_unix' => $observedTs,
         'source_id' => $item['source_id'],
-        'provider' => isset($item['provider']) && is_string($item['provider']) ? $item['provider'] : null,
-        'sample' => $fields,
+        'provider' => $item['provider'],
+        'provider_meta' => bridgeScrubValue($item['provider_meta']),
     ];
-    if (isset($item['provider_meta']) && is_array($item['provider_meta'])) {
-        $record['provider_meta'] = bridgeScrubValue($item['provider_meta']);
-    }
     if (isset($item['bridge_id']) && is_string($item['bridge_id'])) {
         $record['body_bridge_id'] = $item['bridge_id'];
     }
@@ -110,7 +102,7 @@ function bridgeNormalizeWeatherItem(array $item): array
 }
 
 /**
- * Extract weather items from a POST body (single or samples[] batch).
+ * Extract weather items from a POST body (single observation or samples[] batch).
  *
  * @param array $body Decoded JSON body
  * @return array{ok: bool, items?: list<array>, error?: string, code?: string}
@@ -133,15 +125,11 @@ function bridgeExtractWeatherItems(array $body): array
             if (!is_array($sampleItem)) {
                 return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => "samples[{$idx}] must be an object"];
             }
-            // Inherit top-level bridge_id / source_id / provider when omitted per item
-            if (!isset($sampleItem['bridge_id']) && isset($body['bridge_id'])) {
-                $sampleItem['bridge_id'] = $body['bridge_id'];
-            }
-            if (!isset($sampleItem['source_id']) && isset($body['source_id'])) {
-                $sampleItem['source_id'] = $body['source_id'];
-            }
-            if (!isset($sampleItem['provider']) && isset($body['provider'])) {
-                $sampleItem['provider'] = $body['provider'];
+            // Inherit top-level identity fields when omitted per item
+            foreach (['bridge_id', 'source_id', 'provider'] as $inheritKey) {
+                if (!isset($sampleItem[$inheritKey]) && isset($body[$inheritKey])) {
+                    $sampleItem[$inheritKey] = $body[$inheritKey];
+                }
             }
             $items[] = $sampleItem;
         }
@@ -163,37 +151,9 @@ function bridgeWeatherBucketStartUnix(int $unix): int
 }
 
 /**
- * Update min/max/sum/count stats for a numeric field on a bucket.
+ * Merge one observation into buckets.json as a receipt count window (no unit conversion).
  *
- * @param array $bucket Bucket array (by ref)
- * @param string $field Field name
- * @param float $value Sample value
- * @return void
- */
-function bridgeWeatherBucketAddField(array &$bucket, string $field, float $value): void
-{
-    if (!isset($bucket[$field]) || !is_array($bucket[$field])) {
-        $bucket[$field] = [
-            'min' => $value,
-            'max' => $value,
-            'sum' => $value,
-            'count' => 1,
-            'mean' => $value,
-            'last' => $value,
-        ];
-        return;
-    }
-    $stats = &$bucket[$field];
-    $stats['min'] = min((float) $stats['min'], $value);
-    $stats['max'] = max((float) $stats['max'], $value);
-    $stats['sum'] = (float) $stats['sum'] + $value;
-    $stats['count'] = (int) $stats['count'] + 1;
-    $stats['mean'] = $stats['sum'] / $stats['count'];
-    $stats['last'] = $value;
-}
-
-/**
- * Merge one sample into buckets.json (bounded).
+ * Numeric weather aggregates belong in provider adapters after parsing provider_meta.raw.
  *
  * @param string $path buckets.json path
  * @param array $record Normalized weather record
@@ -217,13 +177,10 @@ function bridgeWeatherUpdateBuckets(string $path, array $record): bool
     }
     $bucket = &$data['buckets'][$key];
     $bucket['count'] = (int) ($bucket['count'] ?? 0) + 1;
-    foreach ($record['sample'] as $field => $value) {
-        if (is_float($value) || is_int($value)) {
-            bridgeWeatherBucketAddField($bucket, $field, (float) $value);
-        }
-    }
+    $bucket['last_observed_at'] = $record['observed_at'] ?? null;
+    $bucket['last_provider'] = $record['provider'] ?? null;
+    $bucket['last_source_id'] = $record['source_id'] ?? null;
 
-    // Keep newest buckets only
     if (count($data['buckets']) > BRIDGE_WEATHER_BUCKETS_MAX) {
         ksort($data['buckets'], SORT_NUMERIC);
         $data['buckets'] = array_slice($data['buckets'], -BRIDGE_WEATHER_BUCKETS_MAX, null, true);
@@ -233,13 +190,13 @@ function bridgeWeatherUpdateBuckets(string $path, array $record): bool
 }
 
 /**
- * Append one line to samples.jsonl and trim.
+ * Append one line to samples.jsonl and trim to the ring bound.
  *
  * @param string $path samples.jsonl path
  * @param array $record Normalized record
  * @return void
  */
-function bridgeWeatherAppendSampleLine(string $path, array $record): void
+function bridgeWeatherAppendObservationLine(string $path, array $record): void
 {
     $dir = dirname($path);
     if (!bridgeEnsureCacheDir($dir)) {
@@ -270,7 +227,7 @@ function bridgeWeatherAppendSampleLine(string $path, array $record): void
 }
 
 /**
- * Persist one accepted weather sample (diagnostics always; enable gate is separate).
+ * Persist one accepted weather observation (diagnostics always; enable gate is separate).
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -278,7 +235,7 @@ function bridgeWeatherAppendSampleLine(string $path, array $record): void
  * @param int|null $receivedAt Receive time
  * @return bool
  */
-function bridgeStoreWeatherSample(
+function bridgeStoreWeatherObservation(
     string $airportId,
     string $bridgeId,
     array $record,
@@ -301,14 +258,14 @@ function bridgeStoreWeatherSample(
     if (!bridgeWriteJsonFile($latestPath, $stored)) {
         return false;
     }
-    bridgeWeatherAppendSampleLine($samplesPath, $stored);
+    bridgeWeatherAppendObservationLine($samplesPath, $stored);
     bridgeWeatherUpdateBuckets($bucketsPath, $stored);
     bridgeTouchMeta($airportId, $bridgeId, 'weather', $receivedAt);
     return true;
 }
 
 /**
- * Load latest weather sample for a bridge source.
+ * Load latest weather observation for a bridge source.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id

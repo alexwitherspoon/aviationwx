@@ -12,7 +12,7 @@ The **Public API** (`https://api.aviationwx.org/v1/...`) is the supported integr
 
 **Production health snapshot:** `GET /v1/operations` returns a scheduler-built JSON summary (system and Public API health caches, weather, NOTAM, and variant health in `data_plane`, `reference_catalogs` for bulk reference ingest status, capacity metrics, optional scrubbed log fingerprints). It is intended for operators and support tooling, not for flight-critical minute-by-minute data. The scheduler writes `cache/operations_snapshot.json`; if the job stalls, responses may be served with `snapshot_meta.freshness` set to `stale` for up to 30 minutes.
 
-**Bridge push API:** Field bridges authenticate with required `X-Api-Key` values of shape `awxb_…` (not partner `ak_*` keys) on `GET /v1/bridge/bootstrap`, `POST /v1/bridge/health`, and `POST /v1/bridge/weather`. See OpenAPI (`api/docs/openapi.json`) and [CONFIGURATION.md](CONFIGURATION.md) (AviationWX Bridge). Weather samples are accepted when keyed; public weather requires an explicit `weather_sources` entry with `type: aviationwx_bridge`.
+**Bridge push API:** Field bridges authenticate with required `X-Api-Key` values of shape `awxb_…` (not partner `ak_*` keys) on `GET /v1/bridge/bootstrap`, `POST /v1/bridge/health`, and `POST /v1/bridge/weather`. See OpenAPI (`api/docs/openapi.json`) and [CONFIGURATION.md](CONFIGURATION.md) (AviationWX Bridge). Weather POSTs are provider-tagged with `provider_meta.raw`; public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`).
 
 ---
 

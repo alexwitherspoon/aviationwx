@@ -4,8 +4,8 @@
  *
  * POST /v1/bridge/weather
  *
- * Accepts keyed samples always (installer verification). Only weather_sources
- * type aviationwx_bridge rows contribute to WeatherSnapshot / public weather.
+ * Accepts keyed provider-tagged observations with provider_meta.raw (installer
+ * verification). Public weather requires an explicit weather_sources enable row.
  */
 
 require_once __DIR__ . '/../../lib/bridge/middleware.php';
@@ -73,8 +73,8 @@ function handleBridgeWeather(array $params, array $context): void
             warnIfBridgeBodyIdMismatch($context, $itemBodyBridge);
         }
 
-        if (!bridgeStoreWeatherSample($airportId, $bridgeId, $record)) {
-            sendPublicApiError(PUBLIC_API_ERROR_SERVICE_UNAVAILABLE, 'Failed to persist weather sample', 503);
+        if (!bridgeStoreWeatherObservation($airportId, $bridgeId, $record)) {
+            sendPublicApiError(PUBLIC_API_ERROR_SERVICE_UNAVAILABLE, 'Failed to persist weather observation', 503);
             return;
         }
         $accepted++;

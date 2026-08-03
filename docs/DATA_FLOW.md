@@ -182,9 +182,9 @@ All weather sources are configured in a unified `weather_sources` array. Each so
 - **Transport**: HTTPS JSON only on Public API `/v1/bridge/bootstrap`, `/v1/bridge/health`, `/v1/bridge/weather` with required `X-Api-Key` (`awxb_…`). Images remain on SFTP.
 - **Identity**: The API key alone authorizes airport + `bridge_id`. Body ids may disagree; core attributes to the key and logs a warning.
 - **Health**: ~60s heartbeats persist host/NTP/subsystem status, source inventory, and scrubbed error fingerprints under `cache/bridges/{airport}/{bridge_id}/`. Status **Bridge Host** lines use heartbeat age with `DEFAULT_STALE_*` plus NTP rules (brief NTP failure → degraded; long-lived ≈ `DEFAULT_STALE_ERROR_SECONDS` → down contribution).
-- **Weather ingest**: Keyed weather POSTs are always stored (latest + samples ring + 60-second buckets) for diagnostics and installer verification. Units on the wire are °C, kt, inHg.
-- **Publish gate**: Only `weather_sources` entries with `type: aviationwx_bridge` (matching `bridge_id` + `bridge_source_id`) enter UnifiedFetcher / `WeatherSnapshot`. The adapter reads local cache (no upstream HTTP), similar to DyaconLive skip-HTTP reuse.
-- **Aggregation**: Bridge samples participate in the same freshest-wins aggregator as other sources. Prefer documenting one Davis path (cloud or local) for ops; dual ingest is not refused at the wire.
+- **Weather ingest**: Keyed weather POSTs are always stored (latest + observation ring + 60-second receipt buckets) for diagnostics and installer verification. Wire shape is provider-tagged (`provider`, `source_id`, `provider_meta.raw` with station-native units and fields). Core adapters own unit conversion and numeric aggregation; the bridge does not send a canonical sample object.
+- **Publish gate**: Only an explicit `weather_sources` enable row matching `bridge_id` + `bridge_source_id` (provider-specific cache-backed adapter type) enters UnifiedFetcher / `WeatherSnapshot`. The adapter reads local bridge cache (no upstream HTTP), similar to DyaconLive skip-HTTP reuse.
+- **Aggregation**: Enabled bridge observations participate in the same freshest-wins aggregator as other sources. Prefer documenting one Davis path (cloud or local) for ops; dual ingest is not refused at the wire.
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`

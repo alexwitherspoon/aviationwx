@@ -599,8 +599,8 @@
     },
     "/bridge/weather": {
       "post": {
-        "summary": "Bridge weather sample ingest",
-        "description": "Push bridge-local weather samples (°C, kt, inHg). Keyed POSTs are always accepted for diagnostics. Only `weather_sources` entries with `type: aviationwx_bridge` contribute to WeatherSnapshot / public weather. Supports a single sample object or a bounded `samples` array.",
+        "summary": "Bridge weather observation ingest",
+        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are always stored for diagnostics. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). Supports a single observation or a bounded `samples` batch (max 60).",
         "operationId": "bridgeWeather",
         "tags": ["Bridge"],
         "security": [{"BridgeApiKeyAuth": []}],
@@ -747,41 +747,56 @@
           "errors": {"type": "array", "items": {"type": "object"}}
         }
       },
-      "BridgeWeatherSample": {
+      "BridgeWeatherProviderMeta": {
         "type": "object",
+        "required": ["raw"],
+        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object). Optional keys such as api, path, txid, wind_reference, did are stored when present.",
         "properties": {
-          "temp_c": {"type": "number"},
-          "humidity_pct": {"type": "number"},
-          "wind_speed_kt": {"type": "number"},
-          "wind_gust_kt": {"type": "number"},
-          "wind_dir_deg": {"type": "number"},
-          "pressure_inhg": {"type": "number"},
-          "rain_in": {"type": "number"}
-        }
+          "raw": {
+            "type": "object",
+            "description": "Non-empty station-native observation object",
+            "additionalProperties": true
+          },
+          "api": {"type": "string"},
+          "path": {"type": "string"},
+          "txid": {"type": "integer"},
+          "wind_reference": {"type": "string", "enum": ["true", "magnetic"]},
+          "did": {"type": "string"},
+          "host": {"type": "string"}
+        },
+        "additionalProperties": true
       },
-      "BridgeWeatherRequest": {
+      "BridgeWeatherObservation": {
         "type": "object",
-        "description": "Single sample (observed_at + source_id + sample) or batch (samples array, max 60).",
+        "required": ["observed_at", "source_id", "provider", "provider_meta"],
         "properties": {
           "observed_at": {"type": "string", "format": "date-time"},
           "bridge_id": {"type": "string"},
           "source_id": {"type": "string"},
-          "provider": {"type": "string"},
-          "sample": {"$ref": "#/components/schemas/BridgeWeatherSample"},
-          "provider_meta": {"type": "object"},
+          "provider": {
+            "type": "string",
+            "description": "Provider family token (e.g. davis_weatherlink_live). Must match health inventory station type when advertised.",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}
+        }
+      },
+      "BridgeWeatherRequest": {
+        "type": "object",
+        "description": "Single observation or batch (`samples` array, max 60). Top-level bridge_id / source_id / provider may be inherited by batch items. A legacy `sample` key is ignored if present.",
+        "properties": {
+          "observed_at": {"type": "string", "format": "date-time"},
+          "bridge_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "provider": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"},
           "samples": {
             "type": "array",
             "maxItems": 60,
-            "items": {
-              "type": "object",
-              "properties": {
-                "observed_at": {"type": "string", "format": "date-time"},
-                "source_id": {"type": "string"},
-                "provider": {"type": "string"},
-                "sample": {"$ref": "#/components/schemas/BridgeWeatherSample"},
-                "provider_meta": {"type": "object"}
-              }
-            }
+            "items": {"$ref": "#/components/schemas/BridgeWeatherObservation"}
           }
         }
       },

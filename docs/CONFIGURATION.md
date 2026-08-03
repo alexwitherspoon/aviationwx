@@ -616,14 +616,14 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 
 ### AviationWX Bridge (local LAN weather)
 
-Field bridges push host heartbeats and weather samples to the Public API under `/v1/bridge/*`. Images continue to use SFTP. Core owns show, trust, and dedupe when both WeatherLink.com cloud and bridge-local Davis (or other LAN adapters) are configured.
+Field bridges push host heartbeats and provider-tagged weather observations to the Public API under `/v1/bridge/*`. Images continue to use SFTP. Core owns parse, show, trust, and dedupe when both WeatherLink.com cloud and bridge-local Davis (or other LAN adapters) are configured.
 
 **Trust vs publish (Option B enable gate):**
 
 | Layer | Meaning |
 |-------|---------|
-| `bridges[].api_key` | Device may call bootstrap / health / weather. Samples are stored for diagnostics. |
-| `weather_sources` row `type: aviationwx_bridge` | Named `bridge_id` + `bridge_source_id` may enter `WeatherSnapshot` / dashboard / Public weather. |
+| `bridges[].api_key` | Device may call bootstrap / health / weather. Observations are stored for diagnostics. |
+| `weather_sources` enable row | Named `bridge_id` + `bridge_source_id` (provider-specific adapter type) may enter `WeatherSnapshot` / dashboard / Public weather. |
 
 A bridge key alone never publishes weather.
 
@@ -654,7 +654,7 @@ A bridge key alone never publishes weather.
 ]
 ```
 
-Wire units are °C, knots, and inHg. See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
+Weather POSTs carry `provider` (e.g. `davis_weatherlink_live`), `source_id`, and `provider_meta.raw` (station-native payload). See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
 
 ### Tempest Weather
 

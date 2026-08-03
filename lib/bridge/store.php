@@ -106,7 +106,8 @@ function bridgeScrubSecretString(string $value): string
  */
 function bridgeScrubValue(mixed $value, int $depth = 0): mixed
 {
-    if ($depth > 8) {
+    // Weather provider_meta.raw nests conditions[]; keep headroom for LAN payloads
+    if ($depth > 16) {
         return '[truncated]';
     }
     if (is_string($value)) {

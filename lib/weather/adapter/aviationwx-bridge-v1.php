@@ -1,8 +1,10 @@
 <?php
 /**
- * AviationWX Bridge weather adapter (local cache; no upstream HTTP).
+ * Transitional bridge cache adapter (local cache; no upstream HTTP).
  *
- * Reads latest accepted sample for an enabled weather_sources binding.
+ * Reads a legacy canonical "sample" object when present. Provider-tagged
+ * observations store provider_meta.raw only; those need a provider-specific
+ * cache-backed adapter (e.g. Davis WeatherLink Live) to produce snapshots.
  */
 
 require_once __DIR__ . '/../data/WeatherReading.php';
@@ -16,7 +18,9 @@ use AviationWX\Weather\Data\WeatherSnapshot;
 use AviationWX\Weather\Data\WindGroup;
 
 /**
- * Resolve a WeatherSnapshot from bridge weather cache for a weather_sources row.
+ * Resolve a WeatherSnapshot from a legacy canonical sample in bridge cache.
+ *
+ * Returns null for raw-only observations (provider_meta.raw without sample).
  *
  * @param string $airportId Airport id
  * @param array $source weather_sources entry (type aviationwx_bridge)

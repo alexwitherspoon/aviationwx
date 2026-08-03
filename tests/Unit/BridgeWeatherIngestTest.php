@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for bridge weather store, enable gate, and adapter snapshot.
+ * Unit tests for bridge weather ingest (raw-only wire) and enable gate.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -44,39 +44,107 @@ class BridgeWeatherIngestTest extends TestCase
         @rmdir($dir);
     }
 
-    private function sampleItem(string $sourceId = 'station-scappoose-davis', ?float $temp = 18.3): array
-    {
+    /**
+     * Minimal Davis-shaped observation matching the bridge wire contract.
+     *
+     * @return array<string, mixed>
+     */
+    private function rawObservation(
+        string $sourceId = 'station-scappoose-davis',
+        int $ts = 1531754005
+    ): array {
         return [
-            'observed_at' => '2026-07-29T23:00:15Z',
+            'observed_at' => gmdate('c', $ts),
             'source_id' => $sourceId,
             'provider' => 'davis_weatherlink_live',
-            'sample' => [
-                'temp_c' => $temp,
-                'humidity_pct' => 72,
-                'wind_speed_kt' => 6.1,
-                'wind_gust_kt' => 9.0,
-                'wind_dir_deg' => 270,
-                'pressure_inhg' => 30.12,
-                'rain_in' => 0.0,
+            'provider_meta' => [
+                'api' => 'weatherlink_live_local_v1',
+                'path' => '/v1/current_conditions',
+                'txid' => 1,
+                'wind_reference' => 'true',
+                'did' => '001D0A700002',
+                'raw' => [
+                    'did' => '001D0A700002',
+                    'ts' => $ts,
+                    'conditions' => [
+                        [
+                            'lsid' => 318687,
+                            'data_structure_type' => 1,
+                            'txid' => 1,
+                            'temp' => 64.9,
+                            'hum' => 48.8,
+                            'wind_speed_last' => 5.0,
+                            'wind_dir_last' => 270,
+                        ],
+                        [
+                            'lsid' => 318686,
+                            'data_structure_type' => 3,
+                            'bar_sea_level' => 30.082,
+                        ],
+                    ],
+                ],
             ],
         ];
     }
 
-    public function testStoreSample_BuildsSixtySecondBuckets(): void
+    public function testNormalize_RequiresProviderMetaRaw(): void
     {
-        $n1 = bridgeNormalizeWeatherItem($this->sampleItem('station-a', 10.0));
+        $ok = bridgeNormalizeWeatherItem($this->rawObservation());
+        $this->assertTrue($ok['ok']);
+        $this->assertSame('davis_weatherlink_live', $ok['record']['provider']);
+        $this->assertArrayHasKey('raw', $ok['record']['provider_meta']);
+        $this->assertArrayNotHasKey('sample', $ok['record']);
+        $this->assertSame(64.9, $ok['record']['provider_meta']['raw']['conditions'][0]['temp']);
+    }
+
+    public function testNormalize_RejectsMissingRaw(): void
+    {
+        $item = $this->rawObservation();
+        unset($item['provider_meta']['raw']);
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('provider_meta.raw', $n['error']);
+    }
+
+    public function testNormalize_RejectsEmptyRaw(): void
+    {
+        $item = $this->rawObservation();
+        $item['provider_meta']['raw'] = [];
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+    }
+
+    public function testNormalize_RejectsMissingProvider(): void
+    {
+        $item = $this->rawObservation();
+        unset($item['provider']);
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('provider', $n['error']);
+    }
+
+    public function testNormalize_IgnoresLegacySampleKey(): void
+    {
+        $item = $this->rawObservation();
+        $item['sample'] = ['temp_c' => 18.3];
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok']);
+        $this->assertArrayNotHasKey('sample', $n['record']);
+    }
+
+    public function testStore_PersistsRawAndCountBuckets(): void
+    {
+        $n1 = bridgeNormalizeWeatherItem($this->rawObservation('station-a', strtotime('2026-07-29T23:00:15Z')));
         $this->assertTrue($n1['ok']);
-        $this->assertTrue(bridgeStoreWeatherSample('kspb', 'bridge-1', $n1['record']));
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n1['record']));
 
-        $item2 = $this->sampleItem('station-a', 12.0);
-        $item2['observed_at'] = '2026-07-29T23:00:45Z';
+        $item2 = $this->rawObservation('station-a', strtotime('2026-07-29T23:00:45Z'));
         $n2 = bridgeNormalizeWeatherItem($item2);
-        $this->assertTrue(bridgeStoreWeatherSample('kspb', 'bridge-1', $n2['record']));
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n2['record']));
 
-        $item3 = $this->sampleItem('station-a', 20.0);
-        $item3['observed_at'] = '2026-07-29T23:01:10Z';
+        $item3 = $this->rawObservation('station-a', strtotime('2026-07-29T23:01:10Z'));
         $n3 = bridgeNormalizeWeatherItem($item3);
-        $this->assertTrue(bridgeStoreWeatherSample('kspb', 'bridge-1', $n3['record']));
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n3['record']));
 
         $buckets = bridgeLoadWeatherBuckets('kspb', 'bridge-1', 'station-a');
         $this->assertNotNull($buckets);
@@ -85,17 +153,20 @@ class BridgeWeatherIngestTest extends TestCase
         $firstKey = (string) bridgeWeatherBucketStartUnix(strtotime('2026-07-29T23:00:15Z'));
         $this->assertArrayHasKey($firstKey, $buckets['buckets']);
         $this->assertSame(2, $buckets['buckets'][$firstKey]['count']);
-        $this->assertEqualsWithDelta(11.0, $buckets['buckets'][$firstKey]['temp_c']['mean'], 0.001);
-        $this->assertEqualsWithDelta(9.0, $buckets['buckets'][$firstKey]['wind_gust_kt']['max'], 0.001);
+        $this->assertSame('davis_weatherlink_live', $buckets['buckets'][$firstKey]['last_provider']);
+        $this->assertArrayNotHasKey('temp_c', $buckets['buckets'][$firstKey]);
 
         $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
-        $this->assertEqualsWithDelta(20.0, (float) $latest['sample']['temp_c'], 0.001);
+        $this->assertNotNull($latest);
+        $this->assertSame('davis_weatherlink_live', $latest['provider']);
+        $this->assertArrayHasKey('conditions', $latest['provider_meta']['raw']);
+        $this->assertArrayNotHasKey('sample', $latest);
     }
 
     public function testEnableGate_AdapterNullWhenNotInWeatherSources(): void
     {
-        $n = bridgeNormalizeWeatherItem($this->sampleItem());
-        bridgeStoreWeatherSample('kspb', 'bridge-spb-1', $n['record']);
+        $n = bridgeNormalizeWeatherItem($this->rawObservation());
+        bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
 
         $airport = [
             'weather_sources' => [
@@ -110,10 +181,12 @@ class BridgeWeatherIngestTest extends TestCase
         $this->assertNull($snap);
     }
 
-    public function testEnableGate_AdapterReturnsSnapshotWhenEnabled(): void
+    public function testEnableGate_LegacySampleAdapterNullForRawOnlyCache(): void
     {
-        $n = bridgeNormalizeWeatherItem($this->sampleItem());
-        bridgeStoreWeatherSample('kspb', 'bridge-spb-1', $n['record']);
+        // aviationwx_bridge mapper only reads a legacy sample object; raw-only records
+        // stay in cache for diagnostics until a provider-specific adapter parses them.
+        $n = bridgeNormalizeWeatherItem($this->rawObservation());
+        bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
 
         $source = [
             'type' => 'aviationwx_bridge',
@@ -122,13 +195,12 @@ class BridgeWeatherIngestTest extends TestCase
             'station_id' => 'wx-spb-bridge-davis',
         ];
         $airport = ['weather_sources' => [$source]];
-        $snap = aviationwxBridgeResolveSnapshot('kspb', $source, $airport);
-        $this->assertNotNull($snap);
-        $this->assertTrue($snap->isValid);
-        $this->assertSame('aviationwx_bridge', $snap->source);
-        $this->assertEqualsWithDelta(18.3, $snap->temperature->value, 0.01);
-        $this->assertEqualsWithDelta(6.1, $snap->wind->speed->value, 0.01);
-        $this->assertSame('wx-spb-bridge-davis', $snap->stationId);
+        $this->assertTrue(isBridgeWeatherSourceEnabled($airport, 'bridge-spb-1', 'station-scappoose-davis'));
+        $this->assertNull(aviationwxBridgeResolveSnapshot('kspb', $source, $airport));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-spb-1', 'station-scappoose-davis');
+        $this->assertNotNull($latest);
+        $this->assertArrayHasKey('raw', $latest['provider_meta']);
     }
 
     public function testBatchExtract(): void
@@ -136,14 +208,15 @@ class BridgeWeatherIngestTest extends TestCase
         $body = [
             'bridge_id' => 'bridge-1',
             'source_id' => 'station-a',
+            'provider' => 'davis_weatherlink_live',
             'samples' => [
                 [
                     'observed_at' => '2026-07-29T23:00:00Z',
-                    'sample' => ['temp_c' => 1.0],
+                    'provider_meta' => ['raw' => ['ts' => 1, 'conditions' => []]],
                 ],
                 [
                     'observed_at' => '2026-07-29T23:00:01Z',
-                    'sample' => ['temp_c' => 2.0],
+                    'provider_meta' => ['raw' => ['ts' => 2, 'conditions' => []]],
                 ],
             ],
         ];
@@ -151,5 +224,10 @@ class BridgeWeatherIngestTest extends TestCase
         $this->assertTrue($extracted['ok']);
         $this->assertCount(2, $extracted['items']);
         $this->assertSame('station-a', $extracted['items'][0]['source_id']);
+        $this->assertSame('davis_weatherlink_live', $extracted['items'][0]['provider']);
+
+        $n = bridgeNormalizeWeatherItem($extracted['items'][0]);
+        // Empty conditions array is fine; raw itself is non-empty
+        $this->assertTrue($n['ok']);
     }
 }
