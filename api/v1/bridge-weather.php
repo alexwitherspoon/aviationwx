@@ -73,7 +73,6 @@ function handleBridgeWeather(array $params, array $context): void
             warnIfBridgeBodyIdMismatch($context, $itemBodyBridge);
         }
 
-        // Enabled sources must POST the enable type so latest cannot be overwritten by a mismatched provider
         $enabledType = is_array($airport)
             ? getBridgeEnabledWeatherSourceType($airport, $bridgeId, $record['source_id'])
             : null;
@@ -110,7 +109,7 @@ function handleBridgeWeather(array $params, array $context): void
     }
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
     header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
-    // Installer verification only - not part of the public wire contract
+    // Diagnostic counts for installers; not part of the public wire contract
     header('X-Bridge-Weather-Accepted: ' . (string) $accepted);
     header('X-Bridge-Weather-Enabled: ' . (string) $enabledHits);
     exit;

@@ -52,7 +52,6 @@ function handleBridgeHealth(array $params, array $context): void
         return;
     }
 
-    // 204 No Content
     http_response_code(204);
     $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
     if ($allowedOrigin !== null) {

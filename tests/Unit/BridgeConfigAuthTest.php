@@ -233,7 +233,6 @@ class BridgeConfigAuthTest extends TestCase
                 ]),
             ],
         ];
-        // Invalid: enabled_weather_sources on bridge
         $config['airports']['kspb']['bridges'][0]['enabled_weather_sources'] = [];
         $result = validateRuntimeConfigSchema($config);
         $this->assertFalse($result['valid']);

@@ -261,7 +261,6 @@ function validateBridgeConfig(array $config): array
         }
     }
 
-    // Cache-backed weather_sources must reference a local bridges[].id
     foreach ($config['airports'] as $airportCode => $airport) {
         if (!is_array($airport) || !isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
             continue;

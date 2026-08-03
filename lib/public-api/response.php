@@ -46,7 +46,7 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
     if (isset($data['airports'])) {
         $response['airports'] = $data['airports'];
     } elseif (isset($data['bridge_id'])) {
-        // Bridge bootstrap / bridge-scoped payloads keep all fields under data
+        // Keep bridge payloads nested under data (do not promote fields to top-level)
         $response['data'] = $data;
     } elseif (isset($data['airport'])) {
         $response['airport'] = $data['airport'];

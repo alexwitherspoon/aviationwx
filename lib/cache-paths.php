@@ -38,7 +38,7 @@
  * │       ├── health.json          # Latest bridge heartbeat (+ inventory)
  * │       ├── health_history.jsonl # Bounded heartbeat ring
  * │       ├── meta.json            # first_seen / last_* timestamps
- * │       └── weather/{source_id}/ # latest sample, samples ring, 60s buckets
+ * │       └── weather/{source_id}/ # latest.json, samples.jsonl, observation-time buckets
  * ├── partners/
  * │   ├── {hash}.{ext}             # Partner logo image cache (remote URLs)
  * │   └── lum/                     # Logo luminance metadata (contrast tiles)
@@ -774,7 +774,7 @@ function getBridgeMetaCachePath(string $airportId, string $bridgeId): string
 }
 
 /**
- * Directory for one bridge weather source's sample/bucket cache.
+ * Directory for one bridge weather source's observation cache.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -792,7 +792,7 @@ function getBridgeWeatherSourceCacheDir(string $airportId, string $bridgeId, str
 }
 
 /**
- * Path to latest accepted weather sample for a bridge source.
+ * Path to latest accepted weather observation for a bridge source.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -806,7 +806,7 @@ function getBridgeWeatherLatestCachePath(string $airportId, string $bridgeId, st
 }
 
 /**
- * Path to bounded raw samples ring for a bridge source.
+ * Path to bounded observation ring (samples.jsonl) for a bridge source.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -820,7 +820,7 @@ function getBridgeWeatherSamplesCachePath(string $airportId, string $bridgeId, s
 }
 
 /**
- * Path to 60s weather buckets JSON for a bridge source.
+ * Path to observation-time 60s count buckets for a bridge source.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id

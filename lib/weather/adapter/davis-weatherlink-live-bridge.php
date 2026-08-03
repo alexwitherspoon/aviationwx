@@ -21,13 +21,11 @@ use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
 use AviationWX\Weather\Data\WindGroup;
 
-/** Local API ISS current conditions */
 const DAVIS_WLL_STRUCT_ISS = 1;
-/** Local API leaf/soil (not used for outdoor snapshot) */
+/** Leaf/soil packet - ignored for outdoor aviation snapshot */
 const DAVIS_WLL_STRUCT_LEAF_SOIL = 2;
-/** Local API WLL barometer */
 const DAVIS_WLL_STRUCT_BAR = 3;
-/** Local API WLL inside temp/hum (not outdoor) */
+/** Inside temp/hum packet - ignored for outdoor aviation snapshot */
 const DAVIS_WLL_STRUCT_TEMP_HUM_IN = 4;
 
 /**
@@ -35,7 +33,7 @@ const DAVIS_WLL_STRUCT_TEMP_HUM_IN = 4;
  *
  * @param string $airportId Airport id
  * @param array $source weather_sources entry
- * @param array|null $airport Airport config (enable re-check + declination)
+ * @param array|null $airport Airport config (enable re-check)
  * @return WeatherSnapshot|null
  */
 function davisWeatherlinkLiveResolveSnapshot(
@@ -137,11 +135,8 @@ class DavisWeatherlinkLiveBridgeAdapter
             return null;
         }
 
-        // Station raw.ts only - never wall clock (would mask staleness)
         $obsTime = $parsed['obs_time'];
-
         $windDir = $parsed['wind_direction'];
-        // Properly installed Davis vanes report true north; do not apply declination.
 
         $source = self::SOURCE_TYPE;
         $stationId = isset($config['station_id']) && is_string($config['station_id']) && $config['station_id'] !== ''

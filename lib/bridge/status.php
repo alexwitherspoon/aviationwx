@@ -57,7 +57,7 @@ function evaluateBridgeHostHealth(string $airportId, array $bridge, ?array $airp
         ? (int) $health['host']['ntp_failure_seconds']
         : null;
 
-    // Brief NTP failure → degraded; long-lived (~error tier) → down contribution
+    // Brief NTP failure: degraded; long-lived (~error tier): down
     if ($ntpOk === false) {
         if ($ntpFailureSeconds !== null && $ntpFailureSeconds >= $errorSeconds) {
             $hostStatus = 'down';

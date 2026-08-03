@@ -232,8 +232,8 @@ function bridgeWeatherProviderMatchesEnable(?string $enabledType, string $provid
 /**
  * Persist one accepted weather observation (diagnostics always; enable gate is separate).
  *
- * latest.json keeps the newest observation by observed_unix so delayed/replayed
- * POSTs cannot replace fresher data.
+ * latest.json keeps the newest observation by observed_unix (locked compare-and-swap)
+ * so delayed/replayed POSTs cannot replace fresher data.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -265,7 +265,6 @@ function bridgeStoreWeatherObservation(
         ? (int) $stored['observed_unix']
         : 0;
 
-    // Exclusive lock so concurrent POSTs cannot lose a newer latest
     if (!bridgeUpdateJsonFileLocked($latestPath, static function (?array $existing) use ($stored, $newObs): ?array {
         $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
             ? (int) $existing['observed_unix']

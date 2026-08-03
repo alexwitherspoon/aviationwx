@@ -1,6 +1,6 @@
 <?php
 /**
- * Bridge API authentication (X-Api-Key → airport_id + bridge_id).
+ * Bridge API authentication (X-Api-Key to airport_id + bridge_id).
  *
  * Identity Option B: the key is sole authority. Body bridge_id / source ids may disagree;
  * callers should accept, attribute to the key binding, and log a warning.
