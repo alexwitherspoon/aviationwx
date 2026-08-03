@@ -556,6 +556,7 @@
                             "type": "object",
                             "properties": {
                               "kind": {"type": "string"},
+                              "provider": {"type": "string", "description": "weather_sources type (e.g. davis_weatherlink_live)"},
                               "bridge_source_id": {"type": "string"},
                               "core_station_id": {"type": "string", "nullable": true},
                               "enabled": {"type": "boolean"}

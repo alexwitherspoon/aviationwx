@@ -1,0 +1,45 @@
+{
+  "observed_at": "2018-07-16T15:13:25Z",
+  "source_id": "station-davis-wll",
+  "provider": "davis_weatherlink_live",
+  "provider_meta": {
+    "api": "weatherlink_live_local_v1",
+    "did": "001D0A700002",
+    "path": "/v1/current_conditions",
+    "raw": {
+      "conditions": [
+        {
+          "data_structure_type": 1,
+          "dew_point": 45,
+          "hum": 55,
+          "lsid": 48308,
+          "rain_size": 1,
+          "rainfall_daily": 3,
+          "rx_state": 0,
+          "temp": 62.7,
+          "trans_battery_flag": 0,
+          "txid": 1,
+          "wind_dir_last": 270,
+          "wind_speed_hi_last_10_min": 15,
+          "wind_speed_last": 10
+        },
+        {
+          "data_structure_type": 4,
+          "hum_in": 41.1,
+          "lsid": 48307,
+          "temp_in": 78
+        },
+        {
+          "bar_absolute": 30.008,
+          "bar_sea_level": 30.008,
+          "data_structure_type": 3,
+          "lsid": 48306
+        }
+      ],
+      "did": "001D0A700002",
+      "ts": 1531754005
+    },
+    "txid": 1,
+    "wind_reference": "true"
+  }
+}

@@ -38,9 +38,10 @@ function handleBridgeBootstrap(array $params, array $context): void
 
     $decl = getMagneticDeclinationWithSource($airport);
     $enabled = [];
-    foreach (listAviationwxBridgeWeatherSources($airport, $bridgeId) as $ws) {
+    foreach (listBridgeCacheWeatherSources($airport, $bridgeId) as $ws) {
         $enabled[] = [
             'kind' => 'weather',
+            'provider' => $ws['type'] ?? null,
             'bridge_source_id' => $ws['bridge_source_id'] ?? null,
             'core_station_id' => $ws['station_id'] ?? null,
             'enabled' => true,

@@ -4768,7 +4768,7 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['weather_sources'])) {
                 $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'aviationwx_bridge'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'davis_weatherlink_live', 'aviationwx_bridge'];
                 foreach ($airport['weather_sources'] as $idx => $ws) {
                     $label = "weather_sources[{$idx}]";
                     if (!is_array($ws)) {
@@ -4875,7 +4875,7 @@ function validateAirportsJsonStructure(array $config): array {
                             $warnings[] = "Airport '{$airportCode}' {$label} (dyaconlive): missing airport elevation_ft; pressure will be omitted";
                         }
                     }
-                    // aviationwx_bridge: fields + bridges[].id binding enforced in validateBridgeConfig()
+                    // Cache-backed bridge types: fields + bridges[].id binding in validateBridgeConfig()
                     // metar: station_id optional (nearby_stations can provide fallback)
                 }
             }

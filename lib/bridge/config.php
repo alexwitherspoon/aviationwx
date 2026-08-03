@@ -1,6 +1,6 @@
 <?php
 /**
- * Bridge config helpers and schema validation (bridges[] + aviationwx_bridge weather rows).
+ * Bridge config helpers and schema validation (bridges[] + cache-backed weather rows).
  */
 
 require_once __DIR__ . '/keys.php';
@@ -8,13 +8,32 @@ require_once __DIR__ . '/keys.php';
 /**
  * Allowed top-level fields on an airport bridges[] entry.
  *
- * Publish enable is NOT on the bridge row - use weather_sources type aviationwx_bridge.
+ * Publish enable is NOT on the bridge row - use a cache-backed weather_sources type.
  *
  * @return list<string>
  */
 function bridgeConfigAllowedFields(): array
 {
     return ['id', 'api_key', 'label'];
+}
+
+/**
+ * weather_sources types that read bridge upload cache (no upstream HTTP).
+ *
+ * @return list<string>
+ */
+function bridgeCacheBackedWeatherSourceTypes(): array
+{
+    return ['davis_weatherlink_live', 'aviationwx_bridge'];
+}
+
+/**
+ * @param string|null $type weather_sources type
+ * @return bool
+ */
+function isBridgeCacheBackedWeatherSourceType(?string $type): bool
+{
+    return is_string($type) && in_array($type, bridgeCacheBackedWeatherSourceTypes(), true);
 }
 
 /**
@@ -92,20 +111,20 @@ function findAirportBridgeById(array $airport, string $bridgeId): ?array
 }
 
 /**
- * List aviationwx_bridge weather_sources rows for an airport (optionally filtered by bridge_id).
+ * List cache-backed bridge weather_sources rows for an airport.
  *
  * @param array $airport Airport config
  * @param string|null $bridgeId When set, only rows for this bridge
  * @return list<array>
  */
-function listAviationwxBridgeWeatherSources(array $airport, ?string $bridgeId = null): array
+function listBridgeCacheWeatherSources(array $airport, ?string $bridgeId = null): array
 {
     if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
         return [];
     }
     $out = [];
     foreach ($airport['weather_sources'] as $ws) {
-        if (!is_array($ws) || ($ws['type'] ?? null) !== 'aviationwx_bridge') {
+        if (!is_array($ws) || !isBridgeCacheBackedWeatherSourceType($ws['type'] ?? null)) {
             continue;
         }
         if ($bridgeId !== null && ($ws['bridge_id'] ?? null) !== $bridgeId) {
@@ -114,6 +133,17 @@ function listAviationwxBridgeWeatherSources(array $airport, ?string $bridgeId = 
         $out[] = $ws;
     }
     return $out;
+}
+
+/**
+ * @deprecated Use listBridgeCacheWeatherSources()
+ * @param array $airport Airport config
+ * @param string|null $bridgeId When set, only rows for this bridge
+ * @return list<array>
+ */
+function listAviationwxBridgeWeatherSources(array $airport, ?string $bridgeId = null): array
+{
+    return listBridgeCacheWeatherSources($airport, $bridgeId);
 }
 
 /**
@@ -126,7 +156,7 @@ function listAviationwxBridgeWeatherSources(array $airport, ?string $bridgeId = 
  */
 function isBridgeWeatherSourceEnabled(array $airport, string $bridgeId, string $bridgeSourceId): bool
 {
-    foreach (listAviationwxBridgeWeatherSources($airport, $bridgeId) as $ws) {
+    foreach (listBridgeCacheWeatherSources($airport, $bridgeId) as $ws) {
         if (($ws['bridge_source_id'] ?? null) === $bridgeSourceId) {
             return true;
         }
@@ -135,7 +165,7 @@ function isBridgeWeatherSourceEnabled(array $airport, string $bridgeId, string $
 }
 
 /**
- * Validate bridges[] and aviationwx_bridge weather_sources across the config.
+ * Validate bridges[] and cache-backed weather_sources across the config.
  *
  * @param array $config Root airports.json object
  * @return array{errors: list<string>, warnings: list<string>}
@@ -179,7 +209,7 @@ function validateBridgeConfig(array $config): array
                 if (!in_array($field, bridgeConfigAllowedFields(), true)) {
                     $errors[] = "Airport '{$airportCode}' {$label} has unknown field '{$field}'. "
                         . 'Allowed fields: ' . implode(', ', bridgeConfigAllowedFields())
-                        . '. Enable weather publish via weather_sources type aviationwx_bridge.';
+                        . '. Enable weather publish via weather_sources (e.g. davis_weatherlink_live).';
                 }
             }
 
@@ -221,30 +251,41 @@ function validateBridgeConfig(array $config): array
         }
     }
 
-    // Second pass: aviationwx_bridge weather_sources must reference a local bridges[].id
+    // Cache-backed weather_sources must reference a local bridges[].id
     foreach ($config['airports'] as $airportCode => $airport) {
         if (!is_array($airport) || !isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
             continue;
         }
         $knownBridges = $bridgeIdsByAirport[$airportCode] ?? [];
         foreach ($airport['weather_sources'] as $idx => $ws) {
-            if (!is_array($ws) || ($ws['type'] ?? null) !== 'aviationwx_bridge') {
+            if (!is_array($ws) || !isBridgeCacheBackedWeatherSourceType($ws['type'] ?? null)) {
                 continue;
             }
+            $type = (string) $ws['type'];
             $label = "weather_sources[{$idx}]";
             if (!isset($ws['bridge_id']) || !is_string($ws['bridge_id']) || $ws['bridge_id'] === '') {
-                $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_bridge) missing 'bridge_id'";
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) missing 'bridge_id'";
             } elseif (!isset($knownBridges[$ws['bridge_id']])) {
-                $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_bridge) bridge_id "
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) bridge_id "
                     . "'{$ws['bridge_id']}' does not match any bridges[].id on this airport";
             }
             if (!isset($ws['bridge_source_id']) || !is_string($ws['bridge_source_id']) || $ws['bridge_source_id'] === '') {
-                $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_bridge) missing 'bridge_source_id'";
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) missing 'bridge_source_id'";
             } elseif (!isValidBridgeResourceId($ws['bridge_source_id'])) {
-                $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_bridge) invalid 'bridge_source_id'";
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) invalid 'bridge_source_id'";
             }
             if (isset($ws['station_id']) && (!is_string($ws['station_id']) || $ws['station_id'] === '')) {
-                $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_bridge) station_id must be a non-empty string when set";
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) station_id must be a non-empty string when set";
+            }
+            if (isset($ws['txid']) && !is_numeric($ws['txid'])) {
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) txid must be numeric when set";
+            }
+            if (
+                isset($ws['wind_reference'])
+                && $ws['wind_reference'] !== 'true'
+                && $ws['wind_reference'] !== 'magnetic'
+            ) {
+                $errors[] = "Airport '{$airportCode}' {$label} ({$type}) wind_reference must be 'true' or 'magnetic'";
             }
         }
     }

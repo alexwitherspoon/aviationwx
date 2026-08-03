@@ -11,7 +11,9 @@
  *     --airport kspb \
  *     --bridge bridge-spb-1 \
  *     --source station-scappoose-davis \
- *     [--station-id wx-spb-bridge-davis]
+ *     [--type davis_weatherlink_live] \
+ *     [--station-id wx-spb-bridge-davis] \
+ *     [--txid 1]
  *
  * Exit codes:
  *   0 - Success
@@ -29,6 +31,8 @@ $airportId = null;
 $bridgeId = null;
 $sourceId = null;
 $stationId = null;
+$type = 'davis_weatherlink_live';
+$txid = null;
 
 for ($i = 1; $i < $argc; $i++) {
     $arg = $argv[$i];
@@ -44,13 +48,21 @@ for ($i = 1; $i < $argc; $i++) {
         $sourceId = (string) $argv[++$i];
         continue;
     }
+    if (($arg === '--type' || $arg === '-t') && isset($argv[$i + 1])) {
+        $type = (string) $argv[++$i];
+        continue;
+    }
     if (($arg === '--station-id') && isset($argv[$i + 1])) {
         $stationId = (string) $argv[++$i];
         continue;
     }
+    if (($arg === '--txid') && isset($argv[$i + 1])) {
+        $txid = $argv[++$i];
+        continue;
+    }
     if ($arg === '--help' || $arg === '-h') {
-        echo "Usage: php scripts/bridge-enable-weather.php --airport ID --bridge BRIDGE_ID --source SOURCE_ID [--station-id STATION_ID]\n";
-        echo "Prints a weather_sources entry (type aviationwx_bridge). Paste into airports.json.\n";
+        echo "Usage: php scripts/bridge-enable-weather.php --airport ID --bridge BRIDGE_ID --source SOURCE_ID [--type TYPE] [--station-id STATION_ID] [--txid N]\n";
+        echo "Prints a weather_sources entry (default type davis_weatherlink_live). Paste into airports.json.\n";
         exit(0);
     }
     fwrite(STDERR, "Unknown argument: {$arg}\n");
@@ -64,6 +76,14 @@ if ($airportId === null || $bridgeId === null || $sourceId === null) {
 
 if (!isValidBridgeResourceId($bridgeId) || !isValidBridgeResourceId($sourceId)) {
     fwrite(STDERR, "ERROR: invalid bridge or source id format\n");
+    exit(1);
+}
+
+if (!isBridgeCacheBackedWeatherSourceType($type)) {
+    fwrite(
+        STDERR,
+        'ERROR: --type must be one of: ' . implode(', ', bridgeCacheBackedWeatherSourceTypes()) . "\n"
+    );
     exit(1);
 }
 
@@ -92,26 +112,42 @@ if (isBridgeWeatherSourceEnabled($airport, $bridgeId, $sourceId)) {
 $health = bridgeLoadHealth($airportId, $bridgeId);
 if ($health !== null) {
     $found = false;
+    $inventoryType = null;
     foreach ($health['inventory']['stations'] ?? [] as $station) {
         if (is_array($station) && ($station['id'] ?? null) === $sourceId) {
             $found = true;
+            if (isset($station['type']) && is_string($station['type'])) {
+                $inventoryType = $station['type'];
+            }
             break;
         }
     }
     if (!$found) {
         fwrite(STDERR, "WARNING: source_id '{$sourceId}' was not in the last heartbeat inventory\n");
+    } elseif (
+        $inventoryType !== null
+        && $inventoryType !== $type
+        && isBridgeCacheBackedWeatherSourceType($inventoryType)
+    ) {
+        fwrite(
+            STDERR,
+            "NOTE: inventory type '{$inventoryType}' differs from --type '{$type}'; prefer matching the wire provider\n"
+        );
     }
 } else {
     fwrite(STDERR, "WARNING: no health heartbeat cached yet; cannot verify inventory\n");
 }
 
 $row = [
-    'type' => 'aviationwx_bridge',
+    'type' => $type,
     'bridge_id' => $bridgeId,
     'bridge_source_id' => $sourceId,
 ];
 if ($stationId !== null && $stationId !== '') {
     $row['station_id'] = $stationId;
+}
+if ($txid !== null && $txid !== '' && is_numeric($txid)) {
+    $row['txid'] = (int) $txid;
 }
 
 echo json_encode($row, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";

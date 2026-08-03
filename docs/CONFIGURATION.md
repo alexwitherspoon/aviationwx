@@ -127,7 +127,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `ourairports_id` | - | Optional stable OurAirports integer id from `airports.csv` when set alongside `ourairports_ident`. |
 | **Data Sources** |||
 | `weather_sources` | `[]` | Array of weather source configurations (see Weather Sources section) |
-| `bridges` | `[]` | Optional AviationWX Bridge rows (`id`, `api_key`, optional `label`). Auth only; publish via `aviationwx_bridge` weather_sources. |
+| `bridges` | `[]` | Optional AviationWX Bridge rows (`id`, `api_key`, optional `label`). Auth only; publish via cache-backed weather_sources (e.g. `davis_weatherlink_live`). |
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
@@ -610,7 +610,8 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `swob_man` | Nav Canada Weather (manned stations) | ~5 minutes |
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
-| `aviationwx_bridge` | Bridge-local LAN station via HTTPS push (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `aviationwx_bridge` | Legacy bridge cache mapper (canonical sample only; prefer `davis_weatherlink_live`) | Adapter rate (typically ≤10s) |
+| `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
 
@@ -646,10 +647,11 @@ A bridge key alone never publishes weather.
 ],
 "weather_sources": [
   {
-    "type": "aviationwx_bridge",
+    "type": "davis_weatherlink_live",
     "bridge_id": "bridge-spb-1",
     "bridge_source_id": "station-scappoose-davis",
-    "station_id": "wx-spb-bridge-davis"
+    "station_id": "wx-spb-bridge-davis",
+    "txid": 1
   }
 ]
 ```
