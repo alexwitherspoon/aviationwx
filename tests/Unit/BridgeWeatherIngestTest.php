@@ -133,8 +133,8 @@ class BridgeWeatherIngestTest extends TestCase
 
     public function testNormalize_RejectsFarFutureObservedAt(): void
     {
-        $item = $this->rawObservation();
-        $item['observed_at'] = gmdate('c', time() + 120);
+        $ts = time() + 120;
+        $item = $this->rawObservation('station-a', $ts);
         $n = bridgeNormalizeWeatherItem($item);
         $this->assertFalse($n['ok']);
         $this->assertStringContainsString('future', $n['error']);
@@ -142,10 +142,28 @@ class BridgeWeatherIngestTest extends TestCase
 
     public function testNormalize_AcceptsObservedAtWithinSixtySecondSkew(): void
     {
-        $item = $this->rawObservation();
-        $item['observed_at'] = gmdate('c', time() + 30);
+        $ts = time() + 30;
+        $item = $this->rawObservation('station-a', $ts);
         $n = bridgeNormalizeWeatherItem($item);
         $this->assertTrue($n['ok'], $n['error'] ?? '');
+    }
+
+    public function testNormalize_RejectsRawTsFarInFuture(): void
+    {
+        $item = $this->rawObservation('station-a', time());
+        $item['provider_meta']['raw']['ts'] = time() + 120;
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('raw.ts', $n['error'] ?? '');
+    }
+
+    public function testNormalize_RejectsObservedAtRawTsSkew(): void
+    {
+        $item = $this->rawObservation('station-a', time());
+        $item['provider_meta']['raw']['ts'] = time() - 120;
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('disagree', $n['error'] ?? '');
     }
 
     public function testStore_KeepsNewerLatestOnOutOfOrderPost(): void
@@ -161,6 +179,24 @@ class BridgeWeatherIngestTest extends TestCase
         $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
         $this->assertNotNull($latest);
         $this->assertSame(strtotime('2026-07-29T23:01:00Z'), (int) $latest['observed_unix']);
+    }
+
+    public function testStore_KeepsFirstAtEqualObservedUnix(): void
+    {
+        $ts = strtotime('2026-07-29T23:00:00Z');
+        $first = $this->rawObservation('station-a', $ts);
+        $first['provider_meta']['raw']['conditions'][0]['temp'] = 60.0;
+        $n1 = bridgeNormalizeWeatherItem($first);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n1['record']));
+
+        $second = $this->rawObservation('station-a', $ts);
+        $second['provider_meta']['raw']['conditions'][0]['temp'] = 99.0;
+        $n2 = bridgeNormalizeWeatherItem($second);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n2['record']));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($latest);
+        $this->assertSame(60.0, (float) $latest['provider_meta']['raw']['conditions'][0]['temp']);
     }
 
     public function testStore_PersistsRawAndCountBuckets(): void
@@ -241,11 +277,11 @@ class BridgeWeatherIngestTest extends TestCase
             'samples' => [
                 [
                     'observed_at' => '2026-07-29T23:00:00Z',
-                    'provider_meta' => ['raw' => ['ts' => 1, 'conditions' => []]],
+                    'provider_meta' => ['raw' => ['ts' => strtotime('2026-07-29T23:00:00Z'), 'conditions' => []]],
                 ],
                 [
                     'observed_at' => '2026-07-29T23:00:01Z',
-                    'provider_meta' => ['raw' => ['ts' => 2, 'conditions' => []]],
+                    'provider_meta' => ['raw' => ['ts' => strtotime('2026-07-29T23:00:01Z'), 'conditions' => []]],
                 ],
             ],
         ];
@@ -257,7 +293,7 @@ class BridgeWeatherIngestTest extends TestCase
 
         $n = bridgeNormalizeWeatherItem($extracted['items'][0]);
         // Empty conditions array is fine; raw itself is non-empty
-        $this->assertTrue($n['ok']);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
     }
 
     public function testEnabledType_ReturnsNullWhenNotEnabled(): void

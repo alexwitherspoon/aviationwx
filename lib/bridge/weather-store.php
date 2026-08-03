@@ -100,6 +100,33 @@ function bridgeNormalizeWeatherItem(array $item): array
         ];
     }
 
+    // When station raw.ts is present it drives WeatherSnapshot age - reject future / dual-clock skew
+    $raw = $item['provider_meta']['raw'];
+    if (isset($raw['ts']) && is_numeric($raw['ts'])) {
+        $rawTs = (int) $raw['ts'];
+        if ($rawTs <= 0) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'provider_meta.raw.ts must be a positive unix timestamp when set',
+            ];
+        }
+        if ($rawTs > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'provider_meta.raw.ts is too far in the future',
+            ];
+        }
+        if (abs($rawTs - $observedTs) > BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'observed_at and provider_meta.raw.ts disagree beyond allowed skew',
+            ];
+        }
+    }
+
     $record = [
         'observed_at' => gmdate('c', $observedTs),
         'observed_unix' => $observedTs,
@@ -174,32 +201,33 @@ function bridgeWeatherBucketStartUnix(int $unix): int
  */
 function bridgeWeatherUpdateBuckets(string $path, array $record): bool
 {
-    $data = bridgeReadJsonFile($path);
-    if ($data === null || !isset($data['buckets']) || !is_array($data['buckets'])) {
-        $data = ['buckets' => []];
-    }
+    return bridgeUpdateJsonFileLocked($path, static function (?array $data) use ($record): array {
+        if ($data === null || !isset($data['buckets']) || !is_array($data['buckets'])) {
+            $data = ['buckets' => []];
+        }
 
-    $start = bridgeWeatherBucketStartUnix((int) $record['observed_unix']);
-    $key = (string) $start;
-    if (!isset($data['buckets'][$key]) || !is_array($data['buckets'][$key])) {
-        $data['buckets'][$key] = [
-            'start_unix' => $start,
-            'start_at' => gmdate('c', $start),
-            'count' => 0,
-        ];
-    }
-    $bucket = &$data['buckets'][$key];
-    $bucket['count'] = (int) ($bucket['count'] ?? 0) + 1;
-    $bucket['last_observed_at'] = $record['observed_at'] ?? null;
-    $bucket['last_provider'] = $record['provider'] ?? null;
-    $bucket['last_source_id'] = $record['source_id'] ?? null;
+        $start = bridgeWeatherBucketStartUnix((int) $record['observed_unix']);
+        $key = (string) $start;
+        if (!isset($data['buckets'][$key]) || !is_array($data['buckets'][$key])) {
+            $data['buckets'][$key] = [
+                'start_unix' => $start,
+                'start_at' => gmdate('c', $start),
+                'count' => 0,
+            ];
+        }
+        $bucket = &$data['buckets'][$key];
+        $bucket['count'] = (int) ($bucket['count'] ?? 0) + 1;
+        $bucket['last_observed_at'] = $record['observed_at'] ?? null;
+        $bucket['last_provider'] = $record['provider'] ?? null;
+        $bucket['last_source_id'] = $record['source_id'] ?? null;
 
-    if (count($data['buckets']) > BRIDGE_WEATHER_BUCKETS_MAX) {
-        ksort($data['buckets'], SORT_NUMERIC);
-        $data['buckets'] = array_slice($data['buckets'], -BRIDGE_WEATHER_BUCKETS_MAX, null, true);
-    }
+        if (count($data['buckets']) > BRIDGE_WEATHER_BUCKETS_MAX) {
+            ksort($data['buckets'], SORT_NUMERIC);
+            $data['buckets'] = array_slice($data['buckets'], -BRIDGE_WEATHER_BUCKETS_MAX, null, true);
+        }
 
-    return bridgeWriteJsonFile($path, $data);
+        return $data;
+    });
 }
 
 /**
@@ -269,7 +297,8 @@ function bridgeStoreWeatherObservation(
         $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
             ? (int) $existing['observed_unix']
             : 0;
-        if ($existing !== null && $newObs < $existingObs) {
+        // First-wins at equal observed_unix so same-second garbage cannot replace a good sample
+        if ($existing !== null && $newObs <= $existingObs) {
             return null;
         }
         return $stored;

@@ -242,6 +242,10 @@ class DavisWeatherlinkLiveBridgeAdapter
         if ($obsTime <= 0) {
             return null;
         }
+        // Future station ts bypasses WeatherReading staleness (negative age looks fresh)
+        if ($obsTime > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+            return null;
+        }
 
         $tempF = self::numericOrNull($iss, 'temp');
         $hum = self::numericOrNull($iss, 'hum');

@@ -23,6 +23,21 @@ define('PUBLIC_API_ERROR_API_NOT_ENABLED', 'API_NOT_ENABLED');
 define('PUBLIC_API_ERROR_SERVICE_UNAVAILABLE', 'SERVICE_UNAVAILABLE');
 
 /**
+ * True when the request URI is a Public API bridge route (/v1/bridge/...).
+ *
+ * @param string $uri Request URI or path
+ * @return bool
+ */
+function isPublicApiBridgeRequestUri(string $uri): bool
+{
+    $path = parse_url($uri, PHP_URL_PATH);
+    if (!is_string($path) || $path === '') {
+        $path = $uri;
+    }
+    return (bool) preg_match('#/(?:v1/)?bridge(?:/|$)#', $path);
+}
+
+/**
  * Send a successful JSON response
  *
  * @param array $data Response data
@@ -147,9 +162,9 @@ function sendPublicApiResponse(array $response, int $httpCode = 200, array $extr
             header('Access-Control-Allow-Origin: ' . $allowedOrigin);
         }
         $uri = $_SERVER['REQUEST_URI'] ?? $_SERVER['HTTP_X_ORIGINAL_URI'] ?? '';
-        $isBridge = (strpos($uri, '/bridge') !== false);
+        $isBridge = isPublicApiBridgeRequestUri($uri);
         header('Access-Control-Allow-Methods: ' . ($isBridge ? 'GET, POST, OPTIONS' : 'GET, OPTIONS'));
-        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
+        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key' . ($isBridge ? ', Content-Type' : ''));
         header('Access-Control-Max-Age: 86400');
     }
     
@@ -224,7 +239,7 @@ function handlePublicApiCorsPreflightIfNeeded(): bool
 
     $uri = $_SERVER['REQUEST_URI'] ?? $_SERVER['HTTP_X_ORIGINAL_URI'] ?? '';
     $useEmbedCors = (strpos($uri, '/embed') !== false);
-    $isBridge = (strpos($uri, '/bridge') !== false);
+    $isBridge = isPublicApiBridgeRequestUri($uri);
 
     http_response_code(204);
     if ($useEmbedCors) {
@@ -235,7 +250,7 @@ function handlePublicApiCorsPreflightIfNeeded(): bool
             header('Access-Control-Allow-Origin: ' . $allowedOrigin);
         }
         header('Access-Control-Allow-Methods: ' . ($isBridge ? 'GET, POST, OPTIONS' : 'GET, OPTIONS'));
-        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
+        header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key' . ($isBridge ? ', Content-Type' : ''));
         header('Access-Control-Max-Age: 86400');
     }
     header('Content-Length: 0');

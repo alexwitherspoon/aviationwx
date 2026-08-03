@@ -13,6 +13,10 @@ if (!defined('BRIDGE_HEALTH_ERRORS_MAX')) {
     define('BRIDGE_HEALTH_ERRORS_MAX', 50);
 }
 
+if (!defined('BRIDGE_HEALTH_INVENTORY_MAX')) {
+    define('BRIDGE_HEALTH_INVENTORY_MAX', 100);
+}
+
 /**
  * Allowed host.status / subsystem status values.
  *
@@ -116,6 +120,13 @@ function bridgeNormalizeHealthPayload(array $body): array
                     'ok' => false,
                     'code' => 'INVALID_REQUEST',
                     'error' => "inventory.{$kind} must be an array",
+                ];
+            }
+            if (count($body['inventory'][$kind]) > BRIDGE_HEALTH_INVENTORY_MAX) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => "inventory.{$kind} exceeds max of " . BRIDGE_HEALTH_INVENTORY_MAX,
                 ];
             }
             foreach ($body['inventory'][$kind] as $idx => $item) {

@@ -149,6 +149,21 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::parseRawData($raw, ['txid' => 1], []));
     }
 
+    public function testParseRaw_RejectsFarFutureStationTs(): void
+    {
+        $raw = [
+            'ts' => time() + 120,
+            'conditions' => [
+                [
+                    'data_structure_type' => 1,
+                    'txid' => 1,
+                    'temp' => 60,
+                ],
+            ],
+        ];
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::parseRawData($raw, ['txid' => 1], []));
+    }
+
     public function testSnapshot_RejectsWrongProvider(): void
     {
         $post = $this->loadGoldenPost();

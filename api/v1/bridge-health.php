@@ -52,12 +52,5 @@ function handleBridgeHealth(array $params, array $context): void
         return;
     }
 
-    http_response_code(204);
-    $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
-    if ($allowedOrigin !== null) {
-        header('Access-Control-Allow-Origin: ' . $allowedOrigin);
-    }
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
-    exit;
+    sendBridgeApiNoContent();
 }

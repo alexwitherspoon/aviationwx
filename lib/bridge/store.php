@@ -312,21 +312,38 @@ function bridgeTouchMeta(string $airportId, string $bridgeId, string $event, ?in
 {
     $now = $now ?? time();
     $iso = gmdate('c', $now);
-    $meta = bridgeLoadMeta($airportId, $bridgeId);
-    if (empty($meta['first_seen_at'])) {
-        $meta['first_seen_at'] = $iso;
+    $path = getBridgeMetaCachePath($airportId, $bridgeId);
+    if ($path === '') {
+        return;
     }
-    if ($event === 'bootstrap') {
-        $meta['last_bootstrap_at'] = $iso;
-        $meta['bootstrap_count'] = (int) ($meta['bootstrap_count'] ?? 0) + 1;
-    } elseif ($event === 'health') {
-        $meta['last_health_at'] = $iso;
-        $meta['health_count'] = (int) ($meta['health_count'] ?? 0) + 1;
-    } elseif ($event === 'weather') {
-        $meta['last_weather_at'] = $iso;
-        $meta['weather_count'] = (int) ($meta['weather_count'] ?? 0) + 1;
-    }
-    bridgeSaveMeta($airportId, $bridgeId, $meta);
+
+    bridgeUpdateJsonFileLocked($path, static function (?array $meta) use ($iso, $event): array {
+        if ($meta === null || $meta === []) {
+            $meta = [
+                'first_seen_at' => null,
+                'last_bootstrap_at' => null,
+                'last_health_at' => null,
+                'last_weather_at' => null,
+                'bootstrap_count' => 0,
+                'health_count' => 0,
+                'weather_count' => 0,
+            ];
+        }
+        if (empty($meta['first_seen_at'])) {
+            $meta['first_seen_at'] = $iso;
+        }
+        if ($event === 'bootstrap') {
+            $meta['last_bootstrap_at'] = $iso;
+            $meta['bootstrap_count'] = (int) ($meta['bootstrap_count'] ?? 0) + 1;
+        } elseif ($event === 'health') {
+            $meta['last_health_at'] = $iso;
+            $meta['health_count'] = (int) ($meta['health_count'] ?? 0) + 1;
+        } elseif ($event === 'weather') {
+            $meta['last_weather_at'] = $iso;
+            $meta['weather_count'] = (int) ($meta['weather_count'] ?? 0) + 1;
+        }
+        return $meta;
+    });
 }
 
 /**

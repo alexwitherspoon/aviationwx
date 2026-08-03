@@ -102,15 +102,9 @@ function handleBridgeWeather(array $params, array $context): void
         }
     }
 
-    http_response_code(204);
-    $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
-    if ($allowedOrigin !== null) {
-        header('Access-Control-Allow-Origin: ' . $allowedOrigin);
-    }
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
-    // Diagnostic counts for installers; not part of the public wire contract
-    header('X-Bridge-Weather-Accepted: ' . (string) $accepted);
-    header('X-Bridge-Weather-Enabled: ' . (string) $enabledHits);
-    exit;
+    sendBridgeApiNoContent([
+        // Diagnostic counts for installers; not part of the public wire contract
+        'X-Bridge-Weather-Accepted' => (string) $accepted,
+        'X-Bridge-Weather-Enabled' => (string) $enabledHits,
+    ]);
 }

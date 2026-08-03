@@ -198,6 +198,21 @@ class BridgeHealthStatusTest extends TestCase
         $this->assertStringContainsString('fingerprint', $result['error'] ?? '');
     }
 
+    public function testNormalize_RejectsInventoryOverMax(): void
+    {
+        $stations = [];
+        for ($i = 0; $i < BRIDGE_HEALTH_INVENTORY_MAX + 1; $i++) {
+            $stations[] = ['id' => 'station-' . $i];
+        }
+        $result = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'operational'],
+            'inventory' => ['stations' => $stations],
+        ]);
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('exceeds max', $result['error'] ?? '');
+    }
+
     public function testHistoryAppend_RetainsLinesUnderLock(): void
     {
         $path = $this->tmpRoot . '/health_history.jsonl';

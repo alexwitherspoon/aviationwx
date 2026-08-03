@@ -51,13 +51,11 @@ function getBridgeApiRateLimits(string $endpointClass): array
  */
 function classifyBridgeEndpoint(string $path): string
 {
-    if (str_ends_with($path, '/health') || str_contains($path, '/health')) {
-        return 'health';
-    }
-    if (str_ends_with($path, '/weather') || str_contains($path, '/weather')) {
-        return 'weather';
-    }
-    return 'bootstrap';
+    return match ($path) {
+        '/bridge/health' => 'health',
+        '/bridge/weather' => 'weather',
+        default => 'bootstrap',
+    };
 }
 
 /**
@@ -223,4 +221,25 @@ function bridgeReadJsonBody(int $maxBytes = 65536): array
         return ['ok' => false, 'error' => 'Request body must be JSON object'];
     }
     return ['ok' => true, 'body' => $body];
+}
+
+/**
+ * Send HTTP 204 for an accepted bridge POST and exit.
+ *
+ * @param array<string, string> $extraHeaders Optional response headers
+ * @return never
+ */
+function sendBridgeApiNoContent(array $extraHeaders = []): void
+{
+    http_response_code(204);
+    $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
+    if ($allowedOrigin !== null) {
+        header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+    }
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: X-API-Key, X-Api-Key, Content-Type');
+    foreach ($extraHeaders as $name => $value) {
+        header($name . ': ' . $value);
+    }
+    exit;
 }
