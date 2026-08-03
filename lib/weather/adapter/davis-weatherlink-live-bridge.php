@@ -17,6 +17,7 @@ require_once __DIR__ . '/../data/WeatherSnapshot.php';
 require_once __DIR__ . '/../../bridge/weather-store.php';
 require_once __DIR__ . '/../../bridge/config.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../units.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
@@ -326,13 +327,13 @@ class DavisWeatherlinkLiveBridgeAdapter
         }
 
         return [
-            'temperature' => $tempF !== null ? (($tempF - 32.0) / 1.8) : null,
-            'dewpoint' => $dewF !== null ? (($dewF - 32.0) / 1.8) : null,
+            'temperature' => $tempF !== null ? fahrenheitToCelsius($tempF) : null,
+            'dewpoint' => $dewF !== null ? fahrenheitToCelsius($dewF) : null,
             'humidity' => $hum,
             'pressure' => $pressure,
-            'wind_speed' => $windMph !== null ? ($windMph * 0.868976) : null,
+            'wind_speed' => $windMph !== null ? mphToKnots($windMph) : null,
             'wind_direction' => $windDir,
-            'gust_speed' => $gustMph !== null ? ($gustMph * 0.868976) : null,
+            'gust_speed' => $gustMph !== null ? mphToKnots($gustMph) : null,
             'precip_accum' => $precip,
             'obs_time' => $obsTime,
         ];
@@ -357,8 +358,8 @@ class DavisWeatherlinkLiveBridgeAdapter
             : 0;
         $inchesPerClick = match ($size) {
             1 => 0.01,
-            2 => 0.2 / 25.4,
-            3 => 0.1 / 25.4,
+            2 => mmToInches(0.2),
+            3 => mmToInches(0.1),
             4 => 0.001,
             default => null,
         };
