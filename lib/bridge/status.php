@@ -11,7 +11,7 @@ require_once __DIR__ . '/../config.php';
  * Evaluate one bridge host line from latest health cache + stale tiers + NTP rules.
  *
  * @param string $airportId Airport id
- * @param array $bridge Bridge config row (id, label, …)
+ * @param array $bridge Bridge config row (id, label, and related fields)
  * @param array|null $airport Airport config (for stale thresholds)
  * @return array{name: string, status: string, message: string, lastChanged: int, bridge_id: string, inventory?: array}
  */
@@ -128,6 +128,40 @@ function evaluateBridgeHostHealth(string $airportId, array $bridge, ?array $airp
 }
 
 /**
+ * Severity rank for bridge host status (higher = worse for component rollup).
+ *
+ * Unknown statuses rank as down so a bad payload cannot look healthier than peers.
+ *
+ * @param string $status operational|degraded|down|maintenance|other
+ * @return int
+ */
+function bridgeHostStatusSeverityRank(string $status): int
+{
+    return match ($status) {
+        'down' => 3,
+        'degraded' => 2,
+        'maintenance' => 1,
+        'operational' => 0,
+        default => 3,
+    };
+}
+
+/**
+ * Pick the worse host status for Bridge Hosts rollup
+ * (down > degraded > maintenance > operational).
+ *
+ * @param string $current Current aggregate
+ * @param string $candidate Candidate host status
+ * @return string
+ */
+function bridgeHostStatusWorse(string $current, string $candidate): string
+{
+    return bridgeHostStatusSeverityRank($candidate) > bridgeHostStatusSeverityRank($current)
+        ? $candidate
+        : $current;
+}
+
+/**
  * Build Bridge Hosts component for checkAirportHealth().
  *
  * @param string $airportId Airport id
@@ -152,14 +186,7 @@ function buildAirportBridgeHostsComponent(string $airportId, array $airport): ?a
         if (($row['lastChanged'] ?? 0) > $lastChanged) {
             $lastChanged = (int) $row['lastChanged'];
         }
-        $st = $row['status'] ?? 'down';
-        if ($st === 'down') {
-            $worst = 'down';
-        } elseif ($st === 'degraded' && $worst === 'operational') {
-            $worst = 'degraded';
-        } elseif ($st === 'maintenance' && $worst === 'operational') {
-            $worst = 'maintenance';
-        }
+        $worst = bridgeHostStatusWorse($worst, (string) ($row['status'] ?? 'down'));
     }
 
     if ($hosts === []) {

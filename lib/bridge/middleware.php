@@ -59,6 +59,21 @@ function classifyBridgeEndpoint(string $path): string
 }
 
 /**
+ * Opaque rate-limit bucket id for a bridge key.
+ *
+ * Public-api rate-limit logging truncates the identifier; hash so raw key
+ * material never appears in logs while buckets stay per key + endpoint class.
+ *
+ * @param string $apiKey Bridge API key
+ * @param string $endpointClass bootstrap|health|weather
+ * @return string Identifier for checkAndIncrementWindow()
+ */
+function bridgeApiRateLimitIdentifier(string $apiKey, string $endpointClass): string
+{
+    return 'bridge:' . $endpointClass . ':' . hash('sha256', $apiKey);
+}
+
+/**
  * Check bridge rate limits using Public API window helpers with a bridge-prefixed key.
  *
  * @param string $apiKey Bridge API key
@@ -68,7 +83,7 @@ function classifyBridgeEndpoint(string $path): string
 function checkBridgeApiRateLimit(string $apiKey, string $endpointClass): array
 {
     $limits = getBridgeApiRateLimits($endpointClass);
-    $identifier = 'bridge:' . $endpointClass . ':' . $apiKey;
+    $identifier = bridgeApiRateLimitIdentifier($apiKey, $endpointClass);
     $now = time();
     $windows = [
         'minute' => ['limit' => $limits['requests_per_minute'], 'seconds' => 60],

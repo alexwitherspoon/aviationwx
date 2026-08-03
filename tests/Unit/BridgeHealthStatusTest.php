@@ -226,4 +226,53 @@ class BridgeHealthStatusTest extends TestCase
         $this->assertSame(2, json_decode($lines[0], true)['n'] ?? null);
         $this->assertSame(3, json_decode($lines[1], true)['n'] ?? null);
     }
+
+    public function testHostStatusWorse_DegradedBeatsMaintenanceEitherOrder(): void
+    {
+        $this->assertSame('degraded', bridgeHostStatusWorse('maintenance', 'degraded'));
+        $this->assertSame('degraded', bridgeHostStatusWorse('degraded', 'maintenance'));
+        $this->assertSame('down', bridgeHostStatusWorse('degraded', 'down'));
+        $this->assertSame('down', bridgeHostStatusWorse('maintenance', 'down'));
+        $this->assertSame('maintenance', bridgeHostStatusWorse('operational', 'maintenance'));
+    }
+
+    public function testBuildAirportBridgeHostsComponent_DegradedWinsOverMaintenance(): void
+    {
+        $maint = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'maintenance', 'ntp_ok' => true, 'ntp_failure_seconds' => 0],
+            'inventory' => ['stations' => [], 'cameras' => []],
+        ]);
+        $this->assertTrue($maint['ok']);
+        $this->assertTrue(bridgeStoreHealth('kspb', 'bridge-maint', $maint['health']));
+
+        $degraded = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'degraded', 'ntp_ok' => true, 'ntp_failure_seconds' => 0],
+            'inventory' => ['stations' => [], 'cameras' => []],
+        ]);
+        $this->assertTrue($degraded['ok']);
+        $this->assertTrue(bridgeStoreHealth('kspb', 'bridge-degraded', $degraded['health']));
+
+        $airport = [
+            'bridges' => [
+                ['id' => 'bridge-maint', 'label' => 'Maint'],
+                ['id' => 'bridge-degraded', 'label' => 'Degraded'],
+            ],
+        ];
+        $component = buildAirportBridgeHostsComponent('kspb', $airport);
+        $this->assertNotNull($component);
+        $this->assertSame('degraded', $component['status']);
+
+        // Order of bridges[] must not change the rollup
+        $airportReversed = [
+            'bridges' => [
+                ['id' => 'bridge-degraded', 'label' => 'Degraded'],
+                ['id' => 'bridge-maint', 'label' => 'Maint'],
+            ],
+        ];
+        $componentReversed = buildAirportBridgeHostsComponent('kspb', $airportReversed);
+        $this->assertNotNull($componentReversed);
+        $this->assertSame('degraded', $componentReversed['status']);
+    }
 }

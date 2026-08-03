@@ -6,6 +6,7 @@
  * callers should accept, attribute to the key binding, and log a warning.
  */
 
+require_once __DIR__ . '/keys.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/../logger.php';
 

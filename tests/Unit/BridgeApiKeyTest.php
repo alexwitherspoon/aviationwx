@@ -6,6 +6,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/bridge/keys.php';
+require_once __DIR__ . '/../../lib/bridge/middleware.php';
 
 class BridgeApiKeyTest extends TestCase
 {
@@ -25,6 +26,26 @@ class BridgeApiKeyTest extends TestCase
         $a = generateBridgeApiKey();
         $b = generateBridgeApiKey();
         $this->assertNotSame($a, $b);
+    }
+
+    public function testBridgeApiRateLimitIdentifier_OmitsRawKey(): void
+    {
+        $key = 'awxb_000000000000000000000000000000000000000000000001';
+        $id = bridgeApiRateLimitIdentifier($key, 'weather');
+        $this->assertStringStartsWith('bridge:weather:', $id);
+        $this->assertStringNotContainsString($key, $id);
+        $this->assertSame(
+            'bridge:weather:' . hash('sha256', $key),
+            $id
+        );
+        $this->assertNotSame(
+            bridgeApiRateLimitIdentifier($key, 'weather'),
+            bridgeApiRateLimitIdentifier($key, 'health')
+        );
+        $this->assertNotSame(
+            bridgeApiRateLimitIdentifier($key, 'weather'),
+            bridgeApiRateLimitIdentifier(generateBridgeApiKey(), 'weather')
+        );
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('invalidKeyProvider')]
