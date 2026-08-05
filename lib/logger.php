@@ -233,7 +233,7 @@ if (!function_exists('aviationwx_redact_sensitive_query_params')) {
 function aviationwx_redact_sensitive_query_params(string $value): string
 {
     return (string) preg_replace(
-        '/([?&])(api_key|apikey|application_key|api_secret|client_secret|client_id|api_token|access_token|token|password|secret)=([^&]*)/i',
+        '/([?&])(api_key|apikey|application_key|api_secret|client_secret|client_id|api_token|apiToken|access_token|token|password|passwd|pass|secret)=([^&]*)/i',
         '$1$2=[redacted]',
         $value,
     );
