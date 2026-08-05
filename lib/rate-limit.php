@@ -41,6 +41,19 @@ function getRateLimitClientIp(): string {
 }
 
 /**
+ * Whether rate-limit counters should use the file store
+ *
+ * CLI always uses files because APCu is process-local there. FPM/web uses APCu
+ * when available so workers share the same buckets.
+ */
+function rateLimitUsesFileStore(): bool
+{
+    return PHP_SAPI === 'cli'
+        || !function_exists('apcu_fetch')
+        || !function_exists('apcu_store');
+}
+
+/**
  * Check if request should be rate limited
  *
  * Implements IP-based rate limiting using APCu (preferred under FPM/web) or
@@ -57,8 +70,7 @@ function getRateLimitClientIp(): string {
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
     $ip = getRateLimitClientIp();
 
-    // FPM/web only: CLI APCu does not share across processes
-    if (PHP_SAPI !== 'cli' && function_exists('apcu_fetch') && function_exists('apcu_store')) {
+    if (!rateLimitUsesFileStore()) {
         $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);
         $data = apcu_fetch($rateLimitKey);
 
@@ -261,26 +273,27 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
 
 /**
  * Get remaining rate limit for this key
- * 
+ *
  * Returns the number of requests remaining in the current time window
  * and when the window resets. Used for X-RateLimit-* headers.
- * 
+ *
+ * Must use the same identity and store as checkRateLimit(), or headers
+ * describe a different bucket than enforcement.
+ *
  * @param string $key Rate limit key
  * @param int $maxRequests Maximum requests allowed
  * @param int $windowSeconds Time window in seconds
  * @return array Returns array with 'remaining' (int) and 'reset' (int timestamp) keys
  */
 function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
-    // Must derive the same identity as checkRateLimit, or the
-    // X-RateLimit-* headers describe a different client's bucket
     $ip = getRateLimitClientIp();
-    
-    if (!function_exists('apcu_fetch')) {
+
+    if (rateLimitUsesFileStore()) {
         require_once __DIR__ . '/cache-paths.php';
         $identifier = md5($key . '_' . $ip);
         $rateLimitFile = getRateLimitPath($identifier);
         $now = time();
-        
+
         if (file_exists($rateLimitFile)) {
             $content = @file_get_contents($rateLimitFile);
             if ($content !== false) {
@@ -303,10 +316,10 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
             'reset' => $now + $windowSeconds
         ];
     }
-    
+
     $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);
     $data = apcu_fetch($rateLimitKey);
-    
+
     if ($data === false) {
         // No rate limit data exists, so all requests are available
         return [
@@ -314,17 +327,17 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
             'reset' => time() + $windowSeconds
         ];
     }
-    
+
     // Extract count and reset time from the data array
     // Normalize to int to prevent type coercion issues
-    $currentCount = is_array($data) 
+    $currentCount = is_array($data)
         ? (isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : 0)
         : (is_numeric($data) ? (int)$data : 0);
     $now = time();
-    
+
     // Check if window expired (normalize reset time to int for comparison)
-    $dataReset = is_array($data) && isset($data['reset']) && is_numeric($data['reset']) 
-        ? (int)$data['reset'] 
+    $dataReset = is_array($data) && isset($data['reset']) && is_numeric($data['reset'])
+        ? (int)$data['reset']
         : null;
     if ($dataReset !== null && $now >= $dataReset) {
         // Window expired, all requests are available
@@ -333,9 +346,9 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
             'reset' => $now + $windowSeconds
         ];
     }
-    
+
     $resetTime = $dataReset !== null ? $dataReset : ($now + $windowSeconds);
-    
+
     return [
         'remaining' => (int)max(0, $maxRequests - $currentCount),
         'reset' => $resetTime
