@@ -53,6 +53,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
+          ini-values: apc.enable_cli=1
           coverage: pcov
       
       - name: Install system dependencies
@@ -224,6 +225,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Install system dependencies
@@ -694,6 +696,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -744,6 +747,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -866,6 +870,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -970,6 +975,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies

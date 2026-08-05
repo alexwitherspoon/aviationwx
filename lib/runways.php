@@ -101,15 +101,19 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
     }
 
     $segments = loadRunwaySegmentsFromFileCache($airportId, $airport);
-    if ($segments !== null && function_exists('apcu_store')) {
+    if ($segments === null) {
+        return null;
+    }
+
+    // Warm APCu when available; always return file/fixture segments either way
+    if (function_exists('apcu_store')) {
         @apcu_store($apcuKey, $segments, RUNWAYS_APCU_TTL);
         if ($fileMtime > 0) {
             @apcu_store(RUNWAYS_APCU_MTIME_KEY, $fileMtime, RUNWAYS_APCU_TTL);
         }
-        return rotateSegmentsIfTrueNorth($segments, $airport);
     }
 
-    return null;
+    return rotateSegmentsIfTrueNorth($segments, $airport);
 }
 
 /**
