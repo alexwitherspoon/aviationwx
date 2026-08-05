@@ -53,6 +53,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
+          ini-values: apc.enable_cli=1
           coverage: pcov
       
       - name: Install system dependencies
@@ -90,11 +91,9 @@ jobs:
         run: |
           vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --coverage-clover unit-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
-          if [ $exit_code -gt 1 ]; then
-            echo "❌ Unit tests failed - check output above"
+          if [ $exit_code -ne 0 ]; then
+            echo "❌ Unit tests failed (exit $exit_code) - check output above"
             exit 1
-          elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  Unit tests passed with warnings"
           else
             echo "✓ Unit tests passed"
           fi
@@ -103,11 +102,9 @@ jobs:
         run: |
           vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --coverage-clover integration-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
-          if [ $exit_code -gt 1 ]; then
-            echo "❌ Integration tests failed - check output above"
+          if [ $exit_code -ne 0 ]; then
+            echo "❌ Integration tests failed (exit $exit_code) - check output above"
             exit 1
-          elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  Integration tests passed with warnings"
           else
             echo "✓ Integration tests passed"
           fi
@@ -228,6 +225,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Install system dependencies
@@ -698,6 +696,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -748,6 +747,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -870,6 +870,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies
@@ -974,6 +975,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
+          ini-values: apc.enable_cli=1
           coverage: none
       
       - name: Cache Composer dependencies

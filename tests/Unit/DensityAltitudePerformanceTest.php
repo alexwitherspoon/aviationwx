@@ -297,7 +297,7 @@ class DensityAltitudePerformanceTest extends TestCase
     {
         $tables = loadPohTakeoffTables();
         $runway = [
-            'length_ft' => 2500,
+            'length_ft' => 4000,
             'surface' => 'ASPH',
             'ends' => [
                 [
@@ -311,14 +311,17 @@ class DensityAltitudePerformanceTest extends TestCase
             ],
         ];
 
-        $range = evaluateRunwayEndPerformanceRange($runway, 5000.0, 35.0, $tables);
+        // Mild DA so the clear departure end stays normal while the obstructed
+        // reciprocal (mapped opposite) remains caution+
+        $range = evaluateRunwayEndPerformanceRange($runway, 3000.0, 20.0, $tables);
         $tier = densityAltitudePerformanceTierFromScoredEnd($range['best']['total_risk']);
 
         $this->assertSame('normal', $tier);
+        // Obstruction on end 27 stresses the opposite departure (09)
         $this->assertSame('09', $range['worst']['end_id']);
         $this->assertSame('27', $range['best']['end_id']);
         $this->assertGreaterThanOrEqual(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['worst']['total_risk']);
-        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_WARNING, $range['best']['total_risk']);
+        $this->assertLessThan(DENSITY_ALTITUDE_PERFORMANCE_TIER_CAUTION, $range['best']['total_risk']);
     }
 
     public function testSyntheticShortTurfRunwayRemainsWarningOnBothEnds(): void

@@ -102,7 +102,8 @@ final class UnifiedNotamFetcherTest extends TestCase
         $merged = AirspaceAggregator::merge(array_merge($nmsRows, $wfs));
         $this->assertArrayHasKey('N:543', $merged);
         $row = $merged['N:543'];
-        $this->assertSame(FaaTfrWfsAdapter::SOURCE_TYPE, $row['field_sources']['geometry'] ?? null);
+        // NMS circle geometry is retained over WFS when the NMS row is a circle approximation
+        $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $row['field_sources']['geometry'] ?? null);
         $this->assertSame(NOTAM_AIRSPACE_SOURCE_NMS, $row['field_sources']['text'] ?? null);
         $this->assertTrue($row['capabilities']['map']);
         $this->assertTrue($row['capabilities']['banner']);

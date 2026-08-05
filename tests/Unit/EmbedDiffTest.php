@@ -13,13 +13,14 @@ require_once __DIR__ . '/../../lib/embed-diff.php';
 
 class EmbedDiffTest extends TestCase
 {
-    private const TEST_AIRPORT_ID = 'kspb';
+    /** Airport id not present in tests/Fixtures/runways_data.json */
+    private const TEST_AIRPORT_ID = 'embeddiff';
 
     private function getMinimalAirport(): array
     {
         return [
             'name' => 'Test Airport',
-            'icao' => 'KSPB',
+            'icao' => 'ZZED',
             'lat' => 45.77,
             'lon' => -122.86,
             'elevation_ft' => 58,

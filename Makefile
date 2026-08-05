@@ -63,7 +63,10 @@ config-example: ## Copy example config for local development (mock mode)
 		echo "   Remove it first if you want to reset: rm config/airports.json"; \
 	else \
 		cp config/airports.json.example config/airports.json; \
+		KEY=$$(php scripts/generate-bridge-api-key.php); \
+		php -r '$$path=$$argv[1]; $$key=$$argv[2]; $$placeholder="awxb_EXAMPLEDONOTUSE000000000000000000000000000000000"; $$raw=file_get_contents($$path); if ($$raw===false || strpos($$raw, $$placeholder)===false) { fwrite(STDERR, "ERROR: example bridge api_key placeholder missing\n"); exit(1);} file_put_contents($$path, str_replace($$placeholder, $$key, $$raw));' config/airports.json "$$KEY"; \
 		echo "✓ Created config/airports.json from example"; \
+		echo "  Generated a fresh bridges[].api_key (do not commit it)"; \
 		echo "  Mock mode will auto-activate (test API keys detected)"; \
 		echo "  Run 'make dev' to start development server"; \
 	fi
@@ -134,24 +137,36 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "2️⃣  Running Unit Tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage; \
 	exit_code=$$?; \
-	if [ "$$exit_code" -gt 1 ]; then echo "❌ Unit tests failed"; exit 1; elif [ "$$exit_code" -eq 1 ]; then echo "⚠️  Unit tests passed with warnings"; else echo "✓ Unit tests passed"; fi
+	if [ "$$exit_code" -ne 0 ]; then echo "❌ Unit tests failed (exit $$exit_code)"; exit 1; else echo "✓ Unit tests passed"; fi
 	@echo ""
 	@echo "3️⃣  Running Integration Tests..."
-	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage; \
+	@# Prefer isolated test stack (:9080). Never fall through to :8080 (dev secrets).
+	@# When no stack is up, point at an unreachable URL so HTTP tests skip (CI-like).
+	@TEST_API_URL="$${TEST_API_URL:-}"; \
+	if [ -z "$$TEST_API_URL" ]; then \
+		if curl -sf --max-time 2 http://127.0.0.1:9080 >/dev/null 2>&1; then \
+			TEST_API_URL="http://127.0.0.1:9080"; \
+			echo "Using TEST_API_URL=$$TEST_API_URL"; \
+		else \
+			TEST_API_URL="http://127.0.0.1:9"; \
+			echo "Isolated :9080 not healthy - HTTP integration tests will skip (TEST_API_URL=$$TEST_API_URL)"; \
+		fi; \
+	fi; \
+	APP_ENV=testing TEST_API_URL="$$TEST_API_URL" vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage; \
 	exit_code=$$?; \
-	if [ "$$exit_code" -gt 1 ]; then echo "❌ Integration tests failed"; exit 1; elif [ "$$exit_code" -eq 1 ]; then echo "⚠️  Integration tests passed with warnings"; else echo "✓ Integration tests passed"; fi
+	if [ "$$exit_code" -ne 0 ]; then echo "❌ Integration tests failed (exit $$exit_code)"; exit 1; else echo "✓ Integration tests passed"; fi
 	@echo ""
 	@echo "4️⃣  Running Critical Safety Tests..."
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherCalculationsTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WeatherCalculationsTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/MagneticDeclinationSafetyTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WindRoseSafetyTest.php --testdox --stop-on-failure --no-coverage; \
-	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WindRoseSafetyTest failed"; exit 1; fi
+	exit_code=$$?; if [ "$$exit_code" -ne 0 ]; then echo "❌ WindRoseSafetyTest failed"; exit 1; fi
 	@echo "✓ Critical safety tests passed"
 	@echo ""
 	@echo "5️⃣  Validating JavaScript..."

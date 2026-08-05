@@ -519,6 +519,116 @@
           }
         }
       }
+    },
+    "/bridge/bootstrap": {
+      "get": {
+        "summary": "Bridge bootstrap",
+        "description": "Confirm bridge identity from X-Api-Key and return read-only site context (airport, declination, heartbeat interval, enabled weather bindings). Requires a bridge API key (`awxb_…`), not a partner `ak_*` key.",
+        "operationId": "bridgeBootstrap",
+        "tags": ["Bridge"],
+        "security": [{"BridgeApiKeyAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Bootstrap payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "airport": {
+                          "type": "object",
+                          "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"}
+                          }
+                        },
+                        "bridge_id": {"type": "string"},
+                        "declination_deg": {"type": "number", "description": "East-positive degrees"},
+                        "declination_source": {"type": "string", "enum": ["override", "global", "wmm", "none"]},
+                        "heartbeat_interval_seconds": {"type": "integer"},
+                        "enabled_sources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {"type": "string"},
+                              "provider": {"type": "string", "description": "weather_sources type (e.g. davis_weatherlink_live)"},
+                              "bridge_source_id": {"type": "string"},
+                              "core_station_id": {"type": "string", "nullable": true},
+                              "enabled": {"type": "boolean"}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    },
+    "/bridge/health": {
+      "post": {
+        "summary": "Bridge health heartbeat",
+        "description": "Fleet heartbeat (~60s) with host health, subsystems, source inventory, and error fingerprints. Persisted for status Bridge Host lines and ops discovery. When subsystems, inventory, or errors are present, every entry must be well-formed (malformed rows are rejected, not dropped). Body bridge_id may disagree with the key binding; core attributes to the key and logs a warning.",
+        "operationId": "bridgeHealth",
+        "tags": ["Bridge"],
+        "security": [{"BridgeApiKeyAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/BridgeHealthRequest"}
+            }
+          }
+        },
+        "responses": {
+          "204": {"description": "Accepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/bridge/weather": {
+      "post": {
+        "summary": "Bridge weather observation ingest",
+        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are always stored for diagnostics. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
+        "operationId": "bridgeWeather",
+        "tags": ["Bridge"],
+        "security": [{"BridgeApiKeyAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/BridgeWeatherRequest"}
+            }
+          }
+        },
+        "responses": {
+          "204": {"description": "Accepted"},
+          "400": {
+            "description": "Invalid request (including PROVIDER_MISMATCH when an enabled source posts a different provider than weather_sources.type)",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
     }
   },
   "components": {
@@ -527,7 +637,13 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Optional API key for higher rate limits"
+        "description": "Optional partner API key for higher rate limits (ak_live_* / ak_test_*)"
+      },
+      "BridgeApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key",
+        "description": "Required bridge API key (awxb_ + 48 alphanumeric). Generate with scripts/generate-bridge-api-key.php"
       }
     },
     "parameters": {
@@ -600,9 +716,126 @@
             }
           }
         }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
       }
     },
     "schemas": {
+      "BridgeHealthRequest": {
+        "type": "object",
+        "required": ["observed_at", "host"],
+        "properties": {
+          "observed_at": {"type": "string", "format": "date-time"},
+          "bridge_id": {"type": "string"},
+          "host": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {"type": "string", "enum": ["operational", "degraded", "down", "maintenance"]},
+              "ntp_ok": {"type": "boolean"},
+              "ntp_failure_seconds": {"type": "integer", "minimum": 0},
+              "build": {"type": "object"},
+              "resources": {"type": "object"}
+            }
+          },
+          "subsystems": {"type": "object"},
+          "inventory": {
+            "type": "object",
+            "properties": {
+              "cameras": {"type": "array", "items": {"type": "object"}},
+              "stations": {"type": "array", "items": {"type": "object"}}
+            }
+          },
+          "errors": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "BridgeWeatherProviderMeta": {
+        "type": "object",
+        "required": ["raw"],
+        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object). Optional keys such as api, path, txid, did are stored when present. Wind is always true north from a properly installed vane; do not send wind_reference.",
+        "properties": {
+          "raw": {
+            "type": "object",
+            "description": "Non-empty station-native observation object",
+            "additionalProperties": true
+          },
+          "api": {"type": "string"},
+          "path": {"type": "string"},
+          "txid": {"type": "integer"},
+          "did": {"type": "string"},
+          "host": {"type": "string"}
+        },
+        "additionalProperties": true
+      },
+      "BridgeWeatherObservation": {
+        "type": "object",
+        "required": ["observed_at", "source_id", "provider", "provider_meta"],
+        "properties": {
+          "observed_at": {"type": "string", "format": "date-time"},
+          "bridge_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "provider": {
+            "type": "string",
+            "description": "Provider family token (e.g. davis_weatherlink_live). When the source is enabled in weather_sources, must equal that row's type.",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}
+        }
+      },
+      "BridgeWeatherBatchItem": {
+        "type": "object",
+        "required": ["observed_at", "provider_meta"],
+        "description": "Batch sample; source_id / provider / bridge_id may be inherited from the request top level.",
+        "properties": {
+          "observed_at": {"type": "string", "format": "date-time"},
+          "bridge_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "provider": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "provider_meta": {"$ref": "#/components/schemas/BridgeWeatherProviderMeta"}
+        }
+      },
+      "BridgeWeatherRequest": {
+        "oneOf": [
+          {
+            "title": "SingleObservation",
+            "allOf": [
+              {"$ref": "#/components/schemas/BridgeWeatherObservation"}
+            ]
+          },
+          {
+            "title": "BatchSamples",
+            "type": "object",
+            "required": ["samples"],
+            "description": "Bounded batch (max 60). Top-level bridge_id / source_id / provider may be inherited by items.",
+            "properties": {
+              "bridge_id": {"type": "string"},
+              "source_id": {"type": "string"},
+              "provider": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "samples": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 60,
+                "items": {"$ref": "#/components/schemas/BridgeWeatherBatchItem"}
+              }
+            }
+          }
+        ],
+        "description": "Single observation or batch (`samples` array, max 60). A legacy `sample` key is ignored if present."
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {

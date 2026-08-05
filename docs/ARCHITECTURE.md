@@ -114,6 +114,8 @@ aviationwx.org/
 
 TLS terminates in nginx. **`api.aviationwx.org`** exposes Public API v1; **`embed.aviationwx.org`** serves the embed generator and forwards `/api/v1/...` to **`api/v1/router.php`** on that host so `fetch()` from the embed origin receives CORS on the first hop. **`aviationwx.org`** and **`*.aviationwx.org`** serve the dashboard. The committed **`docker/nginx.conf`** is bind-mounted in production (see **`docs/DEPLOYMENT.md`**).
 
+Bridge appliances authenticate to Public API `/v1/bridge/*` with required `awxb_` keys (`lib/bridge/`). Partner `ak_*` keys remain optional for other v1 routes. Fleet ops cache lives under `cache/bridges/`; weather publish requires an explicit cache-backed `weather_sources` row such as `davis_weatherlink_live` (see [CONFIGURATION.md](CONFIGURATION.md) and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push)).
+
 ### Routing System (`index.php`)
 
 - **Purpose**: Routes requests to appropriate pages
@@ -129,9 +131,9 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 
 - **Purpose**: Fetches and serves weather data as JSON for first-party consumers
 - **Key Features**:
-  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR, Nav Canada Weather for Canadian airports)
+  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR, Nav Canada Weather for Canadian airports, AviationWX Bridge push)
   - **Unified Fetcher** (default): Clean aggregation pipeline with predictable behavior
-  - Parallel fetching via `curl_multi` for all sources
+  - Parallel fetching via `curl_multi` for most sources (`davis_weatherlink_live` / bridge cache and DyaconLive use local-cache / dedicated paths)
   - Field-level source tracking and observation times
   - Per-source staleness checking (3-hour threshold for sensors, METAR has own threshold)
   - Caching with stale-while-revalidate
@@ -145,7 +147,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 1. Request validation (airport ID, rate limiting)
 2. Cache check (fresh/stale/expired)
 3. Build source list (primary + backup + METAR)
-4. Fetch all sources in parallel via `curl_multi` (Tempest may perform up to two **sequential** follow-up HTTP calls per airport source when federated station `obs` is empty: `GET /stations/{id}` then `GET /observations/device/{st_id}`; see [DATA_FLOW.md](DATA_FLOW.md#tempest-weatherflow-api))
+4. Fetch sources (parallel `curl_multi` for HTTP providers; local-cache resolve for `davis_weatherlink_live` / bridge cache; dedicated paths for DyaconLive / METAR as documented in DATA_FLOW)
 5. Parse responses into `WeatherSnapshot` objects
 6. Aggregate using `WeatherAggregator` with freshness-based selection:
    - Wind fields must come from single source (complete group)

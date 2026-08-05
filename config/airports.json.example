@@ -197,6 +197,14 @@
         "fuel": "100LL, Jet-A",
         "repairs_available": true
       },
+      "bridges": [
+        {
+          "id": "bridge-spb-example-1",
+          "api_key": "awxb_EXAMPLEDONOTUSE000000000000000000000000000000000",
+          "label": "Example Bridge Pi"
+        }
+      ],
+      "_comment_bridges": "bridges[].api_key placeholder is intentionally non-secret. make config-example replaces it with a freshly generated awxb_ key in the local copy.",
       "weather_sources": [
         {
           "type": "tempest",
@@ -226,8 +234,14 @@
           "type": "dyaconlive",
           "station_id": 130114,
           "username": "test_dyaconlive_user_demo",
-          "password": "test_dyaconlive_password_demo",
-          "_comment": "DyaconLive+ API credentials; station_id from GET /stations after token auth"
+          "password": "test_dyaconlive_password_demo"
+        },
+        {
+          "type": "davis_weatherlink_live",
+          "bridge_id": "bridge-spb-example-1",
+          "bridge_source_id": "station-scappoose-davis",
+          "station_id": "wx-spb-bridge-davis",
+          "txid": 1
         }
       ],
       "webcams": [

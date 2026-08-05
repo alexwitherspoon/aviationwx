@@ -276,6 +276,8 @@ class FormatWeatherResponseTest extends TestCase
             'density_altitude' => 6280,
             'pressure_altitude' => 4570,
             'temperature' => 20.1,
+            'pressure' => 30.12,
+            'last_updated_primary' => time(),
         ];
         $airport = [
             'id' => 'id76',

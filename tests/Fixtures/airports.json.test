@@ -55,6 +55,13 @@
       "timezone": "America/Los_Angeles",
       "access_type": "public",
       "tower_status": "non_towered",
+      "bridges": [
+        {
+          "id": "bridge-spb-test-1",
+          "api_key": "awxb_000000000000000000000000000000000000000000000001",
+          "label": "Test Bridge"
+        }
+      ],
       "weather_sources": [
         {
           "type": "tempest",
@@ -69,6 +76,13 @@
           "type": "metar",
           "station_id": "KSPB",
           "nearby_stations": ["KVUO", "KHIO"]
+        },
+        {
+          "type": "davis_weatherlink_live",
+          "bridge_id": "bridge-spb-test-1",
+          "bridge_source_id": "station-davis-wll",
+          "station_id": "wx-spb-bridge-davis",
+          "txid": 1
         }
       ],
       "webcams": [

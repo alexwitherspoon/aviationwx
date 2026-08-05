@@ -97,6 +97,18 @@ class RunwaysTest extends TestCase
     }
 
     /**
+     * Programmatic segments return even when APCu is unavailable
+     */
+    public function testGetRunwaySegmentsForAirport_FixtureWithoutRequiringApcu(): void
+    {
+        $airport = ['lat' => 45.7710278, 'lon' => -122.8618333, 'icao' => 'KSPB'];
+        $segments = getRunwaySegmentsForAirport('kspb', $airport);
+        $this->assertNotNull($segments);
+        $this->assertNotEmpty($segments);
+        $this->assertSame('programmatic', $segments[0]['source']);
+    }
+
+    /**
      * Test ident resolution: icao used when airportId differs
      */
     public function testLoadRunwaySegmentsFromFileCache_ResolvesViaIcao(): void

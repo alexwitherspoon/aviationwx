@@ -63,13 +63,20 @@ class NotamApiTest extends TestCase {
      * Test upcoming NOTAM today
      */
     public function testRevalidateNotamStatus_UpcomingToday() {
+        // Pin clock so start stays on the same local calendar day (avoids midnight flake)
+        $tz = new DateTimeZone('America/Denver');
+        $localNoon = (new DateTimeImmutable('now', $tz))->setTime(12, 0, 0);
+        $nowUnix = $localNoon->getTimestamp();
+        $startUnix = $localNoon->modify('+1 hour')->getTimestamp();
+        $endUnix = $localNoon->modify('+2 hours')->getTimestamp();
+
         $notam = [
-            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600), // Starts in 1 hour
-            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 7200),   // Ends in 2 hours
+            'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $startUnix),
+            'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', $endUnix),
             'status' => 'upcoming_today'
         ];
         
-        $status = revalidateNotamStatus($notam, 'America/Denver');
+        $status = revalidateNotamStatus($notam, 'America/Denver', $nowUnix);
         $this->assertEquals('upcoming_today', $status);
     }
     

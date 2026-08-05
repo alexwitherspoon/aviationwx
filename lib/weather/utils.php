@@ -413,6 +413,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'DyaconLive',
                 'url' => 'https://dyacon.net/'
             ];
+        case 'davis_weatherlink_live':
+            return [
+                'name' => 'Davis WeatherLink Live (Bridge)',
+                'url' => 'https://weatherlink.github.io/weatherlink-live-local-api/'
+            ];
         default:
             return null;
     }
