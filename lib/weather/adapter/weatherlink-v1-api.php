@@ -1,16 +1,17 @@
 <?php
 /**
  * WeatherLink v1 API Adapter
- * 
+ *
  * Handles fetching and parsing weather data from WeatherLink v1 API (legacy).
  * Supports: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial loggers,
  *           and WeatherLink Network Annual Subscription connected stations.
- * 
+ *
  * API documentation: https://www.weatherlink.com/static/docs/APIdocumentation.pdf
- * 
- * Authentication: Device ID (DID) + API Token
+ *
+ * Authentication: Device ID (DID) + API Token; optional account/device password
  * Required config: device_id, api_token
- * 
+ * Optional config: password (some legacy stations reject empty pass=)
+ *
  * Note: The v1 API is for legacy devices. New Davis devices (WeatherLink Live,
  * WeatherLink Console, EnviroMonitor) should use the v2 API instead.
  */
@@ -28,9 +29,9 @@ use AviationWX\Weather\Data\WeatherSnapshot;
 
 /**
  * WeatherLink v1 API Adapter Class
- * 
+ *
  * Legacy Davis Instruments WeatherLink stations using older hardware.
- * The v1 API uses Device ID (DID) and API Token for authentication.
+ * The v1 API uses Device ID (DID), API Token, and optionally a password.
  * Data is returned in NOAA Extended format (JSON).
  * Updates every ~60 seconds depending on model/configuration.
  */
@@ -94,26 +95,26 @@ class WeatherLinkV1Adapter {
     
     /**
      * Build the API URL for fetching data
-     * 
-     * WeatherLink v1 API uses Device ID and API Token as query parameters.
-     * 
-     * Endpoint format: https://api.weatherlink.com/v1/NoaaExt.json?user={user}&pass={pass}&apiToken={token}
-     * Note: 'user' is the Device ID (DID) and 'pass' can be empty or any value.
-     * 
-     * @param array $config Source configuration (device_id, api_token)
+     *
+     * Endpoint: https://api.weatherlink.com/v1/NoaaExt.json?user={did}&pass={pass}&apiToken={token}
+     * 'user' is the Device ID. 'pass' stays empty when password is unset/empty so existing
+     * stations keep working; some legacy stations require the account/device password.
+     *
+     * @param array $config Source configuration (device_id, api_token; optional password)
      * @return string|null API URL or null if config is invalid
      */
     public static function buildUrl(array $config): ?string {
         if (!isset($config['device_id']) || !isset($config['api_token'])) {
             return null;
         }
-        
-        $deviceId = urlencode($config['device_id']);
-        $apiToken = urlencode($config['api_token']);
-        
-        // The v1 API uses 'user' for Device ID and 'pass' (can be empty)
-        // Format: NoaaExt.json returns JSON formatted NOAA extended data
-        return "https://api.weatherlink.com/v1/NoaaExt.json?user={$deviceId}&pass=&apiToken={$apiToken}";
+
+        $deviceId = urlencode((string) $config['device_id']);
+        $apiToken = urlencode((string) $config['api_token']);
+        $pass = isset($config['password']) && $config['password'] !== ''
+            ? urlencode((string) $config['password'])
+            : '';
+
+        return "https://api.weatherlink.com/v1/NoaaExt.json?user={$deviceId}&pass={$pass}&apiToken={$apiToken}";
     }
     
     /**
@@ -198,8 +199,12 @@ class WeatherLinkV1Adapter {
         }
         
         $data = json_decode($response, true);
-        
+
         if ($data === null || !is_array($data)) {
+            // Auth failures often return plain text (e.g. "Invalid Request!") with HTTP 200
+            aviationwx_log('warning', 'WeatherLink v1 response was not valid JSON', [
+                'body_prefix' => substr(preg_replace('/\s+/', ' ', $response) ?? $response, 0, 80),
+            ], 'app');
             return null;
         }
         
@@ -317,27 +322,25 @@ class WeatherLinkV1Adapter {
 
 /**
  * Fetch weather from WeatherLink v1 API (synchronous)
- * 
- * @param array $source Source configuration (device_id, api_token)
+ *
+ * @param array $source Source configuration (device_id, api_token; optional password)
  * @return array|null Weather data array or null on failure
  */
 function fetchWeatherLinkV1Weather($source): ?array {
     if (!is_array($source) || !isset($source['device_id']) || !isset($source['api_token'])) {
         return null;
     }
-    
+
     $url = WeatherLinkV1Adapter::buildUrl($source);
     if ($url === null) {
         return null;
     }
-    
-    // Check for mock response in test mode
+
     $mockResponse = getMockHttpResponse($url);
     if ($mockResponse !== null) {
         return WeatherLinkV1Adapter::parseResponse($mockResponse);
     }
-    
-    // Create context with timeout
+
     $context = stream_context_create([
         'http' => [
             'timeout' => CURL_TIMEOUT,
@@ -345,16 +348,17 @@ function fetchWeatherLinkV1Weather($source): ?array {
             'header' => "Accept: application/json\r\n",
         ],
     ]);
-    
+
+    // @ suppresses warning; false return is handled explicitly below
     $response = @file_get_contents($url, false, $context);
-    
+
     if ($response === false) {
         aviationwx_log('warning', 'WeatherLink v1 API fetch failed', [
-            'url_masked' => preg_replace('/apiToken=[^&]+/', 'apiToken=***', $url),
+            'url_masked' => aviationwx_redact_sensitive_query_params($url),
         ], 'app');
         return null;
     }
-    
+
     return WeatherLinkV1Adapter::parseResponse($response);
 }
 
