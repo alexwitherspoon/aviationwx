@@ -117,4 +117,16 @@ class WeatherLinkV1AdapterTest extends TestCase
         // WeatherLink auth failures often return plain text with HTTP 200
         $this->assertNull(WeatherLinkV1Adapter::parseResponse('Invalid Request!'));
     }
+
+    public function testLogSafeBodyPrefix_RedactsPassAndApiToken(): void
+    {
+        $raw = 'fail ?user=001D0ATEST01&pass=sekret&apiToken=tok123 trailing detail';
+        $redacted = WeatherLinkV1Adapter::logSafeBodyPrefix($raw);
+
+        $this->assertStringContainsString('pass=[redacted]', $redacted);
+        $this->assertStringContainsString('apiToken=[redacted]', $redacted);
+        $this->assertStringNotContainsString('sekret', $redacted);
+        $this->assertStringNotContainsString('tok123', $redacted);
+        $this->assertLessThanOrEqual(80, strlen($redacted));
+    }
 }

@@ -175,6 +175,19 @@ class WeatherLinkV1Adapter {
     }
     
     /**
+     * Build a short, credential-scrubbed prefix of an upstream body for app.log.
+     *
+     * aviationwx_log writes context without scrubbing; exchange forwarding does.
+     */
+    public static function logSafeBodyPrefix(string $response): string
+    {
+        $rawPrefix = substr($response, 0, 256);
+        $normalized = substr(preg_replace('/\s+/', ' ', $rawPrefix) ?? $rawPrefix, 0, 120);
+
+        return substr(aviationwx_redact_sensitive_query_params($normalized), 0, 80);
+    }
+
+    /**
      * Parse WeatherLink v1 API response (NOAA Extended JSON format)
      * 
      * The v1 API returns data in NOAA Extended format with fields like:
@@ -202,9 +215,8 @@ class WeatherLinkV1Adapter {
 
         if ($data === null || !is_array($data)) {
             // Auth failures often return plain text (e.g. "Invalid Request!") with HTTP 200
-            $rawPrefix = substr($response, 0, 256);
             aviationwx_log('warning', 'WeatherLink v1 response was not valid JSON', [
-                'body_prefix' => substr(preg_replace('/\s+/', ' ', $rawPrefix) ?? $rawPrefix, 0, 80),
+                'body_prefix' => self::logSafeBodyPrefix($response),
             ], 'app');
             return null;
         }
