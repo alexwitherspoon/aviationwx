@@ -275,4 +275,61 @@ class BridgeHealthStatusTest extends TestCase
         $this->assertNotNull($componentReversed);
         $this->assertSame('degraded', $componentReversed['status']);
     }
+
+    /**
+     * Airport rollup treats host maintenance as degraded (not operational)
+     */
+    public function testCheckAirportHealth_BridgeHostsMaintenanceOnly_IsDegraded(): void
+    {
+        require_once __DIR__ . '/../../lib/status-checks.php';
+
+        $maint = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'maintenance', 'ntp_ok' => true, 'ntp_failure_seconds' => 0],
+            'inventory' => ['stations' => [], 'cameras' => []],
+        ]);
+        $this->assertTrue($maint['ok']);
+        $this->assertTrue(bridgeStoreHealth('kspb', 'bridge-maint-only', $maint['health']));
+
+        $airport = [
+            'weather_sources' => [],
+            'webcams' => [],
+            'bridges' => [
+                ['id' => 'bridge-maint-only', 'label' => 'Maint'],
+            ],
+        ];
+        $health = checkAirportHealth('kspb', $airport);
+
+        $this->assertArrayHasKey('bridge_hosts', $health['components']);
+        $this->assertSame('maintenance', $health['components']['bridge_hosts']['status']);
+        $this->assertSame('degraded', $health['status']);
+    }
+
+    /**
+     * Config airport maintenance still overrides component-derived status
+     */
+    public function testCheckAirportHealth_ConfigMaintenanceOverridesBridgeDegraded(): void
+    {
+        require_once __DIR__ . '/../../lib/status-checks.php';
+
+        $maint = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'maintenance', 'ntp_ok' => true, 'ntp_failure_seconds' => 0],
+            'inventory' => ['stations' => [], 'cameras' => []],
+        ]);
+        $this->assertTrue($maint['ok']);
+        $this->assertTrue(bridgeStoreHealth('kspb', 'bridge-maint-cfg', $maint['health']));
+
+        $airport = [
+            'maintenance' => true,
+            'weather_sources' => [],
+            'webcams' => [],
+            'bridges' => [
+                ['id' => 'bridge-maint-cfg', 'label' => 'Maint'],
+            ],
+        ];
+        $health = checkAirportHealth('kspb', $airport);
+
+        $this->assertSame('maintenance', $health['status']);
+    }
 }
