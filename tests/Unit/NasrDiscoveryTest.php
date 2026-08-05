@@ -166,9 +166,11 @@ class NasrDiscoveryTest extends TestCase
         try {
             nasrHttpThrottle();
             nasrHttpThrottle();
+            // Real check: back-to-back calls sleep once near the configured interval.
+            // Allow a small upper epsilon - microtime jitter can push wait slightly over 60.0.
             $this->assertCount(1, $slept);
             $this->assertGreaterThan(50.0, $slept[0]);
-            $this->assertLessThanOrEqual(60.0, $slept[0]);
+            $this->assertLessThanOrEqual(60.0 + 0.01, $slept[0]);
         } finally {
             @unlink($dir . '/.http_last_request');
             @unlink($dir . '/.http_throttle.lock');
