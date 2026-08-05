@@ -1001,6 +1001,10 @@ function checkFtpSftpServices(): array
 /**
  * Check airport health
  *
+ * Overall status is down if any nested source/camera/host is down, else degraded
+ * if any is degraded (or host/component maintenance), else operational. Config
+ * `maintenance: true` then overrides overall status to maintenance.
+ *
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
  * @return array {
