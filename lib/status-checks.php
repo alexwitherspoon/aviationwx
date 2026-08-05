@@ -1001,6 +1001,11 @@ function checkFtpSftpServices(): array
 /**
  * Check airport health
  *
+ * Overall status is down if any nested source/camera/host is down, else degraded
+ * if any is degraded, failed (sources), or host/component maintenance, else
+ * operational. Config `maintenance: true` then overrides overall status to
+ * maintenance.
+ *
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
  * @return array {
@@ -1617,8 +1622,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $health['components']['bridge_hosts'] = $bridgeHostsComponent;
     }
     
-    // Determine overall airport status: any component down = down, any degraded = degraded
-    // Check all components including nested sources/cameras for complete status picture
+    // Overall airport status: down > degraded (incl. host/component maintenance) > operational.
+    // Host "maintenance" is not the same as config airport maintenance (applied below).
     $hasDown = false;
     $hasDegraded = false;
     foreach ($health['components'] as $comp) {
@@ -1651,7 +1656,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $hasDown = true;
                     break 2;
                 }
-                if ($hostStatus === 'degraded') {
+                if ($hostStatus === 'degraded' || $hostStatus === 'maintenance') {
                     $hasDegraded = true;
                 }
             }
@@ -1660,7 +1665,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
             if ($comp['status'] === 'down') {
                 $hasDown = true;
                 break;
-            } elseif ($comp['status'] === 'degraded') {
+            } elseif ($comp['status'] === 'degraded' || $comp['status'] === 'maintenance') {
                 $hasDegraded = true;
             }
         }

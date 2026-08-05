@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../lib/bridge/health.php';
 require_once __DIR__ . '/../../lib/bridge/store.php';
 require_once __DIR__ . '/../../lib/bridge/status.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/../../lib/status-checks.php';
 
 class BridgeHealthStatusTest extends TestCase
 {
@@ -274,5 +275,60 @@ class BridgeHealthStatusTest extends TestCase
         $componentReversed = buildAirportBridgeHostsComponent('kspb', $airportReversed);
         $this->assertNotNull($componentReversed);
         $this->assertSame('degraded', $componentReversed['status']);
+    }
+
+    /**
+     * Airport rollup maps host maintenance to degraded (not operational)
+     */
+    public function testCheckAirportHealth_BridgeHostsMaintenanceOnly_IsDegraded(): void
+    {
+        $this->storeMaintenanceBridgeHealth('bridge-maint-only');
+
+        $airport = [
+            'weather_sources' => [],
+            'webcams' => [],
+            'bridges' => [
+                ['id' => 'bridge-maint-only', 'label' => 'Maint'],
+            ],
+        ];
+        $health = checkAirportHealth('kspb', $airport);
+
+        $this->assertArrayHasKey('bridge_hosts', $health['components']);
+        $this->assertSame('maintenance', $health['components']['bridge_hosts']['status']);
+        $this->assertSame('degraded', $health['status']);
+    }
+
+    /**
+     * Config airport maintenance must not be conflated with host maintenance
+     */
+    public function testCheckAirportHealth_ConfigMaintenanceOverridesBridgeDegraded(): void
+    {
+        $this->storeMaintenanceBridgeHealth('bridge-maint-cfg');
+
+        $airport = [
+            'maintenance' => true,
+            'weather_sources' => [],
+            'webcams' => [],
+            'bridges' => [
+                ['id' => 'bridge-maint-cfg', 'label' => 'Maint'],
+            ],
+        ];
+        $health = checkAirportHealth('kspb', $airport);
+
+        $this->assertSame('maintenance', $health['status']);
+    }
+
+    /**
+     * @param string $bridgeId Bridge id used for cache path and config
+     */
+    private function storeMaintenanceBridgeHealth(string $bridgeId): void
+    {
+        $maint = bridgeNormalizeHealthPayload([
+            'observed_at' => gmdate('c'),
+            'host' => ['status' => 'maintenance', 'ntp_ok' => true, 'ntp_failure_seconds' => 0],
+            'inventory' => ['stations' => [], 'cameras' => []],
+        ]);
+        $this->assertTrue($maint['ok']);
+        $this->assertTrue(bridgeStoreHealth('kspb', $bridgeId, $maint['health']));
     }
 }
