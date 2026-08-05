@@ -42,10 +42,13 @@ function getRateLimitClientIp(): string {
 
 /**
  * Check if request should be rate limited
- * 
- * Implements IP-based rate limiting using APCu (preferred) or file-based fallback.
- * Buckets by client IP via getRateLimitClientIp().
- * 
+ *
+ * Implements IP-based rate limiting using APCu (preferred under FPM/web) or
+ * file-based fallback. Buckets by client IP via getRateLimitClientIp().
+ *
+ * CLI always uses files: APCu is process-local in CLI, so counters would not
+ * accumulate across separate PHP processes (workers, test harnesses).
+ *
  * @param string $key Unique key for this rate limit (e.g., 'weather_api', 'webcam_api')
  * @param int $maxRequests Maximum requests allowed in the time window (default: RATE_LIMIT_WEATHER_MAX)
  * @param int $windowSeconds Time window in seconds (default: RATE_LIMIT_WEATHER_WINDOW)
@@ -53,25 +56,25 @@ function getRateLimitClientIp(): string {
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
     $ip = getRateLimitClientIp();
-    
-    // Use APCu if available for rate limiting
-    if (function_exists('apcu_fetch') && function_exists('apcu_store')) {
+
+    // FPM/web only: CLI APCu does not share across processes
+    if (PHP_SAPI !== 'cli' && function_exists('apcu_fetch') && function_exists('apcu_store')) {
         $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);
         $data = apcu_fetch($rateLimitKey);
-        
+
         if ($data === false) {
             // First request in this window
             apcu_store($rateLimitKey, ['count' => 1, 'reset' => time() + $windowSeconds], $windowSeconds + RATE_LIMIT_APCU_TTL_BUFFER);
             return true;
         }
-        
+
         // Check if window expired
         if (time() >= ($data['reset'] ?? 0)) {
             // Reset window
             apcu_store($rateLimitKey, ['count' => 1, 'reset' => time() + $windowSeconds], $windowSeconds + RATE_LIMIT_APCU_TTL_BUFFER);
             return true;
         }
-        
+
         if (($data['count'] ?? 0) >= $maxRequests) {
             // Rate limit exceeded
             aviationwx_log('warning', 'rate limit exceeded', [
@@ -82,16 +85,16 @@ function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeco
             ], 'app');
             return false;
         }
-        
+
         // Increment counter
         $data['count'] = ($data['count'] ?? 0) + 1;
         apcu_store($rateLimitKey, $data, $windowSeconds + RATE_LIMIT_APCU_TTL_BUFFER);
         return true;
     }
-    
-    // Fallback: File-based rate limiting if APCu not available
+
+    // File-based: no APCu, or CLI (process-local APCu cannot share counters)
     $isProd = isProduction();
-    if ($isProd) {
+    if ($isProd && PHP_SAPI !== 'cli') {
         aviationwx_log('warning', 'APCu not available, using file-based rate limiting fallback', [
             'key' => $key
         ], 'app');
