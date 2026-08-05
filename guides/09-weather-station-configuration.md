@@ -428,6 +428,7 @@ For older devices: Vantage Connect, WeatherLinkIP, and WeatherLink USB/Serial da
 |-------------|-------------|---------------|
 | **Device ID (DID)** | 12-16 character code | Printed on your device |
 | **API Token** | Authentication token | WeatherLink account page |
+| **Password** (optional) | Account or device password used in the v1 `pass` query param | WeatherLink account credentials for the station. Some legacy stations require this; others accept an empty `pass`. |
 
 #### Step-by-Step: Getting Your v1 Credentials
 
@@ -453,13 +454,18 @@ The DID looks like: `001D0A12345678` (12-16 alphanumeric characters)
 4. Look for the **"API Token"** section
 5. Copy your API Token
 
+**Step 3: Password (when required)**
+
+Some legacy v1 stations reject requests with an empty `pass` parameter. If WeatherLink returns `Invalid Request!` without a password, set `password` to the station's WeatherLink account or device password. Leave it omitted when the station works with an empty `pass`.
+
 #### Example Configuration (v1)
 
 ```json
 "weather_source": {
   "type": "weatherlink_v1",
   "device_id": "001D0A12345678",
-  "api_token": "ABCDEF123456..."
+  "api_token": "ABCDEF123456...",
+  "password": "optional-device-password"
 }
 ```
 
