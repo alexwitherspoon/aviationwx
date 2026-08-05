@@ -68,6 +68,22 @@ PHP, $configPath);
         self::assertStringNotContainsString('supersecret', $scrubbed['endpoint']);
     }
 
+    public function testScrubExchangeLogContext_RedactsPassQueryParameterInUrl(): void
+    {
+        putenv('APP_ENV=testing');
+        putenv('CONFIG_PATH=' . dirname(__DIR__, 2) . '/tests/Fixtures/airports.json.test');
+        require_once dirname(__DIR__, 2) . '/lib/logger.php';
+
+        $scrubbed = aviationwx_scrub_exchange_log_context([
+            'url_masked' => 'https://api.weatherlink.com/v1/NoaaExt.json?user=001D0ATEST01&pass=%40TestRanch&apiToken=test_api_token',
+        ]);
+
+        self::assertStringContainsString('pass=[redacted]', $scrubbed['url_masked']);
+        self::assertStringContainsString('apiToken=[redacted]', $scrubbed['url_masked']);
+        self::assertStringNotContainsString('%40TestRanch', $scrubbed['url_masked']);
+        self::assertStringNotContainsString('test_api_token', $scrubbed['url_masked']);
+    }
+
     /**
      * @return array{exit: int, output: string}
      */

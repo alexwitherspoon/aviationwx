@@ -708,7 +708,8 @@ For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial logger
   {
     "type": "weatherlink_v1",
     "device_id": "001D0A12345678",
-    "api_token": "your-api-token"
+    "api_token": "your-api-token",
+    "password": "optional-device-password"
   }
 ]
 ```
@@ -719,6 +720,7 @@ For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial logger
 |-------|------------------|
 | `device_id` | Printed on a label on your physical device (12-16 characters) |
 | `api_token` | WeatherLink Account page → API Token section |
+| `password` | Optional. Account or device password for the station. Some legacy stations reject an empty `pass` query parameter and require this value. |
 
 See the [Weather Station Guide](../guides/09-weather-station-configuration.md) for photos and detailed instructions.
 
