@@ -202,8 +202,9 @@ class WeatherLinkV1Adapter {
 
         if ($data === null || !is_array($data)) {
             // Auth failures often return plain text (e.g. "Invalid Request!") with HTTP 200
+            $rawPrefix = substr($response, 0, 256);
             aviationwx_log('warning', 'WeatherLink v1 response was not valid JSON', [
-                'body_prefix' => substr(preg_replace('/\s+/', ' ', $response) ?? $response, 0, 80),
+                'body_prefix' => substr(preg_replace('/\s+/', ' ', $rawPrefix) ?? $rawPrefix, 0, 80),
             ], 'app');
             return null;
         }
