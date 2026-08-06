@@ -225,7 +225,7 @@ AviationWX processes images automatically - we resize and optimize for web deliv
 
 Avoid: 4K every 10 seconds (excessive bandwidth, often unnecessary).
 
-We will reject images that are over-pixelated, heavily compressed, or unreadable. When in doubt, upload less frequently at higher quality.
+We will reject images that are corrupt, uniform/blank, or otherwise unreadable. When in doubt, upload less frequently at higher quality.
 
 ### RTSP Stream Settings
 

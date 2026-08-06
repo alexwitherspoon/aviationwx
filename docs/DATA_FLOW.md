@@ -1414,7 +1414,7 @@ The webcam processing pipeline uses three main components:
 
 6. **Processing Pipeline**
    - **Single Image Load**: GD resource loaded once from staging file
-   - **Error Frame Detection**: Uniform color, pixelation, Blue Iris errors
+   - **Error Frame Detection**: Uniform color, corrupt regions, Blue Iris errors
    - **EXIF Validation**: Ensures valid timestamp, adds if missing
    - **EXIF Normalization**: Converts to UTC, adds GPS timestamp fields
    - **Variant Generation**: Creates 1080p, 720p, 360p variants
