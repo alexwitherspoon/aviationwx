@@ -303,7 +303,6 @@ function reference_data_nasr_frq_source_health(): array
     $messages = [];
     if (!$readable) {
         $status = 'down';
-        $messages[] = 'NASR FRQ cache missing';
     } else {
         if ($needsRefresh) {
             $status = 'degraded';
@@ -328,13 +327,17 @@ function reference_data_nasr_frq_source_health(): array
 
     $effectiveDate = is_array($meta) ? ($meta['frq_effective_date'] ?? null) : null;
 
-    $message = $airportCount > 0
-        ? "{$airportCount} airports in FRQ cache"
-        : 'NASR FRQ cache present';
-    if ($messages !== []) {
-        $message .= ' • ' . implode(' • ', $messages);
-    } elseif (!$needsRefresh) {
-        $message .= ' • Up to date';
+    if (!$readable) {
+        $message = 'NASR FRQ cache missing (run fetch-nasr-frq.php)';
+    } else {
+        $message = $airportCount > 0
+            ? "{$airportCount} airports in FRQ cache"
+            : 'NASR FRQ cache present';
+        if ($messages !== []) {
+            $message .= ' • ' . implode(' • ', $messages);
+        } elseif (!$needsRefresh) {
+            $message .= ' • Up to date';
+        }
     }
 
     return [

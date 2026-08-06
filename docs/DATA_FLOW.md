@@ -705,7 +705,7 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 
 OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
-**NASR ingest**: `scripts/fetch-nasr-apt.php` (scheduler weekly + startup when missing) writes `cache/nasr/nasr_apt.json`. Failed or closed NASR pavement condition and water surfaces are excluded from runway selection.
+**NASR ingest**: `scripts/fetch-nasr-apt.php` writes `cache/nasr/nasr_apt.json`. The scheduler retries on a short interval while the APT/FRQ cache files are missing, and uses a weekly gate when the files are present but aged or a new cycle needs discovery. Failed or closed NASR pavement condition and water surfaces are excluded from runway selection.
 
 **Configured runtime slice**: Weather formatting loads `cache/nasr/nasr_apt_configured.json`, a subset containing only NASR records referenced by `airports.json`. The slice rebuilds automatically when the config file or full NASR cache changes (tracked via config SHA and source mtime in `nasr_meta.json`).
 
