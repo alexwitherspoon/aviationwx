@@ -312,6 +312,81 @@ class PushCameraBatchProcessingTest extends TestCase
         $this->assertFalse($result->success, 'Should not succeed for new file');
         $this->assertTrue($result->isSkip(), 'Should be a skip');
         $this->assertEquals('file_too_new', $result->getSkipReason(), 'Reason should be file_too_new');
+        $this->assertFileExists($tooNewPath, 'Too-new file must remain for a later attempt');
+    }
+
+    /**
+     * Rejected inbox files must be consumed so the same upload is not re-evaluated
+     *
+     * Regression: error_frame (and other hard rejects) used to leave the FTP/SFTP
+     * file in place, causing ~20x duplicate quarantine copies and reject metrics.
+     */
+    public function testAcquireFile_ConsumesInboxFileAfterErrorFrameReject()
+    {
+        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
+        if ($whichCode !== 0) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+
+        $path = $this->testDir . '/solid_grey_reject.jpg';
+        $img = imagecreatetruecolor(1024, 768);
+        $grey = imagecolorallocate($img, 128, 128, 128);
+        imagefilledrectangle($img, 0, 0, 1023, 767, $grey);
+        imagejpeg($img, $path, 90);
+
+        $mtime = time() - 10;
+        touch($path, $mtime);
+
+        $dt = gmdate('Y:m:d H:i:s', $mtime);
+        $gpsDate = gmdate('Y:m:d', $mtime);
+        $gpsTime = gmdate('H:i:s', $mtime);
+        exec(sprintf(
+            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
+            escapeshellarg($dt),
+            escapeshellarg($gpsDate),
+            escapeshellarg($gpsTime),
+            escapeshellarg($path)
+        ), $exifOut, $exifCode);
+        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
+        // exiftool updates mtime; restore age so the file is eligible for evaluation
+        touch($path, $mtime);
+
+        $result = $strategy->acquireFile($path);
+
+        $this->assertFalse($result->success, 'Solid grey frame should not be accepted');
+        $this->assertFalse($result->isSkip(), 'Should be a hard failure, not a retryable skip');
+        $this->assertSame('error_frame', $result->errorReason, 'Expected error_frame rejection');
+        $this->assertFileDoesNotExist($path, 'Rejected inbox file must be consumed after one evaluation');
+
+        $retry = $strategy->acquireFile($path);
+        $this->assertTrue($retry->isSkip(), 'Second attempt should skip missing file');
+        $this->assertSame('file_missing', $retry->getSkipReason());
+    }
+
+    /**
+     * Transient I/O validation failures must not delete the inbox upload
+     */
+    public function testConsumeEvaluatedUpload_SkipsTransientIoReasons(): void
+    {
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+        $path = $this->createTestFile('keep_on_io_error.jpg', time() - 10);
+
+        $reflection = new ReflectionClass($strategy);
+        $consume = $reflection->getMethod('consumeEvaluatedUpload');
+
+        $consume->invoke($strategy, $path, 'file_read_error');
+        $this->assertFileExists($path, 'file_read_error must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'file_not_readable');
+        $this->assertFileExists($path, 'file_not_readable must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'incomplete_upload');
+        $this->assertFileExists($path, 'incomplete_upload must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'error_frame');
+        $this->assertFileDoesNotExist($path, 'error_frame must still consume inbox file');
     }
 
     // ========================================

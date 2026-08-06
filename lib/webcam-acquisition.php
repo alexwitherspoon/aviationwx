@@ -253,7 +253,7 @@ abstract class BaseAcquisitionStrategy implements AcquisitionStrategy
     }
 
     /**
-     * Check for error frames (corrupt bottom, uniform color, pixelation, etc.)
+     * Check for error frames (corrupt bottom, uniform color, Blue Iris, etc.)
      *
      * @param string $imagePath Path to image file
      * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); avoids redundant load when caller has it
@@ -1043,8 +1043,11 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         // Validate image content
         $validationResult = $this->validateUploadedImage($uploadFile);
         if (!$validationResult['valid']) {
+            $reason = $validationResult['reason'] ?? 'validation_failed';
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
-            return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
+            // Quarantine already saved when applicable; consume inbox so this file is not re-evaluated
+            $this->consumeEvaluatedUpload($uploadFile, $reason);
+            return AcquisitionResult::failure($reason, 'push', $validationResult);
         }
 
         // Normalize EXIF timestamp
@@ -1053,6 +1056,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            $this->consumeEvaluatedUpload($uploadFile, 'invalid_exif_timestamp');
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
@@ -1071,6 +1075,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
                 logWebcamRejection($this->airportId, $this->camIndex, 'timestamp_drift', 
                     sprintf('EXIF differs from upload time by %d seconds', $drift));
                 $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+                $this->consumeEvaluatedUpload($uploadFile, 'timestamp_drift');
                 return AcquisitionResult::failure('timestamp_drift', 'push', ['drift_seconds' => $drift]);
             }
         }
@@ -1098,11 +1103,78 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     }
 
     /**
+     * Whether a push validation failure is definitive content/EXIF rejection.
+     *
+     * Transient I/O and incomplete-read reasons must not consume the inbox file;
+     * the upload may succeed on a later cycle once the host recovers.
+     *
+     * @param string $reason Validation / rejection reason code
+     * @return bool True when the inbox file should be deleted after evaluation
+     */
+    private function isDefinitivePushRejectReason(string $reason): bool
+    {
+        static $definitive = [
+            'error_frame' => true,
+            'exif_invalid' => true,
+            'invalid_exif_timestamp' => true,
+            'timestamp_drift' => true,
+            'no_exif_timestamp' => true,
+            'size_too_small' => true,
+            'size_limit_exceeded' => true,
+            'extension_not_allowed' => true,
+            'invalid_mime_type' => true,
+            'invalid_format' => true,
+            'image_corrupt' => true,
+        ];
+
+        return isset($definitive[$reason]);
+    }
+
+    /**
+     * Remove a push inbox file after a definitive evaluation failure.
+     *
+     * Successful paths rename/move the file to staging. Hard rejects (error_frame,
+     * EXIF failures, etc.) must also consume the inbox file; otherwise the same
+     * upload is re-evaluated every worker cycle until max age, multiplying reject
+     * metrics and quarantine copies.
+     *
+     * Transient skips (too new, unstable) and transient I/O failures
+     * (file_not_readable, file_read_error, incomplete_upload) must not call this
+     * in a way that deletes - those files should remain for a later attempt.
+     *
+     * @param string $filePath Absolute path to the inbox upload
+     * @param string $reason Rejection reason for logging
+     * @return void
+     */
+    private function consumeEvaluatedUpload(string $filePath, string $reason): void
+    {
+        if (!$this->isDefinitivePushRejectReason($reason)) {
+            return;
+        }
+
+        if (!is_file($filePath)) {
+            return;
+        }
+
+        $basename = basename($filePath);
+        $deleted = @unlink($filePath);
+
+        aviationwx_log($deleted ? 'info' : 'warning', $deleted
+            ? 'Consumed rejected push upload'
+            : 'Failed to consume rejected push upload', [
+            'file' => $basename,
+            'reason' => $reason,
+            'airport' => $this->airportId,
+            'cam' => $this->camIndex,
+        ], 'app');
+    }
+
+    /**
      * Find the newest valid image in all upload directories (FTP and SFTP)
      * 
-     * Note: No time-based filtering - files are moved after processing,
-     * so they won't appear again. Time filtering was removed to fix a bug
-     * where backlog files could be orphaned.
+     * Note: No time-based filtering - files are moved after successful processing
+     * or deleted after a definitive reject, so they will not appear again. Time
+     * filtering was removed to fix a bug where backlog files could be orphaned.
      */
     private function findNewestValidImage(): ?string
     {
@@ -1157,6 +1229,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             $timezone = $this->getTimezone();
             $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
             if (!ensureImageHasExif($file, null, $timezone, $context)) {
+                // exiftool down/misconfigured: leave file for retry once tooling recovers
+                if (!isExiftoolAvailable()) {
+                    continue;
+                }
+                require_once __DIR__ . '/webcam-image-metrics.php';
+                trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
+                $this->consumeEvaluatedUpload($file, 'no_exif_timestamp');
                 continue;
             }
 
@@ -1429,11 +1508,14 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     private function getRequiredStableChecks(): int
     {
         $key = "stability_metrics_{$this->airportId}_{$this->camIndex}";
-        $metrics = apcu_fetch($key);
+        $metrics = false;
+        if (function_exists('apcu_fetch')) {
+            $metrics = apcu_fetch($key);
+        }
 
         if (!$metrics) {
             $metrics = $this->loadStabilityMetricsFromDisk();
-            if ($metrics) {
+            if ($metrics && function_exists('apcu_store')) {
                 apcu_store($key, $metrics, 7 * 86400);
             }
         }
@@ -1465,7 +1547,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     private function recordStabilityMetrics(float $stabilityTime, bool $accepted): void
     {
         $key = "stability_metrics_{$this->airportId}_{$this->camIndex}";
-        $metrics = apcu_fetch($key);
+        $metrics = false;
+        if (function_exists('apcu_fetch')) {
+            $metrics = apcu_fetch($key);
+        }
 
         if (!$metrics) {
             $metrics = $this->loadStabilityMetricsFromDisk() ?? [
@@ -1485,7 +1570,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         $metrics['last_updated'] = time();
-        apcu_store($key, $metrics, 7 * 86400);
+        if (function_exists('apcu_store')) {
+            apcu_store($key, $metrics, 7 * 86400);
+        }
 
         // Periodically persist to disk
         static $counter = 0;
@@ -1675,17 +1762,24 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         $timezone = $this->getTimezone();
         $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
         if (!ensureImageHasExif($filePath, null, $timezone, $context)) {
+            // Host missing exiftool is infra, not a bad frame - keep inbox for later
+            if (!isExiftoolAvailable()) {
+                return AcquisitionResult::skip('exiftool_unavailable', 'push');
+            }
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
             $this->recordStabilityMetrics($stabilityTime, false);
+            $this->consumeEvaluatedUpload($filePath, 'no_exif_timestamp');
             return AcquisitionResult::failure('no_exif_timestamp', 'push');
         }
 
         // Validate image content (including EXIF timestamp)
         $validationResult = $this->validateUploadedImage($filePath);
         if (!$validationResult['valid']) {
+            $reason = $validationResult['reason'] ?? 'validation_failed';
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
-            return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
+            $this->consumeEvaluatedUpload($filePath, $reason);
+            return AcquisitionResult::failure($reason, 'push', $validationResult);
         }
 
         // Normalize EXIF timestamp to UTC
@@ -1693,6 +1787,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            $this->consumeEvaluatedUpload($filePath, 'invalid_exif_timestamp');
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
@@ -1711,6 +1806,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
                 logWebcamRejection($this->airportId, $this->camIndex, 'timestamp_drift',
                     sprintf('EXIF differs from upload time by %d seconds', $drift));
                 $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+                $this->consumeEvaluatedUpload($filePath, 'timestamp_drift');
                 return AcquisitionResult::failure('timestamp_drift', 'push', ['drift_seconds' => $drift]);
             }
         }
