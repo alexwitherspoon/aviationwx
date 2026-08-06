@@ -1103,6 +1103,34 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     }
 
     /**
+     * Whether a push validation failure is definitive content/EXIF rejection.
+     *
+     * Transient I/O and incomplete-read reasons must not consume the inbox file;
+     * the upload may succeed on a later cycle once the host recovers.
+     *
+     * @param string $reason Validation / rejection reason code
+     * @return bool True when the inbox file should be deleted after evaluation
+     */
+    private function isDefinitivePushRejectReason(string $reason): bool
+    {
+        static $definitive = [
+            'error_frame' => true,
+            'exif_invalid' => true,
+            'invalid_exif_timestamp' => true,
+            'timestamp_drift' => true,
+            'no_exif_timestamp' => true,
+            'size_too_small' => true,
+            'size_limit_exceeded' => true,
+            'extension_not_allowed' => true,
+            'invalid_mime_type' => true,
+            'invalid_format' => true,
+            'image_corrupt' => true,
+        ];
+
+        return isset($definitive[$reason]);
+    }
+
+    /**
      * Remove a push inbox file after a definitive evaluation failure.
      *
      * Successful paths rename/move the file to staging. Hard rejects (error_frame,
@@ -1110,8 +1138,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
      * upload is re-evaluated every worker cycle until max age, multiplying reject
      * metrics and quarantine copies.
      *
-     * Transient skips (too new, unstable) must not call this - those files should
-     * remain for a later attempt.
+     * Transient skips (too new, unstable) and transient I/O failures
+     * (file_not_readable, file_read_error, incomplete_upload) must not call this
+     * in a way that deletes - those files should remain for a later attempt.
      *
      * @param string $filePath Absolute path to the inbox upload
      * @param string $reason Rejection reason for logging
@@ -1119,6 +1148,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
      */
     private function consumeEvaluatedUpload(string $filePath, string $reason): void
     {
+        if (!$this->isDefinitivePushRejectReason($reason)) {
+            return;
+        }
+
         if (!is_file($filePath)) {
             return;
         }
@@ -1196,6 +1229,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             $timezone = $this->getTimezone();
             $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
             if (!ensureImageHasExif($file, null, $timezone, $context)) {
+                // exiftool down/misconfigured: leave file for retry once tooling recovers
+                if (!isExiftoolAvailable()) {
+                    continue;
+                }
                 require_once __DIR__ . '/webcam-image-metrics.php';
                 trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
                 $this->consumeEvaluatedUpload($file, 'no_exif_timestamp');
@@ -1725,6 +1762,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         $timezone = $this->getTimezone();
         $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
         if (!ensureImageHasExif($filePath, null, $timezone, $context)) {
+            // Host missing exiftool is infra, not a bad frame - keep inbox for later
+            if (!isExiftoolAvailable()) {
+                return AcquisitionResult::skip('exiftool_unavailable', 'push');
+            }
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
             $this->recordStabilityMetrics($stabilityTime, false);

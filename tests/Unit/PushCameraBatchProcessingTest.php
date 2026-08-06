@@ -365,6 +365,30 @@ class PushCameraBatchProcessingTest extends TestCase
         $this->assertSame('file_missing', $retry->getSkipReason());
     }
 
+    /**
+     * Transient I/O validation failures must not delete the inbox upload
+     */
+    public function testConsumeEvaluatedUpload_SkipsTransientIoReasons(): void
+    {
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+        $path = $this->createTestFile('keep_on_io_error.jpg', time() - 10);
+
+        $reflection = new ReflectionClass($strategy);
+        $consume = $reflection->getMethod('consumeEvaluatedUpload');
+
+        $consume->invoke($strategy, $path, 'file_read_error');
+        $this->assertFileExists($path, 'file_read_error must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'file_not_readable');
+        $this->assertFileExists($path, 'file_not_readable must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'incomplete_upload');
+        $this->assertFileExists($path, 'incomplete_upload must not consume inbox file');
+
+        $consume->invoke($strategy, $path, 'error_frame');
+        $this->assertFileDoesNotExist($path, 'error_frame must still consume inbox file');
+    }
+
     // ========================================
     // Helper Methods
     // ========================================
