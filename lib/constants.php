@@ -1134,38 +1134,6 @@ if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS')) {
     define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS', 35); // Skip dark corners (night); corruption green/blue/red typically 35+
 }
 
-// Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
-// Measures edge sharpness - healthy images have sharp edges, pixelated images are blurry
-// Conservative thresholds to avoid false positives (fog, overcast, snow are legitimately soft)
-// Phase-specific thresholds: day has more detail, night is naturally softer
-//
-// Laplacian variance values observed in real-world conditions:
-// - Crisp daytime image: 500-2000+
-// - Foggy/overcast day: 100-300
-// - Night with lights: 50-200
-// - Dark night: 20-100
-// - Foggy night/twilight: 2-8 (legitimate but very soft)
-// - Ultra-dark clear night (little edge content): can fall just under 2; still valid
-// - Severely pixelated/corrupted: near 0 (essentially flat/broken)
-//
-// Night threshold below 2 accepts that band without letting obvious broken frames through when combined with other checks.
-if (!defined('WEBCAM_PIXELATION_THRESHOLD_DAY')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_DAY', 15); // Day: reject if variance < 15
-}
-if (!defined('WEBCAM_PIXELATION_THRESHOLD_CIVIL')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_CIVIL', 10); // Civil twilight: lower threshold
-}
-if (!defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 5); // Nautical twilight: more lenient for foggy conditions
-}
-if (!defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 1); // Night: allow Laplacian variance down to 1 (very dark sky)
-}
-// Sample size for Laplacian calculation (grid of NxN samples across image)
-if (!defined('WEBCAM_PIXELATION_SAMPLE_GRID')) {
-    define('WEBCAM_PIXELATION_SAMPLE_GRID', 20); // 20x20 grid = 400 sample points
-}
-
 // EXIF timestamp validation (fail closed - reject images with invalid timestamps)
 // All webcam images must have valid EXIF DateTimeOriginal before acceptance
 // Server-generated images (RTSP/MJPEG) have EXIF added immediately after capture

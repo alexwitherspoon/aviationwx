@@ -117,7 +117,7 @@ class PipelineResult
  * 
  * Steps:
  * 1. Validate image format/dimensions
- * 2. Error frame detection (uniform color, pixelation, etc.)
+ * 2. Error frame detection (uniform color, Blue Iris, etc.)
  * 3. EXIF validation/normalization
  * 4. Variant generation (staging files)
  * 5. Atomic promotion with symlink updates

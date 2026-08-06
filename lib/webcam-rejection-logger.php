@@ -20,7 +20,7 @@ require_once __DIR__ . '/webcam-image-metrics.php';
  * @param string $imagePath Path to rejected image file
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $rejectionReason Rejection reason (e.g., 'error_frame', 'pixelated')
+ * @param string $rejectionReason Rejection reason (e.g., 'error_frame', 'exif_invalid')
  * @param array $diagnosticData Additional diagnostic data to log
  * @return bool True if saved successfully, false otherwise
  */
