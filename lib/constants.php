@@ -463,7 +463,7 @@ if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
     define('NASR_FETCH_CHECK_INTERVAL', REFERENCE_DATA_WEEK_SECONDS);
 }
 // Cold start / wiped cache: retry sooner than the weekly gate while APT/FRQ JSON is absent.
-// Lock files still prevent overlapping workers; FAA/NFDC HTTP remains paced separately.
+// Lock files still prevent overlapping workers; FAA/NFDC HTTP pacing is unchanged.
 if (!defined('NASR_MISSING_RETRY_INTERVAL')) {
     define('NASR_MISSING_RETRY_INTERVAL', 15 * 60);
 }
