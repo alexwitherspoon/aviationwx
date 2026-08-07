@@ -195,35 +195,61 @@ final class SchedulerWorkRegistryTest extends TestCase
         $this->assertTrue($ran);
     }
 
-    public function testTerminateAll_UsedByForceDrainPath(): void
+    public function testTerminatePoolsByClass_OnlyCleansRequestedClassIncludingRetiring(): void
     {
         $reg = new SchedulerWorkRegistry();
-        $terminated = 0;
-        $reg->setPool('weather', new class ($terminated) {
-            private int $terminated;
-            public function __construct(int &$terminated)
+        $liveHits = 0;
+        $refHits = 0;
+
+        $reg->setPool('weather', $this->makeTerminablePool($liveHits, 2), SCHEDULER_POOL_CLASS_LIVE);
+        $reg->setPool('nasr_apt', $this->makeTerminablePool($refHits, 2), SCHEDULER_POOL_CLASS_REFERENCE);
+
+        // Replace while active so both classes keep a retiring entry.
+        $reg->setPool('weather', $this->makeTerminablePool($liveHits, 1), SCHEDULER_POOL_CLASS_LIVE);
+        $reg->setPool('nasr_apt', $this->makeTerminablePool($refHits, 1), SCHEDULER_POOL_CLASS_REFERENCE);
+
+        $byClass = $reg->sumActiveWorkersByClass();
+        $this->assertSame(3, $byClass['live']);
+        $this->assertSame(3, $byClass['reference']);
+        $this->assertSame(2, $reg->retiringPoolCount());
+
+        $reg->terminatePoolsByClass(SCHEDULER_POOL_CLASS_LIVE);
+        $this->assertSame(2, $liveHits, 'current + retiring live pools');
+        $this->assertSame(0, $refHits);
+        $this->assertSame(1, $reg->retiringPoolCount(), 'reference retiring pool remains');
+
+        $reg->terminatePoolsByClass(SCHEDULER_POOL_CLASS_REFERENCE);
+        $this->assertSame(2, $liveHits);
+        $this->assertSame(2, $refHits, 'current + retiring reference pools');
+        $this->assertSame(0, $reg->retiringPoolCount());
+    }
+
+    /**
+     * @return object
+     */
+    private function makeTerminablePool(int &$hits, int $active): object
+    {
+        return new class ($hits, $active) {
+            private int $hits;
+            private int $active;
+
+            public function __construct(int &$hits, int $active)
             {
-                $this->terminated = &$terminated;
+                $this->hits = &$hits;
+                $this->active = $active;
             }
+
             public function cleanup(): void
             {
-                $this->terminated++;
+                $this->hits++;
+                $this->active = 0;
             }
+
             public function getActiveCount(): int
             {
-                return 1;
+                return $this->active;
             }
-        });
-
-        $applied = deploy_drain_apply_scheduler_action(
-            'force_terminate',
-            1120,
-            static function () use ($reg): void {
-                $reg->terminateAll();
-            }
-        );
-        $this->assertTrue($applied);
-        $this->assertSame(1, $terminated);
+        };
     }
 
     /**
