@@ -28,6 +28,10 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     $effectiveDate = null;
     $airports = [];
 
+    if (function_exists('updateWorkerHeartbeat')) {
+        updateWorkerHeartbeat();
+    }
+
     foreach (nasrIterateCsvFile($basePath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));
@@ -49,6 +53,9 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     }
 
     $runwaysByKey = [];
+    if (function_exists('updateWorkerHeartbeat')) {
+        updateWorkerHeartbeat();
+    }
     foreach (nasrIterateCsvFile($rwyPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));
@@ -93,6 +100,9 @@ function nasrParseAptCsvDirectory(string $csvDir): array
     }
     unset($runwaysByKey);
 
+    if (function_exists('updateWorkerHeartbeat')) {
+        updateWorkerHeartbeat();
+    }
     foreach (nasrIterateCsvFile($endPath) as $row) {
         $effectiveDate = $effectiveDate ?? nasrNormalizeEffectiveDate($row['EFF_DATE'] ?? null);
         $arptId = strtoupper(trim((string) ($row['ARPT_ID'] ?? '')));

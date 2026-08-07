@@ -48,6 +48,8 @@ class NasrWorkersTest extends TestCase
 
     public function testFrqWorkerWaitsForAptFetchLock(): void
     {
+        $this->writeMinimalAptCache();
+
         $lockPath = getNasrAptFetchLockPath();
         $dir = dirname($lockPath);
         if (!is_dir($dir)) {
@@ -64,6 +66,13 @@ class NasrWorkersTest extends TestCase
             flock($fp, LOCK_UN);
             fclose($fp);
         }
+    }
+
+    public function testFrqWorkerWaitsUntilAptCachePresent(): void
+    {
+        $this->assertFalse(nasrAptCacheDataPresent());
+        $this->assertFalse(nasrFrqWorkerShouldRun());
+        $this->assertFalse(nasrFrqSchedulerShouldEnqueue(1_700_000_000, 0));
     }
 
     public function testAptWorkerSkipsWhenLockHeld(): void
@@ -109,7 +118,7 @@ class NasrWorkersTest extends TestCase
     {
         $now = 1_700_000_000;
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, 0));
-        $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, 0));
+        $this->assertFalse(nasrFrqSchedulerShouldEnqueue($now, 0));
     }
 
     public function testMissingCache_RespectsShortBackoffAfterFailedAttempt(): void
@@ -127,6 +136,12 @@ class NasrWorkersTest extends TestCase
         $lastAttempt = $now - NASR_MISSING_RETRY_INTERVAL;
 
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->assertFalse(
+            nasrFrqSchedulerShouldEnqueue($now, $lastAttempt),
+            'FRQ stays gated until APT JSON exists'
+        );
+
+        $this->writeMinimalAptCache();
         $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
     }
 
@@ -175,7 +190,7 @@ class NasrWorkersTest extends TestCase
 
         $this->assertLessThan(NASR_FETCH_CHECK_INTERVAL, 60 * 60);
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, $lastAttempt));
-        $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->assertFalse(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
     }
 
     private function writeMinimalAptCache(): void

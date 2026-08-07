@@ -43,6 +43,7 @@ try {
     $failures = 0;
 
     foreach (ourAirportsCsvFileKeys() as $fileKey) {
+        updateWorkerHeartbeat();
         if (!ourAirportsFileNeedsFetch($fileKey)) {
             continue;
         }

@@ -436,12 +436,14 @@ $workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$
     }
 
     // 8a. NASR APT: presence/age/cycle gate, then short retry if missing else weekly
+    $nasrAptStartedThisTick = false;
     if (nasrAptSchedulerShouldEnqueue($now, $lastNasrAptFetch)) {
         $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
         if (file_exists($nasrScript)) {
             $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
             exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
             reapZombies();
+            $nasrAptStartedThisTick = true;
             aviationwx_log('info', 'scheduler: nasr apt fetch started', [
                 'reason' => nasrAptCacheDataPresent() ? 'refresh' : 'missing',
                 'retry_interval_sec' => nasrAptSchedulerRetryInterval(),
@@ -454,8 +456,8 @@ $workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$
         $lastNasrAptFetch = $now;
     }
 
-    // 8a-ii. NASR FRQ: same cadence policy; waits on APT lock via should-run
-    if (nasrFrqSchedulerShouldEnqueue($now, $lastNasrFrqFetch)) {
+    // 8a-ii. Skip FRQ on the same tick as APT spawn (child may not hold lock yet).
+    if (!$nasrAptStartedThisTick && nasrFrqSchedulerShouldEnqueue($now, $lastNasrFrqFetch)) {
         $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
         if (file_exists($nasrFrqScript)) {
             $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';

@@ -53,11 +53,15 @@ function nasrAptWorkerShouldRun(): bool
 /**
  * True when the scheduler should spawn fetch-nasr-frq.php.
  *
- * FRQ waits for APT fetch so cycle metadata is not updated mid-download.
+ * Requires APT cache on disk (avoids spawning FRQ before a background APT child
+ * holds its lock). Also waits while an APT fetch lock is held.
  */
 function nasrFrqWorkerShouldRun(): bool
 {
-    return nasrFrqCacheNeedsRefresh() && !nasrFrqFetchInProgress() && !nasrAptFetchInProgress();
+    return nasrAptCacheDataPresent()
+        && nasrFrqCacheNeedsRefresh()
+        && !nasrFrqFetchInProgress()
+        && !nasrAptFetchInProgress();
 }
 
 /**

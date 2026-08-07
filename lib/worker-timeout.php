@@ -153,62 +153,86 @@ function shouldWorkerAbort(int $requiredSeconds = 10): bool {
 }
 
 /**
- * Clean up stale worker heartbeat files
- * 
- * Finds and removes heartbeat files from workers that appear to have died
- * without cleaning up. Also returns PIDs of potentially stuck workers.
- * 
- * @param int|null $staleSeconds Consider heartbeat stale after this many seconds (default: worker_timeout + 30)
+ * Stale age for a worker heartbeat (declared timeout +30s, override, or default).
+ *
+ * Declared timeout comes from initWorkerTimeout so long jobs (NASR APT) are not
+ * killed by the short webcam/weather default.
+ *
+ * @param array<string, mixed> $data Heartbeat JSON payload
+ * @param int|null $staleSecondsOverride When set, applies to all workers
+ * @param int $defaultStaleSeconds Fallback when no declared timeout (typically getWorkerTimeout()+30)
+ * @return int Seconds after last heartbeat stamp before the worker is stale
+ */
+function workerHeartbeatStaleAfterSeconds(
+    array $data,
+    ?int $staleSecondsOverride,
+    int $defaultStaleSeconds
+): int {
+    if ($staleSecondsOverride !== null) {
+        return max(1, $staleSecondsOverride);
+    }
+
+    $declaredTimeout = isset($data['timeout']) && is_numeric($data['timeout'])
+        ? (int) $data['timeout']
+        : 0;
+    if ($declaredTimeout <= 0) {
+        return max(1, $defaultStaleSeconds);
+    }
+
+    // Cap corrupt timeout values so stuck workers remain killable.
+    return min($declaredTimeout + 30, 86400 + 30);
+}
+
+/**
+ * Clean up stale worker heartbeat files and return PIDs that still look stuck.
+ *
+ * @param int|null $staleSeconds Override for all files; null uses each file's
+ *        declared timeout (+30s) or getWorkerTimeout()+30.
  * @return int[] PIDs of potentially stuck workers (empty if none found)
  */
 function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
-    if ($staleSeconds === null) {
-        $staleSeconds = getWorkerTimeout() + 30;
-    }
-    
     $stuckPids = [];
     $pattern = '/tmp/worker_heartbeat_*.json';
     $files = glob($pattern);
-    
-    // glob() returns false on error, empty array if no matches
+
     if ($files === false || empty($files)) {
         return $stuckPids;
     }
-    
+
     $now = time();
+    $defaultStaleSeconds = getWorkerTimeout() + 30;
     foreach ($files as $file) {
         $content = @file_get_contents($file);
         if ($content === false) {
             continue;
         }
-        
+
         $data = @json_decode($content, true);
         if (!is_array($data) || !isset($data['heartbeat']) || !isset($data['pid'])) {
-            // Invalid format, just delete
             @unlink($file);
             continue;
         }
-        
-        $heartbeatAge = $now - $data['heartbeat'];
-        if ($heartbeatAge > $staleSeconds) {
-            // Heartbeat is stale - worker may be stuck
-            $pid = (int)$data['pid'];
-            
-            // Use cross-platform process check from process-utils.php
+
+        $effectiveStale = workerHeartbeatStaleAfterSeconds($data, $staleSeconds, $defaultStaleSeconds);
+        $heartbeatAge = $now - (int) $data['heartbeat'];
+        if ($heartbeatAge > $effectiveStale) {
+            $pid = (int) $data['pid'];
+
             if ($pid > 0 && isProcessRunning($pid, 'php')) {
                 $stuckPids[] = $pid;
                 aviationwx_log('warning', 'worker heartbeat stale - process may be stuck', [
                     'pid' => $pid,
                     'heartbeat_age' => $heartbeatAge,
-                    'file' => basename($file)
+                    'stale_after' => $effectiveStale,
+                    'file' => basename($file),
                 ], 'app');
             }
-            
-            // Clean up the file regardless
+
+            // Drop stamp either way so we do not re-warn every cleanup tick.
             @unlink($file);
         }
     }
-    
+
     return $stuckPids;
 }
 

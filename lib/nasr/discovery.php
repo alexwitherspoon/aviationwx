@@ -92,6 +92,11 @@ function nasrHttpThrottlePaths(): array
  */
 function nasrHttpThrottle(): void
 {
+    // Long NASR jobs: progress signal for stuck-worker cleanup during paced HTTP.
+    if (function_exists('updateWorkerHeartbeat')) {
+        updateWorkerHeartbeat();
+    }
+
     if (!nasrHttpThrottleShouldEnforce()) {
         return;
     }
