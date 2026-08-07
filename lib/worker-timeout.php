@@ -188,12 +188,15 @@ function workerHeartbeatStaleAfterSeconds(
  *
  * @param int|null $staleSeconds Override for all files; null uses each file's
  *        declared timeout (+30s) or getWorkerTimeout()+30.
+ * @param string $globPattern Heartbeat file glob (tests may narrow this)
  * @return int[] PIDs of potentially stuck workers (empty if none found)
  */
-function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
+function cleanupStaleWorkerHeartbeats(
+    ?int $staleSeconds = null,
+    string $globPattern = '/tmp/worker_heartbeat_*.json'
+): array {
     $stuckPids = [];
-    $pattern = '/tmp/worker_heartbeat_*.json';
-    $files = glob($pattern);
+    $files = glob($globPattern);
 
     if ($files === false || empty($files)) {
         return $stuckPids;

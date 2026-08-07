@@ -6,12 +6,21 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/worker-timeout.php';
 
 class WorkerTimeoutHeartbeatTest extends TestCase
 {
     /** @var list<string> */
     private array $heartbeatFiles = [];
+
+    private string $heartbeatIdPrefix = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->heartbeatIdPrefix = 'test_' . bin2hex(random_bytes(4));
+    }
 
     protected function tearDown(): void
     {
@@ -58,27 +67,29 @@ class WorkerTimeoutHeartbeatTest extends TestCase
 
     public function testLongDeclaredTimeout_NotTreatedStaleAtWebcamDefault(): void
     {
+        $age = $this->agePastDefaultStaleThreshold();
         $path = $this->writeHeartbeat([
             'pid' => 2147483000,
-            'started' => time() - 180,
-            'heartbeat' => time() - 150,
+            'started' => time() - $age - 30,
+            'heartbeat' => time() - $age,
             'timeout' => 7200,
         ]);
 
-        $stuck = cleanupStaleWorkerHeartbeats(null);
+        $stuck = cleanupStaleWorkerHeartbeats(null, $this->heartbeatGlob());
         $this->assertSame([], $stuck);
         $this->assertFileExists($path);
     }
 
     public function testDefaultTimeout_RemovesStaleHeartbeatWithoutDeclaredTimeout(): void
     {
+        $age = $this->agePastDefaultStaleThreshold();
         $path = $this->writeHeartbeat([
             'pid' => 2147483001,
-            'started' => time() - 200,
-            'heartbeat' => time() - 150,
+            'started' => time() - $age - 30,
+            'heartbeat' => time() - $age,
         ]);
 
-        $stuck = cleanupStaleWorkerHeartbeats(null);
+        $stuck = cleanupStaleWorkerHeartbeats(null, $this->heartbeatGlob());
         $this->assertSame([], $stuck, 'Synthetic PID must not match a live php process');
         $this->assertFileDoesNotExist($path);
     }
@@ -92,9 +103,26 @@ class WorkerTimeoutHeartbeatTest extends TestCase
             'timeout' => 7200,
         ]);
 
-        $stuck = cleanupStaleWorkerHeartbeats(60);
+        $stuck = cleanupStaleWorkerHeartbeats(60, $this->heartbeatGlob());
         $this->assertSame([], $stuck);
         $this->assertFileDoesNotExist($path);
+    }
+
+    /**
+     * Heartbeat age past getWorkerTimeout()+30, but well below NASR APT's declared timeout.
+     */
+    private function agePastDefaultStaleThreshold(): int
+    {
+        $defaultStale = getWorkerTimeout() + 30;
+        $age = $defaultStale + 30;
+        $this->assertLessThan(7200, $age);
+
+        return $age;
+    }
+
+    private function heartbeatGlob(): string
+    {
+        return '/tmp/worker_heartbeat_' . $this->heartbeatIdPrefix . '_*.json';
     }
 
     /**
@@ -102,8 +130,8 @@ class WorkerTimeoutHeartbeatTest extends TestCase
      */
     private function writeHeartbeat(array $data): string
     {
-        $id = 'test_' . bin2hex(random_bytes(4));
-        $path = '/tmp/worker_heartbeat_' . $id . '.json';
+        $id = bin2hex(random_bytes(4));
+        $path = '/tmp/worker_heartbeat_' . $this->heartbeatIdPrefix . '_' . $id . '.json';
         file_put_contents($path, json_encode($data, JSON_UNESCAPED_SLASHES));
         $this->heartbeatFiles[] = $path;
 
