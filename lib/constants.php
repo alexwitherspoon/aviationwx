@@ -414,12 +414,14 @@ if (!defined('NASR_CYCLE_PERIOD_SECONDS')) {
     define('NASR_CYCLE_PERIOD_SECONDS', NASR_CYCLE_PERIOD_DAYS * 86400);
 }
 
-// Runway geometry (FAA + OurAirports) - daily HEAD probe; bulk fetch when upstream changes or hard max age
+// Runway geometry (FAA + OurAirports) - daily HEAD probe; bulk fetch when upstream changes or hard max age.
+// Scheduler spawn gate for bulk CSV (and runway merge after startup) - local check only; workers still
+// no-op unless needs-fetch. Hourly is enough for this slow-changing catalog (not 60s).
 if (!defined('OURAIRPORTS_PROBE_INTERVAL')) {
     define('OURAIRPORTS_PROBE_INTERVAL', 86400);
 }
 if (!defined('OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL')) {
-    define('OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL', REFERENCE_DATA_SPAWN_CHECK_INTERVAL);
+    define('OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL', 3600);
 }
 if (!defined('OURAIRPORTS_BULK_HARD_MAX_AGE')) {
     define('OURAIRPORTS_BULK_HARD_MAX_AGE', NASR_CYCLE_PERIOD_SECONDS);
@@ -459,6 +461,11 @@ if (!defined('NASR_APT_SCHEMA_VERSION')) {
 }
 if (!defined('NASR_FETCH_CHECK_INTERVAL')) {
     define('NASR_FETCH_CHECK_INTERVAL', REFERENCE_DATA_WEEK_SECONDS);
+}
+// Cold start / wiped cache: retry sooner than the weekly gate while APT/FRQ JSON is absent.
+// Lock files still prevent overlapping workers; FAA/NFDC HTTP pacing is unchanged elsewhere.
+if (!defined('NASR_MISSING_RETRY_INTERVAL')) {
+    define('NASR_MISSING_RETRY_INTERVAL', 15 * 60);
 }
 if (!defined('NASR_CACHE_MAX_AGE')) {
     define('NASR_CACHE_MAX_AGE', NASR_CYCLE_PERIOD_SECONDS + REFERENCE_DATA_WEEK_SECONDS);

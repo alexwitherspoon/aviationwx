@@ -240,6 +240,8 @@ class ConstantsTest extends TestCase
         $this->assertSame(28 * 86400, NASR_CYCLE_PERIOD_SECONDS);
         $this->assertSame(86400, OURAIRPORTS_PROBE_INTERVAL);
         $this->assertSame(REFERENCE_DATA_WEEK_SECONDS, NASR_FETCH_CHECK_INTERVAL);
+        $this->assertSame(15 * 60, NASR_MISSING_RETRY_INTERVAL);
+        $this->assertLessThan(NASR_FETCH_CHECK_INTERVAL, NASR_MISSING_RETRY_INTERVAL);
         $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, OURAIRPORTS_BULK_HARD_MAX_AGE);
         $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, FAA_NGDA_RUNWAY_REFRESH_MAX_AGE);
         $this->assertSame(NASR_CYCLE_PERIOD_SECONDS, RUNWAYS_CACHE_MAX_AGE);
@@ -256,10 +258,8 @@ class ConstantsTest extends TestCase
         $this->assertSame(60, NASR_HTTP_MIN_INTERVAL_SECONDS);
         $this->assertSame(7200, NASR_APT_WORKER_TIMEOUT);
         $this->assertSame(3600, NASR_FRQ_WORKER_TIMEOUT);
-        $this->assertSame(
-            REFERENCE_DATA_SPAWN_CHECK_INTERVAL,
-            OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL
-        );
+        $this->assertSame(3600, OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL);
+        $this->assertLessThan(OURAIRPORTS_PROBE_INTERVAL, OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL);
         $this->assertSame(6 * 3600, FAA_NGDA_FETCH_RETRY_INTERVAL);
     }
     

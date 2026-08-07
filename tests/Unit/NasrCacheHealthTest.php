@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/status-checks.php';
+require_once __DIR__ . '/../../lib/reference-data-sources.php';
 
 class NasrCacheHealthTest extends TestCase
 {
@@ -17,7 +18,7 @@ class NasrCacheHealthTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE] as $path) {
+        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE, CACHE_NASR_FRQ_DATA_FILE] as $path) {
             if (file_exists($path)) {
                 $this->backupFiles[$path] = file_get_contents($path);
                 @unlink($path);
@@ -27,7 +28,7 @@ class NasrCacheHealthTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE] as $path) {
+        foreach ([CACHE_NASR_APT_DATA_FILE, CACHE_NASR_APT_META_FILE, CACHE_NASR_APT_CONFIGURED_FILE, CACHE_NASR_FRQ_DATA_FILE] as $path) {
             if (isset($this->backupFiles[$path])) {
                 $dir = dirname($path);
                 if (!is_dir($dir)) {
@@ -95,6 +96,17 @@ class NasrCacheHealthTest extends TestCase
 
         $this->assertSame('degraded', $health['status']);
         $this->assertStringContainsString('Last fetch failed', $health['message']);
+    }
+
+    public function testNasrFrqHealthWhenMissing_DoesNotClaimPresent(): void
+    {
+        @unlink(CACHE_NASR_FRQ_DATA_FILE);
+
+        $leaf = reference_data_nasr_frq_source_health();
+
+        $this->assertSame('down', $leaf['status']);
+        $this->assertStringContainsString('missing', $leaf['message']);
+        $this->assertStringNotContainsString('cache present', $leaf['message']);
     }
 
     /**
