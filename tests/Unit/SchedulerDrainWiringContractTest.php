@@ -73,6 +73,30 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->assertStringContainsString('--week=', $weekly);
     }
 
+    public function testWorkflow_DeployJobTimeoutExceedsReferenceDrainWindow(): void
+    {
+        require_once $this->root . '/lib/constants.php';
+        $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
+
+        $this->assertMatchesRegularExpression(
+            '/^  deploy:\n(?:.*\n)*?    timeout-minutes: (\d+)/m',
+            $workflow
+        );
+        preg_match('/^  deploy:\n(?:.*\n)*?    timeout-minutes: (\d+)/m', $workflow, $matches);
+        $timeoutMinutes = (int) ($matches[1] ?? 0);
+
+        $drainMinutes = (int) ceil(
+            (DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS) / 60
+        );
+        // Headroom for checkout, image build, health checks after drain returns.
+        $minimum = $drainMinutes + 30;
+        $this->assertGreaterThanOrEqual(
+            $minimum,
+            $timeoutMinutes,
+            "deploy timeout-minutes ({$timeoutMinutes}) must be >= reference drain window + overhead ({$minimum})"
+        );
+    }
+
     public function testWorkflow_DrainsImmediatelyBeforeComposeUpAndClearsOnFailure(): void
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
