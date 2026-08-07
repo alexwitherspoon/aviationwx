@@ -185,12 +185,11 @@ function workerHeartbeatStaleAfterSeconds(
 
 /**
  * Whether a heartbeat glob is restricted to /tmp/worker_heartbeat_*.json paths.
- *
- * Character class includes underscore so ids like nasr_apt / test_... match.
  */
 function workerHeartbeatGlobIsAllowed(string $globPattern): bool
 {
-    return preg_match('#^/tmp/worker_heartbeat_[A-Za-z0-9_*?\-]*\.json$#', $globPattern) === 1;
+    // \w includes underscore (nasr_apt, test_...); * ? - are glob metacharacters.
+    return preg_match('#^/tmp/worker_heartbeat_[\w*?-]*\.json$#', $globPattern) === 1;
 }
 
 /**
