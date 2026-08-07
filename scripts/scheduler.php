@@ -35,6 +35,9 @@ require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
 require_once __DIR__ . '/../lib/nasr/workers.php';
 require_once __DIR__ . '/../lib/runways.php';
 require_once __DIR__ . '/../lib/airport-country-resolution-merge.php';
+require_once __DIR__ . '/../lib/ourairports/refresh.php';
+require_once __DIR__ . '/../lib/reference-data/jobs.php';
+require_once __DIR__ . '/../lib/reference-data/orchestrator.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/scheduler-daemon-lock.php';
 require_once __DIR__ . '/../lib/deploy-drain.php';
@@ -57,13 +60,6 @@ $lastDailySpawnAttempt = 0;
 $lastWeeklySpawnAttempt = 0;
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
-$lastRunwaysFetch = 0;
-$lastOurAirportsProbe = 0;
-$lastOurAirportsBulkFetch = 0;
-$lastNasrAptFetch = 0;
-$lastNasrFrqFetch = 0;
-$lastCountryResolutionSchedulerCheck = 0;
-$countryResolutionSchedulerStartupEval = false;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
@@ -74,7 +70,6 @@ $lastNmsFdcAirspaceRefresh = 0;
 $lastNwsPointsMissingLog = 0;
 $lastNmsFdcAirspaceMissingLog = 0;
 $deployDrainAnnounced = false;
-$runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -222,9 +217,27 @@ $weatherPool = null;
 $webcamPool = null;
 $notamPool = null;
 $stationPowerPool = null;
+/** @var array<string, ProcessPool|null> */
+$referencePools = [];
+foreach (referenceDataJobNames() as $refJobName) {
+    $referencePools[$refJobName] = null;
+}
 $workRegistry = new SchedulerWorkRegistry();
 $webcamScheduleQueue = null; // Priority queue for efficient webcam scheduling
 $invocationId = aviationwx_get_invocation_id();
+
+$referenceDataState = [
+    'last_ourairports_probe' => 0,
+    'last_ourairports_bulk' => 0,
+    'last_runways' => 0,
+    'runways_startup_done' => false,
+    'last_nasr_apt' => 0,
+    'last_nasr_frq' => 0,
+    'last_country_check' => 0,
+    'country_startup_eval' => false,
+    'config_path' => null,
+    'config_sha' => null,
+];
 
 
 // Drain-gated work: register via setPool / registerEnqueueTick (run only when allow_new_work).
@@ -371,128 +384,15 @@ $workRegistry->registerEnqueueTick('station_power', function (int $now) use (&$s
     }
 });
 
-$workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$lastOurAirportsProbe, &$lastOurAirportsBulkFetch, &$lastRunwaysFetch, &$runwaysFetchOnStartupDone, &$lastNasrAptFetch, &$lastNasrFrqFetch, &$lastCountryResolutionSchedulerCheck, &$countryResolutionSchedulerStartupEval, &$lastConfigSha, &$config): void {
-    // 8. OurAirports upstream probe (daily; background worker only)
-    if (($now - $lastOurAirportsProbe) >= OURAIRPORTS_PROBE_INTERVAL && ourAirportsProbeWorkerShouldRun()) {
-        $probeScript = __DIR__ . '/probe-ourairports.php';
-        if (file_exists($probeScript)) {
-            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($probeScript) . ' > /dev/null 2>&1 &');
-            reapZombies();
-            aviationwx_log('info', 'scheduler: ourairports probe started', [], 'app');
-        } else {
-            aviationwx_log('warning', 'scheduler: probe-ourairports.php missing', [
-            'path' => $probeScript,
-            ], 'app');
-        }
-        $lastOurAirportsProbe = $now;
-    }
+$workRegistry->registerEnqueueTick('reference_data', function (int $now) use (&$referencePools, &$referenceDataState, &$lastConfigSha): void {
+    $referenceDataState['config_path'] = getConfigFilePath();
+    $referenceDataState['config_sha'] = $lastConfigSha;
 
-    // 8-i. OurAirports bulk CSV fetch when policy requires
-    if (($now - $lastOurAirportsBulkFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && ourAirportsBulkWorkerShouldRun()) {
-        $bulkScript = __DIR__ . '/fetch-ourairports-bulk.php';
-        if (file_exists($bulkScript)) {
-            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($bulkScript) . ' > /dev/null 2>&1 &');
-            reapZombies();
-            aviationwx_log('info', 'scheduler: ourairports bulk fetch started', [], 'app');
-        } else {
-            aviationwx_log('warning', 'scheduler: fetch-ourairports-bulk.php missing', [
-            'path' => $bulkScript,
-            ], 'app');
-        }
-        $lastOurAirportsBulkFetch = $now;
-    }
-
-    // 8-ii. Runways merge fetch (background; reads OurAirports CSVs from disk)
-    $runwaysScript = __DIR__ . '/fetch-runways.php';
-    if (!$runwaysFetchOnStartupDone) {
-        if (runwaysMergeWorkerShouldRun()) {
-            if (file_exists($runwaysScript)) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: runways fetch started (startup)', [], 'app');
-            } else {
-                aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
-                'path' => $runwaysScript,
-                ], 'app');
-            }
-        }
-        $runwaysFetchOnStartupDone = true;
-        $lastRunwaysFetch = $now;
-    } elseif (($now - $lastRunwaysFetch) >= OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL && runwaysMergeWorkerShouldRun()) {
-        if (file_exists($runwaysScript)) {
-            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($runwaysScript) . ' > /dev/null 2>&1 &');
-            reapZombies();
-            aviationwx_log('info', 'scheduler: runways fetch started', [], 'app');
-        } else {
-            aviationwx_log('warning', 'scheduler: fetch-runways.php missing', [
-            'path' => $runwaysScript,
-            ], 'app');
-        }
-        $lastRunwaysFetch = $now;
-    }
-
-    // 8a. NASR APT: presence/age/cycle gate, then short retry if missing else weekly
-    if (nasrAptSchedulerShouldEnqueue($now, $lastNasrAptFetch)) {
-        $nasrScript = __DIR__ . '/fetch-nasr-apt.php';
-        if (file_exists($nasrScript)) {
-            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrScript) . ' > /dev/null 2>&1 &');
-            reapZombies();
-            aviationwx_log('info', 'scheduler: nasr apt fetch started', [
-                'reason' => nasrAptCacheDataPresent() ? 'refresh' : 'missing',
-                'retry_interval_sec' => nasrAptSchedulerRetryInterval(),
-            ], 'app');
-        } else {
-            aviationwx_log('warning', 'scheduler: fetch-nasr-apt.php missing', [
-                'path' => $nasrScript,
-            ], 'app');
-        }
-        $lastNasrAptFetch = $now;
-    }
-
-    // 8a-ii. NASR FRQ: same cadence policy; waits on APT lock via should-run
-    if (nasrFrqSchedulerShouldEnqueue($now, $lastNasrFrqFetch)) {
-        $nasrFrqScript = __DIR__ . '/fetch-nasr-frq.php';
-        if (file_exists($nasrFrqScript)) {
-            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($nasrFrqScript) . ' > /dev/null 2>&1 &');
-            reapZombies();
-            aviationwx_log('info', 'scheduler: nasr frq fetch started', [
-                'reason' => nasrFrqCacheDataPresent() ? 'refresh' : 'missing',
-                'retry_interval_sec' => nasrFrqSchedulerRetryInterval(),
-            ], 'app');
-        } else {
-            aviationwx_log('warning', 'scheduler: fetch-nasr-frq.php missing', [
-                'path' => $nasrFrqScript,
-            ], 'app');
-        }
-        $lastNasrFrqFetch = $now;
-    }
-
-    // 8b. Airport country resolution aggregate (first loop immediately; then at most hourly)
-    $countryResolutionScript = __DIR__ . '/refresh-airport-country-resolution.php';
-    $countryResolutionEvalDue = !$countryResolutionSchedulerStartupEval
-    || (($now - $lastCountryResolutionSchedulerCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
-    if ($countryResolutionEvalDue
-    && file_exists($countryResolutionScript)
-    && $config !== null
-    && $lastConfigSha !== null) {
-        $lastCountryResolutionSchedulerCheck = $now;
-        $countryResolutionSchedulerStartupEval = true;
-        $cfgPath = getConfigFilePath();
-        if ($cfgPath !== null && is_readable($cfgPath)) {
-            $countryNeedsRefresh = countryResolutionAggregateShouldRefresh($cfgPath, $lastConfigSha);
-            if ($countryNeedsRefresh) {
-                $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
-                exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($countryResolutionScript) . ' > /dev/null 2>&1 &');
-                reapZombies();
-                aviationwx_log('info', 'scheduler: airport country resolution refresh spawned', [], 'app');
-            }
-        }
+    $started = referenceDataEnqueueDueJobs($now, $referencePools, $referenceDataState);
+    foreach ($started as $jobName) {
+        aviationwx_log('info', 'scheduler: reference worker started', [
+            'job' => $jobName,
+        ], 'app');
     }
 });
 
@@ -779,6 +679,23 @@ while ($running) {
                         'config_changed' => $configChanged,
                     ], 'app');
                 }
+
+                // Reference pools are size-1 / job-timeout; create once (not on every config SHA change).
+                if (($referencePools['nasr_apt'] ?? null) === null) {
+                    foreach (referenceDataJobs() as $refName => $refJob) {
+                        $referencePools[$refName] = new ProcessPool(
+                            1,
+                            $refJob['timeout'],
+                            $refJob['script'],
+                            $invocationId
+                        );
+                        $workRegistry->setPool(
+                            $refName,
+                            $referencePools[$refName],
+                            SCHEDULER_POOL_CLASS_REFERENCE
+                        );
+                    }
+                }
             }
         }
         
@@ -841,6 +758,20 @@ while ($running) {
             $workRegistry->setPool('notam', $notamPool);
             $workRegistry->setPool('station_power', $stationPowerPool);
 
+            foreach (referenceDataJobs() as $refName => $refJob) {
+                $referencePools[$refName] = new ProcessPool(
+                    1,
+                    $refJob['timeout'],
+                    $refJob['script'],
+                    $invocationId
+                );
+                $workRegistry->setPool(
+                    $refName,
+                    $referencePools[$refName],
+                    SCHEDULER_POOL_CLASS_REFERENCE
+                );
+            }
+
             // Initialize webcam schedule queue with config
             // This uses a priority queue (min-heap) for O(log N) scheduling
             $webcamScheduleQueue = new WebcamScheduleQueue();
@@ -856,16 +787,20 @@ while ($running) {
 
         reapZombies();
 
-        $drainActiveWorkers = $workRegistry->sumActiveWorkers();
-        $drainTick = deploy_drain_evaluate_scheduler_tick($drainActiveWorkers, $now);
+        $drainActiveByClass = $workRegistry->sumActiveWorkersByClass();
+        $drainActiveWorkers = $drainActiveByClass['live'] + $drainActiveByClass['reference'];
+        $drainTick = deploy_drain_evaluate_scheduler_tick($drainActiveByClass, $now);
         if (!$drainTick['allow_new_work']) {
             if (!$deployDrainAnnounced) {
                 aviationwx_log('info', 'scheduler: deploy drain active - pausing new workers', [
                     'active_workers' => $drainActiveWorkers,
+                    'live_workers' => $drainActiveByClass['live'],
+                    'reference_workers' => $drainActiveByClass['reference'],
                     'action' => $drainTick['action'],
                     'elapsed_seconds' => deploy_drain_elapsed_seconds($now),
                     'max_seconds' => DEPLOY_WORKER_DRAIN_MAX_SECONDS,
-                    'ttl_seconds' => deploy_drain_ttl_seconds(),
+                    'reference_max_seconds' => DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS,
+                    'ttl_seconds' => deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds()),
                     'registered_pools' => $workRegistry->registeredPoolNames(),
                 ], 'app');
                 $deployDrainAnnounced = true;
@@ -875,7 +810,7 @@ while ($running) {
                 if ($drainTick['action'] === 'abandon_clear') {
                     aviationwx_log('warning', 'scheduler: deploy drain abandoned - resuming workers', [
                         'elapsed_seconds' => deploy_drain_elapsed_seconds($now),
-                        'ttl_seconds' => deploy_drain_ttl_seconds(),
+                        'ttl_seconds' => deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds()),
                     ], 'app');
                 }
             }
@@ -884,7 +819,19 @@ while ($running) {
         $drainApplied = deploy_drain_apply_scheduler_action(
             $drainTick['action'],
             $now,
-            static function () use ($workRegistry, $drainActiveWorkers, $drainTick): void {
+            static function () use ($workRegistry, $drainActiveWorkers, $drainTick, $drainActiveByClass): void {
+                if ($drainTick['action'] === 'force_terminate_live') {
+                    if ($drainActiveByClass['live'] <= 0) {
+                        return;
+                    }
+                    aviationwx_log('warning', 'scheduler: deploy drain terminating live pool workers', [
+                        'live_workers' => $drainActiveByClass['live'],
+                        'reference_workers' => $drainActiveByClass['reference'],
+                        'action' => $drainTick['action'],
+                    ], 'app');
+                    $workRegistry->terminatePoolsByClass(SCHEDULER_POOL_CLASS_LIVE);
+                    return;
+                }
                 if ($drainTick['action'] !== 'force_terminate' && $drainTick['action'] !== 'abandon_clear') {
                     return;
                 }
@@ -895,6 +842,7 @@ while ($running) {
                     'active_workers' => $drainActiveWorkers,
                     'action' => $drainTick['action'],
                     'max_seconds' => DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+                    'reference_max_seconds' => DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS,
                     'registered_pools' => $workRegistry->registeredPoolNames(),
                 ], 'app');
                 $workRegistry->terminateAll();

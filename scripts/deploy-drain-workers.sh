@@ -38,10 +38,10 @@ run_in_web() {
 }
 
 MAX_WAIT="$(
-  run_in_web php -r 'require "/var/www/html/lib/constants.php"; echo (int) DEPLOY_WORKER_DRAIN_MAX_SECONDS;'
+  run_in_web php -r 'require "/var/www/html/lib/constants.php"; echo (int) max(DEPLOY_WORKER_DRAIN_MAX_SECONDS, DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS);'
 )"
 if ! [[ "${MAX_WAIT}" =~ ^[0-9]+$ ]] || [ "${MAX_WAIT}" -lt 1 ]; then
-  echo "⚠️  Could not read DEPLOY_WORKER_DRAIN_MAX_SECONDS from container - skipping worker drain"
+  echo "⚠️  Could not read deploy drain max seconds from container - skipping worker drain"
   exit 0
 fi
 
@@ -51,7 +51,7 @@ if ! run_in_web php scripts/deploy-drain.php request --cache-dir="$CONTAINER_CAC
   exit 0
 fi
 
-echo "Waiting for in-flight ProcessPool workers (max ${MAX_WAIT}s + grace)..."
+echo "Waiting for in-flight ProcessPool workers (max ${MAX_WAIT}s + grace; reference-aware)..."
 set +e
 run_in_web php scripts/deploy-drain.php wait --cache-dir="$CONTAINER_CACHE_DIR" --max-wait="${MAX_WAIT}"
 WAIT_RC=$?

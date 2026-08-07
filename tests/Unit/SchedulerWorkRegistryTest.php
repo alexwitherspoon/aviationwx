@@ -173,8 +173,10 @@ final class SchedulerWorkRegistryTest extends TestCase
             false,
             1000,
             $reg->sumActiveWorkers(),
+            0,
             1010,
             120,
+            7200,
             600
         );
         $this->assertFalse($tick['allow_new_work']);
@@ -185,7 +187,7 @@ final class SchedulerWorkRegistryTest extends TestCase
         }
         $this->assertFalse($ran);
 
-        $tickIdle = deploy_drain_evaluate_state(false, false, null, 0, 1010, 120, 600);
+        $tickIdle = deploy_drain_evaluate_state(false, false, null, 0, 0, 1010, 120, 7200, 600);
         $this->assertTrue($tickIdle['allow_new_work']);
         if ($tickIdle['allow_new_work']) {
             $reg->runEnqueueTicks(1010);

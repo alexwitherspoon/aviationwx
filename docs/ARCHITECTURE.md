@@ -167,12 +167,14 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - Runs continuously as a background process: **Docker entrypoint** starts one instance after cache setup; **`scheduler-health-check.php`** (cron, every minute) confirms lock/PID/health and starts a replacement only when recovery is needed
 - Dispatches weather, webcam, NOTAM, station power, reference-data / status prewarm, and metrics housekeeping on configurable intervals (minimum 5 seconds, 1-second granularity)
 - Starts work via **ProcessPool** workers (concurrency-limited, waited on for deploy drain) or fire-and-forget CLI scripts (background `exec`; not waited on)
+- **Live pools** (weather, webcam, NOTAM, station power) use the short deploy-drain force window (`DEPLOY_WORKER_DRAIN_MAX_SECONDS`)
+- **Reference pools** (OurAirports probe/bulk, runways merge, NASR APT/FRQ, country resolution) are size-1 ProcessPools with job-specific timeouts; drain waits up to `DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS` before force-terminate so mid-cycle FAA catalog work is not cut at the live window
 - Main loop: due checks, enqueue or spawn, pool cleanup, config reload, deploy-drain evaluation - registered ticks must not block on upstream I/O, image pipelines, geometry builds, or metrics aggregation (fire-and-forget CLI or ProcessPool only)
 - Automatically reloads configuration changes without restart
 
 **Work registry (`lib/scheduler-work-registry.php`)**: Drain-aware registration of scheduler work
-- ProcessPools register with `setPool` (weather, webcam, NOTAM, station power). Replacing a pool that still has active children keeps the prior pool in a retiring set until idle or force-terminate, so drain counts stay accurate across config-driven recreation.
-- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush)
+- ProcessPools register with `setPool` (weather, webcam, NOTAM, station power, plus each reference job). Replacing a pool that still has active children keeps the prior pool in a retiring set until idle or force-terminate, so drain counts stay accurate across config-driven recreation. Reference pools pass class `reference` so drain force timing can differ from live pools.
+- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush). The `reference_data` tick uses `referenceDataEnqueueDueJobs()` for dependency-aware size-1 pool enqueue (not fire-and-forget `exec`).
 - Each loop: cleanup finished pool workers, evaluate deploy drain, then run registered enqueue ticks only when new work is allowed
 - Active worker counts and force-terminate iterate registered pools only
 - New gated work is added by registering a pool and/or tick; ungated paths stay outside the registry (stuck-worker heartbeat cleanup remains in-process control-plane work)
@@ -181,11 +183,11 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 - CD writes `cache/deploy-drain.flag` on the shared cache volume (via `scripts/deploy-drain-workers.sh` running `deploy-drain.php` inside the live web container; host has no PHP) while Apache continues serving clients
 - The scheduler stops running registered enqueue ticks; in-flight ProcessPool workers may finish
 - When pools are idle, the scheduler writes `cache/deploy-drain.done` so CD can proceed
-- After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining registered pool workers are force-terminated (`ProcessPool::cleanup`: SIGTERM, brief wait, then SIGKILL) and `.done` is written
-- After `MAX + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS` from drain start (or for an orphan `.done` without a flag), markers are cleared and registered work resumes so a failed recreate cannot leave refresh paused indefinitely
+- After `DEPLOY_WORKER_DRAIN_MAX_SECONDS`, remaining **live** pool workers are force-terminated (`ProcessPool::cleanup`: SIGTERM, brief wait, then SIGKILL); **reference** pools may continue until idle or `DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS`, then remaining pools are force-terminated the same way and `.done` is written
+- After the active force window + `DEPLOY_WORKER_DRAIN_ABANDON_SECONDS` from drain start (or for an orphan `.done` without a flag), markers are cleared and registered work resumes so a failed recreate cannot leave refresh paused indefinitely
 - While drain is active inside that TTL, `scheduler-health-check.php` does not spawn a second daemon when a live scheduler is already present; if the daemon has died, the watchdog may start a replacement (the new process continues under the same drain markers)
 - Container entrypoint clears both markers before starting the scheduler
-- Registered CLI background ticks are not started during drain; in-flight fire-and-forget CLI processes are not waited on (only ProcessPool workers are)
+- Registered CLI background ticks are not started during drain; in-flight fire-and-forget CLI processes (metrics, airspace helpers) are not waited on; airport reference catalogs are ProcessPool-owned and are waited on
 - Slight data staleness during the drain window is preferred over killing mid-flight webcam or weather pool workers
 
 ### Webcam System

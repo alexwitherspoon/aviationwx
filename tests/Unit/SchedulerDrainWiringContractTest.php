@@ -141,14 +141,18 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->assertMatchesRegularExpression('/SIGTERM.*SIGKILL|SIGKILL.*SIGTERM/i', $arch);
     }
 
-    public function testScheduler_CountryResolutionSpawnsNonBlocking(): void
+    public function testScheduler_CountryResolutionUsesReferenceProcessPool(): void
     {
         $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');
-        $this->assertStringContainsString('refresh-airport-country-resolution.php', $scheduler);
-        $this->assertMatchesRegularExpression(
-            '/escapeshellarg\(\$countryResolutionScript\)\s*\.\s*[\'"]\s*>\s*\/dev\/null\s*2>&1\s*&/',
+        $jobs = (string) file_get_contents($this->root . '/lib/reference-data/jobs.php');
+        $this->assertStringContainsString('refresh-airport-country-resolution.php', $jobs);
+        $this->assertStringContainsString('country_resolution', $jobs);
+        $this->assertStringContainsString('referenceDataEnqueueDueJobs', $scheduler);
+        $this->assertStringContainsString('SCHEDULER_POOL_CLASS_REFERENCE', $scheduler);
+        $this->assertStringNotContainsString(
+            'escapeshellarg($countryResolutionScript)',
             $scheduler,
-            'Country resolution must be fire-and-forget so the dispatcher tick cannot block on geometry I/O'
+            'Country resolution must use ProcessPool enqueue, not fire-and-forget exec'
         );
         $this->assertStringNotContainsString(
             ", \$output, \$exitCode)",

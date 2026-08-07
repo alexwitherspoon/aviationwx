@@ -140,6 +140,16 @@ class ProcessPool {
         $this->cleanupFinished($dummyStats);
         return count($this->workers);
     }
+
+    /**
+     * Per-worker timeout in seconds (pool hard kill / timeout(1) wrapper).
+     *
+     * @return int
+     */
+    public function getTimeout(): int
+    {
+        return (int) $this->timeout;
+    }
     
     /**
      * Check if system timeout command is available

@@ -70,7 +70,7 @@ switch ($command) {
     case 'wait':
         // Explicit --max-wait=0 is a single poll (tests / check-once). Default adds grace.
         if ($maxWait === null) {
-            $waitSeconds = DEPLOY_WORKER_DRAIN_MAX_SECONDS + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS;
+            $waitSeconds = deploy_drain_cd_wait_seconds();
         } elseif ($maxWait <= 0) {
             $waitSeconds = 0;
         } else {
@@ -96,9 +96,11 @@ switch ($command) {
             'done' => deploy_drain_done_path(),
             'done_payload' => deploy_drain_read_done_payload(),
             'max_seconds' => DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+            'reference_max_seconds' => DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS,
             'abandon_seconds' => DEPLOY_WORKER_DRAIN_ABANDON_SECONDS,
-            'ttl_seconds' => deploy_drain_ttl_seconds(),
+            'ttl_seconds' => deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds()),
             'wait_grace_seconds' => DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS,
+            'cd_wait_seconds' => deploy_drain_cd_wait_seconds(),
         ];
         echo json_encode($status, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         exit(0);
