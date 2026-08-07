@@ -7,6 +7,7 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../cache-paths.php';
+require_once __DIR__ . '/../worker-timeout.php';
 
 /**
  * User-Agent for FAA/NFDC HTTP.
@@ -93,9 +94,7 @@ function nasrHttpThrottlePaths(): array
 function nasrHttpThrottle(): void
 {
     // Long NASR jobs: refresh silence clock on each paced FAA/NFDC attempt.
-    if (function_exists('updateWorkerHeartbeat')) {
-        updateWorkerHeartbeat();
-    }
+    updateWorkerHeartbeat();
 
     if (!nasrHttpThrottleShouldEnforce()) {
         return;

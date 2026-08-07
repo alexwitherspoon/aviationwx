@@ -31,6 +31,15 @@ class WorkerTimeoutHeartbeatTest extends TestCase
             }
         }
         $this->heartbeatFiles = [];
+
+        // initWorkerTimeout leaves process-global state; clear so later suites are unaffected.
+        if (function_exists('pcntl_alarm')) {
+            pcntl_alarm(0);
+        }
+        $GLOBALS['_aviationwx_worker_start_time'] = null;
+        $GLOBALS['_aviationwx_worker_timeout'] = null;
+        $GLOBALS['_aviationwx_worker_heartbeat_file'] = null;
+
         parent::tearDown();
     }
 
@@ -66,6 +75,14 @@ class WorkerTimeoutHeartbeatTest extends TestCase
             workerHeartbeatExpectedProcessName(['script' => '/var/www/html/scripts/fetch-nasr-apt.php'])
         );
         $this->assertSame('scripts/', workerHeartbeatExpectedProcessName([]));
+    }
+
+    public function testExpectedProcessName_RejectsBroadOrForgedTokens(): void
+    {
+        $this->assertSame('scripts/', workerHeartbeatExpectedProcessName(['script' => 'php']));
+        $this->assertSame('scripts/', workerHeartbeatExpectedProcessName(['script' => 'php-fpm']));
+        $this->assertSame('scripts/', workerHeartbeatExpectedProcessName(['script' => '../evil']));
+        $this->assertSame('scripts/', workerHeartbeatExpectedProcessName(['script' => 'not-a-php-script']));
     }
 
     public function testCorruptHugeTimeout_IsCapped(): void
@@ -162,27 +179,38 @@ class WorkerTimeoutHeartbeatTest extends TestCase
         $this->assertFileExists($path);
     }
 
+    public function testPastAbsoluteDeadline_RemovesHeartbeatEvenIfSilenceFresh(): void
+    {
+        $timeout = (int) NASR_APT_WORKER_TIMEOUT;
+        $runtime = $timeout + 30 + 5;
+        $path = $this->writeHeartbeat([
+            'pid' => 2147483005,
+            'started' => time() - $runtime,
+            'heartbeat' => time() - 10,
+            'timeout' => $timeout,
+            'script' => 'scripts/fetch-nasr-apt.php',
+        ]);
+
+        $stuck = cleanupStaleWorkerHeartbeats(null, $this->heartbeatGlob());
+        $this->assertSame([], $stuck, 'Synthetic PID must not match a live process');
+        $this->assertFileDoesNotExist($path);
+    }
+
     public function testInitWorkerTimeout_WritesTimeoutUsedByStalePolicy(): void
     {
         $safeId = $this->heartbeatIdPrefix . '_contract';
-        try {
-            initWorkerTimeout(600, $safeId);
-            $path = '/tmp/worker_heartbeat_' . $safeId . '.json';
-            $this->heartbeatFiles[] = $path;
+        initWorkerTimeout(600, $safeId);
+        $path = '/tmp/worker_heartbeat_' . $safeId . '.json';
+        $this->heartbeatFiles[] = $path;
 
-            $this->assertFileExists($path);
-            $data = json_decode((string) file_get_contents($path), true);
-            $this->assertIsArray($data);
-            $this->assertSame(600, $data['timeout'] ?? null);
-            $this->assertSame(
-                630,
-                workerHeartbeatStaleAfterSeconds($data, null, getWorkerTimeout() + 30)
-            );
-        } finally {
-            if (function_exists('pcntl_alarm')) {
-                pcntl_alarm(0);
-            }
-        }
+        $this->assertFileExists($path);
+        $data = json_decode((string) file_get_contents($path), true);
+        $this->assertIsArray($data);
+        $this->assertSame(600, $data['timeout'] ?? null);
+        $this->assertSame(
+            630,
+            workerHeartbeatStaleAfterSeconds($data, null, getWorkerTimeout() + 30)
+        );
     }
 
     /**

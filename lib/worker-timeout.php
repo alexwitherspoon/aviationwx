@@ -163,8 +163,8 @@ function shouldWorkerAbort(int $requiredSeconds = 10): bool {
 /**
  * Silence allowed after the last heartbeat before a worker is treated as stuck.
  *
- * Uses the worker's declared timeout from initWorkerTimeout (not total runtime
- * since start) so long jobs are not killed by the short webcam/weather default.
+ * Also used as the absolute runtime ceiling from `started` so a worker that
+ * keeps refreshing heartbeats past its declared timeout is still cleaned up.
  *
  * @param array<string, mixed> $data Heartbeat JSON payload
  * @param int|null $staleSecondsOverride When set, applies to all workers
@@ -203,13 +203,18 @@ function workerHeartbeatGlobIsAllowed(string $globPattern): bool
 /**
  * Cmdline substring used to verify a heartbeat PID before kill (limits PID reuse risk).
  *
+ * Heartbeat files live in world-writable /tmp, so "script" is only trusted when it
+ * looks like a worker basename (e.g. fetch-nasr-apt.php). Broad tokens like "php"
+ * fall back to scripts/ (same idea as scheduler-health-check's "scheduler" token).
+ *
  * @param array<string, mixed> $data Heartbeat JSON payload
  */
 function workerHeartbeatExpectedProcessName(array $data): string
 {
     if (!empty($data['script']) && is_string($data['script'])) {
         $script = basename($data['script']);
-        if ($script !== '' && $script !== '.' && $script !== '..') {
+        // Reject free-form / broad tokens from forged heartbeat files.
+        if (preg_match('/^[A-Za-z0-9_-]+\.php$/', $script) === 1) {
             return $script;
         }
     }
@@ -257,80 +262,84 @@ function cleanupStaleWorkerHeartbeats(
 
         $effectiveStale = workerHeartbeatStaleAfterSeconds($data, $staleSeconds, $defaultStaleSeconds);
         $heartbeatAge = $now - (int) $data['heartbeat'];
-        if ($heartbeatAge > $effectiveStale) {
-            $pid = (int) $data['pid'];
-            $expectedName = workerHeartbeatExpectedProcessName($data);
-
-            if ($pid > 0 && isProcessRunning($pid, $expectedName)) {
-                $stuckWorkers[] = [
-                    'pid' => $pid,
-                    'expected_name' => $expectedName,
-                ];
-                aviationwx_log('warning', 'worker heartbeat stale - process may be stuck', [
-                    'pid' => $pid,
-                    'heartbeat_age' => $heartbeatAge,
-                    'stale_after' => $effectiveStale,
-                    'expected_name' => $expectedName,
-                    'file' => basename($file),
-                ], 'app');
-            }
-
-            // Drop stamp either way so we do not re-warn every cleanup tick.
-            @unlink($file);
+        $started = isset($data['started']) ? (int) $data['started'] : 0;
+        // Absolute runtime past declared timeout (defense if heartbeats keep refreshing).
+        $pastAbsoluteDeadline = $started > 0 && ($now - $started) > $effectiveStale;
+        if ($heartbeatAge <= $effectiveStale && !$pastAbsoluteDeadline) {
+            continue;
         }
+
+        $pid = (int) $data['pid'];
+        $expectedName = workerHeartbeatExpectedProcessName($data);
+
+        if ($pid > 0 && isProcessRunning($pid, $expectedName)) {
+            $stuckWorkers[] = [
+                'pid' => $pid,
+                'expected_name' => $expectedName,
+            ];
+            aviationwx_log('warning', 'worker heartbeat stale - process may be stuck', [
+                'pid' => $pid,
+                'heartbeat_age' => $heartbeatAge,
+                'stale_after' => $effectiveStale,
+                'runtime' => $started > 0 ? ($now - $started) : null,
+                'expected_name' => $expectedName,
+                'file' => basename($file),
+            ], 'app');
+            // Keep stamp so a failed kill is retried on the next cleanup tick.
+            continue;
+        }
+
+        @unlink($file);
     }
 
     return $stuckWorkers;
 }
 
 /**
- * Kill stuck worker processes
- * 
- * Attempts to terminate stuck worker processes identified by cleanupStaleWorkerHeartbeats().
- * Uses SIGTERM first, then SIGKILL if process doesn't exit.
- * 
- * @param int[] $pids Array of PIDs to kill
- * @param string $expectedName Process name substring to verify before killing (safety check)
- * @return int Number of processes killed
+ * Kill stuck workers returned by cleanupStaleWorkerHeartbeats().
+ *
+ * Matches ProcessPool / scheduler-health-check: SIGTERM, brief wait, then SIGKILL.
+ *
+ * @param list<array{pid: int, expected_name?: string}> $stuckWorkers
+ * @return list<int> PIDs that were signaled (for accurate scheduler logs)
  */
-function killStuckWorkers(array $pids, string $expectedName = 'scripts/'): int {
-    // Require posix_kill and signal constants for this function
+function killStuckWorkers(array $stuckWorkers): array
+{
     if (!function_exists('posix_kill') || !defined('SIGTERM') || !defined('SIGKILL')) {
-        return 0;
+        return [];
     }
-    
-    $killed = 0;
-    
-    foreach ($pids as $pid) {
-        $pid = (int)$pid;
-        if ($pid <= 0) {
+
+    $killedPids = [];
+
+    foreach ($stuckWorkers as $worker) {
+        $pid = (int) ($worker['pid'] ?? 0);
+        $expectedName = (string) ($worker['expected_name'] ?? 'scripts/');
+        if ($pid <= 0 || $expectedName === '') {
             continue;
         }
-        
-        // Use cross-platform process check with name verification
-        // This prevents killing unrelated processes (e.g., PID reuse)
+
+        // Name check limits PID-reuse kills of unrelated processes.
         if (!isProcessRunning($pid, $expectedName)) {
             continue;
         }
-        
-        // Try SIGTERM first (graceful shutdown)
+
         $result = @posix_kill($pid, SIGTERM);
-        if ($result) {
-            usleep(500000); // 500ms grace period
-            
-            // Check if still running
-            if (isProcessRunning($pid)) {
-                // Force kill
-                @posix_kill($pid, SIGKILL);
-            }
-            
-            $killed++;
-            aviationwx_log('info', 'killed stuck worker', [
-                'pid' => $pid
-            ], 'app');
+        if (!$result) {
+            continue;
         }
+
+        usleep(500000);
+        if (isProcessRunning($pid, $expectedName)) {
+            @posix_kill($pid, SIGKILL);
+        }
+
+        $killedPids[] = $pid;
+        aviationwx_log('info', 'killed stuck worker', [
+            'pid' => $pid,
+            'expected_name' => $expectedName,
+        ], 'app');
     }
-    
-    return $killed;
+
+    return $killedPids;
 }
 

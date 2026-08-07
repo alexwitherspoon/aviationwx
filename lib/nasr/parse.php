@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../worker-timeout.php';
 require_once __DIR__ . '/csv-validation.php';
 require_once __DIR__ . '/runway-remarks.php';
 
@@ -163,10 +164,9 @@ function nasrIterateCsvFile(string $path): Generator
         $header = array_map(static fn ($col) => trim((string) $col), $header);
 
         $rowIndex = 0;
+        // Sparse enough for large CSVs; frequent enough to beat silence stale policy.
         $heartbeatEveryRows = 5000;
-        if (function_exists('updateWorkerHeartbeat')) {
-            updateWorkerHeartbeat();
-        }
+        updateWorkerHeartbeat();
 
         while (($data = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
             if ($data === [null] || $data === false) {
@@ -179,7 +179,7 @@ function nasrIterateCsvFile(string $path): Generator
             yield $row;
 
             $rowIndex++;
-            if ($rowIndex % $heartbeatEveryRows === 0 && function_exists('updateWorkerHeartbeat')) {
+            if ($rowIndex % $heartbeatEveryRows === 0) {
                 updateWorkerHeartbeat();
             }
         }

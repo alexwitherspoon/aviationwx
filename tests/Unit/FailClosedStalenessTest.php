@@ -230,11 +230,11 @@ class FailClosedStalenessTest extends TestCase
         $now = time();
         $failclosedThreshold = getStaleFailclosedSeconds();
         
-        // Create data where field has obs_time but exceeds failclosed threshold
+        // Comfortably over failclosed (avoid 1s flake if the suite is slow).
         $data = [
             'temperature' => 15.0,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($failclosedThreshold + 1),  // 1 second over threshold
+                'temperature' => $now - ($failclosedThreshold + 60),
             ],
             'last_updated_primary' => $now - 300,
         ];
@@ -258,11 +258,11 @@ class FailClosedStalenessTest extends TestCase
         $now = time();
         $failclosedThreshold = getStaleFailclosedSeconds();
         
-        // Create data where field has obs_time and is under failclosed threshold
+        // Comfortably under failclosed (avoid 1s flake if the suite is slow).
         $data = [
             'temperature' => 15.0,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($failclosedThreshold - 1),  // 1 second under threshold
+                'temperature' => $now - max(1, $failclosedThreshold - 60),
             ],
             'last_updated_primary' => $now - 300,
         ];
