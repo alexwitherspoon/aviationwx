@@ -918,13 +918,23 @@ while ($running) {
         // Clean up stuck worker processes (every 60 seconds).
         // Safety net for workers that become stuck despite self-timeout mechanisms.
         if (($now - $lastStuckWorkerCleanup) >= 60) {
-            $stuckPids = cleanupStaleWorkerHeartbeats();
-            if (!empty($stuckPids)) {
-                $killed = killStuckWorkers($stuckPids);
+            $stuckWorkers = cleanupStaleWorkerHeartbeats();
+            if (!empty($stuckWorkers)) {
+                $killed = 0;
+                $pids = [];
+                foreach ($stuckWorkers as $worker) {
+                    $pid = (int) ($worker['pid'] ?? 0);
+                    $expectedName = (string) ($worker['expected_name'] ?? 'scripts/');
+                    if ($pid <= 0) {
+                        continue;
+                    }
+                    $pids[] = $pid;
+                    $killed += killStuckWorkers([$pid], $expectedName);
+                }
                 if ($killed > 0) {
                     aviationwx_log('warning', 'scheduler: cleaned up stuck workers', [
                         'killed_count' => $killed,
-                        'pids' => $stuckPids
+                        'pids' => $pids,
                     ], 'app');
                 }
             }

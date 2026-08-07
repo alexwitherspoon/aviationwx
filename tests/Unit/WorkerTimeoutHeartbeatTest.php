@@ -59,6 +59,15 @@ class WorkerTimeoutHeartbeatTest extends TestCase
         );
     }
 
+    public function testExpectedProcessName_PrefersScriptBasename(): void
+    {
+        $this->assertSame(
+            'fetch-nasr-apt.php',
+            workerHeartbeatExpectedProcessName(['script' => '/var/www/html/scripts/fetch-nasr-apt.php'])
+        );
+        $this->assertSame('scripts/', workerHeartbeatExpectedProcessName([]));
+    }
+
     public function testCorruptHugeTimeout_IsCapped(): void
     {
         $this->assertSame(

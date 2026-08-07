@@ -215,6 +215,7 @@ final class MetricsSchedulerWorkersTest extends TestCase
         // Control-plane cleanup stays in the daemon.
         $this->assertStringContainsString('cleanupStaleWorkerHeartbeats', $scheduler);
         $this->assertStringContainsString('killStuckWorkers', $scheduler);
+        $this->assertStringContainsString("\$worker['expected_name']", $scheduler);
         // Background APT may not hold its lock yet in the same tick.
         $this->assertStringContainsString('$nasrAptStartedThisTick', $scheduler);
         $this->assertStringContainsString(

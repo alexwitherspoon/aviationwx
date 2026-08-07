@@ -115,6 +115,14 @@ function updateWorkerHeartbeat(): void {
         'heartbeat' => time(),
         'timeout' => $GLOBALS['_aviationwx_worker_timeout']
     ];
+
+    $script = basename((string) ($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    if ($script === '' && isset($_SERVER['argv'][0])) {
+        $script = basename((string) $_SERVER['argv'][0]);
+    }
+    if ($script !== '' && $script !== '.' && $script !== '..') {
+        $data['script'] = $script;
+    }
     
     @file_put_contents($heartbeatFile, json_encode($data), LOCK_EX);
 }
@@ -193,26 +201,44 @@ function workerHeartbeatGlobIsAllowed(string $globPattern): bool
 }
 
 /**
- * Clean up stale worker heartbeat files and return PIDs that still look stuck.
+ * Cmdline substring used to verify a heartbeat PID before kill (limits PID reuse risk).
+ *
+ * @param array<string, mixed> $data Heartbeat JSON payload
+ */
+function workerHeartbeatExpectedProcessName(array $data): string
+{
+    if (!empty($data['script']) && is_string($data['script'])) {
+        $script = basename($data['script']);
+        if ($script !== '' && $script !== '.' && $script !== '..') {
+            return $script;
+        }
+    }
+
+    // CLI workers live under scripts/; avoids matching php-fpm pool workers.
+    return 'scripts/';
+}
+
+/**
+ * Clean up stale worker heartbeat files and return stuck workers to kill.
  *
  * @param int|null $staleSeconds Override for all files; null uses each file's
  *        declared timeout (+30s) or getWorkerTimeout()+30.
  * @param string $globPattern Heartbeat file glob (tests may narrow within /tmp)
- * @return int[] PIDs of potentially stuck workers (empty if none found)
+ * @return list<array{pid: int, expected_name: string}>
  */
 function cleanupStaleWorkerHeartbeats(
     ?int $staleSeconds = null,
     string $globPattern = '/tmp/worker_heartbeat_*.json'
 ): array {
-    $stuckPids = [];
+    $stuckWorkers = [];
     if (!workerHeartbeatGlobIsAllowed($globPattern)) {
-        return $stuckPids;
+        return $stuckWorkers;
     }
 
     $files = glob($globPattern);
 
     if ($files === false || empty($files)) {
-        return $stuckPids;
+        return $stuckWorkers;
     }
 
     $now = time();
@@ -233,13 +259,18 @@ function cleanupStaleWorkerHeartbeats(
         $heartbeatAge = $now - (int) $data['heartbeat'];
         if ($heartbeatAge > $effectiveStale) {
             $pid = (int) $data['pid'];
+            $expectedName = workerHeartbeatExpectedProcessName($data);
 
-            if ($pid > 0 && isProcessRunning($pid, 'php')) {
-                $stuckPids[] = $pid;
+            if ($pid > 0 && isProcessRunning($pid, $expectedName)) {
+                $stuckWorkers[] = [
+                    'pid' => $pid,
+                    'expected_name' => $expectedName,
+                ];
                 aviationwx_log('warning', 'worker heartbeat stale - process may be stuck', [
                     'pid' => $pid,
                     'heartbeat_age' => $heartbeatAge,
                     'stale_after' => $effectiveStale,
+                    'expected_name' => $expectedName,
                     'file' => basename($file),
                 ], 'app');
             }
@@ -249,7 +280,7 @@ function cleanupStaleWorkerHeartbeats(
         }
     }
 
-    return $stuckPids;
+    return $stuckWorkers;
 }
 
 /**
@@ -262,7 +293,7 @@ function cleanupStaleWorkerHeartbeats(
  * @param string $expectedName Process name substring to verify before killing (safety check)
  * @return int Number of processes killed
  */
-function killStuckWorkers(array $pids, string $expectedName = 'php'): int {
+function killStuckWorkers(array $pids, string $expectedName = 'scripts/'): int {
     // Require posix_kill and signal constants for this function
     if (!function_exists('posix_kill') || !defined('SIGTERM') || !defined('SIGKILL')) {
         return 0;
