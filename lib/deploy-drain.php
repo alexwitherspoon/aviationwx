@@ -442,7 +442,7 @@ function deploy_drain_evaluate_state(
  *   action: 'none'|'wait'|'mark_complete_idle'|'force_terminate_live'|'force_terminate_reference'|'force_terminate'|'already_complete'|'abandon_clear'
  * }
  */
-function deploy_drain_evaluate_scheduler_tick($activeByClass, ?int $now = null): array
+function deploy_drain_evaluate_scheduler_tick(array|int $activeByClass, ?int $now = null): array
 {
     $now = $now ?? time();
     if (is_int($activeByClass)) {
