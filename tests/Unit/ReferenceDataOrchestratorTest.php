@@ -76,13 +76,14 @@ final class ReferenceDataOrchestratorTest extends TestCase
 
     public function testEnqueue_StartsJobAndUpdatesState(): void
     {
-        $added = false;
-        $pool = new class ($added) {
-            private bool $added;
+        $addedArgs = null;
+        $pool = new class ($addedArgs) {
+            /** @var array<string, mixed>|null */
+            private $addedArgs;
 
-            public function __construct(bool &$added)
+            public function __construct(?array &$addedArgs)
             {
-                $this->added = &$added;
+                $this->addedArgs = &$addedArgs;
             }
 
             public function getActiveCount(): int
@@ -92,27 +93,20 @@ final class ReferenceDataOrchestratorTest extends TestCase
 
             public function addJob(array $args): bool
             {
-                $this->added = true;
+                $this->addedArgs = $args;
                 return true;
             }
         };
 
-        // Force country path with unreadable config so only a stubbed job can start.
-        // Use a fake job by temporarily only enqueuing via direct shouldEnqueue false for all
-        // real jobs except we inject a pool that always would run - instead call addJob path
-        // through nasr_apt with last attempt far in the past and needs-refresh mocked is hard.
-        // Verify enqueue helper records state when addJob succeeds via a custom pool map entry
-        // for a job we force by using ourairports_probe with interval satisfied and should-run
-        // may be true/false depending on locks - assert API shape instead:
-
+        $now = time();
         $state = [
-            'last_ourairports_probe' => time(),
-            'last_ourairports_bulk' => time(),
-            'last_runways' => time(),
+            'last_ourairports_probe' => 0,
+            'last_ourairports_bulk' => $now,
+            'last_runways' => $now,
             'runways_startup_done' => true,
-            'last_nasr_apt' => time(),
-            'last_nasr_frq' => time(),
-            'last_country_check' => time(),
+            'last_nasr_apt' => $now,
+            'last_nasr_frq' => $now,
+            'last_country_check' => $now,
             'country_startup_eval' => true,
             'config_path' => null,
             'config_sha' => null,
@@ -126,9 +120,71 @@ final class ReferenceDataOrchestratorTest extends TestCase
             'country_resolution' => $this->makePool(0),
         ];
 
-        $started = referenceDataEnqueueDueJobs(time(), $pools, $state);
+        $started = referenceDataEnqueueDueJobs($now, $pools, $state);
+        $this->assertSame(['ourairports_probe'], $started);
+        $this->assertSame([], $addedArgs);
+        $this->assertSame($now, $state['last_ourairports_probe']);
+    }
+
+    public function testEnqueue_KeepsRunwaysStartupPendingWhileBulkActive(): void
+    {
+        $now = time();
+        $state = [
+            'last_ourairports_probe' => $now,
+            'last_ourairports_bulk' => $now,
+            'last_runways' => 0,
+            'runways_startup_done' => false,
+            'last_nasr_apt' => $now,
+            'last_nasr_frq' => $now,
+            'last_country_check' => $now,
+            'country_startup_eval' => true,
+            'config_path' => null,
+            'config_sha' => null,
+        ];
+        $pools = [
+            'ourairports_probe' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(1),
+            'runways_merge' => $this->makePool(0),
+            'nasr_apt' => $this->makePool(0),
+            'nasr_frq' => $this->makePool(0),
+            'country_resolution' => $this->makePool(0),
+        ];
+
+        $started = referenceDataEnqueueDueJobs($now, $pools, $state);
         $this->assertSame([], $started);
-        $this->assertFalse($added);
+        $this->assertFalse($state['runways_startup_done']);
+        $this->assertSame(0, $state['last_runways']);
+    }
+
+    public function testEnqueue_AdvancesRunwaysStartupWhenSkippedWithoutUpstream(): void
+    {
+        $now = time();
+        $state = [
+            'last_ourairports_probe' => $now,
+            'last_ourairports_bulk' => $now,
+            'last_runways' => 0,
+            'runways_startup_done' => false,
+            'last_nasr_apt' => $now,
+            'last_nasr_frq' => $now,
+            'last_country_check' => $now,
+            'country_startup_eval' => true,
+            'config_path' => null,
+            'config_sha' => null,
+        ];
+        $pools = [
+            'ourairports_probe' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+            'runways_merge' => $this->makePool(0),
+            'nasr_apt' => $this->makePool(0),
+            'nasr_frq' => $this->makePool(0),
+            'country_resolution' => $this->makePool(0),
+        ];
+
+        // No runway inputs in test cache => shouldEnqueue false; still advances startup flag.
+        $started = referenceDataEnqueueDueJobs($now, $pools, $state);
+        $this->assertNotContains('runways_merge', $started);
+        $this->assertTrue($state['runways_startup_done']);
+        $this->assertSame($now, $state['last_runways']);
     }
 
     /**

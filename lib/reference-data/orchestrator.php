@@ -141,10 +141,14 @@ function referenceDataEnqueueDueJobs(int $now, array $pools, array &$state): arr
 
     foreach (referenceDataJobNames() as $jobName) {
         if (!referenceDataShouldEnqueue($jobName, $now, $pools, $state)) {
-            // Startup runways still advances the startup flag when skipped.
+            // Keep startup runways pending while OA probe/bulk still occupies a pool slot.
             if ($jobName === 'runways_merge' && empty($state['runways_startup_done'])) {
-                $state['runways_startup_done'] = true;
-                $state['last_runways'] = $now;
+                $blockedByUpstream = referenceDataPoolIsActive($pools, 'ourairports_bulk')
+                    || referenceDataPoolIsActive($pools, 'ourairports_probe');
+                if (!$blockedByUpstream) {
+                    $state['runways_startup_done'] = true;
+                    $state['last_runways'] = $now;
+                }
             }
             if ($jobName === 'country_resolution') {
                 $startupEval = !empty($state['country_startup_eval']);
