@@ -179,12 +179,14 @@ function workerHeartbeatStaleAfterSeconds(
         return max(1, $defaultStaleSeconds);
     }
 
-    // Cap corrupt timeout values so stuck workers remain killable.
-    return min($declaredTimeout + 30, 86400 + 30);
+    // Cap declared timeout before adding the buffer (avoids int overflow on corrupt values).
+    return min($declaredTimeout, 86400) + 30;
 }
 
 /**
  * Whether a heartbeat glob is restricted to /tmp/worker_heartbeat_*.json paths.
+ *
+ * Character class includes underscore so ids like nasr_apt / test_... match.
  */
 function workerHeartbeatGlobIsAllowed(string $globPattern): bool
 {

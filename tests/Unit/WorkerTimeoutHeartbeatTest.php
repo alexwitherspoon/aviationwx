@@ -65,12 +65,17 @@ class WorkerTimeoutHeartbeatTest extends TestCase
             86400 + 30,
             workerHeartbeatStaleAfterSeconds(['timeout' => 999999999], null, 120)
         );
+        $this->assertSame(
+            86400 + 30,
+            workerHeartbeatStaleAfterSeconds(['timeout' => PHP_INT_MAX], null, 120)
+        );
     }
 
     public function testGlobAllowsDefaultAndTestScopedPatterns(): void
     {
         $this->assertTrue(workerHeartbeatGlobIsAllowed('/tmp/worker_heartbeat_*.json'));
         $this->assertTrue(workerHeartbeatGlobIsAllowed($this->heartbeatGlob()));
+        $this->assertTrue(workerHeartbeatGlobIsAllowed('/tmp/worker_heartbeat_nasr_apt.json'));
         $this->assertFalse(workerHeartbeatGlobIsAllowed('/tmp/other_*.json'));
         $this->assertFalse(workerHeartbeatGlobIsAllowed('/etc/passwd'));
         $this->assertFalse(workerHeartbeatGlobIsAllowed('/tmp/../etc/passwd'));
