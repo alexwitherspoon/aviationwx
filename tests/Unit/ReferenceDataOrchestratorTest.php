@@ -6,15 +6,22 @@ namespace AviationWx\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Helpers/IsolatesOurAirportsCacheTrait.php';
+
 /**
  * Reference-data orchestrator gates (ProcessPool enqueue policy).
  */
 final class ReferenceDataOrchestratorTest extends TestCase
 {
+    use \IsolatesOurAirportsCacheTrait;
+
     protected function setUp(): void
     {
+        require_once dirname(__DIR__, 2) . '/lib/cache-paths.php';
         require_once dirname(__DIR__, 2) . '/lib/constants.php';
+        require_once dirname(__DIR__, 2) . '/lib/ourairports/meta.php';
         require_once dirname(__DIR__, 2) . '/lib/reference-data/orchestrator.php';
+        $this->resetOurAirportsTestCacheState();
     }
 
     public function testJobs_ListExpectedSingletons(): void
@@ -185,6 +192,174 @@ final class ReferenceDataOrchestratorTest extends TestCase
         $this->assertNotContains('runways_merge', $started);
         $this->assertTrue($state['runways_startup_done']);
         $this->assertSame($now, $state['last_runways']);
+    }
+
+    /**
+     * System regression: early merge stamps last_runways; bulk then lands newer CSVs.
+     * Source mtime must beat the last-attempt throttle so merge is not delayed an hour.
+     */
+    public function testRunways_EnqueuesWhenSourcesNewerDespiteRecentLastAttempt(): void
+    {
+        $now = time();
+        $this->seedRunnableRunwayMergeInputs($now - 7200, $now);
+
+        $state = [
+            'runways_startup_done' => true,
+            'last_runways' => $now - 60,
+        ];
+        $pools = [
+            'runways_merge' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+        ];
+
+        $this->assertTrue(referenceDataRunwaysSourceInputsNewerThanMerge());
+        $this->assertTrue(
+            referenceDataShouldEnqueue('runways_merge', $now, $pools, $state),
+            'Newer source CSVs must bypass last_runways interval'
+        );
+    }
+
+    public function testRunways_EnqueuesWhenNgdaNewerDespiteRecentLastAttempt(): void
+    {
+        $now = time();
+        // OA CSVs not newer than merge; NGDA CSV is.
+        $this->seedRunnableRunwayMergeInputs($now - 60, $now - 60);
+        file_put_contents(CACHE_FAA_NGDA_RUNWAYS_CSV, "ARPT_ID,RWY_ID\nKTEST,18/36\n", LOCK_EX);
+        touch(CACHE_FAA_NGDA_RUNWAYS_CSV, $now);
+
+        $state = [
+            'runways_startup_done' => true,
+            'last_runways' => $now - 60,
+        ];
+        $pools = [
+            'runways_merge' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+        ];
+
+        $this->assertTrue(faaNgdaRunwayCsvNewerThanMerge());
+        $this->assertTrue(referenceDataRunwaysSourceInputsNewerThanMerge());
+        $this->assertTrue(referenceDataShouldEnqueue('runways_merge', $now, $pools, $state));
+    }
+
+    /**
+     * Full tick: after bulk lands newer CSVs, enqueue must start merge despite a fresh last_runways.
+     */
+    public function testEnqueue_StartsRunwaysWhenSourcesNewerWithinInterval(): void
+    {
+        $now = time();
+        $this->seedRunnableRunwayMergeInputs($now - 7200, $now);
+
+        $added = false;
+        $runwaysPool = new class ($added) {
+            private bool $added;
+
+            public function __construct(bool &$added)
+            {
+                $this->added = &$added;
+            }
+
+            public function getActiveCount(): int
+            {
+                return 0;
+            }
+
+            public function addJob(array $args): bool
+            {
+                $this->added = true;
+                return true;
+            }
+        };
+
+        $state = [
+            'last_ourairports_probe' => $now,
+            'last_ourairports_bulk' => $now,
+            'last_runways' => $now - 60,
+            'runways_startup_done' => true,
+            'last_nasr_apt' => $now,
+            'last_nasr_frq' => $now,
+            'last_country_check' => $now,
+            'country_startup_eval' => true,
+            'config_path' => null,
+            'config_sha' => null,
+        ];
+        $pools = [
+            'ourairports_probe' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+            'runways_merge' => $runwaysPool,
+            'nasr_apt' => $this->makePool(0),
+            'nasr_frq' => $this->makePool(0),
+            'country_resolution' => $this->makePool(0),
+        ];
+
+        $started = referenceDataEnqueueDueJobs($now, $pools, $state);
+        $this->assertSame(['runways_merge'], $started);
+        $this->assertTrue($added);
+        $this->assertSame($now, $state['last_runways']);
+    }
+
+    public function testRunways_IdleThrottleHoldsWhenSourcesNotNewer(): void
+    {
+        $now = time();
+        // Merge and sources share the same age; force max-age refresh due so the interval
+        // gate is the only thing preventing enqueue.
+        $this->seedRunnableRunwayMergeInputs($now - RUNWAYS_CACHE_MAX_AGE - 10, $now - RUNWAYS_CACHE_MAX_AGE - 10);
+
+        $state = [
+            'runways_startup_done' => true,
+            'last_runways' => $now - 60,
+        ];
+        $pools = [
+            'runways_merge' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+        ];
+
+        $this->assertFalse(referenceDataRunwaysSourceInputsNewerThanMerge());
+        $this->assertTrue(runwaysCacheNeedsRefresh(), 'max-age should still make merge due');
+        $this->assertFalse(
+            referenceDataShouldEnqueue('runways_merge', $now, $pools, $state),
+            'Without newer sources, last_runways remains an idle throttle'
+        );
+    }
+
+    public function testRunways_EnqueuesAfterIntervalWhenSourcesNotNewerButDue(): void
+    {
+        $now = time();
+        $this->seedRunnableRunwayMergeInputs($now - RUNWAYS_CACHE_MAX_AGE - 10, $now - RUNWAYS_CACHE_MAX_AGE - 10);
+
+        $state = [
+            'runways_startup_done' => true,
+            'last_runways' => $now - OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL - 1,
+        ];
+        $pools = [
+            'runways_merge' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+        ];
+
+        $this->assertTrue(referenceDataShouldEnqueue('runways_merge', $now, $pools, $state));
+    }
+
+    /**
+     * @param int $mergeMtime Published merge cache mtime
+     * @param int $sourceMtime OurAirports CSV mtime
+     */
+    private function seedRunnableRunwayMergeInputs(int $mergeMtime, int $sourceMtime): void
+    {
+        file_put_contents(CACHE_RUNWAYS_DATA_FILE, '{}', LOCK_EX);
+        touch(CACHE_RUNWAYS_DATA_FILE, $mergeMtime);
+
+        file_put_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV, "id,ident\n", LOCK_EX);
+        file_put_contents(CACHE_OURAIRPORTS_RUNWAYS_CSV, "id,airport_ident\n", LOCK_EX);
+        touch(CACHE_OURAIRPORTS_AIRPORTS_CSV, $sourceMtime);
+        touch(CACHE_OURAIRPORTS_RUNWAYS_CSV, $sourceMtime);
+
+        ourAirportsUpdateFileMeta('airports', [
+            'last_probe_result' => 'unchanged',
+            'last_fetch_at' => $sourceMtime,
+        ]);
+        ourAirportsUpdateFileMeta('runways', [
+            'last_probe_result' => 'unchanged',
+            'last_fetch_at' => $sourceMtime,
+        ]);
     }
 
     /**

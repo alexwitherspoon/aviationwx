@@ -29,6 +29,16 @@ function referenceDataPoolIsActive(array $pools, string $jobName): bool
 }
 
 /**
+ * Whether on-disk runway inputs are newer than the published merge cache.
+ *
+ * Used to bypass last-attempt throttling: source mtime is the freshness signal.
+ */
+function referenceDataRunwaysSourceInputsNewerThanMerge(): bool
+{
+    return ourAirportsRunwaySourcesNewerThanMerge() || faaNgdaRunwayCsvNewerThanMerge();
+}
+
+/**
  * Whether the scheduler should enqueue a reference job on this tick.
  *
  * @param array<string, object|null> $pools
@@ -74,9 +84,12 @@ function referenceDataShouldEnqueue(string $jobName, int $now, array $pools, arr
             if (!$startupDone) {
                 return runwaysMergeWorkerShouldRun();
             }
-            $last = (int) ($state['last_runways'] ?? 0);
-            if (($now - $last) < OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL) {
-                return false;
+            // Source age beats last-attempt clock after an early merge / mid-interval bulk land.
+            if (!referenceDataRunwaysSourceInputsNewerThanMerge()) {
+                $last = (int) ($state['last_runways'] ?? 0);
+                if (($now - $last) < OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL) {
+                    return false;
+                }
             }
 
             return runwaysMergeWorkerShouldRun();
