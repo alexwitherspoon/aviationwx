@@ -35,6 +35,9 @@ function referenceDataPoolIsActive(array $pools, string $jobName): bool
  */
 function referenceDataRunwaysSourceInputsNewerThanMerge(): bool
 {
+    // Scheduler is long-lived; ProcessPool children replace these files out of process.
+    clearstatcache();
+
     return ourAirportsRunwaySourcesNewerThanMerge() || faaNgdaRunwayCsvNewerThanMerge();
 }
 
@@ -43,6 +46,9 @@ function referenceDataRunwaysSourceInputsNewerThanMerge(): bool
  */
 function referenceDataRunwaysNewestSourceMtime(): ?int
 {
+    // Same process-lifetime stat cache concern as source-newer checks above.
+    clearstatcache();
+
     $mtimes = [];
     foreach (OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS as $fileKey) {
         $path = ourAirportsCsvPath($fileKey);

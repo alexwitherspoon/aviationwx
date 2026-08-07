@@ -198,6 +198,21 @@ final class ReferenceDataOrchestratorTest extends TestCase
      * System regression: early merge stamps last_runways; bulk then lands newer CSVs.
      * Source mtime must beat the last-attempt throttle so merge is not delayed an hour.
      */
+    public function testRunways_SourceAgeHelpersClearStatCache(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/lib/reference-data/orchestrator.php');
+        foreach (['referenceDataRunwaysSourceInputsNewerThanMerge', 'referenceDataRunwaysNewestSourceMtime'] as $fn) {
+            $pos = strpos($src, "function {$fn}");
+            $this->assertNotFalse($pos, $fn);
+            $chunk = substr($src, $pos, 450);
+            $this->assertStringContainsString(
+                'clearstatcache()',
+                $chunk,
+                "{$fn} must clearstatcache before filemtime so child-written CSVs are visible"
+            );
+        }
+    }
+
     public function testRunways_EnqueuesWhenSourcesNewerDespiteRecentLastAttempt(): void
     {
         $now = time();
