@@ -39,6 +39,25 @@ function referenceDataRunwaysSourceInputsNewerThanMerge(): bool
 }
 
 /**
+ * Newest mtime among runway merge input files (OurAirports CSVs + NGDA), or null.
+ */
+function referenceDataRunwaysNewestSourceMtime(): ?int
+{
+    $mtimes = [];
+    foreach (OURAIRPORTS_RUNWAY_MERGE_FILE_KEYS as $fileKey) {
+        $path = ourAirportsCsvPath($fileKey);
+        if (is_readable($path)) {
+            $mtimes[] = (int) filemtime($path);
+        }
+    }
+    if (is_readable(CACHE_FAA_NGDA_RUNWAYS_CSV)) {
+        $mtimes[] = (int) filemtime(CACHE_FAA_NGDA_RUNWAYS_CSV);
+    }
+
+    return $mtimes === [] ? null : max($mtimes);
+}
+
+/**
  * Whether the scheduler should enqueue a reference job on this tick.
  *
  * @param array<string, object|null> $pools
@@ -84,9 +103,13 @@ function referenceDataShouldEnqueue(string $jobName, int $now, array $pools, arr
             if (!$startupDone) {
                 return runwaysMergeWorkerShouldRun();
             }
-            // Source age beats last-attempt clock after an early merge / mid-interval bulk land.
-            if (!referenceDataRunwaysSourceInputsNewerThanMerge()) {
-                $last = (int) ($state['last_runways'] ?? 0);
+            $last = (int) ($state['last_runways'] ?? 0);
+            // Source age beats last-attempt clock only when inputs changed since that attempt.
+            // Otherwise a failed merge (sources still newer than merge) would spin every tick.
+            $sourcesNewerThanMerge = referenceDataRunwaysSourceInputsNewerThanMerge();
+            $newestSource = referenceDataRunwaysNewestSourceMtime();
+            $sourcesChangedSinceAttempt = $newestSource !== null && $newestSource > $last;
+            if (!($sourcesNewerThanMerge && $sourcesChangedSinceAttempt)) {
                 if (($now - $last) < OURAIRPORTS_BULK_FETCH_CHECK_INTERVAL) {
                     return false;
                 }
@@ -164,13 +187,20 @@ function referenceDataEnqueueDueJobs(int $now, array $pools, array &$state): arr
                 }
             }
             if ($jobName === 'country_resolution') {
-                $startupEval = !empty($state['country_startup_eval']);
-                $lastCheck = (int) ($state['last_country_check'] ?? 0);
-                $due = !$startupEval
-                    || (($now - $lastCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
-                if ($due) {
-                    $state['last_country_check'] = $now;
-                    $state['country_startup_eval'] = true;
+                // Do not treat a missing config identity as a completed evaluation.
+                $cfgPath = $state['config_path'] ?? null;
+                $configSha = $state['config_sha'] ?? null;
+                $identityOk = is_string($cfgPath) && $cfgPath !== '' && is_readable($cfgPath)
+                    && is_string($configSha) && $configSha !== '';
+                if ($identityOk) {
+                    $startupEval = !empty($state['country_startup_eval']);
+                    $lastCheck = (int) ($state['last_country_check'] ?? 0);
+                    $due = !$startupEval
+                        || (($now - $lastCheck) >= COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL);
+                    if ($due) {
+                        $state['last_country_check'] = $now;
+                        $state['country_startup_eval'] = true;
+                    }
                 }
             }
             continue;

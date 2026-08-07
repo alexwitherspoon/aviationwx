@@ -219,6 +219,60 @@ final class ReferenceDataOrchestratorTest extends TestCase
         );
     }
 
+    public function testRunways_KeepsBackoffWhenSourcesUnchangedAfterFailedAttempt(): void
+    {
+        $now = time();
+        // Sources newer than merge, but last attempt is after those source mtimes
+        // (failed merge that did not publish a new cache).
+        $sourceMtime = $now - 120;
+        $this->seedRunnableRunwayMergeInputs($now - 7200, $sourceMtime);
+
+        $state = [
+            'runways_startup_done' => true,
+            'last_runways' => $now - 30,
+        ];
+        $pools = [
+            'runways_merge' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+        ];
+
+        $this->assertTrue(referenceDataRunwaysSourceInputsNewerThanMerge());
+        $this->assertFalse(
+            referenceDataShouldEnqueue('runways_merge', $now, $pools, $state),
+            'Unchanged sources after a failed attempt must keep the interval backoff'
+        );
+    }
+
+    public function testEnqueue_DoesNotAdvanceCountryEvalWhenConfigIdentityMissing(): void
+    {
+        $now = time();
+        $state = [
+            'last_ourairports_probe' => $now,
+            'last_ourairports_bulk' => $now,
+            'last_runways' => $now,
+            'runways_startup_done' => true,
+            'last_nasr_apt' => $now,
+            'last_nasr_frq' => $now,
+            'last_country_check' => 0,
+            'country_startup_eval' => false,
+            'config_path' => null,
+            'config_sha' => null,
+        ];
+        $pools = [
+            'ourairports_probe' => $this->makePool(0),
+            'ourairports_bulk' => $this->makePool(0),
+            'runways_merge' => $this->makePool(0),
+            'nasr_apt' => $this->makePool(0),
+            'nasr_frq' => $this->makePool(0),
+            'country_resolution' => $this->makePool(0),
+        ];
+
+        $started = referenceDataEnqueueDueJobs($now, $pools, $state);
+        $this->assertNotContains('country_resolution', $started);
+        $this->assertFalse($state['country_startup_eval']);
+        $this->assertSame(0, $state['last_country_check']);
+    }
+
     public function testRunways_EnqueuesWhenNgdaNewerDespiteRecentLastAttempt(): void
     {
         $now = time();
