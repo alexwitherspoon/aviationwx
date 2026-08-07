@@ -153,15 +153,15 @@ function shouldWorkerAbort(int $requiredSeconds = 10): bool {
 }
 
 /**
- * Stale age for a worker heartbeat (declared timeout +30s, override, or default).
+ * Silence allowed after the last heartbeat before a worker is treated as stuck.
  *
- * Declared timeout comes from initWorkerTimeout so long jobs (NASR APT) are not
- * killed by the short webcam/weather default.
+ * Uses the worker's declared timeout from initWorkerTimeout (not total runtime
+ * since start) so long jobs are not killed by the short webcam/weather default.
  *
  * @param array<string, mixed> $data Heartbeat JSON payload
  * @param int|null $staleSecondsOverride When set, applies to all workers
  * @param int $defaultStaleSeconds Fallback when no declared timeout (typically getWorkerTimeout()+30)
- * @return int Seconds after last heartbeat stamp before the worker is stale
+ * @return int Seconds of no heartbeat progress before the worker is stale
  */
 function workerHeartbeatStaleAfterSeconds(
     array $data,
@@ -184,11 +184,19 @@ function workerHeartbeatStaleAfterSeconds(
 }
 
 /**
+ * Whether a heartbeat glob is restricted to /tmp/worker_heartbeat_*.json paths.
+ */
+function workerHeartbeatGlobIsAllowed(string $globPattern): bool
+{
+    return preg_match('#^/tmp/worker_heartbeat_[A-Za-z0-9_*?\-]*\.json$#', $globPattern) === 1;
+}
+
+/**
  * Clean up stale worker heartbeat files and return PIDs that still look stuck.
  *
  * @param int|null $staleSeconds Override for all files; null uses each file's
  *        declared timeout (+30s) or getWorkerTimeout()+30.
- * @param string $globPattern Heartbeat file glob (tests may narrow this)
+ * @param string $globPattern Heartbeat file glob (tests may narrow within /tmp)
  * @return int[] PIDs of potentially stuck workers (empty if none found)
  */
 function cleanupStaleWorkerHeartbeats(
@@ -196,6 +204,10 @@ function cleanupStaleWorkerHeartbeats(
     string $globPattern = '/tmp/worker_heartbeat_*.json'
 ): array {
     $stuckPids = [];
+    if (!workerHeartbeatGlobIsAllowed($globPattern)) {
+        return $stuckPids;
+    }
+
     $files = glob($globPattern);
 
     if ($files === false || empty($files)) {

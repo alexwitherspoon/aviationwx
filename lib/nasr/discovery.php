@@ -92,7 +92,7 @@ function nasrHttpThrottlePaths(): array
  */
 function nasrHttpThrottle(): void
 {
-    // Long NASR jobs: progress signal for stuck-worker cleanup during paced HTTP.
+    // Long NASR jobs: refresh silence clock on each paced FAA/NFDC attempt.
     if (function_exists('updateWorkerHeartbeat')) {
         updateWorkerHeartbeat();
     }
