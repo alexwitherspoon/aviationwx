@@ -44,14 +44,114 @@ final class DeployDrainTest extends TestCase
     {
         $this->assertGreaterThanOrEqual(90, DEPLOY_WORKER_DRAIN_MAX_SECONDS);
         $this->assertLessThanOrEqual(300, DEPLOY_WORKER_DRAIN_MAX_SECONDS);
+        $this->assertGreaterThanOrEqual(DEPLOY_WORKER_DRAIN_MAX_SECONDS, DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS);
         $this->assertGreaterThanOrEqual(60, DEPLOY_WORKER_DRAIN_ABANDON_SECONDS);
         $this->assertGreaterThanOrEqual(1, DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS);
         $this->assertSame(
             DEPLOY_WORKER_DRAIN_MAX_SECONDS + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS,
             deploy_drain_ttl_seconds()
         );
+        $this->assertSame(
+            DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS + DEPLOY_WORKER_DRAIN_ABANDON_SECONDS,
+            deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds())
+        );
+        $this->assertSame(
+            DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS,
+            deploy_drain_cd_wait_seconds()
+        );
         $this->assertSame('deploy-drain.flag', DEPLOY_DRAIN_FLAG_BASENAME);
         $this->assertSame('deploy-drain.done', DEPLOY_DRAIN_DONE_BASENAME);
+    }
+
+    public function testEvaluateState_ReferenceWaitsPastLiveMax(): void
+    {
+        $started = 1_700_000_000;
+        $liveMax = 120;
+        $refMax = 7200;
+
+        $atLiveMax = deploy_drain_evaluate_state(
+            true,
+            false,
+            $started,
+            1,
+            1,
+            $started + $liveMax,
+            $liveMax,
+            $refMax,
+            600
+        );
+        $this->assertSame('force_terminate_live', $atLiveMax['action']);
+        $this->assertFalse($atLiveMax['allow_new_work']);
+
+        $afterLiveOnlyRef = deploy_drain_evaluate_state(
+            true,
+            false,
+            $started,
+            0,
+            1,
+            $started + $liveMax + 10,
+            $liveMax,
+            $refMax,
+            600
+        );
+        $this->assertSame('wait', $afterLiveOnlyRef['action']);
+
+        $atRefMax = deploy_drain_evaluate_state(
+            true,
+            false,
+            $started,
+            0,
+            1,
+            $started + $refMax,
+            $liveMax,
+            $refMax,
+            600
+        );
+        $this->assertSame('force_terminate', $atRefMax['action']);
+    }
+
+    public function testEvaluateState_TtlStaysReferenceAwareAfterReferenceExits(): void
+    {
+        $started = 1_700_000_000;
+        // Reference finished early; live idle. Must not abandon at live TTL (720).
+        $afterRefExit = deploy_drain_evaluate_state(
+            true,
+            false,
+            $started,
+            0,
+            0,
+            $started + 1000,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('mark_complete_idle', $afterRefExit['action']);
+
+        $beforeRefAbandon = deploy_drain_evaluate_state(
+            true,
+            true,
+            $started,
+            0,
+            0,
+            $started + 1000,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('already_complete', $beforeRefAbandon['action']);
+
+        $atRefAbandon = deploy_drain_evaluate_state(
+            true,
+            true,
+            $started,
+            0,
+            0,
+            $started + 7200 + 600,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('abandon_clear', $atRefAbandon['action']);
     }
 
     public function testSetCacheBase_OverridesAndClears(): void
@@ -394,7 +494,9 @@ final class DeployDrainTest extends TestCase
             (bool) $input['already_complete'],
             $input['started_at'] === null ? null : (int) $input['started_at'],
             (int) $input['active_workers'],
+            0,
             (int) $input['now'],
+            (int) $input['max_seconds'],
             (int) $input['max_seconds'],
             (int) $input['abandon_seconds']
         );
@@ -424,7 +526,10 @@ final class DeployDrainTest extends TestCase
         $this->assertSame('already_complete', $done['action']);
         $this->assertFalse($done['allow_new_work']);
 
-        $abandoned = deploy_drain_evaluate_scheduler_tick(0, $now + deploy_drain_ttl_seconds());
+        $abandoned = deploy_drain_evaluate_scheduler_tick(
+            0,
+            $now + deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds())
+        );
         $this->assertSame('abandon_clear', $abandoned['action']);
         $this->assertTrue($abandoned['allow_new_work']);
     }
@@ -537,7 +642,11 @@ final class DeployDrainTest extends TestCase
         deploy_drain_clear_markers();
         deploy_drain_request($now);
         deploy_drain_mark_complete('idle', $now + 1);
-        $this->assertFalse(deploy_drain_should_suppress_scheduler_restart($now + deploy_drain_ttl_seconds()));
+        $this->assertFalse(
+            deploy_drain_should_suppress_scheduler_restart(
+                $now + deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds())
+            )
+        );
     }
 
     public function testCdWait_ReturnsTrueWhenDoneAppears(): void

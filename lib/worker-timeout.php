@@ -153,19 +153,45 @@ function shouldWorkerAbort(int $requiredSeconds = 10): bool {
 }
 
 /**
+ * Silence allowed after the last heartbeat before a worker is treated as stuck.
+ *
+ * Uses the worker's declared timeout from initWorkerTimeout when present so
+ * long ProcessPool jobs (NASR, etc.) are not killed by the short live default.
+ *
+ * @param array<string, mixed> $data Heartbeat JSON payload
+ * @param int|null $staleSecondsOverride When set, applies to all workers
+ * @param int $defaultStaleSeconds Fallback when no declared timeout
+ * @return int
+ */
+function workerHeartbeatStaleAfterSeconds(
+    array $data,
+    ?int $staleSecondsOverride,
+    int $defaultStaleSeconds
+): int {
+    if ($staleSecondsOverride !== null) {
+        return max(1, $staleSecondsOverride);
+    }
+
+    $declaredTimeout = isset($data['timeout']) && is_numeric($data['timeout'])
+        ? (int) $data['timeout']
+        : 0;
+    if ($declaredTimeout <= 0) {
+        return max(1, $defaultStaleSeconds);
+    }
+
+    return min($declaredTimeout, 86400) + 30;
+}
+
+/**
  * Clean up stale worker heartbeat files
  * 
  * Finds and removes heartbeat files from workers that appear to have died
  * without cleaning up. Also returns PIDs of potentially stuck workers.
  * 
- * @param int|null $staleSeconds Consider heartbeat stale after this many seconds (default: worker_timeout + 30)
+ * @param int|null $staleSeconds Consider heartbeat stale after this many seconds (default: per-file declared timeout + 30, else worker_timeout + 30)
  * @return int[] PIDs of potentially stuck workers (empty if none found)
  */
 function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
-    if ($staleSeconds === null) {
-        $staleSeconds = getWorkerTimeout() + 30;
-    }
-    
     $stuckPids = [];
     $pattern = '/tmp/worker_heartbeat_*.json';
     $files = glob($pattern);
@@ -176,6 +202,7 @@ function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
     }
     
     $now = time();
+    $defaultStaleSeconds = getWorkerTimeout() + 30;
     foreach ($files as $file) {
         $content = @file_get_contents($file);
         if ($content === false) {
@@ -189,17 +216,19 @@ function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
             continue;
         }
         
-        $heartbeatAge = $now - $data['heartbeat'];
-        if ($heartbeatAge > $staleSeconds) {
+        $effectiveStale = workerHeartbeatStaleAfterSeconds($data, $staleSeconds, $defaultStaleSeconds);
+        $heartbeatAge = $now - (int) $data['heartbeat'];
+        if ($heartbeatAge > $effectiveStale) {
             // Heartbeat is stale - worker may be stuck
             $pid = (int)$data['pid'];
             
-            // Use cross-platform process check from process-utils.php
-            if ($pid > 0 && isProcessRunning($pid, 'php')) {
+            // Prefer scripts/ cmdline token: ProcessPool workers and CLI fetchers live there.
+            if ($pid > 0 && isProcessRunning($pid, 'scripts/')) {
                 $stuckPids[] = $pid;
                 aviationwx_log('warning', 'worker heartbeat stale - process may be stuck', [
                     'pid' => $pid,
                     'heartbeat_age' => $heartbeatAge,
+                    'stale_after' => $effectiveStale,
                     'file' => basename($file)
                 ], 'app');
             }
@@ -222,7 +251,7 @@ function cleanupStaleWorkerHeartbeats(?int $staleSeconds = null): array {
  * @param string $expectedName Process name substring to verify before killing (safety check)
  * @return int Number of processes killed
  */
-function killStuckWorkers(array $pids, string $expectedName = 'php'): int {
+function killStuckWorkers(array $pids, string $expectedName = 'scripts/'): int {
     // Require posix_kill and signal constants for this function
     if (!function_exists('posix_kill') || !defined('SIGTERM') || !defined('SIGKILL')) {
         return 0;

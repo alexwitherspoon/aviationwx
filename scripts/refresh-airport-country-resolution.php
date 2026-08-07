@@ -26,8 +26,11 @@ define('AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE', true);
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/country-resolution.php';
 require_once __DIR__ . '/../lib/config.php';
+
+initWorkerTimeout(COUNTRY_RESOLUTION_WORKER_TIMEOUT, 'country_resolution');
 
 $config = loadConfig();
 if ($config === null || !isset($config['airports']) || !is_array($config['airports'])) {

@@ -57,7 +57,10 @@ function nasrAptWorkerShouldRun(): bool
  */
 function nasrFrqWorkerShouldRun(): bool
 {
-    return nasrFrqCacheNeedsRefresh() && !nasrFrqFetchInProgress() && !nasrAptFetchInProgress();
+    return nasrAptCacheDataPresent()
+        && nasrFrqCacheNeedsRefresh()
+        && !nasrFrqFetchInProgress()
+        && !nasrAptFetchInProgress();
 }
 
 /**

@@ -216,6 +216,22 @@ final class MetricsSchedulerWorkersTest extends TestCase
         $this->assertStringContainsString('cleanupStaleWorkerHeartbeats', $scheduler);
         $this->assertStringContainsString('killStuckWorkers', $scheduler);
 
+        // Airport reference catalogs use size-1 ProcessPools (not fire-and-forget exec).
+        $this->assertStringContainsString('referenceDataEnqueueDueJobs', $scheduler);
+        $this->assertStringContainsString('SCHEDULER_POOL_CLASS_REFERENCE', $scheduler);
+        $this->assertStringContainsString('referenceDataJobs()', $scheduler);
+        $this->assertStringContainsString('sumActiveWorkersByClass', $scheduler);
+        $this->assertStringContainsString('force_terminate_live', $scheduler);
+        $this->assertStringContainsString('terminatePoolsByClass', $scheduler);
+        $this->assertDoesNotMatchRegularExpression(
+            '/fetch-nasr-apt\.php.*?>\s*\/dev\/null\s+2>&1\s*&/s',
+            $scheduler
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/fetch-ourairports-bulk\.php.*?>\s*\/dev\/null\s+2>&1\s*&/s',
+            $scheduler
+        );
+
         // Payload metrics must not run in-process after the drain gate.
         $afterGate = $scheduler;
         $gatePos = strpos($scheduler, "if (\$drainTick['allow_new_work'])");

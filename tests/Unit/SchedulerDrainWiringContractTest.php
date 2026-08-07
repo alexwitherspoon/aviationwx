@@ -73,6 +73,30 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->assertStringContainsString('--week=', $weekly);
     }
 
+    public function testWorkflow_DeployJobTimeoutExceedsReferenceDrainWindow(): void
+    {
+        require_once $this->root . '/lib/constants.php';
+        $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
+
+        $this->assertMatchesRegularExpression(
+            '/^  deploy:\n(?:.*\n)*?    timeout-minutes: (\d+)/m',
+            $workflow
+        );
+        preg_match('/^  deploy:\n(?:.*\n)*?    timeout-minutes: (\d+)/m', $workflow, $matches);
+        $timeoutMinutes = (int) ($matches[1] ?? 0);
+
+        $drainMinutes = (int) ceil(
+            (DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS + DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS) / 60
+        );
+        // Headroom for checkout, image build, health checks after drain returns.
+        $minimum = $drainMinutes + 30;
+        $this->assertGreaterThanOrEqual(
+            $minimum,
+            $timeoutMinutes,
+            "deploy timeout-minutes ({$timeoutMinutes}) must be >= reference drain window + overhead ({$minimum})"
+        );
+    }
+
     public function testWorkflow_DrainsImmediatelyBeforeComposeUpAndClearsOnFailure(): void
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
@@ -141,14 +165,18 @@ final class SchedulerDrainWiringContractTest extends TestCase
         $this->assertMatchesRegularExpression('/SIGTERM.*SIGKILL|SIGKILL.*SIGTERM/i', $arch);
     }
 
-    public function testScheduler_CountryResolutionSpawnsNonBlocking(): void
+    public function testScheduler_CountryResolutionUsesReferenceProcessPool(): void
     {
         $scheduler = (string) file_get_contents($this->root . '/scripts/scheduler.php');
-        $this->assertStringContainsString('refresh-airport-country-resolution.php', $scheduler);
-        $this->assertMatchesRegularExpression(
-            '/escapeshellarg\(\$countryResolutionScript\)\s*\.\s*[\'"]\s*>\s*\/dev\/null\s*2>&1\s*&/',
+        $jobs = (string) file_get_contents($this->root . '/lib/reference-data/jobs.php');
+        $this->assertStringContainsString('refresh-airport-country-resolution.php', $jobs);
+        $this->assertStringContainsString('country_resolution', $jobs);
+        $this->assertStringContainsString('referenceDataEnqueueDueJobs', $scheduler);
+        $this->assertStringContainsString('SCHEDULER_POOL_CLASS_REFERENCE', $scheduler);
+        $this->assertStringNotContainsString(
+            'escapeshellarg($countryResolutionScript)',
             $scheduler,
-            'Country resolution must be fire-and-forget so the dispatcher tick cannot block on geometry I/O'
+            'Country resolution must use ProcessPool enqueue, not fire-and-forget exec'
         );
         $this->assertStringNotContainsString(
             ", \$output, \$exitCode)",

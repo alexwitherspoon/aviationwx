@@ -109,6 +109,10 @@ class NasrWorkersTest extends TestCase
     {
         $now = 1_700_000_000;
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, 0));
+        // FRQ requires APT cache on disk (orchestrator / worker gate).
+        $this->assertFalse(nasrFrqSchedulerShouldEnqueue($now, 0));
+
+        $this->writeMinimalAptCache();
         $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, 0));
     }
 
@@ -118,6 +122,7 @@ class NasrWorkersTest extends TestCase
         $lastAttempt = $now - (NASR_MISSING_RETRY_INTERVAL - 1);
 
         $this->assertFalse(nasrAptSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->writeMinimalAptCache();
         $this->assertFalse(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
     }
 
@@ -127,6 +132,7 @@ class NasrWorkersTest extends TestCase
         $lastAttempt = $now - NASR_MISSING_RETRY_INTERVAL;
 
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->writeMinimalAptCache();
         $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
     }
 
@@ -175,6 +181,8 @@ class NasrWorkersTest extends TestCase
 
         $this->assertLessThan(NASR_FETCH_CHECK_INTERVAL, 60 * 60);
         $this->assertTrue(nasrAptSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->assertFalse(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
+        $this->writeMinimalAptCache();
         $this->assertTrue(nasrFrqSchedulerShouldEnqueue($now, $lastAttempt));
     }
 

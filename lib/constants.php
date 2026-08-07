@@ -40,6 +40,10 @@ if (!defined('WEATHER_INTERNAL_API_ERROR_SOURCE_NOT_CONFIGURED')) {
 if (!defined('DEPLOY_WORKER_DRAIN_MAX_SECONDS')) {
     define('DEPLOY_WORKER_DRAIN_MAX_SECONDS', 120);
 }
+// Reference pools (NASR, OurAirports, ...) wait up to this before force-terminate during drain.
+if (!defined('DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS')) {
+    define('DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS', 7200);
+}
 // Extra wall time after MAX for compose/build before an abandoned drain unsticks the live site.
 if (!defined('DEPLOY_WORKER_DRAIN_ABANDON_SECONDS')) {
     define('DEPLOY_WORKER_DRAIN_ABANDON_SECONDS', 600);
@@ -600,6 +604,9 @@ if (!defined('COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS')) {
 // Scheduler evaluates refresh at most this often (avoids reading/decoding aggregate every main-loop tick).
 if (!defined('COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL')) {
     define('COUNTRY_RESOLUTION_SCHEDULER_CHECK_INTERVAL', 3600); // 1 hour
+}
+if (!defined('COUNTRY_RESOLUTION_WORKER_TIMEOUT')) {
+    define('COUNTRY_RESOLUTION_WORKER_TIMEOUT', 600);
 }
 // @deprecated Use COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS; kept for backward compatibility (same value).
 if (!defined('COUNTRY_RESOLUTION_REFRESH_INTERVAL')) {

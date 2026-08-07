@@ -6,12 +6,14 @@
  * depending on PHP inside the image being replaced.
  *
  * Timeline from flag started_at:
- *   - before MAX: pause new ProcessPool / background work; mark .done when pools idle
- *   - at MAX: SIGTERM remaining pool workers and mark .done
- *   - before MAX+ABANDON: stay paused so CD can recreate (Apache still serves)
- *   - at MAX+ABANDON: clear markers and resume (abandoned CD must not pause the site forever)
+ *   - before live MAX: pause new work; mark .done when all pools idle
+ *   - at live MAX: SIGTERM remaining live pools (weather/webcam/...); reference may continue
+ *   - at reference MAX: SIGTERM remaining reference pools; mark .done
+ *   - before forceMAX+ABANDON: stay paused so CD can recreate (Apache still serves)
+ *   - at forceMAX+ABANDON: clear markers and resume (abandoned CD must not pause forever)
  *
- * Fire-and-forget CLI workers (NASR, etc.) are not started during drain but are not waited on.
+ * Airport reference pools use DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS (NASR-scale).
+ * Other fire-and-forget CLIs (metrics, airspace) are not waited on.
  */
 
 require_once __DIR__ . '/constants.php';
@@ -173,6 +175,29 @@ function deploy_drain_ttl_seconds(
 }
 
 /**
+ * Wall clock used for abandon and CD wait when reference pools may still be draining.
+ *
+ * @return int
+ */
+function deploy_drain_reference_aware_max_seconds(): int
+{
+    return max(
+        (int) DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+        (int) DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS
+    );
+}
+
+/**
+ * Default CD wait for .done (reference window + grace).
+ *
+ * @return int
+ */
+function deploy_drain_cd_wait_seconds(): int
+{
+    return deploy_drain_reference_aware_max_seconds() + (int) DEPLOY_WORKER_DRAIN_WAIT_GRACE_SECONDS;
+}
+
+/**
  * Temp file + rename so readers never see a partial JSON marker.
  *
  * @param string $path Destination path
@@ -275,31 +300,43 @@ function deploy_drain_clear_markers(): bool {
 /**
  * Pure decision for one scheduler drain evaluation.
  *
+ * Live pools force at $liveMaxSeconds; reference pools force at $referenceMaxSeconds.
+ * Abandon TTL uses the larger of the two force windows.
+ *
  * @param bool $requested Drain flag present
  * @param bool $alreadyComplete Done marker present
  * @param int|null $startedAt Drain start unix time (null if unknown)
- * @param int $activeWorkers Current ProcessPool active count (sum)
+ * @param int $liveActive Live ProcessPool active count
+ * @param int $referenceActive Reference ProcessPool active count
  * @param int $now Current unix time
- * @param int $maxSeconds Force-terminate ceiling
- * @param int $abandonSeconds Extra seconds after max before auto-resume
+ * @param int $liveMaxSeconds Live force-terminate ceiling
+ * @param int $referenceMaxSeconds Reference force-terminate ceiling
+ * @param int $abandonSeconds Extra seconds after max force before auto-resume
  * @return array{
  *   allow_new_work: bool,
  *   suppress_scheduler_restart: bool,
- *   action: 'none'|'wait'|'mark_complete_idle'|'force_terminate'|'already_complete'|'abandon_clear'
+ *   action: 'none'|'wait'|'mark_complete_idle'|'force_terminate_live'|'force_terminate_reference'|'force_terminate'|'already_complete'|'abandon_clear'
  * }
  */
 function deploy_drain_evaluate_state(
     bool $requested,
     bool $alreadyComplete,
     ?int $startedAt,
-    int $activeWorkers,
-    int $now,
-    int $maxSeconds = DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+    int $liveActive,
+    int $referenceActive = 0,
+    int $now = 0,
+    int $liveMaxSeconds = DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+    int $referenceMaxSeconds = DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS,
     int $abandonSeconds = DEPLOY_WORKER_DRAIN_ABANDON_SECONDS
 ): array {
-    $activeWorkers = max(0, $activeWorkers);
-    $maxSeconds = max(1, $maxSeconds);
-    $ttl = deploy_drain_ttl_seconds($maxSeconds, $abandonSeconds);
+    $liveActive = max(0, $liveActive);
+    $referenceActive = max(0, $referenceActive);
+    $activeWorkers = $liveActive + $referenceActive;
+    $liveMaxSeconds = max(1, $liveMaxSeconds);
+    $referenceMaxSeconds = max($liveMaxSeconds, $referenceMaxSeconds);
+    // Keep abandon TTL fixed at the reference-aware ceiling for the whole drain request.
+    // Shrinking TTL when reference workers finish early can abandon before .done is written.
+    $ttl = deploy_drain_ttl_seconds($referenceMaxSeconds, $abandonSeconds);
 
     if (!$requested && !$alreadyComplete) {
         return [
@@ -309,7 +346,6 @@ function deploy_drain_evaluate_state(
         ];
     }
 
-    // Orphan .done without a flag must not pause the site forever.
     if (!$requested && $alreadyComplete) {
         return [
             'allow_new_work' => true,
@@ -318,7 +354,6 @@ function deploy_drain_evaluate_state(
         ];
     }
 
-    // Unknown start: do not block CD or the live site indefinitely.
     if ($startedAt === null || $startedAt <= 0) {
         if ($activeWorkers > 0) {
             return [
@@ -343,7 +378,6 @@ function deploy_drain_evaluate_state(
 
     $elapsed = max(0, $now - $startedAt);
 
-    // Abandoned CD: clear markers and resume refreshes on the still-running container.
     if ($elapsed >= $ttl) {
         return [
             'allow_new_work' => true,
@@ -368,11 +402,27 @@ function deploy_drain_evaluate_state(
         ];
     }
 
-    if ($elapsed >= $maxSeconds) {
+    if ($elapsed >= $referenceMaxSeconds) {
         return [
             'allow_new_work' => false,
             'suppress_scheduler_restart' => true,
             'action' => 'force_terminate',
+        ];
+    }
+
+    if ($elapsed >= $liveMaxSeconds && $liveActive > 0) {
+        return [
+            'allow_new_work' => false,
+            'suppress_scheduler_restart' => true,
+            'action' => $referenceActive > 0 ? 'force_terminate_live' : 'force_terminate',
+        ];
+    }
+
+    if ($elapsed >= $liveMaxSeconds && $liveActive === 0 && $referenceActive > 0) {
+        return [
+            'allow_new_work' => false,
+            'suppress_scheduler_restart' => true,
+            'action' => 'wait',
         ];
     }
 
@@ -384,24 +434,34 @@ function deploy_drain_evaluate_state(
 }
 
 /**
- * @param int $activeWorkers Sum of ProcessPool active counts (caller should cleanupFinished first)
+ * @param array{live: int, reference: int}|int $activeByClass Or legacy total active count
  * @param int|null $now Current unix time (injectable for tests)
  * @return array{
  *   allow_new_work: bool,
  *   suppress_scheduler_restart: bool,
- *   action: 'none'|'wait'|'mark_complete_idle'|'force_terminate'|'already_complete'|'abandon_clear'
+ *   action: 'none'|'wait'|'mark_complete_idle'|'force_terminate_live'|'force_terminate_reference'|'force_terminate'|'already_complete'|'abandon_clear'
  * }
  */
-function deploy_drain_evaluate_scheduler_tick(int $activeWorkers, ?int $now = null): array {
+function deploy_drain_evaluate_scheduler_tick(array|int $activeByClass, ?int $now = null): array
+{
     $now = $now ?? time();
+    if (is_int($activeByClass)) {
+        $liveActive = max(0, $activeByClass);
+        $referenceActive = 0;
+    } else {
+        $liveActive = max(0, (int) ($activeByClass['live'] ?? 0));
+        $referenceActive = max(0, (int) ($activeByClass['reference'] ?? 0));
+    }
 
     return deploy_drain_evaluate_state(
         deploy_drain_is_requested(),
         deploy_drain_is_complete(),
         deploy_drain_started_at(),
-        $activeWorkers,
+        $liveActive,
+        $referenceActive,
         $now,
         DEPLOY_WORKER_DRAIN_MAX_SECONDS,
+        DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS,
         DEPLOY_WORKER_DRAIN_ABANDON_SECONDS
     );
 }
@@ -420,7 +480,7 @@ function deploy_drain_should_suppress_scheduler_restart(?int $now = null): bool 
 /**
  * @param string $action Action from deploy_drain_evaluate_*
  * @param int|null $now Current unix time
- * @param callable():void $forceTerminate SIGTERM active ProcessPool workers
+ * @param callable():void $forceTerminate Invoked for force/abandon actions (caller scopes by class)
  * @return bool False only when a required marker write/clear fails
  */
 function deploy_drain_apply_scheduler_action(string $action, ?int $now, callable $forceTerminate): bool {
@@ -434,6 +494,12 @@ function deploy_drain_apply_scheduler_action(string $action, ?int $now, callable
     if ($action === 'force_terminate') {
         $forceTerminate();
         return deploy_drain_mark_complete('forced_timeout', $now);
+    }
+
+    // Live force only: reference pools may still be draining; do not write .done yet.
+    if ($action === 'force_terminate_live') {
+        $forceTerminate();
+        return true;
     }
 
     if ($action === 'mark_complete_idle') {
