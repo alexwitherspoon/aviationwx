@@ -110,6 +110,50 @@ final class DeployDrainTest extends TestCase
         $this->assertSame('force_terminate', $atRefMax['action']);
     }
 
+    public function testEvaluateState_TtlStaysReferenceAwareAfterReferenceExits(): void
+    {
+        $started = 1_700_000_000;
+        // Reference finished early; live idle. Must not abandon at live TTL (720).
+        $afterRefExit = deploy_drain_evaluate_state(
+            true,
+            false,
+            $started,
+            0,
+            0,
+            $started + 1000,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('mark_complete_idle', $afterRefExit['action']);
+
+        $beforeRefAbandon = deploy_drain_evaluate_state(
+            true,
+            true,
+            $started,
+            0,
+            0,
+            $started + 1000,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('already_complete', $beforeRefAbandon['action']);
+
+        $atRefAbandon = deploy_drain_evaluate_state(
+            true,
+            true,
+            $started,
+            0,
+            0,
+            $started + 7200 + 600,
+            120,
+            7200,
+            600
+        );
+        $this->assertSame('abandon_clear', $atRefAbandon['action']);
+    }
+
     public function testSetCacheBase_OverridesAndClears(): void
     {
         $this->assertSame(
@@ -482,7 +526,10 @@ final class DeployDrainTest extends TestCase
         $this->assertSame('already_complete', $done['action']);
         $this->assertFalse($done['allow_new_work']);
 
-        $abandoned = deploy_drain_evaluate_scheduler_tick(0, $now + deploy_drain_ttl_seconds());
+        $abandoned = deploy_drain_evaluate_scheduler_tick(
+            0,
+            $now + deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds())
+        );
         $this->assertSame('abandon_clear', $abandoned['action']);
         $this->assertTrue($abandoned['allow_new_work']);
     }
@@ -595,7 +642,11 @@ final class DeployDrainTest extends TestCase
         deploy_drain_clear_markers();
         deploy_drain_request($now);
         deploy_drain_mark_complete('idle', $now + 1);
-        $this->assertFalse(deploy_drain_should_suppress_scheduler_restart($now + deploy_drain_ttl_seconds()));
+        $this->assertFalse(
+            deploy_drain_should_suppress_scheduler_restart(
+                $now + deploy_drain_ttl_seconds(deploy_drain_reference_aware_max_seconds())
+            )
+        );
     }
 
     public function testCdWait_ReturnsTrueWhenDoneAppears(): void

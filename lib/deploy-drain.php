@@ -334,9 +334,9 @@ function deploy_drain_evaluate_state(
     $activeWorkers = $liveActive + $referenceActive;
     $liveMaxSeconds = max(1, $liveMaxSeconds);
     $referenceMaxSeconds = max($liveMaxSeconds, $referenceMaxSeconds);
-    // Abandon TTL follows the force window still in play (reference when any reference workers remain).
-    $forceMax = $referenceActive > 0 ? $referenceMaxSeconds : $liveMaxSeconds;
-    $ttl = deploy_drain_ttl_seconds($forceMax, $abandonSeconds);
+    // Keep abandon TTL fixed at the reference-aware ceiling for the whole drain request.
+    // Shrinking TTL when reference workers finish early can abandon before .done is written.
+    $ttl = deploy_drain_ttl_seconds($referenceMaxSeconds, $abandonSeconds);
 
     if (!$requested && !$alreadyComplete) {
         return [
