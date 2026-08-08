@@ -613,6 +613,37 @@ class WebcamErrorDetectorTest extends TestCase
         $this->assertStringContainsString('empty_band_webp_flat_rows_', $joined);
     }
 
+    public function testDetectErrorFrame_PngFile_AutoDetectsFormatPad(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+
+        if (!function_exists('imagepng')) {
+            $this->markTestSkipped('GD PNG support not available');
+        }
+
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pngPath = $this->testImageDir . '/auto_png_' . uniqid() . '.png';
+        imagepng($img, $pngPath);
+
+        // No explicit sourceFormat: magic-byte detect must select PNG solid pad
+        $result = detectErrorFrame($pngPath);
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $joined);
+    }
+
     public function testTruncatedPngBitstream_FailsIendBeforeDecodePad(): void
     {
         require_once __DIR__ . '/../../lib/webcam-history.php';

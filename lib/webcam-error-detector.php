@@ -489,15 +489,9 @@ function detectPngSolidEmptyBottomBand($img, int $width, int $height): array
     $minEmptyRows = defined('WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS')
         ? max(1, (int) WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS)
         : 1;
-    // Same relative mid-content idea as WebP: avoid rejecting uniform dark night bottoms
-    $midVarianceMin = defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')
-        ? (float) WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN
-        : 20.0;
     $stepX = max(1, (int) floor($width / $sampleCount));
 
-    $midY = (int) floor($height / 2);
-    $midVariance = sampleRowBrightnessVariance($img, $midY, $width, $stepX);
-    if ($midVariance < $midVarianceMin) {
+    if (!midFrameHasTexture($img, $height, $width, $stepX)) {
         return [
             'is_empty_band' => false,
             'coverage' => 1.0,
@@ -546,14 +540,9 @@ function detectWebpRelativeFlatBottomBand($img, int $width, int $height): array
     $minEmptyRows = defined('WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS')
         ? max(1, (int) WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS)
         : 1;
-    $midVarianceMin = defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')
-        ? (float) WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN
-        : 20.0;
     $stepX = max(1, (int) floor($width / $sampleCount));
 
-    $midY = (int) floor($height / 2);
-    $midVariance = sampleRowBrightnessVariance($img, $midY, $width, $stepX);
-    if ($midVariance < $midVarianceMin) {
+    if (!midFrameHasTexture($img, $height, $width, $stepX)) {
         return [
             'is_empty_band' => false,
             'coverage' => 1.0,
@@ -575,6 +564,28 @@ function detectWebpRelativeFlatBottomBand($img, int $width, int $height): array
             return isWebpFlatPadRow($img, $y, $width, $stepX);
         }
     );
+}
+
+/**
+ * Mid-frame row has enough brightness variance to treat as real content.
+ *
+ * Used by PNG/WebP truncation pads so uniform dark night frames are not
+ * rejected as empty bottom bands (uniform-color check remains separate).
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $height Image height
+ * @param int $width Image width
+ * @param int $stepX Horizontal sample stride
+ * @return bool
+ */
+function midFrameHasTexture($img, int $height, int $width, int $stepX): bool
+{
+    $midVarianceMin = defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')
+        ? (float) WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN
+        : 20.0;
+    $midY = (int) floor($height / 2);
+
+    return sampleRowBrightnessVariance($img, $midY, $width, $stepX) >= $midVarianceMin;
 }
 
 /**
@@ -729,7 +740,7 @@ function isPngSolidEmptyFillRow($img, int $y, int $width, int $stepX): bool
         : 24.0;
 
     $brightnesses = [];
-    for ($x = 0; $x < $width; $x += $stepX) {
+    for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
         $rgb = imagecolorat($img, $x, $y);
         $r = ($rgb >> 16) & 0xFF;
         $g = ($rgb >> 8) & 0xFF;
@@ -775,7 +786,7 @@ function isWebpFlatPadRow($img, int $y, int $width, int $stepX): bool
     $brightnesses = [];
     $chromaSum = 0.0;
     $n = 0;
-    for ($x = 0; $x < $width; $x += $stepX) {
+    for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
         $rgb = imagecolorat($img, $x, $y);
         $r = ($rgb >> 16) & 0xFF;
         $g = ($rgb >> 8) & 0xFF;
@@ -797,7 +808,7 @@ function isWebpFlatPadRow($img, int $y, int $width, int $stepX): bool
 }
 
 /**
- * Brightness variance across one row (used for WebP mid-frame content gate).
+ * Brightness variance across one row (mid-frame texture gate for PNG/WebP pads).
  *
  * @param resource|\GdImage $img GD image
  * @param int $y Row index
@@ -808,7 +819,7 @@ function isWebpFlatPadRow($img, int $y, int $width, int $stepX): bool
 function sampleRowBrightnessVariance($img, int $y, int $width, int $stepX): float
 {
     $brightnesses = [];
-    for ($x = 0; $x < $width; $x += $stepX) {
+    for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
         $rgb = imagecolorat($img, $x, $y);
         $r = ($rgb >> 16) & 0xFF;
         $g = ($rgb >> 8) & 0xFF;
