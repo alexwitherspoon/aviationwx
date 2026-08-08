@@ -1357,6 +1357,11 @@ The webcam processing pipeline uses three main components:
   - **Maximum checks**: 20 (conservative default, 10 seconds verification)
   - **Feedback loop**: High rejection rate (>5%) triggers more conservative behavior
   - **Metrics tracking**: Rolling window of last 100 uploads per camera stored in APCu
+- **Bitstream Completeness** (Fail-Closed):
+  - After size/mtime stability, JPEG EOI (`FF D9`), PNG IEND, or WebP trailer must be present before EXIF mutation
+  - Incomplete uploads are a definitive reject: quarantine copy, consume inbox file (a finished write missing a trailer does not grow one later)
+  - Completeness is re-checked after exiftool rewrite
+  - Decode-time safety net: GD mid-grey (~128) fill contiguous from the bottom (including a single last line) is rejected as an error frame
 - **File Age Limits** (Fail-Closed Protection):
   - **Minimum age**: 3 seconds (files must age before checking, prevents checking mid-transfer)
   - **Maximum age**: 30 minutes default (configurable 10min-2hr per camera)
@@ -1414,7 +1419,8 @@ The webcam processing pipeline uses three main components:
 
 6. **Processing Pipeline**
    - **Single Image Load**: GD resource loaded once from staging file
-   - **Error Frame Detection**: Uniform color, corrupt regions, Blue Iris errors
+   - **Error Frame Detection**: Uniform color, truncated JPEG mid-grey bottom fill, Blue Iris errors
+   - **Bitstream Completeness**: JPEG EOI / PNG IEND / WebP trailer required before EXIF mutation and promotion
    - **EXIF Validation**: Ensures valid timestamp, adds if missing
    - **EXIF Normalization**: Converts to UTC, adds GPS timestamp fields
    - **Variant Generation**: Creates 1080p, 720p, 360p variants

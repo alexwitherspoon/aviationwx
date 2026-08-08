@@ -5,10 +5,10 @@
  * Detects invalid webcam images including:
  * - Blue Iris error frames (grey borders with white text)
  * - Uniform color images (lens cap, dead camera, corruption)
- * - Corrupt bottom region (solid green/blue/red lines from partial JPEG or device failure)
- * - Lower-right corner fast-fail (last pixels in JPEG scan order; catches partial corruption)
+ * - Decoder mid-grey bottom fill from truncated JPEG (partial upload)
  *
  * Uniform-color checks use phase-aware thresholds (day/twilight/night).
+ * File-level EOI checks (isJpegComplete) complement decode-time fill detection.
  */
 
 require_once __DIR__ . '/constants.php';
@@ -65,29 +65,17 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
 
-    // CORRUPT BOTTOM: Run cheap checks first (10 pixels, then 5 rows) before full-image uniform color
-    $cornerCheck = detectCorruptBottomCornerFastFail($img, $width, $height);
-    if ($cornerCheck['is_corrupt']) {
+    // Truncated JPEG: GD pads undecoded rows as mid-grey ~128; check before border early-exit
+    $emptyBandCheck = detectEmptyBottomBand($img, $width, $height);
+    if ($emptyBandCheck['is_empty_band']) {
         return [
             'is_error' => true,
-            'confidence' => 0.9,
-            'error_score' => 0.9,
-            'reasons' => [$cornerCheck['reason']]
+            'confidence' => 0.95,
+            'error_score' => 0.95,
+            'reasons' => [$emptyBandCheck['reason']]
         ];
     }
 
-    // Full corrupt bottom region check (rows, variance, etc.)
-    $corruptBottomCheck = detectCorruptBottomRegion($img, $width, $height);
-    if ($corruptBottomCheck['is_corrupt']) {
-        return [
-            'is_error' => true,
-            'confidence' => 0.9,
-            'error_score' => 0.9,
-            'reasons' => [$corruptBottomCheck['reason']]
-        ];
-    }
-
-    // UNIFORM COLOR: Full-image scan (expensive); run after cheap corruption checks
     $uniformCheck = detectUniformColor($img, $width, $height, $airport);
     if ($uniformCheck['is_uniform']) {
         return [
@@ -421,184 +409,155 @@ function detectUniformColor($img, int $width, int $height, ?array $airport = nul
 }
 
 /**
- * Fast-fail: check last N pixels in lower-right corner for corruption color
+ * Detect GD mid-grey fill band at the bottom of a decoded image (truncated JPEG).
  *
- * JPEG encodes top-to-bottom, left-to-right; truncation cuts off at lower-right.
- * Samples rightmost pixels of bottom row. Requires min_match of N to match
- * corruption color, and avg brightness > threshold to skip dark night corners.
- *
- * @param resource|\GdImage $img GD image resource
- * @param int $width Image width
- * @param int $height Image height
- * @return array{is_corrupt: bool, reason: string}
- */
-function detectCorruptBottomCornerFastFail($img, int $width, int $height): array
-{
-    $size = defined('WEBCAM_ERROR_CORRUPT_CORNER_SIZE') ? WEBCAM_ERROR_CORRUPT_CORNER_SIZE : 10;
-    $minMatch = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH : 8;
-    $minBrightness = defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS') ? WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS : 35;
-
-    $y = $height - 1;
-    $xStart = max(0, $width - $size);
-    $matchCount = 0;
-    $brightnessSum = 0;
-    $sampleCount = 0;
-
-    for ($x = $xStart; $x < $width; $x++) {
-        $rgb = imagecolorat($img, $x, $y);
-        $r = ($rgb >> 16) & 0xFF;
-        $g = ($rgb >> 8) & 0xFF;
-        $b = $rgb & 0xFF;
-        $brightnessSum += ($r + $g + $b) / 3;
-        $sampleCount++;
-        if (isCorruptionColor($r, $g, $b)) {
-            $matchCount++;
-        }
-    }
-
-    if ($sampleCount === 0) {
-        return ['is_corrupt' => false, 'reason' => ''];
-    }
-    $avgBrightness = $brightnessSum / $sampleCount;
-    if ($avgBrightness < $minBrightness) {
-        return ['is_corrupt' => false, 'reason' => ''];
-    }
-
-    $minMatchRequired = min($minMatch, $sampleCount);
-    if ($matchCount >= $minMatchRequired) {
-        return [
-            'is_corrupt' => true,
-            'reason' => sprintf('corrupt_corner_fast_fail_matched_%d_of_%d_brightness_%.0f', $matchCount, $sampleCount, $avgBrightness)
-        ];
-    }
-
-    return ['is_corrupt' => false, 'reason' => ''];
-}
-
-/**
- * Detect corrupt bottom region (solid corruption-color lines in last N rows)
- *
- * JPEG encodes top-to-bottom; partial uploads or device corruption produce
- * solid color lines at the bottom (green/blue/red from failed encode).
- * Checks only the last N rows for CPU efficiency; corruption typically
- * affects the last-painted rows first.
+ * JPEG encodes top-to-bottom. Truncation often yields a full canvas with undecoded
+ * rows filled as solid mid-grey (128,128,128) - not browser-green. Reject when a
+ * contiguous decoder-grey band from the bottom is at least
+ * WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS deep (default 1). Night scenes are darker
+ * and/or textured and do not match mid-grey fill.
  *
  * @param resource|\GdImage $img GD image resource
  * @param int $width Image width
  * @param int $height Image height
- * @return array {
- *   'is_corrupt' => bool,
- *   'variance' => float,
- *   'reason' => string
+ * @return array{
+ *   is_empty_band: bool,
+ *   coverage: float,
+ *   content_rows: int,
+ *   empty_rows: int,
+ *   reason: string
  * }
  */
-function detectCorruptBottomRegion($img, int $width, int $height): array
+function detectEmptyBottomBand($img, int $width, int $height): array
 {
-    $rowsToCheck = defined('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS')
-        ? WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS
-        : 5;
-    $rowSampleStep = defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')
-        ? WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP
-        : 20;
+    $rowStep = defined('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP')
+        ? max(1, (int) WEBCAM_ERROR_EMPTY_BAND_ROW_STEP)
+        : 4;
+    $sampleCount = defined('WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT')
+        ? max(5, (int) WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT)
+        : 40;
+    $minEmptyRows = defined('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS')
+        ? max(1, (int) WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS)
+        : 1;
 
-    $yStart = max(0, $height - $rowsToCheck);
-    $stepX = max(1, (int) floor($width / $rowSampleStep));
+    $stepX = max(1, (int) floor($width / $sampleCount));
 
-    // Scan from bottom up; corruption typically affects last-painted rows first
-    for ($y = $height - 1; $y >= $yStart; $y--) {
-        $rowPixels = [];
-        for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
-            $rgb = imagecolorat($img, $x, $y);
-            $rowPixels[] = [
-                ($rgb >> 16) & 0xFF,
-                ($rgb >> 8) & 0xFF,
-                $rgb & 0xFF,
-            ];
-        }
-
-        if (count($rowPixels) < 5) {
+    $firstEmptyY = null;
+    for ($y = $height - 1; $y >= 0; $y -= $rowStep) {
+        if (isDecoderGreyFillRow($img, $y, $width, $stepX)) {
+            $firstEmptyY = $y;
             continue;
         }
+        break;
+    }
 
-        $rValues = array_column($rowPixels, 0);
-        $gValues = array_column($rowPixels, 1);
-        $bValues = array_column($rowPixels, 2);
-        $rowVariance = max(
-            calculateVariance($rValues),
-            calculateVariance($gValues),
-            calculateVariance($bValues)
-        );
-
-        $varianceThreshold = defined('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD')
-            ? WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD
-            : 50;
-        if ($rowVariance >= $varianceThreshold) {
-            continue;
-        }
-
-        $avgR = (int) round(array_sum($rValues) / count($rValues));
-        $avgG = (int) round(array_sum($gValues) / count($gValues));
-        $avgB = (int) round(array_sum($bValues) / count($bValues));
-
-        if (!isCorruptionColor($avgR, $avgG, $avgB)) {
-            continue;
-        }
-
-        $colorDesc = getCorruptionColorDescription($avgR, $avgG, $avgB);
-
+    if ($firstEmptyY === null) {
         return [
-            'is_corrupt' => true,
-            'variance' => $rowVariance,
-            'reason' => sprintf('corrupt_bottom_%s_row_%d_variance_%.1f_rgb_%d_%d_%d',
-                $colorDesc, $y, $rowVariance, $avgR, $avgG, $avgB),
+            'is_empty_band' => false,
+            'coverage' => 1.0,
+            'content_rows' => $height,
+            'empty_rows' => 0,
+            'reason' => '',
         ];
     }
 
-    return ['is_corrupt' => false, 'variance' => 999, 'reason' => ''];
+    // Stepped scan may land inside the band; walk up to the first fill row
+    $transitionY = $firstEmptyY;
+    for ($y = $firstEmptyY; $y >= 0; $y--) {
+        if (isDecoderGreyFillRow($img, $y, $width, $stepX)) {
+            $transitionY = $y;
+            continue;
+        }
+        break;
+    }
+
+    $contentRows = $transitionY;
+    $emptyRows = $height - $contentRows;
+    $coverage = $height > 0 ? ($contentRows / $height) : 0.0;
+
+    if ($emptyRows >= $minEmptyRows) {
+        return [
+            'is_empty_band' => true,
+            'coverage' => $coverage,
+            'content_rows' => $contentRows,
+            'empty_rows' => $emptyRows,
+            'reason' => sprintf(
+                'empty_band_midgrey_rows_%d_coverage_%.3f_content_%d',
+                $emptyRows,
+                $coverage,
+                $contentRows
+            ),
+        ];
+    }
+
+    return [
+        'is_empty_band' => false,
+        'coverage' => $coverage,
+        'content_rows' => $contentRows,
+        'empty_rows' => $emptyRows,
+        'reason' => '',
+    ];
 }
 
 /**
- * Check if RGB is a known corruption artifact color (green/blue/red)
+ * Row matches GD truncated-JPEG fill: low variance, neutral chroma, mean near 128.
+ * Dark night rows fail the mid-grey brightness gate.
  *
- * @param int $r Red 0-255
- * @param int $g Green 0-255
- * @param int $b Blue 0-255
+ * @param resource|\GdImage $img GD image
+ * @param int $y Row index
+ * @param int $width Image width
+ * @param int $stepX Horizontal sample stride
  * @return bool
  */
-function isCorruptionColor(int $r, int $g, int $b): bool
+function isDecoderGreyFillRow($img, int $y, int $width, int $stepX): bool
 {
-    $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
-    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 110;
+    $varianceThreshold = defined('WEBCAM_ERROR_EMPTY_BAND_VARIANCE_THRESHOLD')
+        ? (float) WEBCAM_ERROR_EMPTY_BAND_VARIANCE_THRESHOLD
+        : 5.0;
+    $greyTarget = defined('WEBCAM_ERROR_EMPTY_BAND_GREY_TARGET')
+        ? (float) WEBCAM_ERROR_EMPTY_BAND_GREY_TARGET
+        : 128.0;
+    $greyTolerance = defined('WEBCAM_ERROR_EMPTY_BAND_GREY_TOLERANCE')
+        ? (float) WEBCAM_ERROR_EMPTY_BAND_GREY_TOLERANCE
+        : 16.0;
+    $chromaMax = defined('WEBCAM_ERROR_EMPTY_BAND_CHROMA_MAX')
+        ? (float) WEBCAM_ERROR_EMPTY_BAND_CHROMA_MAX
+        : 10.0;
 
-    return ($r < $low && $g > $high && $b < $low)
-        || ($r < $low && $g < $low && $b > $high)
-        || ($r > $high && $g < $low && $b < $low);
-}
+    $redValues = [];
+    $greenValues = [];
+    $blueValues = [];
 
-/**
- * Get human-readable description for corruption color
- *
- * @param int $r Red 0-255
- * @param int $g Green 0-255
- * @param int $b Blue 0-255
- * @return string Description (solid_green, solid_blue, solid_red, or solid_color)
- */
-function getCorruptionColorDescription(int $r, int $g, int $b): string
-{
-    $low = defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW') ? WEBCAM_ERROR_CORRUPT_COLOR_LOW : 50;
-    $high = defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH') ? WEBCAM_ERROR_CORRUPT_COLOR_HIGH : 110;
-
-    if ($g > $high && $r < $low && $b < $low) {
-        return 'solid_green';
-    }
-    if ($b > $high && $r < $low && $g < $low) {
-        return 'solid_blue';
-    }
-    if ($r > $high && $g < $low && $b < $low) {
-        return 'solid_red';
+    for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
+        $rgb = imagecolorat($img, $x, $y);
+        $redValues[] = ($rgb >> 16) & 0xFF;
+        $greenValues[] = ($rgb >> 8) & 0xFF;
+        $blueValues[] = $rgb & 0xFF;
     }
 
-    return 'solid_color';
+    if (count($redValues) < 5) {
+        return false;
+    }
+
+    $rowVariance = max(
+        calculateVariance($redValues),
+        calculateVariance($greenValues),
+        calculateVariance($blueValues)
+    );
+    if ($rowVariance >= $varianceThreshold) {
+        return false;
+    }
+
+    $avgR = array_sum($redValues) / count($redValues);
+    $avgG = array_sum($greenValues) / count($greenValues);
+    $avgB = array_sum($blueValues) / count($blueValues);
+    $chroma = max(abs($avgR - $avgG), abs($avgG - $avgB), abs($avgR - $avgB));
+    if ($chroma > $chromaMax) {
+        return false;
+    }
+
+    $mean = ($avgR + $avgG + $avgB) / 3.0;
+    return abs($mean - $greyTarget) <= $greyTolerance;
 }
 
 /**

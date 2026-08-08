@@ -1121,31 +1121,29 @@ if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT')) {
 if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
     define('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE', 50); // Only need ~50 samples for this check
 }
-// Corrupt bottom detection: rows to check from bottom (JPEG encodes top-to-bottom)
-if (!defined('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS')) {
-    define('WEBCAM_ERROR_CORRUPT_BOTTOM_ROWS', 5);
+// Truncated JPEG: GD fills undecoded bottom rows as solid mid-grey (~128). Reject when
+// a contiguous decoder-grey band from the bottom meets MIN_EMPTY_ROWS (default: last line).
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP', 4);
 }
-if (!defined('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP')) {
-    define('WEBCAM_ERROR_CORRUPT_ROW_SAMPLE_STEP', 20); // Samples per row for line check
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT', 40);
 }
-if (!defined('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD')) {
-    define('WEBCAM_ERROR_CORRUPT_ROW_VARIANCE_THRESHOLD', 200); // Skip row if variance >= this; allows JPEG artifacts in corrupt regions, skips real varied content
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_VARIANCE_THRESHOLD', 5.0);
 }
-if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_LOW')) {
-    define('WEBCAM_ERROR_CORRUPT_COLOR_LOW', 50); // R/B must be < this for green/blue (allows JPEG variation)
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_GREY_TARGET')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_GREY_TARGET', 128);
 }
-if (!defined('WEBCAM_ERROR_CORRUPT_COLOR_HIGH')) {
-    define('WEBCAM_ERROR_CORRUPT_COLOR_HIGH', 110); // Dominant channel must be > this; full row of solid green/blue/red is rare
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_GREY_TOLERANCE')) {
+    // Night bottoms are much darker than mid-grey; keep this tight around 128
+    define('WEBCAM_ERROR_EMPTY_BAND_GREY_TOLERANCE', 16.0);
 }
-// Fast-fail: last N pixels in lower-right (JPEG scan order); corruption cuts off there
-if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_SIZE')) {
-    define('WEBCAM_ERROR_CORRUPT_CORNER_SIZE', 10); // Pixels to sample (rightmost of bottom row)
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_CHROMA_MAX')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_CHROMA_MAX', 10.0);
 }
-if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH')) {
-    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_MATCH', 8); // Require 8+ of 10 to match corruption color
-}
-if (!defined('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS')) {
-    define('WEBCAM_ERROR_CORRUPT_CORNER_MIN_BRIGHTNESS', 35); // Skip dark corners (night); corruption green/blue/red typically 35+
+if (!defined('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS')) {
+    define('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS', 1);
 }
 
 // EXIF timestamp validation (fail closed - reject images with invalid timestamps)
