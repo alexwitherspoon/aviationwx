@@ -366,6 +366,41 @@ class PushCameraBatchProcessingTest extends TestCase
     }
 
     /**
+     * Truncated JPEG (missing EOI) is a definitive reject and must be consumed.
+     * Completeness runs before EXIF so truncated files are not stamped by exiftool.
+     */
+    public function testAcquireFile_ConsumesInboxFileAfterIncompleteUploadReject(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+
+        $fullPath = $this->testDir . '/complete_source.jpg';
+        $img = imagecreatetruecolor(640, 480);
+        for ($y = 0; $y < 480; $y += 8) {
+            $color = imagecolorallocate($img, ($y * 3) % 256, (100 + $y) % 256, (200 - ($y % 100)));
+            imagefilledrectangle($img, 0, $y, 639, min(479, $y + 7), $color);
+        }
+        imagejpeg($img, $fullPath, 85);
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $path = $this->testDir . '/truncated_upload.jpg';
+        file_put_contents($path, substr($bytes, 0, (int) floor(strlen($bytes) * 0.5)));
+        $this->assertFalse(isJpegComplete($path));
+
+        $mtime = time() - 10;
+        touch($path, $mtime);
+
+        $result = $strategy->acquireFile($path);
+
+        $this->assertFalse($result->success, 'Truncated JPEG must not be accepted');
+        $this->assertFalse($result->isSkip(), 'incomplete_upload is a hard failure');
+        $this->assertSame('incomplete_upload', $result->errorReason);
+        $this->assertFileDoesNotExist($path, 'Incomplete upload must be consumed after reject');
+    }
+
+    /**
      * Transient I/O validation failures must not delete the inbox upload
      */
     public function testConsumeEvaluatedUpload_SkipsTransientIoReasons(): void
@@ -383,10 +418,11 @@ class PushCameraBatchProcessingTest extends TestCase
         $this->assertFileExists($path, 'file_not_readable must not consume inbox file');
 
         $consume->invoke($strategy, $path, 'incomplete_upload');
-        $this->assertFileExists($path, 'incomplete_upload must not consume inbox file');
+        $this->assertFileDoesNotExist($path, 'incomplete_upload must consume inbox file (definitive reject)');
 
-        $consume->invoke($strategy, $path, 'error_frame');
-        $this->assertFileDoesNotExist($path, 'error_frame must still consume inbox file');
+        $path2 = $this->createTestFile('keep_then_error.jpg', time() - 10);
+        $consume->invoke($strategy, $path2, 'error_frame');
+        $this->assertFileDoesNotExist($path2, 'error_frame must still consume inbox file');
     }
 
     // ========================================

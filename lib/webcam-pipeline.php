@@ -175,8 +175,8 @@ class ProcessingPipeline
                 return PipelineResult::failure($loadResult['reason'], ['source' => $sourceType]);
             }
 
-            // Step 2: Error frame detection
-            $errorCheck = $this->checkErrorFrame($imagePath);
+            // Step 2: Error frame detection (format-specific truncation pads)
+            $errorCheck = $this->checkErrorFrame($imagePath, $loadResult['format'] ?? null);
             if (!$errorCheck['passed']) {
                 $this->recordRejection($imagePath, $errorCheck['reason'], [
                     'source' => $sourceType,
@@ -308,10 +308,14 @@ class ProcessingPipeline
 
     /**
      * Check for error frames using loaded GD image
+     *
+     * @param string $imagePath Path to image file
+     * @param string|null $sourceFormat Bitstream format from loadImage (jpg, png, webp)
+     * @return array{passed: bool, reason?: string, confidence?: float, details?: array}
      */
-    private function checkErrorFrame(string $imagePath): array
+    private function checkErrorFrame(string $imagePath, ?string $sourceFormat = null): array
     {
-        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage);
+        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage, $sourceFormat);
 
         if ($result['is_error']) {
             return [

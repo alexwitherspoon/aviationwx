@@ -257,11 +257,12 @@ abstract class BaseAcquisitionStrategy implements AcquisitionStrategy
      *
      * @param string $imagePath Path to image file
      * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); avoids redundant load when caller has it
+     * @param string|null $sourceFormat Source bitstream format (jpg, png, webp) for truncation-pad model
      * @return array{is_error: bool, confidence: float, reasons: array}
      */
-    protected function detectErrorFrame(string $imagePath, $gdImage = null): array
+    protected function detectErrorFrame(string $imagePath, $gdImage = null, ?string $sourceFormat = null): array
     {
-        return detectErrorFrame($imagePath, $this->airportConfig, $gdImage);
+        return detectErrorFrame($imagePath, $this->airportConfig, $gdImage, $sourceFormat);
     }
 }
 
@@ -553,8 +554,21 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             $errorOutput = implode("\n", $output);
 
             if ($exitCode === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
+                require_once __DIR__ . '/webcam-history.php';
+                if (!isJpegComplete($jpegTmp)) {
+                    require_once __DIR__ . '/webcam-rejection-logger.php';
+                    saveRejectedWebcam($jpegTmp, $this->airportId, $this->camIndex, 'incomplete_upload', [
+                        'source' => 'rtsp',
+                        'format' => 'jpg',
+                        'attempt' => $attempt,
+                    ]);
+                    @unlink($jpegTmp);
+                    $this->recordFailure('incomplete_upload', 'transient');
+                    continue;
+                }
+
                 // Check for error frames
-                $errorCheck = $this->detectErrorFrame($jpegTmp);
+                $errorCheck = $this->detectErrorFrame($jpegTmp, null, 'jpg');
                 if ($errorCheck['is_error']) {
                     aviationwx_log('warning', 'RTSP error frame detected', [
                         'airport' => $this->airportId,
@@ -682,13 +696,47 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_format', $this->sourceType);
         }
 
-        // Convert PNG to JPEG if needed
+        require_once __DIR__ . '/webcam-history.php';
+        require_once __DIR__ . '/webcam-rejection-logger.php';
+
+        // PNG: validate IEND on raw bytes before PNG→JPEG so re-encoded EOI is not treated as source proof
         if ($isPng) {
+            if (!isPngDataComplete($data)) {
+                if (@file_put_contents($stagingPath, $data) !== false) {
+                    saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'incomplete_upload', [
+                        'source' => $this->sourceType,
+                        'format' => 'png',
+                    ]);
+                    @unlink($stagingPath);
+                }
+                $this->recordFailure('incomplete_upload', 'transient');
+                return AcquisitionResult::failure('incomplete_upload', $this->sourceType);
+            }
+
             $img = @imagecreatefromstring($data);
             if (!$img) {
                 $this->recordFailure('png_decode_failed', 'transient');
                 return AcquisitionResult::failure('png_decode_failed', $this->sourceType);
             }
+
+            // Decode-time pad on source pixels before convert (JPEG mid-grey model does not apply)
+            if (@file_put_contents($stagingPath, $data) === false) {
+                $this->recordFailure('write_failed', 'transient');
+                return AcquisitionResult::failure('write_failed', $this->sourceType);
+            }
+            $errorCheck = $this->detectErrorFrame($stagingPath, $img, 'png');
+            if ($errorCheck['is_error']) {
+                saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
+                    'source' => $this->sourceType,
+                    'confidence' => $errorCheck['confidence'],
+                    'reasons' => $errorCheck['reasons'],
+                    'format' => 'png',
+                ]);
+                @unlink($stagingPath);
+                $this->recordFailure('error_frame', 'transient');
+                return AcquisitionResult::failure('error_frame', $this->sourceType, $errorCheck);
+            }
+
             if (!@imagejpeg($img, $stagingPath, 85)) {
                 $this->recordFailure('jpeg_encode_failed', 'transient');
                 return AcquisitionResult::failure('jpeg_encode_failed', $this->sourceType);
@@ -698,20 +746,29 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 $this->recordFailure('write_failed', 'transient');
                 return AcquisitionResult::failure('write_failed', $this->sourceType);
             }
-        }
 
-        // Check for error frames
-        $errorCheck = $this->detectErrorFrame($stagingPath);
-        if ($errorCheck['is_error']) {
-            require_once __DIR__ . '/webcam-rejection-logger.php';
-            saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
-                'source' => $this->sourceType,
-                'confidence' => $errorCheck['confidence'],
-                'reasons' => $errorCheck['reasons']
-            ]);
-            @unlink($stagingPath);
-            $this->recordFailure('error_frame', 'transient');
-            return AcquisitionResult::failure('error_frame', $this->sourceType, $errorCheck);
+            if (!isJpegComplete($stagingPath)) {
+                saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'incomplete_upload', [
+                    'source' => $this->sourceType,
+                    'format' => 'jpg',
+                ]);
+                @unlink($stagingPath);
+                $this->recordFailure('incomplete_upload', 'transient');
+                return AcquisitionResult::failure('incomplete_upload', $this->sourceType);
+            }
+
+            $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg');
+            if ($errorCheck['is_error']) {
+                saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
+                    'source' => $this->sourceType,
+                    'confidence' => $errorCheck['confidence'],
+                    'reasons' => $errorCheck['reasons'],
+                    'format' => 'jpg',
+                ]);
+                @unlink($stagingPath);
+                $this->recordFailure('error_frame', 'transient');
+                return AcquisitionResult::failure('error_frame', $this->sourceType, $errorCheck);
+            }
         }
 
         // Add and validate EXIF
@@ -818,8 +875,20 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('write_failed', 'mjpeg');
         }
 
+        require_once __DIR__ . '/webcam-history.php';
+        if (!isJpegComplete($stagingPath)) {
+            require_once __DIR__ . '/webcam-rejection-logger.php';
+            saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'incomplete_upload', [
+                'source' => 'mjpeg',
+                'format' => 'jpg',
+            ]);
+            @unlink($stagingPath);
+            $this->recordFailure('incomplete_upload', 'transient');
+            return AcquisitionResult::failure('incomplete_upload', 'mjpeg');
+        }
+
         // Check for error frames
-        $errorCheck = $this->detectErrorFrame($stagingPath);
+        $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg');
         if ($errorCheck['is_error']) {
             require_once __DIR__ . '/webcam-rejection-logger.php';
             saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
@@ -1125,6 +1194,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             'invalid_mime_type' => true,
             'invalid_format' => true,
             'image_corrupt' => true,
+            // Stable file missing EOI/IEND will not grow a trailer; reject and consume
+            'incomplete_upload' => true,
         ];
 
         return isset($definitive[$reason]);
@@ -1139,8 +1210,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
      * metrics and quarantine copies.
      *
      * Transient skips (too new, unstable) and transient I/O failures
-     * (file_not_readable, file_read_error, incomplete_upload) must not call this
-     * in a way that deletes - those files should remain for a later attempt.
+     * (file_not_readable, file_read_error) must not call this in a way that
+     * deletes - those files should remain for a later attempt.
+     * incomplete_upload is definitive once size-stable (missing format trailer will not appear later).
      *
      * @param string $filePath Absolute path to the inbox upload
      * @param string $reason Rejection reason for logging
@@ -1225,6 +1297,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
                 continue; // File still being written
             }
 
+            // Completeness before EXIF - do not mutate truncated bitstreams
+            $incomplete = $this->checkUploadCompleteness($file);
+            if ($incomplete !== null) {
+                $this->consumeEvaluatedUpload($file, $incomplete['reason']);
+                continue;
+            }
+
             // Ensure EXIF exists
             $timezone = $this->getTimezone();
             $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
@@ -1239,10 +1318,52 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
                 continue;
             }
 
+            // Fail closed if exiftool rewrite damaged the trailer
+            $incompleteAfterExif = $this->checkUploadCompleteness($file);
+            if ($incompleteAfterExif !== null) {
+                $this->consumeEvaluatedUpload($file, $incompleteAfterExif['reason']);
+                continue;
+            }
+
             return $file;
         }
 
         return null;
+    }
+
+    /**
+     * Reject incomplete image bitstreams (missing JPEG EOI / PNG IEND / WebP trailer).
+     *
+     * Cheap (~0.1ms). Call before EXIF mutation and again after exiftool.
+     * Quarantines a copy on incomplete_upload.
+     *
+     * @param string $file Absolute path to upload
+     * @return array{valid: false, reason: string, format?: string}|null Null when complete
+     */
+    private function checkUploadCompleteness(string $file): ?array
+    {
+        require_once __DIR__ . '/webcam-format-generation.php';
+        require_once __DIR__ . '/webcam-history.php';
+
+        $format = detectImageFormat($file);
+        if ($format === null) {
+            return ['valid' => false, 'reason' => 'invalid_format'];
+        }
+        if ($format === 'jpeg') {
+            $format = 'jpg';
+        }
+
+        if (isImageComplete($file, $format)) {
+            return null;
+        }
+
+        require_once __DIR__ . '/webcam-rejection-logger.php';
+        saveRejectedWebcam($file, $this->airportId, $this->camIndex, 'incomplete_upload', [
+            'source' => 'push',
+            'format' => $format,
+        ]);
+
+        return ['valid' => false, 'reason' => 'incomplete_upload', 'format' => $format];
     }
 
     /**
@@ -1298,20 +1419,14 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         if ($format === null) {
             return ['valid' => false, 'reason' => 'invalid_format'];
         }
-
-        // Check for truncated uploads
-        require_once __DIR__ . '/webcam-history.php';
-        $isComplete = true;
         if ($format === 'jpeg') {
-            $isComplete = isJpegComplete($file);
-        } elseif ($format === 'png') {
-            $isComplete = isPngComplete($file);
-        } elseif ($format === 'webp') {
-            $isComplete = isWebpComplete($file);
+            $format = 'jpg';
         }
 
-        if (!$isComplete) {
-            return ['valid' => false, 'reason' => 'incomplete_upload', 'format' => $format];
+        // Truncated uploads (defense in depth; primary gate runs before EXIF)
+        $incomplete = $this->checkUploadCompleteness($file);
+        if ($incomplete !== null) {
+            return $incomplete;
         }
 
         // Validate GD can parse the image; pass to detectErrorFrame to avoid redundant load
@@ -1328,9 +1443,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             unset($imageData);
         }
 
-        // Check for error frames (corrupt bottom, uniform color, etc.)
-        // Run for JPEG, PNG, WebP - corruption can occur in any format (partial uploads)
-        $errorCheck = $this->detectErrorFrame($file, $testImg);
+        // Error frames: format-specific truncation pads, uniform color, Blue Iris borders, etc.
+        $errorCheck = $this->detectErrorFrame($file, $testImg, $format);
         unset($testImg); // Free memory before EXIF check
         if ($errorCheck['is_error']) {
             require_once __DIR__ . '/webcam-rejection-logger.php';
@@ -1757,6 +1871,15 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::skip('file_unstable', 'push', ['stability_time' => $stabilityTime]);
         }
 
+        // Completeness before EXIF - do not mutate truncated bitstreams
+        $incomplete = $this->checkUploadCompleteness($filePath);
+        if ($incomplete !== null) {
+            $reason = $incomplete['reason'];
+            $this->recordStabilityMetrics($stabilityTime, false);
+            $this->consumeEvaluatedUpload($filePath, $reason);
+            return AcquisitionResult::failure($reason, 'push', $incomplete);
+        }
+
         // Ensure EXIF exists BEFORE validation (adds from filename timestamp if missing)
         // Must happen before validateUploadedImage() which checks EXIF timestamp
         $timezone = $this->getTimezone();
@@ -1771,6 +1894,15 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             $this->recordStabilityMetrics($stabilityTime, false);
             $this->consumeEvaluatedUpload($filePath, 'no_exif_timestamp');
             return AcquisitionResult::failure('no_exif_timestamp', 'push');
+        }
+
+        // Fail closed if exiftool rewrite damaged the trailer
+        $incompleteAfterExif = $this->checkUploadCompleteness($filePath);
+        if ($incompleteAfterExif !== null) {
+            $reason = $incompleteAfterExif['reason'];
+            $this->recordStabilityMetrics($stabilityTime, false);
+            $this->consumeEvaluatedUpload($filePath, $reason);
+            return AcquisitionResult::failure($reason, 'push', $incompleteAfterExif);
         }
 
         // Validate image content (including EXIF timestamp)

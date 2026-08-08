@@ -2,14 +2,11 @@
 /**
  * Unit Tests for Webcam Error Frame Detector
  *
- * Tests error frame detection functionality including:
- * - Grey pixel detection
- * - Color variance analysis
- * - Edge detection
- * - Border analysis
- * - Corrupt bottom region (solid green/blue/red from partial JPEG/device failure)
- * - Lower-right corner fast-fail (partial corruption)
- * - Quick check function
+ * Covers error-frame detection:
+ * - Grey / uniform / Blue Iris border heuristics
+ * - Format-specific truncation pads (JPEG mid-grey, PNG solid, WebP relative flat)
+ * - Phase-aware uniform-color thresholds
+ * - Production partial fixture (tests/Fixtures/webcam-partial/)
  */
 
 namespace AviationWX\Tests;
@@ -240,75 +237,15 @@ class WebcamErrorDetectorTest extends TestCase
         $this->assertTrue($result['is_error'], 'Image with no edges should be detected as error');
     }
     
-    public function testDetectCorruptBottomCornerFastFail_GreenInCorner_RejectsImage(): void
+    public function testDetectEmptyBottomBand_GreyFillBelowCoverage_Rejects(): void
     {
-        // Lower-right 10 pixels are last in JPEG scan order; corruption cuts off there
-        $width = 300;
-        $height = 200;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
-            if ($y === $height - 1 && $x >= $width - 10) {
-                return [0, 200, 0]; // Bright green in corner
-            }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
-        });
-        if ($img === null) {
-            $this->markTestSkipped('GD library not available');
-        }
-
-        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
-
-        $this->assertTrue($result['is_corrupt'], 'Green in lower-right corner must be rejected');
-        $this->assertStringContainsString('corrupt_corner_fast_fail', $result['reason']);
-    }
-
-    public function testDetectCorruptBottomCornerFastFail_DarkCorner_Passes(): void
-    {
-        // Dark corners (night) should not trigger; brightness gate skips
-        $width = 300;
-        $height = 200;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
-            if ($y === $height - 1 && $x >= $width - 10) {
-                return [5, 8, 12]; // Dark (night) - avg brightness ~8
-            }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
-        });
-        if ($img === null) {
-            $this->markTestSkipped('GD library not available');
-        }
-
-        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
-
-        $this->assertFalse($result['is_corrupt'], 'Dark corner should pass (night safety)');
-    }
-
-    public function testDetectCorruptBottomCornerFastFail_VariedCorner_Passes(): void
-    {
-        // Varied content in corner (grass, text) should pass
-        $width = 300;
-        $height = 200;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($width, $height) {
-            if ($y === $height - 1 && $x >= $width - 10) {
-                return [80 + ($x % 40), 90 + (($x + $y) % 30), 70];
-            }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
-        });
-        if ($img === null) {
-            $this->markTestSkipped('GD library not available');
-        }
-
-        $result = detectCorruptBottomCornerFastFail($img, $width, $height);
-
-        $this->assertFalse($result['is_corrupt'], 'Varied corner should pass');
-    }
-
-    public function testDetectCorruptBottomRegion_SingleLineSolidGreen_RejectsImage(): void
-    {
-        // Fail closed: even one row of solid green at bottom = reject
-        $width = 300;
-        $height = 200;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
-            if ($y === $height - 1) {
-                return [0, 255, 0];
+        // GD truncation fill is mid-grey 128, not browser-green
+        $width = 320;
+        $height = 240;
+        $fillStart = (int) floor($height * 0.40); // large mid-grey pad from bottom
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [128, 128, 128];
             }
             return [100 + ($x % 50), 120 + ($y % 40), 130 + (($x + $y) % 30)];
         });
@@ -316,56 +253,78 @@ class WebcamErrorDetectorTest extends TestCase
             $this->markTestSkipped('GD library not available');
         }
 
-        $result = detectCorruptBottomRegion($img, $width, $height);
+        $result = detectEmptyBottomBand($img, $width, $height);
 
-        $this->assertTrue($result['is_corrupt'], 'Single line of solid green at bottom must be rejected');
-        $this->assertStringContainsString('corrupt_bottom', $result['reason']);
+        $this->assertTrue($result['is_empty_band'], 'Large grey fill band must be rejected');
+        $this->assertLessThan(0.85, $result['coverage']);
+        $this->assertStringContainsString('empty_band_midgrey_rows_', $result['reason']);
     }
 
-    public function testDetectCorruptBottomRegion_SingleLineSolidBlue_RejectsImage(): void
+    public function testDetectEmptyBottomBand_LastLineMidGrey_Rejects(): void
     {
-        // Blue is common corruption artifact (e.g. decoder failure)
-        $width = 300;
-        $height = 200;
+        // Partial upload signature: even one GD mid-grey last line fails closed
+        $width = 320;
+        $height = 240;
         $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
             if ($y === $height - 1) {
-                return [0, 0, 255];
+                return [128, 128, 128];
             }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
         });
         if ($img === null) {
             $this->markTestSkipped('GD library not available');
         }
 
-        $result = detectCorruptBottomRegion($img, $width, $height);
+        $result = detectEmptyBottomBand($img, $width, $height);
 
-        $this->assertTrue($result['is_corrupt'], 'Single line of solid blue at bottom must be rejected');
+        $this->assertTrue($result['is_empty_band'], 'Single mid-grey last line must reject');
+        $this->assertSame(1, $result['empty_rows']);
+        $this->assertStringContainsString('empty_band_midgrey_rows_', $result['reason']);
     }
 
-    public function testDetectCorruptBottomRegion_SolidGreenAtTop_Passes(): void
+    public function testDetectEmptyBottomBand_DarkNightLastRow_Passes(): void
     {
-        // Only check bottom; green at top (e.g. trees) is legitimate
-        $width = 300;
-        $height = 200;
+        // Night bottoms are dark, not mid-grey 128 - must not false-reject
+        $width = 320;
+        $height = 240;
         $img = $this->createTestImageResource($width, $height, function ($x, $y) {
-            if ($y === 0) {
-                return [0, 255, 0];
-            }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
+            $n = ($x * 17 + $y * 13) % 11;
+            return [4 + $n, 5 + $n, 7 + $n];
         });
         if ($img === null) {
             $this->markTestSkipped('GD library not available');
         }
 
-        $result = detectCorruptBottomRegion($img, $width, $height);
+        $result = detectEmptyBottomBand($img, $width, $height);
 
-        $this->assertFalse($result['is_corrupt'], 'Green at top only should pass');
+        $this->assertFalse($result['is_empty_band'], 'Dark noisy night frame must pass');
+        $this->assertSame(0, $result['empty_rows']);
     }
 
-    public function testDetectCorruptBottomRegion_VariedBottom_Passes(): void
+    public function testDetectEmptyBottomBand_SolidBlackLastRow_Passes(): void
     {
-        $width = 300;
-        $height = 200;
+        // Solid black is low-variance but not decoder mid-grey
+        $width = 320;
+        $height = 240;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
+            if ($y === $height - 1) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectEmptyBottomBand($img, $width, $height);
+
+        $this->assertFalse($result['is_empty_band'], 'Solid black last row is not GD mid-grey fill');
+    }
+
+    public function testDetectEmptyBottomBand_VariedBottom_Passes(): void
+    {
+        $width = 320;
+        $height = 240;
         $img = $this->createTestImageResource($width, $height, function ($x, $y) {
             return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
         });
@@ -373,96 +332,382 @@ class WebcamErrorDetectorTest extends TestCase
             $this->markTestSkipped('GD library not available');
         }
 
-        $result = detectCorruptBottomRegion($img, $width, $height);
+        $result = detectEmptyBottomBand($img, $width, $height);
 
-        $this->assertFalse($result['is_corrupt'], 'Varied bottom should pass');
+        $this->assertFalse($result['is_empty_band']);
+        $this->assertSame(0, $result['empty_rows']);
+        $this->assertEqualsWithDelta(1.0, $result['coverage'], 0.001);
     }
 
-    public function testDetectCorruptBottomRegion_GreenWithJpegArtifactVariation_RejectsImage(): void
+    public function testDetectEmptyBottomBand_SolidFillAtTopOnly_Passes(): void
     {
-        // JPEG compression adds block artifacts; corrupt green can have variance 50-150
-        // Old threshold 50 skipped these; threshold 200 allows detection
-        $width = 300;
-        $height = 200;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($height) {
-            if ($y >= $height - 3) {
-                // Simulate JPEG block artifacts: G varies 125-145 (variance ~65)
-                $block = (int) floor($x / 15) % 5;
-                $g = [125, 127, 135, 143, 145][$block];
-                return [1, $g, 0];
+        // Fill band must be contiguous from the bottom
+        $width = 320;
+        $height = 240;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            if ($y < 40) {
+                return [128, 128, 128];
             }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
         });
         if ($img === null) {
             $this->markTestSkipped('GD library not available');
         }
 
-        $result = detectCorruptBottomRegion($img, $width, $height);
+        $result = detectEmptyBottomBand($img, $width, $height);
 
-        $this->assertTrue($result['is_corrupt'], 'Green with JPEG-like variance must be rejected');
-        $this->assertStringContainsString('corrupt_bottom', $result['reason']);
+        $this->assertFalse($result['is_empty_band'], 'Top-only solid band is not a truncation pad');
     }
 
-    public function testDetectCorruptBottomRegion_CorruptionOutsideFiveRows_Passes(): void
+    public function testDetectErrorFrame_EmptyBand_DetectsError(): void
     {
-        // Only last 5 rows are checked; corruption at row 6 from bottom is outside window
         $width = 300;
         $height = 200;
-        $corruptRow = $height - 6;
-        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($corruptRow) {
-            if ($y === $corruptRow) {
-                return [0, 255, 0];
-            }
-            return [100 + ($x % 50), 120 + ($y % 40), 130];
-        });
-        if ($img === null) {
-            $this->markTestSkipped('GD library not available');
-        }
-
-        $result = detectCorruptBottomRegion($img, $width, $height);
-
-        $this->assertFalse($result['is_corrupt'], 'Corruption outside 5-row window should pass');
-    }
-
-    public function testDetectErrorFrame_CorruptBottomRegion_DetectsError(): void
-    {
-        // Simulates partial JPEG/device corruption: varied top, solid green bottom
-        $width = 300;
-        $height = 200;
-        $bottomStart = (int) floor($height * 0.67);
-        $filePath = $this->createTestImage($width, $height, function ($x, $y) use ($bottomStart) {
-            if ($y >= $bottomStart) {
-                return [0, 255, 0];
+        $fillStart = (int) floor($height * 0.50);
+        $filePath = $this->createTestImage($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [128, 128, 128];
             }
             return [100 + ($x % 50), 120 + ($y % 40), 130 + (($x + $y) % 30)];
         });
 
         $result = detectErrorFrame($filePath);
 
-        $this->assertTrue($result['is_error'], 'Image with corrupt solid-green bottom should be detected');
-        $this->assertNotEmpty($result['reasons']);
-        $hasCorruptReason = false;
+        $this->assertTrue($result['is_error'], 'Empty-band partial must be detected via detectErrorFrame');
+        $hasEmptyBand = false;
         foreach ($result['reasons'] as $reason) {
-            if (strpos($reason, 'corrupt_bottom') !== false || strpos($reason, 'corrupt_corner_fast_fail') !== false) {
-                $hasCorruptReason = true;
+            if (strpos($reason, 'empty_band_midgrey_rows_') !== false) {
+                $hasEmptyBand = true;
                 break;
             }
         }
-        $this->assertTrue($hasCorruptReason, 'Should include corrupt_bottom or corrupt_corner_fast_fail in reasons');
+        $this->assertTrue($hasEmptyBand, 'Reason should include empty_band_midgrey_rows_');
     }
 
     public function testDetectErrorFrame_HealthyBottomRegion_Passes(): void
     {
-        // Varied content throughout (including bottom) - should pass corrupt-bottom check
-        $filePath = $this->createTestImage(300, 200, function($x, $y) {
+        $filePath = $this->createTestImage(300, 200, function ($x, $y) {
             return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
         });
-        
+
         $result = detectErrorFrame($filePath);
-        
+
         $this->assertFalse($result['is_error'], 'Image with varied bottom should pass');
     }
-    
+
+    public function testU88WestPartialFixture_MissingEoiAndEmptyBand(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        $fixture = __DIR__ . '/../Fixtures/webcam-partial/u88-west-partial-original.jpg';
+        if (!is_file($fixture)) {
+            $this->markTestSkipped('U88 West partial fixture missing');
+        }
+
+        $this->assertFalse(isJpegComplete($fixture), 'Production partial must fail EOI check');
+
+        $img = @imagecreatefromjpeg($fixture);
+        if ($img === false) {
+            $this->fail('GD must decode the U88 West partial fixture');
+        }
+
+        $width = imagesx($img);
+        $height = imagesy($img);
+        $band = detectEmptyBottomBand($img, $width, $height);
+        $this->assertTrue($band['is_empty_band'], 'U88 West must fail empty-band coverage');
+        $this->assertLessThan(0.5, $band['coverage'], 'Expected large undecoded fill (~29% content)');
+        $this->assertStringContainsString('empty_band_midgrey_rows_', $band['reason']);
+
+        $frame = detectErrorFrame($fixture, null, $img);
+        $this->assertTrue($frame['is_error'], 'detectErrorFrame must reject U88 West partial');
+        $joined = implode(' ', $frame['reasons']);
+        $this->assertStringContainsString('empty_band_midgrey_rows_', $joined);
+    }
+
+    public function testTruncatedJpegDecode_EmptyBandRejects(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $fullPath = $this->createTestImage(640, 480, function ($x, $y) {
+            $sky = (int) max(0, 200 - (int) ($y * 0.3));
+            return [
+                min(255, $sky + (($x * 3 + $y * 5) % 17)),
+                min(255, (int) (180 - $y * 0.15) + (($x * 7 + $y) % 23)),
+                min(255, (int) (220 - $y * 0.2) + (($x + $y * 11) % 19)),
+            ];
+        });
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $partialPath = $this->testImageDir . '/truncated_' . uniqid() . '.jpg';
+        // Keep enough header/scan data to decode, drop EOI and bottom MCUs
+        $cut = (int) floor(strlen($bytes) * 0.45);
+        file_put_contents($partialPath, substr($bytes, 0, $cut));
+
+        $this->assertFalse(isJpegComplete($partialPath));
+
+        $img = @imagecreatefromstring(file_get_contents($partialPath));
+        $this->assertNotFalse($img, 'GD should still decode truncated JPEG');
+
+        $band = detectEmptyBottomBand($img, imagesx($img), imagesy($img));
+        $this->assertTrue($band['is_empty_band'], 'Synthetic truncate must trip empty-band');
+
+        $frame = detectErrorFrame($partialPath, null, $img);
+        $this->assertTrue($frame['is_error']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_BlackPadRejects(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertTrue($band['is_empty_band']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $band['reason']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_TexturedBottomPasses(): void
+    {
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_UniformDarkPassesRelativeGate(): void
+    {
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [6, 6, 6];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band'], 'Uniform dark PNG must not trip solid-pad without mid content');
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_MidGreyBottomDoesNotMatchPngSolid(): void
+    {
+        // JPEG mid-grey is a different pad model; PNG solid gate is near-black / empty
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [128, 128, 128];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pngBand = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($pngBand['is_empty_band'], 'Mid-grey pad is JPEG-specific, not PNG solid');
+
+        $jpegBand = detectEmptyBottomBand($img, $width, $height);
+        $this->assertTrue($jpegBand['is_empty_band']);
+    }
+
+    public function testDetectWebpRelativeFlatBottomBand_FlatPadWithContentMidRejects(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.60);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [90, 90, 90];
+            }
+            return [40 + ($x % 100), 50 + ($y % 90), 60 + (($x + $y) % 80)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectWebpRelativeFlatBottomBand($img, $width, $height);
+        $this->assertTrue($band['is_empty_band']);
+        $this->assertStringContainsString('empty_band_webp_flat_rows_', $band['reason']);
+    }
+
+    public function testDetectWebpRelativeFlatBottomBand_UniformDarkPassesRelativeGate(): void
+    {
+        // Entire frame flat/dark: relative mid-content gate must not fire (uniform check is separate)
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [8, 8, 8];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectWebpRelativeFlatBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band']);
+    }
+
+    public function testDetectErrorFrame_PngFormat_UsesSolidPad(): void
+    {
+        $width = 300;
+        $height = 200;
+        // Pad must start below mid-row so the relative mid-content gate still sees texture
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        // Pass GD directly - JPEG re-encode would add noise that masks solid-black pads
+        $result = detectErrorFrame('/dev/null', null, $img, 'png');
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $joined);
+    }
+
+    public function testDetectErrorFrame_WebpFormat_UsesRelativeFlatPad(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [100, 100, 100];
+            }
+            return [30 + ($x % 120), 40 + ($y % 100), 50 + (($x + $y) % 90)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectErrorFrame('/dev/null', null, $img, 'webp');
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_webp_flat_rows_', $joined);
+    }
+
+    public function testDetectErrorFrame_PngFile_AutoDetectsFormatPad(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+
+        if (!function_exists('imagepng')) {
+            $this->markTestSkipped('GD PNG support not available');
+        }
+
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pngPath = $this->testImageDir . '/auto_png_' . uniqid() . '.png';
+        imagepng($img, $pngPath);
+
+        // No explicit sourceFormat: magic-byte detect must select PNG solid pad
+        $result = detectErrorFrame($pngPath);
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $joined);
+    }
+
+    public function testTruncatedPngBitstream_FailsIendBeforeDecodePad(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagepng')) {
+            $this->markTestSkipped('GD PNG support not available');
+        }
+
+        $img = imagecreatetruecolor(320, 240);
+        for ($y = 0; $y < 240; $y++) {
+            for ($x = 0; $x < 320; $x++) {
+                $c = imagecolorallocate($img, 50 + ($x % 100), 60 + ($y % 80), 70 + (($x + $y) % 60));
+                imagesetpixel($img, $x, $y, $c);
+            }
+        }
+        $fullPath = $this->testImageDir . '/full_' . uniqid() . '.png';
+        imagepng($img, $fullPath);
+        unset($img);
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $this->assertTrue(isPngDataComplete($bytes));
+
+        $partialPath = $this->testImageDir . '/partial_' . uniqid() . '.png';
+        $cut = (int) floor(strlen($bytes) * 0.70);
+        file_put_contents($partialPath, substr($bytes, 0, $cut));
+
+        $this->assertFalse(isPngComplete($partialPath));
+        $this->assertFalse(isPngDataComplete(file_get_contents($partialPath)));
+    }
+
+    public function testTruncatedWebpBitstream_FailsRiffSizeGate(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagewebp')) {
+            $this->markTestSkipped('GD WebP support not available');
+        }
+
+        $img = imagecreatetruecolor(320, 240);
+        for ($y = 0; $y < 240; $y++) {
+            for ($x = 0; $x < 320; $x++) {
+                $c = imagecolorallocate($img, 40 + ($x % 90), 50 + ($y % 70), 60 + (($x + $y) % 50));
+                imagesetpixel($img, $x, $y, $c);
+            }
+        }
+        $fullPath = $this->testImageDir . '/full_' . uniqid() . '.webp';
+        if (@imagewebp($img, $fullPath, 80) === false) {
+            unset($img);
+            $this->markTestSkipped('imagewebp failed');
+        }
+        unset($img);
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $this->assertTrue(isWebpComplete($fullPath));
+
+        $partialPath = $this->testImageDir . '/partial_' . uniqid() . '.webp';
+        $cut = (int) floor(strlen($bytes) * 0.55);
+        file_put_contents($partialPath, substr($bytes, 0, max(12, $cut)));
+
+        $this->assertFalse(isWebpComplete($partialPath));
+    }
+
     public function testDetectErrorFrame_GreyBorders_DetectsError()
     {
         // Create image with grey borders (error frame characteristic)

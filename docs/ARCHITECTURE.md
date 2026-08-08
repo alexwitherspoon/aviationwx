@@ -45,7 +45,7 @@ aviationwx.org/
 │   ├── partner-logo-cache.php # Partner logo caching
 │   ├── partner-logo-luminance.php # Partner logo contrast hints (opaque-pixel luminance)
 │   ├── push-webcam-validator.php # Push webcam validation
-│   ├── webcam-error-detector.php # Webcam image validation (error frames, uniform color)
+│   ├── webcam-error-detector.php # Webcam image validation (error frames, uniform color, truncation pads)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, JPEG)
 │   ├── exif-utils.php        # EXIF timestamp reading, writing, and validation
 │   ├── sun/
@@ -448,7 +448,7 @@ WebcamWorker orchestrates:
   ↓
 5. ProcessingPipeline.process()
    - Load image once as GD resource
-   - Error frame detection (uniform color, corrupt regions, Blue Iris errors)
+   - Error frame detection (uniform color; JPEG mid-grey / PNG solid / WebP relative-flat truncation pads; Blue Iris errors)
    - EXIF validation and normalization to UTC
    - Variant generation (original, 1080p, 720p, 360p)
    - Format generation (JPEG, WebP)
