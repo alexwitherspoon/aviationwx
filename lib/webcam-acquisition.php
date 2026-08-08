@@ -555,12 +555,14 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             if ($exitCode === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
                 require_once __DIR__ . '/webcam-history.php';
                 if (!isJpegComplete($jpegTmp)) {
-                    aviationwx_log('warning', 'RTSP capture incomplete JPEG', [
-                        'airport' => $this->airportId,
-                        'cam' => $this->camIndex,
+                    require_once __DIR__ . '/webcam-rejection-logger.php';
+                    saveRejectedWebcam($jpegTmp, $this->airportId, $this->camIndex, 'incomplete_upload', [
+                        'source' => 'rtsp',
+                        'format' => 'jpeg',
                         'attempt' => $attempt,
-                    ], 'app');
+                    ]);
                     @unlink($jpegTmp);
+                    $this->recordFailure('incomplete_upload', 'transient');
                     continue;
                 }
 
