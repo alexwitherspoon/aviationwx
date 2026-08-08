@@ -1145,6 +1145,31 @@ if (!defined('WEBCAM_ERROR_EMPTY_BAND_CHROMA_MAX')) {
 if (!defined('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS')) {
     define('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS', 1);
 }
+// Truncated PNG: incomplete decode often leaves a contiguous near-black (or empty) bottom band.
+if (!defined('WEBCAM_ERROR_PNG_EMPTY_BAND_MAX_BRIGHTNESS')) {
+    define('WEBCAM_ERROR_PNG_EMPTY_BAND_MAX_BRIGHTNESS', 24.0);
+}
+if (!defined('WEBCAM_ERROR_PNG_EMPTY_BAND_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_PNG_EMPTY_BAND_VARIANCE_THRESHOLD', 5.0);
+}
+if (!defined('WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS')) {
+    define('WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS', 1);
+}
+// Truncated WebP: flat bottom pad only when mid-frame still has content (relative gate).
+if (!defined('WEBCAM_ERROR_WEBP_PAD_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_WEBP_PAD_VARIANCE_THRESHOLD', 5.0);
+}
+if (!defined('WEBCAM_ERROR_WEBP_PAD_CHROMA_MAX')) {
+    define('WEBCAM_ERROR_WEBP_PAD_CHROMA_MAX', 12.0);
+}
+// Shared mid-frame texture gate for PNG/WebP relative truncation pads
+if (!defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')) {
+    // Mid-frame must show real texture; keep below typical daylight scene variance
+    define('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN', 20.0);
+}
+if (!defined('WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS')) {
+    define('WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS', 1);
+}
 
 // EXIF timestamp validation (fail closed - reject images with invalid timestamps)
 // All webcam images must have valid EXIF DateTimeOriginal before acceptance

@@ -5,10 +5,10 @@
  * Detects invalid webcam images including:
  * - Blue Iris error frames (grey borders with white text)
  * - Uniform color images (lens cap, dead camera, corruption)
- * - Decoder mid-grey bottom fill from truncated JPEG (partial upload)
+ * - Format-specific truncation pads (JPEG mid-grey, PNG solid, WebP relative flat)
  *
  * Uniform-color checks use phase-aware thresholds (day/twilight/night).
- * File-level EOI checks (isJpegComplete) complement decode-time fill detection.
+ * Bitstream completeness (EOI / IEND / RIFF size) complements decode-time pad detection.
  */
 
 require_once __DIR__ . '/constants.php';
@@ -22,6 +22,7 @@ require_once __DIR__ . '/weather/utils.php';
  * @param string $imagePath Path to image file
  * @param array|null $airport Airport config for phase-aware uniform-color thresholds (optional)
  * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); when provided, skips file load
+ * @param string|null $sourceFormat Source bitstream format (jpg, png, webp); selects truncation pad model
  * @return array {
  *   'is_error' => bool,
  *   'confidence' => float,
@@ -29,7 +30,7 @@ require_once __DIR__ . '/weather/utils.php';
  *   'reasons' => array
  * }
  */
-function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null): array {
+function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null, ?string $sourceFormat = null): array {
     $img = null;
 
     $isGdImage = ($gdImage instanceof \GdImage)
@@ -65,8 +66,8 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
 
-    // Truncated JPEG: GD pads undecoded rows as mid-grey ~128; check before border early-exit
-    $emptyBandCheck = detectEmptyBottomBand($img, $width, $height);
+    $normalizedFormat = normalizeWebcamSourceFormat($sourceFormat, $imagePath);
+    $emptyBandCheck = detectTruncationPadBand($img, $width, $height, $normalizedFormat);
     if ($emptyBandCheck['is_empty_band']) {
         return [
             'is_error' => true,
@@ -409,6 +410,260 @@ function detectUniformColor($img, int $width, int $height, ?array $airport = nul
 }
 
 /**
+ * Normalize source format for truncation-pad dispatch (jpeg → jpg).
+ *
+ * @param string|null $sourceFormat Explicit format from caller
+ * @param string $imagePath Path used for auto-detect when format omitted
+ * @return string One of jpg, png, webp (defaults to jpg)
+ */
+function normalizeWebcamSourceFormat(?string $sourceFormat, string $imagePath = ''): string
+{
+    $format = $sourceFormat;
+    if ($format === null || $format === '') {
+        if ($imagePath !== '' && function_exists('detectImageFormat')) {
+            $format = detectImageFormat($imagePath);
+        }
+    }
+
+    $format = strtolower((string) $format);
+    if ($format === 'jpeg') {
+        return 'jpg';
+    }
+    if ($format === 'png' || $format === 'webp' || $format === 'jpg') {
+        return $format;
+    }
+
+    return 'jpg';
+}
+
+/**
+ * Dispatch format-specific bottom-pad detection for truncated uploads.
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $width Image width
+ * @param int $height Image height
+ * @param string $sourceFormat Normalized format (jpg, png, webp)
+ * @return array{
+ *   is_empty_band: bool,
+ *   coverage: float,
+ *   content_rows: int,
+ *   empty_rows: int,
+ *   reason: string
+ * }
+ */
+function detectTruncationPadBand($img, int $width, int $height, string $sourceFormat): array
+{
+    switch ($sourceFormat) {
+        case 'png':
+            return detectPngSolidEmptyBottomBand($img, $width, $height);
+        case 'webp':
+            return detectWebpRelativeFlatBottomBand($img, $width, $height);
+        case 'jpg':
+        default:
+            return detectEmptyBottomBand($img, $width, $height);
+    }
+}
+
+/**
+ * Contiguous near-black bottom band from incomplete PNG decode/paint.
+ *
+ * @param resource|\GdImage $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array{
+ *   is_empty_band: bool,
+ *   coverage: float,
+ *   content_rows: int,
+ *   empty_rows: int,
+ *   reason: string
+ * }
+ */
+function detectPngSolidEmptyBottomBand($img, int $width, int $height): array
+{
+    $rowStep = defined('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP')
+        ? max(1, (int) WEBCAM_ERROR_EMPTY_BAND_ROW_STEP)
+        : 4;
+    $sampleCount = defined('WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT')
+        ? max(5, (int) WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT)
+        : 40;
+    $minEmptyRows = defined('WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS')
+        ? max(1, (int) WEBCAM_ERROR_PNG_EMPTY_BAND_MIN_EMPTY_ROWS)
+        : 1;
+    // Same relative mid-content idea as WebP: avoid rejecting uniform dark night bottoms
+    $midVarianceMin = defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')
+        ? (float) WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN
+        : 20.0;
+    $stepX = max(1, (int) floor($width / $sampleCount));
+
+    $midY = (int) floor($height / 2);
+    $midVariance = sampleRowBrightnessVariance($img, $midY, $width, $stepX);
+    if ($midVariance < $midVarianceMin) {
+        return [
+            'is_empty_band' => false,
+            'coverage' => 1.0,
+            'content_rows' => $height,
+            'empty_rows' => 0,
+            'reason' => '',
+        ];
+    }
+
+    return measureContiguousBottomBand(
+        $img,
+        $width,
+        $height,
+        $rowStep,
+        $stepX,
+        $minEmptyRows,
+        'empty_band_png_solid_rows_',
+        static function ($img, int $y, int $width, int $stepX): bool {
+            return isPngSolidEmptyFillRow($img, $y, $width, $stepX);
+        }
+    );
+}
+
+/**
+ * Contiguous flat bottom pad when mid-frame still has texture (WebP truncation).
+ *
+ * @param resource|\GdImage $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array{
+ *   is_empty_band: bool,
+ *   coverage: float,
+ *   content_rows: int,
+ *   empty_rows: int,
+ *   reason: string
+ * }
+ */
+function detectWebpRelativeFlatBottomBand($img, int $width, int $height): array
+{
+    $rowStep = defined('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP')
+        ? max(1, (int) WEBCAM_ERROR_EMPTY_BAND_ROW_STEP)
+        : 4;
+    $sampleCount = defined('WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT')
+        ? max(5, (int) WEBCAM_ERROR_EMPTY_BAND_SAMPLE_COUNT)
+        : 40;
+    $minEmptyRows = defined('WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS')
+        ? max(1, (int) WEBCAM_ERROR_WEBP_PAD_MIN_EMPTY_ROWS)
+        : 1;
+    $midVarianceMin = defined('WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN')
+        ? (float) WEBCAM_ERROR_TRUNCATION_PAD_MID_VARIANCE_MIN
+        : 20.0;
+    $stepX = max(1, (int) floor($width / $sampleCount));
+
+    $midY = (int) floor($height / 2);
+    $midVariance = sampleRowBrightnessVariance($img, $midY, $width, $stepX);
+    if ($midVariance < $midVarianceMin) {
+        return [
+            'is_empty_band' => false,
+            'coverage' => 1.0,
+            'content_rows' => $height,
+            'empty_rows' => 0,
+            'reason' => '',
+        ];
+    }
+
+    return measureContiguousBottomBand(
+        $img,
+        $width,
+        $height,
+        $rowStep,
+        $stepX,
+        $minEmptyRows,
+        'empty_band_webp_flat_rows_',
+        static function ($img, int $y, int $width, int $stepX): bool {
+            return isWebpFlatPadRow($img, $y, $width, $stepX);
+        }
+    );
+}
+
+/**
+ * Walk upward from the bottom while $isEmptyRow is true; reject when empty_rows >= min.
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $width Image width
+ * @param int $height Image height
+ * @param int $rowStep Coarse vertical stride
+ * @param int $stepX Horizontal sample stride
+ * @param int $minEmptyRows Minimum contiguous empty rows to reject
+ * @param string $reasonPrefix Prefix for rejection reason string
+ * @param callable $isEmptyRow fn($img, int $y, int $width, int $stepX): bool
+ * @return array{
+ *   is_empty_band: bool,
+ *   coverage: float,
+ *   content_rows: int,
+ *   empty_rows: int,
+ *   reason: string
+ * }
+ */
+function measureContiguousBottomBand(
+    $img,
+    int $width,
+    int $height,
+    int $rowStep,
+    int $stepX,
+    int $minEmptyRows,
+    string $reasonPrefix,
+    callable $isEmptyRow
+): array {
+    $firstEmptyY = null;
+    for ($y = $height - 1; $y >= 0; $y -= $rowStep) {
+        if ($isEmptyRow($img, $y, $width, $stepX)) {
+            $firstEmptyY = $y;
+            continue;
+        }
+        break;
+    }
+
+    if ($firstEmptyY === null) {
+        return [
+            'is_empty_band' => false,
+            'coverage' => 1.0,
+            'content_rows' => $height,
+            'empty_rows' => 0,
+            'reason' => '',
+        ];
+    }
+
+    $transitionY = $firstEmptyY;
+    for ($y = $firstEmptyY; $y >= 0; $y--) {
+        if ($isEmptyRow($img, $y, $width, $stepX)) {
+            $transitionY = $y;
+            continue;
+        }
+        break;
+    }
+
+    $contentRows = $transitionY;
+    $emptyRows = $height - $contentRows;
+    $coverage = $height > 0 ? ($contentRows / $height) : 0.0;
+
+    if ($emptyRows >= $minEmptyRows) {
+        return [
+            'is_empty_band' => true,
+            'coverage' => $coverage,
+            'content_rows' => $contentRows,
+            'empty_rows' => $emptyRows,
+            'reason' => sprintf(
+                '%s%d_coverage_%.3f_content_%d',
+                $reasonPrefix,
+                $emptyRows,
+                $coverage,
+                $contentRows
+            ),
+        ];
+    }
+
+    return [
+        'is_empty_band' => false,
+        'coverage' => $coverage,
+        'content_rows' => $contentRows,
+        'empty_rows' => $emptyRows,
+        'reason' => '',
+    ];
+}
+
+/**
  * Detect GD mid-grey fill band at the bottom of a decoded image (truncated JPEG).
  *
  * JPEG encodes top-to-bottom. Truncation often yields a full canvas with undecoded
@@ -439,64 +694,129 @@ function detectEmptyBottomBand($img, int $width, int $height): array
     $minEmptyRows = defined('WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS')
         ? max(1, (int) WEBCAM_ERROR_EMPTY_BAND_MIN_EMPTY_ROWS)
         : 1;
-
     $stepX = max(1, (int) floor($width / $sampleCount));
 
-    $firstEmptyY = null;
-    for ($y = $height - 1; $y >= 0; $y -= $rowStep) {
-        if (isDecoderGreyFillRow($img, $y, $width, $stepX)) {
-            $firstEmptyY = $y;
+    return measureContiguousBottomBand(
+        $img,
+        $width,
+        $height,
+        $rowStep,
+        $stepX,
+        $minEmptyRows,
+        'empty_band_midgrey_rows_',
+        static function ($img, int $y, int $width, int $stepX): bool {
+            return isDecoderGreyFillRow($img, $y, $width, $stepX);
+        }
+    );
+}
+
+/**
+ * Row is near-black and low-variance (PNG incomplete paint / empty pad).
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $y Row index
+ * @param int $width Image width
+ * @param int $stepX Horizontal sample stride
+ * @return bool
+ */
+function isPngSolidEmptyFillRow($img, int $y, int $width, int $stepX): bool
+{
+    $varianceThreshold = defined('WEBCAM_ERROR_PNG_EMPTY_BAND_VARIANCE_THRESHOLD')
+        ? (float) WEBCAM_ERROR_PNG_EMPTY_BAND_VARIANCE_THRESHOLD
+        : 5.0;
+    $maxBrightness = defined('WEBCAM_ERROR_PNG_EMPTY_BAND_MAX_BRIGHTNESS')
+        ? (float) WEBCAM_ERROR_PNG_EMPTY_BAND_MAX_BRIGHTNESS
+        : 24.0;
+
+    $brightnesses = [];
+    for ($x = 0; $x < $width; $x += $stepX) {
+        $rgb = imagecolorat($img, $x, $y);
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        // Fully transparent truecolor samples count as empty pad
+        if ((($rgb >> 24) & 0x7F) >= 127) {
+            $brightnesses[] = 0.0;
             continue;
         }
-        break;
+        $brightnesses[] = ($r + $g + $b) / 3.0;
     }
 
-    if ($firstEmptyY === null) {
-        return [
-            'is_empty_band' => false,
-            'coverage' => 1.0,
-            'content_rows' => $height,
-            'empty_rows' => 0,
-            'reason' => '',
-        ];
+    if (count($brightnesses) < 3) {
+        return false;
     }
 
-    // Stepped scan may land inside the band; walk up to the first fill row
-    $transitionY = $firstEmptyY;
-    for ($y = $firstEmptyY; $y >= 0; $y--) {
-        if (isDecoderGreyFillRow($img, $y, $width, $stepX)) {
-            $transitionY = $y;
-            continue;
-        }
-        break;
+    $mean = array_sum($brightnesses) / count($brightnesses);
+    if ($mean > $maxBrightness) {
+        return false;
     }
 
-    $contentRows = $transitionY;
-    $emptyRows = $height - $contentRows;
-    $coverage = $height > 0 ? ($contentRows / $height) : 0.0;
+    return calculateVariance($brightnesses) <= $varianceThreshold;
+}
 
-    if ($emptyRows >= $minEmptyRows) {
-        return [
-            'is_empty_band' => true,
-            'coverage' => $coverage,
-            'content_rows' => $contentRows,
-            'empty_rows' => $emptyRows,
-            'reason' => sprintf(
-                'empty_band_midgrey_rows_%d_coverage_%.3f_content_%d',
-                $emptyRows,
-                $coverage,
-                $contentRows
-            ),
-        ];
+/**
+ * Row is low-variance flat pad (WebP), independent of mid-grey brightness.
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $y Row index
+ * @param int $width Image width
+ * @param int $stepX Horizontal sample stride
+ * @return bool
+ */
+function isWebpFlatPadRow($img, int $y, int $width, int $stepX): bool
+{
+    $varianceThreshold = defined('WEBCAM_ERROR_WEBP_PAD_VARIANCE_THRESHOLD')
+        ? (float) WEBCAM_ERROR_WEBP_PAD_VARIANCE_THRESHOLD
+        : 5.0;
+    $chromaMax = defined('WEBCAM_ERROR_WEBP_PAD_CHROMA_MAX')
+        ? (float) WEBCAM_ERROR_WEBP_PAD_CHROMA_MAX
+        : 12.0;
+
+    $brightnesses = [];
+    $chromaSum = 0.0;
+    $n = 0;
+    for ($x = 0; $x < $width; $x += $stepX) {
+        $rgb = imagecolorat($img, $x, $y);
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $brightnesses[] = ($r + $g + $b) / 3.0;
+        $chromaSum += (max($r, $g, $b) - min($r, $g, $b));
+        $n++;
     }
 
-    return [
-        'is_empty_band' => false,
-        'coverage' => $coverage,
-        'content_rows' => $contentRows,
-        'empty_rows' => $emptyRows,
-        'reason' => '',
-    ];
+    if ($n < 3) {
+        return false;
+    }
+
+    if (($chromaSum / $n) > $chromaMax) {
+        return false;
+    }
+
+    return calculateVariance($brightnesses) <= $varianceThreshold;
+}
+
+/**
+ * Brightness variance across one row (used for WebP mid-frame content gate).
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $y Row index
+ * @param int $width Image width
+ * @param int $stepX Horizontal sample stride
+ * @return float
+ */
+function sampleRowBrightnessVariance($img, int $y, int $width, int $stepX): float
+{
+    $brightnesses = [];
+    for ($x = 0; $x < $width; $x += $stepX) {
+        $rgb = imagecolorat($img, $x, $y);
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $brightnesses[] = ($r + $g + $b) / 3.0;
+    }
+
+    return calculateVariance($brightnesses);
 }
 
 /**

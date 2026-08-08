@@ -4,7 +4,7 @@
  *
  * Covers error-frame detection:
  * - Grey / uniform / Blue Iris border heuristics
- * - Decoder mid-grey empty-band (truncated JPEG partial upload)
+ * - Format-specific truncation pads (JPEG mid-grey, PNG solid, WebP relative flat)
  * - Phase-aware uniform-color thresholds
  * - Production partial fixture (tests/Fixtures/webcam-partial/)
  */
@@ -458,6 +458,223 @@ class WebcamErrorDetectorTest extends TestCase
 
         $frame = detectErrorFrame($partialPath, null, $img);
         $this->assertTrue($frame['is_error']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_BlackPadRejects(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertTrue($band['is_empty_band']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $band['reason']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_TexturedBottomPasses(): void
+    {
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band']);
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_UniformDarkPassesRelativeGate(): void
+    {
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [6, 6, 6];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band'], 'Uniform dark PNG must not trip solid-pad without mid content');
+    }
+
+    public function testDetectPngSolidEmptyBottomBand_MidGreyBottomDoesNotMatchPngSolid(): void
+    {
+        // JPEG mid-grey is a different pad model; PNG solid gate is near-black / empty
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [128, 128, 128];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pngBand = detectPngSolidEmptyBottomBand($img, $width, $height);
+        $this->assertFalse($pngBand['is_empty_band'], 'Mid-grey pad is JPEG-specific, not PNG solid');
+
+        $jpegBand = detectEmptyBottomBand($img, $width, $height);
+        $this->assertTrue($jpegBand['is_empty_band']);
+    }
+
+    public function testDetectWebpRelativeFlatBottomBand_FlatPadWithContentMidRejects(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.60);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [90, 90, 90];
+            }
+            return [40 + ($x % 100), 50 + ($y % 90), 60 + (($x + $y) % 80)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectWebpRelativeFlatBottomBand($img, $width, $height);
+        $this->assertTrue($band['is_empty_band']);
+        $this->assertStringContainsString('empty_band_webp_flat_rows_', $band['reason']);
+    }
+
+    public function testDetectWebpRelativeFlatBottomBand_UniformDarkPassesRelativeGate(): void
+    {
+        // Entire frame flat/dark: relative mid-content gate must not fire (uniform check is separate)
+        $width = 300;
+        $height = 200;
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) {
+            return [8, 8, 8];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $band = detectWebpRelativeFlatBottomBand($img, $width, $height);
+        $this->assertFalse($band['is_empty_band']);
+    }
+
+    public function testDetectErrorFrame_PngFormat_UsesSolidPad(): void
+    {
+        $width = 300;
+        $height = 200;
+        // Pad must start below mid-row so the relative mid-content gate still sees texture
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [0, 0, 0];
+            }
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        // Pass GD directly - JPEG re-encode would add noise that masks solid-black pads
+        $result = detectErrorFrame('/dev/null', null, $img, 'png');
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_png_solid_rows_', $joined);
+    }
+
+    public function testDetectErrorFrame_WebpFormat_UsesRelativeFlatPad(): void
+    {
+        $width = 300;
+        $height = 200;
+        $fillStart = (int) floor($height * 0.55);
+        $img = $this->createTestImageResource($width, $height, function ($x, $y) use ($fillStart) {
+            if ($y >= $fillStart) {
+                return [100, 100, 100];
+            }
+            return [30 + ($x % 120), 40 + ($y % 100), 50 + (($x + $y) % 90)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $result = detectErrorFrame('/dev/null', null, $img, 'webp');
+        $this->assertTrue($result['is_error']);
+        $joined = implode(' ', $result['reasons']);
+        $this->assertStringContainsString('empty_band_webp_flat_rows_', $joined);
+    }
+
+    public function testTruncatedPngBitstream_FailsIendBeforeDecodePad(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagepng')) {
+            $this->markTestSkipped('GD PNG support not available');
+        }
+
+        $img = imagecreatetruecolor(320, 240);
+        for ($y = 0; $y < 240; $y++) {
+            for ($x = 0; $x < 320; $x++) {
+                $c = imagecolorallocate($img, 50 + ($x % 100), 60 + ($y % 80), 70 + (($x + $y) % 60));
+                imagesetpixel($img, $x, $y, $c);
+            }
+        }
+        $fullPath = $this->testImageDir . '/full_' . uniqid() . '.png';
+        imagepng($img, $fullPath);
+        unset($img);
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $this->assertTrue(isPngDataComplete($bytes));
+
+        $partialPath = $this->testImageDir . '/partial_' . uniqid() . '.png';
+        $cut = (int) floor(strlen($bytes) * 0.70);
+        file_put_contents($partialPath, substr($bytes, 0, $cut));
+
+        $this->assertFalse(isPngComplete($partialPath));
+        $this->assertFalse(isPngDataComplete(file_get_contents($partialPath)));
+    }
+
+    public function testTruncatedWebpBitstream_FailsRiffSizeGate(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagewebp')) {
+            $this->markTestSkipped('GD WebP support not available');
+        }
+
+        $img = imagecreatetruecolor(320, 240);
+        for ($y = 0; $y < 240; $y++) {
+            for ($x = 0; $x < 320; $x++) {
+                $c = imagecolorallocate($img, 40 + ($x % 90), 50 + ($y % 70), 60 + (($x + $y) % 50));
+                imagesetpixel($img, $x, $y, $c);
+            }
+        }
+        $fullPath = $this->testImageDir . '/full_' . uniqid() . '.webp';
+        if (@imagewebp($img, $fullPath, 80) === false) {
+            unset($img);
+            $this->markTestSkipped('imagewebp failed');
+        }
+        unset($img);
+
+        $bytes = file_get_contents($fullPath);
+        $this->assertNotFalse($bytes);
+        $this->assertTrue(isWebpComplete($fullPath));
+
+        $partialPath = $this->testImageDir . '/partial_' . uniqid() . '.webp';
+        $cut = (int) floor(strlen($bytes) * 0.55);
+        file_put_contents($partialPath, substr($bytes, 0, max(12, $cut)));
+
+        $this->assertFalse(isWebpComplete($partialPath));
     }
 
     public function testDetectErrorFrame_GreyBorders_DetectsError()
