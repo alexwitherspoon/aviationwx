@@ -424,8 +424,8 @@ function detectUniformColor($img, int $width, int $height, ?array $airport = nul
 /**
  * Resolve source format for truncation-pad dispatch.
  *
- * Prefer caller-supplied format. When omitted, magic-byte detect via detectImageFormat.
- * Returns null when unresolved so callers can fail closed (no silent JPEG default).
+ * Prefer caller-supplied format. When omitted, resolve via magic-byte detection.
+ * Returns null when unresolved so callers can fail closed.
  *
  * @param string|null $sourceFormat Explicit format from caller
  * @param string $imagePath Path used for magic-byte detect when format omitted

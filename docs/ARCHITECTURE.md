@@ -448,7 +448,7 @@ WebcamWorker orchestrates:
   ↓
 5. ProcessingPipeline.process()
    - Load image once as GD resource
-   - Error frame detection (uniform color; JPEG mid-grey / PNG solid / WebP relative-flat truncation pads; Blue Iris errors; unresolved source format fails closed)
+   - Error frame detection: uniform color; format-specific truncation pads (caller format or magic-byte detect; unresolved format rejected); Blue Iris borders
    - EXIF validation and normalization to UTC
    - Variant generation (original, 1080p, 720p, 360p)
    - Format generation (JPEG, WebP)
