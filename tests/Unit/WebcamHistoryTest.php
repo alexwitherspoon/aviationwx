@@ -323,6 +323,32 @@ class WebcamHistoryTest extends TestCase
         $result = isPngComplete($file);
         $this->assertFalse($result);
     }
+
+    /**
+     * IEND must be the exact 12-byte trailer (length+type+CRC), not a loose substring match.
+     */
+    public function testIsPngComplete_IendSubstringWithoutValidTrailer_ReturnsFalse(): void
+    {
+        $file = $this->testImageDir . '/fake_iend.png';
+        $pngHeader = "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A";
+        // Last 12 bytes contain ASCII "IEND" but wrong length/CRC layout
+        $fakeFooter = "xxIEND\x00\x00\x00\x00\x00\x00";
+        file_put_contents($file, $pngHeader . str_repeat("\x00", 100) . $fakeFooter);
+
+        $this->assertFalse(isPngComplete($file));
+    }
+
+    public function testIsPngDataComplete_ValidAndTruncated(): void
+    {
+        $iend = "\x00\x00\x00\x00IEND\xAE\x42\x60\x82";
+        $pngHeader = "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A";
+        $complete = $pngHeader . str_repeat("\x00", 100) . $iend;
+        $truncated = $pngHeader . str_repeat("\x00", 100);
+
+        $this->assertTrue(isPngDataComplete($complete));
+        $this->assertFalse(isPngDataComplete($truncated));
+        $this->assertFalse(isPngDataComplete(substr($complete, 0, 40)));
+    }
     
     /**
      * Test isWebpComplete with valid WebP

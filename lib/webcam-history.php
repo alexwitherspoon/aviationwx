@@ -428,38 +428,66 @@ function isJpegComplete(string $file): bool {
 }
 
 /**
- * Check if PNG file is complete (has IEND chunk)
- * 
- * PNG files should end with the IEND chunk followed by CRC.
- * The sequence is: 00 00 00 00 49 45 4E 44 AE 42 60 82
- * We just look for "IEND" in the last 12 bytes.
- * Cost: ~0.1ms (reads only last 12 bytes)
- * 
+ * Exact PNG IEND trailer (zero-length chunk + type + CRC).
+ *
+ * @param string $footer Exactly 12 bytes from EOF
+ * @return bool
+ */
+function pngHasValidIendTrailer(string $footer): bool
+{
+    return $footer === "\x00\x00\x00\x00IEND\xAE\x42\x60\x82";
+}
+
+/**
+ * Check if PNG file is complete (ends with the canonical IEND chunk).
+ *
+ * Cost: ~0.1ms (reads only last 12 bytes).
+ *
  * @param string $file Path to PNG file
  * @return bool True if file appears complete
  */
-function isPngComplete(string $file): bool {
+function isPngComplete(string $file): bool
+{
     $size = @filesize($file);
     if ($size === false || $size < 50) {
         return false;
     }
-    
+
     $handle = @fopen($file, 'rb');
     if (!$handle) {
         return false;
     }
-    
-    // Seek to last 12 bytes (IEND chunk is 12 bytes total)
+
     if (@fseek($handle, -12, SEEK_END) !== 0) {
         @fclose($handle);
         return false;
     }
-    
+
     $footer = @fread($handle, 12);
     @fclose($handle);
-    
-    // Look for IEND marker (ASCII: 49 45 4E 44)
-    return strpos($footer, 'IEND') !== false;
+
+    if ($footer === false || strlen($footer) !== 12) {
+        return false;
+    }
+
+    return pngHasValidIendTrailer($footer);
+}
+
+/**
+ * In-memory PNG completeness (canonical IEND trailer).
+ *
+ * Use before PNG→JPEG conversion so a truncated source is rejected on raw bytes.
+ *
+ * @param string $data PNG file bytes
+ * @return bool
+ */
+function isPngDataComplete(string $data): bool
+{
+    if (strlen($data) < 50) {
+        return false;
+    }
+
+    return pngHasValidIendTrailer(substr($data, -12));
 }
 
 /**

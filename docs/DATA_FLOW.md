@@ -1357,6 +1357,18 @@ The webcam processing pipeline uses three main components:
   - **Maximum checks**: 20 (conservative default, 10 seconds verification)
   - **Feedback loop**: High rejection rate (>5%) triggers more conservative behavior
   - **Metrics tracking**: Rolling window of last 100 uploads per camera stored in APCu
+- **Bitstream Completeness** (Fail-Closed):
+  - After size/mtime stability, format-specific trailers must be present before EXIF mutation:
+    - JPEG: EOI (`FF D9`)
+    - PNG: canonical IEND chunk (12-byte trailer with CRC) on source bytes before any PNG-to-JPEG conversion
+    - WebP: RIFF declared size matches file size
+  - Incomplete uploads are a definitive reject: quarantine copy, consume inbox file (a finished write missing a trailer does not grow one later)
+  - Completeness is re-checked after exiftool rewrite
+- **Decode-time Truncation Pads** (Fail-Closed):
+  - Source format comes from the caller or magic-byte detection; unresolved format is rejected
+  - JPEG: contiguous GD mid-grey (~128) fill from the bottom (minimum one row)
+  - PNG: contiguous near-black or empty bottom band when mid-frame still has textured content
+  - WebP: contiguous flat bottom pad when mid-frame still has textured content
 - **File Age Limits** (Fail-Closed Protection):
   - **Minimum age**: 3 seconds (files must age before checking, prevents checking mid-transfer)
   - **Maximum age**: 30 minutes default (configurable 10min-2hr per camera)
@@ -1414,7 +1426,8 @@ The webcam processing pipeline uses three main components:
 
 6. **Processing Pipeline**
    - **Single Image Load**: GD resource loaded once from staging file
-   - **Error Frame Detection**: Uniform color, corrupt regions, Blue Iris errors
+   - **Error Frame Detection**: Uniform color; format-specific truncation pads (caller format or magic-byte detect; unresolved format rejected); Blue Iris borders
+   - **Bitstream Completeness**: JPEG EOI / PNG IEND on source bytes / WebP RIFF size match before EXIF mutation and promotion
    - **EXIF Validation**: Ensures valid timestamp, adds if missing
    - **EXIF Normalization**: Converts to UTC, adds GPS timestamp fields
    - **Variant Generation**: Creates 1080p, 720p, 360p variants
