@@ -18,6 +18,8 @@ require_once __DIR__ . '/weather/utils.php';
  * Check if an image appears to be an error frame
  *
  * Detects various image quality issues. Runs cheap checks first for efficiency.
+ * When $sourceFormat is omitted, format is resolved via magic-byte detection;
+ * unresolved format fails closed (unknown_source_format).
  *
  * @param string $imagePath Path to image file
  * @param array|null $airport Airport config for phase-aware uniform-color thresholds (optional)
@@ -66,7 +68,17 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
 
+    // Fail closed: wrong pad model under-rejects truncated PNG/WebP
     $normalizedFormat = normalizeWebcamSourceFormat($sourceFormat, $imagePath);
+    if ($normalizedFormat === null) {
+        return [
+            'is_error' => true,
+            'confidence' => 1.0,
+            'error_score' => 1.0,
+            'reasons' => ['unknown_source_format'],
+        ];
+    }
+
     $emptyBandCheck = detectTruncationPadBand($img, $width, $height, $normalizedFormat);
     if ($emptyBandCheck['is_empty_band']) {
         return [
@@ -410,19 +422,27 @@ function detectUniformColor($img, int $width, int $height, ?array $airport = nul
 }
 
 /**
- * Normalize source format for truncation-pad dispatch (jpeg → jpg).
+ * Resolve source format for truncation-pad dispatch.
+ *
+ * Prefer caller-supplied format. When omitted, magic-byte detect via detectImageFormat.
+ * Returns null when unresolved so callers can fail closed (no silent JPEG default).
  *
  * @param string|null $sourceFormat Explicit format from caller
- * @param string $imagePath Path used for auto-detect when format omitted
- * @return string One of jpg, png, webp (defaults to jpg)
+ * @param string $imagePath Path used for magic-byte detect when format omitted
+ * @return string|null One of jpg, png, webp; null when unresolved
  */
-function normalizeWebcamSourceFormat(?string $sourceFormat, string $imagePath = ''): string
+function normalizeWebcamSourceFormat(?string $sourceFormat, string $imagePath = ''): ?string
 {
     $format = $sourceFormat;
     if ($format === null || $format === '') {
-        if ($imagePath !== '' && function_exists('detectImageFormat')) {
+        require_once __DIR__ . '/webcam-format-generation.php';
+        if ($imagePath !== '') {
             $format = detectImageFormat($imagePath);
         }
+    }
+
+    if ($format === null || $format === '') {
+        return null;
     }
 
     $format = strtolower((string) $format);
@@ -433,7 +453,7 @@ function normalizeWebcamSourceFormat(?string $sourceFormat, string $imagePath = 
         return $format;
     }
 
-    return 'jpg';
+    return null;
 }
 
 /**

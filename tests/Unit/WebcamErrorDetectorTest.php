@@ -615,8 +615,6 @@ class WebcamErrorDetectorTest extends TestCase
 
     public function testDetectErrorFrame_PngFile_AutoDetectsFormatPad(): void
     {
-        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-
         if (!function_exists('imagepng')) {
             $this->markTestSkipped('GD PNG support not available');
         }
@@ -642,6 +640,48 @@ class WebcamErrorDetectorTest extends TestCase
         $this->assertTrue($result['is_error']);
         $joined = implode(' ', $result['reasons']);
         $this->assertStringContainsString('empty_band_png_solid_rows_', $joined);
+    }
+
+    public function testNormalizeWebcamSourceFormat_ExplicitAndMagicDetect(): void
+    {
+        $this->assertSame('jpg', normalizeWebcamSourceFormat('jpeg'));
+        $this->assertSame('png', normalizeWebcamSourceFormat('PNG'));
+        $this->assertSame('webp', normalizeWebcamSourceFormat('webp'));
+        $this->assertNull(normalizeWebcamSourceFormat('gif'));
+        $this->assertNull(normalizeWebcamSourceFormat(null, ''));
+        $this->assertNull(normalizeWebcamSourceFormat(null, '/nonexistent/no-such-image.bin'));
+
+        if (!function_exists('imagepng')) {
+            $this->markTestSkipped('GD PNG support not available');
+        }
+        $img = $this->createTestImageResource(64, 64, function ($x, $y) {
+            return [10 + ($x % 40), 20 + ($y % 30), 30 + (($x + $y) % 20)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+        $pngPath = $this->testImageDir . '/fmt_' . uniqid() . '.png';
+        imagepng($img, $pngPath);
+        $this->assertSame('png', normalizeWebcamSourceFormat(null, $pngPath));
+    }
+
+    public function testDetectErrorFrame_UnresolvedFormat_FailsClosed(): void
+    {
+        $img = $this->createTestImageResource(200, 200, function ($x, $y) {
+            return [80 + ($x % 80), 90 + ($y % 70), 100 + (($x + $y) % 60)];
+        });
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        // GD present but path cannot yield magic-byte format and caller omitted format
+        $result = detectErrorFrame('/dev/null', null, $img, null);
+        $this->assertTrue($result['is_error']);
+        $this->assertContains('unknown_source_format', $result['reasons']);
+
+        $bogus = detectErrorFrame('/dev/null', null, $img, 'gif');
+        $this->assertTrue($bogus['is_error']);
+        $this->assertContains('unknown_source_format', $bogus['reasons']);
     }
 
     public function testTruncatedPngBitstream_FailsIendBeforeDecodePad(): void

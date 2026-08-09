@@ -1365,6 +1365,7 @@ The webcam processing pipeline uses three main components:
   - Incomplete uploads are a definitive reject: quarantine copy, consume inbox file (a finished write missing a trailer does not grow one later)
   - Completeness is re-checked after exiftool rewrite
   - Decode-time safety net (format-specific bottom pad):
+    - Pad model is selected from caller-supplied format or magic-byte detection; unresolved format is rejected (`unknown_source_format`)
     - JPEG: GD mid-grey (~128) fill contiguous from the bottom (including a single last line)
     - PNG: contiguous near-black / empty bottom band on decoded source pixels when mid-frame still has textured content
     - WebP: contiguous flat bottom pad when mid-frame still has textured content
