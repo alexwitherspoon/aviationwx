@@ -104,6 +104,28 @@ class WebcamErrorDetectorTest extends TestCase
         return $img;
     }
 
+    /**
+     * Solid-color GD image for bitstream completeness fixtures (no per-pixel work).
+     *
+     * @return \GdImage|null
+     */
+    private function createSolidTestImageResource(int $width, int $height, int $r = 80, int $g = 90, int $b = 100): ?\GdImage
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $img = imagecreatetruecolor($width, $height);
+        if ($img === false) {
+            return null;
+        }
+
+        $fill = imagecolorallocate($img, $r, $g, $b);
+        imagefilledrectangle($img, 0, 0, $width - 1, $height - 1, $fill);
+
+        return $img;
+    }
+
     public function testDetectErrorFrame_FileNotExists_ReturnsError()
     {
         $result = detectErrorFrame('/nonexistent/file.jpg');
@@ -692,12 +714,9 @@ class WebcamErrorDetectorTest extends TestCase
             $this->markTestSkipped('GD PNG support not available');
         }
 
-        $img = imagecreatetruecolor(320, 240);
-        for ($y = 0; $y < 240; $y++) {
-            for ($x = 0; $x < 320; $x++) {
-                $c = imagecolorallocate($img, 50 + ($x % 100), 60 + ($y % 80), 70 + (($x + $y) % 60));
-                imagesetpixel($img, $x, $y, $c);
-            }
+        $img = $this->createSolidTestImageResource(320, 240);
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
         }
         $fullPath = $this->testImageDir . '/full_' . uniqid() . '.png';
         imagepng($img, $fullPath);
@@ -723,12 +742,9 @@ class WebcamErrorDetectorTest extends TestCase
             $this->markTestSkipped('GD WebP support not available');
         }
 
-        $img = imagecreatetruecolor(320, 240);
-        for ($y = 0; $y < 240; $y++) {
-            for ($x = 0; $x < 320; $x++) {
-                $c = imagecolorallocate($img, 40 + ($x % 90), 50 + ($y % 70), 60 + (($x + $y) % 50));
-                imagesetpixel($img, $x, $y, $c);
-            }
+        $img = $this->createSolidTestImageResource(320, 240, 40, 50, 60);
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
         }
         $fullPath = $this->testImageDir . '/full_' . uniqid() . '.webp';
         if (@imagewebp($img, $fullPath, 80) === false) {
