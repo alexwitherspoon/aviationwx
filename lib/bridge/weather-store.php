@@ -1,10 +1,10 @@
 <?php
 /**
- * Bridge weather ingest: latest + observation ring + 60s observation-time buckets.
+ * Bridge weather ingest: publish latest, observation ring, 60s count buckets.
  *
- * Wire contract: provider-tagged observations with provider_meta.raw (station-native).
- * Keyed POSTs are always stored for diagnostics. Public weather requires an explicit
- * weather_sources enable row (Option B); adapters parse raw cache, not this store.
+ * Usable rows (no provider_meta.error) update latest. Diagnostic rows append the
+ * ring only so they cannot win WeatherSnapshot. Adapters parse cache; this store
+ * does not publish.
  */
 
 require_once __DIR__ . '/store.php';
@@ -27,6 +27,95 @@ if (!defined('BRIDGE_WEATHER_FUTURE_SKEW_SECONDS')) {
     define('BRIDGE_WEATHER_FUTURE_SKEW_SECONDS', 60);
 }
 
+if (!defined('BRIDGE_WEATHER_ERROR_MISSING_STATION_TIME')) {
+    define('BRIDGE_WEATHER_ERROR_MISSING_STATION_TIME', 'missing_station_time');
+}
+if (!defined('BRIDGE_WEATHER_ERROR_IDENTITY_UNMATCHED')) {
+    define('BRIDGE_WEATHER_ERROR_IDENTITY_UNMATCHED', 'identity_unmatched');
+}
+if (!defined('BRIDGE_WEATHER_ERROR_DECODE_FAILED')) {
+    define('BRIDGE_WEATHER_ERROR_DECODE_FAILED', 'decode_failed');
+}
+
+/**
+ * Known provider_meta.error values (bridge WeatherError* constants).
+ *
+ * @return list<string> Stable diagnostic codes
+ */
+function bridgeWeatherKnownDiagnosticErrorCodes(): array
+{
+    return [
+        BRIDGE_WEATHER_ERROR_MISSING_STATION_TIME,
+        BRIDGE_WEATHER_ERROR_IDENTITY_UNMATCHED,
+        BRIDGE_WEATHER_ERROR_DECODE_FAILED,
+    ];
+}
+
+/**
+ * Classify provider_meta.error for ingest.
+ *
+ * @param mixed $errorField Wire error value
+ * @return array{ok: true, diagnostic: bool, code: ?string}|array{ok: false, error: string}
+ */
+function bridgeWeatherClassifyProviderMetaError(mixed $errorField): array
+{
+    if ($errorField === null || $errorField === '') {
+        return ['ok' => true, 'diagnostic' => false, 'code' => null];
+    }
+    if (!is_string($errorField)) {
+        return ['ok' => false, 'error' => 'provider_meta.error must be a string'];
+    }
+    return ['ok' => true, 'diagnostic' => true, 'code' => $errorField];
+}
+
+/**
+ * Diagnostic error code from a stored record or wire item, or null for a usable row.
+ *
+ * @param array $record Normalized record or wire item with provider_meta
+ * @return string|null
+ */
+function bridgeWeatherDiagnosticError(array $record): ?string
+{
+    $meta = $record['provider_meta'] ?? null;
+    if (!is_array($meta)) {
+        return null;
+    }
+    $classified = bridgeWeatherClassifyProviderMetaError($meta['error'] ?? null);
+    if (!$classified['ok'] || !$classified['diagnostic']) {
+        return null;
+    }
+    return $classified['code'];
+}
+
+/**
+ * Whether a stored record is a diagnostic row (must not become WeatherSnapshot).
+ *
+ * @param array $record Normalized record or wire item
+ * @return bool
+ */
+function bridgeWeatherRecordIsDiagnostic(array $record): bool
+{
+    return bridgeWeatherDiagnosticError($record) !== null;
+}
+
+/**
+ * Log an unknown provider_meta.error string once per process.
+ *
+ * @param string $code Unknown error token
+ * @return void
+ */
+function bridgeWeatherLogUnknownDiagnosticError(string $code): void
+{
+    static $logged = [];
+    if (isset($logged[$code])) {
+        return;
+    }
+    $logged[$code] = true;
+    aviationwx_log('warning', 'bridge weather unknown diagnostic error code', [
+        'error' => $code,
+    ], 'bridge');
+}
+
 /**
  * Validate a wire provider token (e.g. davis_weatherlink_live).
  *
@@ -44,8 +133,8 @@ function isValidBridgeProviderToken(string $provider): bool
 /**
  * Parse one weather POST observation into a cache record.
  *
- * Requires observed_at, source_id, provider, and provider_meta.raw (object).
- * A legacy "sample" key is ignored and never stored.
+ * Usable rows require non-empty provider_meta.raw. Diagnostic decode_failed may omit raw.
+ * A legacy "sample" key is ignored and never stored. raw is not rewritten.
  *
  * @param array $item Decoded item
  * @return array{ok: bool, record?: array, error?: string, code?: string}
@@ -85,45 +174,60 @@ function bridgeNormalizeWeatherItem(array $item): array
     if (!isset($item['provider_meta']) || !is_array($item['provider_meta'])) {
         return ['ok' => false, 'code' => 'INVALID_REQUEST', 'error' => 'provider_meta object is required'];
     }
-    if (!isset($item['provider_meta']['raw']) || !is_array($item['provider_meta']['raw'])) {
+
+    $classified = bridgeWeatherClassifyProviderMetaError($item['provider_meta']['error'] ?? null);
+    if (!$classified['ok']) {
         return [
             'ok' => false,
             'code' => 'INVALID_REQUEST',
-            'error' => 'provider_meta.raw object is required',
+            'error' => $classified['error'],
         ];
     }
-    if ($item['provider_meta']['raw'] === []) {
-        return [
-            'ok' => false,
-            'code' => 'INVALID_REQUEST',
-            'error' => 'provider_meta.raw must not be empty',
-        ];
+    $isDiagnostic = $classified['diagnostic'];
+    $allowOmitRaw = $isDiagnostic && $classified['code'] === BRIDGE_WEATHER_ERROR_DECODE_FAILED;
+
+    if (!$allowOmitRaw) {
+        if (!isset($item['provider_meta']['raw']) || !is_array($item['provider_meta']['raw'])) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'provider_meta.raw object is required',
+            ];
+        }
+        if ($item['provider_meta']['raw'] === []) {
+            return [
+                'ok' => false,
+                'code' => 'INVALID_REQUEST',
+                'error' => 'provider_meta.raw must not be empty',
+            ];
+        }
     }
 
-    // When station raw.ts is present it drives WeatherSnapshot age - reject future / dual-clock skew
-    $raw = $item['provider_meta']['raw'];
-    if (isset($raw['ts']) && is_numeric($raw['ts'])) {
-        $rawTs = (int) $raw['ts'];
-        if ($rawTs <= 0) {
-            return [
-                'ok' => false,
-                'code' => 'INVALID_REQUEST',
-                'error' => 'provider_meta.raw.ts must be a positive unix timestamp when set',
-            ];
-        }
-        if ($rawTs > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
-            return [
-                'ok' => false,
-                'code' => 'INVALID_REQUEST',
-                'error' => 'provider_meta.raw.ts is too far in the future',
-            ];
-        }
-        if (abs($rawTs - $observedTs) > BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
-            return [
-                'ok' => false,
-                'code' => 'INVALID_REQUEST',
-                'error' => 'observed_at and provider_meta.raw.ts disagree beyond allowed skew',
-            ];
+    if (!$isDiagnostic) {
+        $raw = $item['provider_meta']['raw'] ?? null;
+        if (is_array($raw) && isset($raw['ts']) && is_numeric($raw['ts'])) {
+            $rawTs = (int) $raw['ts'];
+            if ($rawTs <= 0) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => 'provider_meta.raw.ts must be a positive unix timestamp when set',
+                ];
+            }
+            if ($rawTs > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => 'provider_meta.raw.ts is too far in the future',
+                ];
+            }
+            if (abs($rawTs - $observedTs) > BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
+                return [
+                    'ok' => false,
+                    'code' => 'INVALID_REQUEST',
+                    'error' => 'observed_at and provider_meta.raw.ts disagree beyond allowed skew',
+                ];
+            }
         }
     }
 
@@ -136,6 +240,12 @@ function bridgeNormalizeWeatherItem(array $item): array
     ];
     if (isset($item['bridge_id']) && is_string($item['bridge_id'])) {
         $record['body_bridge_id'] = $item['bridge_id'];
+    }
+
+    if ($isDiagnostic && is_string($classified['code'])
+        && !in_array($classified['code'], bridgeWeatherKnownDiagnosticErrorCodes(), true)
+    ) {
+        bridgeWeatherLogUnknownDiagnosticError($classified['code']);
     }
 
     return ['ok' => true, 'record' => $record];
@@ -300,10 +410,10 @@ function bridgePrepareWeatherIngestBatch(array $items, string $bridgeId, ?array 
 }
 
 /**
- * Persist one accepted weather observation (diagnostics always; enable gate is separate).
+ * Persist one accepted weather observation (enable gate is separate).
  *
- * latest.json keeps the newest observation by observed_unix (locked compare-and-swap)
- * so delayed/replayed POSTs cannot replace fresher data.
+ * Diagnostic rows append the observation ring only so they cannot replace
+ * publish latest or fold into 60s count buckets.
  *
  * @param string $airportId Airport id
  * @param string $bridgeId Bridge id
@@ -331,27 +441,32 @@ function bridgeStoreWeatherObservation(
     $stored['airport_id'] = $airportId;
     $stored['bridge_id'] = $bridgeId;
 
-    $newObs = isset($stored['observed_unix']) && is_numeric($stored['observed_unix'])
-        ? (int) $stored['observed_unix']
-        : 0;
+    $isDiagnostic = bridgeWeatherRecordIsDiagnostic($stored);
 
-    if (!bridgeUpdateJsonFileLocked($latestPath, static function (?array $existing) use ($stored, $newObs): ?array {
-        $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
-            ? (int) $existing['observed_unix']
+    if (!$isDiagnostic) {
+        $newObs = isset($stored['observed_unix']) && is_numeric($stored['observed_unix'])
+            ? (int) $stored['observed_unix']
             : 0;
-        // First-wins at equal observed_unix so same-second garbage cannot replace a good sample
-        if ($existing !== null && $newObs <= $existingObs) {
-            return null;
+        if (!bridgeUpdateJsonFileLocked($latestPath, static function (?array $existing) use ($stored, $newObs): ?array {
+            $existingIsDiagnostic = is_array($existing) && bridgeWeatherRecordIsDiagnostic($existing);
+            $existingObs = is_array($existing) && isset($existing['observed_unix']) && is_numeric($existing['observed_unix'])
+                ? (int) $existing['observed_unix']
+                : 0;
+            // First-wins at equal observed_unix so same-second garbage cannot replace a good sample.
+            // Diagnostic latest is transport-time ranked; a usable station clock must still win publish.
+            if ($existing !== null && !$existingIsDiagnostic && $newObs <= $existingObs) {
+                return null;
+            }
+            return $stored;
+        })) {
+            return false;
         }
-        return $stored;
-    })) {
-        return false;
     }
 
     if (!bridgeWeatherAppendObservationLine($samplesPath, $stored)) {
         return false;
     }
-    if (!bridgeWeatherUpdateBuckets($bucketsPath, $stored)) {
+    if (!$isDiagnostic && !bridgeWeatherUpdateBuckets($bucketsPath, $stored)) {
         return false;
     }
     bridgeTouchMeta($airportId, $bridgeId, 'weather', $receivedAt);

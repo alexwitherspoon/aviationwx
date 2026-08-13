@@ -602,7 +602,7 @@
     "/bridge/weather": {
       "post": {
         "summary": "Bridge weather observation ingest",
-        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are always stored for diagnostics. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
+        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are stored for diagnostics. Usable rows (no `provider_meta.error`) update publish latest. Diagnostic rows (`provider_meta.error` set: `missing_station_time`, `identity_unmatched`, `decode_failed`) append the observation ring only and must not replace publish latest or become a WeatherSnapshot. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
         "operationId": "bridgeWeather",
         "tags": ["Bridge"],
         "security": [{"BridgeApiKeyAuth": []}],
@@ -759,13 +759,17 @@
       },
       "BridgeWeatherProviderMeta": {
         "type": "object",
-        "required": ["raw"],
-        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object). Optional keys such as api, path, txid, did are stored when present. Wind is always true north from a properly installed vane; do not send wind_reference.",
+        "description": "Provider provenance. `raw` is the station-native payload (e.g. WeatherLink Live Local API `data` object) and is required except when `error` is `decode_failed`. Optional keys such as api, path, txid, did are stored when present. Wind is always true north from a properly installed vane; do not send wind_reference. `error` is omitted on usable rows. When set, the row is diagnostic: `observed_at` is receive/process time, `observed_at_source` is omitted, and `raw` is stored unchanged.",
         "properties": {
           "raw": {
             "type": "object",
-            "description": "Non-empty station-native observation object",
+            "description": "Station-native observation object as received. Required except when `error` is `decode_failed`. Do not rewrite (including Davis `ts` of 0 or a missing `ts` key).",
             "additionalProperties": true
+          },
+          "error": {
+            "type": "string",
+            "description": "Optional diagnostic code. Omitted on usable rows. Known values: missing_station_time, identity_unmatched, decode_failed.",
+            "enum": ["missing_station_time", "identity_unmatched", "decode_failed"]
           },
           "api": {"type": "string"},
           "path": {"type": "string"},

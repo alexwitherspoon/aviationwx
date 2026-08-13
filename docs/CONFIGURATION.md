@@ -657,7 +657,7 @@ A bridge key alone never publishes weather.
 ]
 ```
 
-Weather POSTs carry `provider` (e.g. `davis_weatherlink_live`), `source_id`, and `provider_meta.raw` (station-native payload). See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
+Weather POSTs carry `provider` (e.g. `davis_weatherlink_live`), `source_id`, and `provider_meta.raw` (station-native payload). Diagnostic rows (`provider_meta.error`) are stored on the observation ring only; they do not replace publish latest or become a public WeatherSnapshot. See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
 
 ### Tempest Weather
 
