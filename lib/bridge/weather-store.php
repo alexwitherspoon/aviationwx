@@ -38,7 +38,7 @@ if (!defined('BRIDGE_WEATHER_ERROR_DECODE_FAILED')) {
 }
 
 /**
- * Known provider_meta.error values (bridge WeatherError* constants).
+ * Known provider_meta.error values (BRIDGE_WEATHER_ERROR_*).
  *
  * @return list<string> Stable diagnostic codes
  */
