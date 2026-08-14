@@ -602,7 +602,7 @@
     "/bridge/weather": {
       "post": {
         "summary": "Bridge weather observation ingest",
-        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are stored for diagnostics. Usable rows (no `provider_meta.error`) update publish latest. Diagnostic rows (`provider_meta.error` set: `missing_station_time`, `identity_unmatched`, `decode_failed`) append the observation ring only and must not replace publish latest or become a WeatherSnapshot. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
+        "description": "Push provider-tagged LAN observations with `provider_meta.raw` (station-native payload; no canonical sample). Keyed POSTs are stored for diagnostics. Usable rows (no `provider_meta.error`) update publish latest. Diagnostic rows (`provider_meta.error` set: known `missing_station_time`, `identity_unmatched`, `decode_failed`, or an unknown string) append the observation ring only and must not replace publish latest or become a WeatherSnapshot. Public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). When a source is enabled, `provider` must match that row's `type` or the request fails with `PROVIDER_MISMATCH`. Supports a single observation or a bounded `samples` batch (max 60).",
         "operationId": "bridgeWeather",
         "tags": ["Bridge"],
         "security": [{"BridgeApiKeyAuth": []}],
@@ -768,7 +768,7 @@
           },
           "error": {
             "type": "string",
-            "description": "Optional diagnostic code. Omitted on usable rows. Known values: missing_station_time, identity_unmatched, decode_failed.",
+            "description": "Optional diagnostic code. Omitted on usable rows. Known values: missing_station_time, identity_unmatched, decode_failed. Unknown strings are accepted as diagnostic.",
             "enum": ["missing_station_time", "identity_unmatched", "decode_failed"]
           },
           "api": {"type": "string"},
