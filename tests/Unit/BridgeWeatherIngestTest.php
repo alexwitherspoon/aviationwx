@@ -86,6 +86,38 @@ class BridgeWeatherIngestTest extends TestCase
         ];
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function sampleRing(string $airportId, string $bridgeId, string $sourceId): array
+    {
+        $path = getBridgeWeatherSamplesCachePath($airportId, $bridgeId, $sourceId);
+        $this->assertNotSame('', $path);
+        $this->assertFileExists($path);
+        $raw = file_get_contents($path);
+        $this->assertNotFalse($raw);
+        $lines = array_values(array_filter(explode("\n", trim($raw))));
+        $decoded = [];
+        foreach ($lines as $line) {
+            $row = json_decode($line, true);
+            $this->assertIsArray($row);
+            $decoded[] = $row;
+        }
+        return $decoded;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadDiagnosticFixture(): array
+    {
+        $path = __DIR__ . '/../Fixtures/bridge/weather_post_davis_wll_missing_station_time.example.json';
+        $this->assertFileExists($path);
+        $json = json_decode((string) file_get_contents($path), true);
+        $this->assertIsArray($json);
+        return $json;
+    }
+
     public function testNormalize_RequiresProviderMetaRaw(): void
     {
         $ok = bridgeNormalizeWeatherItem($this->rawObservation());
@@ -413,5 +445,208 @@ class BridgeWeatherIngestTest extends TestCase
         $this->assertNotFalse($raw);
         $lines = array_values(array_filter(explode("\n", trim($raw))));
         $this->assertCount(2, $lines);
+    }
+
+    public function testNormalize_RejectsUsableRowRawTsZero(): void
+    {
+        $item = $this->rawObservation('station-a', time() - 10);
+        $item['provider_meta']['raw']['ts'] = 0;
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertSame('INVALID_REQUEST', $n['code'] ?? null);
+        $this->assertStringContainsString('raw.ts', $n['error'] ?? '');
+    }
+
+    public function testNormalize_RejectsUsableRowRawTsNegative(): void
+    {
+        $item = $this->rawObservation('station-a', time() - 10);
+        $item['provider_meta']['raw']['ts'] = -1;
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('raw.ts', $n['error'] ?? '');
+    }
+
+    public function testStore_DiagnosticMissingStationTimeTsZero_RingOnlyLatestUnchanged(): void
+    {
+        $usableTs = time() - 20;
+        $usable = $this->rawObservation('station-a', $usableTs);
+        $nUsable = bridgeNormalizeWeatherItem($usable);
+        $this->assertTrue($nUsable['ok'], $nUsable['error'] ?? '');
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $nUsable['record']));
+
+        $item = $this->loadDiagnosticFixture();
+        $item['source_id'] = 'station-a';
+        $item['observed_at'] = gmdate('c');
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame(0, (int) $n['record']['provider_meta']['raw']['ts']);
+        $this->assertSame('missing_station_time', $n['record']['provider_meta']['error']);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n['record']));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($latest);
+        $this->assertSame($usableTs, (int) $latest['observed_unix']);
+        $this->assertArrayNotHasKey('error', $latest['provider_meta']);
+        $this->assertSame(64.9, (float) $latest['provider_meta']['raw']['conditions'][0]['temp']);
+
+        $ring = $this->sampleRing('kspb', 'bridge-1', 'station-a');
+        $this->assertCount(2, $ring);
+        $this->assertSame('missing_station_time', $ring[1]['provider_meta']['error'] ?? null);
+        $this->assertSame(0, (int) $ring[1]['provider_meta']['raw']['ts']);
+
+        $buckets = bridgeLoadWeatherBuckets('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($buckets);
+        $usableKey = (string) bridgeWeatherBucketStartUnix($usableTs);
+        $this->assertSame(1, $buckets['buckets'][$usableKey]['count'] ?? null);
+        $bucketCount = 0;
+        foreach ($buckets['buckets'] as $bucket) {
+            $bucketCount += (int) ($bucket['count'] ?? 0);
+        }
+        $this->assertSame(1, $bucketCount);
+
+        $source = [
+            'type' => 'davis_weatherlink_live',
+            'bridge_id' => 'bridge-1',
+            'bridge_source_id' => 'station-a',
+            'txid' => 1,
+        ];
+        $airport = ['weather_sources' => [$source]];
+        $snap = davisWeatherlinkLiveResolveSnapshot('kspb', $source, $airport);
+        $this->assertNotNull($snap);
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1]));
+    }
+
+    public function testStore_InterceptorMissingStationTime_AcceptedNoSnapshot(): void
+    {
+        $item = [
+            'observed_at' => gmdate('c'),
+            'source_id' => 'station-interceptor',
+            'provider' => 'http_interceptor',
+            'provider_meta' => [
+                'api' => 'http_interceptor_wunderground_v1',
+                'path' => '/weatherstation/updateweatherstation.php',
+                'dialect' => 'wunderground',
+                'error' => 'missing_station_time',
+                'raw' => [
+                    'dateutc' => 'now',
+                    'tempf' => '62.7',
+                    'humidity' => '55',
+                    'windspeedmph' => '10',
+                ],
+            ],
+        ];
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n['record']));
+
+        $this->assertNull(bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-interceptor'));
+        $ring = $this->sampleRing('kspb', 'bridge-1', 'station-interceptor');
+        $this->assertCount(1, $ring);
+        $this->assertSame('now', $ring[0]['provider_meta']['raw']['dateutc'] ?? null);
+        $this->assertTrue(bridgeWeatherRecordIsDiagnostic($n['record']));
+        $this->assertNull(bridgeLoadWeatherBuckets('kspb', 'bridge-1', 'station-interceptor'));
+    }
+
+    public function testStore_IdentityUnmatchedFullRaw_AcceptedNoSnapshot(): void
+    {
+        $usableTs = time() - 15;
+        $usable = $this->rawObservation('station-a', $usableTs);
+        $nUsable = bridgeNormalizeWeatherItem($usable);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $nUsable['record']));
+
+        $item = $this->rawObservation('station-a', $usableTs);
+        $item['observed_at'] = gmdate('c');
+        $item['provider_meta']['raw']['ts'] = 1531754005;
+        $item['provider_meta']['error'] = 'identity_unmatched';
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame('identity_unmatched', $n['record']['provider_meta']['error']);
+        $this->assertSame(1531754005, (int) $n['record']['provider_meta']['raw']['ts']);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n['record']));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($latest);
+        $this->assertArrayNotHasKey('error', $latest['provider_meta']);
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1]));
+    }
+
+    public function testStore_UsableRowReplacesDiagnosticLatest(): void
+    {
+        $diagTs = time();
+        $diag = $this->rawObservation('station-a', $diagTs);
+        $diag['provider_meta']['error'] = 'missing_station_time';
+        $diag['provider_meta']['raw']['ts'] = 0;
+        $nDiag = bridgeNormalizeWeatherItem($diag);
+        $this->assertTrue($nDiag['ok'], $nDiag['error'] ?? '');
+
+        $path = getBridgeWeatherLatestCachePath('kspb', 'bridge-1', 'station-a');
+        $this->assertNotSame('', $path);
+        $planted = $nDiag['record'];
+        $planted['observed_unix'] = $diagTs;
+        $this->assertTrue(bridgeWriteJsonFile($path, $planted));
+
+        $usableTs = $diagTs - 30;
+        $usable = $this->rawObservation('station-a', $usableTs);
+        $nUsable = bridgeNormalizeWeatherItem($usable);
+        $this->assertTrue($nUsable['ok'], $nUsable['error'] ?? '');
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $nUsable['record']));
+
+        $latest = bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a');
+        $this->assertNotNull($latest);
+        $this->assertArrayNotHasKey('error', $latest['provider_meta']);
+        $this->assertSame($usableTs, (int) $latest['observed_unix']);
+    }
+
+    public function testNormalize_RejectsFutureObservedAtOnDiagnosticRow(): void
+    {
+        $item = $this->loadDiagnosticFixture();
+        $item['observed_at'] = gmdate('c', time() + 120);
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('future', $n['error'] ?? '');
+    }
+
+    public function testNormalize_DiagnosticDecodeFailedMayOmitRaw(): void
+    {
+        $item = [
+            'observed_at' => gmdate('c'),
+            'source_id' => 'station-a',
+            'provider' => 'davis_weatherlink_live',
+            'provider_meta' => [
+                'api' => 'weatherlink_live_local_v1',
+                'error' => 'decode_failed',
+            ],
+        ];
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame('decode_failed', $n['record']['provider_meta']['error']);
+        $this->assertArrayNotHasKey('raw', $n['record']['provider_meta']);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n['record']));
+        $this->assertNull(bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a'));
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1]));
+    }
+
+    public function testNormalize_DiagnosticMissingStationTime_RejectsEmptyRaw(): void
+    {
+        $item = $this->loadDiagnosticFixture();
+        $item['observed_at'] = gmdate('c');
+        $item['provider_meta']['raw'] = [];
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertFalse($n['ok']);
+        $this->assertStringContainsString('provider_meta.raw', $n['error'] ?? '');
+    }
+
+    public function testNormalize_UnknownErrorString_TreatedAsDiagnostic(): void
+    {
+        $item = $this->rawObservation('station-a', time() - 10);
+        $item['observed_at'] = gmdate('c');
+        $item['provider_meta']['error'] = 'firmware_skew_example';
+        $item['provider_meta']['raw']['ts'] = 0;
+        $n = bridgeNormalizeWeatherItem($item);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame('firmware_skew_example', $n['record']['provider_meta']['error']);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-1', $n['record']));
+        $this->assertNull(bridgeLoadWeatherLatest('kspb', 'bridge-1', 'station-a'));
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1]));
     }
 }

@@ -56,9 +56,22 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         return $json;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadDiagnosticPost(): array
+    {
+        $path = __DIR__ . '/../Fixtures/bridge/weather_post_davis_wll_missing_station_time.example.json';
+        $this->assertFileExists($path);
+        $json = json_decode((string) file_get_contents($path), true);
+        $this->assertIsArray($json);
+        return $json;
+    }
+
     public function testParseRaw_GoldenFixtureConvertsUnits(): void
     {
         $post = $this->loadGoldenPost();
+        $this->assertArrayNotHasKey('error', $post['provider_meta']);
         $parsed = DavisWeatherlinkLiveBridgeAdapter::parseRawData(
             $post['provider_meta']['raw'],
             $post['provider_meta'],
@@ -227,6 +240,52 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
         $snap = davisWeatherlinkLiveResolveSnapshot('kspb', $source, $airport);
         $this->assertNotNull($snap);
         $this->assertEqualsWithDelta(270.0, $snap->wind->direction->value, 0.1);
+    }
+
+    public function testParseRaw_RejectsZeroStationTs(): void
+    {
+        $raw = [
+            'ts' => 0,
+            'conditions' => [
+                [
+                    'data_structure_type' => 1,
+                    'txid' => 1,
+                    'temp' => 60,
+                ],
+            ],
+        ];
+        $this->assertNull(DavisWeatherlinkLiveBridgeAdapter::parseRawData($raw, ['txid' => 1], []));
+    }
+
+    public function testSnapshot_RejectsDiagnosticErrorWithFullIss(): void
+    {
+        $post = $this->loadGoldenPost();
+        $post['provider_meta']['error'] = 'identity_unmatched';
+        $post['observed_at'] = gmdate('c');
+        $n = bridgeNormalizeWeatherItem($post);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertNull(
+            DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1])
+        );
+        $this->assertNull(
+            DavisWeatherlinkLiveBridgeAdapter::parseRawData(
+                $n['record']['provider_meta']['raw'],
+                $n['record']['provider_meta'],
+                ['txid' => 1]
+            )
+        );
+    }
+
+    public function testSnapshot_RejectsMissingStationTimeFixture(): void
+    {
+        $post = $this->loadDiagnosticPost();
+        $post['observed_at'] = gmdate('c');
+        $n = bridgeNormalizeWeatherItem($post);
+        $this->assertTrue($n['ok'], $n['error'] ?? '');
+        $this->assertSame(0, (int) $n['record']['provider_meta']['raw']['ts']);
+        $this->assertNull(
+            DavisWeatherlinkLiveBridgeAdapter::snapshotFromLatestRecord($n['record'], ['txid' => 1])
+        );
     }
 
     public function testRainfallDailyInches_RainSizeVariants(): void

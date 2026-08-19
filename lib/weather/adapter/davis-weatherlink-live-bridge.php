@@ -130,6 +130,10 @@ class DavisWeatherlinkLiveBridgeAdapter
         if (!is_array($meta)) {
             return self::reject('missing_provider_meta');
         }
+        $diagnosticError = bridgeWeatherDiagnosticError($record);
+        if ($diagnosticError !== null) {
+            return self::reject('bridge_diagnostic', ['error' => $diagnosticError]);
+        }
         $raw = $meta['raw'] ?? null;
         if (!is_array($raw) || $raw === []) {
             return self::reject('missing_provider_meta_raw');
@@ -207,6 +211,12 @@ class DavisWeatherlinkLiveBridgeAdapter
      */
     public static function parseRawData(array $raw, array $meta = [], array $config = []): ?array
     {
+        $diagnosticError = bridgeWeatherDiagnosticError(['provider_meta' => $meta]);
+        if ($diagnosticError !== null) {
+            self::logReject('bridge_diagnostic', ['error' => $diagnosticError]);
+            return null;
+        }
+
         $conditions = $raw['conditions'] ?? null;
         if (!is_array($conditions) || $conditions === []) {
             self::logReject('empty_conditions');
@@ -248,7 +258,7 @@ class DavisWeatherlinkLiveBridgeAdapter
         }
         $iss = $issByTxid[$wantedTxid];
 
-        // Fail closed without station ts - wall clock would make stale cache look fresh
+        // Fail closed without station ts - wall clock or envelope observed_at would make stale cache look fresh
         if (!isset($raw['ts']) || !is_numeric($raw['ts'])) {
             self::logReject('missing_raw_ts');
             return null;
