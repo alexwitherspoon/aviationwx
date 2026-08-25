@@ -224,6 +224,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | **Common** |||
 | `name` | - | Display name |
 | `approximate_heading` | - | **Required** when the airport is `enabled: true` and not in `maintenance`. Integer **0**-**360**: direction the camera lens points, in **true north** degrees. Optional on maintenance or disabled airports until commissioned. Aim within ±10° when measuring (operational target, not validated). See [Guide 02](../guides/02-location-and-siting.md) (how to measure) and [Guide 08](../guides/08-camera-configuration.md) (installer checklist). |
+| `operator` | `aviationwx` | Optional lowercase slug for the operating network. Omit for AviationWX-operated weathercams. Set explicitly for other networks (for example `wsdot`). |
 | `enabled` | `true` | When `false`, the slot stays in config/UI but acquisition fields such as `url`, `push_config`, and `base_url` are not required and workers do not run for this camera |
 | **Conditional** |||
 | `url` | - | Stream/image URL for pull types (`http` / `mjpeg` / `static_jpeg` / `static_png` / `rtsp`). Not used for `push` (credentials live under `push_config`) or for `aviationwx_api` (use `base_url`). Omit for `enabled: false` placeholders. |
@@ -611,6 +612,19 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+
+**Operator:** Optional `operator` on each `weather_sources[]` row is a lowercase slug. Public API `GET /v1/airports?operator=` matches airports.json (configured weathercams and weather sources), not the live fused observation. Omit `operator` to use the type default:
+
+| `type` | Default `operator` |
+|--------|--------------------|
+| `metar` | `faa` |
+| `nws` | `nws` |
+| `swob_auto`, `swob_man` | `navcanada` |
+| `awosnet` | `awosnet` |
+| `synopticdata` | `synopticdata` |
+| All other types (on-field stations, `aviationwx_api`) | `aviationwx` |
+
+Set `operator` only when that default would be wrong (for example an airport-owned Tempest).
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
 

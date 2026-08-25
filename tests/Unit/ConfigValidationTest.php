@@ -1872,6 +1872,110 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
     }
 
+    public function testWebcam_Operator_ExplicitSlugValid(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => 90,
+                            'operator' => 'wsdot',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
+    public function testWebcam_Operator_RejectsUppercaseSlug(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => 90,
+                            'operator' => 'WSDOT',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid operator', implode(' ', $result['errors']));
+    }
+
+    public function testWeatherSource_Operator_RejectsUppercaseSlug(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'weather_sources' => [[
+                        'type' => 'metar',
+                        'station_id' => 'KSPB',
+                        'operator' => 'FAA',
+                    ]],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid operator', implode(' ', $result['errors']));
+    }
+
+    public function testWeatherSource_Operator_ExplicitSlugValid(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'weather_sources' => [[
+                        'type' => 'metar',
+                        'station_id' => 'KSPB',
+                        'operator' => 'aviationwx',
+                    ]],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors'] ?? []));
+    }
+
     /**
      * Test weather source validation - Valid configurations
      */

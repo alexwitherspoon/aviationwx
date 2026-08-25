@@ -25,6 +25,14 @@ if (!defined('WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS')) {
     define('WEBCAM_LAST_COMPLETED_PAIR_MAX_GAP_SECONDS', 600); // 10 minutes
 }
 
+// Default operator when the field is omitted and no weather-source type default applies
+if (!defined('DEFAULT_OPERATOR')) {
+    define('DEFAULT_OPERATOR', 'aviationwx');
+}
+if (!defined('OPERATOR_MAX_LENGTH')) {
+    define('OPERATOR_MAX_LENGTH', 64);
+}
+
 if (!defined('DEFAULT_WEATHER_REFRESH')) {
     define('DEFAULT_WEATHER_REFRESH', 60);
 }
