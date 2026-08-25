@@ -35,6 +35,25 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertSame(90, $formatted['approximate_heading']);
+        $this->assertSame('aviationwx', $formatted['operator']);
+    }
+
+    public function testFormatWebcamMetadata_UsesExplicitOperator(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = [
+            'enabled' => true,
+            'maintenance' => false,
+        ];
+        $webcam = [
+            'name' => 'DOT Camera',
+            'approximate_heading' => 180,
+            'operator' => 'wsdot',
+        ];
+
+        $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
+        $this->assertSame('wsdot', $formatted['operator']);
     }
 
     public function testFormatWebcamMetadata_NullHeadingWhenOmitted(): void

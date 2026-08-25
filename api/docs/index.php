@@ -500,7 +500,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List all available airports with basic metadata.</p>
+                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator.</p>
             </div>
         </div>
         
@@ -520,7 +520,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get current weather conditions for an airport.</p>
+                <p class="endpoint-desc">Get the fused current weather observation. Not filtered by operator.</p>
             </div>
         </div>
         
@@ -540,7 +540,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List webcams for an airport with metadata.</p>
+                <p class="endpoint-desc">List weathercams for an airport. Optional <code>operator</code> returns only weathercams whose operator equals that slug.</p>
             </div>
         </div>
         
