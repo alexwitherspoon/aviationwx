@@ -2034,6 +2034,10 @@ function validateCropMargins(mixed $margins, string $context): array {
  */
 function isValidCanonicalPublicApiBaseUrl(string $url): bool
 {
+    if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
     $parts = parse_url($url);
     if (!is_array($parts)) {
         return false;

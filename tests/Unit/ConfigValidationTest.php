@@ -5455,6 +5455,17 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(', ', $result['errors']));
     }
 
+    public function testPublicApiCanonicalBaseUrl_InvalidHostWithSpace()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://exa mple.com/v1',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
     public function testPublicApiCanonicalBaseUrl_InvalidMissingHost()
     {
         $config = $this->createMinimalConfig();
