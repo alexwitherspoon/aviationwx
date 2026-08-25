@@ -35,6 +35,52 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertArrayNotHasKey('approximate_heading_reference', $formatted);
         $this->assertSame(90, $formatted['approximate_heading']);
+        $this->assertSame('aviationwx', $formatted['operator']);
+    }
+
+    public function testFormatWebcamMetadata_UsesExplicitOperator(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = [
+            'enabled' => true,
+            'maintenance' => false,
+        ];
+        $webcam = [
+            'name' => 'DOT Camera',
+            'approximate_heading' => 180,
+            'operator' => 'wsdot',
+        ];
+
+        $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport);
+        $this->assertSame('wsdot', $formatted['operator']);
+    }
+
+    public function testListWebcamsFilter_KeepsConfigIndexesWhenOperatorSet(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = [
+            'enabled' => true,
+            'maintenance' => false,
+            'webcams' => [
+                ['name' => 'Ours', 'approximate_heading' => 0],
+                ['name' => 'DOT', 'operator' => 'wsdot', 'approximate_heading' => 180],
+            ],
+        ];
+
+        $formatted = [];
+        foreach ($airport['webcams'] as $index => $webcam) {
+            if (!weathercamMatchesOperator($webcam, 'wsdot')) {
+                continue;
+            }
+            $formatted[] = formatWebcamMetadata('kspb', $index, $webcam, $airport);
+        }
+
+        $this->assertCount(1, $formatted);
+        $this->assertSame(1, $formatted[0]['index']);
+        $this->assertSame('wsdot', $formatted[0]['operator']);
+        $this->assertSame('/v1/airports/kspb/webcams/1/image', $formatted[0]['image_url']);
     }
 
     public function testFormatWebcamMetadata_NullHeadingWhenOmitted(): void

@@ -11,6 +11,7 @@
  * - maintenance: Filter by maintenance mode ('true' or 'false')
  * - limited_availability: Filter by limited availability ('true' or 'false')
  * - include_unlisted: Include unlisted airports ('true' or 'false', default: false)
+ * - operator: Include airports that have one or more matching weathercams or weather sources
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -57,11 +58,22 @@ function handleListAirports(array $params, array $context): void
             $limitedAvailabilityFilter = false;
         }
     }
+
+    $operatorParse = parseOperatorQueryFromGet();
+    if (!$operatorParse['ok']) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            $operatorParse['error'],
+            400
+        );
+        return;
+    }
+    $operatorFilter = $operatorParse['value'];
     
     // Format airports for response
     $formattedAirports = [];
     foreach ($airports as $airportId => $airport) {
-        $formatted = formatAirportSummary($airportId, $airport);
+        $formatted = formatAirportSummary($airportId, $airport, $operatorFilter);
         
         // Apply maintenance filter if specified
         if ($maintenanceFilter !== null && $formatted['maintenance'] !== $maintenanceFilter) {
@@ -70,6 +82,10 @@ function handleListAirports(array $params, array $context): void
         
         // Apply limited_availability filter if specified
         if ($limitedAvailabilityFilter !== null && $formatted['limited_availability'] !== $limitedAvailabilityFilter) {
+            continue;
+        }
+
+        if ($operatorFilter !== null && !airportMatchesOperator($airport, $operatorFilter)) {
             continue;
         }
         
@@ -96,14 +112,15 @@ function handleListAirports(array $params, array $context): void
  *
  * @param string $airportId Airport ID
  * @param array $airport Airport configuration
+ * @param string|null $operatorFilter When set, webcam_count counts matching weathercams only
  * @return array Formatted airport summary
  */
-function formatAirportSummary(string $airportId, array $airport): array
+function formatAirportSummary(string $airportId, array $airport, ?string $operatorFilter = null): array
 {
-    // Check what data is available
+    // Weather is always the fused observation, so has_weather is not operator-sliced.
     $hasWeather = hasWeatherSources($airport);
-    $hasWebcams = isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0;
-    $webcamCount = $hasWebcams ? count($airport['webcams']) : 0;
+    $webcamCount = countWeathercamsForOperator($airport, $operatorFilter);
+    $hasWebcams = $webcamCount > 0;
 
     $baseDomain = getBaseDomain();
     $url = 'https://' . $airportId . '.' . $baseDomain . '/';

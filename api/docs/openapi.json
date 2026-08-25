@@ -29,7 +29,7 @@
     "/airports": {
       "get": {
         "summary": "List all airports",
-        "description": "Returns a list of all enabled airports with basic metadata.",
+        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted.",
         "operationId": "listAirports",
         "tags": ["Airports"],
         "parameters": [
@@ -50,6 +50,9 @@
               "type": "string",
               "enum": ["true", "false"]
             }
+          },
+          {
+            "$ref": "#/components/parameters/Operator"
           }
         ],
         "responses": {
@@ -62,6 +65,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -103,7 +109,7 @@
     "/airports/{id}/weather": {
       "get": {
         "summary": "Get current weather",
-        "description": "Returns current weather conditions for an airport.",
+        "description": "Returns the fused current weather observation for an airport. Not filtered by operator: fields from every configured source stay together.",
         "operationId": "getWeather",
         "tags": ["Weather"],
         "parameters": [
@@ -244,13 +250,16 @@
     },
     "/airports/{id}/webcams": {
       "get": {
-        "summary": "List webcams",
-        "description": "Returns a list of webcams for an airport with metadata.",
+        "summary": "List weathercams",
+        "description": "Returns weathercams for an airport with metadata. Optional operator lists only weathercams whose operator equals the slug. Camera index values are unchanged so image URLs stay stable.",
         "operationId": "listWebcams",
         "tags": ["Webcams"],
         "parameters": [
           {
             "$ref": "#/components/parameters/AirportId"
+          },
+          {
+            "$ref": "#/components/parameters/Operator"
           }
         ],
         "responses": {
@@ -263,6 +272,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -655,6 +667,17 @@
         "schema": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9-]+$"
+        }
+      },
+      "Operator": {
+        "name": "operator",
+        "in": "query",
+        "description": "Operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json. Omitted weathercam operator is aviationwx. Omitted weather-source operator uses the type default: metar is faa, nws is nws, swob_auto and swob_man are navcanada, awosnet is awosnet, synopticdata is synopticdata, and other types are aviationwx.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
+          "maxLength": 64,
+          "example": "aviationwx"
         }
       },
       "CamIndex": {
@@ -1220,13 +1243,16 @@
             "description": "Whether airport has limited availability (off-grid, solar, battery)"
           },
           "has_weather": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the airport has weather sources configured. Not sliced by operator; weather remains the fused observation."
           },
           "has_webcams": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the airport has one or more weathercams. When operator is set, only matching weathercams are counted."
           },
           "webcam_count": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Weathercam count. When operator is set, only matching weathercams are counted."
           },
           "url": {
             "type": "string",
@@ -1905,7 +1931,8 @@
                 "name",
                 "image_url",
                 "refresh_seconds",
-                "approximate_heading"
+                "approximate_heading",
+                "operator"
               ],
               "properties": {
                 "index": {
@@ -1935,6 +1962,10 @@
                   "minimum": 0,
                   "maximum": 360,
                   "description": "Direction the camera lens points, in true-north degrees clockwise from north (0-360). Non-null on active non-maintenance airports. Null when the airport is in maintenance or heading is not yet commissioned."
+                },
+                "operator": {
+                  "type": "string",
+                  "description": "Operating network slug. Omitted config is aviationwx. Other networks (for example wsdot) are explicit."
                 }
               }
             }

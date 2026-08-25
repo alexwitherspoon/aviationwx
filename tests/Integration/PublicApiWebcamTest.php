@@ -13,7 +13,7 @@ class PublicApiWebcamTest extends TestCase
 {
     private static $apiBaseUrl;
     private static $testAirport = 'kspb';
-    private static $testCam = 0;  // Fixture has 1 webcam at index 0
+    private static $testCam = 0;  // Fixture camera 0 is AviationWX-operated; camera 1 is wsdot
     
     public static function setUpBeforeClass(): void
     {

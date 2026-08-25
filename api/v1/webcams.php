@@ -1,10 +1,14 @@
 <?php
 /**
- * Public API - List Webcams Endpoint
- * 
+ * Public API - List Weathercams Endpoint
+ *
  * GET /v1/airports/{id}/webcams
- * 
- * Returns a list of webcams for an airport with metadata.
+ *
+ * Returns a list of weathercams for an airport with metadata.
+ * Path and JSON key remain `webcams` for compatibility.
+ *
+ * Query parameters:
+ * - operator: Only include weathercams whose operator equals this slug
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -41,12 +45,25 @@ function handleListWebcams(array $params, array $context): void
         return;
     }
     
-    // Get webcams
+    $operatorParse = parseOperatorQueryFromGet();
+    if (!$operatorParse['ok']) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            $operatorParse['error'],
+            400
+        );
+        return;
+    }
+    $weathercamOperatorFilter = $operatorParse['value'];
+
     $webcams = $airport['webcams'] ?? [];
-    
-    // Format webcams for response
+
+    // Keep original indexes so image URLs do not move when a filter omits a camera
     $formattedWebcams = [];
     foreach ($webcams as $index => $webcam) {
+        if (!is_array($webcam) || !weathercamMatchesOperator($webcam, $weathercamOperatorFilter)) {
+            continue;
+        }
         $formattedWebcams[] = formatWebcamMetadata($airportId, $index, $webcam, $airport);
     }
     
@@ -68,17 +85,17 @@ function handleListWebcams(array $params, array $context): void
 }
 
 /**
- * Format webcam data for API response
- * 
+ * Format weathercam data for API response
+ *
  * @param string $airportId Airport ID
- * @param int $index Webcam index
- * @param array $webcam Webcam configuration
+ * @param int $index Weathercam index
+ * @param array $webcam Weathercam configuration
  * @param array $airport Airport configuration
- * @return array Formatted webcam metadata
+ * @return array Formatted weathercam metadata
  */
 function formatWebcamMetadata(string $airportId, int $index, array $webcam, array $airport): array
 {
-    // Check if history is enabled for this webcam (max_frames >= 2 enables history)
+    // Check if history is enabled for this weathercam (max_frames >= 2 enables history)
     $historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
     
     // Get refresh interval
@@ -92,6 +109,7 @@ function formatWebcamMetadata(string $airportId, int $index, array $webcam, arra
         'image_url' => '/v1/airports/' . $airportId . '/webcams/' . $index . '/image',
         'refresh_seconds' => $refreshSeconds,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
+        'operator' => getWeathercamOperator($webcam),
     ];
 
     if ($historyEnabled) {
@@ -108,7 +126,7 @@ function formatWebcamMetadata(string $airportId, int $index, array $webcam, arra
  * Config validation requires integer 0-360, but runtime config may be stale or
  * hand-edited. Reject non-integers and out-of-range values rather than casting.
  *
- * @param array $webcam Webcam configuration
+ * @param array $webcam Weathercam configuration
  * @return int|null Heading degrees, or null when omitted or invalid
  */
 function formatWebcamApproximateHeadingForApi(array $webcam): ?int

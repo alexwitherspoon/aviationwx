@@ -3,8 +3,9 @@
  * Public API - Get Weather Endpoint
  * 
  * GET /v1/airports/{id}/weather
- * 
- * Returns current weather data for a single airport.
+ *
+ * Returns the fused current weather observation for a single airport.
+ * Not filtered by operator: mixed-operator fields stay together for safety.
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
