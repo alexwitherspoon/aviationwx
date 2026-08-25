@@ -138,6 +138,29 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertCount(2, $again[0]['webcams']);
     }
 
+    public function testRememberWeathercamBulkCatalogIfConfigShaStable_MatchingSha_StoresCatalog(): void
+    {
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        $payload = [['id' => 'kspb']];
+        rememberWeathercamBulkCatalogIfConfigShaStable($payload, $sha, $sha);
+        $this->assertSame($payload, recallWeathercamBulkCatalog());
+    }
+
+    public function testRememberWeathercamBulkCatalogIfConfigShaStable_MismatchedSha_DoesNotStore(): void
+    {
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        rememberWeathercamBulkCatalogIfConfigShaStable([['id' => 'stale']], $sha, $sha . 'changed');
+        $this->assertNull(recallWeathercamBulkCatalog());
+    }
+
+    public function testRememberWeathercamBulkCatalogIfConfigShaStable_EmptyBeforeSha_DoesNotStore(): void
+    {
+        rememberWeathercamBulkCatalogIfConfigShaStable([['id' => 'stale']], '', 'not-empty');
+        $this->assertNull(recallWeathercamBulkCatalog());
+    }
+
     public function testRecallWeathercamBulkCatalog_MatchingSha_ReturnsAirports(): void
     {
         $sha = getConfigFileSha256();

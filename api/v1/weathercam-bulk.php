@@ -60,8 +60,9 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
 {
     $full = recallWeathercamBulkCatalog();
     if ($full === null) {
+        $shaBefore = getConfigFileSha256();
         $full = buildWeathercamBulkAirports(getPublicApiAirports(true, false), null);
-        rememberWeathercamBulkCatalog($full);
+        rememberWeathercamBulkCatalogIfConfigShaStable($full, $shaBefore, getConfigFileSha256());
     }
 
     return filterWeathercamBulkAirportsByOperator($full, $operatorFilter);
@@ -134,6 +135,26 @@ function filterWeathercamBulkAirportsByOperator(array $airports, ?string $operat
     }
 
     return $filtered;
+}
+
+/**
+ * Cache a rebuilt catalog only when airports.json SHA matches before and after the walk.
+ *
+ * Otherwise a config save mid-rebuild can store the previous rows under the new SHA
+ * until TTL or the next change.
+ *
+ * @param list<array<string, mixed>> $airports
+ */
+function rememberWeathercamBulkCatalogIfConfigShaStable(
+    array $airports,
+    ?string $shaBefore,
+    ?string $shaAfter
+): void {
+    if ($shaBefore === null || $shaBefore === '' || $shaBefore !== $shaAfter) {
+        return;
+    }
+
+    rememberWeathercamBulkCatalog($airports, $shaBefore);
 }
 
 /**
