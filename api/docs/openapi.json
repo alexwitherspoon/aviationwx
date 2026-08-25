@@ -52,15 +52,7 @@
             }
           },
           {
-            "name": "operator",
-            "in": "query",
-            "description": "Include airports that have one or more weathercams or weather sources with this slug in airports.json. Omitted weathercam operator is aviationwx. Weather-source defaults follow type (metar is faa, nws is nws). webcam_count and has_webcams count matching weathercams only. GET /airports/{id}/weather remains the full fused observation.",
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "maxLength": 64,
-              "example": "aviationwx"
-            }
+            "$ref": "#/components/parameters/Operator"
           }
         ],
         "responses": {
@@ -267,15 +259,7 @@
             "$ref": "#/components/parameters/AirportId"
           },
           {
-            "name": "operator",
-            "in": "query",
-            "description": "Only include weathercams whose operator equals this slug. Omitted operator on a camera defaults to aviationwx.",
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "maxLength": 64,
-              "example": "aviationwx"
-            }
+            "$ref": "#/components/parameters/Operator"
           }
         ],
         "responses": {
@@ -683,6 +667,17 @@
         "schema": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9-]+$"
+        }
+      },
+      "Operator": {
+        "name": "operator",
+        "in": "query",
+        "description": "Operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Omitted weathercam operator is aviationwx.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
+          "maxLength": 64,
+          "example": "aviationwx"
         }
       },
       "CamIndex": {
