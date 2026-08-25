@@ -2029,6 +2029,9 @@ function validateCropMargins(mixed $margins, string $context): array {
 /**
  * True when a Public API canonical base is safe to concatenate with /airports/... paths.
  *
+ * The path after the origin must be `/v1` (trailing slashes allowed) because
+ * `publicApiV1Url()` appends `/airports/...` onto this value.
+ *
  * @param string $url Trimmed candidate URL
  * @return bool
  */
@@ -2053,8 +2056,12 @@ function isValidCanonicalPublicApiBaseUrl(string $url): bool
         return false;
     }
 
-    return !isset($parts['query']) && !isset($parts['fragment'])
-        && !isset($parts['user']) && !isset($parts['pass']);
+    if (isset($parts['query']) || isset($parts['fragment'])
+        || isset($parts['user']) || isset($parts['pass'])) {
+        return false;
+    }
+
+    return rtrim((string) ($parts['path'] ?? ''), '/') === '/v1';
 }
 
 /**
@@ -2067,7 +2074,7 @@ function isValidCanonicalPublicApiBaseUrl(string $url): bool
  * - bulk_max_airports
  * - weather_history settings
  * - partner_keys
- * - canonical_base_url (optional; absolute http(s) URL with host, no query/fragment/userinfo)
+ * - canonical_base_url (optional; absolute http(s) URL ending in /v1, with host, no query/fragment/userinfo)
  * 
  * @param mixed $publicApi The public_api config value to validate
  * @return array Array of error messages (empty if valid)
@@ -2146,7 +2153,7 @@ function validatePublicApiConfig(mixed $publicApi): array {
             if ($trimmed === '') {
                 $errors[] = "config.public_api.canonical_base_url must be a non-empty string when set";
             } elseif (!isValidCanonicalPublicApiBaseUrl($trimmed)) {
-                $errors[] = "config.public_api.canonical_base_url must be an absolute http:// or https:// URL with a host and no query, fragment, or userinfo";
+                $errors[] = "config.public_api.canonical_base_url must be an absolute http:// or https:// URL ending in /v1, with a host and no query, fragment, or userinfo";
             }
         }
     }
