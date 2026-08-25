@@ -583,7 +583,7 @@ $attribution = getPublicApiAttributionText();
                 <p class="endpoint-desc">One-query weathercam catalog. Optional <code>operator</code> matches weathercams only (not weather sources). Nested webcam objects include absolute <code>image_url</code> / <code>images</code> URLs. Origin rebuilds when airports.json changes.</p>
             </div>
         </div>
-        
+
         <div class="endpoint">
             <div class="endpoint-header">
                 <span class="method">GET</span>
