@@ -2027,6 +2027,33 @@ function validateCropMargins(mixed $margins, string $context): array {
 }
 
 /**
+ * True when a Public API canonical base is safe to concatenate with /airports/... paths.
+ *
+ * @param string $url Trimmed candidate URL
+ * @return bool
+ */
+function isValidCanonicalPublicApiBaseUrl(string $url): bool
+{
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return false;
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return false;
+    }
+
+    $host = $parts['host'] ?? '';
+    if (!is_string($host) || $host === '') {
+        return false;
+    }
+
+    return !isset($parts['query']) && !isset($parts['fragment'])
+        && !isset($parts['user']) && !isset($parts['pass']);
+}
+
+/**
  * Validate public_api configuration section
  * 
  * Validates the nested public_api configuration including:
@@ -2036,7 +2063,7 @@ function validateCropMargins(mixed $margins, string $context): array {
  * - bulk_max_airports
  * - weather_history settings
  * - partner_keys
- * - canonical_base_url (optional; must be string if key present)
+ * - canonical_base_url (optional; absolute http(s) URL with host, no query/fragment/userinfo)
  * 
  * @param mixed $publicApi The public_api config value to validate
  * @return array Array of error messages (empty if valid)
@@ -2114,8 +2141,8 @@ function validatePublicApiConfig(mixed $publicApi): array {
             $trimmed = trim($publicApi['canonical_base_url']);
             if ($trimmed === '') {
                 $errors[] = "config.public_api.canonical_base_url must be a non-empty string when set";
-            } elseif (!preg_match('#^https?://#i', $trimmed)) {
-                $errors[] = "config.public_api.canonical_base_url must start with http:// or https://";
+            } elseif (!isValidCanonicalPublicApiBaseUrl($trimmed)) {
+                $errors[] = "config.public_api.canonical_base_url must be an absolute http:// or https:// URL with a host and no query, fragment, or userinfo";
             }
         }
     }

@@ -5445,6 +5445,60 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
+    public function testPublicApiCanonicalBaseUrl_ValidLocalhostWithPort()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'http://localhost:9080/v1',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], implode(', ', $result['errors']));
+    }
+
+    public function testPublicApiCanonicalBaseUrl_InvalidMissingHost()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
+    public function testPublicApiCanonicalBaseUrl_InvalidQuery()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://example.com/v1?tenant=a',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
+    public function testPublicApiCanonicalBaseUrl_InvalidFragment()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://example.com/v1#docs',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
+    public function testPublicApiCanonicalBaseUrl_InvalidUserinfo()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'canonical_base_url' => 'https://user:pass@example.com/v1',
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
+    }
+
     // =========================================================================
     // Existing Config Fields - Ensure Still Validated
     // =========================================================================
