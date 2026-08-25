@@ -90,6 +90,12 @@
           "name": "Test Camera 1",
           "url": "https://example.com/cam1.jpg",
           "approximate_heading": 318
+        },
+        {
+          "name": "WSDOT Test Camera",
+          "url": "https://example.com/cam-wsdot.jpg",
+          "approximate_heading": 180,
+          "operator": "wsdot"
         }
       ],
       "runways": [
