@@ -141,4 +141,44 @@ class OperatorConfigTest extends TestCase
         $this->assertFalse(isValidOperatorSlug('ws--dot'));
         $this->assertFalse(isValidOperatorSlug(str_repeat('a', OPERATOR_MAX_LENGTH + 1)));
     }
+
+    public function testParseOperatorQueryFromGet_ReadsQueryString(): void
+    {
+        $originalGet = $_GET;
+        try {
+            $_GET = [];
+            $omitted = parseOperatorQueryFromGet();
+            $this->assertTrue($omitted['ok']);
+            $this->assertNull($omitted['value']);
+
+            $_GET = ['operator' => 'WSDOT'];
+            $mixed = parseOperatorQueryFromGet();
+            $this->assertTrue($mixed['ok']);
+            $this->assertSame('wsdot', $mixed['value']);
+
+            $_GET = ['operator' => 'not valid'];
+            $invalid = parseOperatorQueryFromGet();
+            $this->assertFalse($invalid['ok']);
+
+            $_GET = ['operator' => ['wsdot']];
+            $array = parseOperatorQueryFromGet();
+            $this->assertFalse($array['ok']);
+        } finally {
+            $_GET = $originalGet;
+        }
+    }
+
+    public function testOpenApiOperatorQueryPattern_AcceptsMixedCase(): void
+    {
+        $spec = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../api/docs/openapi.json'),
+            true
+        );
+        $this->assertIsArray($spec);
+        $pattern = $spec['components']['parameters']['Operator']['schema']['pattern'] ?? '';
+        $this->assertNotSame('', $pattern);
+        $this->assertSame(1, preg_match('/' . $pattern . '/', 'WSDOT'));
+        $this->assertSame(1, preg_match('/' . $pattern . '/', 'wsdot'));
+        $this->assertSame(0, preg_match('/' . $pattern . '/', 'not valid'));
+    }
 }
