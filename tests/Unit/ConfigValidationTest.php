@@ -5445,7 +5445,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_ValidLocalhostWithPort()
+    public function testPublicApiCanonicalBaseUrl_ValidLocalhostWithPort(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5455,7 +5455,7 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(', ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidHostWithSpace()
+    public function testPublicApiCanonicalBaseUrl_InvalidHostWithSpace(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5466,7 +5466,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidMissingHost()
+    public function testPublicApiCanonicalBaseUrl_InvalidMissingHost(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5477,7 +5477,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidQuery()
+    public function testPublicApiCanonicalBaseUrl_InvalidQuery(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5488,7 +5488,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidFragment()
+    public function testPublicApiCanonicalBaseUrl_InvalidFragment(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5499,7 +5499,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidUserinfo()
+    public function testPublicApiCanonicalBaseUrl_InvalidUserinfo(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5510,7 +5510,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_ValidTrailingSlash()
+    public function testPublicApiCanonicalBaseUrl_ValidTrailingSlash(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5520,7 +5520,7 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], implode(', ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidMissingV1Path()
+    public function testPublicApiCanonicalBaseUrl_InvalidMissingV1Path(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
@@ -5531,7 +5531,7 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('canonical_base_url', implode(' ', $result['errors']));
     }
 
-    public function testPublicApiCanonicalBaseUrl_InvalidNonV1Path()
+    public function testPublicApiCanonicalBaseUrl_InvalidNonV1Path(): void
     {
         $config = $this->createMinimalConfig();
         $config['config']['public_api'] = [
