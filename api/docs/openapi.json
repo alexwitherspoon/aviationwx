@@ -1973,6 +1973,79 @@
           }
         }
       },
+      "Webcam": {
+        "type": "object",
+        "required": [
+          "index",
+          "name",
+          "image_url",
+          "refresh_seconds",
+          "approximate_heading",
+          "operator",
+          "images"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "image_url": {
+            "type": "string",
+            "description": "Current image. Origin-relative /v1 path on GET /airports/{id}/webcams. Absolute canonical Public API v1 URL on GET /weathercam/bulk."
+          },
+          "history_url": {
+            "type": "string",
+            "description": "History endpoint. Present only when webcam history retention is greater than zero. Origin-relative on GET /airports/{id}/webcams; absolute on GET /weathercam/bulk."
+          },
+          "history_enabled": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "Present and true when webcam history retention is greater than zero for this airport."
+          },
+          "refresh_seconds": {
+            "type": "integer"
+          },
+          "approximate_heading": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 360,
+            "description": "Direction the camera lens points, in true-north degrees clockwise from north (0-360). Non-null on active non-maintenance airports. Null when the airport is in maintenance or heading is not yet commissioned."
+          },
+          "operator": {
+            "type": "string",
+            "description": "Operating network slug. Omitted config is aviationwx. Other networks (for example wsdot) are explicit."
+          },
+          "images": {
+            "type": "array",
+            "description": "Configured original plus height variants. Original is jpg only. Sized rows follow enabled formats. Not a disk probe of the current frame.",
+            "items": {
+              "type": "object",
+              "required": ["variant", "height", "format", "url"],
+              "properties": {
+                "variant": {
+                  "type": "string",
+                  "description": "'original' or a height in pixels as a string"
+                },
+                "height": {
+                  "type": "integer",
+                  "nullable": true,
+                  "description": "Variant height in pixels; null for original"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": ["jpg", "webp"]
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "WebcamListResponse": {
         "type": "object",
         "properties": {
@@ -1985,77 +2058,7 @@
           "webcams": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": [
-                "index",
-                "name",
-                "image_url",
-                "refresh_seconds",
-                "approximate_heading",
-                "operator",
-                "images"
-              ],
-              "properties": {
-                "index": {
-                  "type": "integer"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "image_url": {
-                  "type": "string",
-                  "description": "Current image. Origin-relative /v1 path on GET /airports/{id}/webcams. Absolute canonical Public API v1 URL on GET /weathercam/bulk."
-                },
-                "history_url": {
-                  "type": "string",
-                  "description": "History endpoint. Present only when webcam history retention is greater than zero. Origin-relative on GET /airports/{id}/webcams; absolute on GET /weathercam/bulk."
-                },
-                "history_enabled": {
-                  "type": "boolean",
-                  "enum": [true],
-                  "description": "Present and true when webcam history retention is greater than zero for this airport."
-                },
-                "refresh_seconds": {
-                  "type": "integer"
-                },
-                "approximate_heading": {
-                  "type": "integer",
-                  "nullable": true,
-                  "minimum": 0,
-                  "maximum": 360,
-                  "description": "Direction the camera lens points, in true-north degrees clockwise from north (0-360). Non-null on active non-maintenance airports. Null when the airport is in maintenance or heading is not yet commissioned."
-                },
-                "operator": {
-                  "type": "string",
-                  "description": "Operating network slug. Omitted config is aviationwx. Other networks (for example wsdot) are explicit."
-                },
-                "images": {
-                  "type": "array",
-                  "description": "Configured original plus height variants. Original is jpg only. Sized rows follow enabled formats. Not a disk probe of the current frame.",
-                  "items": {
-                    "type": "object",
-                    "required": ["variant", "height", "format", "url"],
-                    "properties": {
-                      "variant": {
-                        "type": "string",
-                        "description": "'original' or a height in pixels as a string"
-                      },
-                      "height": {
-                        "type": "integer",
-                        "nullable": true,
-                        "description": "Variant height in pixels; null for original"
-                      },
-                      "format": {
-                        "type": "string",
-                        "enum": ["jpg", "webp"]
-                      },
-                      "url": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
+              "$ref": "#/components/schemas/Webcam"
             }
           }
         }
@@ -2099,7 +2102,10 @@
                   "properties": {
                     "webcams": {
                       "type": "array",
-                      "description": "Same webcam objects as GET /airports/{id}/webcams. Image, history, and images[].url are absolute canonical Public API v1 URLs."
+                      "description": "Same webcam objects as GET /airports/{id}/webcams. Image, history, and images[].url are absolute canonical Public API v1 URLs.",
+                      "items": {
+                        "$ref": "#/components/schemas/Webcam"
+                      }
                     }
                   }
                 }

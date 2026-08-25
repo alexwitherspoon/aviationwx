@@ -254,5 +254,22 @@ class PublicApiWeathercamBulkTest extends TestCase
         $description = $spec['components']['parameters']['WeathercamOperator']['description'] ?? '';
         $this->assertStringContainsString('weathercam', strtolower($description));
         $this->assertStringContainsString('weather sources do not', strtolower($description));
+
+        $webcamRef = '#/components/schemas/Webcam';
+        $this->assertSame(
+            $webcamRef,
+            $spec['components']['schemas']['WebcamListResponse']['properties']['webcams']['items']['$ref'] ?? null
+        );
+        $bulkWebcams = null;
+        foreach ($spec['components']['schemas']['WebcamBulkResponse']['properties']['airports']['items']['allOf'] ?? [] as $part) {
+            if (isset($part['properties']['webcams'])) {
+                $bulkWebcams = $part['properties']['webcams'];
+                break;
+            }
+        }
+        $this->assertSame($webcamRef, $bulkWebcams['items']['$ref'] ?? null);
+        $this->assertArrayHasKey('image_url', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertArrayHasKey('operator', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertArrayHasKey('images', $spec['components']['schemas']['Webcam']['properties'] ?? []);
     }
 }
