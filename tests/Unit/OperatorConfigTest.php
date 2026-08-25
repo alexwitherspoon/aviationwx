@@ -119,6 +119,12 @@ class OperatorConfigTest extends TestCase
         $invalid = parseOperatorQueryParam('not valid');
         $this->assertFalse($invalid['ok']);
         $this->assertNull($invalid['value']);
+        $this->assertStringContainsString((string) OPERATOR_MAX_LENGTH, (string) $invalid['error']);
+        $this->assertStringNotContainsString('lowercase', (string) $invalid['error']);
+
+        $overlong = parseOperatorQueryParam(str_repeat('a', OPERATOR_MAX_LENGTH + 1));
+        $this->assertFalse($overlong['ok']);
+        $this->assertStringContainsString((string) OPERATOR_MAX_LENGTH, (string) $overlong['error']);
 
         $valid = parseOperatorQueryParam('wsdot');
         $this->assertTrue($valid['ok']);
@@ -163,6 +169,7 @@ class OperatorConfigTest extends TestCase
             $_GET = ['operator' => ['wsdot']];
             $array = parseOperatorQueryFromGet();
             $this->assertFalse($array['ok']);
+            $this->assertStringContainsString((string) OPERATOR_MAX_LENGTH, (string) $array['error']);
         } finally {
             $_GET = $originalGet;
         }

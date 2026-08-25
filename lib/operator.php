@@ -209,6 +209,34 @@ function airportMatchesOperator(array $airport, ?string $operatorFilter): bool
 }
 
 /**
+ * Public API 400 detail for an invalid operator query value.
+ *
+ * Query values are lowercased before matching, so this does not require
+ * the client to send lowercase.
+ *
+ * @return string Error detail
+ */
+function operatorQueryShapeError(): string
+{
+    return 'operator must be a slug of 1-' . OPERATOR_MAX_LENGTH
+        . ' letters, digits, and single hyphens between segments';
+}
+
+/**
+ * Config validation error for an invalid operator field.
+ *
+ * Config slugs must already be lowercase. Query parsing lowercases first.
+ *
+ * @param string $label Error-message prefix
+ * @return string Error detail
+ */
+function operatorConfigShapeError(string $label): string
+{
+    return "{$label} has invalid operator: must be a lowercase slug of 1-"
+        . OPERATOR_MAX_LENGTH . ' letters, digits, and single hyphens between segments';
+}
+
+/**
  * Parse an operator query value.
  *
  * @param string|null $raw Raw query value, or null when the parameter is omitted
@@ -225,7 +253,7 @@ function parseOperatorQueryParam(?string $raw): array
         return [
             'ok' => false,
             'value' => null,
-            'error' => 'operator must be a lowercase slug (letters, digits, hyphens)',
+            'error' => operatorQueryShapeError(),
         ];
     }
 
@@ -248,7 +276,7 @@ function parseOperatorQueryFromGet(): array
         return [
             'ok' => false,
             'value' => null,
-            'error' => 'operator must be a lowercase slug (letters, digits, hyphens)',
+            'error' => operatorQueryShapeError(),
         ];
     }
 
@@ -272,12 +300,12 @@ function validateConfigOperator(array $row, string $label): array
 
     $operator = $row['operator'];
     if (!is_string($operator)) {
-        return ["{$label} has invalid operator: must be a lowercase slug (letters, digits, hyphens)"];
+        return [operatorConfigShapeError($label)];
     }
 
     $trimmed = trim($operator);
     if ($trimmed === '' || $trimmed !== $operator || !isValidOperatorSlug($trimmed)) {
-        return ["{$label} has invalid operator: must be a lowercase slug (letters, digits, hyphens)"];
+        return [operatorConfigShapeError($label)];
     }
 
     return [];

@@ -1927,6 +1927,38 @@ class ConfigValidationTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('invalid operator', implode(' ', $result['errors']));
+        $this->assertStringContainsString((string) OPERATOR_MAX_LENGTH, implode(' ', $result['errors']));
+        $this->assertStringContainsString('lowercase', implode(' ', $result['errors']));
+    }
+
+    public function testWebcam_Operator_RejectsOverlongSlug(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'enabled' => true,
+                    'maintenance' => false,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'webcams' => [
+                        [
+                            'name' => 'Test Camera',
+                            'url' => 'https://example.com/cam.jpg',
+                            'approximate_heading' => 90,
+                            'operator' => str_repeat('a', OPERATOR_MAX_LENGTH + 1),
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('invalid operator', implode(' ', $result['errors']));
+        $this->assertStringContainsString((string) OPERATOR_MAX_LENGTH, implode(' ', $result['errors']));
     }
 
     public function testWeatherSource_Operator_RejectsUppercaseSlug(): void
