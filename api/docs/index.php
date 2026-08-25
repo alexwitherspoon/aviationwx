@@ -461,8 +461,8 @@ $attribution = getPublicApiAttributionText();
             <h3>🚀 Quick Start</h3>
             <p>Get current weather for an airport:</p>
             <pre><code>curl https://api.aviationwx.org/v1/airports/kspb/weather</code></pre>
-            <p>List all available airports:</p>
-            <pre><code>curl https://api.aviationwx.org/v1/airports</code></pre>
+            <p>List AviationWX-operated weathercams (absolute image URLs):</p>
+            <pre><code>curl https://api.aviationwx.org/v1/weathercam/bulk?operator=aviationwx</code></pre>
         </div>
         
         <h2>Authentication</h2>
@@ -500,7 +500,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted (for example metar is faa).</p>
+                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted (for example metar is faa). Optional <code>has_webcams=true</code> keeps airports that have weathercams configured (not sliced by operator). Optional <code>has_weather=true</code> keeps airports with weather sources configured (not sliced by operator). When <code>operator</code> is set, <code>webcam_count</code> still counts matching weathercams only.</p>
             </div>
         </div>
         
@@ -571,6 +571,16 @@ $attribution = getPublicApiAttributionText();
             </div>
             <div class="endpoint-body">
                 <p class="endpoint-desc">Get weather for multiple airports in a single request (max <?= getPublicApiBulkMaxAirports() ?> airports).</p>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method">GET</span>
+                <span class="endpoint-path">/v1/weathercam/bulk</span>
+            </div>
+            <div class="endpoint-body">
+                <p class="endpoint-desc">One-query weathercam catalog. Optional <code>operator</code> matches weathercams only (not weather sources). Nested webcam objects include absolute <code>image_url</code> / <code>images</code> URLs. Origin rebuilds when airports.json changes.</p>
             </div>
         </div>
         

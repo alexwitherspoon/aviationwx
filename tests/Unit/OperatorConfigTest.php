@@ -101,13 +101,65 @@ class OperatorConfigTest extends TestCase
 
         $faa = formatAirportSummary('kspb', $airport, 'faa');
         $this->assertTrue($faa['has_weather']);
-        $this->assertFalse($faa['has_webcams']);
+        $this->assertTrue($faa['has_webcams'], 'has_webcams is not operator-sliced');
         $this->assertSame(0, $faa['webcam_count']);
 
         $wsdot = formatAirportSummary('kspb', $airport, 'wsdot');
         $this->assertTrue($wsdot['has_weather']);
         $this->assertTrue($wsdot['has_webcams']);
         $this->assertSame(1, $wsdot['webcam_count']);
+    }
+
+    public function testParsePublicApiOptionalBooleanQuery_ReadsTrueFalse(): void
+    {
+        $originalGet = $_GET;
+        try {
+            $_GET = [];
+            $this->assertNull(parsePublicApiOptionalBooleanQuery('has_webcams'));
+            $this->assertNull(parsePublicApiOptionalBooleanQuery('has_weather'));
+
+            $_GET = ['has_webcams' => 'true', 'has_weather' => 'FALSE'];
+            $this->assertTrue(parsePublicApiOptionalBooleanQuery('has_webcams'));
+            $this->assertFalse(parsePublicApiOptionalBooleanQuery('has_weather'));
+
+            $_GET = ['has_webcams' => '1'];
+            $this->assertTrue(parsePublicApiOptionalBooleanQuery('has_webcams'));
+
+            $_GET = ['has_webcams' => 'maybe'];
+            $this->assertNull(parsePublicApiOptionalBooleanQuery('has_webcams'));
+
+            $_GET = ['has_webcams' => ['true']];
+            $this->assertNull(parsePublicApiOptionalBooleanQuery('has_webcams'));
+        } finally {
+            $_GET = $originalGet;
+        }
+    }
+
+    public function testOpenApiHasWebcamsAndHasWeatherQuery_AreAirportListFilters(): void
+    {
+        $spec = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../api/docs/openapi.json'),
+            true
+        );
+        $this->assertIsArray($spec);
+        $params = $spec['paths']['/airports']['get']['parameters'] ?? [];
+        $names = [];
+        foreach ($params as $param) {
+            if (isset($param['name'])) {
+                $names[] = $param['name'];
+            }
+        }
+        $this->assertContains('has_webcams', $names);
+        $this->assertContains('has_weather', $names);
+
+        $webcamParamNames = [];
+        foreach ($spec['paths']['/airports/{id}/webcams']['get']['parameters'] ?? [] as $param) {
+            if (isset($param['name'])) {
+                $webcamParamNames[] = $param['name'];
+            }
+        }
+        $this->assertNotContains('has_webcams', $webcamParamNames);
+        $this->assertNotContains('has_weather', $webcamParamNames);
     }
 
     public function testParseOperatorQueryParam_NormalizesAndRejectsInvalidSlug(): void

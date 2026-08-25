@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/webcam-metadata.php';
 
 /**
  * Handle GET /v1/airports/{id}/webcams request
@@ -55,33 +56,52 @@ function handleListWebcams(array $params, array $context): void
         return;
     }
     $weathercamOperatorFilter = $operatorParse['value'];
+    $formattedWebcams = listFormattedWebcamsForAirport($airportId, $airport, $weathercamOperatorFilter);
 
-    $webcams = $airport['webcams'] ?? [];
-
-    // Keep original indexes so image URLs do not move when a filter omits a camera
-    $formattedWebcams = [];
-    foreach ($webcams as $index => $webcam) {
-        if (!is_array($webcam) || !weathercamMatchesOperator($webcam, $weathercamOperatorFilter)) {
-            continue;
-        }
-        $formattedWebcams[] = formatWebcamMetadata($airportId, $index, $webcam, $airport);
-    }
-    
-    // Build metadata
     $meta = [
         'airport_id' => $airportId,
         'airport_name' => $airport['name'] ?? '',
         'webcam_count' => count($formattedWebcams),
     ];
-    
-    // Send cache headers for metadata
+
     sendPublicApiCacheHeaders('metadata');
-    
-    // Send response
     sendPublicApiSuccess(
         ['webcams' => $formattedWebcams],
         $meta
     );
+}
+
+/**
+ * Format weathercams for one airport, keeping original config indexes.
+ *
+ * @param string $airportId Airport ID
+ * @param array $airport Airport configuration
+ * @param string|null $operatorFilter Lowercase slug, or null for every weathercam
+ * @param bool $absoluteUrls When true, image and history URLs use the canonical v1 base
+ * @return list<array<string, mixed>>
+ */
+function listFormattedWebcamsForAirport(
+    string $airportId,
+    array $airport,
+    ?string $operatorFilter,
+    bool $absoluteUrls = false
+): array {
+    $webcams = $airport['webcams'] ?? [];
+    $formattedWebcams = [];
+    foreach ($webcams as $index => $webcam) {
+        if (!is_array($webcam) || !weathercamMatchesOperator($webcam, $operatorFilter)) {
+            continue;
+        }
+        $formattedWebcams[] = formatWebcamMetadata(
+            $airportId,
+            (int) $index,
+            $webcam,
+            $airport,
+            $absoluteUrls
+        );
+    }
+
+    return $formattedWebcams;
 }
 
 /**
@@ -91,33 +111,81 @@ function handleListWebcams(array $params, array $context): void
  * @param int $index Weathercam index
  * @param array $webcam Weathercam configuration
  * @param array $airport Airport configuration
+ * @param bool $absoluteUrls When true, image and history URLs use the canonical v1 base
  * @return array Formatted weathercam metadata
  */
-function formatWebcamMetadata(string $airportId, int $index, array $webcam, array $airport): array
-{
-    // Check if history is enabled for this weathercam (max_frames >= 2 enables history)
+function formatWebcamMetadata(
+    string $airportId,
+    int $index,
+    array $webcam,
+    array $airport,
+    bool $absoluteUrls = false
+): array {
     $historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
-    
-    // Get refresh interval
-    $refreshSeconds = $webcam['refresh_seconds'] 
-        ?? $airport['webcam_refresh_seconds'] 
+
+    $refreshSeconds = $webcam['refresh_seconds']
+        ?? $airport['webcam_refresh_seconds']
         ?? 60;
-    
+
+    $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $metadata = [
         'index' => $index,
         'name' => $webcam['name'] ?? 'Camera ' . ($index + 1),
-        'image_url' => '/v1/airports/' . $airportId . '/webcams/' . $index . '/image',
+        'image_url' => publicApiV1Url($imagePath, $absoluteUrls),
         'refresh_seconds' => $refreshSeconds,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
         'operator' => getWeathercamOperator($webcam),
+        'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls),
     ];
 
     if ($historyEnabled) {
         $metadata['history_enabled'] = true;
-        $metadata['history_url'] = '/v1/airports/' . $airportId . '/webcams/' . $index . '/history';
+        $metadata['history_url'] = publicApiV1Url(
+            '/airports/' . $airportId . '/webcams/' . $index . '/history',
+            $absoluteUrls
+        );
     }
 
     return $metadata;
+}
+
+/**
+ * Configured original plus height variants. Original is jpg only.
+ *
+ * @param string $airportId Airport ID
+ * @param int $index Weathercam index
+ * @param bool $absoluteUrls When true, URLs use the canonical v1 base
+ * @return list<array{variant: string, height: int|null, format: string, url: string}>
+ */
+function formatWebcamImageVariants(string $airportId, int $index, bool $absoluteUrls): array
+{
+    $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
+    $images = [
+        [
+            'variant' => 'original',
+            'height' => null,
+            'format' => 'jpg',
+            'url' => publicApiV1Url($imagePath, $absoluteUrls),
+        ],
+    ];
+
+    foreach (getVariantHeights($airportId, $index) as $height) {
+        foreach (getEnabledWebcamFormats() as $format) {
+            $query = [];
+            if ($format !== 'jpg') {
+                $query['fmt'] = $format;
+            }
+            $query['size'] = (string) $height;
+            $images[] = [
+                'variant' => (string) $height,
+                'height' => (int) $height,
+                'format' => $format,
+                'url' => publicApiV1Url($imagePath, $absoluteUrls, $query),
+            ];
+        }
+    }
+
+    return $images;
 }
 
 /**

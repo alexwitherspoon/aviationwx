@@ -2541,6 +2541,9 @@ function clearConfigCache(): void {
         apcu_delete('aviationwx_config');
         apcu_delete('aviationwx_config_sha');
     }
+    if (function_exists('resetWeathercamBulkCatalogCache')) {
+        resetWeathercamBulkCatalogCache();
+    }
     require_once __DIR__ . '/airport-country-resolution-merge.php';
     countryResolutionResetMergeFingerprint();
 }

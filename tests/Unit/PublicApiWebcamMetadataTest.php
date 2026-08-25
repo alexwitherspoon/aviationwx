@@ -69,18 +69,26 @@ class PublicApiWebcamMetadataTest extends TestCase
             ],
         ];
 
-        $formatted = [];
-        foreach ($airport['webcams'] as $index => $webcam) {
-            if (!weathercamMatchesOperator($webcam, 'wsdot')) {
-                continue;
-            }
-            $formatted[] = formatWebcamMetadata('kspb', $index, $webcam, $airport);
-        }
+        $formatted = listFormattedWebcamsForAirport('kspb', $airport, 'wsdot');
 
         $this->assertCount(1, $formatted);
         $this->assertSame(1, $formatted[0]['index']);
         $this->assertSame('wsdot', $formatted[0]['operator']);
         $this->assertSame('/v1/airports/kspb/webcams/1/image', $formatted[0]['image_url']);
+        $this->assertSame('/v1/airports/kspb/webcams/1/image', $formatted[0]['images'][0]['url']);
+    }
+
+    public function testFormatWebcamMetadata_AbsoluteUrls_UseCanonicalV1Base(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = ['enabled' => true, 'maintenance' => false];
+        $webcam = ['name' => 'North', 'approximate_heading' => 0];
+        $formatted = formatWebcamMetadata('kspb', 0, $webcam, $airport, true);
+        $base = getCanonicalPublicApiV1BaseUrl();
+
+        $this->assertSame($base . '/airports/kspb/webcams/0/image', $formatted['image_url']);
+        $this->assertSame($formatted['image_url'], $formatted['images'][0]['url']);
     }
 
     public function testFormatWebcamMetadata_NullHeadingWhenOmitted(): void

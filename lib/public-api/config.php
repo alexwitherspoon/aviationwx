@@ -76,6 +76,27 @@ function getCanonicalPublicApiV1BaseUrl(): string
 }
 
 /**
+ * Build a Public API v1 URL from a path under that base.
+ *
+ * @param string $v1Path Path after /v1 (for example /airports/kspb/webcams/0/image)
+ * @param bool $absolute When true, prefix getCanonicalPublicApiV1BaseUrl(); when false, prefix /v1
+ * @param array<string, scalar> $query Optional query parameters
+ * @return string Relative /v1/... path or absolute canonical URL
+ */
+function publicApiV1Url(string $v1Path, bool $absolute = false, array $query = []): string
+{
+    $path = '/' . ltrim($v1Path, '/');
+    $url = $absolute
+        ? getCanonicalPublicApiV1BaseUrl() . $path
+        : '/v1' . $path;
+    if ($query === []) {
+        return $url;
+    }
+
+    return $url . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+/**
  * Get rate limits for a specific tier
  * 
  * Tiers:

@@ -29,7 +29,7 @@
     "/airports": {
       "get": {
         "summary": "List all airports",
-        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted.",
+        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted. Optional has_webcams keeps airports that have weathercams configured; it is not sliced by operator. Optional has_weather keeps airports that have weather sources configured; it is not sliced by operator. When operator is set, webcam_count still counts matching weathercams only.",
         "operationId": "listAirports",
         "tags": ["Airports"],
         "parameters": [
@@ -53,6 +53,24 @@
           },
           {
             "$ref": "#/components/parameters/Operator"
+          },
+          {
+            "name": "has_webcams",
+            "in": "query",
+            "description": "Filter by whether the airport has weathercams. Use 'true' for airports with one or more weathercams, 'false' for none. Not sliced by operator.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
+          },
+          {
+            "name": "has_weather",
+            "in": "query",
+            "description": "Filter by whether the airport has weather sources configured. Use 'true' for airports with weather, 'false' for none. Not sliced by operator; weather remains the fused observation.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
           }
         ],
         "responses": {
@@ -486,6 +504,37 @@
         }
       }
     },
+    "/weathercam/bulk": {
+      "get": {
+        "summary": "Weathercam catalog",
+        "description": "One-query catalog of listed airports that have matching weathercams. Nested webcam objects match GET /airports/{id}/webcams, with absolute image and history URLs. Optional operator matches weathercams only; weather sources do not affect membership. Airports with no matching weathercam are omitted. Unlike GET /weather/bulk, this is a full catalog (no airports query and no max-airport cap). The origin response is rebuilt when airports.json changes.",
+        "operationId": "getWeathercamBulk",
+        "tags": ["Webcams"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WeathercamOperator"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebcamBulkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/operations": {
       "get": {
         "summary": "Get operations snapshot",
@@ -673,6 +722,17 @@
         "name": "operator",
         "in": "query",
         "description": "Operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json. Omitted weathercam operator is aviationwx. Omitted weather-source operator uses the type default: metar is faa, nws is nws, swob_auto and swob_man are navcanada, awosnet is awosnet, synopticdata is synopticdata, and other types are aviationwx.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
+          "maxLength": 64,
+          "example": "aviationwx"
+        }
+      },
+      "WeathercamOperator": {
+        "name": "operator",
+        "in": "query",
+        "description": "Weathercam operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json weathercams only; omitted weathercam operator is aviationwx. Airports with no matching weathercam are omitted. Weather sources do not affect membership.",
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
@@ -1248,7 +1308,7 @@
           },
           "has_webcams": {
             "type": "boolean",
-            "description": "True when the airport has one or more weathercams. When operator is set, only matching weathercams are counted."
+            "description": "True when the airport has one or more weathercams. Not sliced by operator."
           },
           "webcam_count": {
             "type": "integer",
@@ -1932,7 +1992,8 @@
                 "image_url",
                 "refresh_seconds",
                 "approximate_heading",
-                "operator"
+                "operator",
+                "images"
               ],
               "properties": {
                 "index": {
@@ -1942,11 +2003,12 @@
                   "type": "string"
                 },
                 "image_url": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Current image. Origin-relative /v1 path on GET /airports/{id}/webcams. Absolute canonical Public API v1 URL on GET /weathercam/bulk."
                 },
                 "history_url": {
                   "type": "string",
-                  "description": "URL to webcam history endpoint. Present only when webcam history retention is greater than zero for this airport (airport-specific, global, or default setting)."
+                  "description": "History endpoint. Present only when webcam history retention is greater than zero. Origin-relative on GET /airports/{id}/webcams; absolute on GET /weathercam/bulk."
                 },
                 "history_enabled": {
                   "type": "boolean",
@@ -1966,8 +2028,82 @@
                 "operator": {
                   "type": "string",
                   "description": "Operating network slug. Omitted config is aviationwx. Other networks (for example wsdot) are explicit."
+                },
+                "images": {
+                  "type": "array",
+                  "description": "Configured original plus height variants. Original is jpg only. Sized rows follow enabled formats. Not a disk probe of the current frame.",
+                  "items": {
+                    "type": "object",
+                    "required": ["variant", "height", "format", "url"],
+                    "properties": {
+                      "variant": {
+                        "type": "string",
+                        "description": "'original' or a height in pixels as a string"
+                      },
+                      "height": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "Variant height in pixels; null for original"
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": ["jpg", "webp"]
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
+            }
+          }
+        }
+      },
+      "WebcamBulkResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "allOf": [
+              { "$ref": "#/components/schemas/Meta" },
+              {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "description": "Airports in this response"
+                  },
+                  "webcam_count": {
+                    "type": "integer",
+                    "description": "Weathercams in this response"
+                  },
+                  "coordinate_system": {
+                    "type": "string",
+                    "example": "WGS84"
+                  }
+                }
+              }
+            ]
+          },
+          "airports": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                { "$ref": "#/components/schemas/AirportSummary" },
+                {
+                  "type": "object",
+                  "required": ["webcams"],
+                  "properties": {
+                    "webcams": {
+                      "type": "array",
+                      "description": "Same webcam objects as GET /airports/{id}/webcams. Image, history, and images[].url are absolute canonical Public API v1 URLs."
+                    }
+                  }
+                }
+              ]
             }
           }
         }

@@ -125,6 +125,55 @@ class PublicApiOperatorTest extends TestCase
         $this->assertNull($this->findAirport($airports, 'kspb'));
     }
 
+    public function testListAirports_HasWebcamsTrueIsIndependentOfOperator(): void
+    {
+        $response = $this->apiRequest('/airports?operator=faa&has_webcams=true');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+
+        $airports = $response['json']['airports'] ?? [];
+        $kspb = $this->findAirport($airports, 'kspb');
+        $this->assertNotNull($kspb, 'kspb matches faa via METAR and has weathercams');
+        $this->assertTrue($kspb['has_webcams']);
+        $this->assertSame(0, $kspb['webcam_count'], 'webcam_count stays operator-sliced');
+        $this->assertNull($this->findAirport($airports, '03s'));
+    }
+
+    public function testListAirports_HasWebcamsTrueKeepsAviationwxCameras(): void
+    {
+        $response = $this->apiRequest('/airports?operator=aviationwx&has_webcams=true');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+
+        $airports = $response['json']['airports'] ?? [];
+        $kspb = $this->findAirport($airports, 'kspb');
+        $this->assertNotNull($kspb);
+        $this->assertTrue($kspb['has_webcams']);
+        $this->assertSame(1, $kspb['webcam_count']);
+    }
+
+    public function testListAirports_HasWeatherTrueKeepsKspb(): void
+    {
+        $response = $this->apiRequest('/airports?has_weather=true');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+
+        $airports = $response['json']['airports'] ?? [];
+        $kspb = $this->findAirport($airports, 'kspb');
+        $this->assertNotNull($kspb);
+        $this->assertTrue($kspb['has_weather']);
+    }
+
+    public function testListAirports_HasWeatherFalseOmitsKspb(): void
+    {
+        $response = $this->apiRequest('/airports?has_weather=false');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+
+        $airports = $response['json']['airports'] ?? [];
+        $this->assertNull($this->findAirport($airports, 'kspb'));
+    }
+
     public function testListAirports_InvalidOperatorReturns400(): void
     {
         $response = $this->apiRequest('/airports?operator=not%20valid');
@@ -191,5 +240,42 @@ class PublicApiOperatorTest extends TestCase
             $filtered['json']['weather'] ?? false,
             'Weather must stay fused and ignore operator'
         );
+    }
+
+    public function testWeathercamBulk_OperatorAviationwxIsCamOnlyWithAbsoluteUrls(): void
+    {
+        $response = $this->apiRequest('/weathercam/bulk?operator=aviationwx');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+
+        $airports = $response['json']['airports'] ?? [];
+        $kspb = $this->findAirport($airports, 'kspb');
+        $this->assertNotNull($kspb);
+        $this->assertCount(1, $kspb['webcams']);
+        $this->assertSame(0, $kspb['webcams'][0]['index']);
+        $this->assertSame('aviationwx', $kspb['webcams'][0]['operator']);
+        $this->assertSame(1, $kspb['webcam_count']);
+        $this->assertStringContainsString('/airports/kspb/webcams/0/image', $kspb['webcams'][0]['image_url']);
+        $this->assertMatchesRegularExpression('#^https?://#', $kspb['webcams'][0]['image_url']);
+        $this->assertSame($kspb['webcams'][0]['image_url'], $kspb['webcams'][0]['images'][0]['url'] ?? null);
+        $this->assertNull($this->findAirport($airports, '03s'));
+    }
+
+    public function testWeathercamBulk_OperatorFaaOmitsWeatherSourceOnlyMatches(): void
+    {
+        $response = $this->apiRequest('/weathercam/bulk?operator=faa');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+        $airports = $response['json']['airports'] ?? [];
+        $this->assertNull($this->findAirport($airports, 'kspb'));
+        $this->assertNull($this->findAirport($airports, '03s'));
+    }
+
+    public function testWeathercamBulk_InvalidOperatorReturns400(): void
+    {
+        $response = $this->apiRequest('/weathercam/bulk?operator=not%20valid');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(400, $response['status']);
+        $this->assertSame('INVALID_REQUEST', $response['json']['error']['code'] ?? null);
     }
 }

@@ -106,6 +106,9 @@ function routePublicApiRequest(string $path, array $context): void
         
         // GET /v1/weather/bulk
         '#^/weather/bulk$#' => ['file' => 'weather-bulk.php', 'handler' => 'handleGetWeatherBulk'],
+
+        // GET /v1/weathercam/bulk
+        '#^/weathercam/bulk$#' => ['file' => 'weathercam-bulk.php', 'handler' => 'handleGetWeathercamBulk'],
         
         // GET /v1/status
         '#^/status$#' => ['file' => 'status.php', 'handler' => 'handleGetStatus'],
