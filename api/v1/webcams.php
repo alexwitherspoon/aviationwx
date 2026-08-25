@@ -169,8 +169,9 @@ function formatWebcamImageVariants(string $airportId, int $index, bool $absolute
         ],
     ];
 
+    $formats = getEnabledWebcamFormats();
     foreach (getVariantHeights($airportId, $index) as $height) {
-        foreach (getEnabledWebcamFormats() as $format) {
+        foreach ($formats as $format) {
             $query = [];
             if ($format !== 'jpg') {
                 $query['fmt'] = $format;
