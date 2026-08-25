@@ -500,7 +500,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator.</p>
+                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted (for example metar is faa).</p>
             </div>
         </div>
         

@@ -29,7 +29,7 @@
     "/airports": {
       "get": {
         "summary": "List all airports",
-        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator.",
+        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted.",
         "operationId": "listAirports",
         "tags": ["Airports"],
         "parameters": [
@@ -672,7 +672,7 @@
       "Operator": {
         "name": "operator",
         "in": "query",
-        "description": "Operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Omitted weathercam operator is aviationwx.",
+        "description": "Operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json. Omitted weathercam operator is aviationwx. Omitted weather-source operator uses the type default: metar is faa, nws is nws, swob_auto and swob_man are navcanada, awosnet is awosnet, synopticdata is synopticdata, and other types are aviationwx.",
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",

@@ -187,5 +187,13 @@ class OperatorConfigTest extends TestCase
         $this->assertSame(1, preg_match('/' . $pattern . '/', 'WSDOT'));
         $this->assertSame(1, preg_match('/' . $pattern . '/', 'wsdot'));
         $this->assertSame(0, preg_match('/' . $pattern . '/', 'not valid'));
+
+        $description = $spec['components']['parameters']['Operator']['description'] ?? '';
+        $this->assertStringContainsString('aviationwx', $description);
+        $this->assertStringContainsString('faa', $description);
+        $this->assertStringContainsString('nws', $description);
+        $this->assertStringContainsString('navcanada', $description);
+        $this->assertStringContainsString('awosnet', $description);
+        $this->assertStringContainsString('synopticdata', $description);
     }
 }
