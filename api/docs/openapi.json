@@ -57,19 +57,19 @@
           {
             "name": "has_webcams",
             "in": "query",
-            "description": "Filter by whether the airport has weathercams. Use 'true' for airports with one or more weathercams, 'false' for none. Not sliced by operator.",
+            "description": "Filter by whether the airport has weathercams. Use 'true' or '1' for airports with one or more weathercams; use 'false' or '0' for none. Not sliced by operator.",
             "schema": {
               "type": "string",
-              "enum": ["true", "false"]
+              "enum": ["true", "false", "1", "0"]
             }
           },
           {
             "name": "has_weather",
             "in": "query",
-            "description": "Filter by whether the airport has weather sources configured. Use 'true' for airports with weather, 'false' for none. Not sliced by operator; weather remains the fused observation.",
+            "description": "Filter by whether the airport has weather sources configured. Use 'true' or '1' for airports with weather; use 'false' or '0' for none. Not sliced by operator; weather remains the fused observation.",
             "schema": {
               "type": "string",
-              "enum": ["true", "false"]
+              "enum": ["true", "false", "1", "0"]
             }
           }
         ],

@@ -12,8 +12,8 @@
  * - limited_availability: Filter by limited availability ('true' or 'false')
  * - include_unlisted: Include unlisted airports ('true' or 'false', default: false)
  * - operator: Include airports that have one or more matching weathercams or weather sources
- * - has_webcams: Filter by weathercam presence ('true' or 'false'); not operator-sliced
- * - has_weather: Filter by weather-source presence ('true' or 'false'); not operator-sliced
+ * - has_webcams: Filter by weathercam presence ('true'/'1' or 'false'/'0'); not operator-sliced
+ * - has_weather: Filter by weather-source presence ('true'/'1' or 'false'/'0'); not operator-sliced
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';

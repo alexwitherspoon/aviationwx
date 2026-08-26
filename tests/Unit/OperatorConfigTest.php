@@ -248,4 +248,23 @@ class OperatorConfigTest extends TestCase
         $this->assertStringContainsString('awosnet', $description);
         $this->assertStringContainsString('synopticdata', $description);
     }
+
+    public function testOpenApiCapabilityFilters_DocumentAcceptedBooleanAliases(): void
+    {
+        $spec = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../api/docs/openapi.json'),
+            true
+        );
+        $parameters = $spec['paths']['/airports']['get']['parameters'] ?? [];
+        $enums = [];
+        foreach ($parameters as $parameter) {
+            $name = $parameter['name'] ?? '';
+            if ($name === 'has_webcams' || $name === 'has_weather') {
+                $enums[$name] = $parameter['schema']['enum'] ?? [];
+            }
+        }
+
+        $this->assertSame(['true', 'false', '1', '0'], $enums['has_webcams'] ?? null);
+        $this->assertSame(['true', 'false', '1', '0'], $enums['has_weather'] ?? null);
+    }
 }
