@@ -2575,12 +2575,12 @@ function getConfigFileSha256(): ?string
  * @return void
  */
 function clearConfigCache(): void {
+    $GLOBALS['_aviationwx_weathercam_bulk_sha'] = null;
+    $GLOBALS['_aviationwx_weathercam_bulk_airports'] = null;
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_config');
         apcu_delete('aviationwx_config_sha');
-    }
-    if (function_exists('resetWeathercamBulkCatalogCache')) {
-        resetWeathercamBulkCatalogCache();
+        apcu_delete('aviationwx_weathercam_bulk');
     }
     require_once __DIR__ . '/airport-country-resolution-merge.php';
     countryResolutionResetMergeFingerprint();
