@@ -1440,12 +1440,16 @@ function isWebpGenerationEnabled(): bool {
 /**
  * Get list of enabled formats for webcam generation
  * 
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return array Array of enabled format strings: ['jpg', 'webp']
  */
-function getEnabledWebcamFormats(): array {
+function getEnabledWebcamFormats(?array $config = null): array {
     $formats = ['jpg']; // Always enabled
-    
-    if (isWebpGenerationEnabled()) {
+
+    $webpEnabled = $config === null
+        ? isWebpGenerationEnabled()
+        : (bool)($config['config']['webcam_generate_webp'] ?? false);
+    if ($webpEnabled) {
         $formats[] = 'webp';
     }
     
@@ -1593,10 +1597,11 @@ const WEBCAM_HISTORY_FRAME_SAFETY_MULTIPLIER = 2.0;
  * History is considered enabled when retention > 0 and would result in >= 2 frames.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return bool True if webcam history enabled for this airport
  */
-function isWebcamHistoryEnabledForAirport(string $airportId): bool {
-    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+function isWebcamHistoryEnabledForAirport(string $airportId, ?array $config = null): bool {
+    $retentionHours = getWebcamHistoryRetentionHours($airportId, $config);
     return $retentionHours > 0;
 }
 
@@ -1607,10 +1612,11 @@ function isWebcamHistoryEnabledForAirport(string $airportId): bool {
  * Supports both new time-based config and legacy frame-based config.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return float Retention period in hours
  */
-function getWebcamHistoryRetentionHours(string $airportId): float {
-    $config = loadConfig();
+function getWebcamHistoryRetentionHours(string $airportId, ?array $config = null): float {
+    $config ??= loadConfig();
     if ($config === null) {
         return WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT;
     }

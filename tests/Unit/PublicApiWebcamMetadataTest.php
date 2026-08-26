@@ -191,4 +191,34 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertArrayHasKey('approximate_heading', $formatted);
         $this->assertNull($formatted['approximate_heading']);
     }
+
+    public function testFormatWebcamImageVariants_UsesProvidedConfiguration(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => true,
+                'webcam_variant_heights' => [480],
+            ],
+            'airports' => [
+                'test' => [
+                    'webcams' => [
+                        ['variant_heights' => [600]],
+                    ],
+                ],
+            ],
+        ];
+
+        $images = formatWebcamImageVariants('test', 0, false, $config);
+
+        $this->assertSame(
+            [
+                ['variant' => 'original', 'height' => null, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image'],
+                ['variant' => '600', 'height' => 600, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image?size=600'],
+                ['variant' => '600', 'height' => 600, 'format' => 'webp', 'url' => '/v1/airports/test/webcams/0/image?fmt=webp&size=600'],
+            ],
+            $images
+        );
+    }
 }

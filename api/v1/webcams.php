@@ -56,7 +56,13 @@ function handleListWebcams(array $params, array $context): void
         return;
     }
     $weathercamOperatorFilter = $operatorParse['value'];
-    $formattedWebcams = listFormattedWebcamsForAirport($airportId, $airport, $weathercamOperatorFilter);
+    $formattedWebcams = listFormattedWebcamsForAirport(
+        $airportId,
+        $airport,
+        $weathercamOperatorFilter,
+        false,
+        loadConfig()
+    );
 
     $meta = [
         'airport_id' => $airportId,
@@ -78,15 +84,18 @@ function handleListWebcams(array $params, array $context): void
  * @param array $airport Airport configuration
  * @param string|null $operatorFilter Lowercase slug, or null for every weathercam
  * @param bool $absoluteUrls When true, image and history URLs use the canonical v1 base
+ * @param array|null $config Already-loaded configuration, or null to load it once
  * @return list<array<string, mixed>>
  */
 function listFormattedWebcamsForAirport(
     string $airportId,
     array $airport,
     ?string $operatorFilter,
-    bool $absoluteUrls = false
+    bool $absoluteUrls = false,
+    ?array $config = null
 ): array
 {
+    $config ??= loadConfig();
     $webcams = $airport['webcams'] ?? [];
     $formattedWebcams = [];
     foreach ($webcams as $index => $webcam) {
@@ -98,7 +107,8 @@ function listFormattedWebcamsForAirport(
             (int) $index,
             $webcam,
             $airport,
-            $absoluteUrls
+            $absoluteUrls,
+            $config
         );
     }
 
@@ -113,6 +123,7 @@ function listFormattedWebcamsForAirport(
  * @param array $webcam Weathercam configuration
  * @param array $airport Airport configuration
  * @param bool $absoluteUrls When true, image and history URLs use the canonical v1 base
+ * @param array|null $config Already-loaded configuration
  * @return array Formatted weathercam metadata
  */
 function formatWebcamMetadata(
@@ -120,10 +131,11 @@ function formatWebcamMetadata(
     int $index,
     array $webcam,
     array $airport,
-    bool $absoluteUrls = false
+    bool $absoluteUrls = false,
+    ?array $config = null
 ): array
 {
-    $historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
+    $historyEnabled = isWebcamHistoryEnabledForAirport($airportId, $config);
 
     $refreshSeconds = $webcam['refresh_seconds']
         ?? $airport['webcam_refresh_seconds']
@@ -137,7 +149,7 @@ function formatWebcamMetadata(
         'refresh_seconds' => $refreshSeconds,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
         'operator' => getWeathercamOperator($webcam),
-        'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls),
+        'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls, $config),
     ];
 
     if ($historyEnabled) {
@@ -157,9 +169,15 @@ function formatWebcamMetadata(
  * @param string $airportId Airport ID
  * @param int $index Weathercam index
  * @param bool $absoluteUrls When true, URLs use the canonical v1 base
+ * @param array|null $config Already-loaded configuration
  * @return list<array{variant: string, height: int|null, format: string, url: string}>
  */
-function formatWebcamImageVariants(string $airportId, int $index, bool $absoluteUrls): array
+function formatWebcamImageVariants(
+    string $airportId,
+    int $index,
+    bool $absoluteUrls,
+    ?array $config = null
+): array
 {
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $images = [
@@ -171,8 +189,8 @@ function formatWebcamImageVariants(string $airportId, int $index, bool $absolute
         ],
     ];
 
-    $formats = getEnabledWebcamFormats();
-    foreach (getVariantHeights($airportId, $index) as $height) {
+    $formats = getEnabledWebcamFormats($config);
+    foreach (getVariantHeights($airportId, $index, $config) as $height) {
         foreach ($formats as $format) {
             $query = [];
             if ($format !== 'jpg') {

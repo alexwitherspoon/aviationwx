@@ -61,7 +61,9 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
     $full = recallWeathercamBulkCatalog();
     if ($full === null) {
         $shaBefore = getConfigFileSha256();
-        $full = buildWeathercamBulkAirports(getPublicApiAirports(true, false), null);
+        $config = loadConfig();
+        $airports = is_array($config) ? getListedAirports($config) : [];
+        $full = buildWeathercamBulkAirports($airports, null, $config);
         rememberWeathercamBulkCatalogIfConfigShaStable($full, $shaBefore, getConfigFileSha256());
     }
 
@@ -76,16 +78,28 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
  *
  * @param array<string, mixed> $airports Airport ID to configuration
  * @param string|null $operatorFilter Lowercase slug, or null for every weathercam
+ * @param array|null $config Already-loaded configuration, or null to load it once
  * @return list<array<string, mixed>>
  */
-function buildWeathercamBulkAirports(array $airports, ?string $operatorFilter): array
+function buildWeathercamBulkAirports(
+    array $airports,
+    ?string $operatorFilter,
+    ?array $config = null
+): array
 {
+    $config ??= loadConfig();
     $formattedAirports = [];
     foreach ($airports as $airportId => $airport) {
         if (!is_string($airportId) || $airportId === '' || !is_array($airport)) {
             continue;
         }
-        $webcams = listFormattedWebcamsForAirport($airportId, $airport, $operatorFilter, true);
+        $webcams = listFormattedWebcamsForAirport(
+            $airportId,
+            $airport,
+            $operatorFilter,
+            true,
+            $config
+        );
         if ($webcams === []) {
             continue;
         }
