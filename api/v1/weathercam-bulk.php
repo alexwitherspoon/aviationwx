@@ -149,7 +149,8 @@ function rememberWeathercamBulkCatalogIfConfigShaStable(
     array $airports,
     ?string $shaBefore,
     ?string $shaAfter
-): void {
+): void
+{
     if ($shaBefore === null || $shaBefore === '' || $shaBefore !== $shaAfter) {
         return;
     }

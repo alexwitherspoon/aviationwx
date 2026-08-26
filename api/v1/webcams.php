@@ -85,7 +85,8 @@ function listFormattedWebcamsForAirport(
     array $airport,
     ?string $operatorFilter,
     bool $absoluteUrls = false
-): array {
+): array
+{
     $webcams = $airport['webcams'] ?? [];
     $formattedWebcams = [];
     foreach ($webcams as $index => $webcam) {
@@ -120,7 +121,8 @@ function formatWebcamMetadata(
     array $webcam,
     array $airport,
     bool $absoluteUrls = false
-): array {
+): array
+{
     $historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
 
     $refreshSeconds = $webcam['refresh_seconds']
