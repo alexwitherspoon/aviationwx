@@ -29,33 +29,12 @@ require_once __DIR__ . '/../../lib/weather/utils.php';
  */
 function handleListAirports(array $params, array $context): void
 {
-    $includeUnlisted = false;
-    if (isset($_GET['include_unlisted'])) {
-        $unlistedParam = strtolower(trim($_GET['include_unlisted']));
-        $includeUnlisted = ($unlistedParam === 'true' || $unlistedParam === '1');
-    }
+    $includeUnlisted = parsePublicApiOptionalBooleanQuery('include_unlisted') ?? false;
 
     $airports = getPublicApiAirports(true, $includeUnlisted);
 
-    $maintenanceFilter = null;
-    if (isset($_GET['maintenance'])) {
-        $maintenanceParam = strtolower(trim($_GET['maintenance']));
-        if ($maintenanceParam === 'true' || $maintenanceParam === '1') {
-            $maintenanceFilter = true;
-        } elseif ($maintenanceParam === 'false' || $maintenanceParam === '0') {
-            $maintenanceFilter = false;
-        }
-    }
-
-    $limitedAvailabilityFilter = null;
-    if (isset($_GET['limited_availability'])) {
-        $limitedParam = strtolower(trim($_GET['limited_availability']));
-        if ($limitedParam === 'true' || $limitedParam === '1') {
-            $limitedAvailabilityFilter = true;
-        } elseif ($limitedParam === 'false' || $limitedParam === '0') {
-            $limitedAvailabilityFilter = false;
-        }
-    }
+    $maintenanceFilter = parsePublicApiOptionalBooleanQuery('maintenance');
+    $limitedAvailabilityFilter = parsePublicApiOptionalBooleanQuery('limited_availability');
 
     $operatorParse = parseOperatorQueryFromGet();
     if (!$operatorParse['ok']) {

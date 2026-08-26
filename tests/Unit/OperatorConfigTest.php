@@ -128,8 +128,15 @@ class OperatorConfigTest extends TestCase
             $_GET = ['has_webcams' => 'maybe'];
             $this->assertNull(parsePublicApiOptionalBooleanQuery('has_webcams'));
 
-            $_GET = ['has_webcams' => ['true']];
-            $this->assertNull(parsePublicApiOptionalBooleanQuery('has_webcams'));
+            foreach ([
+                'has_webcams',
+                'include_unlisted',
+                'maintenance',
+                'limited_availability',
+            ] as $name) {
+                $_GET = [$name => ['true']];
+                $this->assertNull(parsePublicApiOptionalBooleanQuery($name));
+            }
         } finally {
             $_GET = $originalGet;
         }
