@@ -663,8 +663,7 @@ function sendImageResponse(
             'age_seconds' => time() - $timestamp,
             'failclosed_seconds' => getStaleFailclosedSeconds($airport),
         ], 'app');
-        $headers = generateCacheHeaders(0, 0, false);
-        $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+        $headers = getNoStoreCacheHeaders(0);
         header('Warning: 110 - "Response is stale"');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $timestamp) . ' GMT');
     } else {
