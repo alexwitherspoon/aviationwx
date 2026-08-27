@@ -792,8 +792,9 @@ function handleGetWebcamMetadata(
         'variant_heights' => $variantHeights,
     ];
     
-    // Send cache headers (short TTL since image changes frequently)
-    sendPublicApiCacheHeaders('live');
+    // age_seconds/stale are time-relative, so this payload must not be cached;
+    // a 60s shared cache would serve values that no longer match the capture age.
+    sendPublicApiCacheHeaders('none');
     
     // Send response
     sendPublicApiSuccess($data, $meta);
