@@ -1330,19 +1330,8 @@ if (!is_dir($cacheDir) || !is_readable($cacheDir)) {
 
 // Get latest timestamp
 $latestTimestamp = getLatestImageTimestamp($airportId, $camIndex);
-$currentOriginal = null;
 $refreshInterval = getRefreshIntervalForCamera($airportId, $config, $cam);
 $enabledFormats = getEnabledWebcamFormats();
-
-// Judge staleness from the servable capture, not the newest filename: a fresh but
-// corrupt capture must not mask an aged servable original as current.
-$servingNativeCurrentOriginal = $requestedSize === 'original' && !isset($_GET['fmt']);
-if ($servingNativeCurrentOriginal) {
-    $currentOriginal = getCurrentServableWebcamOriginal($airportId, $camIndex);
-    if ($currentOriginal !== null) {
-        $latestTimestamp = $currentOriginal['timestamp'];
-    }
-}
 
 // If no image exists, serve placeholder
 if ($latestTimestamp === 0) {
@@ -1486,7 +1475,9 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
     exit;
 }
 
+$servingNativeCurrentOriginal = $requestedSize === 'original' && !isset($_GET['fmt']);
 if ($servingNativeCurrentOriginal) {
+    $currentOriginal = getCurrentServableWebcamOriginal($airportId, $camIndex);
     $imagePath = $currentOriginal['path'] ?? null;
     if ($currentOriginal !== null) {
         $latestTimestamp = $currentOriginal['timestamp'];

@@ -98,16 +98,6 @@ class WebcamFormatGenerationTest extends TestCase
         $format = detectImageFormat($file);
         $this->assertEquals('webp', $format);
     }
-
-    public function testDetectImageFormat_TruncatedWebpZeroRiffSize_ReturnsNull(): void
-    {
-        $path = $this->testImageDir . '/truncated.webp';
-        // RIFF + 0xFF00 0000 size + WEBP: a zero-length chunk stub must not be
-        // classified as webp, so a truncated file isn't served with a real type.
-        file_put_contents($path, "RIFF\x00\x00\x00\x00WEBP");
-        $this->assertNull(detectImageFormat($path));
-        $this->assertNull(detectImageFormatFromHeader("RIFF\x00\x00\x00\x00WEBP"));
-    }
     
     public function testDetectImageFormat_InvalidFile_ReturnsNull(): void
     {

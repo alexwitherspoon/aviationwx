@@ -68,12 +68,7 @@ if (is_array($rawFormat)) {
     echo json_encode(['error' => 'fmt must be a single value']);
     exit;
 }
-// Normalize through the shared alias map so fmt=jpeg is accepted here as everywhere else.
 $requestedFormat = $explicitFormatRequest ? strtolower(trim((string) $rawFormat)) : 'jpg';
-if ($explicitFormatRequest) {
-    $normalized = normalizeWebcamFormatName($requestedFormat);
-    $requestedFormat = $normalized ?? $requestedFormat;
-}
 if ($explicitFormatRequest && !isset($supportedFormats[$requestedFormat])) {
     header('Content-Type: application/json');
     http_response_code(400);

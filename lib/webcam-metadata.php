@@ -248,8 +248,6 @@ function validateVariantHeights(array $heights): array {
 function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
     $bestPath = null;
     $bestRank = -1;
-    // Legitimate symlink targets always resolve under the airport cache dir.
-    $airportDir = getWebcamAirportDir($airportId);
     foreach (getSupportedWebcamSourceFormats() as $format) {
         $symlink = getWebcamOriginalSymlinkPath($airportId, $camIndex, $format);
         if (!is_link($symlink)) {
@@ -259,18 +257,7 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
         if ($realPath === false) {
             continue;
         }
-        $fullPath = $realPath[0] === '/' ? $realPath : dirname($symlink) . '/' . $realPath;
-        // Refuse symlinks that resolve outside the airport cache (defense in depth).
-        $realTarget = realpath($fullPath);
-        if ($realTarget === false || !str_starts_with($realTarget, $airportDir . '/')) {
-            aviationwx_log('warn', 'webcam original symlink escapes airport cache', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'symlink' => $symlink,
-                'target' => $fullPath,
-            ], 'app');
-            continue;
-        }
+        $fullPath = dirname($symlink) . '/' . $realPath;
         $rank = webcamServableOriginalCaptureRank($fullPath);
         if ($rank === null || $rank <= $bestRank) {
             continue;

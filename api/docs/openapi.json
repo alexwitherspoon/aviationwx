@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. Files that are not those types are not served.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
+        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Exact height-based variant from the pre-generated set (no cropping or size fallback)\n- Neither: Native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. Files that are not those types are not served.\n\nsize may be omitted or set to original. Numeric size, width, and height values must be complete canonical integers within their documented ranges; malformed values return 400.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -337,11 +337,20 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Height-based variant from pre-generated set (no cropping). Use for standard variants like 720, 1080. Mutually exclusive with width/height. Ignored when profile is set.",
+            "description": "Exact height-based variant from the pre-generated set (no cropping or fallback to the original). Omit for the native original. Mutually exclusive with width/height. Ignored when profile is set.",
             "schema": {
-              "type": "string",
               "default": "original",
-              "example": "720"
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": ["original"]
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5000
+                }
+              ]
             }
           },
           {
@@ -406,7 +415,7 @@
     "/airports/{id}/webcams/{cam}/history": {
       "get": {
         "summary": "Get webcam history",
-        "description": "Returns list of historical webcam frames, or a specific frame image when ts is provided.\n\nWhen ts is set, omit fmt for the native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. fmt applies only to generated size variants. fmt with no size, or with size=original, returns 400.",
+        "description": "Returns list of historical webcam frames, or a specific frame image when ts is provided.\n\nWhen ts is set, omit fmt for the native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. fmt applies only to generated size variants. fmt with no size, or with size=original, returns 400. ts must be a complete canonical integer. size may be omitted, set to original, or supplied as a complete canonical integer. Malformed values return 400. Requested heights are exact and never fall back to the original.",
         "operationId": "getWebcamHistory",
         "tags": ["Webcams"],
         "parameters": [
@@ -421,7 +430,8 @@
             "in": "query",
             "description": "Timestamp of specific frame to retrieve (returns image)",
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1
             }
           },
           {
@@ -436,10 +446,19 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Height-based variant from the pre-generated set. Only used with ts. Omit fmt when requesting the original.",
+            "description": "Exact height-based variant from the pre-generated set. Only used with ts and never falls back to the original. Omit size and fmt when requesting the native original.",
             "schema": {
-              "type": "string",
-              "example": "720"
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": ["original"]
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5000
+                }
+              ]
             }
           }
         ],

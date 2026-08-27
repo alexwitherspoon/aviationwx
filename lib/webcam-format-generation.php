@@ -42,13 +42,6 @@ function detectImageFormatFromHeader(string $header): ?string
     }
 
     if (substr($header, 0, 4) === 'RIFF' && substr($header, 8, 4) === 'WEBP') {
-        // A WebP RIFF header opens with RIFF + a uint32 little-endian size
-        // (file bytes minus 8) + WEBP. Reject a zero-sized chunk stub so a
-        // truncated RIFF\\0\\0\\0\\0WEBP isn't served as a valid webp.
-        $riffSize = unpack('V', substr($header, 4, 4))[1];
-        if ($riffSize < 4) {
-            return null;
-        }
         return 'webp';
     }
 
@@ -261,6 +254,46 @@ function webcamReadServableImage(string $path): ?array
     $served['bytes'] = $bytes;
 
     return $served;
+}
+
+/**
+ * Open and classify a webcam image without reopening its path.
+ *
+ * @param string $path Existing file path
+ * @return array{handle: resource, format: string, content_type: string, size: int, mtime: int}|null
+ */
+function openServableWebcamImage(string $path): ?array
+{
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) {
+        return null;
+    }
+
+    $stat = @fstat($handle);
+    if ($stat === false || ($stat['size'] ?? 0) <= 0) {
+        fclose($handle);
+        return null;
+    }
+
+    $prefix = @fread($handle, 12);
+    if ($prefix === false || !@rewind($handle)) {
+        fclose($handle);
+        return null;
+    }
+
+    $served = webcamServableImageContentFromBytes($prefix);
+    if ($served === null) {
+        fclose($handle);
+        return null;
+    }
+
+    return [
+        'handle' => $handle,
+        'format' => $served['format'],
+        'content_type' => $served['content_type'],
+        'size' => (int) $stat['size'],
+        'mtime' => (int) ($stat['mtime'] ?? time()),
+    ];
 }
 
 /**

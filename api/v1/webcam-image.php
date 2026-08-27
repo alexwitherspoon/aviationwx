@@ -193,8 +193,8 @@ function handleGetWebcamImage(array $params, array $context): void
         }
         $originalFile = $currentOriginal['path'];
 
-        $meta = webcamServableImageFileMeta($originalFile);
-        if ($meta === null) {
+        $opened = openServableWebcamImage($originalFile);
+        if ($opened === null) {
             sendPublicApiError(
                 PUBLIC_API_ERROR_INVALID_REQUEST,
                 'Image format is not supported',
@@ -202,33 +202,9 @@ function handleGetWebcamImage(array $params, array $context): void
             );
             return;
         }
-        $format = $currentOriginal['format'];
-
-        $captureTime = 0;
-        if ($format === 'jpg' && function_exists('exif_read_data')) {
-            $exif = @exif_read_data($originalFile, 'EXIF', true);
-            if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
-                $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                $parsed = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                if ($parsed !== false && $parsed > 0) {
-                    $captureTime = (int) $parsed;
-                }
-            } elseif (isset($exif['DateTimeOriginal'])) {
-                $dateTime = $exif['DateTimeOriginal'];
-                $parsed = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                if ($parsed !== false && $parsed > 0) {
-                    $captureTime = (int) $parsed;
-                }
-            }
-        }
-
-        $mtime = $meta['mtime'];
-        if ($captureTime > 0) {
-            $filenameStamp = gmdate('Y-m-d_His', $captureTime) . '_UTC';
-        } else {
-            $filenameStamp = gmdate('Y-m-d_His', $currentOriginal['timestamp']) . '_UTC';
-        }
-
+        $format = $opened['format'];
+        $mtime = $opened['mtime'];
+        $filenameStamp = gmdate('Y-m-d_His', $currentOriginal['timestamp']) . '_UTC';
         $filename = strtolower($airportId) . "_{$camIndex}_{$filenameStamp}." . $format;
 
         // Latest download is mutable; use the live-image cache policy.
@@ -245,15 +221,22 @@ function handleGetWebcamImage(array $params, array $context): void
         }
 
         require_once __DIR__ . '/../../lib/http-integrity.php';
-        if (addIntegrityHeadersForFile($originalFile, $mtime)) {
+        if (addIntegrityHeadersForOpenFile(
+            $opened['handle'],
+            $originalFile,
+            $mtime,
+            $opened['size']
+        )) {
+            fclose($opened['handle']);
             exit;
         }
 
-        header('Content-Type: ' . $meta['content_type']);
+        header('Content-Type: ' . $opened['content_type']);
         header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . $meta['size']);
+        header('Content-Length: ' . $opened['size']);
 
-        readfile($originalFile);
+        fpassthru($opened['handle']);
+        fclose($opened['handle']);
         exit;
     }
     
@@ -282,15 +265,46 @@ function handleGetWebcamImage(array $params, array $context): void
         return;
     }
 
-    // Parse dimension parameters
-    $requestedWidth = isset($_GET['width']) && is_numeric($_GET['width']) ? (int)$_GET['width'] : null;
-    $requestedHeight = isset($_GET['height']) && is_numeric($_GET['height']) ? (int)$_GET['height'] : null;
-    $size = $_GET['size'] ?? null;
+    $widthParse = parsePublicApiWebcamDimensionQueryFromGet('width', 16, 3840);
+    $heightParse = parsePublicApiWebcamDimensionQueryFromGet('height', 16, 2160);
+    $sizeParse = parsePublicApiWebcamSizeQueryFromGet();
+    foreach ([$widthParse, $heightParse, $sizeParse] as $queryParse) {
+        if (!$queryParse['ok']) {
+            sendPublicApiError(
+                PUBLIC_API_ERROR_INVALID_REQUEST,
+                $queryParse['error'],
+                400
+            );
+            return;
+        }
+    }
+    $requestedWidth = $widthParse['value'];
+    $requestedHeight = $heightParse['value'];
+    $size = $sizeParse['size'];
     if (
-        $size === null ||
-        ($size !== 'original' && (!is_numeric($size) || (int)$size < 1 || (int)$size > 5000))
+        array_key_exists('size', $_GET)
+        && ($requestedWidth !== null || $requestedHeight !== null)
     ) {
-        $size = 'original';
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            'size cannot be combined with width or height',
+            400
+        );
+        return;
+    }
+    $explicitFormatRequest = $fmtParse['explicit'];
+    if (publicApiWebcamFmtRejectedOnOriginal(
+        $explicitFormatRequest,
+        $size,
+        $requestedWidth,
+        $requestedHeight
+    )) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            'fmt applies to generated size variants. Omit fmt for the original.',
+            400
+        );
+        return;
     }
 
     $currentOriginal = getCurrentServableWebcamOriginal($airportId, $camIndex);
@@ -309,7 +323,6 @@ function handleGetWebcamImage(array $params, array $context): void
     $cacheFile = null;
     $variant = 'original';
     $format = $fmtParse['format'] ?? 'jpg';
-    $explicitFormatRequest = $fmtParse['explicit'];
 
     if ($requestedWidth !== null || $requestedHeight !== null) {
         $cacheFile = handleTransformRequest(
@@ -333,20 +346,6 @@ function handleGetWebcamImage(array $params, array $context): void
             $variant = 'h' . $requestedHeight;
         }
     } else {
-        if (publicApiWebcamFmtRejectedOnOriginal(
-            $explicitFormatRequest,
-            $size,
-            $requestedWidth,
-            $requestedHeight
-        )) {
-            sendPublicApiError(
-                PUBLIC_API_ERROR_INVALID_REQUEST,
-                'fmt applies to generated size variants. Omit fmt for the original.',
-                400
-            );
-            return;
-        }
-
         if ($size === 'original' && !$explicitFormatRequest) {
             if ($currentOriginal === null) {
                 sendPublicApiError(
@@ -404,26 +403,17 @@ function handleGetWebcamImage(array $params, array $context): void
         return;
     }
 
-    $served = webcamServableImageContent($cacheFile);
-    if ($served === null) {
-        sendPublicApiError(
-            PUBLIC_API_ERROR_INVALID_REQUEST,
-            'Image format is not supported',
-            400
-        );
-        return;
-    }
-    if (!webcamExplicitFmtMatchesFile($explicitFormatRequest, $format, $served['format'])) {
-        sendPublicApiError(
-            PUBLIC_API_ERROR_INVALID_REQUEST,
-            "Requested format '{$format}' does not match the image file",
-            400
-        );
-        return;
-    }
-    $format = $served['format'];
-
-    sendImageResponse($airportId, $camIndex, $cacheFile, $timestamp, $variant, $format, $airport, $webcams[$camIndex]);
+    sendImageResponse(
+        $airportId,
+        $camIndex,
+        $cacheFile,
+        $timestamp,
+        $variant,
+        $format,
+        $airport,
+        $webcams[$camIndex],
+        $explicitFormatRequest
+    );
 }
 
 /**
@@ -605,6 +595,7 @@ function handleTransformRequest(
  * @param string $format Caller hint; body type is taken from the file header
  * @param array $airport Airport configuration
  * @param array $cam Camera configuration
+ * @param bool $explicitFormatRequest Whether fmt was supplied by the client
  */
 function sendImageResponse(
     string $airportId,
@@ -614,10 +605,11 @@ function sendImageResponse(
     string|int $variant,
     string $format,
     array $airport,
-    array $cam
+    array $cam,
+    bool $explicitFormatRequest = false
 ): void {
-    $meta = webcamServableImageFileMeta($cacheFile);
-    if ($meta === null) {
+    $opened = openServableWebcamImage($cacheFile);
+    if ($opened === null) {
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
             'Image format is not supported',
@@ -625,12 +617,16 @@ function sendImageResponse(
         );
         return;
     }
-    $format = $meta['format'];
-
-    // A capture older than the fail-closed threshold is a "last known good frame":
-    // still served as 200, but marked stale so it is not cached as current. The
-    // capture time (authoritative EXIF) travels in the bytes and is exposed via Last-Modified.
-    $stale = $timestamp > 0 && (time() - $timestamp) > getStaleFailclosedSeconds($airport);
+    if (!webcamExplicitFmtMatchesFile($explicitFormatRequest, $format, $opened['format'])) {
+        fclose($opened['handle']);
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            "Requested format '{$format}' does not match the image file",
+            400
+        );
+        return;
+    }
+    $format = $opened['format'];
 
     $sizeForMetrics = 'original';
     if (is_numeric($variant) && (int)$variant >= 1 && (int)$variant <= 5000) {
@@ -644,7 +640,7 @@ function sendImageResponse(
     }
     metrics_track_webcam_serve($airportId, $camIndex, $format, $sizeForMetrics);
 
-    $mtime = $meta['mtime'];
+    $mtime = $opened['mtime'];
     $filename = $timestamp . '_' . $variant . '.' . $format;
 
     $webcamRefresh = getDefaultWebcamRefresh();
@@ -655,38 +651,29 @@ function sendImageResponse(
         $webcamRefresh = intval($cam['refresh_seconds']);
     }
 
-    if ($stale) {
-        // Last known good frame; log the over-age delivery so it is auditable.
-        aviationwx_log('warn', 'serving over-age webcam frame past fail-closed threshold', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'capture_timestamp' => $timestamp,
-            'age_seconds' => time() - $timestamp,
-            'failclosed_seconds' => getStaleFailclosedSeconds($airport),
-        ], 'app');
-        header('Warning: 110 - "Response is stale"');
-        $headers = generateCacheHeaders(0, 0, false);
-        $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
-        $lastModified = gmdate('D, d M Y H:i:s', $timestamp) . ' GMT';
-        header('Last-Modified: ' . $lastModified);
-    } else {
-        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
-    }
+    $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
     foreach ($headers as $name => $value) {
         header($name . ': ' . $value);
     }
     header('Access-Control-Allow-Origin: *');
 
     require_once __DIR__ . '/../../lib/http-integrity.php';
-    if (addIntegrityHeadersForFile($cacheFile, $mtime)) {
+    if (addIntegrityHeadersForOpenFile(
+        $opened['handle'],
+        $cacheFile,
+        $mtime,
+        $opened['size']
+    )) {
+        fclose($opened['handle']);
         return;
     }
 
-    header('Content-Type: ' . $meta['content_type']);
+    header('Content-Type: ' . $opened['content_type']);
     header('Content-Disposition: inline; filename="' . $filename . '"');
-    header('Content-Length: ' . $meta['size']);
+    header('Content-Length: ' . $opened['size']);
 
-    readfile($cacheFile);
+    fpassthru($opened['handle']);
+    fclose($opened['handle']);
 }
 
 /**
@@ -761,13 +748,9 @@ function handleGetWebcamMetadata(
     rsort($recommendedSizes);
     
     // Build response
-    $ageSeconds = max(0, time() - $timestamp);
-    $staleFailClosed = getStaleFailclosedSeconds($airport);
     $data = [
         'timestamp' => $timestamp,
         'timestamp_iso' => gmdate('c', $timestamp),
-        'age_seconds' => $ageSeconds,
-        'stale' => $ageSeconds > $staleFailClosed,
         'formats' => $formats,
         'recommended_sizes' => array_values($recommendedSizes),
         'urls' => $urls,

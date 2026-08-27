@@ -25,9 +25,8 @@ require_once __DIR__ . '/webcam-metadata.php';
  *
  * History URLs are immutable, so only files for this timestamp are used.
  * Staging files belong to in-progress live promotion and must not be served
- * as an old timestamp. When the requested height is missing, the same-format
- * original for that timestamp may be used. A missing format is not replaced
- * with another format.
+ * as an old timestamp. Requested heights are exact; a missing size or format
+ * is not replaced with another file.
  *
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index (0-based)
@@ -43,39 +42,11 @@ function findHistoricalWebcamSizeFile(
     string|int $size,
     string $format
 ): array {
-    $resolvedSize = $size;
     $cacheFile = timestampedWebcamImagePathIfExists($airportId, $camIndex, $timestamp, $size, $format);
-    if ($cacheFile === null && $size !== 'original') {
-        $original = timestampedWebcamImagePathIfExists(
-            $airportId,
-            $camIndex,
-            $timestamp,
-            'original',
-            $format
-        );
-        if ($original !== null) {
-            $cacheFile = $original;
-            $resolvedSize = 'original';
-        }
-    }
 
-    return ['path' => $cacheFile, 'size' => $resolvedSize];
+    return ['path' => $cacheFile, 'size' => $size];
 }
 
-/**
- * Resolve the exact timestamped frame path for a requested size/format.
- *
- * For the original size, only the known source-format extensions are probed;
- * for a numeric size the variant path is returned if it exists. Returns null
- * when no matching file is present on disk.
- *
- * @param string $airportId Airport identifier
- * @param int $camIndex Camera index (0-based)
- * @param int $timestamp Exact capture timestamp for the frame
- * @param string|int $size "original" or a numeric variant height
- * @param string $format jpg, png, or webp
- * @return string|null Path to the frame, or null when not present
- */
 function timestampedWebcamImagePathIfExists(
     string $airportId,
     int $camIndex,

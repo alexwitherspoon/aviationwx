@@ -82,9 +82,18 @@ function handleGetWebcamHistory(array $params, array $context): void
         return;
     }
     
-    // Check if specific timestamp requested (return image)
-    if (isset($_GET['ts'])) {
-        handleGetHistoricalFrame($airportId, $camIndex, (int)$_GET['ts']);
+    $timestampParse = parsePublicApiWebcamTimestampQueryFromGet();
+    if (!$timestampParse['ok']) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            $timestampParse['error'],
+            400
+        );
+        return;
+    }
+
+    if ($timestampParse['present']) {
+        handleGetHistoricalFrame($airportId, $camIndex, $timestampParse['timestamp']);
         return;
     }
     
@@ -197,10 +206,16 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
 {
     require_once __DIR__ . '/../../lib/webcam-history.php';
 
-    $size = $_GET['size'] ?? 'original';
-    if ($size !== 'original' && (!is_numeric($size) || (int)$size < 1 || (int)$size > 5000)) {
-        $size = 'original';
+    $sizeParse = parsePublicApiWebcamSizeQueryFromGet();
+    if (!$sizeParse['ok']) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_INVALID_REQUEST,
+            $sizeParse['error'],
+            400
+        );
+        return;
     }
+    $size = $sizeParse['size'];
 
     $fmtParse = parsePublicApiWebcamFmtQueryFromGet();
     if (!$fmtParse['ok']) {
@@ -262,8 +277,8 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         return;
     }
 
-    $meta = webcamServableImageFileMeta($cacheFile);
-    if ($meta === null) {
+    $opened = openServableWebcamImage($cacheFile);
+    if ($opened === null) {
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
             'Image format is not supported',
@@ -271,7 +286,8 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         );
         return;
     }
-    if (!webcamExplicitFmtMatchesFile($explicitFmt, $format, $meta['format'])) {
+    if (!webcamExplicitFmtMatchesFile($explicitFmt, $format, $opened['format'])) {
+        fclose($opened['handle']);
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
             "Requested format '{$format}' does not match the image file",
@@ -279,7 +295,7 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         );
         return;
     }
-    $format = $meta['format'];
+    $format = $opened['format'];
 
     $variant = ($size === 'original') ? 'original' : (int)$size;
     $filename = $timestamp . '_' . $variant . '.' . $format;
@@ -288,14 +304,21 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     header('Access-Control-Allow-Origin: *');
 
     require_once __DIR__ . '/../../lib/http-integrity.php';
-    if (addIntegrityHeadersForFile($cacheFile, $meta['mtime'])) {
+    if (addIntegrityHeadersForOpenFile(
+        $opened['handle'],
+        $cacheFile,
+        $opened['mtime'],
+        $opened['size']
+    )) {
+        fclose($opened['handle']);
         return;
     }
 
-    header('Content-Type: ' . $meta['content_type']);
+    header('Content-Type: ' . $opened['content_type']);
     header('Content-Disposition: inline; filename="' . $filename . '"');
-    header('Content-Length: ' . $meta['size']);
+    header('Content-Length: ' . $opened['size']);
 
-    readfile($cacheFile);
+    fpassthru($opened['handle']);
+    fclose($opened['handle']);
 }
 

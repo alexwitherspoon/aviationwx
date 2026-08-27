@@ -261,6 +261,44 @@ class HttpIntegrityTest extends TestCase
         $this->assertSame(computeContentMd5FromString($content), $cached['md5']);
     }
 
+    public function testGetOpenFileDigestsWithCache_HashesAndRewindsDescriptor(): void
+    {
+        $content = 'open descriptor digest test';
+        $filePath = $this->tempDir . '/open_digest_test.txt';
+        file_put_contents($filePath, $content);
+        $handle = fopen($filePath, 'rb');
+        $this->assertIsResource($handle);
+
+        try {
+            $digests = getOpenFileDigestsWithCache(
+                $handle,
+                $filePath,
+                (int)filemtime($filePath),
+                strlen($content)
+            );
+
+            $this->assertNotNull($digests);
+            $this->assertSame(computeContentDigestFromString($content), $digests['digest']);
+            $this->assertSame(computeContentMd5FromString($content), $digests['md5']);
+            $this->assertSame(0, ftell($handle));
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    public function testRewindOpenFileForResponse_NonSeekableStream_ReturnsFalse(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($pair);
+
+        try {
+            $this->assertFalse(rewindOpenFileForResponse($pair[1]));
+        } finally {
+            fclose($pair[0]);
+            fclose($pair[1]);
+        }
+    }
+
     /**
      * getHttpIntegrityDigestTtlSeconds returns TTL >= 24h when config has 24h retention
      */
