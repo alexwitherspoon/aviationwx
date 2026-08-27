@@ -38,7 +38,7 @@ function processWebcamWidgetData($data, $options) {
         require_once __DIR__ . '/../cache-paths.php';
         require_once __DIR__ . '/../webcam-format-generation.php';
         
-        $files = getWebcamImageFiles($airportId, $webcamIndex, '*_*.{jpg,jpeg,webp}');
+        $files = getWebcamImageFiles($airportId, $webcamIndex, '*_*.{jpg,jpeg,png,webp}');
         if (!empty($files)) {
             usort($files, function($a, $b) {
                 return filemtime($b) - filemtime($a);

@@ -1538,14 +1538,10 @@ if (php_sapi_name() === 'cli') {
                     $weeklyAirportMetrics = $usageMetrics['airports'][$airportIdLower] ?? null;
                     
                     // Calculate webcam totals (serves = successful image deliveries)
-                    $totalWebcamServes = 0;
-                    $formatTotals = ['jpg' => 0, 'webp' => 0];
+                    $formatTotals = metricsSumWebcamFormatTotals($webcamMetrics);
+                    $totalWebcamServes = array_sum($formatTotals);
                     $sizeTotals = []; // Dynamic: height-based variants like '720', '360', 'original'
                     foreach ($webcamMetrics as $camData) {
-                        foreach ($camData['by_format'] ?? [] as $fmt => $count) {
-                            $formatTotals[$fmt] += $count;
-                            $totalWebcamServes += $count;
-                        }
                         foreach ($camData['by_size'] ?? [] as $sz => $count) {
                             if (!isset($sizeTotals[$sz])) {
                                 $sizeTotals[$sz] = 0;

@@ -15,9 +15,11 @@ require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../../lib/circuit-breaker.php';
 require_once __DIR__ . '/../../lib/logger.php';
+require_once __DIR__ . '/WebcamUnsupportedPayloads.php';
 
 class WebcamFormatGenerationTest extends TestCase
 {
+    use \WebcamUnsupportedPayloads;
     private $testImageDir;
     
     protected function setUp(): void
@@ -80,6 +82,7 @@ class WebcamFormatGenerationTest extends TestCase
         $file = $this->createTestJpeg('test.jpg');
         $format = detectImageFormat($file);
         $this->assertEquals('jpg', $format);
+        $this->assertSame('jpg', detectImageFormatFromHeader(file_get_contents($file)));
     }
     
     public function testDetectImageFormat_PngFile_ReturnsPng(): void
@@ -94,6 +97,16 @@ class WebcamFormatGenerationTest extends TestCase
         $file = $this->createTestWebp('test.webp');
         $format = detectImageFormat($file);
         $this->assertEquals('webp', $format);
+    }
+
+    public function testDetectImageFormat_TruncatedWebpZeroRiffSize_ReturnsNull(): void
+    {
+        $path = $this->testImageDir . '/truncated.webp';
+        // RIFF + 0xFF00 0000 size + WEBP: a zero-length chunk stub must not be
+        // classified as webp, so a truncated file isn't served with a real type.
+        file_put_contents($path, "RIFF\x00\x00\x00\x00WEBP");
+        $this->assertNull(detectImageFormat($path));
+        $this->assertNull(detectImageFormatFromHeader("RIFF\x00\x00\x00\x00WEBP"));
     }
     
     public function testDetectImageFormat_InvalidFile_ReturnsNull(): void
@@ -125,6 +138,35 @@ class WebcamFormatGenerationTest extends TestCase
         file_put_contents($file, "\xFF"); // Only 1 byte
         $format = detectImageFormat($file);
         $this->assertNull($format);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedWebcamPayloadProvider')]
+    public function testDetectImageFormat_UnsupportedPayload_ReturnsNull(string $label, string $bytes): void
+    {
+        $file = $this->testImageDir . '/payload.' . $label;
+        file_put_contents($file, $bytes);
+        $this->assertNull(detectImageFormat($file));
+        $this->assertNull(detectServableWebcamImageFormat($file));
+        $this->assertNull(webcamServableImageContent($file));
+        $this->assertNull(webcamServableImageContentFromBytes($bytes));
+        $this->assertNull(webcamReadServableImage($file));
+        $this->assertNull(webcamImageContentType($label));
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedWebcamPayloadProvider')]
+    public function testGenerateVariantsFromOriginal_UnsupportedPayload_DoesNotPromoteAsJpeg(string $label, string $bytes): void
+    {
+        $airportId = 'badpipe_unit';
+        $camIndex = 0;
+        $timestamp = 1704067600;
+        $source = $this->testImageDir . '/payload.' . $label;
+        file_put_contents($source, $bytes);
+
+        $result = generateVariantsFromOriginal($source, $airportId, $camIndex, $timestamp);
+        $this->assertNull($result['original']);
+        $this->assertFileDoesNotExist(
+            getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'jpg')
+        );
     }
     
 
@@ -919,6 +961,23 @@ class WebcamFormatGenerationTest extends TestCase
     {
         $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
         $this->assertStringContainsString('1703700000_original.jpg', $path);
+    }
+
+    public function testGlobWebcamHourDirImageFiles_PngFrame_IsIncluded(): void
+    {
+        $this->createTestJpeg('123_original.jpg');
+        $this->createTestPng('456_original.png');
+        $this->createTestWebp('789_original.webp');
+        file_put_contents($this->testImageDir . '/notes.txt', 'skip');
+
+        $files = globWebcamHourDirImageFiles($this->testImageDir);
+        $basenames = array_map('basename', $files);
+        sort($basenames);
+
+        $this->assertSame(
+            ['123_original.jpg', '456_original.png', '789_original.webp'],
+            $basenames
+        );
     }
 }
 

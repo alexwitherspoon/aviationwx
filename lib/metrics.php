@@ -7,7 +7,7 @@
  * 
  * Metrics tracked:
  * - Airport page views, weather requests, webcam requests
- * - Webcam serves by format (jpg, webp)
+ * - Webcam serves by format (jpg, png, webp)
  * - Webcam serves by size (height-based: 720, 360, 1080, original)
  * - Webcam image processing (variants_generated, verified, rejected)
  * - Map tile serves by source (openweathermap, rainviewer)
@@ -54,7 +54,7 @@ function metrics_get_empty_global(): array {
         'variants_generated' => 0,
         'tiles_served' => 0,
         'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
-        'format_served' => ['jpg' => 0, 'webp' => 0],
+        'format_served' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
         'size_served' => [],
         'browser_support' => ['webp' => 0, 'jpg_only' => 0],
         'cache' => ['hits' => 0, 'misses' => 0]
@@ -82,9 +82,37 @@ function metrics_get_empty_airport(): array {
 function metrics_get_empty_webcam(): array {
     return [
         'requests' => 0,
-        'by_format' => ['jpg' => 0, 'webp' => 0],
+        'by_format' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
         'by_size' => []
     ];
+}
+
+/**
+ * Sum per-webcam by_format counts for status display.
+ *
+ * Unknown format keys are initialized on first sight (same as by_size) so a
+ * PNG or future bucket does not warn under error reporting.
+ *
+ * @param array $webcamMetrics Map of webcam key => metrics row
+ * @return array<string, int>
+ */
+function metricsSumWebcamFormatTotals(array $webcamMetrics): array
+{
+    $formatTotals = metrics_get_empty_webcam()['by_format'];
+    foreach ($webcamMetrics as $camData) {
+        if (!is_array($camData)) {
+            continue;
+        }
+        foreach ($camData['by_format'] ?? [] as $fmt => $count) {
+            $fmt = (string) $fmt;
+            if (!isset($formatTotals[$fmt])) {
+                $formatTotals[$fmt] = 0;
+            }
+            $formatTotals[$fmt] += (int) $count;
+        }
+    }
+
+    return $formatTotals;
 }
 
 // =============================================================================
@@ -434,7 +462,7 @@ function metrics_track_webcam_request(string $airportId, int $camIndex): void {
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index
- * @param string $format Image format (jpg, webp)
+ * @param string $format Image format (jpg, png, webp)
  * @param string|int $size Image size variant (height like 720, 360, 1080 or 'original')
  * @return void
  */
@@ -708,7 +736,7 @@ function metrics_new_empty_hour_bucket(string $hourId): array {
             'variants_generated' => 0,
             'tiles_served' => 0,
             'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
-            'format_served' => ['jpg' => 0, 'webp' => 0],
+            'format_served' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
             'size_served' => [],
             'browser_support' => ['webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0],

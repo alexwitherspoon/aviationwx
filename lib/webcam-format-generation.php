@@ -22,50 +22,340 @@ require_once __DIR__ . '/variant-health.php';
 require_once __DIR__ . '/webcam-image-metrics.php';
 
 /**
- * Detect image format from file headers
- * 
- * Reads file headers to determine image format.
- * 
- * @param string $filePath Path to image file
- * @return string|null Format: 'jpg', 'png', 'webp', or null if unknown
+ * Classify jpg, png, or webp from magic bytes.
+ *
+ * @param string $header At least 12 bytes of the file, or the full body
+ * @return string|null jpg, png, or webp
  */
-function detectImageFormat($filePath) {
+function detectImageFormatFromHeader(string $header): ?string
+{
+    if (strlen($header) < 12) {
+        return null;
+    }
+
+    if (substr($header, 0, 3) === "\xFF\xD8\xFF") {
+        return 'jpg';
+    }
+
+    if (substr($header, 0, 8) === "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A") {
+        return 'png';
+    }
+
+    if (substr($header, 0, 4) === 'RIFF' && substr($header, 8, 4) === 'WEBP') {
+        // A WebP RIFF header opens with RIFF + a uint32 little-endian size
+        // (file bytes minus 8) + WEBP. Reject a zero-sized chunk stub so a
+        // truncated RIFF\\0\\0\\0\\0WEBP isn't served as a valid webp.
+        $riffSize = unpack('V', substr($header, 4, 4))[1];
+        if ($riffSize < 4) {
+            return null;
+        }
+        return 'webp';
+    }
+
+    return null;
+}
+
+/**
+ * Detect image format from file headers.
+ *
+ * @param string $filePath Path to image file
+ * @return string|null jpg, png, webp, or null if the bytes are not one of those types
+ */
+function detectImageFormat($filePath): ?string
+{
+    // @: missing or unreadable files are treated as unknown type
     $handle = @fopen($filePath, 'rb');
     if (!$handle) {
         return null;
     }
-    
+
+    // @: short or unreadable files are unknown type
     $header = @fread($handle, 12);
-    if (!$header || strlen($header) < 12) {
-        @fclose($handle);
-        return null;
-    }
-    
-    // JPEG: FF D8 FF
-    if (substr($header, 0, 3) === "\xFF\xD8\xFF") {
-        @fclose($handle);
-        return 'jpg';
-    }
-    
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (substr($header, 0, 8) === "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A") {
-        @fclose($handle);
-        return 'png';
-    }
-    
-    // WebP: RIFF...WEBP
-    if (substr($header, 0, 4) === 'RIFF') {
-        @fseek($handle, 8);
-        $more = @fread($handle, 4);
-        @fclose($handle);
-        if ($more && strpos($more, 'WEBP') !== false) {
-            return 'webp';
-        }
-        return null;
-    }
-    
     @fclose($handle);
-    return null;
+    if (!$header) {
+        return null;
+    }
+
+    return detectImageFormatFromHeader($header);
+}
+
+/**
+ * Formats allowed for native originals and Public API image bodies.
+ *
+ * @return list<string>
+ */
+function getSupportedWebcamSourceFormats(): array
+{
+    return ['jpg', 'png', 'webp'];
+}
+
+/**
+ * File extensions stored for a format name (jpeg files are jpg).
+ *
+ * @param string $format Format name from getSupportedWebcamSourceFormats()
+ * @return list<string>
+ */
+function webcamSourceFormatFileExtensions(string $format): array
+{
+    if (!in_array($format, getSupportedWebcamSourceFormats(), true)) {
+        return [];
+    }
+
+    if ($format === 'jpg') {
+        return ['jpg', 'jpeg'];
+    }
+
+    return [$format];
+}
+
+/**
+ * Extensions scanned for native originals (jpg, jpeg, png, webp).
+ *
+ * @return list<string>
+ */
+function webcamSupportedOriginalFileExtensions(): array
+{
+    $exts = [];
+    foreach (getSupportedWebcamSourceFormats() as $format) {
+        foreach (webcamSourceFormatFileExtensions($format) as $ext) {
+            $exts[] = $ext;
+        }
+    }
+
+    return $exts;
+}
+
+/**
+ * Normalize a format query to a supported name, or null if unknown.
+ *
+ * @param string $format Raw fmt value
+ * @return string|null jpg, png, or webp
+ */
+function normalizeWebcamFormatName(string $format): ?string
+{
+    $format = strtolower(trim($format));
+    if ($format === 'jpeg') {
+        $format = 'jpg';
+    }
+
+    if (!in_array($format, getSupportedWebcamSourceFormats(), true)) {
+        return null;
+    }
+
+    return $format;
+}
+
+/**
+ * Header-detected format if it is on the serve allowlist.
+ *
+ * @param string $path Existing image path
+ * @return string|null jpg, png, or webp
+ */
+function detectServableWebcamImageFormat(string $path): ?string
+{
+    $detected = detectImageFormat($path);
+    if ($detected === null || !in_array($detected, getSupportedWebcamSourceFormats(), true)) {
+        return null;
+    }
+
+    return $detected;
+}
+
+/**
+ * @param string $bytes File contents
+ * @return string|null jpg, png, or webp
+ */
+function detectServableWebcamImageFormatFromBytes(string $bytes): ?string
+{
+    $detected = detectImageFormatFromHeader($bytes);
+    if ($detected === null || !in_array($detected, getSupportedWebcamSourceFormats(), true)) {
+        return null;
+    }
+
+    return $detected;
+}
+
+/**
+ * Explicit fmt= must match file magic. Native original (no fmt) uses the detected type.
+ */
+function webcamExplicitFmtMatchesFile(bool $explicitRequest, string $requestedFormat, string $detectedFormat): bool
+{
+    return !$explicitRequest || $requestedFormat === $detectedFormat;
+}
+
+/**
+ * Content-Type for a supported webcam image format.
+ *
+ * @param string $format jpg, png, or webp
+ * @return string|null Null when the format must not be served
+ */
+function webcamImageContentType(string $format): ?string
+{
+    return match ($format) {
+        'jpg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        default => null,
+    };
+}
+
+/**
+ * @param string $bytes File contents
+ * @return array{format: string, content_type: string}|null
+ */
+function webcamServableImageContentFromBytes(string $bytes): ?array
+{
+    $format = detectServableWebcamImageFormatFromBytes($bytes);
+    if ($format === null) {
+        return null;
+    }
+
+    $contentType = webcamImageContentType($format);
+    if ($contentType === null) {
+        return null;
+    }
+
+    return ['format' => $format, 'content_type' => $contentType];
+}
+
+/**
+ * Type from path using a 12-byte header read (not the body that will be sent).
+ *
+ * @param string $path Existing file path
+ * @return array{format: string, content_type: string}|null
+ */
+function webcamServableImageContent(string $path): ?array
+{
+    $format = detectServableWebcamImageFormat($path);
+    if ($format === null) {
+        return null;
+    }
+
+    $contentType = webcamImageContentType($format);
+    if ($contentType === null) {
+        return null;
+    }
+
+    return ['format' => $format, 'content_type' => $contentType];
+}
+
+/**
+ * Read a file and classify the same buffer that will be sent.
+ *
+ * @param string $path Existing file path
+ * @return array{format: string, content_type: string, bytes: string}|null
+ */
+function webcamReadServableImage(string $path): ?array
+{
+    // @: file can vanish between existence check and read
+    $bytes = @file_get_contents($path);
+    if ($bytes === false || $bytes === '') {
+        return null;
+    }
+
+    $served = webcamServableImageContentFromBytes($bytes);
+    if ($served === null) {
+        return null;
+    }
+
+    $served['bytes'] = $bytes;
+
+    return $served;
+}
+
+/**
+ * Classify a file from its 12-byte header and stat it for a streamed send.
+ *
+ * Magic-byte type does not require the body in PHP memory. Callers hash and
+ * stream from the file descriptor path instead of buffering the admission-sized
+ * original.
+ *
+ * @return array{format: string, content_type: string, size: int, mtime: int}|null
+ */
+function webcamServableImageFileMeta(string $path): ?array
+{
+    $served = webcamServableImageContent($path);
+    if ($served === null) {
+        return null;
+    }
+
+    // @: file can vanish between classify and stat
+    $size = @filesize($path);
+    $mtime = @filemtime($path);
+    if ($size === false || $size <= 0 || $mtime === false) {
+        return null;
+    }
+
+    return [
+        'format' => $served['format'],
+        'content_type' => $served['content_type'],
+        'size' => (int) $size,
+        'mtime' => (int) $mtime,
+    ];
+}
+
+/**
+ * Brace glob of extensions for native originals and timestamp scans.
+ *
+ * @return string e.g. {jpg,jpeg,png,webp}
+ */
+function webcamSupportedOriginalGlobBrace(): string
+{
+    return '{' . implode(',', webcamSupportedOriginalFileExtensions()) . '}';
+}
+
+/**
+ * Alternation for basename matching of original and variant files.
+ *
+ * @return string e.g. jpg|jpeg|png|webp
+ */
+function webcamSupportedOriginalExtensionPattern(): string
+{
+    $quoted = [];
+    foreach (webcamSupportedOriginalFileExtensions() as $ext) {
+        $quoted[] = preg_quote($ext, '/');
+    }
+
+    return implode('|', $quoted);
+}
+
+/**
+ * Timestamped image files in a date/hour frames directory.
+ *
+ * @param string $hourDir Absolute path to a YYYY-MM-DD/HH frames directory
+ * @return list<string>
+ */
+function globWebcamHourDirImageFiles(string $hourDir): array
+{
+    $files = glob($hourDir . '/*.' . webcamSupportedOriginalGlobBrace(), GLOB_BRACE);
+    if ($files === false) {
+        return [];
+    }
+
+    return $files;
+}
+
+/**
+ * Capture timestamp for a servable original, or null if it must not be used.
+ *
+ * Basename `{timestamp}_original.*` wins over mtime so a leftover file cannot
+ * outrank a newer frame when mtimes are equal or rewritten.
+ *
+ * @param string $path Existing original file path
+ * @return int|null Unix timestamp rank
+ */
+function webcamServableOriginalCaptureRank(string $path): ?int
+{
+    if (!file_exists($path) || detectServableWebcamImageFormat($path) === null) {
+        return null;
+    }
+
+    if (preg_match('/^(\d+)_original\./', basename($path), $matches) === 1) {
+        return (int) $matches[1];
+    }
+
+    $mtime = filemtime($path);
+    return $mtime !== false ? $mtime : 0;
 }
 
 /**
@@ -201,8 +491,7 @@ function getSourceCaptureTime($filePath) {
 /**
  * Convert PNG to JPEG
  * 
- * PNG is always converted to JPEG (we don't serve PNG).
- * Uses GD library for fast conversion.
+ * Used when a downstream variant explicitly requires JPEG output.
  * 
  * @param string $pngFile Source PNG file path
  * @param string $jpegFile Target JPEG file path
@@ -301,8 +590,6 @@ function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timest
     $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
     return $framesDir . '/' . $timestamp . '_' . $variant . '.' . $format;
 }
-
-// getCacheSymlinkPath() is now defined in cache-paths.php
 
 /**
  * Get cache file path for a webcam image
@@ -471,6 +758,37 @@ function cleanupStagingFiles(string $airportId, int $camIndex): int {
 }
 
 /**
+ * Resolve timestamped files protected by live webcam symlinks.
+ *
+ * @param string $cacheDir Camera cache directory
+ * @return array<string, true> Real target path set
+ */
+function getWebcamLiveSymlinkTargets(string $cacheDir): array
+{
+    $targets = [];
+    $symlinks = array_merge(
+        glob($cacheDir . '/current.*') ?: [],
+        glob($cacheDir . '/original.*') ?: []
+    );
+    foreach ($symlinks as $symlink) {
+        if (!is_link($symlink)) {
+            continue;
+        }
+        $target = readlink($symlink);
+        if ($target === false) {
+            continue;
+        }
+        $targetPath = $target[0] === '/' ? $target : dirname($symlink) . '/' . $target;
+        $realTarget = realpath($targetPath);
+        if ($realTarget !== false) {
+            $targets[$realTarget] = true;
+        }
+    }
+
+    return $targets;
+}
+
+/**
  * Cleanup old timestamp-based cache files
  * 
  * Uses time-based retention with a frame count safety limit.
@@ -521,10 +839,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
             $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
             if ($hourDirs !== false) {
                 foreach ($hourDirs as $hourDir) {
-                    $files = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
-                    if ($files !== false) {
-                        $allFiles = array_merge($allFiles, $files);
-                    }
+                    $allFiles = array_merge($allFiles, globWebcamHourDirImageFiles($hourDir));
                 }
             }
         }
@@ -533,17 +848,15 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         return 0;
     }
     
-    // Filter out symlinks and only keep timestamp-based files
     $timestampFiles = [];
+    $extPattern = webcamSupportedOriginalExtensionPattern();
     foreach ($allFiles as $file) {
-        // Skip symlinks (they're not timestamp files themselves)
         if (is_link($file)) {
             continue;
         }
-        
+
         $basename = basename($file);
-        // Match timestamp-based filename: "1703700000_original.jpg" or "1703700000_720.jpg"
-        if (preg_match('/^(\d+)(?:_[^_]+)?\.(jpg|webp)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)(?:_[^_]+)?\.(' . $extPattern . ')$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if (!isset($timestampFiles[$timestamp])) {
                 $timestampFiles[$timestamp] = [];
@@ -556,23 +869,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         return 0;
     }
     
-    // Get symlink targets to protect from deletion (targets are in date/hour subdirs)
-    $symlinkTargets = [];
-    $symlinks = glob($cacheDir . '/current.*');
-    if ($symlinks !== false) {
-        foreach ($symlinks as $symlink) {
-            if (is_link($symlink)) {
-                $target = readlink($symlink);
-                if ($target !== false) {
-                    $targetPath = $target[0] === '/' ? $target : dirname($symlink) . '/' . $target;
-                    $realTarget = realpath($targetPath);
-                    if ($realTarget !== false) {
-                        $symlinkTargets[basename($realTarget)] = true;
-                    }
-                }
-            }
-        }
-    }
+    $symlinkTargets = getWebcamLiveSymlinkTargets($cacheDir);
     
     $cleaned = 0;
     $initialCount = count($timestampFiles);
@@ -588,8 +885,8 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
     
     foreach ($timestampsToRemoveByTime as $timestamp) {
         foreach ($timestampFiles[$timestamp] as $file) {
-            $basename = basename($file);
-            if (isset($symlinkTargets[$basename])) {
+            $realFile = realpath($file);
+            if ($realFile !== false && isset($symlinkTargets[$realFile])) {
                 continue;
             }
             if (@unlink($file)) {
@@ -612,8 +909,8 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         
         foreach ($timestampsToRemoveBySafety as $timestamp) {
             foreach ($timestampFiles[$timestamp] as $file) {
-                $basename = basename($file);
-                if (isset($symlinkTargets[$basename])) {
+                $realFile = realpath($file);
+                if ($realFile !== false && isset($symlinkTargets[$realFile])) {
                     continue;
                 }
                 if (@unlink($file)) {
@@ -1266,6 +1563,17 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     
     $timeout = getFormatGenerationTimeout();
     $deadline = time() + $timeout;
+
+    // Format before dimensions: ffprobe can size non-images. Do not assume JPEG.
+    $sourceFormat = detectServableWebcamImageFormat($sourceFile);
+    if ($sourceFormat === null) {
+        aviationwx_log('error', 'generateVariantsFromOriginal: unsupported source format', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'source_file' => $sourceFile
+        ], 'app');
+        return ['original' => null, 'variants' => [], 'metadata' => null];
+    }
     
     // Get input dimensions
     $inputDimensions = getImageDimensions($sourceFile);
@@ -1281,12 +1589,6 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     $originalWidth = $inputDimensions['width'];
     $originalHeight = $inputDimensions['height'];
     $aspectRatio = $originalWidth / $originalHeight;
-    
-    // Detect source format
-    $sourceFormat = detectImageFormat($sourceFile);
-    if ($sourceFormat === null) {
-        $sourceFormat = 'jpg'; // Default fallback
-    }
     
     require_once __DIR__ . '/webcam-metadata.php';
     $variantHeights = getVariantHeights($airportId, $camIndex);

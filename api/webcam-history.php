@@ -20,8 +20,9 @@
  * 
  *   GET /api/webcam-history.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
  *     Returns the image for that timestamp in requested format
- *     fmt: 'jpg' (default) or 'webp'
- *     Falls back to JPG if requested format not available
+ *     fmt: 'jpg' (default), 'webp', or 'png'
+ *     Explicit fmt requests are exact; omitted fmt may select another available
+ *     generated format, while omitted fmt for original returns the native format
  * 
  * Response (manifest):
  * {
@@ -51,14 +52,34 @@ require_once __DIR__ . '/../lib/metrics.php';
 // Supported image formats with MIME types
 $supportedFormats = [
     'jpg' => 'image/jpeg',
-    'webp' => 'image/webp'
+    'webp' => 'image/webp',
+    'png' => 'image/png'
 ];
 
 // Get parameters
 $rawIdentifier = isset($_GET['id']) ? trim($_GET['id']) : '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 $timestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
-$requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
+$explicitFormatRequest = array_key_exists('fmt', $_GET);
+$rawFormat = $_GET['fmt'] ?? null;
+if (is_array($rawFormat)) {
+    header('Content-Type: application/json');
+    http_response_code(400);
+    echo json_encode(['error' => 'fmt must be a single value']);
+    exit;
+}
+// Normalize through the shared alias map so fmt=jpeg is accepted here as everywhere else.
+$requestedFormat = $explicitFormatRequest ? strtolower(trim((string) $rawFormat)) : 'jpg';
+if ($explicitFormatRequest) {
+    $normalized = normalizeWebcamFormatName($requestedFormat);
+    $requestedFormat = $normalized ?? $requestedFormat;
+}
+if ($explicitFormatRequest && !isset($supportedFormats[$requestedFormat])) {
+    header('Content-Type: application/json');
+    http_response_code(400);
+    echo json_encode(['error' => 'Unsupported image format']);
+    exit;
+}
 $requestedSize = isset($_GET['size']) ? trim($_GET['size']) : 'original';
 
 // Validate airport ID parameter exists
@@ -98,11 +119,6 @@ if ($timestamp !== null) {
     // History images are stored in the camera cache directory (unified storage)
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
     
-    // Validate requested format
-    if (!isset($supportedFormats[$requestedFormat])) {
-        $requestedFormat = 'jpg';
-    }
-    
     $size = $requestedSize;
     if ($size !== 'original' && is_numeric($size)) {
         $size = (int)$size;
@@ -113,20 +129,34 @@ if ($timestamp !== null) {
         $size = 'original';
     }
     
-    require_once __DIR__ . '/../lib/webcam-metadata.php';
-    $imageFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $requestedFormat);
-    $servedFormat = $requestedFormat;
     $servedSize = $size;
-    
-    if ($imageFile === null) {
+    if ($size === 'original') {
+        $resolved = resolveWebcamOriginalAtTimestamp($airportId, $camIndex, $timestamp);
+        $imageFile = $resolved['ok'] ? $resolved['path'] : null;
+    } else {
+        $imageFile = timestampedWebcamImagePathIfExists(
+            $airportId,
+            $camIndex,
+            $timestamp,
+            $size,
+            $requestedFormat
+        );
+    }
+
+    if ($imageFile === null && !$explicitFormatRequest && $size !== 'original') {
         $enabledFormats = getEnabledWebcamFormats();
         foreach ($enabledFormats as $format) {
             if ($format === $requestedFormat) {
                 continue;
             }
-            $imageFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
+            $imageFile = timestampedWebcamImagePathIfExists(
+                $airportId,
+                $camIndex,
+                $timestamp,
+                $size,
+                $format
+            );
             if ($imageFile !== null) {
-                $servedFormat = $format;
                 break;
             }
         }
@@ -153,6 +183,25 @@ if ($timestamp !== null) {
         echo json_encode(['error' => 'Access denied']);
         exit;
     }
+
+    $meta = webcamServableImageFileMeta($imageFile);
+    if ($meta === null) {
+        header('Content-Type: application/json');
+        http_response_code(404);
+        echo json_encode(['error' => 'Frame not found', 'timestamp' => $timestamp]);
+        exit;
+    }
+    $servedFormat = $meta['format'];
+    if ($explicitFormatRequest && $servedFormat !== $requestedFormat) {
+        header('Content-Type: application/json');
+        http_response_code(400);
+        echo json_encode([
+            'error' => 'Requested format does not match the image file',
+            'requested_format' => $requestedFormat,
+            'actual_format' => $servedFormat
+        ]);
+        exit;
+    }
     
     // Track webcam serve (history player traffic)
     metrics_track_webcam_request($airportId, $camIndex);
@@ -169,16 +218,17 @@ if ($timestamp !== null) {
     $retentionHours = getWebcamHistoryRetentionHours($airportId);
     $retentionSeconds = $retentionHours * 3600;
     $cacheMaxAge = max(86400, min(2592000, $retentionSeconds));
-    
+
+    header("Cache-Control: public, max-age={$cacheMaxAge}, immutable");
+    header('Access-Control-Allow-Origin: *');
+
     require_once __DIR__ . '/../lib/http-integrity.php';
-    $mtime = filemtime($imageFile);
-    if (addIntegrityHeadersForFile($imageFile, $mtime)) {
+    if (addIntegrityHeadersForFile($imageFile, $meta['mtime'])) {
         exit;
     }
-    header('Content-Type: ' . $supportedFormats[$servedFormat]);
+    header('Content-Type: ' . $meta['content_type']);
     header('Content-Disposition: inline; filename="' . $filename . '"');
-    header("Cache-Control: public, max-age={$cacheMaxAge}, immutable");
-    header('Content-Length: ' . filesize($imageFile));
+    header('Content-Length: ' . $meta['size']);
     header('X-Content-Type-Options: nosniff');
     
     if ($servedFormat !== $requestedFormat) {

@@ -269,20 +269,19 @@ class ProcessingPipeline
             return ['success' => false, 'reason' => 'file_too_large'];
         }
 
-        // Detect format
-        $format = detectImageFormat($imagePath);
-        if ($format === null) {
-            return ['success' => false, 'reason' => 'invalid_format'];
-        }
-
-        // Load into GD for validation (single load for pipeline)
+        // @: file can vanish between size check and read
         $imageData = @file_get_contents($imagePath);
         if ($imageData === false) {
             return ['success' => false, 'reason' => 'read_error'];
         }
 
+        $format = detectServableWebcamImageFormatFromBytes($imageData);
+        if ($format === null) {
+            return ['success' => false, 'reason' => 'invalid_format'];
+        }
+
         $this->gdImage = @imagecreatefromstring($imageData);
-        unset($imageData); // Free memory
+        unset($imageData);
 
         if ($this->gdImage === false) {
             $this->gdImage = null;

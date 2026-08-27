@@ -236,37 +236,89 @@ function validateVariantHeights(array $heights): array {
 }
 
 /**
- * Get path to latest original image
- * 
+ * Get path to the newest servable original image
+ *
+ * Prefers original.{format} symlinks. Falls back to a directory scan when none
+ * are valid. Unservable files are skipped so a leftover JPEG cannot hide PNG.
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @return string|null Path to original file or null if not found
  */
 function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
-    // Try symlink first
-    $symlink = getWebcamOriginalSymlinkPath($airportId, $camIndex, 'jpg');
-    if (is_link($symlink) && file_exists($symlink)) {
-        $realPath = readlink($symlink);
-        if ($realPath !== false) {
-            $fullPath = dirname($symlink) . '/' . $realPath;
-            if (file_exists($fullPath)) {
-                return $fullPath;
-            }
+    $bestPath = null;
+    $bestRank = -1;
+    // Legitimate symlink targets always resolve under the airport cache dir.
+    $airportDir = getWebcamAirportDir($airportId);
+    foreach (getSupportedWebcamSourceFormats() as $format) {
+        $symlink = getWebcamOriginalSymlinkPath($airportId, $camIndex, $format);
+        if (!is_link($symlink)) {
+            continue;
         }
+        $realPath = readlink($symlink);
+        if ($realPath === false) {
+            continue;
+        }
+        $fullPath = $realPath[0] === '/' ? $realPath : dirname($symlink) . '/' . $realPath;
+        // Refuse symlinks that resolve outside the airport cache (defense in depth).
+        $realTarget = realpath($fullPath);
+        if ($realTarget === false || !str_starts_with($realTarget, $airportDir . '/')) {
+            aviationwx_log('warn', 'webcam original symlink escapes airport cache', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'symlink' => $symlink,
+                'target' => $fullPath,
+            ], 'app');
+            continue;
+        }
+        $rank = webcamServableOriginalCaptureRank($fullPath);
+        if ($rank === null || $rank <= $bestRank) {
+            continue;
+        }
+        $bestRank = $rank;
+        $bestPath = $fullPath;
     }
-    
-    $files = getWebcamImageFiles($airportId, $camIndex, '*_original.{jpg,jpeg,webp}');
-    
-    if (empty($files)) {
+    if ($bestPath !== null) {
+        return $bestPath;
+    }
+
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_original.' . webcamSupportedOriginalGlobBrace());
+    foreach ($files as $file) {
+        if (is_link($file)) {
+            continue;
+        }
+        $rank = webcamServableOriginalCaptureRank($file);
+        if ($rank === null || $rank <= $bestRank) {
+            continue;
+        }
+        $bestRank = $rank;
+        $bestPath = $file;
+    }
+
+    return $bestPath;
+}
+
+/**
+ * Get the current servable original and its capture identity.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return array{path: string, format: string, timestamp: int}|null
+ */
+function getCurrentServableWebcamOriginal(string $airportId, int $camIndex): ?array
+{
+    $path = getWebcamOriginalPath($airportId, $camIndex);
+    if ($path === null) {
         return null;
     }
-    
-    // Sort by mtime descending
-    usort($files, function($a, $b) {
-        return filemtime($b) - filemtime($a);
-    });
-    
-    return $files[0];
+
+    $format = detectServableWebcamImageFormat($path);
+    $timestamp = webcamServableOriginalCaptureRank($path);
+    if ($format === null || $timestamp === null || $timestamp <= 0) {
+        return null;
+    }
+
+    return ['path' => $path, 'format' => $format, 'timestamp' => $timestamp];
 }
 
 /**
@@ -290,8 +342,10 @@ function getStagingPathForVariant(string $airportId, int $camIndex, $size, strin
 
 /**
  * Get image file path for requested size and format
- * 
+ *
  * Falls back to staging files if promotion is in progress, waiting up to 100ms.
+ * That fallback is for live current-image serving. Historical lookups must use
+ * timestamped files only so an old immutable URL cannot return the live staging frame.
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index
@@ -346,6 +400,45 @@ function getImagePathForSize(string $airportId, int $camIndex, int $timestamp, $
 }
 
 /**
+ * Native original for a timestamp: path plus format from file headers.
+ *
+ * Skips unreadable candidates so a leftover corrupt jpg cannot hide a valid png.
+ * Returns unknown only when at least one original file exists and none are a
+ * supported type.
+ *
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Frame timestamp
+ * @return array{ok: true, path: string, format: string}|array{ok: false, error: 'missing'|'unknown'}
+ */
+function resolveWebcamOriginalAtTimestamp(string $airportId, int $camIndex, int $timestamp): array
+{
+    if ($timestamp <= 0) {
+        return ['ok' => false, 'error' => 'missing'];
+    }
+
+    $sawFile = false;
+    foreach (getSupportedWebcamSourceFormats() as $format) {
+        foreach (webcamSourceFormatFileExtensions($format) as $ext) {
+            $path = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, $ext);
+            if (!file_exists($path)) {
+                continue;
+            }
+
+            $sawFile = true;
+            $detected = detectServableWebcamImageFormat($path);
+            if ($detected === null) {
+                continue;
+            }
+
+            return ['ok' => true, 'path' => $path, 'format' => $detected];
+        }
+    }
+
+    return ['ok' => false, 'error' => $sawFile ? 'unknown' : 'missing'];
+}
+
+/**
  * Get available variants for an image
  * 
  * @param string $airportId Airport identifier
@@ -359,20 +452,27 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
         return [];
     }
     
-    // Only check for enabled formats
     require_once __DIR__ . '/config.php';
     $enabledFormats = getEnabledWebcamFormats();
     
     $variants = [];
     
-    // Check original files for enabled formats only
-    foreach ($enabledFormats as $format) {
-        $path = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, $format);
-        if (file_exists($path)) {
+    foreach (getSupportedWebcamSourceFormats() as $format) {
+        foreach (webcamSourceFormatFileExtensions($format) as $ext) {
+            $path = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, $ext);
+            if (!file_exists($path)) {
+                continue;
+            }
+            $detected = detectServableWebcamImageFormat($path);
+            if ($detected === null) {
+                continue;
+            }
             if (!isset($variants['original'])) {
                 $variants['original'] = [];
             }
-            $variants['original'][] = $format;
+            if (!in_array($detected, $variants['original'], true)) {
+                $variants['original'][] = $detected;
+            }
         }
     }
     
@@ -411,6 +511,9 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
             if (!in_array($format, $enabledFormats)) {
                 continue;
             }
+            if (detectServableWebcamImageFormat($file) !== $format) {
+                continue;
+            }
             
             if (!isset($variants[$height])) {
                 $variants[$height] = [];
@@ -432,19 +535,20 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
  * @return int[] Unique timestamps, newest first (descending)
  */
 function collectWebcamFrameTimestampsFromFiles(string $airportId, int $camIndex): array {
-    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.' . webcamSupportedOriginalGlobBrace());
     if (empty($files)) {
         return [];
     }
 
     $seen = [];
+    $extPattern = webcamSupportedOriginalExtensionPattern();
     foreach ($files as $file) {
         if (is_link($file)) {
             continue;
         }
 
         $basename = basename($file);
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)_(original|\d+)\.(' . $extPattern . ')$/', $basename, $matches)) {
             $seen[(int)$matches[1]] = true;
         }
     }

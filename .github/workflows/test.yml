@@ -89,6 +89,22 @@ jobs:
           else
             echo "✓ Integration tests passed"
           fi
+
+      - name: Start isolated webcam API test stack
+        run: make test-up
+
+      - name: Run native webcam HTTP integration tests
+        run: |
+          TEST_CACHE_DIR=/tmp/aviationwx-cache-test \
+          TEST_API_URL=http://127.0.0.1:9080 \
+          APP_ENV=testing \
+          vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php \
+            --testdox \
+            --no-coverage
+
+      - name: Stop isolated webcam API test stack
+        if: always()
+        run: make test-down
       
       - name: Run Critical Safety Tests
         run: |

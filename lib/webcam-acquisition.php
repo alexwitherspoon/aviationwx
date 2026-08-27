@@ -1345,12 +1345,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         require_once __DIR__ . '/webcam-format-generation.php';
         require_once __DIR__ . '/webcam-history.php';
 
-        $format = detectImageFormat($file);
+        $format = detectServableWebcamImageFormat($file);
         if ($format === null) {
             return ['valid' => false, 'reason' => 'invalid_format'];
-        }
-        if ($format === 'jpeg') {
-            $format = 'jpg';
         }
 
         if (isImageComplete($file, $format)) {
@@ -1415,12 +1412,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
         // Check image format
         require_once __DIR__ . '/webcam-format-generation.php';
-        $format = detectImageFormat($file);
+        $format = detectServableWebcamImageFormat($file);
         if ($format === null) {
             return ['valid' => false, 'reason' => 'invalid_format'];
-        }
-        if ($format === 'jpeg') {
-            $format = 'jpg';
         }
 
         // Truncated uploads (defense in depth; primary gate runs before EXIF)

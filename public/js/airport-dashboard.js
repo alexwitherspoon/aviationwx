@@ -3292,10 +3292,10 @@ const WebcamPlayer = {
 
     // Build URL for a frame using the browser's preferred format and variant
     buildImageUrl(frame) {
-        // Use preferred format if available for this frame, otherwise fall back to jpg
-        const format = (frame.formats && Array.isArray(frame.formats) && frame.formats.includes(this.preferredFormat))
-            ? this.preferredFormat 
-            : 'jpg';
+        const format = window.AviationWX.webcamPlayerUtils.selectWebcamHistoryFormat(
+            frame.formats,
+            this.preferredFormat
+        );
         
         // Get available heights from variant manifest
         const availableHeights = frame.variants ? Object.keys(frame.variants)

@@ -550,7 +550,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams/{cam}/image</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the current webcam image. Supports <code>fmt</code> parameter (jpg, webp).</p>
+                <p class="endpoint-desc">Get the current webcam image. Native original has no <code>fmt</code> (type is read from the file). <code>fmt</code> is for generated size variants (jpg, webp).</p>
             </div>
         </div>
         
@@ -560,7 +560,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams/{cam}/history</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get historical webcam frames. Use <code>ts</code> parameter to retrieve specific frame.</p>
+                <p class="endpoint-desc">Get historical webcam frames. Use <code>ts</code> for a specific frame. Omit <code>fmt</code> for the native original; <code>fmt</code> is for generated size variants.</p>
             </div>
         </div>
         

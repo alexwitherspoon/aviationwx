@@ -45,7 +45,7 @@ function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $count
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
+                    'by_format' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -53,15 +53,18 @@ function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $count
                 $hourData['webcams'][$webcamKey]['requests'] = 0;
             }
             $hourData['webcams'][$webcamKey]['requests'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp)$/', $key, $m)) {
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|png|webp)$/', $key, $m)) {
             $webcamKey = $m[1] . '_' . $m[2];
             $format = $m[3];
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
+                    'by_format' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
                     'by_size' => []
                 ];
+            }
+            if (!isset($hourData['webcams'][$webcamKey]['by_format'][$format])) {
+                $hourData['webcams'][$webcamKey]['by_format'][$format] = 0;
             }
             $hourData['webcams'][$webcamKey]['by_format'][$format] += $value;
         } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_size_(\w+)$/', $key, $m)) {
@@ -71,7 +74,7 @@ function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $count
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0],
+                    'by_format' => ['jpg' => 0, 'png' => 0, 'webp' => 0],
                     'by_size' => []
                 ];
             }
@@ -79,7 +82,10 @@ function metrics_apply_flat_counters_to_hour_data(array &$hourData, array $count
                 $hourData['webcams'][$webcamKey]['by_size'][$size] = 0;
             }
             $hourData['webcams'][$webcamKey]['by_size'][$size] += $value;
-        } elseif (preg_match('/^format_(jpg|webp)_served$/', $key, $m)) {
+        } elseif (preg_match('/^format_(jpg|png|webp)_served$/', $key, $m)) {
+            if (!isset($hourData['global']['format_served'][$m[1]])) {
+                $hourData['global']['format_served'][$m[1]] = 0;
+            }
             $hourData['global']['format_served'][$m[1]] += $value;
         } elseif (preg_match('/^size_(\w+)_served$/', $key, $m)) {
             // Match both height-based and named sizes
@@ -211,9 +217,9 @@ function metrics_flat_counter_key_is_recognized(string $key): bool
         || preg_match('/^airport_([a-z0-9]+)_weather$/', $key) === 1
         || preg_match('/^airport_([a-z0-9]+)_webcam_requests$/', $key) === 1
         || preg_match('/^webcam_([a-z0-9]+)_(\d+)_requests$/', $key) === 1
-        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp)$/', $key) === 1
+        || preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|png|webp)$/', $key) === 1
         || preg_match('/^webcam_([a-z0-9]+)_(\d+)_size_(\w+)$/', $key) === 1
-        || preg_match('/^format_(jpg|webp)_served$/', $key) === 1
+        || preg_match('/^format_(jpg|png|webp)_served$/', $key) === 1
         || preg_match('/^size_(\w+)_served$/', $key) === 1
         || $key === 'global_page_views'
         || $key === 'global_weather_requests'

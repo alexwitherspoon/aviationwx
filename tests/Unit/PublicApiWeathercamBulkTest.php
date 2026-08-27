@@ -226,8 +226,11 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertNotEmpty($cam['images']);
         $this->assertSame('original', $cam['images'][0]['variant']);
         $this->assertNull($cam['images'][0]['height']);
-        $this->assertSame('jpg', $cam['images'][0]['format']);
         $this->assertSame($cam['image_url'], $cam['images'][0]['url']);
+        $this->assertStringNotContainsString('fmt=', $cam['images'][0]['url']);
+        if (isset($cam['images'][0]['format'])) {
+            $this->assertContains($cam['images'][0]['format'], ['jpg', 'png', 'webp']);
+        }
 
         $heights = [];
         foreach ($cam['images'] as $image) {
@@ -246,6 +249,72 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertContains(1080, $heights);
         $this->assertContains(720, $heights);
         $this->assertContains(360, $heights);
+    }
+
+    public function testGetWeathercamBulkAirports_MissingOriginal_OmitsCachedFormat(): void
+    {
+        $airportId = 'bulkfmt_missing_unit';
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        rememberWeathercamBulkCatalog([[
+            'id' => $airportId,
+            'webcams' => [[
+                'index' => 0,
+                'images' => [
+                    ['variant' => 'original', 'url' => '/v1/x', 'format' => 'jpg'],
+                ],
+            ]],
+        ]], $sha);
+
+        $airports = getWeathercamBulkAirports(null);
+        $row = $this->findAirport($airports, $airportId);
+        $this->assertNotNull($row);
+        $this->assertArrayNotHasKey('format', $row['webcams'][0]['images'][0]);
+    }
+
+    public function testGetWeathercamBulkAirports_RefreshesCachedOriginalFormat(): void
+    {
+        $airportId = 'bulkfmt_unit';
+        $cam = 0;
+        $ts = time() - 10;
+        $framesDir = getWebcamFramesDir($airportId, $cam, $ts);
+        ensureCacheDir($framesDir);
+        $path = getWebcamOriginalTimestampedPath($airportId, $cam, $ts, 'png');
+        file_put_contents($path, "\x89PNG\r\n\x1a\n" . str_repeat("\x00", 8));
+
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        $cached = [[
+            'id' => $airportId,
+            'webcams' => [[
+                'index' => 0,
+                'images' => [
+                    ['variant' => 'original', 'url' => '/v1/x', 'format' => 'jpg'],
+                ],
+            ]],
+        ]];
+        rememberWeathercamBulkCatalog($cached, $sha);
+
+        try {
+            $airports = getWeathercamBulkAirports(null);
+            $row = $this->findAirport($airports, $airportId);
+            $this->assertNotNull($row);
+            $this->assertSame('png', $row['webcams'][0]['images'][0]['format']);
+            $cachedAgain = recallWeathercamBulkCatalog();
+            $this->assertSame('jpg', $cachedAgain[0]['webcams'][0]['images'][0]['format']);
+        } finally {
+            $base = CACHE_WEBCAMS_DIR . '/' . $airportId;
+            if (is_dir($base)) {
+                $it = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::CHILD_FIRST
+                );
+                foreach ($it as $file) {
+                    $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+                }
+                rmdir($base);
+            }
+        }
     }
 
     public function testOpenApiWeathercamBulk_IsCatalogPathWithWeathercamOperator(): void
@@ -294,5 +363,44 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertArrayHasKey('image_url', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertArrayHasKey('operator', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertArrayHasKey('images', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $imageFormat = $spec['components']['schemas']['Webcam']['properties']['images']['items']['properties']['format']['enum'] ?? [];
+        $this->assertContains('png', $imageFormat);
+        $this->assertNotContains(
+            'format',
+            $spec['components']['schemas']['Webcam']['properties']['images']['items']['required'] ?? []
+        );
+    }
+
+    public function testOpenApi_HistoryFrame_DocumentsNativeOriginal(): void
+    {
+        $spec = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../api/docs/openapi.json'),
+            true
+        );
+        $this->assertIsArray($spec);
+        $op = $spec['paths']['/airports/{id}/webcams/{cam}/history']['get'] ?? null;
+        $this->assertIsArray($op);
+
+        $fmt = null;
+        $size = null;
+        foreach ($op['parameters'] ?? [] as $param) {
+            if (($param['name'] ?? '') === 'fmt') {
+                $fmt = $param;
+            }
+            if (($param['name'] ?? '') === 'size') {
+                $size = $param;
+            }
+        }
+        $this->assertIsArray($fmt);
+        $this->assertArrayNotHasKey('default', $fmt['schema'] ?? []);
+        $this->assertStringContainsString('Not valid on the original', $fmt['description'] ?? '');
+        $this->assertIsArray($size);
+        $this->assertArrayNotHasKey('default', $size['schema'] ?? []);
+
+        $content = $op['responses']['200']['content'] ?? [];
+        $this->assertArrayHasKey('image/jpeg', $content);
+        $this->assertArrayHasKey('image/png', $content);
+        $this->assertArrayHasKey('image/webp', $content);
+        $this->assertArrayHasKey('400', $op['responses'] ?? []);
     }
 }

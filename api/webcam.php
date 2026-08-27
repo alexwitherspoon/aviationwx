@@ -22,6 +22,7 @@ require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-metadata.php';
+require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/cache-headers.php';
 // Note: Background refresh for webcams is now handled by the scheduler daemon using
@@ -458,8 +459,11 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
         header('X-RateLimit-Reset: ' . (int)$rl['reset']);
     }
-    // Get latest timestamp
-    $timestamp = getLatestImageTimestamp($airportId, $camIndex);
+    // Use the same capture identity as current image responses.
+    $currentOriginal = getCurrentServableWebcamOriginal($airportId, $camIndex);
+    $timestamp = $currentOriginal !== null
+        ? $currentOriginal['timestamp']
+        : getLatestImageTimestamp($airportId, $camIndex);
     
     if ($timestamp === 0) {
         echo json_encode([
@@ -583,7 +587,14 @@ if ($rl !== null) {
 
 
 // Parse format parameter (if specified)
-$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : null;
+$rawFormat = $_GET['fmt'] ?? null;
+if (is_array($rawFormat)) {
+    http_response_code(400);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'fmt must be a single value']);
+    exit;
+}
+$fmt = $rawFormat !== null ? strtolower(trim((string) $rawFormat)) : null;
 if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp'])) {
     $fmt = null; // Invalid fmt, treat as unspecified
 }
@@ -616,63 +627,60 @@ $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_se
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 $perCamRefresh = max(60, $perCamRefresh); // Enforce minimum 60 seconds (cron constraint)
 
-// Handle download request - serves original JPG with proper filename
-// When ts= provided (history player), serve that frame; otherwise serve latest
+// Download the native original (history player passes ts=; otherwise latest)
 if (isset($_GET['download']) && $_GET['download'] == '1') {
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    $originalJpg = null;
-
+    $unsupportedOriginal = false;
     if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
-        $originalJpg = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, 'original', 'jpg');
-        if ($originalJpg === null) {
-            $originalJpg = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, 'original', 'webp');
-            if ($originalJpg !== null) {
-                require_once __DIR__ . '/../lib/http-integrity.php';
-                if (addIntegrityHeadersForFile($originalJpg)) {
-                    exit;
-                }
-                header('Content-Type: image/webp');
-                header('Content-Disposition: attachment; filename="' . strtolower($airportId) . "_{$camIndex}_{$requestedTimestamp}.webp\"");
-                header('Content-Length: ' . filesize($originalJpg));
-                readfile($originalJpg);
-                exit;
-            }
-        }
+        $resolved = resolveWebcamOriginalAtTimestamp($airportId, $camIndex, $requestedTimestamp);
+        $originalPath = $resolved['ok'] ? $resolved['path'] : null;
+        $unsupportedOriginal = !$resolved['ok'] && ($resolved['error'] ?? '') === 'unknown';
+    } else {
+        $originalPath = getWebcamOriginalPath($airportId, $camIndex);
     }
 
-    if ($originalJpg === null) {
-        $originalJpg = $cacheDir . '/original.jpg';
+    if ($originalPath === null || !is_readable($originalPath)) {
+        $code = $unsupportedOriginal ? 400 : 404;
+        http_response_code($code);
+        header('Content-Type: application/json');
+        echo json_encode($unsupportedOriginal
+            ? ['error' => 'unsupported_format', 'message' => 'Image format is not supported']
+            : ['error' => 'original_not_available', 'message' => 'Original image not available for download']
+        );
+        exit;
     }
 
-    if (!file_exists($originalJpg) || !is_readable($originalJpg)) {
-        http_response_code(404);
+    $meta = webcamServableImageFileMeta($originalPath);
+    if ($meta === null) {
+        http_response_code(400);
         header('Content-Type: application/json');
         echo json_encode([
-            'error' => 'original_not_available',
-            'message' => 'Original image not available for download'
+            'error' => 'unsupported_format',
+            'message' => 'Image format is not supported'
         ]);
         exit;
     }
 
-    // Get EXIF capture time for filename (or use requested timestamp for history)
-    $captureTime = $requestedTimestamp ?? getImageCaptureTime($originalJpg);
+    $captureTime = $requestedTimestamp ?? getImageCaptureTime($originalPath);
     if ($captureTime > 0) {
         $timestamp = gmdate('Y-m-d_His', $captureTime) . '_UTC';
     } else {
-        $mtime = filemtime($originalJpg);
-        $timestamp = gmdate('Y-m-d_His', $mtime) . '_UTC';
+        $timestamp = gmdate('Y-m-d_His', $meta['mtime']) . '_UTC';
     }
 
-    $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
+    $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}." . $meta['format'];
+    if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
+        header('Cache-Control: public, max-age=31536000, immutable');
+    } else {
+        header('Cache-Control: public, max-age=60, s-maxage=60, stale-while-revalidate=30');
+    }
     require_once __DIR__ . '/../lib/http-integrity.php';
-    $mtime = filemtime($originalJpg);
-    if (addIntegrityHeadersForFile($originalJpg, $mtime)) {
+    if (addIntegrityHeadersForFile($originalPath, $meta['mtime'])) {
         exit;
     }
-    header('Content-Type: image/jpeg');
+    header('Content-Type: ' . $meta['content_type']);
     header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Content-Length: ' . filesize($originalJpg));
-    readfile($originalJpg);
+    header('Content-Length: ' . $meta['size']);
+    readfile($originalPath);
     exit;
 }
 
@@ -723,7 +731,7 @@ function getImageCaptureTime($filePath) {
  * 
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index
- * @param string $format Format: 'jpg' or 'webp'
+ * @param string $format Format: 'jpg', 'png', or 'webp'
  * @param int $timestamp Image timestamp
  * @return string Webcam URL
  */
@@ -763,6 +771,8 @@ function getMimeTypeForFormat(string $format): string {
     switch ($format) {
         case 'webp':
             return 'image/webp';
+        case 'png':
+            return 'image/png';
         case 'jpg':
         case 'jpeg':
         default:
@@ -1056,10 +1066,11 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         $metricsTracked = true;
         
         // Determine format from content type
-        $format = 'jpg';
-        if ($contentType === 'image/webp') {
-            $format = 'webp';
-        }
+        $format = match ($contentType) {
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            default => 'jpg',
+        };
         
         // Track webcam serve
         $size = $requestedSize ?? 'primary';
@@ -1088,7 +1099,11 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         $timestamp = $latestTimestamp;
     }
     $variant = is_string($requestedSize) ? $requestedSize : (is_numeric($requestedSize) ? (int)$requestedSize : 'original');
-    $ext = ($contentType === 'image/webp') ? 'webp' : 'jpg';
+    $ext = match ($contentType) {
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        default => 'jpg',
+    };
     $filename = $timestamp . '_' . $variant . '.' . $ext;
     header('Content-Disposition: inline; filename="' . $filename . '"');
     
@@ -1315,8 +1330,19 @@ if (!is_dir($cacheDir) || !is_readable($cacheDir)) {
 
 // Get latest timestamp
 $latestTimestamp = getLatestImageTimestamp($airportId, $camIndex);
+$currentOriginal = null;
 $refreshInterval = getRefreshIntervalForCamera($airportId, $config, $cam);
 $enabledFormats = getEnabledWebcamFormats();
+
+// Judge staleness from the servable capture, not the newest filename: a fresh but
+// corrupt capture must not mask an aged servable original as current.
+$servingNativeCurrentOriginal = $requestedSize === 'original' && !isset($_GET['fmt']);
+if ($servingNativeCurrentOriginal) {
+    $currentOriginal = getCurrentServableWebcamOriginal($airportId, $camIndex);
+    if ($currentOriginal !== null) {
+        $latestTimestamp = $currentOriginal['timestamp'];
+    }
+}
 
 // If no image exists, serve placeholder
 if ($latestTimestamp === 0) {
@@ -1377,11 +1403,31 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
         $requestedFormat = 'jpg';
     }
     
-    $timestampFile = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, $requestedSize, $requestedFormat);
+    if ($requestedSize === 'original' && !isset($_GET['fmt'])) {
+        $resolved = resolveWebcamOriginalAtTimestamp($airportId, $camIndex, $requestedTimestamp);
+        $timestampFile = $resolved['ok'] ? $resolved['path'] : null;
+        if ($resolved['ok']) {
+            $requestedFormat = $resolved['format'];
+        }
+    } else {
+        $timestampFile = timestampedWebcamImagePathIfExists(
+            $airportId,
+            $camIndex,
+            $requestedTimestamp,
+            $requestedSize,
+            $requestedFormat
+        );
+    }
     
     // Try requested format first, fall back to JPG
     if ($timestampFile === null && $requestedFormat !== 'jpg') {
-        $timestampFile = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, $requestedSize, 'jpg');
+        $timestampFile = timestampedWebcamImagePathIfExists(
+            $airportId,
+            $camIndex,
+            $requestedTimestamp,
+            $requestedSize,
+            'jpg'
+        );
         $requestedFormat = 'jpg';
     }
     
@@ -1391,28 +1437,34 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
         $cacheDir = getWebcamCameraDir($airportId, $camIndex);
         $realCacheDir = realpath($cacheDir);
         if ($realPath !== false && $realCacheDir !== false && strpos($realPath, $realCacheDir) === 0) {
-            // Track webcam serve (timestamp-based URLs used by dashboard srcset)
-            $sizeForMetrics = $requestedSize ?? 'original';
-            metrics_track_webcam_serve($airportId, $camIndex, $requestedFormat, $sizeForMetrics);
-
-            // Serve timestamp-based file with immutable cache headers
-            $mimeType = getMimeTypeForFormat($requestedFormat);
-            $mtime = @filemtime($timestampFile);
-            
-            // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
-            $variant = ($requestedSize === 'original') ? 'original' : (int)$requestedSize;
-            $filename = $requestedTimestamp . '_' . $variant . '.' . $requestedFormat;
-            
-            require_once __DIR__ . '/../lib/http-integrity.php';
-            if (addIntegrityHeadersForFile($timestampFile, $mtime !== false ? $mtime : null)) {
+            $meta = webcamServableImageFileMeta($timestampFile);
+            if ($meta === null) {
+                http_response_code(400);
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'error' => 'unsupported_format',
+                    'message' => 'Image format is not supported'
+                ]);
                 exit;
             }
-            header('Content-Type: ' . $mimeType);
-            header('Content-Disposition: inline; filename="' . $filename . '"');
+
+            $sizeForMetrics = $requestedSize ?? 'original';
+            metrics_track_webcam_serve($airportId, $camIndex, $meta['format'], $sizeForMetrics);
+
+            $variant = ($requestedSize === 'original') ? 'original' : (int)$requestedSize;
+            $filename = $requestedTimestamp . '_' . $variant . '.' . $meta['format'];
+
             header('Cache-Control: public, max-age=31536000, immutable');
-            header('Content-Length: ' . filesize($timestampFile));
+
+            require_once __DIR__ . '/../lib/http-integrity.php';
+            if (addIntegrityHeadersForFile($timestampFile, $meta['mtime'])) {
+                exit;
+            }
+            header('Content-Type: ' . $meta['content_type']);
+            header('Content-Disposition: inline; filename="' . $filename . '"');
+            header('Content-Length: ' . $meta['size']);
             header('X-Content-Type-Options: nosniff');
-            
+
             readfile($timestampFile);
             exit;
         }
@@ -1434,7 +1486,21 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
     exit;
 }
 
-$imagePath = getImagePathForSize($airportId, $camIndex, $latestTimestamp, $requestedSize, $preferredFormat);
+if ($servingNativeCurrentOriginal) {
+    $imagePath = $currentOriginal['path'] ?? null;
+    if ($currentOriginal !== null) {
+        $latestTimestamp = $currentOriginal['timestamp'];
+        $preferredFormat = $currentOriginal['format'];
+    }
+} else {
+    $imagePath = getImagePathForSize(
+        $airportId,
+        $camIndex,
+        $latestTimestamp,
+        $requestedSize,
+        $preferredFormat
+    );
+}
 
 // Try preferred format first, then fallback to other enabled formats
 if ($imagePath === null) {
@@ -1480,22 +1546,24 @@ $isExplicitFormatRequest = isset($_GET['fmt']) &&
 
 // Re-determine preferred format (may have changed based on enabled formats)
 $requestedFormatOriginal = null;
-if (isset($_GET['fmt'])) {
-    // Explicit format request
-    $fmt = strtolower(trim($_GET['fmt']));
-    if (in_array($fmt, ['webp', 'jpg', 'jpeg'])) {
-        $preferredFormat = ($fmt === 'jpeg') ? 'jpg' : $fmt;
-        $requestedFormatOriginal = $preferredFormat; // Store original for disabled check
+if (!$servingNativeCurrentOriginal) {
+    if (isset($_GET['fmt'])) {
+        // Explicit format request
+        $fmt = strtolower(trim($_GET['fmt']));
+        if (in_array($fmt, ['webp', 'jpg', 'jpeg'])) {
+            $preferredFormat = ($fmt === 'jpeg') ? 'jpg' : $fmt;
+            $requestedFormatOriginal = $preferredFormat; // Store original for disabled check
+        } else {
+            $preferredFormat = 'jpg'; // Invalid fmt, fallback to JPEG
+        }
     } else {
-        $preferredFormat = 'jpg'; // Invalid fmt, fallback to JPEG
-    }
-} else {
-    // No explicit format - use Accept header for preference, but serve immediately
-    $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
-    if (stripos($acceptHeader, 'image/webp') !== false) {
-        $preferredFormat = 'webp';
-    } else {
-        $preferredFormat = 'jpg';
+        // No explicit format - use Accept header for preference, but serve immediately
+        $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+        if (stripos($acceptHeader, 'image/webp') !== false) {
+            $preferredFormat = 'webp';
+        } else {
+            $preferredFormat = 'jpg';
+        }
     }
 }
 
@@ -1521,7 +1589,7 @@ if ($isExplicitFormatRequest && $requestedFormatOriginal !== null && !in_array($
 }
 
 // Adjust preferred format if disabled
-if (!in_array($preferredFormat, $enabledFormats)) {
+if (!$servingNativeCurrentOriginal && !in_array($preferredFormat, $enabledFormats)) {
     // Find next best enabled format
     if ($preferredFormat === 'webp' && in_array('jpg', $enabledFormats)) {
         $preferredFormat = 'jpg';
@@ -1532,7 +1600,7 @@ if (!in_array($preferredFormat, $enabledFormats)) {
 
 // Check rate limiting (before format logic)
 // If rate limited, serve best available format immediately
-if ($isRateLimited) {
+if ($isRateLimited && !$servingNativeCurrentOriginal) {
     $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex, $requestedSize);
     if ($mostEfficient) {
         // Get mtime from format status based on file extension

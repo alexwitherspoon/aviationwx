@@ -39,7 +39,8 @@ function handleGetWeathercamBulk(array $params, array $context): void
         $webcamCount += count($airport['webcams'] ?? []);
     }
 
-    sendPublicApiCacheHeaders('metadata');
+    // images[0].format is read from disk, so this payload is not hour-stable metadata.
+    sendPublicApiCacheHeaders('live');
     sendPublicApiSuccess(
         ['airports' => $catalog],
         [
@@ -67,7 +68,67 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
         rememberWeathercamBulkCatalogIfConfigShaStable($full, $shaBefore, getConfigFileSha256());
     }
 
-    return filterWeathercamBulkAirportsByOperator($full, $operatorFilter);
+    return refreshWeathercamBulkOriginalFormats(
+        filterWeathercamBulkAirportsByOperator($full, $operatorFilter)
+    );
+}
+
+/**
+ * Replace cached images[0].format with the current original on disk.
+ *
+ * Catalog rows are config-keyed; format is not. Does not write back to cache.
+ *
+ * @param list<array<string, mixed>> $airports
+ * @return list<array<string, mixed>>
+ */
+function refreshWeathercamBulkOriginalFormats(array $airports): array
+{
+    $refreshed = [];
+    foreach ($airports as $airport) {
+        if (!is_array($airport)) {
+            $refreshed[] = $airport;
+            continue;
+        }
+        $airportId = $airport['id'] ?? '';
+        $webcams = $airport['webcams'] ?? [];
+        if (!is_string($airportId) || $airportId === '' || !is_array($webcams)) {
+            $refreshed[] = $airport;
+            continue;
+        }
+        $newWebcams = [];
+        foreach ($webcams as $webcam) {
+            if (!is_array($webcam)) {
+                $newWebcams[] = $webcam;
+                continue;
+            }
+            $index = $webcam['index'] ?? null;
+            $images = $webcam['images'] ?? null;
+            $indexOk = is_int($index) || (is_string($index) && ctype_digit($index));
+            if (!$indexOk || !is_array($images) || !isset($images[0]) || !is_array($images[0])) {
+                $newWebcams[] = $webcam;
+                continue;
+            }
+            $original = $images[0];
+            if (($original['variant'] ?? 'original') !== 'original') {
+                $newWebcams[] = $webcam;
+                continue;
+            }
+            $path = getWebcamOriginalPath($airportId, (int) $index);
+            $detected = $path !== null ? detectServableWebcamImageFormat($path) : null;
+            if ($detected !== null) {
+                $original['format'] = $detected;
+            } else {
+                unset($original['format']);
+            }
+            $images[0] = $original;
+            $webcam['images'] = $images;
+            $newWebcams[] = $webcam;
+        }
+        $airport['webcams'] = $newWebcams;
+        $refreshed[] = $airport;
+    }
+
+    return $refreshed;
 }
 
 /**

@@ -140,21 +140,19 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	if [ "$$exit_code" -ne 0 ]; then echo "❌ Unit tests failed (exit $$exit_code)"; exit 1; else echo "✓ Unit tests passed"; fi
 	@echo ""
 	@echo "3️⃣  Running Integration Tests..."
-	@# Prefer isolated test stack (:9080). Never fall through to :8080 (dev secrets).
-	@# When no stack is up, point at an unreachable URL so HTTP tests skip (CI-like).
-	@TEST_API_URL="$${TEST_API_URL:-}"; \
-	if [ -z "$$TEST_API_URL" ]; then \
-		if curl -sf --max-time 2 http://127.0.0.1:9080 >/dev/null 2>&1; then \
-			TEST_API_URL="http://127.0.0.1:9080"; \
-			echo "Using TEST_API_URL=$$TEST_API_URL"; \
-		else \
-			TEST_API_URL="http://127.0.0.1:9"; \
-			echo "Isolated :9080 not healthy - HTTP integration tests will skip (TEST_API_URL=$$TEST_API_URL)"; \
-		fi; \
-	fi; \
-	APP_ENV=testing TEST_API_URL="$$TEST_API_URL" vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage; \
+	@TEST_API_URL="$${TEST_API_URL:-http://127.0.0.1:9}" \
+		APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage; \
 	exit_code=$$?; \
 	if [ "$$exit_code" -ne 0 ]; then echo "❌ Integration tests failed (exit $$exit_code)"; exit 1; else echo "✓ Integration tests passed"; fi
+	@echo ""
+	@echo "3b️⃣ Running Native Webcam HTTP Integration Tests..."
+	@set -eu; \
+	cleanup() { $(MAKE) test-down; }; \
+	trap cleanup EXIT; \
+	$(MAKE) test-up; \
+	TEST_CACHE_DIR="/tmp/aviationwx-cache-test" APP_ENV=testing TEST_API_URL="http://127.0.0.1:9080" \
+		vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php --testdox --no-coverage; \
+	echo "✓ Native webcam HTTP integration tests passed"
 	@echo ""
 	@echo "4️⃣  Running Critical Safety Tests..."
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage; \
@@ -285,7 +283,7 @@ test-local: test-up ## Run PHPUnit tests against isolated test container
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@echo "Running PHPUnit tests..."
-	@TEST_API_URL=http://localhost:9080 APP_ENV=testing vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; $(MAKE) test-down; exit 1)
+	@TEST_CACHE_DIR=/tmp/aviationwx-cache-test TEST_API_URL=http://localhost:9080 APP_ENV=testing vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; $(MAKE) test-down; exit 1)
 	@$(MAKE) test-down
 
 test-error-detector: ## Test webcam error frame detector (requires running containers)
