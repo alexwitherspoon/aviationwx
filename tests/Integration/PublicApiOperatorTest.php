@@ -278,4 +278,32 @@ class PublicApiOperatorTest extends TestCase
         $this->assertSame(400, $response['status']);
         $this->assertSame('INVALID_REQUEST', $response['json']['error']['code'] ?? null);
     }
+
+    public function testWeathercamBulk_MaintenanceSitesExcludedByDefault(): void
+    {
+        // pdx is maintenance:true with an aviationwx webcam; it must be absent
+        // from the default catalog (no maintenance param).
+        $response = $this->apiRequest('/weathercam/bulk?operator=aviationwx');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+        $this->assertNull($this->findAirport($response['json']['airports'] ?? [], 'pdx'));
+    }
+
+    public function testWeathercamBulk_MaintenanceEqualsTrueIncludesMaintenanceSites(): void
+    {
+        $response = $this->apiRequest('/weathercam/bulk?operator=aviationwx&maintenance=true');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+        $pdx = $this->findAirport($response['json']['airports'] ?? [], 'pdx');
+        $this->assertNotNull($pdx);
+        $this->assertTrue($pdx['maintenance'] ?? false);
+    }
+
+    public function testWeathercamBulk_MaintenanceEqualsFalseAlsoExcludes(): void
+    {
+        $response = $this->apiRequest('/weathercam/bulk?operator=aviationwx&maintenance=false');
+        $this->skipUnlessPublicApiOk($response);
+        $this->assertSame(200, $response['status']);
+        $this->assertNull($this->findAirport($response['json']['airports'] ?? [], 'pdx'));
+    }
 }

@@ -10,6 +10,7 @@
  *
  * Query parameters:
  * - operator: Weathercam operator only (not the GET /v1/airports union with weather sources)
+ * - maintenance: true includes maintenance sites (excluded by default; false or omitted excludes)
  */
 
 require_once __DIR__ . '/airports.php';
@@ -33,7 +34,16 @@ function handleGetWeathercamBulk(array $params, array $context): void
         return;
     }
 
+    // Maintenance sites are excluded by default. maintenance=true opts back into
+    // them; maintenance=false is the same as omitting it. Mirrors the airports
+    // list endpoint's maintenance param but keeps the default exclusionary.
+    $maintenanceFilter = parsePublicApiOptionalBooleanQuery('maintenance');
     $catalog = getWeathercamBulkAirports($operatorParse['value']);
+    if ($maintenanceFilter === null || $maintenanceFilter === false) {
+        $catalog = array_values(array_filter($catalog, function ($airport) {
+            return is_array($airport) && !($airport['maintenance'] ?? false);
+        }));
+    }
     $webcamCount = 0;
     foreach ($catalog as $airport) {
         $webcamCount += count($airport['webcams'] ?? []);
