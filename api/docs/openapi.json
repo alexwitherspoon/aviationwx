@@ -2196,6 +2196,18 @@
                   "type": "string",
                   "format": "date-time"
                 },
+                "age_seconds": {
+                  "type": "integer",
+                  "description": "Seconds since the current image's capture timestamp"
+                },
+                "stale": {
+                  "type": "boolean",
+                  "description": "True when age exceeds the airport fail-closed threshold; the image is served but not cached as current"
+                },
+                "stale_failclosed_seconds": {
+                  "type": "integer",
+                  "description": "Airport fail-closed staleness threshold used to compute stale"
+                },
                 "url": {
                   "type": "string"
                 },

@@ -651,7 +651,26 @@ function sendImageResponse(
         $webcamRefresh = intval($cam['refresh_seconds']);
     }
 
-    $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+    // A capture older than the fail-closed threshold is a "last known good frame":
+    // still served as 200, but marked stale so it is not cached as current. The
+    // capture time (authoritative EXIF) travels in the bytes and is exposed via Last-Modified.
+    $stale = $timestamp > 0 && (time() - $timestamp) > getStaleFailclosedSeconds($airport);
+    if ($stale) {
+        // Last known good frame; log the over-age delivery so it is auditable.
+        aviationwx_log('warn', 'serving over-age webcam frame past fail-closed threshold', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'capture_timestamp' => $timestamp,
+            'age_seconds' => time() - $timestamp,
+            'failclosed_seconds' => getStaleFailclosedSeconds($airport),
+        ], 'app');
+        $headers = generateCacheHeaders(0, 0, false);
+        $headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+        header('Warning: 110 - "Response is stale"');
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $timestamp) . ' GMT');
+    } else {
+        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+    }
     foreach ($headers as $name => $value) {
         header($name . ': ' . $value);
     }
@@ -748,9 +767,14 @@ function handleGetWebcamMetadata(
     rsort($recommendedSizes);
     
     // Build response
+    $ageSeconds = max(0, time() - $timestamp);
+    $staleFailClosed = getStaleFailclosedSeconds($airport);
     $data = [
         'timestamp' => $timestamp,
         'timestamp_iso' => gmdate('c', $timestamp),
+        'age_seconds' => $ageSeconds,
+        'stale' => $ageSeconds > $staleFailClosed,
+        'stale_failclosed_seconds' => $staleFailClosed,
         'formats' => $formats,
         'recommended_sizes' => array_values($recommendedSizes),
         'urls' => $urls,

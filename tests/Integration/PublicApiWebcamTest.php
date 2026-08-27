@@ -187,6 +187,13 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('data', $data, 'Should have data field');
         $this->assertArrayHasKey('timestamp', $data['data'], 'Should have timestamp');
         $this->assertArrayHasKey('timestamp_iso', $data['data'], 'Should have timestamp_iso');
+        $this->assertArrayHasKey('age_seconds', $data['data'], 'Should have age_seconds');
+        $this->assertArrayHasKey('stale', $data['data'], 'Should have stale flag');
+        $this->assertArrayHasKey('stale_failclosed_seconds', $data['data'], 'Should have stale_failclosed_seconds');
+        $this->assertIsInt($data['data']['age_seconds']);
+        $this->assertGreaterThanOrEqual(0, $data['data']['age_seconds']);
+        $this->assertIsBool($data['data']['stale']);
+        $this->assertIsInt($data['data']['stale_failclosed_seconds']);
         $this->assertArrayHasKey('formats', $data['data'], 'Should have formats');
         $this->assertArrayHasKey('recommended_sizes', $data['data'], 'Should have recommended_sizes');
         $this->assertArrayHasKey('urls', $data['data'], 'Should have urls');
