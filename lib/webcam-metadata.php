@@ -180,10 +180,11 @@ function buildWebcamMetadataFromFile(string $filePath, string $airportId, int $c
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return array Array of heights (integers)
  */
-function getVariantHeights(string $airportId, int $camIndex): array {
-    $config = loadConfig();
+function getVariantHeights(string $airportId, int $camIndex, ?array $config = null): array {
+    $config ??= loadConfig();
     if ($config === null) {
         return [1080, 720, 360];
     }

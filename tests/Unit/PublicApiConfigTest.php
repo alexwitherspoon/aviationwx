@@ -487,5 +487,31 @@ class PublicApiConfigTest extends TestCase
 
         $this->assertSame('https://weather.example.com/v1', getCanonicalPublicApiV1BaseUrl());
     }
+
+    public function testPublicApiV1Url_RelativeAndAbsolute_DoNotDoubleV1Prefix(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'canonical_base_url' => 'https://weather.example.com/v1',
+                ],
+            ],
+            'airports' => [],
+        ]);
+
+        $this->assertSame(
+            '/v1/airports/kspb/webcams/0/image',
+            publicApiV1Url('/airports/kspb/webcams/0/image')
+        );
+        $this->assertSame(
+            'https://weather.example.com/v1/airports/kspb/webcams/0/image',
+            publicApiV1Url('/airports/kspb/webcams/0/image', true)
+        );
+        $this->assertSame(
+            'https://weather.example.com/v1/airports/kspb/webcams/0/image?fmt=webp&size=1080',
+            publicApiV1Url('/airports/kspb/webcams/0/image', true, ['fmt' => 'webp', 'size' => '1080'])
+        );
+    }
 }
 

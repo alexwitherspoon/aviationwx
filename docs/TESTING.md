@@ -185,7 +185,7 @@ vendor/bin/phpunit --testsuite Unit
 
 **What they test:**
 - Configuration validation
-- **Operator identity:** `tests/Unit/OperatorConfigTest.php` covers weathercam and weather-source defaults, airports.json matching (not live fused weather), and `GET` `operator` query parsing. Config slug validation is in `tests/Unit/ConfigValidationTest.php`. Camera metadata includes `operator` in `tests/Unit/PublicApiWebcamMetadataTest.php`.
+- **Operator identity:** `tests/Unit/OperatorConfigTest.php` covers weathercam and weather-source defaults, airports.json matching (not live fused weather), and `GET` `operator` query parsing. Config slug validation is in `tests/Unit/ConfigValidationTest.php`. Camera metadata includes `operator` in `tests/Unit/PublicApiWebcamMetadataTest.php`. `GET /v1/weathercam/bulk` catalog composition, config-SHA cache, and absolute image URLs are in `tests/Unit/PublicApiWeathercamBulkTest.php`.
 - Weather calculations
 - Data parsing and formatting
 - Utility functions
@@ -201,7 +201,7 @@ vendor/bin/phpunit --testsuite Integration
 
 **What they test:**
 - API endpoint responses
-- **Public API `operator` query:** `tests/Integration/PublicApiOperatorTest.php` (running stack, typically `TEST_API_URL=http://localhost:9080`). Airport list membership and `webcam_count` use airports.json. Webcam list keeps original indexes. Weather ignores `operator`. Cases skip when no server is listening.
+- **Public API `operator` query:** `tests/Integration/PublicApiOperatorTest.php` (running stack, typically `TEST_API_URL=http://localhost:9080`). Airport list membership and `webcam_count` use airports.json. Optional `has_webcams` / `has_weather` filter the list and are not operator-sliced; `webcam_count` still counts matching weathercams when `operator` is set. `GET /v1/weathercam/bulk` is weathercam-only, omits airports with no matching cam, and returns absolute image URLs. Webcam list keeps original indexes. Weather ignores `operator`. Cases skip when no server is listening.
 - Cache behavior
 - HTML output validation
 - Webcam refresh initialization

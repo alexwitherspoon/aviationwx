@@ -1440,12 +1440,16 @@ function isWebpGenerationEnabled(): bool {
 /**
  * Get list of enabled formats for webcam generation
  * 
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return array Array of enabled format strings: ['jpg', 'webp']
  */
-function getEnabledWebcamFormats(): array {
+function getEnabledWebcamFormats(?array $config = null): array {
     $formats = ['jpg']; // Always enabled
-    
-    if (isWebpGenerationEnabled()) {
+
+    $webpEnabled = $config === null
+        ? isWebpGenerationEnabled()
+        : (bool)($config['config']['webcam_generate_webp'] ?? false);
+    if ($webpEnabled) {
         $formats[] = 'webp';
     }
     
@@ -1593,10 +1597,11 @@ const WEBCAM_HISTORY_FRAME_SAFETY_MULTIPLIER = 2.0;
  * History is considered enabled when retention > 0 and would result in >= 2 frames.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return bool True if webcam history enabled for this airport
  */
-function isWebcamHistoryEnabledForAirport(string $airportId): bool {
-    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+function isWebcamHistoryEnabledForAirport(string $airportId, ?array $config = null): bool {
+    $retentionHours = getWebcamHistoryRetentionHours($airportId, $config);
     return $retentionHours > 0;
 }
 
@@ -1607,10 +1612,11 @@ function isWebcamHistoryEnabledForAirport(string $airportId): bool {
  * Supports both new time-based config and legacy frame-based config.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return float Retention period in hours
  */
-function getWebcamHistoryRetentionHours(string $airportId): float {
-    $config = loadConfig();
+function getWebcamHistoryRetentionHours(string $airportId, ?array $config = null): float {
+    $config ??= loadConfig();
     if ($config === null) {
         return WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT;
     }
@@ -2027,6 +2033,44 @@ function validateCropMargins(mixed $margins, string $context): array {
 }
 
 /**
+ * True when a Public API canonical base is safe to concatenate with /airports/... paths.
+ *
+ * The path after the origin must be `/v1` (trailing slashes allowed) because
+ * `publicApiV1Url()` appends `/airports/...` onto this value.
+ *
+ * @param string $url Trimmed candidate URL
+ * @return bool
+ */
+function isValidCanonicalPublicApiBaseUrl(string $url): bool
+{
+    if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return false;
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return false;
+    }
+
+    $host = $parts['host'] ?? '';
+    if (!is_string($host) || $host === '') {
+        return false;
+    }
+
+    if (isset($parts['query']) || isset($parts['fragment'])
+        || isset($parts['user']) || isset($parts['pass'])) {
+        return false;
+    }
+
+    return rtrim((string) ($parts['path'] ?? ''), '/') === '/v1';
+}
+
+/**
  * Validate public_api configuration section
  * 
  * Validates the nested public_api configuration including:
@@ -2036,7 +2080,7 @@ function validateCropMargins(mixed $margins, string $context): array {
  * - bulk_max_airports
  * - weather_history settings
  * - partner_keys
- * - canonical_base_url (optional; must be string if key present)
+ * - canonical_base_url (optional; absolute http(s) URL ending in /v1, with host, no query/fragment/userinfo)
  * 
  * @param mixed $publicApi The public_api config value to validate
  * @return array Array of error messages (empty if valid)
@@ -2114,8 +2158,8 @@ function validatePublicApiConfig(mixed $publicApi): array {
             $trimmed = trim($publicApi['canonical_base_url']);
             if ($trimmed === '') {
                 $errors[] = "config.public_api.canonical_base_url must be a non-empty string when set";
-            } elseif (!preg_match('#^https?://#i', $trimmed)) {
-                $errors[] = "config.public_api.canonical_base_url must start with http:// or https://";
+            } elseif (!isValidCanonicalPublicApiBaseUrl($trimmed)) {
+                $errors[] = "config.public_api.canonical_base_url must be an absolute http:// or https:// URL ending in /v1, with a host and no query, fragment, or userinfo";
             }
         }
     }
@@ -2537,9 +2581,12 @@ function getConfigFileSha256(): ?string
  * @return void
  */
 function clearConfigCache(): void {
+    $GLOBALS['_aviationwx_weathercam_bulk_sha'] = null;
+    $GLOBALS['_aviationwx_weathercam_bulk_airports'] = null;
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_config');
         apcu_delete('aviationwx_config_sha');
+        apcu_delete('aviationwx_weathercam_bulk');
     }
     require_once __DIR__ . '/airport-country-resolution-merge.php';
     countryResolutionResetMergeFingerprint();
