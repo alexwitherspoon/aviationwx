@@ -77,6 +77,84 @@ function getFileDigestsWithCache(string $filePath, int $mtime): ?array
 }
 
 /**
+ * Get integrity digests for an already-open file and rewind it to the start.
+ *
+ * @param resource $handle Open seekable file handle
+ * @param string $identity Stable logical identity used when inode data is unavailable
+ * @param int $mtime File modification time from fstat
+ * @param int $size File size from fstat
+ * @return array{digest: string, md5: string}|null Null on read failure
+ */
+function getOpenFileDigestsWithCache($handle, string $identity, int $mtime, int $size): ?array
+{
+    if (!is_resource($handle)) {
+        return null;
+    }
+
+    $stat = @fstat($handle);
+    $descriptorIdentity = $identity;
+    if ($stat !== false && isset($stat['dev'], $stat['ino'])) {
+        $descriptorIdentity = $stat['dev'] . '|' . $stat['ino'];
+    }
+    $cacheKey = HTTP_INTEGRITY_DIGEST_PREFIX . md5(
+        'open|' . $descriptorIdentity . '|' . $mtime . '|' . $size
+    );
+
+    if (function_exists('apcu_fetch')) {
+        $cached = @apcu_fetch($cacheKey);
+        if ($cached !== false && is_array($cached)) {
+            if (!rewindOpenFileForResponse($handle)) {
+                return null;
+            }
+            return $cached;
+        }
+    }
+
+    if (!rewindOpenFileForResponse($handle)) {
+        return null;
+    }
+    $shaContext = hash_init('sha256');
+    $md5Context = hash_init('md5');
+    while (!feof($handle)) {
+        $chunk = @fread($handle, 8192);
+        if ($chunk === false) {
+            rewindOpenFileForResponse($handle);
+            return null;
+        }
+        hash_update($shaContext, $chunk);
+        hash_update($md5Context, $chunk);
+    }
+    if (!rewindOpenFileForResponse($handle)) {
+        return null;
+    }
+
+    $result = [
+        'digest' => 'sha-256=:' . base64_encode(hash_final($shaContext, true)) . ':',
+        'md5' => base64_encode(hash_final($md5Context, true)),
+    ];
+
+    if (function_exists('apcu_store')) {
+        $ttl = function_exists('getHttpIntegrityDigestTtlSeconds')
+            ? getHttpIntegrityDigestTtlSeconds()
+            : 86400;
+        @apcu_store($cacheKey, $result, $ttl);
+    }
+
+    return $result;
+}
+
+/**
+ * Rewind a response file without leaking stream warnings.
+ *
+ * @param resource $handle Open file handle
+ * @return bool True when the handle is seekable and rewound
+ */
+function rewindOpenFileForResponse($handle): bool
+{
+    return is_resource($handle) && @rewind($handle);
+}
+
+/**
  * Compute Content-Digest (RFC 9530) for file: sha-256=Base64
  * Uses APCu cache when available (write-once, read-many).
  *
@@ -171,6 +249,47 @@ function maybeSend304IfUnchanged(string $etag, int $mtime): bool
         http_response_code(304);
         return true;
     }
+    return false;
+}
+
+/**
+ * Add integrity headers for an already-open file response.
+ *
+ * @param resource $handle Open seekable file handle
+ * @param string $identity Stable logical file identity for the ETag
+ * @param int $mtime File modification time from fstat
+ * @param int $size File size from fstat
+ * @return bool True if 304 sent (do not send body), false to continue
+ */
+function addIntegrityHeadersForOpenFile(
+    $handle,
+    string $identity,
+    int $mtime,
+    int $size
+): bool {
+    if (!is_resource($handle) || $size <= 0) {
+        return false;
+    }
+
+    $etagIdentity = $identity;
+    $stat = @fstat($handle);
+    if ($stat !== false && isset($stat['dev'], $stat['ino'])) {
+        $etagIdentity .= '|' . $stat['dev'] . '|' . $stat['ino'];
+    }
+    $etag = computeFileEtag($etagIdentity, $mtime, $size);
+    if (maybeSend304IfUnchanged($etag, $mtime)) {
+        return true;
+    }
+
+    header('ETag: ' . $etag);
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+
+    $digests = getOpenFileDigestsWithCache($handle, $identity, $mtime, $size);
+    if ($digests !== null) {
+        header('Content-Digest: ' . $digests['digest']);
+        header('Content-MD5: ' . $digests['md5']);
+    }
+
     return false;
 }
 

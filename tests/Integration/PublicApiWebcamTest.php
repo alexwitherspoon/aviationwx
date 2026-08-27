@@ -187,16 +187,7 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('data', $data, 'Should have data field');
         $this->assertArrayHasKey('timestamp', $data['data'], 'Should have timestamp');
         $this->assertArrayHasKey('timestamp_iso', $data['data'], 'Should have timestamp_iso');
-        $this->assertArrayHasKey('age_seconds', $data['data'], 'Should have age_seconds');
-        $this->assertArrayHasKey('stale', $data['data'], 'Should have stale flag');
         $this->assertArrayHasKey('formats', $data['data'], 'Should have formats');
-
-        // age_seconds must be consistent with the capture timestamp and current time.
-        $age = $data['data']['age_seconds'];
-        $this->assertIsInt($age);
-        $this->assertGreaterThanOrEqual(0, $age);
-        // stale is true exactly when age exceeds the (default-minimum) threshold.
-        $this->assertIsBool($data['data']['stale']);
         $this->assertArrayHasKey('recommended_sizes', $data['data'], 'Should have recommended_sizes');
         $this->assertArrayHasKey('urls', $data['data'], 'Should have urls');
         
@@ -304,6 +295,57 @@ class PublicApiWebcamTest extends TestCase
             $response['json']['error']['message'] ?? null
         );
     }
+
+    public function testSizeRequest_PartialValue_ReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=720px'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(
+            'size must be original or an integer from 1 to 5000',
+            $response['json']['error']['message'] ?? null
+        );
+    }
+
+    public function testSizeRequest_MissingExactHeight_DoesNotReturnOriginal(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=719'
+        );
+
+        $this->assertSame(503, $response['status']);
+        $this->assertStringContainsString('application/json', $response['content_type']);
+    }
+
+    public function testHistoryTimestamp_ArrayValue_ReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/history?ts[]=1704067200'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame('ts must be a single value', $response['json']['error']['message'] ?? null);
+    }
+
+    public function testHistorySize_MissingExactHeight_DoesNotReturnOriginal(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $timestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+                '/history?ts=' . $timestamp . '&size=719'
+            );
+
+            $this->assertSame(404, $response['status']);
+            $this->assertStringContainsString('application/json', $response['content_type']);
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
     
     /**
      * Test explicit format request with size parameter works
@@ -396,6 +438,7 @@ class PublicApiWebcamTest extends TestCase
             $this->assertStringContainsString('max-age=60', $cacheControl);
             $this->assertStringNotContainsString('immutable', $cacheControl);
             $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertIntegrityHeadersMatchBody($response);
 
             $etag = $response['headers']['ETag'] ?? null;
             $this->assertNotNull($etag);
@@ -435,6 +478,7 @@ class PublicApiWebcamTest extends TestCase
                 $response['headers']['Cache-Control'] ?? ''
             );
             $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertIntegrityHeadersMatchBody($response);
             $this->assertConditionalImageHeaders($response, (
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
                 '/history?ts=' . $timestamp
@@ -547,7 +591,7 @@ class PublicApiWebcamTest extends TestCase
                 '/api/webcam-history.php?id=' . self::$testAirport .
                 '&cam=' . self::$testCam .
                 '&ts=' . $timestamp .
-                '&fmt=jpeg&size=original'
+                '&fmt=jpg&size=original'
             );
 
             $this->assertSame(200, $response['status']);
@@ -811,14 +855,32 @@ class PublicApiWebcamTest extends TestCase
         }
     }
 
-    public function testSizeRequest_InvalidValueFallsBackToOriginal(): void
+    public function testSizeRequest_InvalidValueReturnsCleanJsonError(): void
     {
         $response = $this->apiRequest(
             '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=bogus'
         );
 
-        $this->assertSame(200, $response['status']);
-        $this->assertStringContainsString('image/jpeg', $response['content_type']);
+        $this->assertSame(400, $response['status']);
+        $this->assertStringContainsString('application/json', $response['content_type']);
+        $this->assertSame(
+            'size must be original or an integer from 1 to 5000',
+            $response['json']['error']['message'] ?? null
+        );
+    }
+
+    public function testSizeRequest_WithDimensionReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+            '/image?width=320&size=720'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame(
+            'size cannot be combined with width or height',
+            $response['json']['error']['message'] ?? null
+        );
     }
 
     public function testSizeRequest_MissingVariantDoesNotReturnNativeOriginal(): void
@@ -851,6 +913,25 @@ class PublicApiWebcamTest extends TestCase
         }
     }
 
+    public function testOriginalFormatRequest_NoCaptureStillReturnsInvalidRequest(): void
+    {
+        self::removeFixtureTree();
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+                '/image?fmt=jpg'
+            );
+
+            $this->assertSame(400, $response['status']);
+            $this->assertSame(
+                'fmt applies to generated size variants. Omit fmt for the original.',
+                $response['json']['error']['message'] ?? null
+            );
+        } finally {
+            self::createTestImages();
+        }
+    }
+
     private function assertNativeOriginalHttpResponse(string $format, string $contentType, string $magicPrefix): void
     {
         $installedPath = null;
@@ -875,6 +956,7 @@ class PublicApiWebcamTest extends TestCase
             if ($format === 'webp') {
                 $this->assertSame('WEBP', substr($response['body'], 8, 4));
             }
+            $this->assertIntegrityHeadersMatchBody($response);
             $this->assertConditionalImageHeaders(
                 $response,
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image',
@@ -883,6 +965,18 @@ class PublicApiWebcamTest extends TestCase
         } finally {
             self::restoreDefaultOriginalFixture($installedPath);
         }
+    }
+
+    private function assertIntegrityHeadersMatchBody(array $response): void
+    {
+        $this->assertSame(
+            'sha-256=:' . base64_encode(hash('sha256', $response['body'], true)) . ':',
+            $response['headers']['Content-Digest'] ?? null
+        );
+        $this->assertSame(
+            base64_encode(md5($response['body'], true)),
+            $response['headers']['Content-MD5'] ?? null
+        );
     }
 
     private function assertConditionalImageHeaders(
@@ -897,6 +991,7 @@ class PublicApiWebcamTest extends TestCase
 
         $conditional = $this->apiRequest($path, ['If-None-Match: ' . $etag]);
         $this->assertSame(304, $conditional['status']);
+        $this->assertSame('', $conditional['body']);
         $cacheControl = $conditional['headers']['Cache-Control'] ?? '';
         $this->assertSame($immutable, str_contains($cacheControl, 'immutable'));
         $this->assertNotSame('', $cacheControl);

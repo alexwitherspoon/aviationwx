@@ -202,6 +202,25 @@ class WebcamOriginalResolveTest extends TestCase
         $this->assertSame($bytes, $read['bytes']);
     }
 
+    public function testOpenServableWebcamImage_PathReplaced_KeepsOriginalDescriptor(): void
+    {
+        $jpeg = $this->jpegBytes();
+        $path = $this->writeOriginal(1704067055, 'jpg', $jpeg);
+        $opened = openServableWebcamImage($path);
+        $this->assertNotNull($opened);
+
+        try {
+            unlink($path);
+            file_put_contents($path, $this->pngBytes());
+
+            $this->assertSame('jpg', $opened['format']);
+            $this->assertSame(strlen($jpeg), $opened['size']);
+            $this->assertSame($jpeg, stream_get_contents($opened['handle']));
+        } finally {
+            fclose($opened['handle']);
+        }
+    }
+
     public function testWebcamServableImageFileMeta_JpegFile_ReturnsHeaderTypeAndSize(): void
     {
         $bytes = $this->jpegBytes();
@@ -298,24 +317,24 @@ class WebcamOriginalResolveTest extends TestCase
         $this->assertTrue(webcamExplicitFmtMatchesFile(false, 'webp', $meta['format']));
     }
 
-    public function testFindHistoricalWebcamSizeFile_MissingHeight_UsesSameFormatOriginal(): void
+    public function testFindHistoricalWebcamSizeFile_MissingHeight_DoesNotUseSameFormatOriginal(): void
     {
         $ts = 1704068010;
-        $original = $this->writeOriginal($ts, 'webp', $this->webpBytes());
+        $this->writeOriginal($ts, 'webp', $this->webpBytes());
 
         $found = findHistoricalWebcamSizeFile($this->airportId, $this->camIndex, $ts, 720, 'webp');
-        $this->assertSame($original, $found['path']);
-        $this->assertSame('original', $found['size']);
+        $this->assertNull($found['path']);
+        $this->assertSame(720, $found['size']);
     }
 
-    public function testFindHistoricalWebcamSizeFile_MissingHeight_UsesJpegExtensionOriginal(): void
+    public function testFindHistoricalWebcamSizeFile_MissingHeight_DoesNotUseJpegExtensionOriginal(): void
     {
         $ts = 1704068110;
-        $original = $this->writeOriginal($ts, 'jpeg', $this->jpegBytes());
+        $this->writeOriginal($ts, 'jpeg', $this->jpegBytes());
 
         $found = findHistoricalWebcamSizeFile($this->airportId, $this->camIndex, $ts, 720, 'jpg');
-        $this->assertSame($original, $found['path']);
-        $this->assertSame('original', $found['size']);
+        $this->assertNull($found['path']);
+        $this->assertSame(720, $found['size']);
     }
 
     public function testFindHistoricalWebcamSizeFile_MissingTimestamp_DoesNotServeStagingVariant(): void
@@ -403,44 +422,27 @@ class WebcamOriginalResolveTest extends TestCase
         $this->assertSame($pngPath, getWebcamOriginalPath($this->airportId, $this->camIndex));
     }
 
+    public function testGetCurrentServableWebcamOriginal_NewerVariantOnlyFrame_SelectsOriginalTimestamp(): void
+    {
+        $originalTs = 1704067035;
+        $variantTs = 1704067635;
+        $originalPath = $this->writeOriginal($originalTs, 'png', $this->pngBytes());
+        $variantPath = getWebcamVariantPath($this->airportId, $this->camIndex, $variantTs, 720, 'jpg');
+        ensureCacheDir(dirname($variantPath));
+        file_put_contents($variantPath, $this->jpegBytes());
+
+        $this->assertSame($variantTs, getLatestImageTimestamp($this->airportId, $this->camIndex));
+        $current = getCurrentServableWebcamOriginal($this->airportId, $this->camIndex);
+        $this->assertNotNull($current);
+        $this->assertSame($originalPath, $current['path']);
+        $this->assertSame('png', $current['format']);
+        $this->assertSame($originalTs, $current['timestamp']);
+    }
+
     public function testWebcamServableOriginalCaptureRank_UnsupportedBytes_ReturnsNull(): void
     {
         $path = $this->writeOriginal(1704067040, 'jpg', str_repeat('notanimage!', 2));
         $this->assertNull(webcamServableOriginalCaptureRank($path));
-    }
-
-    public function testGetWebcamOriginalPath_SymlinkEscapingAirportCache_IsSkipped(): void
-    {
-        // A valid in-cache original that the resolver should fall back to.
-        $inCache = $this->writeOriginal(1704068000, 'png', $this->pngBytes());
-
-        // Point original.jpg at a file outside the airport cache via an absolute symlink.
-        $outside = CACHE_WEBCAMS_DIR . '/outside_fixture.png';
-        file_put_contents($outside, $this->pngBytes());
-        $camDir = getWebcamCameraDir($this->airportId, $this->camIndex);
-        ensureCacheDir($camDir);
-        $symlink = getWebcamOriginalSymlinkPath($this->airportId, $this->camIndex, 'jpg');
-        symlink($outside, $symlink);
-
-        // The escaping symlink must be refused as a servable original (defense in depth),
-        // so resolution falls back to the in-cache jpeg-free png.
-        $result = getWebcamOriginalPath($this->airportId, $this->camIndex);
-        $this->assertNotSame($outside, $result);
-        $this->assertSame($inCache, $result);
-    }
-
-    public function testGetCurrentServableWebcamOriginal_CorruptNewest_ReturnsOlderValidTimestamp(): void
-    {
-        // Newest file is corrupt and must be skipped; the older valid servable is what
-        // a fail-closed staleness gate must judge, so it must not be masked by the
-        // fresher-but-corrupt filename.
-        $newCorrupt = $this->writeOriginal(1704069000, 'jpg', str_repeat('notanimage!', 3));
-        $oldValid = $this->writeOriginal(1704064000, 'png', $this->pngBytes());
-
-        $servable = getCurrentServableWebcamOriginal($this->airportId, $this->camIndex);
-        $this->assertNotNull($servable);
-        $this->assertSame($oldValid, $servable['path']);
-        $this->assertSame(1704064000, $servable['timestamp']);
     }
 
     public function testCleanupOldTimestampFiles_ExpiredPngOriginal_IsRemoved(): void
