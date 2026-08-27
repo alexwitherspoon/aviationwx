@@ -69,9 +69,30 @@
         });
     }
 
+    /**
+     * Select a format advertised by a history frame.
+     *
+     * @param {string[]} formats Available normalized formats
+     * @param {string} preferredFormat Browser-preferred format
+     * @returns {string}
+     */
+    function selectWebcamHistoryFormat(formats, preferredFormat) {
+        if (!Array.isArray(formats) || formats.length === 0) {
+            return 'jpg';
+        }
+        if (formats.includes(preferredFormat)) {
+            return preferredFormat;
+        }
+        if (formats.includes('jpg')) {
+            return 'jpg';
+        }
+        return formats[0];
+    }
+
     const api = {
         makeWebcamPreloadKey: makeWebcamPreloadKey,
-        pruneWebcamPreloadForCameraPeriod: pruneWebcamPreloadForCameraPeriod
+        pruneWebcamPreloadForCameraPeriod: pruneWebcamPreloadForCameraPeriod,
+        selectWebcamHistoryFormat: selectWebcamHistoryFormat
     };
 
     if (typeof module !== 'undefined' && module.exports) {

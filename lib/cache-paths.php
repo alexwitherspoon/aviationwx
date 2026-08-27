@@ -277,10 +277,10 @@ function getWebcamFramesDir(string $airportId, int $camIndex, int $timestamp): s
  *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @param string $pattern Glob pattern for files (e.g., '*_*.{jpg,jpeg,webp}' or '*_original.{jpg,jpeg,webp}')
+ * @param string $pattern Glob pattern for files (e.g., '*_*.{jpg,jpeg,png,webp}' or '*_original.{jpg,jpeg,png,webp}')
  * @return array List of full paths to matching files
  */
-function getWebcamImageFiles(string $airportId, int $camIndex, string $pattern = '*_*.{jpg,jpeg,webp}'): array {
+function getWebcamImageFiles(string $airportId, int $camIndex, string $pattern = '*_*.{jpg,jpeg,png,webp}'): array {
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
     if (!is_dir($cacheDir)) {
         return [];

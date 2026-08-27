@@ -214,11 +214,10 @@ class PublicApiWebcamMetadataTest extends TestCase
 
         $this->assertSame(
             [
-                ['variant' => 'original', 'height' => null, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image'],
                 ['variant' => '600', 'height' => 600, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image?size=600'],
                 ['variant' => '600', 'height' => 600, 'format' => 'webp', 'url' => '/v1/airports/test/webcams/0/image?fmt=webp&size=600'],
             ],
-            $images
+            array_slice($images, 1)
         );
     }
 }

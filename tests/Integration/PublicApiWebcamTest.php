@@ -12,17 +12,68 @@ require_once __DIR__ . '/../../lib/cache-paths.php';
 class PublicApiWebcamTest extends TestCase
 {
     private static $apiBaseUrl;
-    private static $testAirport = 'kspb';
-    private static $testCam = 0;  // Fixture camera 0 is AviationWX-operated; camera 1 is wsdot
+    private static $testAirport = 'wcfx';
+    private static $testCam = 0;
+    private static bool $fixtureReady = false;
     
     public static function setUpBeforeClass(): void
     {
         self::$apiBaseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
-        
-        // Ensure test images exist (use CACHE_WEBCAMS_DIR so server sees them when TEST_API_URL is set)
+
+        $testCacheDir = getenv('TEST_CACHE_DIR');
+        if (!is_string($testCacheDir) || $testCacheDir === '') {
+            return;
+        }
+        if (rtrim($testCacheDir, '/') !== CACHE_BASE_DIR) {
+            return;
+        }
+
+        self::$fixtureReady = true;
+        self::removeFixtureTree();
         self::createTestImages();
     }
-    
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        if (!self::$fixtureReady) {
+            $this->markTestSkipped('TEST_CACHE_DIR must identify the isolated HTTP test cache');
+        }
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (self::$fixtureReady) {
+            self::removeFixtureTree();
+        }
+        parent::tearDownAfterClass();
+    }
+
+    private static function removeFixtureTree(?string $dir = null): void
+    {
+        $dir ??= CACHE_WEBCAMS_DIR . '/' . self::$testAirport;
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $items = scandir($dir);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_link($path) || is_file($path)) {
+                unlink($path);
+            } elseif (is_dir($path)) {
+                self::removeFixtureTree($path);
+            }
+        }
+        rmdir($dir);
+    }
+
     /**
      * Create test images for testing (uses date/hour subdir structure)
      */
@@ -75,7 +126,8 @@ class PublicApiWebcamTest extends TestCase
         // Small delay to avoid rate limiting in tests
         usleep(100000); // 100ms
         
-        $url = self::$apiBaseUrl . '/api/v1' . $endpoint;
+        $url = self::$apiBaseUrl;
+        $url .= str_starts_with($endpoint, '/api/') ? $endpoint : '/api/v1' . $endpoint;
         
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -135,7 +187,16 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('data', $data, 'Should have data field');
         $this->assertArrayHasKey('timestamp', $data['data'], 'Should have timestamp');
         $this->assertArrayHasKey('timestamp_iso', $data['data'], 'Should have timestamp_iso');
+        $this->assertArrayHasKey('age_seconds', $data['data'], 'Should have age_seconds');
+        $this->assertArrayHasKey('stale', $data['data'], 'Should have stale flag');
         $this->assertArrayHasKey('formats', $data['data'], 'Should have formats');
+
+        // age_seconds must be consistent with the capture timestamp and current time.
+        $age = $data['data']['age_seconds'];
+        $this->assertIsInt($age);
+        $this->assertGreaterThanOrEqual(0, $age);
+        // stale is true exactly when age exceeds the (default-minimum) threshold.
+        $this->assertIsBool($data['data']['stale']);
         $this->assertArrayHasKey('recommended_sizes', $data['data'], 'Should have recommended_sizes');
         $this->assertArrayHasKey('urls', $data['data'], 'Should have urls');
         
@@ -204,34 +265,44 @@ class PublicApiWebcamTest extends TestCase
         }
     }
     
-    /**
-     * Test explicit format request for unavailable format returns error
-     * 
-     * This tests Issue #1 fix: when WebP is requested but doesn't exist for original,
-     * should return helpful error instead of silently falling back to JPG.
-     */
-    public function testExplicitFormatRequest_UnavailableFormat_ReturnsError(): void
+    public function testExplicitFormatRequest_DisabledFormat_ReturnsError(): void
     {
-        // Request WebP for original (which typically doesn't exist - only variants have WebP)
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt=webp');
         
         if ($response['status'] === 0) {
             $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
         }
         
-        // Should return 400 Bad Request with helpful error
         $this->assertEquals(400, $response['status'], 
-            'Explicit WebP request for unavailable format should return 400');
+            'Explicit request for a disabled generation format should return 400');
         
         $data = $response['json'];
         $this->assertFalse($data['success'] ?? true, 'Success should be false');
         $this->assertArrayHasKey('error', $data, 'Should have error field');
         $this->assertArrayHasKey('message', $data['error'], 'Error should have message');
         
-        // Error message should mention format not available
         $message = $data['error']['message'];
-        $this->assertStringContainsString('not available', $message, 
-            'Error message should mention format not available');
+        $this->assertStringContainsString('not enabled', $message,
+            'Error message should mention the format is not enabled');
+    }
+
+    public function testExplicitFormatRequest_ArrayValue_ReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt[]=webp&size=720'
+        );
+
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+
+        $this->assertSame(400, $response['status']);
+        $this->assertStringContainsString('application/json', $response['content_type']);
+        $this->assertIsArray($response['json'], 'Response body should be clean JSON without PHP warnings');
+        $this->assertSame(
+            'fmt must be a single value',
+            $response['json']['error']['message'] ?? null
+        );
     }
     
     /**
@@ -267,9 +338,9 @@ class PublicApiWebcamTest extends TestCase
     }
     
     /**
-     * Test default request (no fmt parameter) returns JPG
+     * Test default request (no fmt parameter) returns the native original
      */
-    public function testDefaultRequest_NoFmtParameter_ReturnsJpg(): void
+    public function testDefaultRequest_NoFmtParameter_ReturnsNativeOriginal(): void
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image');
         
@@ -277,14 +348,652 @@ class PublicApiWebcamTest extends TestCase
             $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
         }
         
-        // Should return 200 with JPG (or 503 if no image available)
         $this->assertContains($response['status'], [200, 503], 
             'Default request should return 200 or 503');
         
         if ($response['status'] === 200) {
-            $this->assertStringContainsString('image/jpeg', $response['content_type'],
-                'Default request should return JPEG content type');
+            $this->assertMatchesRegularExpression(
+                '#image/(jpeg|png|webp)#',
+                $response['content_type'],
+                'Default request should return the native original content type'
+            );
         }
+    }
+
+    public function testDefaultRequest_PngOriginal_ReturnsPngContentTypeAndMagic(): void
+    {
+        $this->assertNativeOriginalHttpResponse('png', 'image/png', "\x89PNG\r\n\x1a\n");
+    }
+
+    public function testDefaultRequest_WebpOriginal_ReturnsWebpContentTypeAndMagic(): void
+    {
+        if (!function_exists('imagewebp')) {
+            $this->markTestSkipped('GD WebP support is not available');
+        }
+        $this->assertNativeOriginalHttpResponse('webp', 'image/webp', 'RIFF');
+    }
+
+    public function testDownload_PngOriginal_ReturnsNativeAttachmentWithLiveCachePolicy(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/png', $response['content_type']);
+            $this->assertStringContainsString(
+                'attachment;',
+                $response['headers']['Content-Disposition'] ?? ''
+            );
+            $this->assertStringContainsString(
+                '.png"',
+                $response['headers']['Content-Disposition'] ?? ''
+            );
+            $cacheControl = $response['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('max-age=60', $cacheControl);
+            $this->assertStringNotContainsString('immutable', $cacheControl);
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+
+            $etag = $response['headers']['ETag'] ?? null;
+            $this->assertNotNull($etag);
+            $conditional = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+                '/image?download=1',
+                ['If-None-Match: ' . $etag]
+            );
+            $this->assertSame(304, $conditional['status']);
+            $this->assertStringContainsString(
+                'max-age=60',
+                $conditional['headers']['Cache-Control'] ?? ''
+            );
+            $this->assertStringNotContainsString(
+                'immutable',
+                $conditional['headers']['Cache-Control'] ?? ''
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testHistory_PngOriginal_ReturnsNativeImageWithImmutableCachePolicy(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $timestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/history?ts=' . $timestamp
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/png', $response['content_type']);
+            $this->assertStringContainsString(
+                'immutable',
+                $response['headers']['Cache-Control'] ?? ''
+            );
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertConditionalImageHeaders($response, (
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+                '/history?ts=' . $timestamp
+            ), true);
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testLegacyHistory_PngOriginalReturnsNativeImage(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $timestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $response = $this->apiRequest(
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&fmt=png&size=original'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/png', $response['content_type']);
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertConditionalImageHeaders(
+                $response,
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&fmt=png&size=original',
+                true
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testLegacyTimestamp_PngOriginalReturnsNativeImageWhenFormatOmitted(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $timestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $response = $this->apiRequest(
+                '/api/webcam.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&size=original'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/png', $response['content_type']);
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertConditionalImageHeaders(
+                $response,
+                '/api/webcam.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&size=original',
+                true,
+                false
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testLegacyCurrent_PngOriginalReturnsNativeImageWhenFormatOmitted(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $response = $this->apiRequest(
+                '/api/webcam.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&size=original'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/png', $response['content_type']);
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($response['body'], 0, 8));
+            $this->assertStringContainsString(
+                '.png"',
+                $response['headers']['Content-Disposition'] ?? ''
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testLegacyCurrent_ArrayFormatReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/api/webcam.php?id=' . self::$testAirport .
+            '&cam=' . self::$testCam .
+            '&fmt%5B%5D=png'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame('fmt must be a single value', $response['json']['error'] ?? null);
+    }
+
+    public function testLegacyHistory_JpegAliasReturnsJpegImage(): void
+    {
+        $path = self::installTimestampedOriginal('jpeg', 'jpg');
+        try {
+            $timestamp = (int)explode('_', basename($path), 2)[0];
+            $response = $this->apiRequest(
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&fmt=jpeg&size=original'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString('image/jpeg', $response['content_type']);
+            $this->assertSame("\xff\xd8\xff", substr($response['body'], 0, 3));
+        } finally {
+            self::removeInstalledNativeOriginal($path);
+        }
+    }
+
+    public function testLegacyHistory_MislabeledPngRejectsExplicitFormat(): void
+    {
+        $path = self::installTimestampedOriginal('png', 'jpg');
+        try {
+            $timestamp = (int)explode('_', basename($path), 2)[0];
+            $response = $this->apiRequest(
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&fmt=png&size=original'
+            );
+
+            $this->assertSame(400, $response['status']);
+            $this->assertSame(
+                'jpg',
+                $response['json']['actual_format'] ?? null
+            );
+        } finally {
+            self::removeInstalledNativeOriginal($path);
+        }
+    }
+
+    public function testLegacyHistory_ArrayFormatReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/api/webcam-history.php?id=' . self::$testAirport .
+            '&cam=' . self::$testCam .
+            '&fmt%5B%5D=png'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame('fmt must be a single value', $response['json']['error'] ?? null);
+    }
+
+    public function testLegacyHistory_UnsupportedFormatReturnsCleanJsonError(): void
+    {
+        $response = $this->apiRequest(
+            '/api/webcam-history.php?id=' . self::$testAirport .
+            '&cam=' . self::$testCam .
+            '&fmt=gif'
+        );
+
+        $this->assertSame(400, $response['status']);
+        $this->assertSame('Unsupported image format', $response['json']['error'] ?? null);
+    }
+
+    public function testLegacyHistoryManifest_ClassifiesOriginalFromBytes(): void
+    {
+        $path = self::installTimestampedOriginal('png', 'jpg');
+        $timestamp = (int)explode('_', basename($path), 2)[0];
+        $variantPath = dirname($path) . '/' . $timestamp . '_720.png';
+        $img = imagecreatetruecolor(720, 540);
+        imagejpeg($img, $variantPath);
+        try {
+            $response = $this->apiRequest(
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam
+            );
+            $frames = $response['json']['frames'] ?? [];
+            $matching = array_values(array_filter(
+                $frames,
+                static fn(array $frame): bool => ($frame['timestamp'] ?? null) === $timestamp
+            ));
+
+            $this->assertCount(1, $matching);
+            $this->assertContains('jpg', $matching[0]['formats']);
+            $this->assertNotContains('png', $matching[0]['formats']);
+            $this->assertArrayNotHasKey('720', $matching[0]['variants']);
+        } finally {
+            if (is_file($variantPath)) {
+                unlink($variantPath);
+            }
+            self::removeInstalledNativeOriginal($path);
+        }
+    }
+
+    public function testLegacyHistory_MissingTimestampedSizeDoesNotServeStagingFile(): void
+    {
+        $stagingPath = getWebcamCameraDir(self::$testAirport, self::$testCam) .
+            '/staging_720_jpg.tmp';
+        $img = imagecreatetruecolor(720, 540);
+        imagejpeg($img, $stagingPath);
+
+        try {
+            $response = $this->apiRequest(
+                '/api/webcam-history.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . (time() - 600) .
+                '&fmt=jpg&size=720'
+            );
+
+            $this->assertSame(404, $response['status']);
+        } finally {
+            if (is_file($stagingPath)) {
+                unlink($stagingPath);
+            }
+        }
+    }
+
+    public function testLegacyDownload_LatestUsesLiveCachePolicy(): void
+    {
+        $response = $this->apiRequest(
+            '/api/webcam.php?id=' . self::$testAirport . '&cam=' . self::$testCam . '&download=1'
+        );
+
+        $this->assertSame(200, $response['status']);
+        $cacheControl = $response['headers']['Cache-Control'] ?? '';
+        $this->assertStringContainsString('max-age=60', $cacheControl);
+        $this->assertStringNotContainsString('immutable', $cacheControl);
+    }
+
+    public function testLegacyDownload_TimestampUsesImmutableCachePolicy(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $timestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $response = $this->apiRequest(
+                '/api/webcam.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&ts=' . $timestamp .
+                '&download=1'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertStringContainsString(
+                'immutable',
+                $response['headers']['Cache-Control'] ?? ''
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testTransform_CorruptNewestOriginal_UsesNewestServableCapture(): void
+    {
+        $timestamp = time() + 120;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $corruptPath = $framesDir . '/' . $timestamp . '_original.jpg';
+        file_put_contents($corruptPath, 'not an image');
+
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?width=320'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $dimensions = getimagesizefromstring($response['body']);
+            $this->assertIsArray($dimensions);
+            $this->assertSame(320, $dimensions[0]);
+        } finally {
+            self::removeInstalledNativeOriginal($corruptPath);
+        }
+    }
+
+    public function testMetadata_CorruptNewestOriginal_UsesNewestServableCapture(): void
+    {
+        $path = '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+            '/image?metadata=1';
+        $before = $this->apiRequest($path);
+        $expectedTimestamp = $before['json']['data']['timestamp'] ?? null;
+        $this->assertIsInt($expectedTimestamp);
+        $timestamp = time() + 120;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $corruptPath = $framesDir . '/' . $timestamp . '_original.jpg';
+        file_put_contents($corruptPath, 'not an image');
+
+        try {
+            $response = $this->apiRequest($path);
+
+            $this->assertSame(200, $response['status']);
+            $this->assertSame(
+                $expectedTimestamp,
+                $response['json']['data']['timestamp'] ?? null
+            );
+        } finally {
+            self::removeInstalledNativeOriginal($corruptPath);
+        }
+    }
+
+    public function testLegacyMtime_CorruptNewestOriginal_UsesNewestServableCapture(): void
+    {
+        $before = $this->apiRequest(
+            '/api/webcam.php?id=' . self::$testAirport .
+            '&cam=' . self::$testCam .
+            '&mtime=1'
+        );
+        $expectedTimestamp = $before['json']['timestamp'] ?? null;
+        $this->assertIsInt($expectedTimestamp);
+
+        $timestamp = time() + 120;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $corruptPath = $framesDir . '/' . $timestamp . '_original.jpg';
+        file_put_contents($corruptPath, 'not an image');
+
+        try {
+            $response = $this->apiRequest(
+                '/api/webcam.php?id=' . self::$testAirport .
+                '&cam=' . self::$testCam .
+                '&mtime=1'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $this->assertSame($expectedTimestamp, $response['json']['timestamp'] ?? null);
+        } finally {
+            self::removeInstalledNativeOriginal($corruptPath);
+        }
+    }
+
+    public function testSizeRequest_CorruptNewestOriginal_UsesNewestServableCapture(): void
+    {
+        $installedPath = self::installNativeOriginal('png');
+        $validTimestamp = (int)explode('_', basename($installedPath), 2)[0];
+        $variantPath = dirname($installedPath) . '/' . $validTimestamp . '_720.jpg';
+        $variant = imagecreatetruecolor(1280, 720);
+        imagejpeg($variant, $variantPath);
+
+        $timestamp = time() + 120;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $corruptPath = $framesDir . '/' . $timestamp . '_original.jpg';
+        file_put_contents($corruptPath, 'not an image');
+
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam .
+                '/image?size=720'
+            );
+
+            $this->assertSame(200, $response['status']);
+            $dimensions = getimagesizefromstring($response['body']);
+            $this->assertIsArray($dimensions);
+            $this->assertSame(720, $dimensions[1]);
+        } finally {
+            self::removeInstalledNativeOriginal($corruptPath);
+            if (is_file($variantPath)) {
+                unlink($variantPath);
+            }
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testSizeRequest_InvalidValueFallsBackToOriginal(): void
+    {
+        $response = $this->apiRequest(
+            '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=bogus'
+        );
+
+        $this->assertSame(200, $response['status']);
+        $this->assertStringContainsString('image/jpeg', $response['content_type']);
+    }
+
+    public function testSizeRequest_MissingVariantDoesNotReturnNativeOriginal(): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal('png');
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=777'
+            );
+
+            $this->assertSame(503, $response['status']);
+            $this->assertStringContainsString('application/json', $response['content_type']);
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    public function testDownload_NoOriginalReturnsServiceUnavailable(): void
+    {
+        self::removeFixtureTree();
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+
+            $this->assertSame(503, $response['status']);
+        } finally {
+            self::createTestImages();
+        }
+    }
+
+    private function assertNativeOriginalHttpResponse(string $format, string $contentType, string $magicPrefix): void
+    {
+        $installedPath = null;
+        try {
+            $installedPath = self::installNativeOriginal($format);
+            $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image');
+            if ($response['status'] === 0) {
+                $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+            }
+
+            $this->assertSame(200, $response['status'], 'Isolated stack should serve the installed native original');
+            $this->assertStringContainsString(
+                $contentType,
+                $response['content_type'],
+                'Content-Type must match the native original'
+            );
+            $this->assertSame(
+                $magicPrefix,
+                substr($response['body'], 0, strlen($magicPrefix)),
+                'Body magic bytes must match the native original'
+            );
+            if ($format === 'webp') {
+                $this->assertSame('WEBP', substr($response['body'], 8, 4));
+            }
+            $this->assertConditionalImageHeaders(
+                $response,
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image',
+                false
+            );
+        } finally {
+            self::restoreDefaultOriginalFixture($installedPath);
+        }
+    }
+
+    private function assertConditionalImageHeaders(
+        array $response,
+        string $path,
+        bool $immutable,
+        bool $expectCors = true
+    ): void
+    {
+        $etag = $response['headers']['ETag'] ?? null;
+        $this->assertNotNull($etag);
+
+        $conditional = $this->apiRequest($path, ['If-None-Match: ' . $etag]);
+        $this->assertSame(304, $conditional['status']);
+        $cacheControl = $conditional['headers']['Cache-Control'] ?? '';
+        $this->assertSame($immutable, str_contains($cacheControl, 'immutable'));
+        $this->assertNotSame('', $cacheControl);
+        if ($expectCors) {
+            $this->assertSame('*', $conditional['headers']['Access-Control-Allow-Origin'] ?? null);
+        }
+    }
+
+    private static function restoreDefaultOriginalFixture(?string $installedPath): void
+    {
+        if ($installedPath !== null) {
+            self::removeInstalledNativeOriginal($installedPath);
+        }
+        self::unlinkOriginalFormatSymlinks();
+        self::createTestImages();
+    }
+
+    private static function unlinkOriginalFormatSymlinks(): void
+    {
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) {
+            $link = $cacheDir . '/original.' . $ext;
+            if (is_link($link) || file_exists($link)) {
+                unlink($link);
+            }
+        }
+    }
+
+    private static function removeInstalledNativeOriginal(string $path): void
+    {
+        $hourDir = dirname($path);
+        $dateDir = dirname($hourDir);
+        if (is_file($path) || is_link($path)) {
+            unlink($path);
+        }
+        self::rmdirIfEmpty($hourDir);
+        self::rmdirIfEmpty($dateDir);
+    }
+
+    private static function rmdirIfEmpty(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items !== false && count($items) === 2) {
+            rmdir($dir);
+        }
+    }
+
+    private static function installNativeOriginal(string $format): string
+    {
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+
+        // Must outrank the JPEG fixture so getLatestImageTimestamp selects this file.
+        $timestamp = time() + 1;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($timestamp);
+        $filename = $timestamp . '_original.' . $format;
+        $path = $framesDir . '/' . $filename;
+
+        $img = imagecreatetruecolor(32, 24);
+        $green = imagecolorallocate($img, 0, 128, 0);
+        imagefill($img, 0, 0, $green);
+        if ($format === 'png') {
+            imagepng($img, $path);
+        } else {
+            imagewebp($img, $path);
+        }
+        self::unlinkOriginalFormatSymlinks();
+        symlink($subdir . '/' . $filename, $cacheDir . '/original.' . $format);
+
+        return $path;
+    }
+
+    private static function installTimestampedOriginal(string $extension, string $actualFormat): string
+    {
+        $timestamp = time() + 30;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $path = $framesDir . '/' . $timestamp . '_original.' . $extension;
+        $img = imagecreatetruecolor(32, 24);
+        if ($actualFormat === 'jpg') {
+            imagejpeg($img, $path);
+        } else {
+            imagepng($img, $path);
+        }
+
+        return $path;
     }
     
     /**
@@ -494,7 +1203,7 @@ class PublicApiWebcamTest extends TestCase
         $data = $response['json'];
         $this->assertTrue($data['success'] ?? false);
         $webcams = $data['webcams'] ?? [];
-        $this->assertNotEmpty($webcams, 'kspb fixture should have webcams');
+        $this->assertNotEmpty($webcams, 'Webcam API fixture should have webcams');
 
         foreach ($webcams as $webcam) {
             $this->assertArrayHasKey('approximate_heading', $webcam);

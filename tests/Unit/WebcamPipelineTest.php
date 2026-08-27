@@ -11,9 +11,11 @@ require_once __DIR__ . '/../../lib/webcam-pipeline.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/WebcamUnsupportedPayloads.php';
 
 class WebcamPipelineTest extends TestCase
 {
+    use WebcamUnsupportedPayloads;
     private string $testImagePath;
     private string $testDir;
 
@@ -84,6 +86,18 @@ class WebcamPipelineTest extends TestCase
         $result = $pipeline->process('/nonexistent/path.jpg', time(), 'mjpeg');
         
         $this->assertFalse($result->success, 'Pipeline should fail when staging file is missing');
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedWebcamPayloadProvider')]
+    public function testPipeline_UnsupportedStagingFile_FailsInvalidFormat(string $label, string $bytes): void
+    {
+        $path = $this->testDir . '/payload.' . $label;
+        file_put_contents($path, $bytes);
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['name' => 'Test Airport']);
+        $result = $pipeline->process($path, time(), 'http');
+
+        $this->assertFalse($result->success);
+        $this->assertSame('invalid_format', $result->errorReason);
     }
 
     /**

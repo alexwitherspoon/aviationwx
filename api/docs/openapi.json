@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Original image\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
+        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. Files that are not those types are not served.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -328,11 +328,10 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format (ignored when profile=faa)",
+            "description": "Image format for generated size variants (ignored when profile=faa). Not valid on the original. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
             "schema": {
               "type": "string",
-              "enum": ["jpg", "webp"],
-              "default": "jpg"
+              "enum": ["jpg", "webp"]
             }
           },
           {
@@ -383,6 +382,7 @@
             "description": "Image data or metadata (when metadata=1)",
             "content": {
               "image/jpeg": {},
+              "image/png": {},
               "image/webp": {},
               "application/json": {
                 "schema": {
@@ -406,7 +406,7 @@
     "/airports/{id}/webcams/{cam}/history": {
       "get": {
         "summary": "Get webcam history",
-        "description": "Returns list of historical webcam frames, or a specific frame when ts parameter is provided.",
+        "description": "Returns list of historical webcam frames, or a specific frame image when ts is provided.\n\nWhen ts is set, omit fmt for the native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. fmt applies only to generated size variants. fmt with no size, or with size=original, returns 400.",
         "operationId": "getWebcamHistory",
         "tags": ["Webcams"],
         "parameters": [
@@ -427,20 +427,18 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format (only used with ts parameter)",
+            "description": "Image format for generated size variants. Not valid on the original. Only used with ts. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
             "schema": {
               "type": "string",
-              "enum": ["jpg", "webp"],
-              "default": "jpg"
+              "enum": ["jpg", "webp"]
             }
           },
           {
             "name": "size",
             "in": "query",
-            "description": "Image size variant (only used with ts parameter)",
+            "description": "Height-based variant from the pre-generated set. Only used with ts. Omit fmt when requesting the original.",
             "schema": {
               "type": "string",
-              "default": "original",
               "example": "720"
             }
           }
@@ -454,8 +452,13 @@
                   "$ref": "#/components/schemas/WebcamHistoryResponse"
                 }
               },
-              "image/jpeg": {}
+              "image/jpeg": {},
+              "image/png": {},
+              "image/webp": {}
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2020,10 +2023,10 @@
           },
           "images": {
             "type": "array",
-            "description": "Configured original plus height variants. Original is jpg only. Sized rows follow enabled formats. Not a disk probe of the current frame.",
+            "description": "Configured original plus height variants. Original URL has no fmt; format is the native type when the current original is a supported jpg, png, or webp. Omitted when missing or unsupported. Sized rows follow enabled generation formats from airports.json.",
             "items": {
               "type": "object",
-              "required": ["variant", "height", "format", "url"],
+              "required": ["variant", "height", "url"],
               "properties": {
                 "variant": {
                   "type": "string",
@@ -2036,7 +2039,8 @@
                 },
                 "format": {
                   "type": "string",
-                  "enum": ["jpg", "webp"]
+                  "enum": ["jpg", "png", "webp"],
+                  "description": "Native type of the current original, or an enabled generation format on sized rows. Omitted on original when the file is missing or not a supported jpg, png, or webp."
                 },
                 "url": {
                   "type": "string"
@@ -2241,7 +2245,7 @@
                   "type": "array",
                   "items": {
                     "type": "string",
-                    "enum": ["jpg", "webp"]
+                    "enum": ["jpg", "png", "webp"]
                   }
                 },
                 "example": {

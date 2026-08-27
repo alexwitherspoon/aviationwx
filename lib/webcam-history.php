@@ -18,6 +18,85 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/webcam-metadata.php';
+
+/**
+ * Locate a historical size variant without substituting a different format.
+ *
+ * History URLs are immutable, so only files for this timestamp are used.
+ * Staging files belong to in-progress live promotion and must not be served
+ * as an old timestamp. When the requested height is missing, the same-format
+ * original for that timestamp may be used. A missing format is not replaced
+ * with another format.
+ *
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Frame timestamp
+ * @param string|int $size original or height
+ * @param string $format Requested generation format (jpg, webp)
+ * @return array{path: ?string, size: string|int}
+ */
+function findHistoricalWebcamSizeFile(
+    string $airportId,
+    int $camIndex,
+    int $timestamp,
+    string|int $size,
+    string $format
+): array {
+    $resolvedSize = $size;
+    $cacheFile = timestampedWebcamImagePathIfExists($airportId, $camIndex, $timestamp, $size, $format);
+    if ($cacheFile === null && $size !== 'original') {
+        $original = timestampedWebcamImagePathIfExists(
+            $airportId,
+            $camIndex,
+            $timestamp,
+            'original',
+            $format
+        );
+        if ($original !== null) {
+            $cacheFile = $original;
+            $resolvedSize = 'original';
+        }
+    }
+
+    return ['path' => $cacheFile, 'size' => $resolvedSize];
+}
+
+/**
+ * Resolve the exact timestamped frame path for a requested size/format.
+ *
+ * For the original size, only the known source-format extensions are probed;
+ * for a numeric size the variant path is returned if it exists. Returns null
+ * when no matching file is present on disk.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Exact capture timestamp for the frame
+ * @param string|int $size "original" or a numeric variant height
+ * @param string $format jpg, png, or webp
+ * @return string|null Path to the frame, or null when not present
+ */
+function timestampedWebcamImagePathIfExists(
+    string $airportId,
+    int $camIndex,
+    int $timestamp,
+    string|int $size,
+    string $format
+): ?string {
+    if ($size === 'original') {
+        foreach (webcamSourceFormatFileExtensions($format) as $ext) {
+            $path = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, $ext);
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    $path = getWebcamVariantPath($airportId, $camIndex, $timestamp, (int) $size, $format);
+    return file_exists($path) ? $path : null;
+}
 
 /**
  * Get list of available history frames
@@ -32,7 +111,7 @@ require_once __DIR__ . '/cache-paths.php';
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @return array Array of frames: [['timestamp' => int, 'filename' => string, 'formats' => ['jpg', 'webp']], ...]
+ * @return array Array of frames: [['timestamp' => int, 'filename' => string, 'formats' => ['jpg', 'png', 'webp']], ...]
  */
 function getHistoryFrames(string $airportId, int $camIndex): array {
     // Get max_frames config - if < 2, history is disabled
@@ -54,10 +133,7 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
             $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
             if ($hourDirs !== false) {
                 foreach ($hourDirs as $hourDir) {
-                    $files = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
-                    if ($files !== false) {
-                        $allFiles = array_merge($allFiles, $files);
-                    }
+                    $allFiles = array_merge($allFiles, globWebcamHourDirImageFiles($hourDir));
                 }
             }
         }
@@ -66,21 +142,28 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         return [];
     }
     
-    // Group by timestamp and variant (exclude symlinks)
     $timestampGroups = [];
     
+    $extPattern = webcamSupportedOriginalExtensionPattern();
     foreach ($allFiles as $file) {
-        // Skip symlinks (current.jpg, current.webp, etc.)
         if (is_link($file)) {
             continue;
         }
-        
+
         $basename = basename($file);
-        // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|webp)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)_(original|\d+)\.(' . $extPattern . ')$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             $variant = $matches[2];
-            $format = $matches[3];
+            $format = $matches[3] === 'jpeg' ? 'jpg' : $matches[3];
+            $meta = webcamServableImageFileMeta($file);
+            if ($meta === null) {
+                continue;
+            }
+            if ($variant === 'original') {
+                $format = $meta['format'];
+            } elseif ($meta['format'] !== $format) {
+                continue;
+            }
             
             if (!isset($timestampGroups[$timestamp])) {
                 $timestampGroups[$timestamp] = [
@@ -355,7 +438,7 @@ function parseGPSTimestamp(array $gps): int {
 /**
  * Get total size of webcam cache for an airport camera
  * 
- * Includes all format files (jpg, webp) in the camera cache directory.
+ * Includes all format files (jpg, png, webp) in the camera cache directory.
  * Useful for monitoring disk usage.
  * 
  * @param string $airportId Airport ID
@@ -375,10 +458,7 @@ function getHistoryDiskUsage(string $airportId, int $camIndex): int {
             $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
             if ($hourDirs !== false) {
                 foreach ($hourDirs as $hourDir) {
-                    $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
-                    if ($hourFiles !== false) {
-                        $files = array_merge($files, $hourFiles);
-                    }
+                    $files = array_merge($files, globWebcamHourDirImageFiles($hourDir));
                 }
             }
         }

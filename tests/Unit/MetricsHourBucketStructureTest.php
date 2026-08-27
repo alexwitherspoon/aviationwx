@@ -37,7 +37,7 @@ class MetricsHourBucketStructureTest extends TestCase
             ],
         ];
         metrics_normalize_hour_bucket_for_merge($partial, $hourId);
-        $this->assertSame([ 'jpg' => 0, 'webp' => 0 ], $partial['global']['format_served']);
+        $this->assertSame([ 'jpg' => 0, 'png' => 0, 'webp' => 0 ], $partial['global']['format_served']);
         $this->assertSame([ 'webp' => 0, 'jpg_only' => 0 ], $partial['global']['browser_support']);
         $this->assertSame([ 'hits' => 0, 'misses' => 0 ], $partial['global']['cache']);
     }

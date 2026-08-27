@@ -15,6 +15,18 @@
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/exif-utils.php';
+require_once __DIR__ . '/webcam-metadata.php';
+
+/**
+ * Native original used as the transform source (jpg, png, or webp).
+ *
+ * @return string|null Path to a servable original, or null if missing/unsupported
+ */
+function resolveWebcamTransformSourcePath(string $airportId, int $camIndex, int $timestamp): ?string
+{
+    $resolved = resolveWebcamOriginalAtTimestamp($airportId, $camIndex, $timestamp);
+    return $resolved['ok'] ? $resolved['path'] : null;
+}
 
 // Maximum dimensions to prevent abuse
 if (!defined('IMAGE_TRANSFORM_MAX_WIDTH')) {
@@ -224,15 +236,8 @@ function getTransformedImagePath(
         return $cachePath;
     }
     
-    // Find source image (prefer original JPG)
-    $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'jpg');
-    
-    if (!file_exists($sourcePath)) {
-        // Try WebP source
-        $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'webp');
-    }
-    
-    if (!file_exists($sourcePath)) {
+    $sourcePath = resolveWebcamTransformSourcePath($airportId, $camIndex, $timestamp);
+    if ($sourcePath === null) {
         aviationwx_log('warning', 'image transform no source found', [
             'airport' => $airportId,
             'cam' => $camIndex,
@@ -674,15 +679,8 @@ function getFaaTransformedImagePath(
         }
     }
     
-    // Find source image (prefer original JPG)
-    $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'jpg');
-    
-    if (!file_exists($sourcePath)) {
-        // Try WebP source
-        $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'webp');
-    }
-    
-    if (!file_exists($sourcePath)) {
+    $sourcePath = resolveWebcamTransformSourcePath($airportId, $camIndex, $timestamp);
+    if ($sourcePath === null) {
         aviationwx_log('warning', 'FAA transform no source found', [
             'airport' => $airportId,
             'cam' => $camIndex,

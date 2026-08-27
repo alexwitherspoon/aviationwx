@@ -75,6 +75,7 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 
 // ============================================================================
 // CONFIGURATION - Cleanup Thresholds (in seconds)
@@ -683,7 +684,7 @@ function cleanupFilesByAge(
 /**
  * Cleanup webcam history frame directories
  *
- * Structure: cache/webcams/{airportId}/{camIndex}/{YYYY-MM-DD}/{HH}/*.{jpg,webp}
+ * Structure: cache/webcams/{airportId}/{camIndex}/{YYYY-MM-DD}/{HH}/*.{jpg,jpeg,png,webp}
  */
 function cleanupWebcamHistoryFrames(
     string $webcamsDir,
@@ -714,6 +715,7 @@ function cleanupWebcamHistoryFrames(
             continue;
         }
         foreach ($camDirs as $camDir) {
+            $liveTargets = getWebcamLiveSymlinkTargets($camDir);
             $dateDirs = glob($camDir . '/????-??-??', GLOB_ONLYDIR);
             if ($dateDirs === false) {
                 continue;
@@ -724,10 +726,7 @@ function cleanupWebcamHistoryFrames(
                     continue;
                 }
                 foreach ($hourDirs as $hourDir) {
-                    $files = array_merge(
-                        glob($hourDir . '/*.jpg') ?: [],
-                        glob($hourDir . '/*.webp') ?: []
-                    );
+                    $files = globWebcamHourDirImageFiles($hourDir);
                     foreach ($files as $file) {
                         $stats['files_checked']++;
                         $mtime = @filemtime($file);
@@ -736,6 +735,10 @@ function cleanupWebcamHistoryFrames(
                         }
                         $age = $now - $mtime;
                         if ($age > $maxAge) {
+                            $realFile = realpath($file);
+                            if ($realFile !== false && isset($liveTargets[$realFile])) {
+                                continue;
+                            }
                             $size = @filesize($file) ?: 0;
                             if ($verbose) {
                                 $parts = explode('/', $camDir);

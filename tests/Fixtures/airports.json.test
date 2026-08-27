@@ -315,6 +315,31 @@
         }
       ]
     },
+    "wcfx": {
+      "name": "Webcam API Test Fixture",
+      "enabled": true,
+      "maintenance": false,
+      "unlisted": true,
+      "webcam_history_retention_hours": 1,
+      "icao": "WCFX",
+      "iata": null,
+      "faa": "WCFX",
+      "address": "Test, Oregon",
+      "lat": 45.0,
+      "lon": -122.0,
+      "elevation_ft": 100,
+      "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "webcams": [
+        {
+          "name": "Webcam API Fixture",
+          "url": "https://example.com/webcam-api.jpg",
+          "approximate_heading": 180,
+          "refresh_seconds": 60
+        }
+      ]
+    },
     "kaoc": {
       "name": "Afton Municipal Airport",
       "enabled": true,

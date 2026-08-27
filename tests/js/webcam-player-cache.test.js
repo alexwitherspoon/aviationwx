@@ -10,6 +10,7 @@
 const {
     makeWebcamPreloadKey,
     pruneWebcamPreloadForCameraPeriod,
+    selectWebcamHistoryFormat,
 } = require('../../public/js/webcam-player-utils.js');
 
 let passed = 0;
@@ -86,6 +87,20 @@ function runTests() {
         }
         if (loading.size !== 0) {
             throw new Error('loading should be empty');
+        }
+    });
+
+    test('history format selection preserves PNG-only frames', () => {
+        const format = selectWebcamHistoryFormat(['png'], 'webp');
+        if (format !== 'png') {
+            throw new Error(`expected png, got ${format}`);
+        }
+    });
+
+    test('history format selection prefers JPEG compatibility fallback', () => {
+        const format = selectWebcamHistoryFormat(['png', 'jpg'], 'webp');
+        if (format !== 'jpg') {
+            throw new Error(`expected jpg, got ${format}`);
         }
     });
 

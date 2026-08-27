@@ -70,7 +70,8 @@ function handleListWebcams(array $params, array $context): void
         'webcam_count' => count($formattedWebcams),
     ];
 
-    sendPublicApiCacheHeaders('metadata');
+    // images[0].format is read from disk, so this payload is not hour-stable metadata.
+    sendPublicApiCacheHeaders('live');
     sendPublicApiSuccess(
         ['webcams' => $formattedWebcams],
         $meta
@@ -164,13 +165,18 @@ function formatWebcamMetadata(
 }
 
 /**
- * Configured original plus height variants. Original is jpg only.
+ * Configured original plus height variants.
+ *
+ * Original URL has no fmt: clients cannot pick the native type. format is set
+ * when the current original is a supported jpg, png, or webp so callers know
+ * what GET will return. Omitted when missing or unsupported. Sized rows follow
+ * enabled generation formats.
  *
  * @param string $airportId Airport ID
  * @param int $index Weathercam index
  * @param bool $absoluteUrls When true, URLs use the canonical v1 base
  * @param array|null $config Already-loaded configuration
- * @return list<array{variant: string, height: int|null, format: string, url: string}>
+ * @return list<array{variant: string, height: int|null, format?: string, url: string}>
  */
 function formatWebcamImageVariants(
     string $airportId,
@@ -180,14 +186,17 @@ function formatWebcamImageVariants(
 ): array
 {
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
-    $images = [
-        [
-            'variant' => 'original',
-            'height' => null,
-            'format' => 'jpg',
-            'url' => publicApiV1Url($imagePath, $absoluteUrls),
-        ],
+    $original = [
+        'variant' => 'original',
+        'height' => null,
+        'url' => publicApiV1Url($imagePath, $absoluteUrls),
     ];
+    $path = getWebcamOriginalPath($airportId, $index);
+    $detected = $path !== null ? detectServableWebcamImageFormat($path) : null;
+    if ($detected !== null) {
+        $original['format'] = $detected;
+    }
+    $images = [$original];
 
     $formats = getEnabledWebcamFormats($config);
     foreach (getVariantHeights($airportId, $index, $config) as $height) {

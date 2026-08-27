@@ -17,6 +17,7 @@ namespace AviationWX\Tests;
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/image-transform.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 
@@ -91,6 +92,43 @@ class ImageTransformTest extends TestCase
         
         $this->createdFiles[] = $path;
         return $path;
+    }
+
+    private function createTestPng(int $width, int $height, string $filename = 'test.png'): string
+    {
+        $path = $this->testImageDir . '/' . $filename;
+        if (!function_exists('imagecreatetruecolor') || !function_exists('imagepng')) {
+            $this->markTestSkipped('GD library with PNG support not available');
+        }
+        $img = imagecreatetruecolor($width, $height);
+        $bg = imagecolorallocate($img, 100, 150, 200);
+        imagefill($img, 0, 0, $bg);
+        imagepng($img, $path);
+        $this->createdFiles[] = $path;
+        return $path;
+    }
+
+    private function deleteCacheTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->deleteCacheTree($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
     
     // =========================================================================
@@ -612,6 +650,65 @@ class ImageTransformTest extends TestCase
         $this->assertNotNull($image);
         $this->assertInstanceOf(\GdImage::class, $image);
         
+    }
+
+    public function testLoadSourceImage_ValidPng_ReturnsGdImage(): void
+    {
+        $source = $this->createTestPng(800, 600, 'load_test.png');
+        $image = loadSourceImage($source);
+        $this->assertNotNull($image);
+        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertEquals(800, imagesx($image));
+        $this->assertEquals(600, imagesy($image));
+    }
+
+    public function testGetTransformedImagePath_PngOriginal_CreatesJpegCache(): void
+    {
+        $airportId = 'pngxform_unit';
+        $camIndex = 0;
+        $timestamp = 1704069000;
+        $source = $this->createTestPng(320, 180, 'cam.png');
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+        ensureCacheDir($framesDir);
+        $pngPath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'png');
+        $this->assertTrue(copy($source, $pngPath));
+
+        try {
+            $path = getTransformedImagePath($airportId, $camIndex, $timestamp, 160, 90, 'jpg');
+            $this->assertNotNull($path);
+            $this->assertFileExists($path);
+            $info = getimagesize($path);
+            $this->assertNotFalse($info);
+            $this->assertSame(160, $info[0]);
+            $this->assertSame(90, $info[1]);
+        } finally {
+            $this->deleteCacheTree(CACHE_WEBCAMS_DIR . '/' . $airportId);
+        }
+    }
+
+    public function testGetFaaTransformedImagePath_PngOriginal_CreatesJpegCache(): void
+    {
+        $airportId = 'pngfaaxform_unit';
+        $camIndex = 0;
+        $timestamp = 1704069100;
+        $source = $this->createTestPng(1920, 1080, 'faa_cam.png');
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+        ensureCacheDir($framesDir);
+        $pngPath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'png');
+        $this->assertTrue(copy($source, $pngPath));
+
+        try {
+            $result = getFaaTransformedImagePath($airportId, $camIndex, $timestamp, [
+                'top' => 0,
+                'bottom' => 0,
+                'left' => 0,
+                'right' => 0,
+            ]);
+            $this->assertNotNull($result);
+            $this->assertFileExists($result['path']);
+        } finally {
+            $this->deleteCacheTree(CACHE_WEBCAMS_DIR . '/' . $airportId);
+        }
     }
     
     /**

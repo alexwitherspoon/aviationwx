@@ -113,10 +113,7 @@ function checkSystemHealth(): array {
                             $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
                             if ($hourDirs !== false) {
                                 foreach ($hourDirs as $hourDir) {
-                                    $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
-                                    if ($hourFiles !== false) {
-                                        $files = array_merge($files, $hourFiles);
-                                    }
+                                    $files = array_merge($files, globWebcamHourDirImageFiles($hourDir));
                                 }
                             }
                         }
@@ -1560,10 +1557,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                         $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
                         if ($hourDirs !== false) {
                             foreach ($hourDirs as $hourDir) {
-                                $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
-                                if ($hourFiles !== false) {
-                                    $files = array_merge($files, $hourFiles);
-                                }
+                                $files = array_merge($files, globWebcamHourDirImageFiles($hourDir));
                             }
                         }
                     }
