@@ -204,6 +204,53 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('cam_index', $data['meta'], 'Meta should have cam_index');
         $this->assertArrayHasKey('refresh_seconds', $data['meta'], 'Meta should have refresh_seconds');
         $this->assertArrayHasKey('variant_heights', $data['meta'], 'Meta should have variant_heights');
+
+        // age_seconds/stale are time-relative and must never be served from a
+        // shared cache with outdated values; the metadata response must be no-store.
+        $cacheControl = $response['headers']['Cache-Control'] ?? '';
+        $this->assertStringContainsString('no-store', $cacheControl, 'Metadata should be no-store');
+    }
+
+    public function testImage_OverAgeOriginal_IsServed200WithStaleHeaders(): void
+    {
+        // Install a servable original captured past the fail-closed threshold
+        // (~4h ago, default is 3h) and point the current symlink at it, so the
+        // native-current request resolves a stale frame.
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $oldTs = time() - 14400;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $oldTs);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($oldTs);
+        $filename = $oldTs . '_original.jpg';
+        $path = $framesDir . '/' . $filename;
+        $img = imagecreatetruecolor(32, 24);
+        imagejpeg($img, $path);
+
+        self::unlinkOriginalFormatSymlinks();
+        symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
+
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt=png&size=original'
+            );
+
+            // A stale webcam is not a server error: serve the last known frame as 200,
+            // but flag it and refuse to cache it as current.
+            $this->assertSame(200, $response['status']);
+            $cacheControl = $response['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $cacheControl);
+            $this->assertArrayHasKey('Warning', $response['headers']);
+            $this->assertMatchesRegularExpression('/110/', $response['headers']['Warning']);
+            $this->assertArrayHasKey('Last-Modified', $response['headers']);
+        } finally {
+            @unlink($path);
+            self::unlinkOriginalFormatSymlinks();
+        }
     }
     
     /**

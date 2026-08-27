@@ -652,8 +652,7 @@ function sendImageResponse(
     }
 
     // A capture older than the fail-closed threshold is a "last known good frame":
-    // still served as 200, but marked stale so it is not cached as current. The
-    // capture time (authoritative EXIF) travels in the bytes and is exposed via Last-Modified.
+    // still served as 200, but marked stale so it is not cached as current.
     $stale = $timestamp > 0 && (time() - $timestamp) > getStaleFailclosedSeconds($airport);
     if ($stale) {
         // Last known good frame; log the over-age delivery so it is auditable.
