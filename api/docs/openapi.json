@@ -535,6 +535,15 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WeathercamOperator"
+          },
+          {
+            "name": "maintenance",
+            "in": "query",
+            "description": "Maintenance sites are excluded by default. Use 'true' to include airports in maintenance mode; 'false' or omitted excludes them.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
           }
         ],
         "responses": {

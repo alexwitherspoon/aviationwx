@@ -580,7 +580,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/weathercam/bulk</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">One-query weathercam catalog. Optional <code>operator</code> matches weathercams only (not weather sources). Nested webcam objects include absolute <code>image_url</code> / <code>images</code> URLs. Origin rebuilds when airports.json changes.</p>
+                <p class="endpoint-desc">One-query weathercam catalog. Optional <code>operator</code> matches weathercams only (not weather sources). Maintenance sites are excluded by default; <code>maintenance=true</code> includes them. Nested webcam objects include absolute <code>image_url</code> / <code>images</code> URLs. Origin rebuilds when airports.json changes.</p>
             </div>
         </div>
 
