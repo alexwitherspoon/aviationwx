@@ -365,17 +365,24 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	@docker compose -f docker/docker-compose.test.yml build
 	@docker compose -f docker/docker-compose.test.yml up -d
 	@echo "Waiting for test container to be healthy..."
-	@timeout=60; while [ $$timeout -gt 0 ]; do \
+	@bash -c 'timeout=60; while [ $$timeout -gt 0 ]; do \
 		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf http://localhost/ >/dev/null 2>&1; then \
 			echo "✓ Test environment ready at http://localhost:9080"; \
-			exit 0; \
+			break; \
 		fi; \
 		sleep 1; \
 		timeout=$$((timeout - 1)); \
 	done; \
-	echo "❌ Test container failed to become healthy"; \
-	docker compose -f docker/docker-compose.test.yml logs; \
-	exit 1
+	if [ $$timeout -le 0 ]; then \
+		echo "❌ Test container failed to become healthy"; \
+		docker compose -f docker/docker-compose.test.yml logs; \
+		exit 1; \
+	fi; \
+	# The container (root) writes cache frames into /tmp/aviationwx-cache-test while \
+	# unit/integration phpunit runs on the host (non-root). Normalize permissions so \
+	# the host runner can unlink/rewrite frames, avoiding Permission denied in the \
+	# native webcam HTTP suite (#298). SFTP keeps its root-owned chroot dirs. \
+	chmod -R a+rwX /tmp/aviationwx-cache-test'
 
 test-down: ## Stop isolated test container
 	@echo "Stopping isolated test environment..."
