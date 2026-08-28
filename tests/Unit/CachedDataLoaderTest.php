@@ -23,7 +23,8 @@ class CachedDataLoaderTest extends TestCase
             @unlink($this->testCacheFile);
         }
         
-        // Clear the whole APCu namespace so no key from another test leaks in.
+        // Clear the whole APCu user cache for this process so no key from another
+        // test leaks in.
         // Deleting only a few known keys is unsafe because the loader keys here
         // vary per method and any leftover entry makes a test order-dependent.
         if (function_exists('apcu_clear_cache')) {
@@ -38,7 +39,7 @@ class CachedDataLoaderTest extends TestCase
             @unlink($this->testCacheFile);
         }
         
-        // Clear the whole APCu namespace (see setUp).
+        // Clear the whole APCu user cache (see setUp).
         if (function_exists('apcu_clear_cache')) {
             @apcu_clear_cache();
         }
