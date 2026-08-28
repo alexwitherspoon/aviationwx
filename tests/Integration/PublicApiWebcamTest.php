@@ -253,6 +253,17 @@ class PublicApiWebcamTest extends TestCase
             $expectedLastModified = gmdate('D, d M Y H:i:s', $oldTs) . ' GMT';
             $this->assertSame($expectedLastModified, $response['headers']['Last-Modified']);
 
+            // The download branch must apply the same stale policy for an over-age
+            // frame: attachment, no-store, Warning 110, and capture-time Last-Modified.
+            $download = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+            $this->assertSame(200, $download['status']);
+            $this->assertStringContainsString('attachment', $download['headers']['Content-Disposition'] ?? '');
+            $this->assertStringContainsString('no-store', $download['headers']['Cache-Control'] ?? '');
+            $this->assertMatchesRegularExpression('/110/', $download['headers']['Warning'] ?? '');
+            $this->assertSame($expectedLastModified, $download['headers']['Last-Modified'] ?? '');
+
             // The metadata endpoint must report the same frame as stale so the two
             // surfaces cannot diverge for clients consuming the age fields.
             $meta = $this->apiRequest(

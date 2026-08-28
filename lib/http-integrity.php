@@ -218,8 +218,13 @@ function computeContentMd5FromString(string $content): string
 /**
  * Check conditional request and send 304 if content unchanged
  *
+ * When If-None-Match is present, If-Modified-Since is ignored per RFC 7232.
+ *
  * @param string $etag ETag value (weak or strong)
- * @param int $mtime File modification time
+ * @param int $mtime File modification time (ETag/identity input)
+ * @param int|null $responseLastModified Optional logical last-modified used for the
+ *        If-Modified-Since comparison and the response Last-Modified header. When
+ *        null, $mtime is used. The ETag stays derived from $mtime regardless.
  * @return bool True if 304 was sent (caller should not send body), false otherwise
  */
 function maybeSend304IfUnchanged(string $etag, int $mtime, ?int $responseLastModified = null): bool
@@ -242,10 +247,11 @@ function maybeSend304IfUnchanged(string $etag, int $mtime, ?int $responseLastMod
     }
     // Compare If-Modified-Since against the logical last-modified so a client
     // sending the advertised capture time revalidates correctly even when the
-    // on-disk mtime differs (e.g. a stale frame named with an old capture time).
+    // on-disk mtime differs. RFC 7232: If-Modified-Since is ignored when an
+    // ETag validator is present, so a regenerated frame with a new ETag does not
+    // incorrectly 304 via the date header.
     $lastModified = $responseLastModified ?? $mtime;
-    // @ strtotime: malformed If-Modified-Since; we treat as no match
-    $matchMod = ($ifModSince !== '' && @strtotime($ifModSince) >= $lastModified);
+    $matchMod = $ifNoneMatch === '' && $ifModSince !== '' && @strtotime($ifModSince) >= $lastModified;
 
     if ($matchEtag || $matchMod) {
         header('ETag: ' . $etag);
@@ -263,6 +269,9 @@ function maybeSend304IfUnchanged(string $etag, int $mtime, ?int $responseLastMod
  * @param string $identity Stable logical file identity for the ETag
  * @param int $mtime File modification time from fstat
  * @param int $size File size from fstat
+ * @param int|null $responseLastModified Optional logical last-modified for the
+ *        conditional check and response Last-Modified header; null uses $mtime.
+ *        ETag/digest caching stays keyed on $mtime.
  * @return bool True if 304 sent (do not send body), false to continue
  */
 function addIntegrityHeadersForOpenFile(

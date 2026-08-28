@@ -261,6 +261,24 @@ class HttpIntegrityTest extends TestCase
         $this->assertNotSame(304, http_response_code());
     }
 
+    public function testMaybeSend304IfUnchanged_IfNoneMatchPresent_IgnoresIfModifiedSince(): void
+    {
+        // RFC 7232: when If-None-Match is present, If-Modified-Since must be
+        // ignored, so a non-matching ETag (a regenerated frame) must not 304 via
+        // the date header even if the capture timestamp matches.
+        http_response_code(200);
+        $_SERVER['HTTP_IF_NONE_MATCH'] = 'W/"different-etag"';
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', time()) . ' GMT';
+
+        ob_start();
+        $result = maybeSend304IfUnchanged('W/"server-etag"', time(), time() - 1);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_NONE_MATCH'], $_SERVER['HTTP_IF_MODIFIED_SINCE']);
+
+        $this->assertFalse($result);
+        $this->assertNotSame(304, http_response_code());
+    }
+
     /**
      * Content-Digest verifies body integrity (digest matches actual content)
      */
