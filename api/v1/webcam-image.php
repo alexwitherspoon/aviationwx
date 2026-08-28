@@ -231,10 +231,11 @@ function handleGetWebcamImage(array $params, array $context): void
                 $webcamRefresh = intval($webcam['refresh_seconds']);
             }
             // Same fail-closed boundary rule as sendImageResponse: refuse to cache
-            // within the SWR window of the boundary, else use the normal refresh TTL.
+            // when the remaining time before stale is within the full serveable
+            // window (freshness plus SWR), else use the normal refresh TTL.
             $age = max(0, time() - $captureTimestamp);
             $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
-            if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS) {
+            if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
                 $headers = getNoStoreCacheHeaders(0);
             } else {
                 $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
@@ -692,12 +693,12 @@ function sendImageResponse(
         header('Warning: 110 - "Response is stale"');
     } else {
         // A fresh frame must not be cached past the fail-closed boundary. Refuse
-        // to cache whenever we are within the stale-while-revalidate window of the
-        // boundary, because generateCacheHeaders derives s-maxage/SWR from the
-        // refresh interval and could otherwise outlive the fail-closed point.
+        // to cache whenever the remaining time before stale is within the full
+        // serveable window (freshness plus SWR), because generateCacheHeaders
+        // allows the refresh TTL and then SWR, which could outlive the boundary.
         $age = max(0, time() - $timestamp);
         $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
-        if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS) {
+        if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
             $headers = getNoStoreCacheHeaders(0);
         } else {
             $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
