@@ -247,6 +247,20 @@ class PublicApiWebcamTest extends TestCase
             $this->assertArrayHasKey('Warning', $response['headers']);
             $this->assertMatchesRegularExpression('/110/', $response['headers']['Warning']);
             $this->assertArrayHasKey('Last-Modified', $response['headers']);
+
+            // The metadata endpoint must report the same frame as stale so the two
+            // surfaces cannot diverge for clients consuming the age fields.
+            $meta = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1'
+            );
+            $this->assertSame(200, $meta['status']);
+            $metaData = $meta['json']['data'] ?? [];
+            $this->assertTrue($metaData['stale'] ?? false, 'Metadata should report stale=true');
+            $this->assertGreaterThanOrEqual(
+                $metaData['stale_failclosed_seconds'] ?? -1,
+                $metaData['age_seconds'] ?? 0,
+                'age_seconds should exceed the fail-closed threshold for a stale frame'
+            );
         } finally {
             @unlink($path);
             self::unlinkOriginalFormatSymlinks();
