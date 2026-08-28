@@ -222,7 +222,7 @@ function computeContentMd5FromString(string $content): string
  * @param int $mtime File modification time
  * @return bool True if 304 was sent (caller should not send body), false otherwise
  */
-function maybeSend304IfUnchanged(string $etag, int $mtime): bool
+function maybeSend304IfUnchanged(string $etag, int $mtime, ?int $responseLastModified = null): bool
 {
     $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
     $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
@@ -240,12 +240,16 @@ function maybeSend304IfUnchanged(string $etag, int $mtime): bool
             }
         }
     }
+    // Compare If-Modified-Since against the logical last-modified so a client
+    // sending the advertised capture time revalidates correctly even when the
+    // on-disk mtime differs (e.g. a stale frame named with an old capture time).
+    $lastModified = $responseLastModified ?? $mtime;
     // @ strtotime: malformed If-Modified-Since; we treat as no match
-    $matchMod = ($ifModSince !== '' && @strtotime($ifModSince) >= $mtime);
+    $matchMod = ($ifModSince !== '' && @strtotime($ifModSince) >= $lastModified);
 
     if ($matchEtag || $matchMod) {
         header('ETag: ' . $etag);
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
         http_response_code(304);
         return true;
     }
@@ -278,7 +282,7 @@ function addIntegrityHeadersForOpenFile(
         $etagIdentity .= '|' . $stat['dev'] . '|' . $stat['ino'];
     }
     $etag = computeFileEtag($etagIdentity, $mtime, $size);
-    if (maybeSend304IfUnchanged($etag, $mtime)) {
+    if (maybeSend304IfUnchanged($etag, $mtime, $responseLastModified)) {
         return true;
     }
 

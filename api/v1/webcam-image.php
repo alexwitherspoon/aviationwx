@@ -207,15 +207,31 @@ function handleGetWebcamImage(array $params, array $context): void
         $filenameStamp = gmdate('Y-m-d_His', $currentOriginal['timestamp']) . '_UTC';
         $filename = strtolower($airportId) . "_{$camIndex}_{$filenameStamp}." . $format;
 
-        // Latest download is mutable; use the live-image cache policy.
-        $webcamRefresh = getDefaultWebcamRefresh();
-        if (isset($airport['webcam_refresh_seconds'])) {
-            $webcamRefresh = intval($airport['webcam_refresh_seconds']);
+        // Latest download is mutable; use the live-image cache policy unless the
+        // captured frame is over-age, in which case apply the stale policy so a
+        // stale attachment is not cached as current (same as sendImageResponse).
+        $captureTimestamp = $currentOriginal['timestamp'];
+        $stale = $captureTimestamp > 0 && (time() - $captureTimestamp) > getStaleFailclosedSeconds($airport);
+        if ($stale) {
+            aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'capture_timestamp' => $captureTimestamp,
+                'age_seconds' => time() - $captureTimestamp,
+                'failclosed_seconds' => getStaleFailclosedSeconds($airport),
+            ], 'app');
+            $headers = getNoStoreCacheHeaders(0);
+            header('Warning: 110 - "Response is stale"');
+        } else {
+            $webcamRefresh = getDefaultWebcamRefresh();
+            if (isset($airport['webcam_refresh_seconds'])) {
+                $webcamRefresh = intval($airport['webcam_refresh_seconds']);
+            }
+            if (isset($webcam['refresh_seconds'])) {
+                $webcamRefresh = intval($webcam['refresh_seconds']);
+            }
+            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
         }
-        if (isset($webcam['refresh_seconds'])) {
-            $webcamRefresh = intval($webcam['refresh_seconds']);
-        }
-        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
         foreach ($headers as $name => $value) {
             header($name . ': ' . $value);
         }
@@ -225,7 +241,8 @@ function handleGetWebcamImage(array $params, array $context): void
             $opened['handle'],
             $originalFile,
             $mtime,
-            $opened['size']
+            $opened['size'],
+            $stale ? $captureTimestamp : null
         )) {
             fclose($opened['handle']);
             exit;
@@ -656,7 +673,7 @@ function sendImageResponse(
     $stale = $timestamp > 0 && (time() - $timestamp) > getStaleFailclosedSeconds($airport);
     if ($stale) {
         // Last known good frame; log the over-age delivery so it is auditable.
-        aviationwx_log('warn', 'serving over-age webcam frame past fail-closed threshold', [
+        aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
             'airport' => $airportId,
             'cam' => $camIndex,
             'capture_timestamp' => $timestamp,

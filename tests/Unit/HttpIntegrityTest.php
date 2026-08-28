@@ -233,6 +233,34 @@ class HttpIntegrityTest extends TestCase
         $this->assertSame(304, http_response_code());
     }
 
+    public function testMaybeSend304IfUnchanged_IfModifiedSinceUsesLogicalLastModified(): void
+    {
+        // A stale frame can carry an old capture time while the file is freshly
+        // written (mtime now-ish). If-Modified-Since must compare against the
+        // logical last-modified (the capture time) so it revalidates correctly.
+        $logicalLastModified = time() - 14400; // 4h ago
+        $fileMtime = time() - 5;               // file written 5s ago
+
+        // Client sends the advertised capture time -> should 304.
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', $logicalLastModified) . ' GMT';
+        ob_start();
+        $result = maybeSend304IfUnchanged('W/"etag-check"', $fileMtime, $logicalLastModified);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+        $this->assertTrue($result);
+        $this->assertSame(304, http_response_code());
+
+        // Client sends an older date than the capture time -> no 304 (caller sends 200).
+        http_response_code(200);
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', $logicalLastModified - 3600) . ' GMT';
+        ob_start();
+        $result2 = maybeSend304IfUnchanged('W/"etag-check"', $fileMtime, $logicalLastModified);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+        $this->assertFalse($result2);
+        $this->assertNotSame(304, http_response_code());
+    }
+
     /**
      * Content-Digest verifies body integrity (digest matches actual content)
      */
