@@ -113,8 +113,26 @@ class FtpUploadIsolationTest extends TestCase
     {
         $script = __DIR__ . '/../../scripts/ftp-isolation-probe.py';
         $this->assertFileExists($script);
-        exec('python3 -m py_compile ' . escapeshellarg($script) . ' 2>&1', $output, $code);
+
+        // The script is Python; if python3 is not on PATH, skip rather than fail
+        // on exit 127 so tool-light/container runtimes don't mark it a regression.
+        if (!self::pythonAvailable()) {
+            $this->markTestSkipped('python3 not available');
+        }
+
+        // Compile to a temp pycache prefix so the (possibly read-only) scripts
+        // dir is never written; skip when python3 is absent rather than fail on
+        // exit 127 in tool-light/container runtimes.
+        $cmd = 'PYTHONPYCACHEPREFIX=' . escapeshellarg(sys_get_temp_dir()) .
+            ' python3 -m py_compile ' . escapeshellarg($script) . ' 2>&1';
+        exec($cmd, $output, $code);
         $this->assertSame(0, $code, implode("\n", $output));
+    }
+
+    private static function pythonAvailable(): bool
+    {
+        exec('command -v python3 >/dev/null 2>&1', $out, $code);
+        return $code === 0;
     }
 
     /**
