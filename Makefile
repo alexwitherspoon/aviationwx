@@ -377,12 +377,13 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 		echo "❌ Test container failed to become healthy"; \
 		docker compose -f docker/docker-compose.test.yml logs; \
 		exit 1; \
-	fi; \
-	# The container (root) writes cache frames into /tmp/aviationwx-cache-test while \
-	# unit/integration phpunit runs on the host (non-root). Normalize permissions so \
-	# the host runner can unlink/rewrite frames, avoiding Permission denied in the \
-	# native webcam HTTP suite (#298). SFTP keeps its root-owned chroot dirs. \
-	chmod -R a+rwX /tmp/aviationwx-cache-test'
+	fi'
+	# The container (root) writes webcam frames into the bind-mounted cache while
+	# unit/integration phpunit runs on the host (non-root). Normalize the webcams
+	# frame dir inside the container so the host runner can unlink/rewrite frames,
+	# avoiding Permission denied (#298). Keep the SFTP chroot (/var/sftp) untouched.
+	@docker compose -f docker/docker-compose.test.yml exec -T web \
+		sh -c 'mkdir -p /var/www/html/cache/webcams && chmod -R a+rwX /var/www/html/cache/webcams'
 
 test-down: ## Stop isolated test container
 	@echo "Stopping isolated test environment..."
