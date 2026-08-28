@@ -265,7 +265,8 @@ function addIntegrityHeadersForOpenFile(
     $handle,
     string $identity,
     int $mtime,
-    int $size
+    int $size,
+    ?int $responseLastModified = null
 ): bool {
     if (!is_resource($handle) || $size <= 0) {
         return false;
@@ -282,7 +283,11 @@ function addIntegrityHeadersForOpenFile(
     }
 
     header('ETag: ' . $etag);
-    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+    // Use the real filesystem mtime for the conditional/ETag side, but allow the
+    // response Last-Modified to reflect a logical capture time (e.g. a stale frame
+    // whose capture timestamp differs from the file's mtime).
+    $lastModified = $responseLastModified ?? $mtime;
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
 
     $digests = getOpenFileDigestsWithCache($handle, $identity, $mtime, $size);
     if ($digests !== null) {

@@ -665,7 +665,6 @@ function sendImageResponse(
         ], 'app');
         $headers = getNoStoreCacheHeaders(0);
         header('Warning: 110 - "Response is stale"');
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $timestamp) . ' GMT');
     } else {
         $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
     }
@@ -679,7 +678,8 @@ function sendImageResponse(
         $opened['handle'],
         $cacheFile,
         $mtime,
-        $opened['size']
+        $opened['size'],
+        $stale ? $timestamp : null
     )) {
         fclose($opened['handle']);
         return;

@@ -236,7 +236,9 @@ class PublicApiWebcamTest extends TestCase
 
         try {
             $response = $this->apiRequest(
-                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt=png&size=original'
+                // No fmt so this hits the native-original path (explicit fmt on the
+                // original is rejected) and reaches the stale-frame branch.
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
             );
 
             // A stale webcam is not a server error: serve the last known frame as 200,
@@ -246,7 +248,10 @@ class PublicApiWebcamTest extends TestCase
             $this->assertStringContainsString('no-store', $cacheControl);
             $this->assertArrayHasKey('Warning', $response['headers']);
             $this->assertMatchesRegularExpression('/110/', $response['headers']['Warning']);
+            // Last-Modified reflects the capture timestamp, not the fresh file mtime.
             $this->assertArrayHasKey('Last-Modified', $response['headers']);
+            $expectedLastModified = gmdate('D, d M Y H:i:s', $oldTs) . ' GMT';
+            $this->assertSame($expectedLastModified, $response['headers']['Last-Modified']);
 
             // The metadata endpoint must report the same frame as stale so the two
             // surfaces cannot diverge for clients consuming the age fields.
@@ -262,8 +267,9 @@ class PublicApiWebcamTest extends TestCase
                 'age_seconds should exceed the fail-closed threshold for a stale frame'
             );
         } finally {
-            @unlink($path);
-            self::unlinkOriginalFormatSymlinks();
+            // Restore the default current original so later tests don't see 503
+            // from the removed stale fixture (fixture is created once per class).
+            self::restoreDefaultOriginalFixture($path);
         }
     }
     
