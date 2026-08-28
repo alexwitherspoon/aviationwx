@@ -211,14 +211,14 @@ function handleGetWebcamImage(array $params, array $context): void
         // captured frame is over-age, in which case apply the stale policy so a
         // stale attachment is not cached as current (same as sendImageResponse).
         $captureTimestamp = $currentOriginal['timestamp'];
-        $stale = $captureTimestamp > 0 && (time() - $captureTimestamp) > getStaleFailclosedSeconds($airport);
+        $stale = $captureTimestamp > 0 && (time() - $captureTimestamp) > getWebcamStaleFailclosedSeconds($webcam, $airport);
         if ($stale) {
             aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
                 'airport' => $airportId,
                 'cam' => $camIndex,
                 'capture_timestamp' => $captureTimestamp,
                 'age_seconds' => time() - $captureTimestamp,
-                'failclosed_seconds' => getStaleFailclosedSeconds($airport),
+                'failclosed_seconds' => getWebcamStaleFailclosedSeconds($webcam, $airport),
             ], 'app');
             $headers = getNoStoreCacheHeaders(0);
             header('Warning: 110 - "Response is stale"');
@@ -234,7 +234,7 @@ function handleGetWebcamImage(array $params, array $context): void
             // when the remaining time before stale is within the full serveable
             // window (freshness plus SWR), else use the normal refresh TTL.
             $age = max(0, time() - $captureTimestamp);
-            $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
+            $remaining = max(0, getWebcamStaleFailclosedSeconds($webcam, $airport) - $age);
             if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
                 $headers = getNoStoreCacheHeaders(0);
             } else {
@@ -679,7 +679,7 @@ function sendImageResponse(
 
     // A capture older than the fail-closed threshold is a "last known good frame":
     // still served as 200, but marked stale so it is not cached as current.
-    $stale = $timestamp > 0 && (time() - $timestamp) > getStaleFailclosedSeconds($airport);
+    $stale = $timestamp > 0 && (time() - $timestamp) > getWebcamStaleFailclosedSeconds($cam, $airport);
     if ($stale) {
         // Last known good frame; log the over-age delivery so it is auditable.
         aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
@@ -687,7 +687,7 @@ function sendImageResponse(
             'cam' => $camIndex,
             'capture_timestamp' => $timestamp,
             'age_seconds' => time() - $timestamp,
-            'failclosed_seconds' => getStaleFailclosedSeconds($airport),
+            'failclosed_seconds' => getWebcamStaleFailclosedSeconds($cam, $airport),
         ], 'app');
         $headers = getNoStoreCacheHeaders(0);
         header('Warning: 110 - "Response is stale"');
@@ -697,7 +697,7 @@ function sendImageResponse(
         // serveable window (freshness plus SWR), because generateCacheHeaders
         // allows the refresh TTL and then SWR, which could outlive the boundary.
         $age = max(0, time() - $timestamp);
-        $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
+        $remaining = max(0, getWebcamStaleFailclosedSeconds($cam, $airport) - $age);
         if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
             $headers = getNoStoreCacheHeaders(0);
         } else {
@@ -802,7 +802,7 @@ function handleGetWebcamMetadata(
     
     // Build response
     $ageSeconds = max(0, time() - $timestamp);
-    $staleFailClosed = getStaleFailclosedSeconds($airport);
+    $staleFailClosed = getWebcamStaleFailclosedSeconds($webcam, $airport);
     $data = [
         'timestamp' => $timestamp,
         'timestamp_iso' => gmdate('c', $timestamp),

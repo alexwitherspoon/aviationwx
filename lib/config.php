@@ -994,6 +994,26 @@ function getStaleFailclosedSeconds(?array $airport = null): int {
 }
 
 /**
+ * Effective fail-closed staleness threshold for a webcam, honoring camera ->
+ * airport -> global -> default precedence (same as api/webcam.php).
+ *
+ * @param array|null $webcam Webcam config (camera-level override)
+ * @param array|null $airport Airport config (airport-level override)
+ * @return int Fail-closed threshold in seconds
+ */
+function getWebcamStaleFailclosedSeconds(?array $webcam, ?array $airport): int {
+    $value = null;
+    if ($webcam !== null && isset($webcam['stale_failclosed_seconds'])) {
+        $value = $webcam['stale_failclosed_seconds'];
+    } elseif ($airport !== null && isset($airport['stale_failclosed_seconds'])) {
+        $value = $airport['stale_failclosed_seconds'];
+    } else {
+        $value = getGlobalConfig('stale_failclosed_seconds') ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
+    }
+    return max(MIN_STALE_FAILCLOSED_SECONDS, (int)$value);
+}
+
+/**
  * Get outage banner threshold in seconds
  * For limited_availability airports: when to show "local data unavailable" banner (default 30 min)
  * For others: uses stale_failclosed_seconds (default 3 hours)
