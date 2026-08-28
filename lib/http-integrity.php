@@ -287,9 +287,9 @@ function addIntegrityHeadersForOpenFile(
     }
 
     header('ETag: ' . $etag);
-    // Use the real filesystem mtime for the conditional/ETag side, but allow the
-    // response Last-Modified to reflect a logical capture time (e.g. a stale frame
-    // whose capture timestamp differs from the file's mtime).
+    // The conditional check and response Last-Modified can reflect a logical
+    // capture time (e.g. a stale frame whose capture timestamp differs from the
+    // file's mtime); the filesystem mtime is retained only for ETag/digest identity.
     $lastModified = $responseLastModified ?? $mtime;
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
 
