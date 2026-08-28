@@ -1711,6 +1711,7 @@ function checkPublicApiHealth(): array {
         '/api/v1/airports/kspb/webcams' => 'Webcam List',
         '/api/v1/airports/kspb/weather/history' => 'Weather History',
         '/api/v1/weather/bulk?airports=kspb' => 'Bulk Weather',
+        '/api/v1/weathercam/bulk?operator=aviationwx' => 'Bulk Weathercams',
     ];
     
     $hasDown = false;
