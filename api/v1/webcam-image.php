@@ -230,7 +230,15 @@ function handleGetWebcamImage(array $params, array $context): void
             if (isset($webcam['refresh_seconds'])) {
                 $webcamRefresh = intval($webcam['refresh_seconds']);
             }
-            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+            // Same fail-closed boundary cap as sendImageResponse: don't cache a
+            // fresh frame past the point it should flip to stale.
+            $age = max(0, time() - $captureTimestamp);
+            $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
+            $headers = generateCacheHeaders(
+                $webcamRefresh,
+                min($webcamRefresh, $remaining),
+                $remaining > STALE_WHILE_REVALIDATE_SECONDS
+            );
         }
         foreach ($headers as $name => $value) {
             header($name . ': ' . $value);
@@ -683,7 +691,16 @@ function sendImageResponse(
         $headers = getNoStoreCacheHeaders(0);
         header('Warning: 110 - "Response is stale"');
     } else {
-        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+        // A fresh frame must not be cached past the fail-closed boundary. Cap the
+        // browser/SWR freshness to the remaining time before stale so a frame near
+        // the threshold cannot be served as current after it flips to stale.
+        $age = max(0, time() - $timestamp);
+        $remaining = max(0, getStaleFailclosedSeconds($airport) - $age);
+        $headers = generateCacheHeaders(
+            $webcamRefresh,
+            min($webcamRefresh, $remaining),
+            $remaining > STALE_WHILE_REVALIDATE_SECONDS
+        );
     }
     foreach ($headers as $name => $value) {
         header($name . ': ' . $value);

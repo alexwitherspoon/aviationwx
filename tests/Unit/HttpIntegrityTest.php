@@ -233,7 +233,7 @@ class HttpIntegrityTest extends TestCase
         $this->assertSame(304, http_response_code());
     }
 
-    public function testMaybeSend304IfUnchanged_IfModifiedSinceUsesLogicalLastModified(): void
+    public function testMaybeSend304IfUnchanged_IfModifiedSinceMatchesCaptureTime_Returns304(): void
     {
         // A stale frame can carry an old capture time while the file is freshly
         // written (mtime now-ish). If-Modified-Since must compare against the
