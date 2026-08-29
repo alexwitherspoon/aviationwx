@@ -4978,6 +4978,7 @@ function validateAirportsJsonStructure(array $config): array {
                                 'enabled', 'name', 'operator', 'push_config', 'refresh_seconds', 'rtsp_fetch_timeout',
                                 'rtsp_max_runtime', 'rtsp_transport', 'timeout_seconds', 'transcode_timeout',
                                 'type', 'url', 'variant_heights',
+                                'stale_failclosed_seconds',
                             ];
                             foreach ($webcam as $key => $_val) {
                                 if (!in_array($key, $allowedDisabledWebcamFields, true)) {
@@ -4995,6 +4996,7 @@ function validateAirportsJsonStructure(array $config): array {
                             $allowedPushWebcamFields = [
                                 'name', 'type', 'push_config', 'refresh_seconds', 'variant_heights',
                                 'crop_margins', 'enabled', 'approximate_heading', 'operator',
+                                'stale_failclosed_seconds',
                             ];
                             
                             // Check for unknown fields in push webcam
@@ -5058,6 +5060,7 @@ function validateAirportsJsonStructure(array $config): array {
                                 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout',
                                 'variant_heights', 'crop_margins', 'enabled', 'approximate_heading',
                                 'operator',
+                                'stale_failclosed_seconds',
                             ];
                             
                             // Check for unknown fields in RTSP webcam
@@ -5078,6 +5081,7 @@ function validateAirportsJsonStructure(array $config): array {
                                 'name', 'type', 'base_url', 'api_key', 'timeout_seconds',
                                 'camera_index', 'refresh_seconds', 'variant_heights', 'crop_margins',
                                 'enabled', 'approximate_heading', 'operator',
+                                'stale_failclosed_seconds',
                             ];
                             foreach ($webcam as $key => $value) {
                                 if (!in_array($key, $allowedFederatedWebcamFields, true)) {
@@ -5106,6 +5110,7 @@ function validateAirportsJsonStructure(array $config): array {
                             $allowedPullWebcamFields = [
                                 'name', 'type', 'url', 'refresh_seconds', 'variant_heights',
                                 'crop_margins', 'enabled', 'approximate_heading', 'operator',
+                                'stale_failclosed_seconds',
                             ];
                             
                             // Check for unknown fields in pull webcam
@@ -5123,6 +5128,13 @@ function validateAirportsJsonStructure(array $config): array {
 
                         if (isset($webcam['url']) && !$validateUrl($webcam['url'])) {
                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] has invalid url: must be a valid URL";
+                        }
+                        
+                        if (isset($webcam['stale_failclosed_seconds'])) {
+                            $v = $webcam['stale_failclosed_seconds'];
+                            if (!is_int($v) || $v < MIN_STALE_FAILCLOSED_SECONDS) {
+                                $errors[] = "Airport '{$airportCode}' webcam[{$idx}] stale_failclosed_seconds must be an integer >= " . MIN_STALE_FAILCLOSED_SECONDS;
+                            }
                         }
                         
                         if (isset($webcam['refresh_seconds'])) {
