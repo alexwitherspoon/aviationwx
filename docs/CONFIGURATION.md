@@ -231,6 +231,7 @@ Values are strings in MHz (e.g. `"122.8"`, `"123.05"`).
 | **Optional** |||
 | `type` | auto-detect | `rtsp`, `mjpeg`, `static_jpeg`, `static_png`, `push`, `aviationwx_api` |
 | `refresh_seconds` | airport default | Override refresh for this camera |
+| `stale_failclosed_seconds` | *(camera → airport → global → default)* | Fail-closed staleness threshold override for this camera, in seconds (integer at least `MIN_STALE_FAILCLOSED_SECONDS`). Precedence is **camera → airport → global → default**; omit to inherit the airport/global threshold. |
 | `crop_margins` | global default | FAA profile crop margins override (percentages) |
 | **RTSP Options** |||
 | `rtsp_transport` | `tcp` | `tcp` or `udp` |
