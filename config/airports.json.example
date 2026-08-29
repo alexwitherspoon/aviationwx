@@ -53,7 +53,7 @@
     "dead_man_switch_days": 7,
     "stuck_client_cleanup": false,
     
-    "_comment_staleness": "3-tier staleness thresholds (seconds). Can be overridden per-airport or per-camera for webcams.",
+    "_comment_staleness": "3-tier staleness thresholds (seconds). Can be overridden per-airport for webcams/weather, and per-camera for webcams.",
     "stale_warning_seconds": 600,
     "stale_error_seconds": 3600,
     "stale_failclosed_seconds": 10800,
