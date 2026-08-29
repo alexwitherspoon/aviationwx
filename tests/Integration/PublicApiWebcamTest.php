@@ -310,6 +310,17 @@ class PublicApiWebcamTest extends TestCase
         symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
 
         try {
+            // Inline native-original path (sendImageResponse cutoff).
+            $inline = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
+            );
+            $this->assertSame(200, $inline['status']);
+            $inlineCache = $inline['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $inlineCache);
+            $this->assertMatchesRegularExpression('/max-age=0/', $inlineCache);
+            $this->assertMatchesRegularExpression('/s-maxage=0/', $inlineCache);
+
+            // Download branch (handleGetWebcamImage cutoff).
             $response = $this->apiRequest(
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
             );
