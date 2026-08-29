@@ -123,7 +123,13 @@ class FtpUploadIsolationTest extends TestCase
         // Compile to a temp pycache prefix so the (possibly read-only) scripts
         // dir is never written; skip when python3 is absent rather than fail on
         // exit 127 in tool-light/container runtimes.
-        $cmd = 'PYTHONPYCACHEPREFIX=' . escapeshellarg(sys_get_temp_dir()) .
+        $pycacheDir = sys_get_temp_dir() . '/aviationwx-pycompile-' . getmypid();
+        @mkdir($pycacheDir, 0700, true);
+        register_shutdown_function(static function () use ($pycacheDir): void {
+            self::removePycompileDir($pycacheDir);
+        });
+
+        $cmd = 'PYTHONPYCACHEPREFIX=' . escapeshellarg($pycacheDir) .
             ' python3 -m py_compile ' . escapeshellarg($script) . ' 2>&1';
         exec($cmd, $output, $code);
         $this->assertSame(0, $code, implode("\n", $output));
@@ -133,6 +139,28 @@ class FtpUploadIsolationTest extends TestCase
     {
         exec('command -v python3 >/dev/null 2>&1', $out, $code);
         return $code === 0;
+    }
+
+    private static function removePycompileDir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items !== false) {
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') {
+                    continue;
+                }
+                $path = $dir . '/' . $item;
+                if (is_dir($path)) {
+                    self::removePycompileDir($path);
+                } else {
+                    @unlink($path);
+                }
+            }
+        }
+        @rmdir($dir);
     }
 
     /**
