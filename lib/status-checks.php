@@ -1685,6 +1685,27 @@ function checkAirportHealth(string $airportId, array $airport): array {
 }
 
 /**
+ * Public API endpoints probed by the status page health check.
+ *
+ * Extracted so the endpoint set can be asserted without making real HTTP
+ * calls. kspb is the probe airport because it is commonly available.
+ *
+ * @return array<string,string> Map of endpoint path to display name.
+ */
+function getPublicApiHealthEndpoints(): array {
+    return [
+        '/api/v1/status' => 'API Status',
+        '/api/v1/airports' => 'List Airports',
+        '/api/v1/airports/kspb' => 'Airport Details',
+        '/api/v1/airports/kspb/weather' => 'Weather Data',
+        '/api/v1/airports/kspb/webcams' => 'Webcam List',
+        '/api/v1/airports/kspb/weather/history' => 'Weather History',
+        '/api/v1/weather/bulk?airports=kspb' => 'Bulk Weather',
+        '/api/v1/weathercam/bulk?operator=aviationwx' => 'Bulk Weathercams',
+    ];
+}
+
+/**
  * Check Public API health
  * 
  * Performs lightweight health checks on public API endpoints.
@@ -1703,16 +1724,7 @@ function checkPublicApiHealth(): array {
     
     // Define endpoints to check
     // Use kspb as test airport since it's commonly available
-    $endpoints = [
-        '/api/v1/status' => 'API Status',
-        '/api/v1/airports' => 'List Airports',
-        '/api/v1/airports/kspb' => 'Airport Details',
-        '/api/v1/airports/kspb/weather' => 'Weather Data',
-        '/api/v1/airports/kspb/webcams' => 'Webcam List',
-        '/api/v1/airports/kspb/weather/history' => 'Weather History',
-        '/api/v1/weather/bulk?airports=kspb' => 'Bulk Weather',
-        '/api/v1/weathercam/bulk?operator=aviationwx' => 'Bulk Weathercams',
-    ];
+    $endpoints = getPublicApiHealthEndpoints();
     
     $hasDown = false;
     $hasDegraded = false;
