@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../lib/constants.php';
 
 class WebcamStaleThresholdTest extends TestCase
 {
-    public function testCameraOverrideWins(): void
+    public function testGetWebcamStaleFailclosedSeconds_CameraOverride_WinsOverAirport(): void
     {
         $threshold = getWebcamStaleFailclosedSeconds(
             ['stale_failclosed_seconds' => 7200],
@@ -23,7 +23,7 @@ class WebcamStaleThresholdTest extends TestCase
         $this->assertSame(7200, $threshold);
     }
 
-    public function testAirportOverrideUsedWhenNoCameraOverride(): void
+    public function testGetWebcamStaleFailclosedSeconds_NoCameraOverride_UsesAirport(): void
     {
         $threshold = getWebcamStaleFailclosedSeconds(
             [],
@@ -32,7 +32,7 @@ class WebcamStaleThresholdTest extends TestCase
         $this->assertSame(3600, $threshold);
     }
 
-    public function testNullWebcamFallsBackToAirport(): void
+    public function testGetWebcamStaleFailclosedSeconds_NullWebcam_UsesAirport(): void
     {
         $threshold = getWebcamStaleFailclosedSeconds(
             null,
@@ -41,13 +41,13 @@ class WebcamStaleThresholdTest extends TestCase
         $this->assertSame(3600, $threshold);
     }
 
-    public function testDefaultUsedWhenBothAbsent(): void
+    public function testGetWebcamStaleFailclosedSeconds_NoOverrides_UsesDefault(): void
     {
         $threshold = getWebcamStaleFailclosedSeconds(null, []);
         $this->assertSame(DEFAULT_STALE_FAILCLOSED_SECONDS, $threshold);
     }
 
-    public function testMinimumEnforced(): void
+    public function testGetWebcamStaleFailclosedSeconds_BelowMinimum_EnforcedToMinimum(): void
     {
         $threshold = getWebcamStaleFailclosedSeconds(
             ['stale_failclosed_seconds' => 1],
