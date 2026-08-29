@@ -285,6 +285,45 @@ class PublicApiWebcamTest extends TestCase
     }
     
     /**
+     * A frame still fresh (under threshold) but within the refresh + SWR window of
+     * the fail-closed boundary must not be cacheable, or it could be served past the
+     * threshold as current. Covers the fresh-cutoff no-store branch.
+     */
+    public function testImage_FreshFrameNearFailClosedBoundary_IsServedNoStore(): void
+    {
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $nearTs = time() - 10600; // default threshold 10800, so remaining ~200 <= refresh(60)+SWR(300)
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $nearTs);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($nearTs);
+        $filename = $nearTs . '_original.jpg';
+        $path = $framesDir . '/' . $filename;
+        $img = imagecreatetruecolor(32, 24);
+        imagejpeg($img, $path);
+
+        self::unlinkOriginalFormatSymlinks();
+        symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
+
+        try {
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+            $this->assertSame(200, $response['status']);
+            $cacheControl = $response['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $cacheControl);
+            $this->assertMatchesRegularExpression('/max-age=0/', $cacheControl);
+            $this->assertMatchesRegularExpression('/s-maxage=0/', $cacheControl);
+        } finally {
+            self::restoreDefaultOriginalFixture($path);
+        }
+    }
+
+    /**
      * Test metadata endpoint includes available formats
      */
     public function testMetadataEndpoint_IncludesAvailableFormats(): void
