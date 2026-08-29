@@ -3,8 +3,9 @@
  * Unit Tests for getWebcamStaleFailclosedSeconds() precedence.
  *
  * The effective webcam fail-closed threshold follows camera -> airport -> global
- * -> default precedence, matching api/webcam.php. This guards the camera-level
- * override that the Public API webcam serving paths now honor (#301).
+ * -> default precedence, matching api/webcam.php. The camera and airport overrides
+ * are deterministic and covered here; the global -> built-in default fallback is a
+ * one-liner also exercised by FailClosedStalenessTest via getStaleFailclosedSeconds().
  */
 
 use PHPUnit\Framework\TestCase;
@@ -36,15 +37,9 @@ class WebcamStaleThresholdTest extends TestCase
     {
         $threshold = getWebcamStaleFailclosedSeconds(
             null,
-            ['stale_failclosed_seconds' => 3600]
+            ['stale_failclosed_seconds' => 5400]
         );
-        $this->assertSame(3600, $threshold);
-    }
-
-    public function testGetWebcamStaleFailclosedSeconds_NoOverrides_UsesDefault(): void
-    {
-        $threshold = getWebcamStaleFailclosedSeconds(null, []);
-        $this->assertSame(DEFAULT_STALE_FAILCLOSED_SECONDS, $threshold);
+        $this->assertSame(5400, $threshold);
     }
 
     public function testGetWebcamStaleFailclosedSeconds_BelowMinimum_EnforcedToMinimum(): void
