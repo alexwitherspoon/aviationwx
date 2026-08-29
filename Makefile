@@ -365,17 +365,25 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	@docker compose -f docker/docker-compose.test.yml build
 	@docker compose -f docker/docker-compose.test.yml up -d
 	@echo "Waiting for test container to be healthy..."
-	@timeout=60; while [ $$timeout -gt 0 ]; do \
+	@bash -c 'timeout=60; while [ $$timeout -gt 0 ]; do \
 		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf http://localhost/ >/dev/null 2>&1; then \
 			echo "✓ Test environment ready at http://localhost:9080"; \
-			exit 0; \
+			break; \
 		fi; \
 		sleep 1; \
 		timeout=$$((timeout - 1)); \
 	done; \
-	echo "❌ Test container failed to become healthy"; \
-	docker compose -f docker/docker-compose.test.yml logs; \
-	exit 1
+	if [ $$timeout -le 0 ]; then \
+		echo "❌ Test container failed to become healthy"; \
+		docker compose -f docker/docker-compose.test.yml logs; \
+		exit 1; \
+	fi'
+	# The container (root) writes webcam frames into the bind-mounted cache while
+	# unit/integration phpunit runs on the host (non-root). Normalize the webcams
+	# frame dir inside the container so the host runner can unlink/rewrite frames,
+	# avoiding Permission denied (#298). Keep the SFTP chroot (/var/sftp) untouched.
+	@docker compose -f docker/docker-compose.test.yml exec -T web \
+		sh -c 'mkdir -p /var/www/html/cache/webcams && chmod -R a+rwX /var/www/html/cache/webcams'
 
 test-down: ## Stop isolated test container
 	@echo "Stopping isolated test environment..."

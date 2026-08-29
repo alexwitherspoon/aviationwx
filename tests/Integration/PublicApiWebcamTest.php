@@ -89,6 +89,9 @@ class PublicApiWebcamTest extends TestCase
         if (!is_dir($framesDir)) {
             mkdir($framesDir, 0755, true);
         }
+        // www-data writes on-demand transform caches here, but the host runner
+        // owns this dir on CI. Make it writable by the container too.
+        @chmod($framesDir, 0777);
         $subdir = getWebcamFramesSubdir($timestamp);
         
         // Create original JPG in date/hour subdir
