@@ -107,7 +107,11 @@ function publicApiWebcamVariantUrl(string $airportId, int $camIndex, string $var
 }
 
 /**
- * Effective webcam refresh interval for caching (camera -> airport -> global).
+ * Effective webcam refresh interval for caching.
+ *
+ * @param array $airport Airport config
+ * @param array $cam Webcam config (camera-level refresh override)
+ * @return int Refresh interval in seconds (camera -> airport -> global)
  */
 function webcamRefreshInterval(array $airport, array $cam): int {
     $refresh = getDefaultWebcamRefresh();
@@ -122,9 +126,13 @@ function webcamRefreshInterval(array $airport, array $cam): int {
 
 /**
  * Headers for an over-age webcam frame: serve the last known image as 200 but
- * refuse to cache it as current and log the delivery. Returns the capture
- * timestamp so callers pass it as the response Last-Modified.
+ * refuse to cache it as current and log the delivery.
  *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int $captureTimestamp Capture timestamp of the frame
+ * @param array $cam Webcam config (camera-level fail-closed override)
+ * @param array $airport Airport config
  * @return array{headers: array<string,string>}
  */
 function webcamStaleHeaders(string $airportId, int $camIndex, int $captureTimestamp, array $cam, array $airport): array {
@@ -250,7 +258,13 @@ function handleGetWebcamImage(array $params, array $context): void
             $headers = webcamStaleHeaders($airportId, $camIndex, $captureTimestamp, $webcam, $airport)['headers'];
         } else {
             $webcamRefresh = webcamRefreshInterval($airport, $webcam);
-            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+            $age = max(0, time() - $captureTimestamp);
+            $remaining = max(0, getWebcamStaleFailclosedSeconds($webcam, $airport) - $age);
+            if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
+                $headers = getNoStoreCacheHeaders(0);
+            } else {
+                $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+            }
         }
         foreach ($headers as $name => $value) {
             header($name . ': ' . $value);
@@ -694,7 +708,13 @@ function sendImageResponse(
     if ($stale) {
         $headers = webcamStaleHeaders($airportId, $camIndex, $timestamp, $cam, $airport)['headers'];
     } else {
-        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+        $age = max(0, time() - $timestamp);
+        $remaining = max(0, getWebcamStaleFailclosedSeconds($cam, $airport) - $age);
+        if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
+            $headers = getNoStoreCacheHeaders(0);
+        } else {
+            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+        }
     }
     foreach ($headers as $name => $value) {
         header($name . ': ' . $value);

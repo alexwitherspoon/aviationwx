@@ -2272,11 +2272,11 @@
               },
               "stale": {
                 "type": "boolean",
-                "description": "True when age exceeds the airport fail-closed threshold; the image is served but not cached as current"
+                "description": "True when age exceeds the camera fail-closed threshold (camera -> airport -> global -> default); the image is served but not cached as current"
               },
               "stale_failclosed_seconds": {
                 "type": "integer",
-                "description": "Airport fail-closed staleness threshold used to compute stale"
+                "description": "Camera fail-closed staleness threshold used to compute stale (camera -> airport -> global -> default)"
               },
               "formats": {
                 "type": "object",
