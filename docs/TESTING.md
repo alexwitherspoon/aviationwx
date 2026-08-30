@@ -80,6 +80,16 @@ That uses [`phpunit.external-apis.xml`](../phpunit.external-apis.xml): `APP_ENV=
 
 **Scheduled CI:** [`.github/workflows/weekly-upstream-api-probes.yml`](../.github/workflows/weekly-upstream-api-probes.yml) builds `/tmp/upstream-probe-airports.json` from `config/airports.json.example` plus optional repository secret `OPENWEATHERMAP_API_KEY`, then runs `scripts/run-upstream-api-probes-with-retries.sh` with **5 attempts** and exponential backoff (30s, 60s, 120s, 240s, capped at 300s between attempts). Tune with `UPSTREAM_PROBE_MAX_ATTEMPTS`, `UPSTREAM_PROBE_INITIAL_BACKOFF_SEC`, and `UPSTREAM_PROBE_MAX_BACKOFF_SEC` in the workflow file. The probe gate uses `RUN_EXTERNAL_UPSTREAM_TESTS=1` and refuses `CONFIG_PATH` paths containing `airports.json.test` (not `isTestMode()`), so the job still runs when the workspace `config/airports.json` contains test markers.
 
+### NASR schema drift probes
+
+[`tests/Integration/NasrSchemaDriftIntegrationTest.php`](../tests/Integration/NasrSchemaDriftIntegrationTest.php) downloads the current NASR cycle's APT and FRQ zips and asserts their layout and CSV header prefixes still match what the parsers expect (`NASR_CSV_HEADER_PREFIX` in [`lib/nasr/csv-validation.php`](../lib/nasr/csv-validation.php)). It runs in the same `UpstreamApiProbes` suite, so `make test-external-apis` and the weekly job cover it.
+
+A failure here means FAA changed a subscription URL or CSV column before the scheduled refresh could fail. Fix by:
+
+1. Comparing the failing header against the upstream file (download the current cycle zip from the FAA NASR subscription page).
+2. Updating the matching prefix in `NASR_CSV_HEADER_PREFIX`, then the parser in [`lib/nasr/parse.php`](../lib/nasr/parse.php) (APT) or [`lib/nasr/frequencies-parse.php`](../lib/nasr/frequencies-parse.php) (FRQ).
+3. Regenerating the fixtures under `tests/Fixtures/nasr/` so unit tests track the new shape.
+
 ## Isolated Test Environment
 
 The test environment runs in a separate Docker container that is completely isolated from development:
