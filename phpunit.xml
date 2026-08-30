@@ -23,6 +23,7 @@
             <exclude>tests/Integration/WeatherEndpointTest.php</exclude>
             <exclude>tests/Integration/UpstreamApiProbeTest.php</exclude>
             <exclude>tests/Integration/NasrDiscoveryIntegrationTest.php</exclude>
+            <exclude>tests/Integration/NasrSchemaDriftIntegrationTest.php</exclude>
         </testsuite>
         <testsuite name="Performance">
             <directory>tests/Performance</directory>

@@ -16,6 +16,7 @@
         <testsuite name="UpstreamApiProbes">
             <file>tests/Integration/UpstreamApiProbeTest.php</file>
             <file>tests/Integration/NasrDiscoveryIntegrationTest.php</file>
+            <file>tests/Integration/NasrSchemaDriftIntegrationTest.php</file>
         </testsuite>
     </testsuites>
 

@@ -28,7 +28,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: curl, json, mbstring
+          extensions: curl, json, mbstring, zip
           coverage: none
 
       - name: Cache Composer dependencies

@@ -19,6 +19,7 @@ require_once __DIR__ . '/../lib/nasr/frequencies-cache.php';
 require_once __DIR__ . '/../lib/nasr/discovery.php';
 require_once __DIR__ . '/../lib/nasr/util.php';
 require_once __DIR__ . '/../lib/nasr/csv-validation.php';
+require_once __DIR__ . '/../lib/nasr/extract.php';
 
 /**
  * Download and extract FRQ.csv to a temp directory.
@@ -77,22 +78,7 @@ function downloadNasrFrqCsvDirectory(): ?array
         return null;
     }
 
-    $extracted = false;
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $name = $zip->getNameIndex($i);
-        if (!is_string($name) || basename($name) !== 'FRQ.csv') {
-            continue;
-        }
-        $contents = $zip->getFromIndex($i);
-        if ($contents === false) {
-            break;
-        }
-        if (file_put_contents($extractDir . '/FRQ.csv', $contents, LOCK_EX) === false) {
-            break;
-        }
-        $extracted = true;
-        break;
-    }
+    $extracted = nasrExtractAllowlistedFrqCsvFromZip($zip, $extractDir);
     $zip->close();
 
     if (!$extracted || !is_readable($extractDir . '/FRQ.csv')) {
