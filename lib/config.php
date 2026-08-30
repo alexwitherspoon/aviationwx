@@ -999,14 +999,19 @@ function getStaleFailclosedSeconds(?array $airport = null): int {
  *
  * @param array|null $webcam Webcam config (camera-level override)
  * @param array|null $airport Airport config (airport-level override)
+ * @param array|null $config Already-loaded root config, or null to load it.
+ *        api/webcam.php already has $config in scope; pass it to avoid a
+ *        redundant loadConfig() (and its file read + SHA) per request.
  * @return int Fail-closed threshold in seconds
  */
-function getWebcamStaleFailclosedSeconds(?array $webcam, ?array $airport): int {
+function getWebcamStaleFailclosedSeconds(?array $webcam, ?array $airport, ?array $config = null): int {
     $value = null;
     if ($webcam !== null && isset($webcam['stale_failclosed_seconds'])) {
         $value = $webcam['stale_failclosed_seconds'];
     } elseif ($airport !== null && isset($airport['stale_failclosed_seconds'])) {
         $value = $airport['stale_failclosed_seconds'];
+    } elseif ($config !== null) {
+        $value = $config['config']['stale_failclosed_seconds'] ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
     } else {
         $value = getGlobalConfig('stale_failclosed_seconds') ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
     }

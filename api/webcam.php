@@ -480,11 +480,7 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     }
     
     // Calculate staleness status for frontend display
-    $failClosedThreshold = $cam['stale_failclosed_seconds']
-        ?? $airport['stale_failclosed_seconds']
-        ?? $config['stale_failclosed_seconds']
-        ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
-    $failClosedThreshold = max(MIN_STALE_FAILCLOSED_SECONDS, (int)$failClosedThreshold);
+    $failClosedThreshold = getWebcamStaleFailclosedSeconds($cam, $airport, $config);
     
     $staleErrorThreshold = $cam['stale_error_seconds']
         ?? $airport['stale_error_seconds']
@@ -1345,13 +1341,7 @@ if ($latestTimestamp === 0) {
 // If the image is too old (exceeds fail-closed threshold), return 503 Service Unavailable
 // This prevents display of dangerously outdated data to aviation users.
 // The fail-closed threshold is configurable: camera > airport > global > default (3 hours)
-$failClosedThreshold = $cam['stale_failclosed_seconds']
-    ?? $airport['stale_failclosed_seconds']
-    ?? $config['stale_failclosed_seconds']
-    ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
-
-// Enforce minimum fail-closed threshold
-$failClosedThreshold = max(MIN_STALE_FAILCLOSED_SECONDS, (int)$failClosedThreshold);
+$failClosedThreshold = getWebcamStaleFailclosedSeconds($cam, $airport, $config);
 
 $imageAge = time() - $latestTimestamp;
 if ($imageAge > $failClosedThreshold) {
