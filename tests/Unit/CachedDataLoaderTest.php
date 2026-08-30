@@ -23,11 +23,12 @@ class CachedDataLoaderTest extends TestCase
             @unlink($this->testCacheFile);
         }
         
-        // Clear APCu cache if available
-        if (function_exists('apcu_delete')) {
-            @apcu_delete('cached_test_key');
-            @apcu_delete('cached_test_bg_stale');
-            @apcu_delete('cached_test_bg_fresh');
+        // APCu has a single shared user cache with no per-test namespace, so a key
+        // left by another test leaks in here. Clearing only a few known keys is
+        // unsafe: the loader keys vary per method and any leftover makes a test
+        // order-dependent, so clear the whole cache.
+        if (function_exists('apcu_clear_cache')) {
+            @apcu_clear_cache();
         }
     }
     
@@ -38,11 +39,10 @@ class CachedDataLoaderTest extends TestCase
             @unlink($this->testCacheFile);
         }
         
-        // Clear APCu cache
-        if (function_exists('apcu_delete')) {
-            @apcu_delete('cached_test_key');
-            @apcu_delete('cached_test_bg_stale');
-            @apcu_delete('cached_test_bg_fresh');
+        // Clear the whole APCu user cache so this test's keys do not leak into
+        // later tests.
+        if (function_exists('apcu_clear_cache')) {
+            @apcu_clear_cache();
         }
         
         parent::tearDown();
