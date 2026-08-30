@@ -482,14 +482,12 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     // Calculate staleness status for frontend display
     $failClosedThreshold = getWebcamStaleFailclosedSeconds($cam, $airport, $config);
     
-    $staleErrorThreshold = $cam['stale_error_seconds']
-        ?? $airport['stale_error_seconds']
+    $staleErrorThreshold = $airport['stale_error_seconds']
         ?? $config['config']['stale_error_seconds']
         ?? DEFAULT_STALE_ERROR_SECONDS;
     $staleErrorThreshold = max(MIN_STALE_ERROR_SECONDS, (int)$staleErrorThreshold);
     
-    $staleWarningThreshold = $cam['stale_warning_seconds']
-        ?? $airport['stale_warning_seconds']
+    $staleWarningThreshold = $airport['stale_warning_seconds']
         ?? $config['config']['stale_warning_seconds']
         ?? DEFAULT_STALE_WARNING_SECONDS;
     $staleWarningThreshold = max(MIN_STALE_WARNING_SECONDS, (int)$staleWarningThreshold);
