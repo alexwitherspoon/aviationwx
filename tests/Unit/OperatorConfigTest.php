@@ -110,6 +110,23 @@ class OperatorConfigTest extends TestCase
         $this->assertSame(1, $wsdot['webcam_count']);
     }
 
+    public function testSummarizeWeathercams_CountsTotalAndMatchingInOneWalk(): void
+    {
+        $airport = [
+            'webcams' => [
+                ['name' => 'Ours'],
+                ['name' => 'WSDOT', 'operator' => 'wsdot'],
+                'not-an-array',
+            ],
+        ];
+
+        $all = summarizeWeathercams($airport, null);
+        $this->assertSame(['total' => 2, 'matching' => 2], $all);
+
+        $aviationwx = summarizeWeathercams($airport, 'aviationwx');
+        $this->assertSame(['total' => 2, 'matching' => 1], $aviationwx);
+    }
+
     public function testParsePublicApiOptionalBooleanQuery_ReadsTrueFalse(): void
     {
         $originalGet = $_GET;
