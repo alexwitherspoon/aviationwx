@@ -126,7 +126,8 @@ function webcamRefreshInterval(array $airport, array $cam): int {
 
 /**
  * Headers for an over-age webcam frame: serve the last known image as 200 but
- * refuse to cache it as current and log the delivery.
+ * refuse to cache it as current. The delivery warning is logged at most once
+ * per 5 minutes per camera.
  *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
@@ -136,13 +137,17 @@ function webcamRefreshInterval(array $airport, array $cam): int {
  * @return array{headers: array<string,string>}
  */
 function webcamStaleHeaders(string $airportId, int $camIndex, int $captureTimestamp, array $cam, array $airport): array {
-    aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'capture_timestamp' => $captureTimestamp,
-        'age_seconds' => time() - $captureTimestamp,
-        'failclosed_seconds' => getWebcamStaleFailclosedSeconds($cam, $airport),
-    ], 'app');
+    // Stale responses are no-store, so an offline camera would otherwise write
+    // one warning per request. Throttle the log per camera; headers still go out.
+    if (metrics_should_log_warning('webcam_stale_' . $airportId . '_' . $camIndex, 300)) {
+        aviationwx_log('warning', 'serving over-age webcam frame past fail-closed threshold', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'capture_timestamp' => $captureTimestamp,
+            'age_seconds' => time() - $captureTimestamp,
+            'failclosed_seconds' => getWebcamStaleFailclosedSeconds($cam, $airport),
+        ], 'app');
+    }
     $headers = getNoStoreCacheHeaders(0);
     $headers['Warning'] = '110 - "Response is stale"';
     return ['headers' => $headers];
