@@ -12,10 +12,6 @@
  * Themes: light/dark serve the embeds; the night (cockpit night-vision) palette
  * is selected via the full-mode `night` option and used only by the dashboard.
  *
- * Backward compatibility: the previous filename public/js/embed-wind-compass.js
- * now ships as a thin shim that loads this file, so cached/legacy references keep
- * working.
- *
  * Full embeds (full, full-single, full-dual, full-multi) use full mode
  * matching the main dashboard: runway segments, wind rose petals,
  * magnetic declination, staleness handling.
