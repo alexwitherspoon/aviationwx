@@ -694,13 +694,7 @@ function sendImageResponse(
     $mtime = $opened['mtime'];
     $filename = $timestamp . '_' . $variant . '.' . $format;
 
-    $webcamRefresh = getDefaultWebcamRefresh();
-    if (isset($airport['webcam_refresh_seconds'])) {
-        $webcamRefresh = intval($airport['webcam_refresh_seconds']);
-    }
-    if (isset($cam['refresh_seconds'])) {
-        $webcamRefresh = intval($cam['refresh_seconds']);
-    }
+    $webcamRefresh = webcamRefreshInterval($airport, $cam);
 
     // Over-age: last known good frame, served as 200 but no-store and flagged
     // stale; fresh frames below the threshold use the normal refresh TTL.
