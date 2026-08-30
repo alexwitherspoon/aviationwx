@@ -218,11 +218,16 @@ function computeContentMd5FromString(string $content): string
 /**
  * Check conditional request and send 304 if content unchanged
  *
+ * When If-None-Match is present, If-Modified-Since is ignored per RFC 7232.
+ *
  * @param string $etag ETag value (weak or strong)
- * @param int $mtime File modification time
+ * @param int $mtime File modification time (ETag/identity input)
+ * @param int|null $responseLastModified Optional logical last-modified used for the
+ *        If-Modified-Since comparison and the response Last-Modified header. When
+ *        null, $mtime is used. The ETag stays derived from $mtime regardless.
  * @return bool True if 304 was sent (caller should not send body), false otherwise
  */
-function maybeSend304IfUnchanged(string $etag, int $mtime): bool
+function maybeSend304IfUnchanged(string $etag, int $mtime, ?int $responseLastModified = null): bool
 {
     $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
     $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
@@ -240,12 +245,17 @@ function maybeSend304IfUnchanged(string $etag, int $mtime): bool
             }
         }
     }
-    // @ strtotime: malformed If-Modified-Since; we treat as no match
-    $matchMod = ($ifModSince !== '' && @strtotime($ifModSince) >= $mtime);
+    // Compare If-Modified-Since against the logical last-modified so a client
+    // sending the advertised capture time revalidates correctly even when the
+    // on-disk mtime differs. RFC 7232: If-Modified-Since is ignored when an
+    // ETag validator is present, so a regenerated frame with a new ETag does not
+    // incorrectly 304 via the date header.
+    $lastModified = $responseLastModified ?? $mtime;
+    $matchMod = $ifNoneMatch === '' && $ifModSince !== '' && @strtotime($ifModSince) >= $lastModified;
 
     if ($matchEtag || $matchMod) {
         header('ETag: ' . $etag);
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
         http_response_code(304);
         return true;
     }
@@ -259,13 +269,17 @@ function maybeSend304IfUnchanged(string $etag, int $mtime): bool
  * @param string $identity Stable logical file identity for the ETag
  * @param int $mtime File modification time from fstat
  * @param int $size File size from fstat
+ * @param int|null $responseLastModified Optional logical last-modified for the
+ *        conditional check and response Last-Modified header; null uses $mtime.
+ *        ETag/digest caching stays keyed on $mtime.
  * @return bool True if 304 sent (do not send body), false to continue
  */
 function addIntegrityHeadersForOpenFile(
     $handle,
     string $identity,
     int $mtime,
-    int $size
+    int $size,
+    ?int $responseLastModified = null
 ): bool {
     if (!is_resource($handle) || $size <= 0) {
         return false;
@@ -277,12 +291,16 @@ function addIntegrityHeadersForOpenFile(
         $etagIdentity .= '|' . $stat['dev'] . '|' . $stat['ino'];
     }
     $etag = computeFileEtag($etagIdentity, $mtime, $size);
-    if (maybeSend304IfUnchanged($etag, $mtime)) {
+    if (maybeSend304IfUnchanged($etag, $mtime, $responseLastModified)) {
         return true;
     }
 
     header('ETag: ' . $etag);
-    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+    // The conditional check and response Last-Modified can reflect a logical
+    // capture time (e.g. a stale frame whose capture timestamp differs from the
+    // file's mtime); the filesystem mtime is retained only for ETag/digest identity.
+    $lastModified = $responseLastModified ?? $mtime;
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
 
     $digests = getOpenFileDigestsWithCache($handle, $identity, $mtime, $size);
     if ($digests !== null) {

@@ -233,6 +233,52 @@ class HttpIntegrityTest extends TestCase
         $this->assertSame(304, http_response_code());
     }
 
+    public function testMaybeSend304IfUnchanged_IfModifiedSinceMatchesCaptureTime_Returns304(): void
+    {
+        // A stale frame can carry an old capture time while the file is freshly
+        // written (mtime now-ish). If-Modified-Since must compare against the
+        // logical last-modified (the capture time) so it revalidates correctly.
+        $logicalLastModified = time() - 14400; // 4h ago
+        $fileMtime = time() - 5;               // file written 5s ago
+
+        // Client sends the advertised capture time -> should 304.
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', $logicalLastModified) . ' GMT';
+        ob_start();
+        $result = maybeSend304IfUnchanged('W/"etag-check"', $fileMtime, $logicalLastModified);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+        $this->assertTrue($result);
+        $this->assertSame(304, http_response_code());
+
+        // Client sends an older date than the capture time -> no 304 (caller sends 200).
+        http_response_code(200);
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', $logicalLastModified - 3600) . ' GMT';
+        ob_start();
+        $result2 = maybeSend304IfUnchanged('W/"etag-check"', $fileMtime, $logicalLastModified);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+        $this->assertFalse($result2);
+        $this->assertNotSame(304, http_response_code());
+    }
+
+    public function testMaybeSend304IfUnchanged_IfNoneMatchPresent_IgnoresIfModifiedSince(): void
+    {
+        // RFC 7232: when If-None-Match is present, If-Modified-Since must be
+        // ignored, so a non-matching ETag (a regenerated frame) must not 304 via
+        // the date header even if the capture timestamp matches.
+        http_response_code(200);
+        $_SERVER['HTTP_IF_NONE_MATCH'] = 'W/"different-etag"';
+        $_SERVER['HTTP_IF_MODIFIED_SINCE'] = gmdate('D, d M Y H:i:s', time()) . ' GMT';
+
+        ob_start();
+        $result = maybeSend304IfUnchanged('W/"server-etag"', time(), time() - 1);
+        ob_get_clean();
+        unset($_SERVER['HTTP_IF_NONE_MATCH'], $_SERVER['HTTP_IF_MODIFIED_SINCE']);
+
+        $this->assertFalse($result);
+        $this->assertNotSame(304, http_response_code());
+    }
+
     /**
      * Content-Digest verifies body integrity (digest matches actual content)
      */

@@ -2266,6 +2266,18 @@
                 "format": "date-time",
                 "description": "ISO 8601 timestamp"
               },
+              "age_seconds": {
+                "type": "integer",
+                "description": "Seconds since the current image's capture timestamp"
+              },
+              "stale": {
+                "type": "boolean",
+                "description": "True when age exceeds the camera fail-closed threshold (camera -> airport -> global -> default); the image is served but not cached as current"
+              },
+              "stale_failclosed_seconds": {
+                "type": "integer",
+                "description": "Camera fail-closed staleness threshold used to compute stale (camera -> airport -> global -> default)"
+              },
               "formats": {
                 "type": "object",
                 "description": "Available formats for each variant. Keys are variant names ('original' or numeric height), values are arrays of format names.",

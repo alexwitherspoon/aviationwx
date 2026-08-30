@@ -190,6 +190,13 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('data', $data, 'Should have data field');
         $this->assertArrayHasKey('timestamp', $data['data'], 'Should have timestamp');
         $this->assertArrayHasKey('timestamp_iso', $data['data'], 'Should have timestamp_iso');
+        $this->assertArrayHasKey('age_seconds', $data['data'], 'Should have age_seconds');
+        $this->assertArrayHasKey('stale', $data['data'], 'Should have stale flag');
+        $this->assertArrayHasKey('stale_failclosed_seconds', $data['data'], 'Should have stale_failclosed_seconds');
+        $this->assertIsInt($data['data']['age_seconds']);
+        $this->assertGreaterThanOrEqual(0, $data['data']['age_seconds']);
+        $this->assertIsBool($data['data']['stale']);
+        $this->assertIsInt($data['data']['stale_failclosed_seconds']);
         $this->assertArrayHasKey('formats', $data['data'], 'Should have formats');
         $this->assertArrayHasKey('recommended_sizes', $data['data'], 'Should have recommended_sizes');
         $this->assertArrayHasKey('urls', $data['data'], 'Should have urls');
@@ -200,8 +207,136 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('cam_index', $data['meta'], 'Meta should have cam_index');
         $this->assertArrayHasKey('refresh_seconds', $data['meta'], 'Meta should have refresh_seconds');
         $this->assertArrayHasKey('variant_heights', $data['meta'], 'Meta should have variant_heights');
+
+        // age_seconds/stale are time-relative and must never be served from a
+        // shared cache with outdated values; the metadata response must be no-store.
+        $cacheControl = $response['headers']['Cache-Control'] ?? '';
+        $this->assertStringContainsString('no-store', $cacheControl, 'Metadata should be no-store');
+    }
+
+    public function testImage_OverAgeOriginal_IsServed200WithStaleHeaders(): void
+    {
+        // Install a servable original captured past the fail-closed threshold
+        // (~4h ago, default is 3h) and point the current symlink at it, so the
+        // native-current request resolves a stale frame.
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $oldTs = time() - 14400;
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $oldTs);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($oldTs);
+        $filename = $oldTs . '_original.jpg';
+        $path = $framesDir . '/' . $filename;
+        $img = imagecreatetruecolor(32, 24);
+        imagejpeg($img, $path);
+
+        self::unlinkOriginalFormatSymlinks();
+        symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
+
+        try {
+            $response = $this->apiRequest(
+                // No fmt so this hits the native-original path (explicit fmt on the
+                // original is rejected) and reaches the stale-frame branch.
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
+            );
+
+            // A stale webcam is not a server error: serve the last known frame as 200,
+            // but flag it and refuse to cache it as current.
+            $this->assertSame(200, $response['status']);
+            $cacheControl = $response['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $cacheControl);
+            $this->assertArrayHasKey('Warning', $response['headers']);
+            $this->assertMatchesRegularExpression('/110/', $response['headers']['Warning']);
+            // Last-Modified reflects the capture timestamp, not the fresh file mtime.
+            $this->assertArrayHasKey('Last-Modified', $response['headers']);
+            $expectedLastModified = gmdate('D, d M Y H:i:s', $oldTs) . ' GMT';
+            $this->assertSame($expectedLastModified, $response['headers']['Last-Modified']);
+
+            // The download branch must apply the same stale policy for an over-age
+            // frame: attachment, no-store, Warning 110, and capture-time Last-Modified.
+            $download = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+            $this->assertSame(200, $download['status']);
+            $this->assertStringContainsString('attachment', $download['headers']['Content-Disposition'] ?? '');
+            $this->assertStringContainsString('no-store', $download['headers']['Cache-Control'] ?? '');
+            $this->assertMatchesRegularExpression('/110/', $download['headers']['Warning'] ?? '');
+            $this->assertSame($expectedLastModified, $download['headers']['Last-Modified'] ?? '');
+
+            // The metadata endpoint must report the same frame as stale so the two
+            // surfaces cannot diverge for clients consuming the age fields.
+            $meta = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1'
+            );
+            $this->assertSame(200, $meta['status']);
+            $metaData = $meta['json']['data'] ?? [];
+            $this->assertTrue($metaData['stale'] ?? false, 'Metadata should report stale=true');
+            $this->assertGreaterThanOrEqual(
+                $metaData['stale_failclosed_seconds'] ?? -1,
+                $metaData['age_seconds'] ?? 0,
+                'age_seconds should exceed the fail-closed threshold for a stale frame'
+            );
+        } finally {
+            // Restore the default current original so later tests don't see 503
+            // from the removed stale fixture (fixture is created once per class).
+            self::restoreDefaultOriginalFixture($path);
+        }
     }
     
+    /**
+     * A frame still fresh (under threshold) but within the refresh + SWR window of
+     * the fail-closed boundary must not be cacheable, or it could be served past the
+     * threshold as current. Covers the fresh-cutoff no-store branch.
+     */
+    public function testImage_FreshFrameNearFailClosedBoundary_IsServedNoStore(): void
+    {
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $nearTs = time() - 10600; // default threshold 10800, so remaining ~200 <= refresh(60)+SWR(300)
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $nearTs);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($nearTs);
+        $filename = $nearTs . '_original.jpg';
+        $path = $framesDir . '/' . $filename;
+        $img = imagecreatetruecolor(32, 24);
+        imagejpeg($img, $path);
+
+        self::unlinkOriginalFormatSymlinks();
+        symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
+
+        try {
+            // Inline native-original path (sendImageResponse cutoff).
+            $inline = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
+            );
+            $this->assertSame(200, $inline['status']);
+            $inlineCache = $inline['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $inlineCache);
+            $this->assertMatchesRegularExpression('/max-age=0/', $inlineCache);
+            $this->assertMatchesRegularExpression('/s-maxage=0/', $inlineCache);
+
+            // Download branch (handleGetWebcamImage cutoff).
+            $response = $this->apiRequest(
+                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
+            );
+            $this->assertSame(200, $response['status']);
+            $cacheControl = $response['headers']['Cache-Control'] ?? '';
+            $this->assertStringContainsString('no-store', $cacheControl);
+            $this->assertMatchesRegularExpression('/max-age=0/', $cacheControl);
+            $this->assertMatchesRegularExpression('/s-maxage=0/', $cacheControl);
+        } finally {
+            self::restoreDefaultOriginalFixture($path);
+        }
+    }
+
     /**
      * Test metadata endpoint includes available formats
      */
