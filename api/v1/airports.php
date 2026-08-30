@@ -102,8 +102,9 @@ function formatAirportSummary(string $airportId, array $airport, ?string $operat
     // has_weather and has_webcams are airport capabilities. webcam_count still
     // counts matching weathercams when operator is set.
     $hasWeather = hasWeatherSources($airport);
-    $webcamCount = countWeathercamsForOperator($airport, $operatorFilter);
-    $hasWebcams = countWeathercamsForOperator($airport, null) > 0;
+    $webcamSummary = summarizeWeathercams($airport, $operatorFilter);
+    $webcamCount = $webcamSummary['matching'];
+    $hasWebcams = $webcamSummary['total'] > 0;
 
     $baseDomain = getBaseDomain();
     $url = 'https://' . $airportId . '.' . $baseDomain . '/';

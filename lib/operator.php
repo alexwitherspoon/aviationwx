@@ -143,6 +143,36 @@ function weatherSourceMatchesOperator(array $source, ?string $operatorFilter): b
 }
 
 /**
+ * Weathercam presence and operator-sliced count in a single walk.
+ *
+ * @param array $airport Airport configuration
+ * @param string|null $operatorFilter Lowercase slug, or null for no filter
+ * @return array{total: int, matching: int} Total configured weathercams and
+ *         the count matching the operator filter
+ */
+function summarizeWeathercams(array $airport, ?string $operatorFilter): array
+{
+    $webcams = $airport['webcams'] ?? [];
+    if (!is_array($webcams)) {
+        return ['total' => 0, 'matching' => 0];
+    }
+
+    $total = 0;
+    $matching = 0;
+    foreach ($webcams as $webcam) {
+        if (!is_array($webcam)) {
+            continue;
+        }
+        $total++;
+        if (weathercamMatchesOperator($webcam, $operatorFilter)) {
+            $matching++;
+        }
+    }
+
+    return ['total' => $total, 'matching' => $matching];
+}
+
+/**
  * Count weathercams on an airport that match an optional operator filter.
  *
  * @param array $airport Airport configuration
@@ -151,19 +181,7 @@ function weatherSourceMatchesOperator(array $source, ?string $operatorFilter): b
  */
 function countWeathercamsForOperator(array $airport, ?string $operatorFilter): int
 {
-    $webcams = $airport['webcams'] ?? [];
-    if (!is_array($webcams)) {
-        return 0;
-    }
-
-    $count = 0;
-    foreach ($webcams as $webcam) {
-        if (is_array($webcam) && weathercamMatchesOperator($webcam, $operatorFilter)) {
-            $count++;
-        }
-    }
-
-    return $count;
+    return summarizeWeathercams($airport, $operatorFilter)['matching'];
 }
 
 /**
