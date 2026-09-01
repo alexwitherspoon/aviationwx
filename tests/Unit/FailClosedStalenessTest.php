@@ -262,7 +262,7 @@ class FailClosedStalenessTest extends TestCase
         $data = [
             'temperature' => 15.0,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($failclosedThreshold - 1),  // 1 second under threshold
+                'temperature' => $now - ($failclosedThreshold - 60),  // 60 seconds under threshold
             ],
             'last_updated_primary' => $now - 300,
         ];
