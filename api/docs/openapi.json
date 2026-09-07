@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Exact height-based variant from the pre-generated set (no cropping or size fallback)\n- Neither: Native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. Files that are not those types are not served.\n\nsize may be omitted or set to original. Numeric size, width, and height values must be complete canonical integers within their documented ranges; malformed values return 400.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
+        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Original (no `size`, no `width`/`height`):** serves the native original file unmodified, at its native dimensions and format. The native type (jpg, png, or webp) is read from the file and returned in Content-Type. A file that is not one of those types is not served.\n\n**Sized variants (`size`):** serve a pre-generated variant. A size that was never generated for this camera is a 400 listing the available sizes, not a 503.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Exact height-based variant from the pre-generated set (no cropping or size fallback)\n- Neither: Native original, served unmodified\n\nsize may be omitted or set to original. Numeric size, width, and height values must be complete canonical integers within their documented ranges; malformed values return 400.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -328,7 +328,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants (ignored when profile=faa). Not valid on the original. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants and dimension transforms (ignored when profile=faa). Not valid when requesting the original directly, which is always served in its native format. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -337,7 +337,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Exact height-based variant from the pre-generated set (no cropping or fallback to the original). Omit for the native original. Mutually exclusive with width/height. Ignored when profile is set.",
+            "description": "Exact height-based variant from the pre-generated set (no cropping or fallback to the original). Omit for the native original. A size that was never generated returns 400 listing the available sizes. Mutually exclusive with width/height. Ignored when profile is set.",
             "schema": {
               "default": "original",
               "oneOf": [
@@ -408,6 +408,16 @@
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "description": "No servable image right now (no current frame for this camera). Distinct from 400, which means the request is invalid or asks for a variant this camera never generates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2248,7 +2258,7 @@
                     "items": {
                       "type": "integer"
                     },
-                    "description": "Configured variant heights (e.g., [1080, 720, 360])"
+                    "description": "Configured variant heights (e.g., [1080, 720, 360]). May include heights that were never generated because the source is smaller; see data.formats and data.recommended_sizes for what actually exists on disk."
                   }
                 }
               }
@@ -2280,7 +2290,7 @@
               },
               "formats": {
                 "type": "object",
-                "description": "Available formats for each variant. Keys are variant names ('original' or numeric height), values are arrays of format names.",
+                "description": "Available formats actually on disk for each variant. Keys are variant names ('original' or numeric height), values are arrays of format names. Only generated variants appear here.",
                 "additionalProperties": {
                   "type": "array",
                   "items": {
@@ -2300,7 +2310,7 @@
                 "items": {
                   "type": "integer"
                 },
-                "description": "Recommended variant heights sorted by size (descending)",
+                "description": "Variant heights actually on disk, sorted by size (descending). Differs from meta.variant_heights when a configured height was never generated.",
                 "example": [1080, 720, 360]
               },
               "urls": {

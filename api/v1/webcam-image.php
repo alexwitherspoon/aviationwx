@@ -416,22 +416,24 @@ function handleGetWebcamImage(array $params, array $context): void
         } else {
             $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
 
-            if ($cacheFile === null && $explicitFormatRequest) {
-                $variantHeights = getVariantHeights($airportId, $camIndex);
+            if ($cacheFile === null) {
+                // A requested size with no generated file is a permanent miss for
+                // this camera, not a transient outage, so return 400 rather than 503.
+                // List the sizes that exist on disk so the caller can pick a size
+                // GET will actually serve.
                 $availableSizes = [];
-
-                foreach ($variantHeights as $height) {
-                    $variantPath = getImagePathForSize($airportId, $camIndex, $timestamp, $height, $format);
-                    if ($variantPath !== null) {
+                foreach (getAvailableVariants($airportId, $camIndex, $timestamp) as $height => $heightFormats) {
+                    if ($height !== 'original' && is_int($height) && in_array($format, $heightFormats, true)) {
                         $availableSizes[] = $height;
                     }
                 }
+                rsort($availableSizes, SORT_NUMERIC);
 
-                if (!empty($availableSizes)) {
+                if ($availableSizes !== []) {
                     sendPublicApiError(
                         PUBLIC_API_ERROR_INVALID_REQUEST,
-                        "Format '{$format}' is not available for size '{$size}'. " .
-                        "Available sizes for {$format}: " . implode(', ', $availableSizes) . '.',
+                        "Size '{$size}' is not available for format '{$format}'. " .
+                        "Available sizes: " . implode(', ', $availableSizes) . '.',
                         400
                     );
                     return;
@@ -439,7 +441,7 @@ function handleGetWebcamImage(array $params, array $context): void
 
                 sendPublicApiError(
                     PUBLIC_API_ERROR_INVALID_REQUEST,
-                    "Format '{$format}' is not available for this webcam. Use the size parameter to request specific variants (e.g. 720, 1080).",
+                    "Size '{$size}' is not available for this webcam.",
                     400
                 );
                 return;
