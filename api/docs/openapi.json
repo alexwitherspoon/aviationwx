@@ -328,7 +328,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants (ignored when profile=faa). Requires `size`; `fmt` alone is a 400. Not valid on the original, which is always served in its native format. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants and dimension transforms (ignored when profile=faa). Not valid when requesting the original directly, which is always served in its native format. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -410,8 +410,14 @@
             "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "$ref": "#/components/responses/ServiceUnavailable",
-            "description": "No servable image right now (no current frame for this camera). Distinct from 400, which means the request is invalid or asks for a variant this camera never generates."
+            "description": "No servable image right now (no current frame for this camera). Distinct from 400, which means the request is invalid or asks for a variant this camera never generates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }

@@ -1024,15 +1024,28 @@ class PublicApiWebcamTest extends TestCase
     public function testSizeRequest_MissingVariantDoesNotReturnNativeOriginal(): void
     {
         $installedPath = null;
+        $variantPath = null;
         try {
             $installedPath = self::installNativeOriginal('png');
+            $validTimestamp = (int)explode('_', basename($installedPath), 2)[0];
+            $variantPath = dirname($installedPath) . '/' . $validTimestamp . '_720.jpg';
+            $variant = imagecreatetruecolor(1280, 720);
+            imagejpeg($variant, $variantPath);
+
             $response = $this->apiRequest(
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=777'
             );
 
             $this->assertSame(400, $response['status']);
             $this->assertStringContainsString('application/json', $response['content_type']);
+            $this->assertStringContainsString(
+                'Available sizes: 720',
+                $response['json']['error']['message'] ?? ''
+            );
         } finally {
+            if ($variantPath !== null && is_file($variantPath)) {
+                unlink($variantPath);
+            }
             self::restoreDefaultOriginalFixture($installedPath);
         }
     }

@@ -419,8 +419,8 @@ function handleGetWebcamImage(array $params, array $context): void
             if ($cacheFile === null) {
                 // A requested size with no generated file is a permanent miss for
                 // this camera, not a transient outage, so return 400 rather than 503.
-                // List the sizes that exist on disk so the caller can pick one GET
-                // will actually serve.
+                // List the sizes that exist on disk so the caller can pick a size
+                // GET will actually serve.
                 $availableSizes = [];
                 foreach (getAvailableVariants($airportId, $camIndex, $timestamp) as $height => $heightFormats) {
                     if ($height !== 'original' && is_int($height) && in_array($format, $heightFormats, true)) {
