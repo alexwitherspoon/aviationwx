@@ -453,7 +453,7 @@ class PublicApiWebcamTest extends TestCase
             '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=719'
         );
 
-        $this->assertSame(503, $response['status']);
+        $this->assertSame(400, $response['status']);
         $this->assertStringContainsString('application/json', $response['content_type']);
     }
 
@@ -1030,7 +1030,7 @@ class PublicApiWebcamTest extends TestCase
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?size=777'
             );
 
-            $this->assertSame(503, $response['status']);
+            $this->assertSame(400, $response['status']);
             $this->assertStringContainsString('application/json', $response['content_type']);
         } finally {
             self::restoreDefaultOriginalFixture($installedPath);
