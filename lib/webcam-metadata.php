@@ -431,16 +431,16 @@ function resolveWebcamOriginalAtTimestamp(string $airportId, int $camIndex, int 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index
  * @param int $timestamp Image timestamp
+ * @param array|null $config Already-loaded configuration, or null to load it
  * @return array Array of available heights and formats [height => [formats]]
  */
-function getAvailableVariants(string $airportId, int $camIndex, int $timestamp): array {
+function getAvailableVariants(string $airportId, int $camIndex, int $timestamp, ?array $config = null): array {
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
     if (!is_dir($cacheDir)) {
         return [];
     }
     
-    require_once __DIR__ . '/config.php';
-    $enabledFormats = getEnabledWebcamFormats();
+    $enabledFormats = getEnabledWebcamFormats($config);
     
     $variants = [];
     

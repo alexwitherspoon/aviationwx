@@ -165,12 +165,13 @@ function formatWebcamMetadata(
 }
 
 /**
- * Configured original plus height variants.
+ * Current original plus the sized variants that actually exist on disk.
  *
  * Original URL has no fmt: clients cannot pick the native type. format is set
  * when the current original is a supported jpg, png, or webp so callers know
- * what GET will return. Omitted when missing or unsupported. Sized rows follow
- * enabled generation formats.
+ * what GET will return. Omitted when missing or unsupported. Sized rows reflect
+ * generated files, not configured heights, so a variant is only advertised when
+ * GET will serve it.
  *
  * @param string $airportId Airport ID
  * @param int $index Weathercam index
@@ -186,21 +187,38 @@ function formatWebcamImageVariants(
 ): array
 {
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
+    $images = [];
+    $current = getCurrentServableWebcamOriginal($airportId, $index);
     $original = [
         'variant' => 'original',
         'height' => null,
         'url' => publicApiV1Url($imagePath, $absoluteUrls),
     ];
-    $path = getWebcamOriginalPath($airportId, $index);
-    $detected = $path !== null ? detectServableWebcamImageFormat($path) : null;
-    if ($detected !== null) {
-        $original['format'] = $detected;
+    if ($current !== null) {
+        $original['format'] = $current['format'];
     }
-    $images = [$original];
+    $images[] = $original;
+
+    if ($current === null) {
+        return $images;
+    }
+
+    $available = getAvailableVariants($airportId, $index, $current['timestamp'], $config);
+    $heights = [];
+    foreach ($available as $variant => $_formats) {
+        if ($variant !== 'original' && is_int($variant) && $variant > 0) {
+            $heights[] = $variant;
+        }
+    }
+    rsort($heights, SORT_NUMERIC);
 
     $formats = getEnabledWebcamFormats($config);
-    foreach (getVariantHeights($airportId, $index, $config) as $height) {
+    foreach ($heights as $height) {
+        $availableFormats = $available[$height] ?? [];
         foreach ($formats as $format) {
+            if (!in_array($format, $availableFormats, true)) {
+                continue;
+            }
             $query = [];
             if ($format !== 'jpg') {
                 $query['fmt'] = $format;

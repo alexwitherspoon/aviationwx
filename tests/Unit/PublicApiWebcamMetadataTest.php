@@ -196,6 +196,15 @@ class PublicApiWebcamMetadataTest extends TestCase
     {
         self::loadFormatWebcamMetadata();
 
+        $airportId = 'test';
+        $camIndex = 0;
+        $ts = 1704067900;
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents(getWebcamOriginalTimestampedPath($airportId, $camIndex, $ts, 'jpg'), "\xFF\xD8\xFF\xD9" . str_repeat("\x00", 8));
+        file_put_contents(getWebcamVariantPath($airportId, $camIndex, $ts, 600, 'jpg'), "\xFF\xD8\xFF\xD9" . str_repeat("\x00", 8));
+        file_put_contents(getWebcamVariantPath($airportId, $camIndex, $ts, 600, 'webp'), 'RIFF' . pack('V', 12) . 'WEBP');
+
         $config = [
             'config' => [
                 'webcam_generate_webp' => true,
@@ -210,14 +219,44 @@ class PublicApiWebcamMetadataTest extends TestCase
             ],
         ];
 
-        $images = formatWebcamImageVariants('test', 0, false, $config);
+        try {
+            $images = formatWebcamImageVariants($airportId, $camIndex, false, $config);
 
-        $this->assertSame(
-            [
-                ['variant' => '600', 'height' => 600, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image?size=600'],
-                ['variant' => '600', 'height' => 600, 'format' => 'webp', 'url' => '/v1/airports/test/webcams/0/image?fmt=webp&size=600'],
-            ],
-            array_slice($images, 1)
-        );
+            $this->assertSame(
+                [
+                    ['variant' => '600', 'height' => 600, 'format' => 'jpg', 'url' => '/v1/airports/test/webcams/0/image?size=600'],
+                    ['variant' => '600', 'height' => 600, 'format' => 'webp', 'url' => '/v1/airports/test/webcams/0/image?fmt=webp&size=600'],
+                ],
+                array_slice($images, 1)
+            );
+        } finally {
+            $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+            if (is_dir($cacheDir)) {
+                $this->removeTree($cacheDir);
+            }
+        }
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = scandir($dir);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->removeTree($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
 }

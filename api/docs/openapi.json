@@ -2051,7 +2051,7 @@
           },
           "images": {
             "type": "array",
-            "description": "Configured original plus height variants. Original URL has no fmt; format is the native type when the current original is a supported jpg, png, or webp. Omitted when missing or unsupported. Sized rows follow enabled generation formats from airports.json.",
+            "description": "Current original plus the sized variants that actually exist on disk. Original URL has no fmt; format is the native type when the current original is a supported jpg, png, or webp. Omitted when missing or unsupported. Sized rows reflect generated files, not configured heights, so a variant is only listed when GET will serve it.",
             "items": {
               "type": "object",
               "required": ["variant", "height", "url"],
