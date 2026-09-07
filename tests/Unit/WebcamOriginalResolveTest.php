@@ -75,6 +75,15 @@ class WebcamOriginalResolveTest extends TestCase
         return $path;
     }
 
+    private function writeVariant(int $timestamp, int $height, string $format, string $bytes): string
+    {
+        $framesDir = getWebcamFramesDir($this->airportId, $this->camIndex, $timestamp);
+        ensureCacheDir($framesDir);
+        $path = getWebcamVariantPath($this->airportId, $this->camIndex, $timestamp, $height, $format);
+        file_put_contents($path, $bytes);
+        return $path;
+    }
+
     private function linkOriginal(int $timestamp, string $format, string $targetPath): void
     {
         $camDir = getWebcamCameraDir($this->airportId, $this->camIndex);
@@ -588,7 +597,11 @@ class WebcamOriginalResolveTest extends TestCase
 
     public function testFormatWebcamImageVariants_OriginalRow_OmitsFmt(): void
     {
-        $images = formatWebcamImageVariants('kspb', 0, false);
+        $ts = 1704067650;
+        $this->writeOriginal($ts, 'jpg', $this->jpegBytes());
+        $this->writeVariant($ts, 720, 'jpg', $this->jpegBytes());
+
+        $images = formatWebcamImageVariants($this->airportId, $this->camIndex, false);
         $this->assertSame('original', $images[0]['variant']);
         $this->assertStringNotContainsString('fmt=', $images[0]['url']);
         if (isset($images[0]['format'])) {
@@ -596,6 +609,34 @@ class WebcamOriginalResolveTest extends TestCase
         }
         $this->assertSame('jpg', $images[1]['format']);
         $this->assertStringContainsString('size=', $images[1]['url']);
+    }
+
+    public function testFormatWebcamImageVariants_OmitsUnavailableSizedVariants(): void
+    {
+        // OR81 case: source is sub-1080 so no 1080 variant is ever generated,
+        // but configured heights default to [1080, 720, 360]. The list must
+        // advertise only sizes whose files actually exist on disk.
+        $ts = 1704067900;
+        $this->writeOriginal($ts, 'jpg', $this->jpegBytes());
+        $this->writeVariant($ts, 720, 'webp', $this->webpBytes());
+
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => true,
+                'webcam_variant_heights' => [1080, 720, 360],
+            ],
+            'airports' => [],
+        ];
+
+        $images = formatWebcamImageVariants($this->airportId, $this->camIndex, false, $config);
+
+        $this->assertSame('original', $images[0]['variant']);
+
+        $sized = array_slice($images, 1);
+        $this->assertSame(['720'], array_map(static fn (array $row): string => $row['variant'], $sized));
+        $this->assertSame('webp', $sized[0]['format']);
+        $this->assertStringContainsString('size=720', $sized[0]['url']);
+        $this->assertStringContainsString('fmt=webp', $sized[0]['url']);
     }
 
     public function testFormatWebcamImageVariants_ServablePngOriginal_IncludesFormatOmitsFmt(): void
@@ -606,6 +647,27 @@ class WebcamOriginalResolveTest extends TestCase
         $this->assertSame('original', $images[0]['variant']);
         $this->assertSame('png', $images[0]['format']);
         $this->assertStringNotContainsString('fmt=', $images[0]['url']);
+    }
+
+    public function testFormatWebcamImageVariants_VariantWithoutServableOriginal_StillAdvertised(): void
+    {
+        // A sized variant can exist with no servable original (for example a
+        // source older than the newest completed capture). The image endpoint
+        // falls back to getLatestImageTimestamp(), so the list must advertise
+        // the size GET will actually serve rather than returning only the
+        // original row.
+        $ts = 1704067950;
+        $this->writeVariant($ts, 720, 'jpg', $this->jpegBytes());
+
+        $images = formatWebcamImageVariants($this->airportId, $this->camIndex, false);
+
+        $this->assertSame('original', $images[0]['variant']);
+        $this->assertArrayNotHasKey('format', $images[0]);
+
+        $sized = array_slice($images, 1);
+        $this->assertSame(['720'], array_map(static fn (array $row): string => $row['variant'], $sized));
+        $this->assertSame('jpg', $sized[0]['format']);
+        $this->assertStringContainsString('size=720', $sized[0]['url']);
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedWebcamPayloadProvider')]

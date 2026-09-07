@@ -213,7 +213,7 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertNull($this->findAirport(getWeathercamBulkAirports('faa'), '03s'));
     }
 
-    public function testGetWeathercamBulkAirports_AbsoluteImageUrlsAndConfiguredVariants(): void
+    public function testGetWeathercamBulkAirports_AbsoluteImageUrls(): void
     {
         $base = getCanonicalPublicApiV1BaseUrl();
         $kspb = $this->findAirport(getWeathercamBulkAirports('aviationwx'), 'kspb');
@@ -232,11 +232,9 @@ class PublicApiWeathercamBulkTest extends TestCase
             $this->assertContains($cam['images'][0]['format'], ['jpg', 'png', 'webp']);
         }
 
-        $heights = [];
         foreach ($cam['images'] as $image) {
             $this->assertStringStartsWith($base . '/airports/kspb/webcams/0/image', $image['url']);
             if ($image['variant'] !== 'original') {
-                $heights[] = $image['height'];
                 $this->assertSame((string) $image['height'], $image['variant']);
                 $this->assertStringContainsString('size=' . $image['height'], $image['url']);
                 if ($image['format'] === 'jpg') {
@@ -246,9 +244,6 @@ class PublicApiWeathercamBulkTest extends TestCase
                 }
             }
         }
-        $this->assertContains(1080, $heights);
-        $this->assertContains(720, $heights);
-        $this->assertContains(360, $heights);
     }
 
     public function testGetWeathercamBulkAirports_MissingOriginal_OmitsCachedFormat(): void
