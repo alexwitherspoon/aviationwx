@@ -279,9 +279,19 @@ class NotamFilterTest extends TestCase {
     public function testFilterRelevantNotams_IncludesKspbScenario86Fixture(): void
     {
         require_once __DIR__ . '/../../lib/notam/parser.php';
+        require_once __DIR__ . '/../../lib/notam/schedule.php';
 
         $xml = (string) file_get_contents(__DIR__ . '/../Fixtures/notam/kspb-runway-closure-scenario86.xml');
         $parsed = parseNotamXmlArray([$xml]);
+
+        // The fixture hardcodes a closure window that has since passed. Rebase its
+        // effective window onto now so the scenario-86 classification is exercised
+        // without the fixture rotting on the calendar.
+        $now = time();
+        $parsed[0]['start_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', $now - 3600);
+        $parsed[0]['end_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', $now + 3600);
+        enrichParsedNotamWithSchedule($parsed[0]);
+
         $airport = [
             'icao' => 'KSPB',
             'iata' => 'SPB',
