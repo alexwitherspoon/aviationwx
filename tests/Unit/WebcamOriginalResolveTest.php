@@ -649,6 +649,27 @@ class WebcamOriginalResolveTest extends TestCase
         $this->assertStringNotContainsString('fmt=', $images[0]['url']);
     }
 
+    public function testFormatWebcamImageVariants_VariantWithoutServableOriginal_StillAdvertised(): void
+    {
+        // A sized variant can exist with no servable original (for example a
+        // source older than the newest completed capture). The image endpoint
+        // falls back to getLatestImageTimestamp(), so the list must advertise
+        // the size GET will actually serve rather than returning only the
+        // original row.
+        $ts = 1704067950;
+        $this->writeVariant($ts, 720, 'jpg', $this->jpegBytes());
+
+        $images = formatWebcamImageVariants($this->airportId, $this->camIndex, false);
+
+        $this->assertSame('original', $images[0]['variant']);
+        $this->assertArrayNotHasKey('format', $images[0]);
+
+        $sized = array_slice($images, 1);
+        $this->assertSame(['720'], array_map(static fn (array $row): string => $row['variant'], $sized));
+        $this->assertSame('jpg', $sized[0]['format']);
+        $this->assertStringContainsString('size=720', $sized[0]['url']);
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedWebcamPayloadProvider')]
     public function testFormatWebcamImageVariants_UnsupportedBytesNamedJpg_OmitsFormat(string $label, string $bytes): void
     {

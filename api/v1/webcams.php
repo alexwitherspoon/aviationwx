@@ -199,11 +199,15 @@ function formatWebcamImageVariants(
     }
     $images[] = $original;
 
-    if ($current === null) {
+    // Derive the timestamp the same way the image endpoint does, so a camera
+    // with sized variants but no servable original still advertises the sizes
+    // GET will serve.
+    $timestamp = $current !== null ? $current['timestamp'] : getLatestImageTimestamp($airportId, $index);
+    if ($timestamp <= 0) {
         return $images;
     }
 
-    $available = getAvailableVariants($airportId, $index, $current['timestamp'], $config);
+    $available = getAvailableVariants($airportId, $index, $timestamp, $config);
     $heights = [];
     foreach ($available as $variant => $_formats) {
         if ($variant !== 'original' && is_int($variant) && $variant > 0) {
