@@ -287,8 +287,9 @@ class NotamFilterTest extends TestCase {
         // The fixture hardcodes a closure window that has since passed. Rebase its
         // effective window onto now so the scenario-86 classification is exercised
         // without the fixture rotting on the calendar.
-        $parsed[0]['start_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', time() - 3600);
-        $parsed[0]['end_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', time() + 3600);
+        $now = time();
+        $parsed[0]['start_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', $now - 3600);
+        $parsed[0]['end_time_utc'] = gmdate('Y-m-d\TH:i:s\Z', $now + 3600);
         enrichParsedNotamWithSchedule($parsed[0]);
 
         $airport = [
