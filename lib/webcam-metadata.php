@@ -289,9 +289,17 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
             $anyRank = $rank;
             $anyPath = $file;
         }
-        if ($rank > $completeRank && isWebcamFramePromotionComplete($airportId, $camIndex, $rank)) {
-            $completeRank = $rank;
-            $completePath = $file;
+
+        // The complete-frame check needs a real capture timestamp, because the
+        // manifest lives in the frames dir derived from that timestamp. A rank
+        // from the mtime fallback (a non-timestamped basename) has no manifest,
+        // so only files named {timestamp}_original.* qualify.
+        if (preg_match('/^(\d+)_original\./', basename($file), $matches) === 1) {
+            $timestamp = (int) $matches[1];
+            if ($timestamp > $completeRank && isWebcamFramePromotionComplete($airportId, $camIndex, $timestamp)) {
+                $completeRank = $timestamp;
+                $completePath = $file;
+            }
         }
     }
 
