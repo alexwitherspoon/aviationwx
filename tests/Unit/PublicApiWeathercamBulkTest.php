@@ -246,9 +246,11 @@ class PublicApiWeathercamBulkTest extends TestCase
                 }
             }
         }
-        $this->assertContains(1080, $heights);
-        $this->assertContains(720, $heights);
-        $this->assertContains(360, $heights);
+        // The list advertises only variants that exist on disk. The seeded
+        // camera has a 480 variant, so configured-but-unwritten heights must
+        // stay out.
+        $this->assertContains(480, $heights);
+        $this->assertNotContains(1080, $heights);
     }
 
     public function testGetWeathercamBulkAirports_MissingOriginal_OmitsCachedFormat(): void
