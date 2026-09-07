@@ -432,7 +432,7 @@ function resolveWebcamOriginalAtTimestamp(string $airportId, int $camIndex, int 
  * @param int $camIndex Camera index
  * @param int $timestamp Image timestamp
  * @param array|null $config Already-loaded configuration, or null to load it
- * @return array Array of available heights and formats [height => [formats]]
+ * @return array<string, list<string>> Map of variant key ('original' or numeric height) to available formats
  */
 function getAvailableVariants(string $airportId, int $camIndex, int $timestamp, ?array $config = null): array {
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
