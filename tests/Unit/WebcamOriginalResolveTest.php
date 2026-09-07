@@ -75,13 +75,20 @@ class WebcamOriginalResolveTest extends TestCase
         return $path;
     }
 
-    private function writeVariant(int $timestamp, int $height, string $format, string $bytes): string
+private function writeVariant(int $timestamp, int $height, string $format, string $bytes): string
     {
         $framesDir = getWebcamFramesDir($this->airportId, $this->camIndex, $timestamp);
         ensureCacheDir($framesDir);
         $path = getWebcamVariantPath($this->airportId, $this->camIndex, $timestamp, $height, $format);
         file_put_contents($path, $bytes);
         return $path;
+    }
+
+    private function writeManifest(int $timestamp): void
+    {
+        $framesDir = getWebcamFramesDir($this->airportId, $this->camIndex, $timestamp);
+        ensureCacheDir($framesDir);
+        file_put_contents($framesDir . '/' . $timestamp . '_manifest.json', '{}');
     }
 
     private function linkOriginal(int $timestamp, string $format, string $targetPath): void
@@ -429,6 +436,43 @@ class WebcamOriginalResolveTest extends TestCase
         $this->writeOriginal($newTs, 'jpg', str_repeat('notanimage!', 2));
 
         $this->assertSame($pngPath, getWebcamOriginalPath($this->airportId, $this->camIndex));
+    }
+
+    public function testGetWebcamOriginalPath_DirectoryScan_PrefersCompleteFrameOverNewerPartial(): void
+    {
+        // A newer original whose variants are still generating is not crowned
+        // current; the newest manifest-complete frame stays authoritative.
+        $completeTs = 1704067040;
+        $partialTs = 1704067640;
+        $completePath = $this->writeOriginal($completeTs, 'jpg', $this->jpegBytes());
+        $this->writeManifest($completeTs);
+        $this->writeOriginal($partialTs, 'jpg', $this->jpegBytes());
+
+        $this->assertSame($completePath, getWebcamOriginalPath($this->airportId, $this->camIndex));
+    }
+
+    public function testGetWebcamOriginalPath_DirectoryScan_NewestCompleteFrameWins(): void
+    {
+        $oldTs = 1704067050;
+        $newTs = 1704067650;
+        $this->writeOriginal($oldTs, 'jpg', $this->jpegBytes());
+        $this->writeManifest($oldTs);
+        $newPath = $this->writeOriginal($newTs, 'jpg', $this->jpegBytes());
+        $this->writeManifest($newTs);
+
+        $this->assertSame($newPath, getWebcamOriginalPath($this->airportId, $this->camIndex));
+    }
+
+    public function testGetWebcamOriginalPath_DirectoryScan_NoManifest_FallsBackToNewest(): void
+    {
+        // Frames without a manifest are still servable; when none is complete, the
+        // newest servable original wins.
+        $oldTs = 1704067060;
+        $newTs = 1704067660;
+        $this->writeOriginal($oldTs, 'jpg', $this->jpegBytes());
+        $newPath = $this->writeOriginal($newTs, 'jpg', $this->jpegBytes());
+
+        $this->assertSame($newPath, getWebcamOriginalPath($this->airportId, $this->camIndex));
     }
 
     public function testGetCurrentServableWebcamOriginal_NewerVariantOnlyFrame_SelectsOriginalTimestamp(): void

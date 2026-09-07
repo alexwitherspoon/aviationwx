@@ -269,20 +269,62 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
         return $bestPath;
     }
 
-    $files = getWebcamImageFiles($airportId, $camIndex, '*_original.' . webcamSupportedOriginalGlobBrace());
-    foreach ($files as $file) {
+    // No valid symlink: fall back to a directory scan and prefer the newest
+    // manifest-complete frame so a fresh original whose variants are still
+    // generating never becomes current. When no frame has a manifest, serve
+    // the newest servable original instead.
+    $completePath = null;
+    $completeRank = -1;
+    $anyPath = null;
+    $anyRank = -1;
+    foreach (getWebcamImageFiles($airportId, $camIndex, '*_original.' . webcamSupportedOriginalGlobBrace()) as $file) {
         if (is_link($file)) {
             continue;
         }
         $rank = webcamServableOriginalCaptureRank($file);
-        if ($rank === null || $rank <= $bestRank) {
+        if ($rank === null) {
             continue;
         }
-        $bestRank = $rank;
-        $bestPath = $file;
+        if ($rank > $anyRank) {
+            $anyRank = $rank;
+            $anyPath = $file;
+        }
+
+        // The complete-frame check needs a real capture timestamp, because the
+        // manifest lives in the frames dir derived from that timestamp. A rank
+        // from the mtime fallback (a non-timestamped basename) has no manifest,
+        // so only files named {timestamp}_original.* qualify.
+        if (preg_match('/^(\d+)_original\./', basename($file), $matches) === 1) {
+            $timestamp = (int) $matches[1];
+            if ($timestamp > $completeRank && isWebcamFramePromotionComplete($airportId, $camIndex, $timestamp)) {
+                $completeRank = $timestamp;
+                $completePath = $file;
+            }
+        }
     }
 
-    return $bestPath;
+    return $completePath ?? $anyPath;
+}
+
+/**
+ * Whether a frame has finished promoting, marked by its variant manifest.
+ *
+ * The pipeline writes {timestamp}_manifest.json after the original and all
+ * sized variants are generated, so its presence distinguishes a complete frame
+ * from one whose variants are still being written. Reads the disk file directly
+ * because APCu cache is per-SAPI: the web (FPM) process cannot see the worker's
+ * (CLI) cache.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Frame capture timestamp
+ * @return bool True when the frame's manifest file exists
+ */
+function isWebcamFramePromotionComplete(string $airportId, int $camIndex, int $timestamp): bool {
+    $manifestFile = getWebcamFramesDir($airportId, $camIndex, $timestamp)
+        . '/' . $timestamp . '_manifest.json';
+
+    return is_file($manifestFile);
 }
 
 /**
