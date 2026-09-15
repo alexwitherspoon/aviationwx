@@ -88,14 +88,29 @@ function processPublicApiRequest(): array
     // their render/JSON fetches would otherwise trip the per-IP caps. Partner keys stay keyed
     // (not IP-limited) and human requests keep their counters. Admission uses the trusted
     // client IP (CF-Connecting-IP / REMOTE_ADDR), not the spoofable forwarded header that
-    // buckets the anonymous tier.
+    // buckets the anonymous tier. The result reuses the health-check bypass shape so the
+    // rate-limit headers stay valid.
     if ($tier === 'anonymous' && isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
+        $limits = getPublicApiRateLimits('anonymous');
+        $now = time();
         $rateLimitResult = [
             'allowed' => true,
             'tier' => 'anonymous',
-            'limits' => [],
-            'remaining' => [],
-            'reset' => [],
+            'limits' => [
+                'minute' => $limits['requests_per_minute'],
+                'hour' => $limits['requests_per_hour'],
+                'day' => $limits['requests_per_day'],
+            ],
+            'remaining' => [
+                'minute' => $limits['requests_per_minute'],
+                'hour' => $limits['requests_per_hour'],
+                'day' => $limits['requests_per_day'],
+            ],
+            'reset' => [
+                'minute' => $now + 60,
+                'hour' => $now + 3600,
+                'day' => $now + 86400,
+            ],
             'retry_after' => null,
         ];
     } else {
