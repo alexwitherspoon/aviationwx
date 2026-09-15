@@ -497,12 +497,7 @@ function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allow
  */
 function crawlerIdentityTrustedClientIp(): string
 {
-    $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
-    $peer = trim($_SERVER['REMOTE_ADDR'] ?? '');
-    if ($cfIp !== '' && $peer !== '' && crawlerIdentityPeerIsCloudflare($peer)) {
-        return $cfIp;
-    }
-    return $peer !== '' ? $peer : 'unknown';
+    return crawlerIdentityTrustedClientIpFromEnv($_SERVER);
 }
 
 /**
@@ -533,6 +528,49 @@ function crawlerIdentityPeerIsCloudflare(string $peer): bool
         ['ipv4Prefix' => '172.64.0.0/13'],
         ['ipv4Prefix' => '131.0.72.0/22'],
     ]);
+}
+
+/**
+ * Admission identity and environment for the crawler bypass check.
+ *
+ * Pure counterpart to the middleware wiring so the decision is unit-testable without a HTTP
+ * SAPI. For first-party requests the validated forwarded original IP and user agent are used;
+ * otherwise the trusted edge/peer IP (CF-Connecting-IP from a Cloudflare peer / REMOTE_ADDR).
+ *
+ * @param bool $isFirstParty True when the request came through the trusted internal client
+ * @param string|null $originalClientIp Validated forwarded client IP for first-party calls
+ * @param array<string,mixed> $serverEnv Request environment
+ * @return array{0: string, 1: ?array} [admission IP, admission env]
+ * @internal
+ */
+function crawlerIdentityAdmissionForRequest(bool $isFirstParty, ?string $originalClientIp, array $serverEnv): array
+{
+    $admissionIp = ($isFirstParty && $originalClientIp !== null)
+        ? $originalClientIp
+        : crawlerIdentityTrustedClientIpFromEnv($serverEnv);
+    $admissionEnv = null;
+    if ($isFirstParty) {
+        $admissionEnv = $serverEnv;
+        $forwardedUa = $serverEnv['HTTP_X_FORWARDED_CLIENT_UA'] ?? null;
+        if (is_string($forwardedUa) && $forwardedUa !== '') {
+            $admissionEnv['HTTP_USER_AGENT'] = $forwardedUa;
+        }
+    }
+    return [$admissionIp, $admissionEnv];
+}
+
+/**
+ * @param array<string,mixed> $serverEnv Request environment
+ * @internal
+ */
+function crawlerIdentityTrustedClientIpFromEnv(array $serverEnv): string
+{
+    $cfIp = trim($serverEnv['HTTP_CF_CONNECTING_IP'] ?? '');
+    $peer = trim($serverEnv['REMOTE_ADDR'] ?? '');
+    if ($cfIp !== '' && $peer !== '' && crawlerIdentityPeerIsCloudflare($peer)) {
+        return $cfIp;
+    }
+    return $peer !== '' ? $peer : 'unknown';
 }
 
 /**

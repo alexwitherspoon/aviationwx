@@ -62,21 +62,10 @@ function processPublicApiRequest(): array
         // First-party requests use anonymous tier - rate limited per original user
     }
 
-    // Admission identity: for first-party requests use the validated forwarded original IP;
-    // otherwise use the trusted edge/peer IP (CF-Connecting-IP / REMOTE_ADDR), never the
-    // spoofable forwarded header that buckets the anonymous tier. First-party requests also
-    // carry the original user agent so Bing/Yandex admission is not blind to identity.
-    $admissionIp = ($isFirstParty && $originalClientIp !== null)
-        ? $originalClientIp
-        : crawlerIdentityTrustedClientIp();
-    $admissionEnv = null;
-    if ($isFirstParty) {
-        $admissionEnv = $_SERVER;
-        $forwardedUa = $_SERVER['HTTP_X_FORWARDED_CLIENT_UA'] ?? null;
-        if (is_string($forwardedUa) && $forwardedUa !== '') {
-            $admissionEnv['HTTP_USER_AGENT'] = $forwardedUa;
-        }
-    }
+    // Admission identity: pure helper so the decision is unit-testable. For first-party requests it
+    // uses the validated forwarded original IP (+ UA); otherwise the trusted edge/peer IP
+    // (CF-Connecting-IP from a Cloudflare peer / REMOTE_ADDR), never a spoofable forwarded value.
+    [$admissionIp, $admissionEnv] = crawlerIdentityAdmissionForRequest($isFirstParty, $originalClientIp, $_SERVER);
     
     // Determine tier (partner or anonymous)
     $apiKey = getPublicApiKeyFromRequest();

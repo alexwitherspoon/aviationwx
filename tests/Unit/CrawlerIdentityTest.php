@@ -315,6 +315,37 @@ final class CrawlerIdentityTest extends TestCase
         ));
     }
 
+    public function testCrawlerIdentityAdmissionForRequest_FirstParty_ForwardsIpAndUa(): void
+    {
+        // Seed a Google CIDR so the forwarded IP is verifiable as a crawler.
+        crawlerIdentityWriteGoogleList(
+            getCrawlerIdentityGooglePath(),
+            ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        [$ip, $env] = crawlerIdentityAdmissionForRequest(
+            true,
+            '66.249.80.1',
+            ['HTTP_X_FORWARDED_CLIENT_UA' => 'Mozilla/5.0 (compatible; bingbot/2.0)']
+        );
+        $this->assertSame('66.249.80.1', $ip);
+        $this->assertSame('mozilla/5.0 (compatible; bingbot/2.0)', strtolower($env['HTTP_USER_AGENT']));
+        // The forwarded identity must actually admit the crawler.
+        $this->assertTrue(isKnownSearchEngineCrawler($ip, $env));
+    }
+
+    public function testCrawlerIdentityAdmissionForRequest_External_UsesTrustedPeerNotForwardedHeader(): void
+    {
+        // A non-Cloudflare peer with a forged CF-Connecting-IP must fall back to REMOTE_ADDR so
+        // a direct-origin client cannot mint a Google identity.
+        [$ip, $env] = crawlerIdentityAdmissionForRequest(
+            false,
+            null,
+            ['REMOTE_ADDR' => '9.9.9.9', 'HTTP_CF_CONNECTING_IP' => '66.249.80.1']
+        );
+        $this->assertSame('9.9.9.9', $ip);
+        $this->assertNull($env);
+    }
+
     public function testCrawlerIdentityAdmission_BingUa_VerifiedOnly(): void
     {
         $GLOBALS['crawlerDnsCallCount'] = 0;
