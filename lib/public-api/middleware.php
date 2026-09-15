@@ -51,7 +51,7 @@ function processPublicApiRequest(): array
     // First-party requests come from localhost and forward the original client IP
     $isFirstParty = isFirstPartyRequest();
     $originalClientIp = null;
-    
+
     if ($isFirstParty) {
         // First-party requests forward the original client IP for rate limiting
         // We trust this header ONLY because we verified REMOTE_ADDR is localhost
@@ -62,8 +62,8 @@ function processPublicApiRequest(): array
         // First-party requests use anonymous tier - rate limited per original user
     }
 
-    // Admission identity: pure helper so the decision is unit-testable. For first-party requests it
-    // uses the validated forwarded original IP (+ UA); otherwise the trusted edge/peer IP
+    // Admission identity: pure helper so the decision is unit-testable. For first-party requests
+    // it uses the forwarded hardened admission IP (+ UA); otherwise the trusted edge/peer IP
     // (CF-Connecting-IP from a Cloudflare peer / REMOTE_ADDR), never a spoofable forwarded value.
     [$admissionIp, $admissionEnv] = crawlerIdentityAdmissionForRequest($isFirstParty, $originalClientIp, $_SERVER);
     

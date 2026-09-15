@@ -317,7 +317,7 @@ final class CrawlerIdentityTest extends TestCase
 
     public function testCrawlerIdentityAdmissionForRequest_FirstParty_ForwardsIpAndUa(): void
     {
-        // Seed a Google CIDR so the forwarded IP is verifiable as a crawler.
+        // Seed a Google CIDR so the forwarded hardened IP is verifiable as a crawler.
         crawlerIdentityWriteGoogleList(
             getCrawlerIdentityGooglePath(),
             ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
@@ -325,12 +325,27 @@ final class CrawlerIdentityTest extends TestCase
         [$ip, $env] = crawlerIdentityAdmissionForRequest(
             true,
             '66.249.80.1',
-            ['HTTP_X_FORWARDED_CLIENT_UA' => 'Mozilla/5.0 (compatible; bingbot/2.0)']
+            [
+                'HTTP_X_FORWARDED_ADMISSION_IP' => '66.249.80.1',
+                'HTTP_X_FORWARDED_CLIENT_UA' => 'Mozilla/5.0 (compatible; bingbot/2.0)',
+            ]
         );
         $this->assertSame('66.249.80.1', $ip);
         $this->assertSame('mozilla/5.0 (compatible; bingbot/2.0)', strtolower($env['HTTP_USER_AGENT']));
         // The forwarded identity must actually admit the crawler.
         $this->assertTrue(isKnownSearchEngineCrawler($ip, $env));
+    }
+
+    public function testCrawlerIdentityAdmissionForRequest_FirstPartyWithoutHardenedIp_UsesTrustedPeer(): void
+    {
+        // No hardened admission IP: the spoofable bucketing header must NOT mint the exemption.
+        // The peer (REMOTE_ADDR) wins so a direct-origin client can't claim a Google identity.
+        [$ip, $env] = crawlerIdentityAdmissionForRequest(
+            true,
+            '66.249.80.1',
+            ['REMOTE_ADDR' => '9.9.9.9']
+        );
+        $this->assertSame('9.9.9.9', $ip);
     }
 
     public function testCrawlerIdentityAdmissionForRequest_External_UsesTrustedPeerNotForwardedHeader(): void
@@ -459,5 +474,24 @@ final class CrawlerIdentityTest extends TestCase
         $age = $summary['google_cache_age_seconds'];
         $noUsableCache = $age === null || (is_numeric($age) && (int) $age >= SEO_CRAWLER_STALE_AFTER_SECONDS);
         $this->assertTrue($noUsableCache);
+    }
+
+    public function testCrawlerIdentityPruneNegativeMap_ExpiredAndOverflow_Evicted(): void
+    {
+        $now = time();
+        $expired = [];
+        for ($i = 0; $i < 20; $i++) {
+            $expired['e' . $i] = $now - 1;
+        }
+        $this->assertSame([], crawlerIdentityPruneNegativeMap($expired, $now));
+
+        $fresh = [];
+        for ($i = 0; $i < SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES + 10; $i++) {
+            $fresh['k' . $i] = $now + (10 + $i); // keep newest; evict most-expired
+        }
+        $kept = crawlerIdentityPruneNegativeMap($fresh, $now);
+        $this->assertLessThanOrEqual(SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES, count($kept));
+        $this->assertArrayNotHasKey('k0', $kept, 'oldest entries must be evicted first');
+        $this->assertArrayHasKey('k' . (SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES + 9), $kept);
     }
 }

@@ -567,27 +567,36 @@ function crawlerIdentityPeerIsCloudflare(string $peer): bool
  * Admission identity and environment for the crawler bypass check.
  *
  * Pure counterpart to the middleware wiring so the decision is unit-testable without a HTTP
- * SAPI. For first-party requests the validated forwarded original IP and user agent are used;
- * otherwise the trusted edge/peer IP (CF-Connecting-IP from a Cloudflare peer / REMOTE_ADDR).
+ * SAPI. For first-party requests the caller forwards a hardened admission IP derived from a
+ * validated outer peer (HTTP_X_FORWARDED_ADMISSION_IP), used together with the original user
+ * agent; otherwise the trusted edge/peer IP (CF-Connecting-IP from a Cloudflare peer /
+ * REMOTE_ADDR).
  *
  * @param bool $isFirstParty True when the request came through the trusted internal client
- * @param string|null $originalClientIp Validated forwarded client IP for first-party calls
+ * @param string|null $originalClientIp Bucketing forwarded client IP (never trusted for admission)
  * @param array<string,mixed> $serverEnv Request environment
  * @return array{0: string, 1: ?array} [admission IP, admission env]
  * @internal
  */
 function crawlerIdentityAdmissionForRequest(bool $isFirstParty, ?string $originalClientIp, array $serverEnv): array
 {
-    $admissionIp = ($isFirstParty && $originalClientIp !== null)
-        ? $originalClientIp
-        : crawlerIdentityTrustedClientIpFromEnv($serverEnv);
+    $admissionIp = null;
     $admissionEnv = null;
     if ($isFirstParty) {
+        $forwardedAdmissionIp = $serverEnv['HTTP_X_FORWARDED_ADMISSION_IP'] ?? null;
+        if (is_string($forwardedAdmissionIp) && $forwardedAdmissionIp !== ''
+            && filter_var($forwardedAdmissionIp, FILTER_VALIDATE_IP) !== false
+        ) {
+            $admissionIp = $forwardedAdmissionIp;
+        }
         $admissionEnv = $serverEnv;
         $forwardedUa = $serverEnv['HTTP_X_FORWARDED_CLIENT_UA'] ?? null;
         if (is_string($forwardedUa) && $forwardedUa !== '') {
             $admissionEnv['HTTP_USER_AGENT'] = $forwardedUa;
         }
+    }
+    if ($admissionIp === null) {
+        $admissionIp = crawlerIdentityTrustedClientIpFromEnv($serverEnv);
     }
     return [$admissionIp, $admissionEnv];
 }
