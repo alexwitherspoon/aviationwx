@@ -209,6 +209,26 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame($firstCount, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
+    public function testCrawlerIdentityMemoCheck_FailedBingVerify_DoesNotSuppressYandex(): void
+    {
+        // The negative memo is namespaced per engine: a failed Bing lookup for an IP must not
+        // short-circuit a Yandex verification of that same address.
+        $GLOBALS['crawlerDnsCallCount'] = 0;
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            $GLOBALS['crawlerDnsCallCount'] = (int) ($GLOBALS['crawlerDnsCallCount'] ?? 0) + 1;
+            return $forward ? '9.9.9.9' : 'msnbot-2.search.msn.com';
+        };
+        $bingPath = getCrawlerIdentityBingPath();
+
+        $this->assertFalse(crawlerIdentityMemoCheck('207.46.13.51', $bingPath, ['.search.msn.com']));
+        $firstCount = (int) $GLOBALS['crawlerDnsCallCount'];
+
+        // The bing failure is memoized, but a yandex check for the same IP still runs DNS.
+        $yandexPath = getCrawlerIdentityYandexPath();
+        $this->assertFalse(crawlerIdentityMemoCheck('207.46.13.51', $yandexPath, ['.yandex.ru', '.yandex.net', '.yandex.com']));
+        $this->assertTrue((int) $GLOBALS['crawlerDnsCallCount'] > $firstCount);
+    }
+
     public function testCrawlerIdentityRefresh_FetchesGoogleListAndPrunesMemo_Succeeds(): void
     {
         $GLOBALS['crawlerIdentityTestFixture'] = file_get_contents(__DIR__ . '/../Fixtures/google-crawlers-sample.json');
@@ -239,6 +259,21 @@ final class CrawlerIdentityTest extends TestCase
         $summary = crawlerIdentityRefresh();
         $this->assertSame('fetch_failed', $summary['google_status']);
         // Prior file retained and still parse-read-desirable
+        $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
+    }
+
+    public function testCrawlerIdentityRefresh_EmptyPrefixList_ReportedMalformed(): void
+    {
+        // A 200 with no usable prefixes must not replace a valid allowlist with an empty one.
+        crawlerIdentityWriteGoogleList(
+            getCrawlerIdentityGooglePath(),
+            ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $GLOBALS['crawlerIdentityTestHttpGet'] = function (string $url, int $timeout): array {
+            return ['body' => '{"creationTime":"now","prefixes":[]}', 'http_code' => 200];
+        };
+        $summary = crawlerIdentityRefresh();
+        $this->assertSame('malformed', $summary['google_status']);
         $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
     }
 
