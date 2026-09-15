@@ -57,7 +57,7 @@ final class CrawlerIdentityTest extends TestCase
         parent::tearDown();
     }
 
-    public function testCidrMatchInsideV4Range(): void
+    public function testCrawlerIdentityCidrMatch_V4InRange_ReturnsTrue(): void
     {
         $prefixes = [
             ['ipv4Prefix' => '66.249.64.0/19'],
@@ -68,7 +68,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertTrue(crawlerIdentityCidrMatch('93.184.216.42', $prefixes));
     }
 
-    public function testCidrNoMatchV4(): void
+    public function testCrawlerIdentityCidrMatch_V4OutsideRange_ReturnsFalse(): void
     {
         $prefixes = [
             ['ipv4Prefix' => '66.249.64.0/19'],
@@ -79,7 +79,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityCidrMatch('93.184.217.1', $prefixes));
     }
 
-    public function testCidrMatchInsideV6Range(): void
+    public function testCrawlerIdentityCidrMatch_V6InRange_ReturnsTrue(): void
     {
         $prefixes = [
             ['ipv6Prefix' => '2001:4860:4801:10::/64'],
@@ -88,7 +88,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertTrue(crawlerIdentityCidrMatch('2001:4860:4801:10:ffff:ffff:ffff:ffff', $prefixes));
     }
 
-    public function testCidrNoMatchV6(): void
+    public function testCrawlerIdentityCidrMatch_V6OutsideRange_ReturnsFalse(): void
     {
         $prefixes = [
             ['ipv6Prefix' => '2001:4860:4801:10::/64'],
@@ -98,7 +98,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityCidrMatch('66.249.80.1', $prefixes));
     }
 
-    public function testCidrIgnoresCrossFamilyPrefixes(): void
+    public function testCrawlerIdentityCidrMatch_CrossFamilyPrefixes_IgnoresMismatchedFamily(): void
     {
         $mixed = [
             ['ipv4Prefix' => '66.249.64.0/19'],
@@ -109,14 +109,14 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityCidrMatch('8.8.8.8', $mixed));
     }
 
-    public function testNormalizeHostTrimsDotAndCase(): void
+    public function testCrawlerIdentityNormalizeHost_TrimsDotAndCase_ReturnsCleanHost(): void
     {
         $this->assertSame('crawl-1-2-3-4.googlebot.com', crawlerIdentityNormalizeHost('crawl-1-2-3-4.GoogleBot.COM.'));
         $this->assertSame(null, crawlerIdentityNormalizeHost(''));
         $this->assertSame(null, crawlerIdentityNormalizeHost(null));
     }
 
-    public function testDnsChainAcceptsBingSuffixAndForwardMatch(): void
+    public function testCrawlerIdentityVerifyDnsChain_BingSuffixAndForwardMatch_Accepts(): void
     {
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
             if (!$forward) {
@@ -128,7 +128,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertTrue(crawlerIdentityVerifyDnsChain('207.46.13.42', ['.search.msn.com']));
     }
 
-    public function testDnsChainRejectsWrongSuffix(): void
+    public function testCrawlerIdentityVerifyDnsChain_WrongSuffix_Rejects(): void
     {
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
             return $forward ? '207.46.13.43' : 'evil.example.org';
@@ -136,7 +136,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityVerifyDnsChain('207.46.13.43', ['.search.msn.com']));
     }
 
-    public function testDnsChainRejectsWhenForwardMismatch(): void
+    public function testCrawlerIdentityVerifyDnsChain_ForwardMismatch_Rejects(): void
     {
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
             return $forward ? '9.9.9.9' : 'msnbot-1.search.msn.com';
@@ -144,7 +144,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityVerifyDnsChain('207.46.13.44', ['.search.msn.com']));
     }
 
-    public function testMemoCheckCachesVerifiedIpWithNoSecondDnsCall(): void
+    public function testCrawlerIdentityMemoCheck_VerifiedIp_NoSecondDnsCallInWindow(): void
     {
         $GLOBALS['crawlerDnsCallCount'] = 0;
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
@@ -163,7 +163,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame($firstCount, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
-    public function testMemoCheckFailedVerifyUsesShortNegativeMemo(): void
+    public function testCrawlerIdentityMemoCheck_FailedVerify_UsesShortNegativeMemo(): void
     {
         $GLOBALS['crawlerDnsCallCount'] = 0;
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
@@ -182,7 +182,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame($firstCount, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
-    public function testRefreshFetchesGoogleListAndPrunesMemo(): void
+    public function testCrawlerIdentityRefresh_FetchesGoogleListAndPrunesMemo_Succeeds(): void
     {
         $GLOBALS['crawlerIdentityTestFixture'] = file_get_contents(__DIR__ . '/../Fixtures/google-crawlers-sample.json');
         $GLOBALS['crawlerIdentityTestHttpGet'] = function (string $url, int $timeout): array {
@@ -199,7 +199,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(0, $summary['bing_memo_entries']);
     }
 
-    public function testRefreshRetainsPriorFileOnFailure(): void
+    public function testCrawlerIdentityRefresh_FetchFailure_RetainsPriorFile(): void
     {
         // Existing valid file
         crawlerIdentityWriteGoogleList(
@@ -215,7 +215,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
     }
 
-    public function testMalformedIpReturnsFalseWithoutDns(): void
+    public function testCrawlerIdentityAdmission_MalformedIp_ReturnsFalseWithoutDns(): void
     {
         // A junk CF-Connecting-IP must not reach DNS (gethostbyaddr throws on malformed input).
         $GLOBALS['crawlerDnsCallCount'] = 0;
@@ -227,7 +227,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(0, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
-    public function testForgedCfVerifiedBotHeaderDoesNotAdmitCrawler(): void
+    public function testCrawlerIdentityAdmission_ForgedCfVerifiedBotHeader_NotAdmitted(): void
     {
         // The cf-verified-bot header is not honored: nginx does not strip/validate a client-sent
         // value, so trusting it would be a forgeable bypass. A browser UA with that header must
@@ -238,7 +238,7 @@ final class CrawlerIdentityTest extends TestCase
         ));
     }
 
-    public function testBingVerifiedOnlyWhenUaClaimsBing(): void
+    public function testCrawlerIdentityAdmission_BingUa_VerifiedOnly(): void
     {
         $GLOBALS['crawlerDnsCallCount'] = 0;
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
@@ -260,7 +260,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame($before, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
-    public function testDnsChainAcceptsAnyForwardAddressNotJustFirst(): void
+    public function testCrawlerIdentityVerifyDnsChain_AnyForwardAddress_AcceptsNotJustFirst(): void
     {
         // PTR host resolves forward to two A records; the verified IP is the second one.
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
@@ -274,7 +274,7 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityVerifyDnsChain('207.46.13.12', ['.search.msn.com']));
     }
 
-    public function testTrustedClientIpIgnoresSpoofableForwardedFor(): void
+    public function testCrawlerIdentityTrustedClientIp_IgnoresSpoofableForwardedFor_FallsBackToRemoteAddr(): void
     {
         // Client sets X-Forwarded-For to a Google range; without CF-Connecting-IP, the
         // trusted identity must fall back to REMOTE_ADDR, never the attacker-supplied value.
@@ -298,7 +298,7 @@ final class CrawlerIdentityTest extends TestCase
         }
     }
 
-    public function testRefreshFailureWithoutPriorCacheIsStaleState(): void
+    public function testCrawlerIdentityRefresh_FailureWithoutPriorCache_ReportsNoUsableAllowlist(): void
     {
         // No prior gogle file, and the fetch fails.
         $this->assertFalse(file_exists(getCrawlerIdentityGooglePath()));
