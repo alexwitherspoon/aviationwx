@@ -348,6 +348,12 @@ if (!defined('SEO_CRAWLER_NEGATIVE_MEMO_TTL')) {
     define('SEO_CRAWLER_NEGATIVE_MEMO_TTL', 3600); // 1 hour
 }
 
+// Hard cap on negative-memo entries. A spoofed Bing/Yandex UA from many addresses must not grow
+// the shared file without bound, making every admission check re-read a larger map.
+if (!defined('SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES')) {
+    define('SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES', 5000);
+}
+
 // Oldest a cached Google CIDR file may be before a failed refresh escalates to error-level logging.
 if (!defined('SEO_CRAWLER_STALE_AFTER_SECONDS')) {
     define('SEO_CRAWLER_STALE_AFTER_SECONDS', 172800); // 48 hours

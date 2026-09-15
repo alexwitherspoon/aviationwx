@@ -439,17 +439,50 @@ function crawlerIdentityRecordNegative(string $negKey, int $now): void
     $lockPath = $negPath . '.lock';
     $fp = @fopen($lockPath, 'c+');
     if ($fp === false) {
-        $neg = crawlerIdentityReadMemo($negPath);
+        $neg = crawlerIdentityPruneNegativeMap(crawlerIdentityReadMemo($negPath), $now);
         $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
         crawlerIdentityWriteMemo($negPath, $neg);
         return;
     }
     @flock($fp, LOCK_EX);
-    $neg = crawlerIdentityReadMemo($negPath);
+    $neg = crawlerIdentityPruneNegativeMap(crawlerIdentityReadMemo($negPath), $now);
     $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
     crawlerIdentityWriteMemo($negPath, $neg);
     @flock($fp, LOCK_UN);
     @fclose($fp);
+}
+
+/**
+ * Drop expired negative-memo entries and bound the map size.
+ *
+ * Runs under the negative memo lock so request-path work cannot scale with every failure since
+ * the last worker prune. When over the cap, the newest entries are kept and the most-expired are
+ * dropped, so a flood of spoofed crawl UAs cannot grow the file without bound.
+ *
+ * @param array<string,int> $neg ip|engine -> expires_at map
+ * @return array<string,int>
+ * @internal
+ */
+function crawlerIdentityPruneNegativeMap(array $neg, int $now): array
+{
+    foreach ($neg as $key => $expires) {
+        if (!is_numeric($expires) || (int) $expires <= $now) {
+            unset($neg[$key]);
+        }
+    }
+    $overflow = count($neg) - SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES;
+    if ($overflow > 0) {
+        // Drop entries closest to expiry first (cheapest to re-verify), keeping the newest.
+        asort($neg, SORT_NUMERIC);
+        foreach ($neg as $key => $expires) {
+            if ($overflow <= 0) {
+                break;
+            }
+            unset($neg[$key]);
+            $overflow--;
+        }
+    }
+    return $neg;
 }
 
 /**
