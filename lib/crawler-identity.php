@@ -105,10 +105,19 @@ function crawlerIdentityVerifyDnsChain(string $ip, array $allowedSuffixes): bool
         return true;
     }
     $recs = crawlerIdentityForwardRecords($host);
+    // v6 is compared packed: DNS can return an expanded form of the same address the request
+    // compressed, and text equality would wrongly reject a valid crawler.
+    $packedIp = str_contains($ip, ':') ? crawlerIdentityPackV6($ip) : null;
     foreach ($recs as $rec) {
         $addr = (string) ($rec['ip'] ?? $rec['ipv6'] ?? '');
         if ($addr === $ip) {
             return true;
+        }
+        if ($packedIp !== null && str_contains($addr, ':')) {
+            $packedRec = crawlerIdentityPackV6($addr);
+            if ($packedRec !== null && $packedRec === $packedIp) {
+                return true;
+            }
         }
     }
     return false;

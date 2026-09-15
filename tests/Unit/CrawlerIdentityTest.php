@@ -274,6 +274,19 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertFalse(crawlerIdentityVerifyDnsChain('207.46.13.12', ['.search.msn.com']));
     }
 
+    public function testCrawlerIdentityVerifyDnsChain_V6ExpandedForwardRecord_Accepts(): void
+    {
+        // Request uses a compressed v6 spelling; DNS returns the same address fully expanded.
+        // Text equality would reject it, packed comparison must accept it.
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            return $forward ? '2001:4860:4801:0010:0000:0000:0000:0005' : 'msnbot-v6.search.msn.com';
+        };
+        $GLOBALS['crawlerIdentityTestForwardRecords'] = [
+            ['ipv6' => '2001:4860:4801:0010:0000:0000:0000:0005'],
+        ];
+        $this->assertTrue(crawlerIdentityVerifyDnsChain('2001:4860:4801:10::5', ['.search.msn.com']));
+    }
+
     public function testCrawlerIdentityTrustedClientIp_IgnoresSpoofableForwardedFor_FallsBackToRemoteAddr(): void
     {
         // Client sets X-Forwarded-For to a Google range; without CF-Connecting-IP, the
