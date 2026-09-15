@@ -2,6 +2,7 @@
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/client-ip.php';
 /**
  * Simple Rate Limiting Utility
  * IP-based rate limiting for API endpoints
@@ -10,34 +11,16 @@ require_once __DIR__ . '/config.php';
 /**
  * Get the client IP used for rate limit bucketing
  *
- * Prefers CF-Connecting-IP: Cloudflare overwrites it on every proxied
- * request, so clients cannot forge it through the CDN. X-Forwarded-For
- * comes second because its first entry is client-supplied - Cloudflare
- * appends the real address to whatever arrived, so trusting XFF alone
- * lets an abuser rotate buckets with a spoofed header. Matches the
- * Public API's getPublicApiClientIp() ordering.
- *
- * Bucketing identity only. NOT for security decisions like first-party
- * detection; those must use REMOTE_ADDR (see isFirstPartyRequest()).
+ * Reads the identity nginx validated and forwarded as X-Real-IP, falling back to the TCP peer
+ * when not proxied. The trust boundary is nginx real_ip (Cloudflare ranges), not a forwarded
+ * header PHP chooses to believe; a client-set X-Real-IP is overwritten by nginx before it
+ * reaches the backend. Bucketing identity only. NOT for security decisions like first-party
+ * detection; those use REMOTE_ADDR (see isFirstPartyRequest()).
  *
  * @return string Client IP, or 'unknown' when none is available
  */
 function getRateLimitClientIp(): string {
-    // Trim before testing: a whitespace-only header passes empty() and
-    // would collapse all such clients onto the md5('') bucket
-    $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
-    if ($cfIp !== '') {
-        return $cfIp;
-    }
-
-    // X-Forwarded-For can contain a comma-separated chain; first is the client
-    $xff = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')[0]);
-    if ($xff !== '') {
-        return $xff;
-    }
-
-    $remoteAddr = trim($_SERVER['REMOTE_ADDR'] ?? '');
-    return $remoteAddr !== '' ? $remoteAddr : 'unknown';
+    return getClientIp();
 }
 
 /**
