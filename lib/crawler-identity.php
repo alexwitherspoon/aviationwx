@@ -281,15 +281,21 @@ function crawlerIdentityCidrMatch(string $ip, array $prefixes): bool
  */
 function crawlerIdentityGooglePrefixes(): ?array
 {
+    $path = getCrawlerIdentityGooglePath();
+    $cacheAgeSeconds = file_exists($path) ? (time() - (int) filemtime($path)) : null;
+    if ($cacheAgeSeconds === null || $cacheAgeSeconds >= SEO_CRAWLER_STALE_AFTER_SECONDS) {
+        // Missing or past the stale window: no usable allowlist. Fail closed so stale ranges
+        // never keep granting a bypass after refreshes stop succeeding.
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('crawler_identity_google');
+        }
+        return null;
+    }
     if (function_exists('apcu_fetch')) {
         $cached = @apcu_fetch('crawler_identity_google');
         if (is_array($cached)) {
             return $cached;
         }
-    }
-    $path = getCrawlerIdentityGooglePath();
-    if (!file_exists($path)) {
-        return null;
     }
     $content = @file_get_contents($path);
     if ($content === false) {
