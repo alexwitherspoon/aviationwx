@@ -356,7 +356,7 @@ final class CrawlerIdentityTest extends TestCase
 
     public function testCrawlerIdentityRefresh_FailureWithoutPriorCache_ReportsNoUsableAllowlist(): void
     {
-        // No prior gogle file, and the fetch fails.
+        // No prior google file, and the fetch fails.
         $this->assertFalse(file_exists(getCrawlerIdentityGooglePath()));
         $GLOBALS['crawlerIdentityTestHttpGet'] = function (string $url, int $timeout): array {
             return ['body' => false, 'http_code' => 0];
