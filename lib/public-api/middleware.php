@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/../crawler-identity.php';
 require_once __DIR__ . '/response.php';
 
 /**
@@ -83,11 +84,25 @@ function processPublicApiRequest(): array
     // Check for internal health check (bypass rate limiting entirely)
     $isHealthCheck = isPublicApiHealthCheckRequest();
     
-    // Check rate limits using the appropriate identifier
-    // - Partner requests: use API key
-    // - Anonymous/first-party: use client IP (original user's IP for first-party)
-    $identifier = $apiKey ?? $ip;
-    $rateLimitResult = checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
+    // Verified search-engine crawlers skip the anonymous tier's rate limit entirely:
+    // their render/JSON fetches would otherwise trip the per-IP caps. Partner keys stay keyed
+    // (not IP-limited) and human requests keep their counters.
+    if ($tier === 'anonymous' && isKnownSearchEngineCrawler($ip)) {
+        $rateLimitResult = [
+            'allowed' => true,
+            'tier' => 'anonymous',
+            'limits' => [],
+            'remaining' => [],
+            'reset' => [],
+            'retry_after' => null,
+        ];
+    } else {
+        // Check rate limits using the appropriate identifier
+        // - Partner requests: use API key
+        // - Anonymous/first-party: use client IP (original user's IP for first-party)
+        $identifier = $apiKey ?? $ip;
+        $rateLimitResult = checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
+    }
     
     // Send rate limit headers on every response
     $rateLimitHeaders = getPublicApiRateLimitHeaders($rateLimitResult);

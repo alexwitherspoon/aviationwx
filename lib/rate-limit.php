@@ -2,6 +2,7 @@
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/crawler-identity.php';
 /**
  * Simple Rate Limiting Utility
  * IP-based rate limiting for API endpoints
@@ -69,6 +70,11 @@ function rateLimitUsesFileStore(): bool
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
     $ip = getRateLimitClientIp();
+
+    // Verified search-engine crawlers skip the per-IP caps their multi-resource renders hit.
+    if (isKnownSearchEngineCrawler($ip)) {
+        return true;
+    }
 
     if (!rateLimitUsesFileStore()) {
         $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);

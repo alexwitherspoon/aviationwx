@@ -64,6 +64,7 @@ $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
+$lastCrawlerIdentityRefresh = 0;
 $lastNwsPointsRefresh = 0;
 $lastFaaTfrWfsRefresh = 0;
 $lastNmsFdcAirspaceRefresh = 0;
@@ -568,6 +569,22 @@ $workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$
     exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
     reapZombies();
     $lastMetricsHealthCheck = $now;
+});
+
+$workRegistry->registerEnqueueTick('crawler_identity', function (int $now) use (&$lastCrawlerIdentityRefresh): void {
+    if (($now - $lastCrawlerIdentityRefresh) < SEO_CRAWLER_IDENTITY_REFRESH_INTERVAL) {
+        return;
+    }
+    $script = __DIR__ . '/refresh-seo-crawlers.php';
+    if (!file_exists($script)) {
+        $lastCrawlerIdentityRefresh = $now;
+        aviationwx_log('warning', 'scheduler: refresh-seo-crawlers.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastCrawlerIdentityRefresh = $now;
 });
 
 // Main scheduler loop
