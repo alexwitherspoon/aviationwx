@@ -47,6 +47,10 @@ function processPublicApiRequest(): array
     
     // Get client IP for rate limiting
     $ip = getPublicApiClientIp();
+    // The crawler exemption uses the proxy-validated identity ONLY. The first-party branch below
+    // overwrites $ip with a forwarded header an edge caller can supply (nginx does not strip it),
+    // so it must never drive the exemption; keep the validated value here for that decision.
+    $crawlerIdentity = $ip;
     
     // Check for first-party internal requests (embeds, dashboard, scheduler)
     // First-party requests come from localhost and forward the original client IP
@@ -89,8 +93,8 @@ function processPublicApiRequest(): array
     // the rate limiter uses. Queue unverified Bing/Yandex-looking clients for off-path verify;
     // a miss consumes counters until confirmed.
     if ($tier === 'anonymous') {
-        crawlerAdmissionMaybeEnqueue($ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
-        $crawlerExempt = isKnownCrawler($ip);
+        crawlerAdmissionMaybeEnqueue($crawlerIdentity, $_SERVER['HTTP_USER_AGENT'] ?? '');
+        $crawlerExempt = isKnownCrawler($crawlerIdentity);
     } else {
         $crawlerExempt = false;
     }

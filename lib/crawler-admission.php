@@ -673,7 +673,15 @@ function crawlerAdmissionMaybeEnqueue(string $ip, string $userAgent): bool
         return false;
     }
     $verified = crawlerAdmissionVerifiedIps();
-    if (isset($verified[$ip]) && is_numeric($verified[$ip]) && (int) $verified[$ip] > time()) {
+    $now = time();
+    if (isset($verified[$ip]) && is_numeric($verified[$ip]) && (int) $verified[$ip] > $now) {
+        // Still verified. If it is within one drain interval of expiry, renew it so an active
+        // crawler does not lose its exemption between worker runs. Writes at most once per
+        // interval per IP, not on every request.
+        if ((int) $verified[$ip] < ($now + CRAWLER_ALLOWLIST_REFRESH_INTERVAL)) {
+            $verified[$ip] = $now + CRAWLER_VERIFIED_IP_TTL;
+            crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), $verified);
+        }
         return false;
     }
     return crawlerAdmissionEnqueuePendingIp($ip);

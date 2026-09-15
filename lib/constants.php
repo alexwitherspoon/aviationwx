@@ -1445,7 +1445,7 @@ if (!defined('CRAWLER_VERIFIED_IP_TTL')) {
 }
 
 // Hard cap on pending verification entries. The enqueue gate is a client-controlled user agent,
-// so a spoofed bingbot/Yandex "flood must not grow the pending file without bound.
+// so a spoofed bingbot/Yandex flood must not grow the pending file without bound.
 if (!defined('CRAWLER_PENDING_MAX_IPS')) {
     define('CRAWLER_PENDING_MAX_IPS', 10000);
 }

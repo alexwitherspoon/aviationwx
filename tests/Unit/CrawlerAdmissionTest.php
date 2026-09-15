@@ -140,6 +140,21 @@ final class CrawlerAdmissionTest extends TestCase
         $this->assertSame([], crawlerAdmissionPendingIps());
     }
 
+    public function testCrawlerAdmissionMaybeEnqueue_NearExpiryVerified_RenewsAgainstWorkerGap(): void
+    {
+        // Verified but lapsing before the next drain: a re-hit renews it so an active crawler
+        // keeps its exemption instead of losing it for up to a full interval.
+        $soon = time() + 60;
+        crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), ['207.46.13.77' => $soon]);
+        $this->assertFalse(crawlerAdmissionMaybeEnqueue('207.46.13.77', 'bingbot/2.0'));
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('crawler_admission_verified');
+        }
+        $renewed = crawlerAdmissionVerifiedIps();
+        $this->assertTrue($renewed['207.46.13.77'] > time() + CRAWLER_ALLOWLIST_REFRESH_INTERVAL,
+            'near-expiry verified IP must be renewed on re-hit');
+    }
+
     public function testCrawlerAdmissionMaybeEnqueue_MalformedIp_NotQueued(): void
     {
         $this->assertFalse(crawlerAdmissionMaybeEnqueue('not-an-ip', 'bingbot/2.0'));
