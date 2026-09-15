@@ -635,21 +635,56 @@ function crawlerIdentityRefresh(): array
     foreach ($pruneSpecs as $entry) {
         $memoPath = (string) $entry[0];
         $label = (string) $entry[1];
-        $memo = crawlerIdentityReadMemo($memoPath);
-        $keep = [];
-        foreach ($memo as $ip => $expires) {
-            if (is_numeric($expires) && (int) $expires > $now) {
-                $keep[$ip] = $expires;
-            }
-        }
-        if (count($keep) !== count($memo)) {
-            crawlerIdentityWriteMemo($memoPath, $keep);
-        }
-        $summary[$label . '_memo_entries'] = count($keep);
+        $summary[$label . '_memo_entries'] = crawlerIdentityPruneMemo($memoPath, $now);
     }
 
     $summary['google_cache_age_seconds'] = file_exists($path) ? ($now - (int) filemtime($path)) : null;
     return $summary;
+}
+
+/**
+ * Drop expired entries from a reverse-DNS memo file.
+ *
+ * Lock-protected so a request that verifies a new crawler IP and writes its memo entry during
+ * the prune cannot have that entry silently overwritten by the worker's read-modify-write.
+ *
+ * @return int Count of entries retained
+ * @internal
+ */
+function crawlerIdentityPruneMemo(string $path, int $now): int
+{
+    $lockPath = $path . '.lock';
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        // No lock available: prune unlocked rather than skip cleanup entirely.
+        return crawlerIdentityPruneMemoUnlocked($path, $now);
+    }
+    @flock($fp, LOCK_EX);
+    $result = crawlerIdentityPruneMemoUnlocked($path, $now);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+    return $result;
+}
+
+/**
+ * Drop expired reverse-DNS memo entries without a shared lock.
+ *
+ * @return int Count of entries retained
+ * @internal
+ */
+function crawlerIdentityPruneMemoUnlocked(string $path, int $now): int
+{
+    $memo = crawlerIdentityReadMemo($path);
+    $keep = [];
+    foreach ($memo as $ip => $expires) {
+        if (is_numeric($expires) && (int) $expires > $now) {
+            $keep[$ip] = $expires;
+        }
+    }
+    if (count($keep) !== count($memo)) {
+        crawlerIdentityWriteMemo($path, $keep);
+    }
+    return count($keep);
 }
 
 /**
