@@ -424,6 +424,35 @@ function crawlerIdentityMemoCheck(string $ip, string $path, array $allowedSuffix
 }
 
 /**
+ * Record a failed verification in the shared negative memo.
+ *
+ * The caller holds the positive memo's lock; the negative memo is shared across engines and
+ * pruned by the scheduler under its own lock, so its read-modify-write must take the negative
+ * memo's lock and re-read before writing. Without it, concurrent failures for different engines
+ * can overwrite each other's entries and reopen the blocking-DNS loop.
+ *
+ * @internal
+ */
+function crawlerIdentityRecordNegative(string $negKey, int $now): void
+{
+    $negPath = getCrawlerIdentityNegativePath();
+    $lockPath = $negPath . '.lock';
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        $neg = crawlerIdentityReadMemo($negPath);
+        $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
+        crawlerIdentityWriteMemo($negPath, $neg);
+        return;
+    }
+    @flock($fp, LOCK_EX);
+    $neg = crawlerIdentityReadMemo($negPath);
+    $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
+    crawlerIdentityWriteMemo($negPath, $neg);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+}
+
+/**
  * Memo verification without a shared lock.
  *
  * @internal
@@ -445,8 +474,7 @@ function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allow
     }
 
     if (!crawlerIdentityVerifyDnsChain($ip, $allowedSuffixes)) {
-        $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
-        crawlerIdentityWriteMemo(getCrawlerIdentityNegativePath(), $neg);
+        crawlerIdentityRecordNegative($negKey, $now);
         return false;
     }
 
@@ -714,6 +742,18 @@ function crawlerIdentityHasWellFormedPrefix(array $prefixes): bool
         }
         $addrBits = str_contains($cidr, ':') ? 128 : 32;
         $slash = strpos($cidr, '/');
+        $network = $slash !== false ? substr($cidr, 0, $slash) : $cidr;
+        // The network itself must be a plausible address for its family; a slashless junk string
+        // like "not-an-ip" must not qualify a list as usable.
+        if (str_contains($network, ':')) {
+            if (crawlerIdentityPackV6($network) === null) {
+                continue;
+            }
+        } else {
+            if (crawlerIdentityPackV4($network) === null) {
+                continue;
+            }
+        }
         if ($slash === false) {
             return true;
         }
