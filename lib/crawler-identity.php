@@ -430,12 +430,15 @@ function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allow
     }
 
     $neg = crawlerIdentityReadMemo(getCrawlerIdentityNegativePath());
-    if (isset($neg[$ip]) && is_numeric($neg[$ip]) && (int) $neg[$ip] > $now) {
+    // A failed check is only valid for the engine that performed it: one failed Bing lookup
+    // must not suppress a different engine's verification for the same address.
+    $negKey = basename($path) . '|' . $ip;
+    if (isset($neg[$negKey]) && is_numeric($neg[$negKey]) && (int) $neg[$negKey] > $now) {
         return false;
     }
 
     if (!crawlerIdentityVerifyDnsChain($ip, $allowedSuffixes)) {
-        $neg[$ip] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
+        $neg[$negKey] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
         crawlerIdentityWriteMemo(getCrawlerIdentityNegativePath(), $neg);
         return false;
     }
