@@ -277,6 +277,21 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
     }
 
+    public function testCrawlerIdentityRefresh_JunkNetworkPrefix_ReportedMalformed(): void
+    {
+        // not-an-ip/24 must not qualify as a usable prefix.
+        crawlerIdentityWriteGoogleList(
+            getCrawlerIdentityGooglePath(),
+            ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $GLOBALS['crawlerIdentityTestHttpGet'] = function (string $url, int $timeout): array {
+            return ['body' => '{"creationTime":"now","prefixes":[{"ipv4Prefix":"not-an-ip/24"}]}', 'http_code' => 200];
+        };
+        $summary = crawlerIdentityRefresh();
+        $this->assertSame('malformed', $summary['google_status']);
+        $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
+    }
+
     public function testCrawlerIdentityAdmission_MalformedIp_ReturnsFalseWithoutDns(): void
     {
         // A junk CF-Connecting-IP must not reach DNS (gethostbyaddr throws on malformed input).
