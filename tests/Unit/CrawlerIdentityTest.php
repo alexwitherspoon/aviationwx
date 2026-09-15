@@ -94,6 +94,18 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertTrue(crawlerIdentityCidrMatch('2001:4860:4801:10:ffff:ffff:ffff:ffff', $prefixes));
     }
 
+    public function testCrawlerIdentityPackV6_ShortWithoutCompression_ReturnsNull(): void
+    {
+        // 2001:db8:1 is not a valid IPv6 (no :: and fewer than 8 hextets) and must not be padded
+        // into a usable address.
+        $this->assertNull(crawlerIdentityPackV6('2001:db8:1'));
+        // Bare "::" is not an address.
+        $this->assertNull(crawlerIdentityPackV6('::'));
+        // Valid still packs.
+        $this->assertSame(16, strlen(crawlerIdentityPackV6('2001:db8::1')));
+        $this->assertSame(16, strlen(crawlerIdentityPackV6('::1')));
+    }
+
     public function testCrawlerIdentityCidrMatch_V6OutsideRange_ReturnsFalse(): void
     {
         $prefixes = [

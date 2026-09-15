@@ -193,6 +193,19 @@ function crawlerIdentityPackV6(string $ip): ?string
         return null; // more than one :: run
     }
 
+    // Reject a bare "::" and, when there is no "::" compression, any input that is not exactly
+    // 8 hextets. Without this, a short value like 2001:db8:1 would be silently padded into a
+    // usable 8-hextet address instead of being treated as invalid.
+    if ($left === [] && $right === []) {
+        return null;
+    }
+    if (count($sides) === 1 && count($right) !== 8) {
+        return null;
+    }
+    if ($left !== [] && $right !== [] && (count($left) + count($right)) > 8) {
+        return null;
+    }
+
     $hextets = [];
     foreach ($left as $h) {
         $hextets[] = $h;
