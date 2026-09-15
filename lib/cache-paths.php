@@ -899,6 +899,28 @@ function getRateLimitPath(string $identifier): string {
 }
 
 // =============================================================================
+// CRAWLER ADMISSION PATHS (allowlist data, written by the refresh worker)
+// =============================================================================
+
+if (!defined('CACHE_CRAWLER_ADMISSION_DIR')) {
+    define('CACHE_CRAWLER_ADMISSION_DIR', CACHE_BASE_DIR . '/crawler-admission');
+}
+
+/**
+ * Google crawler CIDR list cache path.
+ */
+function getCrawlerGoogleAllowlistPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/google.json';
+}
+
+/**
+ * Bing/Yandex verified-IP allowlist cache path (written by the refresh worker).
+ */
+function getCrawlerVerifiedIpAllowlistPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/verified-ips.json';
+}
+
+// =============================================================================
 // UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
 // =============================================================================
 
