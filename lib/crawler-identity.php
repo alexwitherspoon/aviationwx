@@ -104,6 +104,13 @@ function crawlerIdentityVerifyDnsChain(string $ip, array $allowedSuffixes): bool
     if ($forward !== null && $forward === $ip) {
         return true;
     }
+    if (isset($GLOBALS['crawlerIdentityDnsResolver']) && is_callable($GLOBALS['crawlerIdentityDnsResolver'])
+        && !isset($GLOBALS['crawlerIdentityTestForwardRecords'])
+    ) {
+        // A scripted resolver with no scripted forward-record list is authoritative: never fall
+        // through to live DNS on a mismatch path in offline tests.
+        return false;
+    }
     $recs = crawlerIdentityForwardRecords($host);
     // v6 is compared packed: DNS can return an expanded form of the same address the request
     // compressed, and text equality would wrongly reject a valid crawler.
