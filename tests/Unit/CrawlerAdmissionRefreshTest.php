@@ -31,6 +31,7 @@ final class CrawlerAdmissionRefreshTest extends TestCase
         }
         if (function_exists('apcu_delete')) {
             @apcu_delete('crawler_admission_google');
+            @apcu_delete('crawler_admission_verified');
         }
     }
 

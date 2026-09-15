@@ -17,6 +17,13 @@ class RateLimitTest extends TestCase
         parent::setUp();
         $this->testCacheDir = CACHE_BASE_DIR;
         ensureCacheDir($this->testCacheDir);
+        @unlink(getCrawlerGoogleAllowlistPath());
+        @unlink(getCrawlerVerifiedIpAllowlistPath());
+        @unlink(getCrawlerPendingIpsPath());
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('crawler_admission_google');
+            @apcu_delete('crawler_admission_verified');
+        }
     }
     
     protected function tearDown(): void
@@ -33,6 +40,9 @@ class RateLimitTest extends TestCase
                 @rmdir($dir);
             }
         }
+        @unlink(getCrawlerGoogleAllowlistPath());
+        @unlink(getCrawlerVerifiedIpAllowlistPath());
+        @unlink(getCrawlerPendingIpsPath());
         parent::tearDown();
     }
 
@@ -41,7 +51,7 @@ class RateLimitTest extends TestCase
      */
     private function withServerVars(array $vars, callable $fn): void
     {
-        $keys = ['HTTP_X_REAL_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
+        $keys = ['HTTP_X_REAL_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR', 'HTTP_USER_AGENT'];
         $saved = [];
         foreach ($keys as $key) {
             $saved[$key] = $_SERVER[$key] ?? null;
@@ -152,6 +162,70 @@ class RateLimitTest extends TestCase
         // In that case, it will fall through to the no-op return true
         $result = checkRateLimit('test_key_' . uniqid(), 60, 60);
         $this->assertTrue($result);
+    }
+
+    /**
+     * A verified crawler (Google CIDR) must skip the per-IP cap and never create a bucket
+     */
+    public function testCheckRateLimit_VerifiedCrawler_BypassesWithoutBucket()
+    {
+        crawlerAdmissionWriteJson(
+            getCrawlerGoogleAllowlistPath(),
+            ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '66.249.80.1',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        ], function () {
+            $key = 'test_google_crawler_' . uniqid();
+            // Any number of calls pass and never consume the bucket.
+            for ($i = 0; $i < 5; $i++) {
+                $this->assertTrue(checkRateLimit($key, 1, 60));
+            }
+            $this->assertSame(1, getRateLimitRemaining($key, 1, 60)['remaining']);
+        });
+    }
+
+    /**
+     * An unverified Bing UA must consume its bucket and be queued for off-path verification
+     */
+    public function testCheckRateLimit_UnverifiedBingUa_ConsumesBucketAndQueues()
+    {
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '207.46.13.99',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; bingbot/2.0)',
+        ], function () {
+            $key = 'test_bing_pending_' . uniqid();
+            $this->assertTrue(checkRateLimit($key, 1, 60));
+            $this->assertFalse(checkRateLimit($key, 1, 60), 'unverified crawler must consume the bucket');
+
+            // The IP was queued for the off-path worker.
+            $pending = crawlerAdmissionPendingIps();
+            $this->assertArrayHasKey('207.46.13.99', $pending);
+        });
+    }
+
+    /**
+     * A browser user agent is neither exempt nor queued
+     */
+    public function testCheckRateLimit_BrowserUa_NotExemptNotQueued()
+    {
+        crawlerAdmissionWriteJson(
+            getCrawlerGoogleAllowlistPath(),
+            ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '198.51.100.33',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Macintosh; Chrome/122)',
+        ], function () {
+            $key = 'test_browser_' . uniqid();
+            $this->assertTrue(checkRateLimit($key, 1, 60));
+            $this->assertFalse(checkRateLimit($key, 1, 60));
+            $this->assertSame([], crawlerAdmissionPendingIps());
+        });
     }
 
     /**

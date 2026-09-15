@@ -20,8 +20,10 @@ final class CrawlerAdmissionTest extends TestCase
     {
         @unlink(getCrawlerGoogleAllowlistPath());
         @unlink(getCrawlerVerifiedIpAllowlistPath());
+        @unlink(getCrawlerPendingIpsPath());
         if (function_exists('apcu_delete')) {
             @apcu_delete('crawler_admission_google');
+            @apcu_delete('crawler_admission_verified');
         }
     }
 
@@ -108,5 +110,38 @@ final class CrawlerAdmissionTest extends TestCase
     {
         $this->assertFalse(isKnownCrawler('not-an-ip'));
         $this->assertFalse(isKnownCrawler(''));
+    }
+
+    public function testCrawlerAdmissionMaybeEnqueue_BingUaUnknownIp_QueuesForVerify(): void
+    {
+        crawlerAdmissionWriteJson(getCrawlerGoogleAllowlistPath(), ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]);
+        $this->assertTrue(crawlerAdmissionMaybeEnqueue('207.46.13.99', 'Mozilla/5.0 (compatible; bingbot/2.0)'));
+        $this->assertSame(['207.46.13.99'], array_keys(crawlerAdmissionPendingIps()));
+    }
+
+    public function testCrawlerAdmissionMaybeEnqueue_BrowserUa_NotQueued(): void
+    {
+        $this->assertFalse(crawlerAdmissionMaybeEnqueue('207.46.13.99', 'Mozilla/5.0 (Macintosh; Chrome/122)'));
+        $this->assertSame([], crawlerAdmissionPendingIps());
+    }
+
+    public function testCrawlerAdmissionMaybeEnqueue_GoogleCoveredIp_NotQueued(): void
+    {
+        crawlerAdmissionWriteJson(getCrawlerGoogleAllowlistPath(), ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]);
+        // A Google-IP claiming a Bing UA must not crowd the queue; it is already known.
+        $this->assertFalse(crawlerAdmissionMaybeEnqueue('66.249.80.1', 'bingbot/2.0'));
+        $this->assertSame([], crawlerAdmissionPendingIps());
+    }
+
+    public function testCrawlerAdmissionMaybeEnqueue_AlreadyVerified_NotRequeued(): void
+    {
+        crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), ['207.46.13.77' => time() + 3600]);
+        $this->assertFalse(crawlerAdmissionMaybeEnqueue('207.46.13.77', 'bingbot/2.0'));
+        $this->assertSame([], crawlerAdmissionPendingIps());
+    }
+
+    public function testCrawlerAdmissionMaybeEnqueue_MalformedIp_NotQueued(): void
+    {
+        $this->assertFalse(crawlerAdmissionMaybeEnqueue('not-an-ip', 'bingbot/2.0'));
     }
 }

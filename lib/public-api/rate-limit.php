@@ -269,15 +269,47 @@ function checkAndIncrementWindowFile(string $cacheKey, int $limit, int $windowSe
  * Returns the most restrictive limit (per-minute) for standard headers
  * 
  * @param array $rateLimitResult Result from checkPublicApiRateLimit
- * @return array Headers as key-value pairs
- */
-function getPublicApiRateLimitHeaders(array $rateLimitResult): array
-{
-    // Use per-minute limits for headers (most relevant for clients)
-    return [
-        'X-RateLimit-Limit' => (string)$rateLimitResult['limits']['minute'],
-        'X-RateLimit-Remaining' => (string)$rateLimitResult['remaining']['minute'],
-        'X-RateLimit-Reset' => (string)$rateLimitResult['reset']['minute'],
-    ];
-}
+* @return array Headers as key-value pairs
+  */
+ function getPublicApiRateLimitHeaders(array $rateLimitResult): array
+ {
+     // Use per-minute limits for headers (most relevant for clients)
+     return [
+         'X-RateLimit-Limit' => (string)$rateLimitResult['limits']['minute'],
+         'X-RateLimit-Remaining' => (string)$rateLimitResult['remaining']['minute'],
+         'X-RateLimit-Reset' => (string)$rateLimitResult['reset']['minute'],
+     ];
+ }
+
+ /**
+  * Allowed rate-limit result for a verified crawler, shaped like the health-check bypass so the
+  * headers stay valid and the anonymous counters are untouched.
+  *
+  * @return array<string, mixed>
+  */
+ function crawlerAdmissionBypassResult(): array
+ {
+     $limits = getPublicApiRateLimits('anonymous');
+     $now = time();
+     return [
+         'allowed' => true,
+         'tier' => 'anonymous',
+         'limits' => [
+             'minute' => $limits['requests_per_minute'],
+             'hour' => $limits['requests_per_hour'],
+             'day' => $limits['requests_per_day'],
+         ],
+         'remaining' => [
+             'minute' => $limits['requests_per_minute'],
+             'hour' => $limits['requests_per_hour'],
+             'day' => $limits['requests_per_day'],
+         ],
+         'reset' => [
+             'minute' => $now + 60,
+             'hour' => $now + 3600,
+             'day' => $now + 86400,
+         ],
+         'retry_after' => null,
+     ];
+ }
 

@@ -11,6 +11,7 @@ require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/../client-ip.php';
+require_once __DIR__ . '/../crawler-admission.php';
 require_once __DIR__ . '/response.php';
 
 /**
@@ -84,11 +85,23 @@ function processPublicApiRequest(): array
     // Check for internal health check (bypass rate limiting entirely)
     $isHealthCheck = isPublicApiHealthCheckRequest();
     
+    // Verified search-engine crawlers skip the anonymous tier's per-IP caps, the same identity
+    // the rate limiter uses. Queue unverified Bing/Yandex-looking clients for off-path verify;
+    // a miss consumes counters until confirmed.
+    if ($tier === 'anonymous') {
+        crawlerAdmissionMaybeEnqueue($ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+        $crawlerExempt = isKnownCrawler($ip);
+    } else {
+        $crawlerExempt = false;
+    }
+    
     // Check rate limits using the appropriate identifier
     // - Partner requests: use API key
     // - Anonymous/first-party: use client IP (original user's IP for first-party)
     $identifier = $apiKey ?? $ip;
-    $rateLimitResult = checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
+    $rateLimitResult = $crawlerExempt
+        ? crawlerAdmissionBypassResult()
+        : checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
     
     // Send rate limit headers on every response
     $rateLimitHeaders = getPublicApiRateLimitHeaders($rateLimitResult);

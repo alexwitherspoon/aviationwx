@@ -36,6 +36,10 @@ if (is_string($testCacheDir) && $testCacheDir !== '' && !defined('CACHE_BASE_DIR
 if (!defined('CACHE_METRICS_DIR')) {
     define('CACHE_METRICS_DIR', sys_get_temp_dir() . '/aviationwx_test_metrics');
 }
+// Crawler admission tests write allowlist files; keep them out of the repo cache.
+if (!defined('CACHE_CRAWLER_ADMISSION_DIR')) {
+    define('CACHE_CRAWLER_ADMISSION_DIR', sys_get_temp_dir() . '/aviationwx_test_crawler_admission');
+}
 if (!defined('CACHE_METRICS_HOURLY_DIR')) {
     define('CACHE_METRICS_HOURLY_DIR', CACHE_METRICS_DIR . '/hourly');
 }

@@ -289,18 +289,29 @@ function crawlerAdmissionGooglePrefixes(): ?array
 /**
  * Read the verified Bing/Yandex IP allowlist map (ip -> expires_at unix seconds).
  *
+ * APCu-keyed on file mtime like the Google list, since the worker rewrites this file from a
+ * separate process and the request path reads it for every client, not just crawler-looking ones.
+ *
  * @return array<string,int>
  * @internal
  */
 function crawlerAdmissionVerifiedIps(): array
 {
     $path = getCrawlerVerifiedIpAllowlistPath();
-    $content = @file_get_contents($path);
-    if ($content === false) {
-        return [];
+    $mtime = file_exists($path) ? (int) filemtime($path) : -1;
+    if (function_exists('apcu_fetch')) {
+        $cached = @apcu_fetch('crawler_admission_verified');
+        if (is_array($cached) && (int) ($cached['mtime'] ?? -1) === $mtime && is_array($cached['ips'])) {
+            return $cached['ips'];
+        }
     }
+    $content = @file_get_contents($path);
     $json = @json_decode($content, true);
-    return is_array($json) ? $json : [];
+    $ips = is_array($json) ? $json : [];
+    if (function_exists('apcu_store')) {
+        @apcu_store('crawler_admission_verified', ['mtime' => $mtime, 'ips' => $ips], CRAWLER_ALLOWLIST_REFRESH_INTERVAL);
+    }
+    return $ips;
 }
 
 /**
@@ -466,10 +477,19 @@ function crawlerAdmissionEnqueuePendingIp(string $ip): bool
     }
     @flock($fp, LOCK_EX);
     $queue = crawlerAdmissionPendingIps();
+    $changed = false;
     if (!isset($queue[$ip])) {
+        if (count($queue) >= CRAWLER_PENDING_MAX_IPS) {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+            return false;
+        }
         $queue[$ip] = time();
+        $changed = true;
     }
-    $ok = crawlerAdmissionWriteJson($path, $queue);
+    // Only write when the map changed: a pending-but-unverified IP requests repeatedly, and a
+    // rewrite per request is an O(N) encode plus rename on a hot path when the queue is large.
+    $ok = $changed ? crawlerAdmissionWriteJson($path, $queue) : true;
     @flock($fp, LOCK_UN);
     @fclose($fp);
     return $ok;
@@ -491,13 +511,18 @@ function crawlerAdmissionDrainPendingQueue(int $now): bool
 {
     $path = getCrawlerPendingIpsPath();
     $lockPath = $path . '.lock';
+
+    // Snapshot the queue under the lock, then release it for the DNS loop. Holding the lock
+    // across every reverse lookup would make request-path enqueues block for the whole drain.
     $fp = @fopen($lockPath, 'c+');
     if ($fp === false) {
         return false;
     }
     @flock($fp, LOCK_EX);
-
     $queue = crawlerAdmissionPendingIps();
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+
     $verified = crawlerAdmissionVerifiedIps();
     foreach ($queue as $ip => $unused) {
         if (!is_string($ip) || filter_var($ip, FILTER_VALIDATE_IP) === false) {
@@ -515,9 +540,21 @@ function crawlerAdmissionDrainPendingQueue(int $now): bool
         }
     }
 
+    // Re-lock for the publish and queue clear so an enqueue during DNS is not lost or double-cleared.
+    // Only the IPs this run processed are removed; anything enqueued during the DNS loop stays for
+    // the next run instead of being dropped.
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        return false;
+    }
+    @flock($fp, LOCK_EX);
     $published = crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), $verified);
     if ($published) {
-        crawlerAdmissionWriteJson($path, []);
+        $remaining = crawlerAdmissionPendingIps();
+        foreach ($queue as $ip => $unused) {
+            unset($remaining[$ip]);
+        }
+        crawlerAdmissionWriteJson($path, $remaining);
     }
     @flock($fp, LOCK_UN);
     @fclose($fp);
@@ -609,4 +646,35 @@ function crawlerAdmissionRefresh(): array
     }
 
     return $summary;
+}
+
+/**
+ * Maybe enqueue an IP for off-path crawler verification.
+ *
+ * Only addresses that claim a Bing or Yandex user agent are queued, so a flood of spoofed
+ * UA/IP pairs cannot grow the pending file without bound without also looking like search
+ * traffic. Already-verified and Google-covered IPs never reach the queue.
+ *
+ * @param string $ip Client IP
+ * @param string $userAgent Raw request user agent (matched case-insensitively)
+ * @return bool True when the IP was accepted onto the queue
+ */
+function crawlerAdmissionMaybeEnqueue(string $ip, string $userAgent): bool
+{
+    if ($ip === '' || filter_var($ip, FILTER_VALIDATE_IP) === false) {
+        return false;
+    }
+    $ua = strtolower($userAgent);
+    if (!str_contains($ua, 'bingbot') && !str_contains($ua, 'bingpreview') && !str_contains($ua, 'yandex')) {
+        return false;
+    }
+    $google = crawlerAdmissionGooglePrefixes();
+    if (is_array($google) && crawlerAdmissionCidrMatch($ip, $google)) {
+        return false;
+    }
+    $verified = crawlerAdmissionVerifiedIps();
+    if (isset($verified[$ip]) && is_numeric($verified[$ip]) && (int) $verified[$ip] > time()) {
+        return false;
+    }
+    return crawlerAdmissionEnqueuePendingIp($ip);
 }

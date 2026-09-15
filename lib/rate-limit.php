@@ -3,6 +3,7 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/client-ip.php';
+require_once __DIR__ . '/crawler-admission.php';
 /**
  * Simple Rate Limiting Utility
  * IP-based rate limiting for API endpoints
@@ -52,6 +53,14 @@ function rateLimitUsesFileStore(): bool
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
     $ip = getRateLimitClientIp();
+
+    // Verified search-engine crawlers skip the per-IP caps their multi-resource renders hit.
+    // Bing/Yandex-looking clients are queued for off-path verification first so a miss gets
+    // resolved by the worker; a miss that is already verified is exempt now.
+    crawlerAdmissionMaybeEnqueue($ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ip !== '' && isKnownCrawler($ip)) {
+        return true;
+    }
 
     if (!rateLimitUsesFileStore()) {
         $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);
@@ -270,6 +279,16 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
  */
 function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
     $ip = getRateLimitClientIp();
+
+    // Match enforcement identity: enqueue candidates and report a full bucket for verified
+    // crawlers so the headers describe the same client checkRateLimit() exempts.
+    crawlerAdmissionMaybeEnqueue($ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    if ($ip !== '' && isKnownCrawler($ip)) {
+        return [
+            'remaining' => (int) max(0, $maxRequests),
+            'reset' => time() + $windowSeconds
+        ];
+    }
 
     if (rateLimitUsesFileStore()) {
         require_once __DIR__ . '/cache-paths.php';
