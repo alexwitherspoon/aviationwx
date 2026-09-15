@@ -421,19 +421,41 @@ function crawlerIdentityMemoCheck(string $ip, string $path, array $allowedSuffix
 {
     $now = time();
 
-    // Serialize the miss path so parallel subresource requests for a new crawler IP do not all
-    // run the DNS chain or overwrite each other's memo entries. Re-check after acquiring.
+    // Fast path: read the memos without locking. A hit or an engine-namespaced negative avoids DNS.
+    $memo = crawlerIdentityReadMemo($path);
+    if (isset($memo[$ip]) && is_numeric($memo[$ip]) && (int) $memo[$ip] > $now) {
+        return true;
+    }
+    $neg = crawlerIdentityReadMemo(getCrawlerIdentityNegativePath());
+    $negKey = basename($path) . '|' . $ip;
+    if (isset($neg[$negKey]) && is_numeric($neg[$negKey]) && (int) $neg[$negKey] > $now) {
+        return false;
+    }
+
+    // DNS runs without holding any memo lock: a slow reverse/forward lookup must not block every
+    // concurrent request that claims the same crawler UA.
+    if (!crawlerIdentityVerifyDnsChain($ip, $allowedSuffixes)) {
+        crawlerIdentityRecordNegative($negKey, $now);
+        return false;
+    }
+
+    // Verified: take the memo lock only for the read-modify-write so concurrent verifications of
+    // different IPs cannot clobber each other's entries.
     $lockPath = $path . '.lock';
     $fp = @fopen($lockPath, 'c+');
     if ($fp === false) {
-        // No lock available: fall back to the unlocked path rather than fail admission.
-        return crawlerIdentityMemoCheckUnlocked($ip, $path, $allowedSuffixes, $now);
+        $memo = crawlerIdentityReadMemo($path);
+        $memo[$ip] = $now + SEO_CRAWLER_MEMO_MAX_AGE;
+        crawlerIdentityWriteMemo($path, $memo);
+        return true;
     }
     @flock($fp, LOCK_EX);
-    $result = crawlerIdentityMemoCheckUnlocked($ip, $path, $allowedSuffixes, $now);
+    $memo = crawlerIdentityReadMemo($path);
+    $memo[$ip] = $now + SEO_CRAWLER_MEMO_MAX_AGE;
+    crawlerIdentityWriteMemo($path, $memo);
     @flock($fp, LOCK_UN);
     @fclose($fp);
-    return $result;
+    return true;
 }
 
 /**
@@ -496,37 +518,6 @@ function crawlerIdentityPruneNegativeMap(array $neg, int $now): array
         }
     }
     return $neg;
-}
-
-/**
- * Memo verification without a shared lock.
- *
- * @internal
- */
-function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allowedSuffixes, int $now): bool
-{
-    $memo = crawlerIdentityReadMemo($path);
-
-    if (isset($memo[$ip]) && is_numeric($memo[$ip]) && (int) $memo[$ip] > $now) {
-        return true;
-    }
-
-    $neg = crawlerIdentityReadMemo(getCrawlerIdentityNegativePath());
-    // A failed check is only valid for the engine that performed it: one failed Bing lookup
-    // must not suppress a different engine's verification for the same address.
-    $negKey = basename($path) . '|' . $ip;
-    if (isset($neg[$negKey]) && is_numeric($neg[$negKey]) && (int) $neg[$negKey] > $now) {
-        return false;
-    }
-
-    if (!crawlerIdentityVerifyDnsChain($ip, $allowedSuffixes)) {
-        crawlerIdentityRecordNegative($negKey, $now);
-        return false;
-    }
-
-    $memo[$ip] = $now + SEO_CRAWLER_MEMO_MAX_AGE;
-    crawlerIdentityWriteMemo($path, $memo);
-    return true;
 }
 
 /**
