@@ -94,6 +94,7 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     // Get the original client IP to forward for rate limiting
     // This allows rate limiting per end-user, not per internal service
     $originalClientIp = getOriginalClientIp();
+    $originalUserAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -106,6 +107,7 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
             'Accept: application/json',
             'X-Internal-Request: embed-widget',
             'X-Forwarded-Client-IP: ' . $originalClientIp, // Forward original user IP for rate limiting
+            'X-Forwarded-Client-UA: ' . $originalUserAgent, // Forward original UA so crawler admission is not blind
         ],
     ]);
     
@@ -269,6 +271,7 @@ function fetchEmbedDataFromEmbedApi(string $airportId): ?array
 {
     $apiUrl = 'http://127.0.0.1:8080/api/v1/airports/' . urlencode($airportId) . '/embed';
     $originalClientIp = getOriginalClientIp();
+    $originalUserAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
 
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -281,6 +284,7 @@ function fetchEmbedDataFromEmbedApi(string $airportId): ?array
             'Accept: application/json',
             'X-Internal-Request: embed-widget',
             'X-Forwarded-Client-IP: ' . $originalClientIp,
+            'X-Forwarded-Client-UA: ' . $originalUserAgent,
         ],
     ]);
 

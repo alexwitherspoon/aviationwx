@@ -64,10 +64,19 @@ function processPublicApiRequest(): array
 
     // Admission identity: for first-party requests use the validated forwarded original IP;
     // otherwise use the trusted edge/peer IP (CF-Connecting-IP / REMOTE_ADDR), never the
-    // spoofable forwarded header that buckets the anonymous tier.
+    // spoofable forwarded header that buckets the anonymous tier. First-party requests also
+    // carry the original user agent so Bing/Yandex admission is not blind to identity.
     $admissionIp = ($isFirstParty && $originalClientIp !== null)
         ? $originalClientIp
         : crawlerIdentityTrustedClientIp();
+    $admissionEnv = null;
+    if ($isFirstParty) {
+        $admissionEnv = $_SERVER;
+        $forwardedUa = $_SERVER['HTTP_X_FORWARDED_CLIENT_UA'] ?? null;
+        if (is_string($forwardedUa) && $forwardedUa !== '') {
+            $admissionEnv['HTTP_USER_AGENT'] = $forwardedUa;
+        }
+    }
     
     // Determine tier (partner or anonymous)
     $apiKey = getPublicApiKeyFromRequest();
@@ -95,7 +104,7 @@ function processPublicApiRequest(): array
     // their render/JSON fetches would otherwise trip the per-IP caps. Partner keys stay keyed
     // (not IP-limited) and human requests keep their counters. The result reuses the
     // health-check bypass shape so the rate-limit headers stay valid.
-    if ($tier === 'anonymous' && isKnownSearchEngineCrawler($admissionIp)) {
+    if ($tier === 'anonymous' && isKnownSearchEngineCrawler($admissionIp, $admissionEnv)) {
         $limits = getPublicApiRateLimits('anonymous');
         $now = time();
         $rateLimitResult = [
