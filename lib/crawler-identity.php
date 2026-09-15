@@ -389,8 +389,31 @@ function crawlerIdentityWriteMemo(string $path, array $memo): bool
  */
 function crawlerIdentityMemoCheck(string $ip, string $path, array $allowedSuffixes): bool
 {
-    $memo = crawlerIdentityReadMemo($path);
     $now = time();
+
+    // Serialize the miss path so parallel subresource requests for a new crawler IP do not all
+    // run the DNS chain or overwrite each other's memo entries. Re-check after acquiring.
+    $lockPath = $path . '.lock';
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        // No lock available: fall back to the unlocked path rather than fail admission.
+        return crawlerIdentityMemoCheckUnlocked($ip, $path, $allowedSuffixes, $now);
+    }
+    @flock($fp, LOCK_EX);
+    $result = crawlerIdentityMemoCheckUnlocked($ip, $path, $allowedSuffixes, $now);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+    return $result;
+}
+
+/**
+ * Memo verification without a shared lock.
+ *
+ * @internal
+ */
+function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allowedSuffixes, int $now): bool
+{
+    $memo = crawlerIdentityReadMemo($path);
 
     if (isset($memo[$ip]) && is_numeric($memo[$ip]) && (int) $memo[$ip] > $now) {
         return true;

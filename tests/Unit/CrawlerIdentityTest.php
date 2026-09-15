@@ -29,6 +29,9 @@ final class CrawlerIdentityTest extends TestCase
             if (file_exists($p)) {
                 @unlink($p);
             }
+            if (file_exists($p . '.lock')) {
+                @unlink($p . '.lock');
+            }
         }
         if (function_exists('apcu_delete')) {
             @apcu_delete('crawler_identity_google');
@@ -52,6 +55,9 @@ final class CrawlerIdentityTest extends TestCase
         ] as $p) {
             if (file_exists($p)) {
                 @unlink($p);
+            }
+            if (file_exists($p . '.lock')) {
+                @unlink($p . '.lock');
             }
         }
         parent::tearDown();
@@ -279,6 +285,22 @@ final class CrawlerIdentityTest extends TestCase
             ['HTTP_USER_AGENT' => 'Mozilla/5.0 (Macintosh; Chrome/122)']
         ));
         $this->assertSame($before, (int) $GLOBALS['crawlerDnsCallCount']);
+    }
+
+    public function testCrawlerIdentityMemoCheck_MissLock_SerializesConcurrentWriters(): void
+    {
+        // Two sequential misses on a fresh IP both succeed; the lock file exists and does not
+        // break the memo path. Locks the once-per-window guarantee end to end.
+        $GLOBALS['crawlerDnsCallCount'] = 0;
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            $GLOBALS['crawlerDnsCallCount'] = (int) ($GLOBALS['crawlerDnsCallCount'] ?? 0) + 1;
+            return $forward ? '207.46.13.77' : 'msnbot-lock.search.msn.com';
+        };
+        $memoPath = getCrawlerIdentityBingPath();
+        $this->assertTrue(crawlerIdentityMemoCheck('207.46.13.77', $memoPath, ['.search.msn.com']));
+        $afterFirst = (int) $GLOBALS['crawlerDnsCallCount'];
+        $this->assertTrue(crawlerIdentityMemoCheck('207.46.13.77', $memoPath, ['.search.msn.com']));
+        $this->assertSame($afterFirst, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 
     public function testCrawlerIdentityVerifyDnsChain_AnyForwardAddress_AcceptsNotJustFirst(): void
