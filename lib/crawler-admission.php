@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/logger.php';
 
 /**
  * Pack an IPv4 address into a 4-byte string, or null for malformed input.
@@ -329,4 +330,283 @@ function isKnownCrawler(string $ip): bool
     }
 
     return false;
+}
+
+/**
+ * Resolve a hostname or IP for crawler verification.
+ *
+ * Test hook: set `$GLOBALS['crawlerAdmissionDnsResolver']` to a callable
+ * `function(string $q, bool $forward): ?string` to script DNS in unit tests.
+ *
+ * @param string $q Hostname (forward) or IP (reverse)
+ * @param bool $forward True for host -> IP, false for IP -> host (PTR)
+ * @return string|null Resolved address or hostname, null on failure
+ * @internal
+ */
+function crawlerAdmissionResolveDns(string $q, bool $forward): ?string
+{
+    if (isset($GLOBALS['crawlerAdmissionDnsResolver']) && is_callable($GLOBALS['crawlerAdmissionDnsResolver'])) {
+        $resolved = ($GLOBALS['crawlerAdmissionDnsResolver'])($q, $forward);
+        return is_string($resolved) && $resolved !== '' ? $resolved : null;
+    }
+    if ($forward) {
+        $recs = @dns_get_record($q, DNS_A);
+        foreach (($recs ?? []) as $rec) {
+            if (is_array($rec) && is_string($rec['ip'] ?? null)) {
+                return (string) $rec['ip'];
+            }
+        }
+        $recs6 = @dns_get_record($q, DNS_AAAA);
+        foreach (($recs6 ?? []) as $rec) {
+            if (is_array($rec) && is_string($rec['ipv6'] ?? null)) {
+                return (string) $rec['ipv6'];
+            }
+        }
+        return null;
+    }
+    $name = @gethostbyaddr($q);
+    return is_string($name) && $name !== '' ? $name : null;
+}
+
+/**
+ * Reverse-DNS + forward-DNS verification for a crawler IP.
+ *
+ * The PTR host must end with an allowed suffix, and the forward lookup of that host must resolve
+ * back to the same IP. Mixed addressing is compared packed for v6 so an expanded DNS spelling
+ * still matches a compressed request address.
+ *
+ * @param string $ip Address to verify
+ * @param array<int,string> $allowedSuffixes e.g. ['.search.msn.com'] for Bing
+ * @return bool True when verified
+ * @internal
+ */
+function crawlerAdmissionVerifyDnsChain(string $ip, array $allowedSuffixes): bool
+{
+    $host = crawlerAdmissionResolveDns($ip, false);
+    if ($host === null) {
+        return false;
+    }
+    $host = strtolower(trim($host));
+    if (substr($host, -1) === '.') {
+        $host = substr($host, 0, -1);
+    }
+    $suffixMatch = false;
+    foreach ($allowedSuffixes as $suffix) {
+        if ($suffix === '' || substr($host, -strlen($suffix)) === $suffix) {
+            $suffixMatch = true;
+            break;
+        }
+    }
+    if (!$suffixMatch) {
+        return false;
+    }
+    $forward = crawlerAdmissionResolveDns($host, true);
+    if ($forward !== null && $forward === $ip) {
+        return true;
+    }
+    // v6 can come back expanded: when the forward string differs, compare every A/AAAA record
+    // packed. Route through the resolver so the offline test hook drives this branch too.
+    if (isset($GLOBALS['crawlerAdmissionDnsResolver']) && is_callable($GLOBALS['crawlerAdmissionDnsResolver'])) {
+        $candidate = crawlerAdmissionResolveDns($host, true);
+        if (!str_contains($ip, ':') || $candidate === null) {
+            return false;
+        }
+        $packedIp = crawlerAdmissionPackV6($ip);
+        $packedCandidate = $packedIp !== null ? crawlerAdmissionPackV6($candidate) : null;
+        return $packedCandidate !== null && $packedCandidate === $packedIp;
+    }
+    $recs = @dns_get_record($host, DNS_A | DNS_AAAA);
+    foreach (($recs ?? []) as $rec) {
+        $addr = (string) ($rec['ipv6'] ?? '');
+        if ($addr !== '') {
+            $packedRec = crawlerAdmissionPackV6($addr);
+            if ($packedRec !== null && $packedRec === $packedIp) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Read the pending Bing/Yandex IP queue (ip -> first_seen unix seconds).
+ *
+ * @return array<string,int>
+ * @internal
+ */
+function crawlerAdmissionPendingIps(): array
+{
+    $content = @file_get_contents(getCrawlerPendingIpsPath());
+    if ($content === false) {
+        return [];
+    }
+    $json = @json_decode($content, true);
+    return is_array($json) ? $json : [];
+}
+
+/**
+ * Add an IP to the pending verification queue, under a lock to stay atomic with the worker drain.
+ *
+ * @return bool True when the IP was accepted onto the queue
+ * @internal
+ */
+function crawlerAdmissionEnqueuePendingIp(string $ip): bool
+{
+    $path = getCrawlerPendingIpsPath();
+    $lockPath = $path . '.lock';
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        if (!@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return false;
+        }
+    }
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        return false;
+    }
+    @flock($fp, LOCK_EX);
+    $queue = crawlerAdmissionPendingIps();
+    if (!isset($queue[$ip])) {
+        $queue[$ip] = time();
+    }
+    $ok = crawlerAdmissionWriteJson($path, $queue);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+    return $ok;
+}
+
+/**
+ * Drain the pending queue through DNS verification and publish the verified map.
+ *
+ * Runs off the request path. PTR + forward-verify each pending IP against the Bing or Yandex
+ * suffix list; verified IPs land in the allowlist. The queue is cleared only after the verified
+ * map is written, so a failed publish keeps the pending IPs for the next run. Expired verified
+ * entries are pruned on every run.
+ *
+ * @param int $now Unix time
+ * @return bool True when the verified map was published, false when the write failed
+ * @internal
+ */
+function crawlerAdmissionDrainPendingQueue(int $now): bool
+{
+    $path = getCrawlerPendingIpsPath();
+    $lockPath = $path . '.lock';
+    $fp = @fopen($lockPath, 'c+');
+    if ($fp === false) {
+        return false;
+    }
+    @flock($fp, LOCK_EX);
+
+    $queue = crawlerAdmissionPendingIps();
+    $verified = crawlerAdmissionVerifiedIps();
+    foreach ($queue as $ip => $unused) {
+        if (!is_string($ip) || filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            continue;
+        }
+        if (crawlerAdmissionVerifyDnsChain($ip, ['.search.msn.com'])) {
+            $verified[$ip] = $now + CRAWLER_VERIFIED_IP_TTL;
+        } elseif (crawlerAdmissionVerifyDnsChain($ip, ['.yandex.ru', '.yandex.net', '.yandex.com'])) {
+            $verified[$ip] = $now + CRAWLER_VERIFIED_IP_TTL;
+        }
+    }
+    foreach ($verified as $ip => $expires) {
+        if (!is_numeric($expires) || (int) $expires <= $now) {
+            unset($verified[$ip]);
+        }
+    }
+
+    $published = crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), $verified);
+    if ($published) {
+        crawlerAdmissionWriteJson($path, []);
+    }
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+    return $published;
+}
+
+/**
+ * Fetch Google's official crawler CIDR JSON.
+ *
+ * @return array{0: string|false, 1: int} body, http code
+ * @internal
+ */
+function crawlerAdmissionFetchGoogleList(): array
+{
+    if (isset($GLOBALS['crawlerAdmissionTestHttpGet']) && is_callable($GLOBALS['crawlerAdmissionTestHttpGet'])) {
+        $result = ($GLOBALS['crawlerAdmissionTestHttpGet'])(
+            'https://developers.google.com/static/crawling/ipranges/common-crawlers.json'
+        );
+        if (is_array($result)) {
+            return [
+                is_string($result['body'] ?? null) ? (string) $result['body'] : false,
+                is_numeric($result['http_code'] ?? null) ? (int) $result['http_code'] : 0,
+            ];
+        }
+        return [false, 0];
+    }
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => 'https://developers.google.com/static/crawling/ipranges/common-crawlers.json',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$body, $code];
+}
+
+/**
+ * Refresh the Google CIDR allowlist and drain the Bing/Yandex verification queue.
+ *
+ * Worker entry point (scripts/refresh-crawler-admission.php). Atomic writes keep the request
+ * path consistent. A failed Google fetch with a prior file retains it; only a stale or missing
+ * result with no usable cache escalates.
+ *
+ * @return array<string, mixed>
+ */
+function crawlerAdmissionRefresh(): array
+{
+    $now = time();
+    $summary = [
+        'google_status' => 'unchanged',
+        'google_prefixes' => 0,
+        'queue_drained' => 0,
+        'verified_ips' => 0,
+    ];
+
+    // Google CIDR list
+    $googlePath = getCrawlerGoogleAllowlistPath();
+    [$body, $code] = crawlerAdmissionFetchGoogleList();
+    if ($body !== false && $code === 200 && $body !== '') {
+        $json = @json_decode($body, true);
+        if (is_array($json) && isset($json['prefixes']) && is_array($json['prefixes'])
+            && crawlerAdmissionHasWellFormedPrefix($json['prefixes'])
+        ) {
+            if (crawlerAdmissionWriteJson($googlePath, $json)) {
+                $summary['google_status'] = 'fetched';
+                $summary['google_prefixes'] = count($json['prefixes']);
+            } else {
+                $summary['google_status'] = 'write_failed';
+            }
+        } else {
+            $summary['google_status'] = 'malformed';
+        }
+    } else {
+        $summary['google_status'] = 'fetch_failed';
+    }
+
+    // Bing/Yandex queue drain
+    $pending = crawlerAdmissionPendingIps();
+    $summary['queue_drained'] = count($pending);
+    $published = crawlerAdmissionDrainPendingQueue($now);
+    $summary['verified_ips'] = count(crawlerAdmissionVerifiedIps());
+    $summary['drain_published'] = $published;
+    if (!$published) {
+        aviationwx_log('warning', 'crawler_admission: verified-ip publish failed; pending IPs retained', [], 'app');
+    }
+
+    return $summary;
 }

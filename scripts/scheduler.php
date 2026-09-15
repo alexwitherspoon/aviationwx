@@ -55,6 +55,7 @@ $lastConfigSha = null; // Track config file SHA hash to detect ANY content chang
 $lastMetricsSpillMerge = 0;
 $lastVariantHealthHttpFlush = 0;
 $lastMetricsHealthCheck = 0; // Separate timestamp for health checks
+$lastCrawlerAdmissionRefresh = 0;
 $lastMetricsCleanup = 0;
 $lastDailySpawnAttempt = 0;
 $lastWeeklySpawnAttempt = 0;
@@ -568,6 +569,22 @@ $workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$
     exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
     reapZombies();
     $lastMetricsHealthCheck = $now;
+});
+
+$workRegistry->registerEnqueueTick('crawler_admission', function (int $now) use (&$lastCrawlerAdmissionRefresh): void {
+    if (($now - $lastCrawlerAdmissionRefresh) < CRAWLER_ALLOWLIST_REFRESH_INTERVAL) {
+        return;
+    }
+    $script = __DIR__ . '/refresh-crawler-admission.php';
+    if (!file_exists($script)) {
+        $lastCrawlerAdmissionRefresh = $now;
+        aviationwx_log('warning', 'scheduler: refresh-crawler-admission.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastCrawlerAdmissionRefresh = $now;
 });
 
 // Main scheduler loop

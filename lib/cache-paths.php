@@ -920,6 +920,13 @@ function getCrawlerVerifiedIpAllowlistPath(): string {
     return CACHE_CRAWLER_ADMISSION_DIR . '/verified-ips.json';
 }
 
+/**
+ * Pending Bing/Yandex IP verification queue (request path appends; worker drains).
+ */
+function getCrawlerPendingIpsPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/pending-ips.json';
+}
+
 // =============================================================================
 // UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
 // =============================================================================
