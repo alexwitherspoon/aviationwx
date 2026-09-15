@@ -483,7 +483,7 @@ function crawlerIdentityTrustedClientIp(): string
  * @param array<string,mixed> $serverEnv Request environment (defaults to $_SERVER)
  * @return bool
  */
-function isKnownSearchEngineCrawler(string $ip, array $serverEnv = null): bool
+function isKnownSearchEngineCrawler(string $ip, ?array $serverEnv = null): bool
 {
     if ($ip === '' || $ip === null) {
         return false;
