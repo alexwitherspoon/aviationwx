@@ -510,7 +510,8 @@ class RateLimitTest extends TestCase
     public function testCheckRateLimit_VerifiedCrawlerIp_BypassesWithoutBucket(): void
     {
         // Seed a Google CIDR allowlist and a Google-verified request identity. The admission
-        // path must read crawlerIdentityTrustedClientIp(), which prefers CF-Connecting-IP.
+        // path must read crawlerIdentityTrustedClientIp(), which trusts CF-Connecting-IP only
+        // from a real Cloudflare peer.
         crawlerIdentityWriteGoogleList(
             getCrawlerIdentityGooglePath(),
             ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
@@ -518,7 +519,7 @@ class RateLimitTest extends TestCase
         $oldServer = $_SERVER;
         try {
             $_SERVER = [
-                'REMOTE_ADDR' => '9.9.9.9',
+                'REMOTE_ADDR' => '104.16.1.1',
                 'HTTP_CF_CONNECTING_IP' => '66.249.80.1',
             ];
             $key = 'test_verified_crawler_' . uniqid();

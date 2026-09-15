@@ -339,8 +339,8 @@ final class CrawlerIdentityTest extends TestCase
 
     public function testCrawlerIdentityMemoCheck_MissLock_SerializesConcurrentWriters(): void
     {
-        // Two sequential misses on a fresh IP both succeed; the lock file exists and does not
-        // break the memo path. Locks the once-per-window guarantee end to end.
+        // A miss must go through the lock path (proven by the lock files existing afterwards)
+        // and the verified entry must be reused on the next call without a second DNS round.
         $GLOBALS['crawlerDnsCallCount'] = 0;
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
             $GLOBALS['crawlerDnsCallCount'] = (int) ($GLOBALS['crawlerDnsCallCount'] ?? 0) + 1;
@@ -348,7 +348,9 @@ final class CrawlerIdentityTest extends TestCase
         };
         $memoPath = getCrawlerIdentityBingPath();
         $this->assertTrue(crawlerIdentityMemoCheck('207.46.13.77', $memoPath, ['.search.msn.com']));
+        $this->assertTrue(file_exists($memoPath . '.lock'), 'miss path must create the memo lock');
         $afterFirst = (int) $GLOBALS['crawlerDnsCallCount'];
+        $this->assertTrue($afterFirst >= 2);
         $this->assertTrue(crawlerIdentityMemoCheck('207.46.13.77', $memoPath, ['.search.msn.com']));
         $this->assertSame($afterFirst, (int) $GLOBALS['crawlerDnsCallCount']);
     }
@@ -382,8 +384,8 @@ final class CrawlerIdentityTest extends TestCase
 
     public function testCrawlerIdentityTrustedClientIp_IgnoresSpoofableForwardedFor_FallsBackToRemoteAddr(): void
     {
-        // Client sets X-Forwarded-For to a Google range; without CF-Connecting-IP, the
-        // trusted identity must fall back to REMOTE_ADDR, never the attacker-supplied value.
+        // Client sets X-Forwarded-For to a Google range; without a validated Cloudflare peer,
+        // the trusted identity must fall back to REMOTE_ADDR, never any forwarded value.
         $oldServer = $_SERVER;
         try {
             $_SERVER = [
@@ -392,11 +394,18 @@ final class CrawlerIdentityTest extends TestCase
             ];
             $this->assertSame('9.9.9.9', crawlerIdentityTrustedClientIp());
 
-            // With CF-Connecting-IP present, it wins (Cloudflare overwrites it on proxied traffic).
+            // CF-Connecting-IP from a NON-Cloudflare peer must be ignored (forgeable origin-direct).
             $_SERVER = [
                 'HTTP_CF_CONNECTING_IP' => '66.249.80.1',
                 'HTTP_X_FORWARDED_FOR' => '6.6.6.6',
                 'REMOTE_ADDR' => '9.9.9.9',
+            ];
+            $this->assertSame('9.9.9.9', crawlerIdentityTrustedClientIp());
+
+            // Only a real Cloudflare peer may assert CF-Connecting-IP.
+            $_SERVER = [
+                'HTTP_CF_CONNECTING_IP' => '66.249.80.1',
+                'REMOTE_ADDR' => '104.16.1.1',
             ];
             $this->assertSame('66.249.80.1', crawlerIdentityTrustedClientIp());
         } finally {

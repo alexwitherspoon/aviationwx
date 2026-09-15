@@ -484,12 +484,13 @@ function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allow
 }
 
 /**
- * Client IP for the crawler admission check.
+ * Trusted client IP for the crawler admission check.
  *
  * Differs from the rate-limit bucketing identity on purpose: bucketing can tolerate a spoofed
  * forwarded header (an attacker rate-limits themselves), but an exemption cannot. So for the
- * identity decision we trust only CF-Connecting-IP (Cloudflare overwrites it on every proxied
- * request) or the TCP peer REMOTE_ADDR, never the first X-Forwarded-For entry a client can set.
+ * identity decision we trust CF-Connecting-IP only when the direct TCP peer is a real Cloudflare
+ * edge (nginx does not validate it, so a direct-origin client could otherwise invent a Google
+ * address), and fall back to REMOTE_ADDR otherwise. X-Forwarded-For is never trusted.
  *
  * @return string Client IP, or 'unknown' when none is available
  * @internal
@@ -497,11 +498,41 @@ function crawlerIdentityMemoCheckUnlocked(string $ip, string $path, array $allow
 function crawlerIdentityTrustedClientIp(): string
 {
     $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
-    if ($cfIp !== '') {
+    $peer = trim($_SERVER['REMOTE_ADDR'] ?? '');
+    if ($cfIp !== '' && $peer !== '' && crawlerIdentityPeerIsCloudflare($peer)) {
         return $cfIp;
     }
-    $remote = trim($_SERVER['REMOTE_ADDR'] ?? '');
-    return $remote !== '' ? $remote : 'unknown';
+    return $peer !== '' ? $peer : 'unknown';
+}
+
+/**
+ * Whether the direct peer is a Cloudflare egress address.
+ *
+ * Curated Cloudflare ranges kept as an admission check, not a routing decision. Source for the
+ * CIDRs below: https://api.cloudflare.com/client/v4/ips (verified 2026-09-15). nginx does not
+ * validate CF-Connecting-IP, so only a real Cloudflare peer may assert it.
+ *
+ * @internal
+ */
+function crawlerIdentityPeerIsCloudflare(string $peer): bool
+{
+    return crawlerIdentityCidrMatch($peer, [
+        ['ipv4Prefix' => '173.245.48.0/20'],
+        ['ipv4Prefix' => '103.21.244.0/22'],
+        ['ipv4Prefix' => '103.22.200.0/22'],
+        ['ipv4Prefix' => '103.31.4.0/22'],
+        ['ipv4Prefix' => '141.101.64.0/18'],
+        ['ipv4Prefix' => '108.162.192.0/18'],
+        ['ipv4Prefix' => '190.93.240.0/20'],
+        ['ipv4Prefix' => '188.114.96.0/20'],
+        ['ipv4Prefix' => '197.234.240.0/22'],
+        ['ipv4Prefix' => '198.41.128.0/17'],
+        ['ipv4Prefix' => '162.158.0.0/15'],
+        ['ipv4Prefix' => '104.16.0.0/13'],
+        ['ipv4Prefix' => '104.24.0.0/14'],
+        ['ipv4Prefix' => '172.64.0.0/13'],
+        ['ipv4Prefix' => '131.0.72.0/22'],
+    ]);
 }
 
 /**
