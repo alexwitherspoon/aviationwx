@@ -313,7 +313,10 @@ function crawlerIdentityGooglePrefixes(): ?array
     if (function_exists('apcu_fetch')) {
         $cached = @apcu_fetch('crawler_identity_google');
         if (is_array($cached)) {
-            return $cached;
+            $currentMtime = (int) filemtime($path);
+            if ((int) ($cached['mtime'] ?? -1) === $currentMtime && is_array($cached['prefixes'])) {
+                return $cached['prefixes'];
+            }
         }
     }
     $content = @file_get_contents($path);
@@ -326,7 +329,14 @@ function crawlerIdentityGooglePrefixes(): ?array
     }
     $prefixes = $json['prefixes'];
     if (function_exists('apcu_store')) {
-        @apcu_store('crawler_identity_google', $prefixes, SEO_CRAWLER_IDENTITY_REFRESH_INTERVAL + RATE_LIMIT_APCU_TTL_BUFFER);
+        // Cache keyed on file mtime: the refresh worker runs as a separate CLI process whose own
+        // apcu_delete cannot invalidate web workers, so gate the value on the file identity that
+        // all processes share. A rewritten file reloads immediately instead of lingering a TTL.
+        @apcu_store(
+            'crawler_identity_google',
+            ['mtime' => (int) filemtime($path), 'prefixes' => $prefixes],
+            SEO_CRAWLER_IDENTITY_REFRESH_INTERVAL + RATE_LIMIT_APCU_TTL_BUFFER
+        );
     }
     return $prefixes;
 }
