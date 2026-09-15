@@ -247,7 +247,19 @@ function crawlerIdentityCidrMatch(string $ip, array $prefixes): bool
         }
         $slash = strpos($cidr, '/');
         $network = $slash !== false ? substr($cidr, 0, $slash) : $cidr;
-        $len = $slash !== false ? (int) substr($cidr, $slash + 1) : $addrBits;
+        $len = $addrBits;
+        if ($slash !== false) {
+            $lenRaw = substr($cidr, $slash + 1);
+            // (int) 'abc' is 0 in PHP, which would widen a malformed prefix to the whole address
+            // family; an oversized length walks past the packed bytes and crashes on ord('').
+            if (!preg_match('/^\d+$/', $lenRaw)) {
+                continue;
+            }
+            $len = (int) $lenRaw;
+            if ($len < 0 || $len > $addrBits) {
+                continue;
+            }
+        }
 
         $nIs6 = str_contains($network, ':');
         if ($nIs6 !== $is6) {

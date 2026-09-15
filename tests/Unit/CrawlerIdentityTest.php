@@ -116,6 +116,27 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(null, crawlerIdentityNormalizeHost(null));
     }
 
+    public function testCrawlerIdentityCidrMatch_NonDecimalPrefixLength_Ignored(): void
+    {
+        // (int) 'abc' is 0 in PHP, which would widen a malformed prefix to the whole family.
+        $prefixes = [
+            ['ipv4Prefix' => '66.249.64.0/abc'],
+            ['ipv4Prefix' => '8.8.8.0/24'],
+        ];
+        $this->assertFalse(crawlerIdentityCidrMatch('66.249.80.1', $prefixes));
+        $this->assertTrue(crawlerIdentityCidrMatch('8.8.8.9', $prefixes));
+    }
+
+    public function testCrawlerIdentityCidrMatch_OutOfRangePrefixLength_Ignored(): void
+    {
+        $prefixes = [
+            ['ipv4Prefix' => '66.249.64.0/64'],
+            ['ipv6Prefix' => '2001:4860:4801:10::/200'],
+        ];
+        $this->assertFalse(crawlerIdentityCidrMatch('66.249.80.1', $prefixes));
+        $this->assertFalse(crawlerIdentityCidrMatch('2001:4860:4801:10::5', $prefixes));
+    }
+
     public function testCrawlerIdentityVerifyDnsChain_BingSuffixAndForwardMatch_Accepts(): void
     {
         $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
