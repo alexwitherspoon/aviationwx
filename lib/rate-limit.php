@@ -69,12 +69,14 @@ function rateLimitUsesFileStore(): bool
  * @return bool True if allowed, false if rate limited
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
-    $ip = getRateLimitClientIp();
-
     // Verified search-engine crawlers skip the per-IP caps their multi-resource renders hit.
-    if (isKnownSearchEngineCrawler($ip)) {
+    // Admission uses the trusted client IP (CF-Connecting-IP / REMOTE_ADDR), not the spoofable
+    // forwarded header that buckets the rate limit.
+    if (isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
         return true;
     }
+
+    $ip = getRateLimitClientIp();
 
     if (!rateLimitUsesFileStore()) {
         $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);

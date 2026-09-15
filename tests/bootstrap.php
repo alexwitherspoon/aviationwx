@@ -46,6 +46,12 @@ if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
     define('CACHE_METRICS_WEEKLY_DIR', CACHE_METRICS_DIR . '/weekly');
 }
 
+// Override crawler identity cache dir for testing (must be before cache-paths.php is loaded)
+// so crawler-identity tests never read or write the project's real allowlist files.
+if (!defined('CACHE_CRAWLER_IDENTITY_DIR')) {
+    define('CACHE_CRAWLER_IDENTITY_DIR', sys_get_temp_dir() . '/aviationwx_test_crawler_identity');
+}
+
 // Create test log directory and log files
 @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
 @touch(AVIATIONWX_LOG_DIR . '/user.log');

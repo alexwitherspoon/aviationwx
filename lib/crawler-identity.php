@@ -81,7 +81,7 @@ function crawlerIdentityNormalizeHost(?string $host): ?string
  *
  * @param string $ip Address to verify
  * @param array<int,string> $allowedSuffixes e.g. ['.search.msn.com'] for Bing
- * @return bool True when PTR host ends with an allowed suffix AND forward DNS returns $ip
+ * @return bool True when PTR host ends with an allowed suffix AND forward DNS resolves back to $ip
  * @internal
  */
 function crawlerIdentityVerifyDnsChain(string $ip, array $allowedSuffixes): bool
@@ -100,8 +100,37 @@ function crawlerIdentityVerifyDnsChain(string $ip, array $allowedSuffixes): bool
     if (!$suffixMatch) {
         return false;
     }
+    // Forward lookup must resolve back to the original address. Check every A/AAAA record so
+    // a dual-stack host with multiple addresses is accepted regardless of which one we probed.
     $forward = crawlerIdentityResolveDns($host, true);
-    return $forward !== null && $forward === $ip;
+    if ($forward !== null && $forward === $ip) {
+        return true;
+    }
+    $recs = crawlerIdentityForwardRecords($host);
+    foreach ($recs as $rec) {
+        $addr = (string) ($rec['ip'] ?? $rec['ipv6'] ?? '');
+        if ($addr === $ip) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * A/AAAA records for a hostname.
+ *
+ * Test hook: set `$GLOBALS['crawlerIdentityTestForwardRecords']` to the record list.
+ *
+ * @return array<int,array<string,mixed>>
+ * @internal
+ */
+function crawlerIdentityForwardRecords(string $host): array
+{
+    if (isset($GLOBALS['crawlerIdentityTestForwardRecords']) && is_array($GLOBALS['crawlerIdentityTestForwardRecords'])) {
+        return $GLOBALS['crawlerIdentityTestForwardRecords'];
+    }
+    $recs = @dns_get_record($host, DNS_A | DNS_AAAA);
+    return is_array($recs) ? $recs : [];
 }
 
 /**
@@ -346,6 +375,27 @@ function crawlerIdentityMemoCheck(string $ip, string $path, array $allowedSuffix
     $memo[$ip] = $now + SEO_CRAWLER_MEMO_MAX_AGE;
     crawlerIdentityWriteMemo($path, $memo);
     return true;
+}
+
+/**
+ * Client IP for the crawler admission check.
+ *
+ * Differs from the rate-limit bucketing identity on purpose: bucketing can tolerate a spoofed
+ * forwarded header (an attacker rate-limits themselves), but an exemption cannot. So for the
+ * identity decision we trust only CF-Connecting-IP (Cloudflare overwrites it on every proxied
+ * request) or the TCP peer REMOTE_ADDR, never the first X-Forwarded-For entry a client can set.
+ *
+ * @return string Client IP, or 'unknown' when none is available
+ * @internal
+ */
+function crawlerIdentityTrustedClientIp(): string
+{
+    $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '');
+    if ($cfIp !== '') {
+        return $cfIp;
+    }
+    $remote = trim($_SERVER['REMOTE_ADDR'] ?? '');
+    return $remote !== '' ? $remote : 'unknown';
 }
 
 /**

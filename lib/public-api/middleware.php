@@ -86,8 +86,10 @@ function processPublicApiRequest(): array
     
     // Verified search-engine crawlers skip the anonymous tier's rate limit entirely:
     // their render/JSON fetches would otherwise trip the per-IP caps. Partner keys stay keyed
-    // (not IP-limited) and human requests keep their counters.
-    if ($tier === 'anonymous' && isKnownSearchEngineCrawler($ip)) {
+    // (not IP-limited) and human requests keep their counters. Admission uses the trusted
+    // client IP (CF-Connecting-IP / REMOTE_ADDR), not the spoofable forwarded header that
+    // buckets the anonymous tier.
+    if ($tier === 'anonymous' && isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
         $rateLimitResult = [
             'allowed' => true,
             'tier' => 'anonymous',

@@ -22,12 +22,11 @@ require_once __DIR__ . '/../lib/crawler-identity.php';
 
 $summary = crawlerIdentityRefresh();
 
-// Exit 1 only when the file is stale and the refresh keeps failing, so an observer can page.
-$exitCode = ($summary['google_status'] === 'fetch_failed'
-    && is_numeric($summary['google_cache_age_seconds'])
-    && (int) $summary['google_cache_age_seconds'] >= SEO_CRAWLER_STALE_AFTER_SECONDS)
-    ? 1
-    : 0;
+// Exit 1 when the refresh failed and the cached allowlist is missing or past the stale window,
+// so an observer can page on a system with no usable crawler allowlist.
+$age = $summary['google_cache_age_seconds'];
+$noUsableCache = $age === null || (is_numeric($age) && (int) $age >= SEO_CRAWLER_STALE_AFTER_SECONDS);
+$exitCode = ($summary['google_status'] === 'fetch_failed' && $noUsableCache) ? 1 : 0;
 
 echo json_encode([
     'google_status' => $summary['google_status'],

@@ -10,14 +10,8 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
-// Steer the crawler identity cache dir to a disposable path before cache-paths loads.
-if (!defined('CACHE_CRAWLER_IDENTITY_DIR')) {
-    define('CACHE_CRAWLER_IDENTITY_DIR', sys_get_temp_dir() . '/crawler_identity_test_' . getmypid());
-}
-
-if (!defined('CACHE_BASE_DIR')) {
-    define('CACHE_BASE_DIR', sys_get_temp_dir() . '/crawler_identity_test_base_' . getmypid());
-}
+// Cache paths are sandboxed by tests/bootstrap.php before cache-paths loads: a disposable
+// CACHE_CRAWLER_IDENTITY_DIR avoids touching the project's real allowlist files.
 
 require_once __DIR__ . '/../../lib/crawler-identity.php';
 
@@ -46,7 +40,8 @@ final class CrawlerIdentityTest extends TestCase
             $GLOBALS['crawlerIdentityDnsResolver'],
             $GLOBALS['crawlerIdentityTestHttpGet'],
             $GLOBALS['crawlerDnsCallCount'],
-            $GLOBALS['crawlerIdentityTestFixture']
+            $GLOBALS['crawlerIdentityTestFixture'],
+            $GLOBALS['crawlerIdentityTestForwardRecords']
         );
         foreach ([
             getCrawlerIdentityGooglePath(),
@@ -228,5 +223,60 @@ final class CrawlerIdentityTest extends TestCase
             ['HTTP_USER_AGENT' => 'Mozilla/5.0 (Macintosh; Chrome/122)']
         ));
         $this->assertSame($before, (int) $GLOBALS['crawlerDnsCallCount']);
+    }
+
+    public function testDnsChainAcceptsAnyForwardAddressNotJustFirst(): void
+    {
+        // PTR host resolves forward to two A records; the verified IP is the second one.
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            return $forward ? '207.46.13.10' : 'msnbot-multi.search.msn.com';
+        };
+        $GLOBALS['crawlerIdentityTestForwardRecords'] = [
+            ['ip' => '207.46.13.10'],
+            ['ip' => '207.46.13.11'],
+        ];
+        $this->assertTrue(crawlerIdentityVerifyDnsChain('207.46.13.11', ['.search.msn.com']));
+        $this->assertFalse(crawlerIdentityVerifyDnsChain('207.46.13.12', ['.search.msn.com']));
+    }
+
+    public function testTrustedClientIpIgnoresSpoofableForwardedFor(): void
+    {
+        // Client sets X-Forwarded-For to a Google range; without CF-Connecting-IP, the
+        // trusted identity must fall back to REMOTE_ADDR, never the attacker-supplied value.
+        $oldServer = $_SERVER;
+        try {
+            $_SERVER = [
+                'HTTP_X_FORWARDED_FOR' => '66.249.80.1',
+                'REMOTE_ADDR' => '9.9.9.9',
+            ];
+            $this->assertSame('9.9.9.9', crawlerIdentityTrustedClientIp());
+
+            // With CF-Connecting-IP present, it wins (Cloudflare overwrites it on proxied traffic).
+            $_SERVER = [
+                'HTTP_CF_CONNECTING_IP' => '66.249.80.1',
+                'HTTP_X_FORWARDED_FOR' => '6.6.6.6',
+                'REMOTE_ADDR' => '9.9.9.9',
+            ];
+            $this->assertSame('66.249.80.1', crawlerIdentityTrustedClientIp());
+        } finally {
+            $_SERVER = $oldServer;
+        }
+    }
+
+    public function testRefreshFailureWithoutPriorCacheIsStaleState(): void
+    {
+        // No prior gogle file, and the fetch fails.
+        $this->assertFalse(file_exists(getCrawlerIdentityGooglePath()));
+        $GLOBALS['crawlerIdentityTestHttpGet'] = function (string $url, int $timeout): array {
+            return ['body' => false, 'http_code' => 0];
+        };
+        $summary = crawlerIdentityRefresh();
+        $this->assertSame('fetch_failed', $summary['google_status']);
+        $this->assertNull($summary['google_cache_age_seconds']);
+        // Worker treats null cache age as no usable allowlist: exit 1. Mirror that condition here
+        // to lock the shape without invoking the worker script.
+        $age = $summary['google_cache_age_seconds'];
+        $noUsableCache = $age === null || (is_numeric($age) && (int) $age >= SEO_CRAWLER_STALE_AFTER_SECONDS);
+        $this->assertTrue($noUsableCache);
     }
 }
