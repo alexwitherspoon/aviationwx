@@ -215,6 +215,18 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
     }
 
+    public function testMalformedIpReturnsFalseWithoutDns(): void
+    {
+        // A junk CF-Connecting-IP must not reach DNS (gethostbyaddr throws on malformed input).
+        $GLOBALS['crawlerDnsCallCount'] = 0;
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            $GLOBALS['crawlerDnsCallCount'] = (int) ($GLOBALS['crawlerDnsCallCount'] ?? 0) + 1;
+            return 'x';
+        };
+        $this->assertFalse(isKnownSearchEngineCrawler('not-an-ip', ['HTTP_USER_AGENT' => 'yandex']));
+        $this->assertSame(0, (int) $GLOBALS['crawlerDnsCallCount']);
+    }
+
     public function testForgedCfVerifiedBotHeaderDoesNotAdmitCrawler(): void
     {
         // The cf-verified-bot header is not honored: nginx does not strip/validate a client-sent

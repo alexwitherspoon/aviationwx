@@ -434,6 +434,11 @@ function isKnownSearchEngineCrawler(string $ip, array $serverEnv = null): bool
     if ($ip === '' || $ip === null) {
         return false;
     }
+    // Only valid addresses reach DNS or CIDR: gethostbyaddr() throws on malformed input under
+    // PHP 8, and a junk CF-Connecting-IP must not turn a rate-limit call into a 500.
+    if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+        return false;
+    }
     if ($serverEnv === null) {
         $serverEnv = $_SERVER;
     }
