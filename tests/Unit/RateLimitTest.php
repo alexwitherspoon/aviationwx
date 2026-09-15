@@ -506,5 +506,53 @@ class RateLimitTest extends TestCase
         $decoded = json_decode($content, true);
         $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
     }
+
+    public function testCheckRateLimit_VerifiedCrawlerIp_BypassesWithoutBucket(): void
+    {
+        // Seed a Google CIDR allowlist and a Google-verified request identity. The admission
+        // path must read crawlerIdentityTrustedClientIp(), which trusts CF-Connecting-IP only
+        // from a real Cloudflare peer.
+        crawlerIdentityWriteGoogleList(
+            getCrawlerIdentityGooglePath(),
+            ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $oldServer = $_SERVER;
+        try {
+            $_SERVER = [
+                'REMOTE_ADDR' => '104.16.1.1',
+                'HTTP_CF_CONNECTING_IP' => '66.249.80.1',
+            ];
+            $key = 'test_verified_crawler_' . uniqid();
+            // Any number of bypassed calls must pass and never create a rate-limit bucket.
+            for ($i = 0; $i < 5; $i++) {
+                $this->assertTrue(checkRateLimit($key, 1, 60));
+            }
+            $remaining = getRateLimitRemaining($key, 1, 60);
+            $this->assertSame(1, $remaining['remaining'], 'Verified crawler must not consume the bucket');
+        } finally {
+            $_SERVER = $oldServer;
+        }
+    }
+
+    public function testCheckRateLimit_UnknownClient_ConsumesBucket(): void
+    {
+        crawlerIdentityWriteGoogleList(
+            getCrawlerIdentityGooglePath(),
+            ['creationTime' => 'x', 'prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $oldServer = $_SERVER;
+        try {
+            $_SERVER = [
+                'REMOTE_ADDR' => '9.9.9.9',
+                'HTTP_CF_CONNECTING_IP' => '9.9.9.9',
+            ];
+            $key = 'test_unknown_client_' . uniqid();
+            $this->assertTrue(checkRateLimit($key, 1, 60));
+            // Second call in the same window hits the limit.
+            $this->assertFalse(checkRateLimit($key, 1, 60));
+        } finally {
+            $_SERVER = $oldServer;
+        }
+    }
 }
 

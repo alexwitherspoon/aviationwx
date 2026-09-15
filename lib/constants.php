@@ -330,6 +330,40 @@ if (!defined('RATE_LIMIT_APCU_TTL_BUFFER')) {
     define('RATE_LIMIT_APCU_TTL_BUFFER', 10);
 }
 
+// Crawler identity (SEO bot IP verification)
+
+// Refresh cadence for the Google crawler CIDR list and Bing/Yandex DNS memo files.
+if (!defined('SEO_CRAWLER_IDENTITY_REFRESH_INTERVAL')) {
+    define('SEO_CRAWLER_IDENTITY_REFRESH_INTERVAL', 43200); // 12 hours
+}
+
+// How long a Bing/Yandex reverse-DNS memo entry stays valid before re-verification.
+if (!defined('SEO_CRAWLER_MEMO_MAX_AGE')) {
+    define('SEO_CRAWLER_MEMO_MAX_AGE', 86400); // 24 hours
+}
+
+// How long a failed DNS verification is remembered so a spoofed crawl UA on the same IP does
+// not force a blocking reverse/forward lookup on every request.
+if (!defined('SEO_CRAWLER_NEGATIVE_MEMO_TTL')) {
+    define('SEO_CRAWLER_NEGATIVE_MEMO_TTL', 3600); // 1 hour
+}
+
+// Hard cap on negative-memo entries. A spoofed Bing/Yandex UA from many addresses must not grow
+// the shared file without bound, making every admission check re-read a larger map.
+if (!defined('SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES')) {
+    define('SEO_CRAWLER_NEGATIVE_MEMO_MAX_ENTRIES', 5000);
+}
+
+// Oldest a cached Google CIDR file may be before a failed refresh escalates to error-level logging.
+if (!defined('SEO_CRAWLER_STALE_AFTER_SECONDS')) {
+    define('SEO_CRAWLER_STALE_AFTER_SECONDS', 172800); // 48 hours
+}
+
+// HTTP read timeout for the Google CIDR list and mutations.
+if (!defined('SEO_CRAWLER_HTTP_TIMEOUT')) {
+    define('SEO_CRAWLER_HTTP_TIMEOUT', 15);
+}
+
 // File operations
 if (!defined('FILE_LOCK_STALE_SECONDS')) {
     define('FILE_LOCK_STALE_SECONDS', 300); // 5 minutes

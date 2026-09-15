@@ -899,6 +899,42 @@ function getRateLimitPath(string $identifier): string {
 }
 
 // =============================================================================
+// CRAWLER IDENTITY PATHS
+// =============================================================================
+
+if (!defined('CACHE_CRAWLER_IDENTITY_DIR')) {
+    define('CACHE_CRAWLER_IDENTITY_DIR', CACHE_BASE_DIR . '/crawler-identity');
+}
+
+/**
+ * Get the Google crawler CIDR list cache path.
+ */
+function getCrawlerIdentityGooglePath(): string {
+    return CACHE_CRAWLER_IDENTITY_DIR . '/google-crawlers.json';
+}
+
+/**
+ * Get the Bing reverse-DNS memo cache path.
+ */
+function getCrawlerIdentityBingPath(): string {
+    return CACHE_CRAWLER_IDENTITY_DIR . '/bing-verified.json';
+}
+
+/**
+ * Get the Yandex reverse-DNS memo cache path.
+ */
+function getCrawlerIdentityYandexPath(): string {
+    return CACHE_CRAWLER_IDENTITY_DIR . '/yandex-verified.json';
+}
+
+/**
+ * Get the short-lived negative (DNS-verification-failed) memo cache path.
+ */
+function getCrawlerIdentityNegativePath(): string {
+    return CACHE_CRAWLER_IDENTITY_DIR . '/neg-verified.json';
+}
+
+// =============================================================================
 // UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
 // =============================================================================
 
@@ -1354,6 +1390,7 @@ function ensureAllCacheDirs(): array {
         CACHE_PARTNERS_LUM_DIR,
         CACHE_RATE_LIMITS_DIR,
         CACHE_UPSTREAM_LIMITS_DIR,
+        CACHE_CRAWLER_IDENTITY_DIR,
         CACHE_METRICS_DIR,
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,

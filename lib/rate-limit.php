@@ -2,6 +2,7 @@
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/crawler-identity.php';
 /**
  * Simple Rate Limiting Utility
  * IP-based rate limiting for API endpoints
@@ -68,6 +69,13 @@ function rateLimitUsesFileStore(): bool
  * @return bool True if allowed, false if rate limited
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
+    // Verified search-engine crawlers skip the per-IP caps their multi-resource renders hit.
+    // Admission uses the trusted client IP (CF-Connecting-IP / REMOTE_ADDR), not the spoofable
+    // forwarded header that buckets the rate limit.
+    if (isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
+        return true;
+    }
+
     $ip = getRateLimitClientIp();
 
     if (!rateLimitUsesFileStore()) {
@@ -287,6 +295,17 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
  */
 function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
     $ip = getRateLimitClientIp();
+
+    // Verified crawlers bypass enforcement, so their remaining headers must report a full bucket
+    // (same-identity contract as checkRateLimit): otherwise an exhausted bucket from before the
+    // entitlement would advertise a low remaining while the request still passes.
+    if (isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
+        $now = time();
+        return [
+            'remaining' => (int) max(0, $maxRequests),
+            'reset' => $now + $windowSeconds
+        ];
+    }
 
     if (rateLimitUsesFileStore()) {
         require_once __DIR__ . '/cache-paths.php';

@@ -77,6 +77,21 @@ function getOriginalClientIp(): string
 }
 
 /**
+ * Original client IP for crawler admission, hardened against spoofed proxy headers.
+ *
+ * getOriginalClientIp() trusts CF-Connecting-IP / X-Forwarded-For for rate-limit bucketing, which
+ * tolerates a spoofed value. Admission cannot: a direct-origin request forging a Google address
+ * would otherwise mint the crawler exemption when forwarded by the localhost hop. Returns the
+ * TCP peer UNLESS the direct peer is a validated Cloudflare range, matching the crawler-id trust.
+ *
+ * @return string Client IP appropriate for the crawler admission decision
+ */
+function getOriginalAdmissionIp(): string
+{
+    return crawlerIdentityTrustedClientIpFromEnv($_SERVER);
+}
+
+/**
  * Fetch weather data from the PUBLIC API
  * 
  * This is a READ-ONLY operation. The cache file already contains all daily
@@ -94,6 +109,8 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     // Get the original client IP to forward for rate limiting
     // This allows rate limiting per end-user, not per internal service
     $originalClientIp = getOriginalClientIp();
+    $originalAdmissionIp = getOriginalAdmissionIp();
+    $originalUserAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -106,6 +123,8 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
             'Accept: application/json',
             'X-Internal-Request: embed-widget',
             'X-Forwarded-Client-IP: ' . $originalClientIp, // Forward original user IP for rate limiting
+            'X-Forwarded-Admission-IP: ' . $originalAdmissionIp, // Hardened IP for crawler admission
+            'X-Forwarded-Client-UA: ' . $originalUserAgent, // Forward original UA so crawler admission is not blind
         ],
     ]);
     
@@ -267,8 +286,10 @@ function fetchEmbedDataFromApi(string $airportId): ?array
  */
 function fetchEmbedDataFromEmbedApi(string $airportId): ?array
 {
-    $apiUrl = 'http://127.0.0.1:8080/api/v1/airports/' . urlencode($airportId) . '/embed';
+$apiUrl = 'http://127.0.0.1:8080/api/v1/airports/' . urlencode($airportId) . '/embed';
     $originalClientIp = getOriginalClientIp();
+    $originalAdmissionIp = getOriginalAdmissionIp();
+    $originalUserAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
 
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -281,6 +302,8 @@ function fetchEmbedDataFromEmbedApi(string $airportId): ?array
             'Accept: application/json',
             'X-Internal-Request: embed-widget',
             'X-Forwarded-Client-IP: ' . $originalClientIp,
+            'X-Forwarded-Admission-IP: ' . $originalAdmissionIp,
+            'X-Forwarded-Client-UA: ' . $originalUserAgent,
         ],
     ]);
 
