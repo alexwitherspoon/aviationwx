@@ -2,9 +2,7 @@
 /**
  * Crawler identity allowlist: verify that an IP belongs to a known search-engine crawler.
  *
- * Three identity sources, cheapest first:
- * - Cloudflare `cf-verified-bot` request header (present only on plans with Bot Management;
- *   a no-op here when absent).
+ * Identity sources, cheapest first:
  * - Google: official CIDR list (developers.google.com/static/crawling/ipranges/common-crawlers.json),
  *   refreshed by the scheduler worker. Pure in-memory match after load.
  * - Bing / Yandex: reverse-DNS memo. No single authoritative IP list exists for either; both
@@ -415,32 +413,17 @@ function crawlerIdentityTrustedClientIp(): string
 }
 
 /**
- * Whether the request carries Cloudflare's verified-bot identity header.
- *
- * Only populated on Cloudflare plans with Bot Management. Always false on the free tier;
- * kept so upgrading a plan upgrades this path without a redeploy. Production callers pass
- * $_SERVER; the trait is extracted for testability.
- *
- * @param array<string,mixed> $serverEnv Request environment (defaults to $_SERVER)
- * @return bool
- */
-function crawlerIdentityCfVerifiedBot(array $serverEnv = null): bool
-{
-    if ($serverEnv === null) {
-        $serverEnv = $_SERVER;
-    }
-    $v = $serverEnv['HTTP_CF_VERIFIED_BOT'] ?? null;
-    return is_string($v) && strtolower(trim($v)) === 'true';
-}
-
-/**
  * Whether an IP is a known search-engine crawler.
  *
- * Order: Cloudflare header (no-op on free tier), Google CIDR, then Bing/Yandex memo gated on
- * the request user-agent. Google matching is pure CIDR with no DNS. Bing and Yandex have no
- * published range lists, so they are verified by reverse DNS only when the request advertises
- * that engine's user-agent; the memo makes that a once-per-IP-per-window lookup. A human with
- * a browser user-agent never triggers a DNS call here.
+ * Order: Google CIDR, then Bing/Yandex memo gated on the request user-agent. Google matching is
+ * pure CIDR with no DNS. Bing and Yandex have no published range lists, so they are verified by
+ * reverse DNS only when the request advertises that engine's user-agent; the memo makes that a
+ * once-per-IP-per-window lookup. A human with a browser user-agent never triggers a DNS call
+ * here.
+ *
+ * The Cloudflare cf-verified-bot header is deliberately not honored: the free tier never emits
+ * it, and nginx does not strip or validate a client-sent value, so trusting it would only open a
+ * forgeable bypass.
  *
  * @param string $ip Client IP address
  * @param array<string,mixed> $serverEnv Request environment (defaults to $_SERVER)
@@ -448,9 +431,6 @@ function crawlerIdentityCfVerifiedBot(array $serverEnv = null): bool
  */
 function isKnownSearchEngineCrawler(string $ip, array $serverEnv = null): bool
 {
-    if (crawlerIdentityCfVerifiedBot($serverEnv)) {
-        return true;
-    }
     if ($ip === '' || $ip === null) {
         return false;
     }

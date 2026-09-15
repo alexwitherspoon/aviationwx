@@ -215,13 +215,15 @@ final class CrawlerIdentityTest extends TestCase
         $this->assertSame(1, count(crawlerIdentityGooglePrefixes()));
     }
 
-    public function testCfVerifiedBotHeaderOnlyWhenTrue(): void
+    public function testForgedCfVerifiedBotHeaderDoesNotAdmitCrawler(): void
     {
-        $this->assertTrue(crawlerIdentityCfVerifiedBot(['HTTP_CF_VERIFIED_BOT' => 'true']));
-        $this->assertTrue(crawlerIdentityCfVerifiedBot(['HTTP_CF_VERIFIED_BOT' => 'True']));
-        $this->assertFalse(crawlerIdentityCfVerifiedBot(['HTTP_CF_VERIFIED_BOT' => 'false']));
-        $this->assertFalse(crawlerIdentityCfVerifiedBot([]));
-        $this->assertFalse(crawlerIdentityCfVerifiedBot(['HTTP_CF_VERIFIED_BOT' => '1']));
+        // The cf-verified-bot header is not honored: nginx does not strip/validate a client-sent
+        // value, so trusting it would be a forgeable bypass. A browser UA with that header must
+        // not be admitted (no Google CIDR match, no Bing/Yandex UA gate).
+        $this->assertFalse(isKnownSearchEngineCrawler(
+            '9.9.9.9',
+            ['HTTP_CF_VERIFIED_BOT' => 'true', 'HTTP_USER_AGENT' => 'Mozilla/5.0']
+        ));
     }
 
     public function testBingVerifiedOnlyWhenUaClaimsBing(): void
