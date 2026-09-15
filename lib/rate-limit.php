@@ -296,6 +296,17 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
 function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
     $ip = getRateLimitClientIp();
 
+    // Verified crawlers bypass enforcement, so their remaining headers must report a full bucket
+    // (same-identity contract as checkRateLimit): otherwise an exhausted bucket from before the
+    // entitlement would advertise a low remaining while the request still passes.
+    if (isKnownSearchEngineCrawler(crawlerIdentityTrustedClientIp())) {
+        $now = time();
+        return [
+            'remaining' => (int) max(0, $maxRequests),
+            'reset' => $now + $windowSeconds
+        ];
+    }
+
     if (rateLimitUsesFileStore()) {
         require_once __DIR__ . '/cache-paths.php';
         $identifier = md5($key . '_' . $ip);
