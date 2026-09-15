@@ -359,6 +359,9 @@ function crawlerIdentityWriteMemo(string $path, array $memo): bool
 /**
  * Verify an IP against a reverse-DNS memo (memoized DNS chain).
  *
+ * A failed check is recorded in a short-lived negative memo so a spoofed crawl user-agent on
+ * the same IP cannot force a blocking DNS lookup on every request.
+ *
  * @param string $ip Address to verify
  * @param string $path Memo cache file path
  * @param array<int,string> $allowedSuffixes Allowed PTR host suffixes
@@ -374,7 +377,14 @@ function crawlerIdentityMemoCheck(string $ip, string $path, array $allowedSuffix
         return true;
     }
 
+    $neg = crawlerIdentityReadMemo(getCrawlerIdentityNegativePath());
+    if (isset($neg[$ip]) && is_numeric($neg[$ip]) && (int) $neg[$ip] > $now) {
+        return false;
+    }
+
     if (!crawlerIdentityVerifyDnsChain($ip, $allowedSuffixes)) {
+        $neg[$ip] = $now + SEO_CRAWLER_NEGATIVE_MEMO_TTL;
+        crawlerIdentityWriteMemo(getCrawlerIdentityNegativePath(), $neg);
         return false;
     }
 
@@ -524,6 +534,7 @@ function crawlerIdentityRefresh(): array
         'google_prefixes' => 0,
         'bing_memo_entries' => 0,
         'yandex_memo_entries' => 0,
+        'negative_memo_entries' => 0,
         'google_cache_age_seconds' => null,
     ];
 
@@ -572,12 +583,12 @@ function crawlerIdentityRefresh(): array
     }
 
     // --- Prune memo files ---
-    foreach (
-        [
-            [getCrawlerIdentityBingPath(), 'bing'],
-            [getCrawlerIdentityYandexPath(), 'yandex'],
-        ] as $entry
-    ) {
+    $pruneSpecs = [
+        [getCrawlerIdentityBingPath(), 'bing'],
+        [getCrawlerIdentityYandexPath(), 'yandex'],
+        [getCrawlerIdentityNegativePath(), 'negative'],
+    ];
+    foreach ($pruneSpecs as $entry) {
         $memoPath = (string) $entry[0];
         $label = (string) $entry[1];
         $memo = crawlerIdentityReadMemo($memoPath);

@@ -33,6 +33,7 @@ echo json_encode([
     'google_prefixes' => $summary['google_prefixes'],
     'bing_memo_entries' => $summary['bing_memo_entries'],
     'yandex_memo_entries' => $summary['yandex_memo_entries'],
+    'negative_memo_entries' => $summary['negative_memo_entries'],
     'google_cache_age_seconds' => $summary['google_cache_age_seconds'],
 ]) . PHP_EOL;
 

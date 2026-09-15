@@ -24,6 +24,7 @@ final class CrawlerIdentityTest extends TestCase
             getCrawlerIdentityGooglePath(),
             getCrawlerIdentityBingPath(),
             getCrawlerIdentityYandexPath(),
+            getCrawlerIdentityNegativePath(),
         ] as $p) {
             if (file_exists($p)) {
                 @unlink($p);
@@ -47,6 +48,7 @@ final class CrawlerIdentityTest extends TestCase
             getCrawlerIdentityGooglePath(),
             getCrawlerIdentityBingPath(),
             getCrawlerIdentityYandexPath(),
+            getCrawlerIdentityNegativePath(),
         ] as $p) {
             if (file_exists($p)) {
                 @unlink($p);
@@ -158,6 +160,25 @@ final class CrawlerIdentityTest extends TestCase
 
         // Second call within the memo window must not hit the resolver at all
         $this->assertTrue(crawlerIdentityMemoCheck('207.46.13.45', $memoPath, ['.search.msn.com']));
+        $this->assertSame($firstCount, (int) $GLOBALS['crawlerDnsCallCount']);
+    }
+
+    public function testMemoCheckFailedVerifyUsesShortNegativeMemo(): void
+    {
+        $GLOBALS['crawlerDnsCallCount'] = 0;
+        $GLOBALS['crawlerIdentityDnsResolver'] = function (string $q, bool $forward): ?string {
+            $GLOBALS['crawlerDnsCallCount'] = (int) ($GLOBALS['crawlerDnsCallCount'] ?? 0) + 1;
+            return $forward ? '9.9.9.9' : 'msnbot-2.search.msn.com';
+        };
+        $memoPath = getCrawlerIdentityBingPath();
+
+        // Failed verify records a negative memo entry.
+        $this->assertFalse(crawlerIdentityMemoCheck('207.46.13.50', $memoPath, ['.search.msn.com']));
+        $firstCount = (int) $GLOBALS['crawlerDnsCallCount'];
+        $this->assertTrue($firstCount >= 2);
+
+        // Repeat within the negative memo window skips DNS.
+        $this->assertFalse(crawlerIdentityMemoCheck('207.46.13.50', $memoPath, ['.search.msn.com']));
         $this->assertSame($firstCount, (int) $GLOBALS['crawlerDnsCallCount']);
     }
 

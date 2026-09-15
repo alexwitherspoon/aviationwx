@@ -927,6 +927,13 @@ function getCrawlerIdentityYandexPath(): string {
     return CACHE_CRAWLER_IDENTITY_DIR . '/yandex-verified.json';
 }
 
+/**
+ * Get the short-lived negative (DNS-verification-failed) memo cache path.
+ */
+function getCrawlerIdentityNegativePath(): string {
+    return CACHE_CRAWLER_IDENTITY_DIR . '/neg-verified.json';
+}
+
 // =============================================================================
 // UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
 // =============================================================================

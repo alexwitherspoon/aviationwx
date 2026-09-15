@@ -342,6 +342,12 @@ if (!defined('SEO_CRAWLER_MEMO_MAX_AGE')) {
     define('SEO_CRAWLER_MEMO_MAX_AGE', 86400); // 24 hours
 }
 
+// How long a failed DNS verification is remembered so a spoofed crawl UA on the same IP does
+// not force a blocking reverse/forward lookup on every request.
+if (!defined('SEO_CRAWLER_NEGATIVE_MEMO_TTL')) {
+    define('SEO_CRAWLER_NEGATIVE_MEMO_TTL', 3600); // 1 hour
+}
+
 // Oldest a cached Google CIDR file may be before a failed refresh escalates to error-level logging.
 if (!defined('SEO_CRAWLER_STALE_AFTER_SECONDS')) {
     define('SEO_CRAWLER_STALE_AFTER_SECONDS', 172800); // 48 hours
