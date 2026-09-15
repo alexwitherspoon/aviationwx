@@ -589,7 +589,9 @@ function crawlerIdentityRefresh(): array
 
     if ($body !== false && $code === HTTP_STATUS_OK && $body !== '') {
         $json = @json_decode($body, true);
-        if (is_array($json) && isset($json['prefixes']) && is_array($json['prefixes'])) {
+        if (is_array($json) && isset($json['prefixes']) && is_array($json['prefixes'])
+            && crawlerIdentityHasWellFormedPrefix($json['prefixes'])
+        ) {
             [$written, $prefixCount] = crawlerIdentityWriteGoogleList($path, $json);
             if ($written) {
                 $summary['google_status'] = 'fetched';
@@ -648,6 +650,41 @@ function crawlerIdentityRefresh(): array
 
     $summary['google_cache_age_seconds'] = file_exists($path) ? ($now - (int) filemtime($path)) : null;
     return $summary;
+}
+
+/**
+ * Whether a CIDR prefix list contains at least one usable entry.
+ *
+ * Rejects an empty or malformed list so a bad upstream response cannot replace a valid allowlist
+ * with one that admits nothing (silently disabling Google crawler admission).
+ *
+ * @param array<int,array<string,mixed>> $prefixes
+ * @internal
+ */
+function crawlerIdentityHasWellFormedPrefix(array $prefixes): bool
+{
+    foreach ($prefixes as $prefix) {
+        $cidr = is_array($prefix)
+            ? (string) ($prefix['ipv6Prefix'] ?? $prefix['ipv4Prefix'] ?? '')
+            : (string) $prefix;
+        if ($cidr === '') {
+            continue;
+        }
+        $addrBits = str_contains($cidr, ':') ? 128 : 32;
+        $slash = strpos($cidr, '/');
+        if ($slash === false) {
+            return true;
+        }
+        $lenRaw = substr($cidr, $slash + 1);
+        if (!preg_match('/^\d+$/', $lenRaw)) {
+            continue;
+        }
+        $len = (int) $lenRaw;
+        if ($len >= 0 && $len <= $addrBits) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
