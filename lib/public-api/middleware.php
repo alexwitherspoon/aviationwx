@@ -150,14 +150,16 @@ function getPublicApiClientIp(): string
 }
 
 /**
- * Check if request is from a first-party internal service
+ * Check if a request claims to be from an internal service
  *
- * First-party requests come from the localhost hop only (nginx to Apache), and must carry an
- * internal request header. REMOTE_ADDR is the TCP peer and cannot be spoofed over HTTP, so it
- * is the right gate for "is this an internal call," distinct from the client identity used for
- * rate limiting.
+ * The only hard facts here: REMOTE_ADDR is the TCP peer, and behind the nginx to Apache hop it
+ * is always 127.0.0.1. So this check is NOT a security boundary. It labels a request as
+ * first-party when it carries a known X-Internal-Request value, which an edge caller can send.
+ * Its only effect is which rate-limit bucket the anonymous tier keys on. Security decisions,
+ * like the crawler exemption, use the proxy-validated identity from getClientIp(), never this
+ * label.
  *
- * @return bool True if request is verified first-party
+ * @return bool True if the request claims a known internal-service header
  */
 function isFirstPartyRequest(): bool
 {
