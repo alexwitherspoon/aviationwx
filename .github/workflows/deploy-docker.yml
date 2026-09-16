@@ -1113,7 +1113,7 @@ jobs:
           CACHE_MKDIRS="/tmp/aviationwx-cache/webcams /tmp/aviationwx-cache/sftp \
             /tmp/aviationwx-cache/weather /tmp/aviationwx-cache/weather/history \
             /tmp/aviationwx-cache/ftp /tmp/aviationwx-cache/notam /tmp/aviationwx-cache/station-power /tmp/aviationwx-cache/partners \
-            /tmp/aviationwx-cache/rate_limits /tmp/aviationwx-cache/upstream-limits \
+            /tmp/aviationwx-cache/rate_limits /tmp/aviationwx-cache/upstream-limits /tmp/aviationwx-cache/crawler-admission \
             /tmp/aviationwx-cache/metar-bulk/stations /tmp/aviationwx-cache/metar-bulk/tmp \
             /tmp/aviationwx-cache/nws-points \
             /tmp/aviationwx-cache/metrics/hourly /tmp/aviationwx-cache/metrics/daily /tmp/aviationwx-cache/metrics/weekly /tmp/aviationwx-cache/metrics/spill \
@@ -1134,7 +1134,7 @@ jobs:
           # Set ownership to match container www-data for cache data dirs.
           # Do NOT chown -R the whole tree: host path sftp/ is bind-mounted to /var/sftp and each
           # {user}/ chroot must stay root:root for sshd (www-data breaks bridge SFTP uploads).
-          CACHE_CHOWN_DIRS="webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits \
+          CACHE_CHOWN_DIRS="webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits crawler-admission \
             metar-bulk nws-points metrics metrics/hourly metrics/daily metrics/weekly metrics/spill \
             peak_gusts temp_extremes runways map_tiles push_webcams"
           for d in ${CACHE_CHOWN_DIRS}; do
@@ -1155,7 +1155,7 @@ jobs:
           
           # Ensure directory permissions allow www-data to write (except sftp chroot tree)
           sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
-            for d in webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits \
+            for d in webcams weather weather/history ftp notam station-power partners rate_limits upstream-limits crawler-admission \
               metar-bulk nws-points push_webcams \
               metrics metrics/hourly metrics/daily metrics/weekly metrics/spill \
               peak_gusts temp_extremes runways map_tiles; do

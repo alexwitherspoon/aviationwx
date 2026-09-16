@@ -17,6 +17,13 @@ class RateLimitTest extends TestCase
         parent::setUp();
         $this->testCacheDir = CACHE_BASE_DIR;
         ensureCacheDir($this->testCacheDir);
+        @unlink(getCrawlerGoogleAllowlistPath());
+        @unlink(getCrawlerVerifiedIpAllowlistPath());
+        @unlink(getCrawlerPendingIpsPath());
+        if (function_exists('apcu_delete')) {
+            @apcu_delete('crawler_admission_google');
+            @apcu_delete('crawler_admission_verified');
+        }
     }
     
     protected function tearDown(): void
@@ -33,6 +40,9 @@ class RateLimitTest extends TestCase
                 @rmdir($dir);
             }
         }
+        @unlink(getCrawlerGoogleAllowlistPath());
+        @unlink(getCrawlerVerifiedIpAllowlistPath());
+        @unlink(getCrawlerPendingIpsPath());
         parent::tearDown();
     }
 
@@ -41,7 +51,7 @@ class RateLimitTest extends TestCase
      */
     private function withServerVars(array $vars, callable $fn): void
     {
-        $keys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
+        $keys = ['HTTP_X_REAL_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR', 'HTTP_USER_AGENT'];
         $saved = [];
         foreach ($keys as $key) {
             $saved[$key] = $_SERVER[$key] ?? null;
@@ -65,42 +75,31 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Cloudflare's header wins even when a client supplies a spoofed
-     * X-Forwarded-For, so abusers cannot rotate rate limit buckets
+     * nginx real_ip rewrote the CF client into $remote_addr and sent it as X-Real-IP, which
+     * Apache exposes as HTTP_X_REAL_IP. That validated value is the identity; a client-supplied
+     * CF-Connecting-IP or X-Forwarded-For cannot rotate the bucket.
      */
-    public function testGetRateLimitClientIp_CfConnectingIpBeatsSpoofedXff()
+    public function testGetRateLimitClientIp_UsesXRealIpFromTrustedProxy()
     {
         $this->withServerVars([
+            'HTTP_X_REAL_IP' => '203.0.113.7',
             'HTTP_CF_CONNECTING_IP' => '203.0.113.7',
             'HTTP_X_FORWARDED_FOR' => '198.51.100.99, 203.0.113.7',
-            'REMOTE_ADDR' => '172.68.1.1',
+            'REMOTE_ADDR' => '127.0.0.1',
         ], function () {
             $this->assertSame('203.0.113.7', getRateLimitClientIp());
         });
     }
 
     /**
-     * Without Cloudflare the first X-Forwarded-For entry is the client
+     * Direct or self-host mode: no nginx forwarding, so the TCP peer is the client
      */
-    public function testGetRateLimitClientIp_XffFirstEntryWhenNoCfHeader()
+    public function testGetRateLimitClientIp_FallsBackToRemoteAddr()
     {
         $this->withServerVars([
-            'HTTP_X_FORWARDED_FOR' => ' 198.51.100.20 , 10.0.0.1',
             'REMOTE_ADDR' => '10.0.0.1',
         ], function () {
-            $this->assertSame('198.51.100.20', getRateLimitClientIp());
-        });
-    }
-
-    /**
-     * Direct connections fall back to the TCP source address
-     */
-    public function testGetRateLimitClientIp_RemoteAddrFallback()
-    {
-        $this->withServerVars([
-            'REMOTE_ADDR' => '192.0.2.33',
-        ], function () {
-            $this->assertSame('192.0.2.33', getRateLimitClientIp());
+            $this->assertSame('10.0.0.1', getRateLimitClientIp());
         });
     }
 
@@ -115,21 +114,14 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Whitespace-only headers must fall through instead of bucketing
+     * Whitespace-only values fall through to unknown instead of bucketing
      * every such client together on an empty identity
      */
     public function testGetRateLimitClientIp_WhitespaceHeadersFallThrough()
     {
         $this->withServerVars([
-            'HTTP_CF_CONNECTING_IP' => '   ',
-            'HTTP_X_FORWARDED_FOR' => ' , 10.0.0.1',
-            'REMOTE_ADDR' => '192.0.2.44',
-        ], function () {
-            $this->assertSame('192.0.2.44', getRateLimitClientIp());
-        });
-
-        $this->withServerVars([
-            'HTTP_X_FORWARDED_FOR' => '  ',
+            'HTTP_X_REAL_IP' => '   ',
+            'REMOTE_ADDR' => '   ',
         ], function () {
             $this->assertSame('unknown', getRateLimitClientIp());
         });
@@ -139,25 +131,25 @@ class RateLimitTest extends TestCase
      * checkRateLimit and getRateLimitRemaining must bucket by the same
      * identity or the X-RateLimit-* headers describe the wrong client
      */
-    public function testRateLimit_BucketsByCfConnectingIp()
+    public function testRateLimit_BucketsByXRealIp()
     {
         $this->withServerVars([
-            'HTTP_CF_CONNECTING_IP' => '203.0.113.50',
-            'HTTP_X_FORWARDED_FOR' => '198.51.100.1',
-            'REMOTE_ADDR' => '172.68.2.2',
+            'HTTP_X_REAL_IP' => '203.0.113.50',
+            'REMOTE_ADDR' => '127.0.0.1',
         ], function () {
-            $key = 'test_cf_bucket_' . uniqid();
+            $key = 'test_client_bucket_' . uniqid();
             $max = 5;
             checkRateLimit($key, $max, 60);
             $afterFirst = getRateLimitRemaining($key, $max, 60)['remaining'];
 
-            // A different spoofed XFF must not move the client to a new bucket
+            // A spoofed forwarded header must not move the client to a new bucket
+            $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.1';
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.2';
             checkRateLimit($key, $max, 60);
             $afterSecond = getRateLimitRemaining($key, $max, 60)['remaining'];
 
             $this->assertSame($afterFirst - 1, $afterSecond,
-                'Spoofed XFF rotated the bucket despite CF-Connecting-IP being present');
+                'Spoofed forwarded headers rotated the bucket despite X-Real-IP being the identity');
         });
     }
 
@@ -170,6 +162,70 @@ class RateLimitTest extends TestCase
         // In that case, it will fall through to the no-op return true
         $result = checkRateLimit('test_key_' . uniqid(), 60, 60);
         $this->assertTrue($result);
+    }
+
+    /**
+     * A verified crawler (Google CIDR) must skip the per-IP cap and never create a bucket
+     */
+    public function testCheckRateLimit_VerifiedCrawler_BypassesWithoutBucket()
+    {
+        crawlerAdmissionWriteJson(
+            getCrawlerGoogleAllowlistPath(),
+            ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '66.249.80.1',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        ], function () {
+            $key = 'test_google_crawler_' . uniqid();
+            // Any number of calls pass and never consume the bucket.
+            for ($i = 0; $i < 5; $i++) {
+                $this->assertTrue(checkRateLimit($key, 1, 60));
+            }
+            $this->assertSame(1, getRateLimitRemaining($key, 1, 60)['remaining']);
+        });
+    }
+
+    /**
+     * An unverified Bing UA must consume its bucket and be queued for off-path verification
+     */
+    public function testCheckRateLimit_UnverifiedBingUa_ConsumesBucketAndQueues()
+    {
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '207.46.13.99',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; bingbot/2.0)',
+        ], function () {
+            $key = 'test_bing_pending_' . uniqid();
+            $this->assertTrue(checkRateLimit($key, 1, 60));
+            $this->assertFalse(checkRateLimit($key, 1, 60), 'unverified crawler must consume the bucket');
+
+            // The IP was queued for the off-path worker.
+            $pending = crawlerAdmissionPendingIps();
+            $this->assertArrayHasKey('207.46.13.99', $pending);
+        });
+    }
+
+    /**
+     * A browser user agent is neither exempt nor queued
+     */
+    public function testCheckRateLimit_BrowserUa_NotExemptNotQueued()
+    {
+        crawlerAdmissionWriteJson(
+            getCrawlerGoogleAllowlistPath(),
+            ['prefixes' => [['ipv4Prefix' => '66.249.64.0/19']]]
+        );
+        $this->withServerVars([
+            'HTTP_X_REAL_IP' => '198.51.100.33',
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Macintosh; Chrome/122)',
+        ], function () {
+            $key = 'test_browser_' . uniqid();
+            $this->assertTrue(checkRateLimit($key, 1, 60));
+            $this->assertFalse(checkRateLimit($key, 1, 60));
+            $this->assertSame([], crawlerAdmissionPendingIps());
+        });
     }
 
     /**

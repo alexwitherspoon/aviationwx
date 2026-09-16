@@ -10,6 +10,8 @@
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/../client-ip.php';
+require_once __DIR__ . '/../crawler-admission.php';
 require_once __DIR__ . '/response.php';
 
 /**
@@ -45,6 +47,10 @@ function processPublicApiRequest(): array
     
     // Get client IP for rate limiting
     $ip = getPublicApiClientIp();
+    // The crawler exemption uses the proxy-validated identity ONLY. The first-party branch below
+    // overwrites $ip with a forwarded header an edge caller can supply (nginx does not strip it),
+    // so it must never drive the exemption; keep the validated value here for that decision.
+    $crawlerIdentity = $ip;
     
     // Check for first-party internal requests (embeds, dashboard, scheduler)
     // First-party requests come from localhost and forward the original client IP
@@ -83,11 +89,23 @@ function processPublicApiRequest(): array
     // Check for internal health check (bypass rate limiting entirely)
     $isHealthCheck = isPublicApiHealthCheckRequest();
     
+    // Verified search-engine crawlers skip the anonymous tier's per-IP caps, the same identity
+    // the rate limiter uses. Queue unverified Bing/Yandex-looking clients for off-path verify;
+    // a miss consumes counters until confirmed.
+    if ($tier === 'anonymous') {
+        crawlerAdmissionMaybeEnqueue($crawlerIdentity, $_SERVER['HTTP_USER_AGENT'] ?? '');
+        $crawlerExempt = isKnownCrawler($crawlerIdentity);
+    } else {
+        $crawlerExempt = false;
+    }
+    
     // Check rate limits using the appropriate identifier
     // - Partner requests: use API key
     // - Anonymous/first-party: use client IP (original user's IP for first-party)
     $identifier = $apiKey ?? $ip;
-    $rateLimitResult = checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
+    $rateLimitResult = $crawlerExempt
+        ? crawlerAdmissionBypassResult()
+        : checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
     
     // Send rate limit headers on every response
     $rateLimitHeaders = getPublicApiRateLimitHeaders($rateLimitResult);
@@ -120,56 +138,31 @@ function processPublicApiRequest(): array
 
 /**
  * Get the client IP address for rate limiting
- * 
- * Respects X-Forwarded-For header for proxied requests (CDN).
- * 
- * SECURITY WARNING: This function trusts forwarded headers which CAN BE SPOOFED.
- * Use this ONLY for rate limiting identification (where spoofing just means
- * the attacker rate-limits themselves under a fake IP - no security impact).
- * 
- * DO NOT use this for security decisions like first-party detection.
- * For security checks, use $_SERVER['REMOTE_ADDR'] directly.
- * See isFirstPartyRequest() for the secure implementation.
- * 
- * @return string Client IP address (may be from trusted proxy headers)
+ *
+ * Reads the identity nginx validated and forwarded as X-Real-IP, falling back to the TCP peer
+ * when not proxied. The trust boundary is nginx real_ip, same as getRateLimitClientIp().
+ *
+ * @return string Client IP address
  */
 function getPublicApiClientIp(): string
 {
-    // Check for CDN CF-Connecting-IP first (Cloudflare-specific header)
-    // This is set by Cloudflare and should be trusted when behind CF
-    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-        return $_SERVER['HTTP_CF_CONNECTING_IP'];
-    }
-    
-    // Check X-Forwarded-For (standard proxy header)
-    // Takes first IP in chain (original client)
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-        return trim($ips[0]);
-    }
-    
-    // Direct connection - use actual TCP source
-    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    return getClientIp();
 }
 
 /**
- * Check if request is from a first-party internal service
- * 
- * First-party requests must meet BOTH criteria:
- * 1. Come from localhost (127.0.0.1 or ::1) - verified via REMOTE_ADDR
- * 2. Include a valid internal request header
- * 
- * SECURITY: Uses REMOTE_ADDR directly, NOT getPublicApiClientIp().
- * This is critical because X-Forwarded-For can be spoofed by attackers.
- * REMOTE_ADDR is set by the TCP connection and cannot be spoofed for HTTP.
- * 
- * @return bool True if request is verified first-party
+ * Check if a request claims to be from an internal service
+ *
+ * The only hard facts here: REMOTE_ADDR is the TCP peer, and behind the nginx to Apache hop it
+ * is always 127.0.0.1. So this check is NOT a security boundary. It labels a request as
+ * first-party when it carries a known X-Internal-Request value, which an edge caller can send.
+ * Its only effect is which rate-limit bucket the anonymous tier keys on. Security decisions,
+ * like the crawler exemption, use the proxy-validated identity from getClientIp(), never this
+ * label.
+ *
+ * @return bool True if the request claims a known internal-service header
  */
 function isFirstPartyRequest(): bool
 {
-    // SECURITY: Use REMOTE_ADDR directly - NOT getPublicApiClientIp()
-    // getPublicApiClientIp() trusts X-Forwarded-For which can be spoofed.
-    // REMOTE_ADDR is the actual TCP connection source - cannot be spoofed.
     $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
     
     // Only allow localhost connections
