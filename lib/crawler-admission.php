@@ -281,7 +281,7 @@ function crawlerAdmissionGooglePrefixes(): ?array
     }
     $prefixes = $json['prefixes'];
     if (function_exists('apcu_store')) {
-        @apcu_store('crawler_admission_google', ['mtime' => $mtime, 'prefixes' => $prefixes], CRAWLER_ALLOWLIST_REFRESH_INTERVAL);
+        @apcu_store('crawler_admission_google', ['mtime' => $mtime, 'prefixes' => $prefixes], CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS);
     }
     return $prefixes;
 }
@@ -309,7 +309,7 @@ function crawlerAdmissionVerifiedIps(): array
     $json = @json_decode($content, true);
     $ips = is_array($json) ? $json : [];
     if (function_exists('apcu_store')) {
-        @apcu_store('crawler_admission_verified', ['mtime' => $mtime, 'ips' => $ips], CRAWLER_ALLOWLIST_REFRESH_INTERVAL);
+        @apcu_store('crawler_admission_verified', ['mtime' => $mtime, 'ips' => $ips], CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS);
     }
     return $ips;
 }
@@ -678,7 +678,7 @@ function crawlerAdmissionMaybeEnqueue(string $ip, string $userAgent): bool
         // Still verified. If it is within one drain interval of expiry, renew it so an active
         // crawler does not lose its exemption between worker runs. Writes at most once per
         // interval per IP, not on every request.
-        if ((int) $verified[$ip] < ($now + CRAWLER_ALLOWLIST_REFRESH_INTERVAL)) {
+        if ((int) $verified[$ip] < ($now + CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS)) {
             $verified[$ip] = $now + CRAWLER_VERIFIED_IP_TTL;
             crawlerAdmissionWriteJson(getCrawlerVerifiedIpAllowlistPath(), $verified);
         }

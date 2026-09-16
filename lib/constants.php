@@ -1432,8 +1432,8 @@ if (!defined('PUSH_UPLOAD_PASSWORD_LENGTH')) {
 // Crawler admission allowlist
 // Google CIDR list refresh cadence and stale window. If refreshes stop succeeding, the stale
 // window bounds how long old ranges keep granting the exemption, then admission fails closed.
-if (!defined('CRAWLER_ALLOWLIST_REFRESH_INTERVAL')) {
-    define('CRAWLER_ALLOWLIST_REFRESH_INTERVAL', 43200); // 12 hours
+if (!defined('CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS')) {
+    define('CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS', 43200); // 12 hours
 }
 if (!defined('CRAWLER_ALLOWLIST_MAX_AGE')) {
     define('CRAWLER_ALLOWLIST_MAX_AGE', 172800); // 48 hours

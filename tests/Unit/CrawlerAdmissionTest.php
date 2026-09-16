@@ -151,7 +151,7 @@ final class CrawlerAdmissionTest extends TestCase
             @apcu_delete('crawler_admission_verified');
         }
         $renewed = crawlerAdmissionVerifiedIps();
-        $this->assertTrue($renewed['207.46.13.77'] > time() + CRAWLER_ALLOWLIST_REFRESH_INTERVAL,
+        $this->assertTrue($renewed['207.46.13.77'] > time() + CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS,
             'near-expiry verified IP must be renewed on re-hit');
     }
 

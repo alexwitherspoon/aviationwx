@@ -572,7 +572,7 @@ $workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$
 });
 
 $workRegistry->registerEnqueueTick('crawler_admission', function (int $now) use (&$lastCrawlerAdmissionRefresh): void {
-    if (($now - $lastCrawlerAdmissionRefresh) < CRAWLER_ALLOWLIST_REFRESH_INTERVAL) {
+    if (($now - $lastCrawlerAdmissionRefresh) < CRAWLER_ALLOWLIST_REFRESH_INTERVAL_SECONDS) {
         return;
     }
     $script = __DIR__ . '/refresh-crawler-admission.php';
