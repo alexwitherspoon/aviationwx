@@ -86,6 +86,10 @@ function isPrivateIp(string $ip): bool
         if ($lower[0] === 'f' && ($lower[1] === 'c' || $lower[1] === 'd')) {
             return true;
         }
+        // IPv6 multicast (ff00::/8) — not public unicast
+        if ($lower[0] === 'f' && $lower[1] === 'f') {
+            return true;
+        }
         return false;
     }
 

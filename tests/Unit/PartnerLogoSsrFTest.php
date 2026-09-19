@@ -53,6 +53,8 @@ class PartnerLogoSsrFTest extends TestCase
             'IPv6 link-local febf' => ['http://[febf::1]/logo.png'],
             'IPv6 ULA fc00' => ['http://[fc00::1]/logo.png'],
             'IPv6 ULA fd00' => ['http://[fd00::1]/logo.png'],
+            'IPv6 multicast ff02' => ['http://[ff02::1]/logo.png'],
+            'IPv6 multicast ff00' => ['http://[ff00::1]/logo.png'],
             'file scheme' => ['file:///etc/passwd'],
             'ftp scheme' => ['ftp://example.com/logo.png'],
             'IPv4 unspecified' => ['http://0.0.0.0/logo.png'],
