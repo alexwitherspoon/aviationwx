@@ -535,6 +535,29 @@ function getBaseDomain(): string {
 }
 
 /**
+ * Determine the request protocol (https or http).
+ *
+ * Checks X-Forwarded-Proto first (for nginx reverse proxy), then the
+ * built-in HTTPS server variable. Defaults to https since nginx
+ * redirects HTTP to HTTPS.
+ *
+ * @return string 'https' or 'http'
+ */
+function getRequestProtocol(): string {
+    if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        $proto = strtolower(trim($_SERVER['HTTP_X_FORWARDED_PROTO']));
+        return ($proto === 'https' || $proto === 'on') ? 'https' : 'http';
+    }
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        return 'https';
+    }
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        return 'https';
+    }
+    return 'http';
+}
+
+/**
  * Get public IPv4 address from global config
  * 
  * Used for FTP passive mode (MasqueradeAddress) and other services that need

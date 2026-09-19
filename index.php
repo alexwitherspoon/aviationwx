@@ -85,7 +85,7 @@ if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
         if ($singleAirportId) {
-            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = getRequestProtocol();
             $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
             header('Location: ' . $redirectUrl, true, 302);
             exit;
@@ -124,7 +124,7 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
         if ($singleAirportId) {
-            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = getRequestProtocol();
             $baseDomain = getBaseDomain();
             $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
             header('Location: ' . $redirectUrl, true, 302);
@@ -161,7 +161,7 @@ if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
         if ($singleAirportId) {
-            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = getRequestProtocol();
             $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
             header('Location: ' . $redirectUrl, true, 302);
             exit;
@@ -179,7 +179,7 @@ if (isset($_GET['airports']) || $requestPath === 'airports') {
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
         if ($singleAirportId) {
-            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = getRequestProtocol();
             $baseDomain = getBaseDomain();
             $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
             header('Location: ' . $redirectUrl, true, 302);
@@ -322,14 +322,7 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         // allowing proper canonical URLs. After redirect, unconfigured airports will show 404.
         if ($requestedIdentifier !== $primaryIdentifierUpper) {
             // Determine protocol (HTTPS preferred)
-            $protocol = 'https';
-            if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-                $protocol = 'https';
-            } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-                $protocol = in_array($_SERVER['HTTP_X_FORWARDED_PROTO'], ['https', 'on']) ? 'https' : 'http';
-            } elseif (!isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
-                $protocol = 'http';
-            }
+            $protocol = getRequestProtocol();
             
             // Get base domain
             $baseDomain = getBaseDomain();
@@ -412,7 +405,7 @@ if (isSingleAirportMode()) {
     // Single-airport mode: redirect to the single airport dashboard
     $singleAirportId = getSingleAirportId();
     if ($singleAirportId) {
-        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $protocol = getRequestProtocol();
         $baseDomain = getBaseDomain();
         $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
         header('Location: ' . $redirectUrl, true, 302);
