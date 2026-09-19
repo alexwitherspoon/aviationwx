@@ -97,10 +97,11 @@ function isLogoUrlSafe(string $logoUrl): bool
 
     $host = strtolower($parsed['host']);
 
-    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+    if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6) !== false) {
         return !isPrivateIp($host);
     }
 
+    // Check both A and AAAA records — getthostbynamel() only returns A records
     $resolved = @gethostbynamel($host);
     if ($resolved === false || $resolved === []) {
         return false;
@@ -109,6 +110,18 @@ function isLogoUrlSafe(string $logoUrl): bool
     foreach ($resolved as $ip) {
         if (isPrivateIp($ip)) {
             return false;
+        }
+    }
+
+    // Also check AAAA records (gethostbynamel skips IPv6)
+    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+    if (is_array($records)) {
+        foreach ($records as $rec) {
+            if (isset($rec['ipv6'])) {
+                if (isPrivateIp($rec['ipv6'])) {
+                    return false;
+                }
+            }
         }
     }
 

@@ -45,8 +45,6 @@ class PartnerLogoSsrFTest extends TestCase
             'RFC 1918 172.16.x' => ['http://172.16.0.1/logo.png'],
             'IPv6 loopback' => ['http://[::1]/logo.png'],
             'IPv6 unspecified' => ['http://[::]/logo.png'],
-            'IPv6 loopback' => ['http://[::1]/logo.png'],
-            'IPv6 unspecified' => ['http://[::]/logo.png'],
             'IPv4-mapped IPv6 loopback' => ['http://[::ffff:127.0.0.1]/logo.png'],
             'IPv4-mapped IPv6 private' => ['http://[::ffff:10.0.0.1]/logo.png'],
             'IPv4-mapped IPv6 metadata' => ['http://[::ffff:169.254.169.254]/logo.png'],
