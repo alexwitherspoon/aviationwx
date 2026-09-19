@@ -24,6 +24,17 @@ function isPrivateIp(string $ip): bool
         return true;
     }
 
+    // Normalize IPv6 to canonical form so ::ffff:7f00:1 -> ::ffff:127.0.0.1
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+        $packed = @inet_pton($ip);
+        if ($packed !== false && strlen($packed) === 16) {
+            $normalized = @inet_ntop($packed);
+            if (is_string($normalized) && $normalized !== $ip) {
+                return isPrivateIp($normalized);
+            }
+        }
+    }
+
     // IPv4-mapped IPv6 (::ffff:127.0.0.1) — decode and check the embedded IPv4
     if (str_starts_with($ip, '::ffff:')) {
         $mapped = substr($ip, 7);
@@ -46,12 +57,14 @@ function isPrivateIp(string $ip): bool
         if ($first === 169 && (int) $octets[1] === 254) {
             return true;
         }
-        // CGNAT (100.64.0.0/10), 0.0.0.0/8, 192.0.0.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24
-        if ($first === 0 || ($first === 100 && (int) $octets[1] >= 64 && (int) $octets[1] < 128)
+        // CGNAT (100.64/10), 0/8, 192.0.0/24, 198.18/15, 198.51.100/24, 203.0.113/24
+        if ($first === 0
+            || ($first === 100 && (int) $octets[1] >= 64 && (int) $octets[1] < 128)
             || ($first === 192 && (int) $octets[1] === 0)
-            || ($first === 198 && ((int) $octets[1] >= 18 && (int) $octets[1] < 65) || (int) $octets[1] === 51)
-            || ($first === 203 && (int) $octets[1] === 0)
-            || ($first === 240) || ($first >= 240)
+            || ($first === 198 && ((int) $octets[1] === 18 || (int) $octets[1] === 19))
+            || ($first === 198 && (int) $octets[1] === 51 && (int) $octets[2] === 100)
+            || ($first === 203 && (int) $octets[1] === 0 && (int) $octets[2] === 113)
+            || $first >= 240
         ) {
             return true;
         }
@@ -90,27 +103,43 @@ function isPrivateIp(string $ip): bool
  */
 function isLogoUrlSafe(string $logoUrl): bool
 {
+    return resolveLogoUrlHost($logoUrl) !== null;
+}
+
+/**
+ * Resolve a logo URL's host to verified-safe public IPs.
+ *
+ * Returns the list of verified public IPs, or null if the URL is unsafe
+ * or unresolvable. The caller should use these IPs via CURLOPT_RESOLVE to
+ * prevent DNS rebinding between the safety check and the actual request.
+ *
+ * @param string $logoUrl Logo URL to check
+ * @return string[]|null Verified public IPs, or null if unsafe
+ */
+function resolveLogoUrlHost(string $logoUrl): ?array
+{
     $parsed = parse_url($logoUrl);
     if ($parsed === false || !isset($parsed['host']) || $parsed['host'] === '') {
-        return false;
+        return null;
     }
 
     // Only allow http and https schemes
     $scheme = strtolower($parsed['scheme'] ?? '');
     if (!in_array($scheme, ['http', 'https'], true)) {
-        return false;
+        return null;
     }
 
     $host = strtolower($parsed['host']);
+    $port = isset($parsed['port']) ? (int) $parsed['port'] : ($scheme === 'https' ? 443 : 80);
 
-    // Reject unspecified and non-routable IPv4 ranges (0/8, 100.64/10 CGNAT, etc.)
+    // If host is a literal IP, check it directly
     if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6) !== false) {
-        return !isPrivateIp($host);
+        return isPrivateIp($host) ? null : [$host];
     }
 
     // Resolve both A and AAAA records; gethostbynamel() only returns A records.
     // Don't return false early if A records are absent — AAAA-only hosts are valid.
-    $safe = true;
+    $ips = [];
     $resolvedAny = false;
 
     $arecords = @gethostbynamel($host);
@@ -118,8 +147,9 @@ function isLogoUrlSafe(string $logoUrl): bool
         foreach ($arecords as $ip) {
             $resolvedAny = true;
             if (isPrivateIp($ip)) {
-                return false;
+                return null;
             }
+            $ips[] = $ip;
         }
     }
 
@@ -129,19 +159,29 @@ function isLogoUrlSafe(string $logoUrl): bool
             if (isset($rec['ip'])) {
                 $resolvedAny = true;
                 if (isPrivateIp($rec['ip'])) {
-                    return false;
+                    return null;
+                }
+                if (!in_array($rec['ip'], $ips, true)) {
+                    $ips[] = $rec['ip'];
                 }
             }
             if (isset($rec['ipv6'])) {
                 $resolvedAny = true;
                 if (isPrivateIp($rec['ipv6'])) {
-                    return false;
+                    return null;
+                }
+                if (!in_array($rec['ipv6'], $ips, true)) {
+                    $ips[] = $rec['ipv6'];
                 }
             }
         }
     }
 
-    return $resolvedAny;
+    if (!$resolvedAny) {
+        return null;
+    }
+
+    return $ips;
 }
 
 /**
@@ -234,12 +274,17 @@ function downloadPartnerLogo(string $logoUrl): bool {
     }
 
     // SSRF protection: reject internal/private IPs before any network request
-    if (!isLogoUrlSafe($logoUrl)) {
+    $verifiedIps = resolveLogoUrlHost($logoUrl);
+    if ($verifiedIps === null) {
         aviationwx_log('warning', 'partner logo download blocked: unsafe URL', [
             'url' => $logoUrl,
         ], 'app');
         return false;
     }
+
+    $parsed = parse_url($logoUrl);
+    $host = $parsed['host'] ?? '';
+    $port = isset($parsed['port']) ? (int) $parsed['port'] : (strtolower($parsed['scheme'] ?? '') === 'https' ? 443 : 80);
 
     $data = null;
     $httpCode = 0;
@@ -256,6 +301,10 @@ function downloadPartnerLogo(string $logoUrl): bool {
 
     if ($data === null) {
         $ch = curl_init();
+        $resolveOpts = [];
+        foreach ($verifiedIps as $vip) {
+            $resolveOpts[] = $host . ':' . $port . ':' . $vip;
+        }
         curl_setopt_array($ch, [
             CURLOPT_URL => $logoUrl,
             CURLOPT_RETURNTRANSFER => true,
@@ -268,6 +317,8 @@ function downloadPartnerLogo(string $logoUrl): bool {
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
             CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+            // Pin the verified IPs to prevent DNS rebinding between check and fetch
+            CURLOPT_RESOLVE => $resolveOpts,
         ]);
 
         $data = curl_exec($ch);
@@ -279,22 +330,33 @@ function downloadPartnerLogo(string $logoUrl): bool {
         // Handle manual redirect following with SSRF protection
         $redirectsFollowed = 0;
         while ($httpCode >= 300 && $httpCode < 400 && $redirectUrl !== '' && $redirectUrl !== false && $redirectsFollowed < 3) {
-            // Resolve relative redirects against the current URL
+            // Resolve relative redirects against the original URL
             if (parse_url($redirectUrl, PHP_URL_HOST) === null) {
-                $redirectUrl = $logoUrl;
-                $redirectUrl = preg_replace('/^[^?#]*' . preg_quote(parse_url($logoUrl, PHP_URL_PATH) ?? '/', '/') . '.*/',
-                    dirname(parse_url($logoUrl, PHP_URL_PATH) ?: '/'), $redirectUrl);
-                $redirectUrl = parse_url($logoUrl, PHP_URL_SCHEME) . '://' .
-                    parse_url($logoUrl, PHP_URL_HOST) .
+                $origScheme = parse_url($logoUrl, PHP_URL_SCHEME) ?: 'https';
+                $origHost = parse_url($logoUrl, PHP_URL_HOST) ?: '';
+                $origPort = isset($origPortParts['port']) ? (int)$origPortParts['port'] : ($origScheme === 'https' ? 443 : 80);
+                $redirectUrl = $origScheme . '://' . $origHost .
+                    (parse_url($redirectUrl, PHP_URL_PORT) !== null ? ':' . parse_url($redirectUrl, PHP_URL_PORT) : '') .
                     $redirectUrl;
             }
 
-            if (!isLogoUrlSafe($redirectUrl)) {
+            $redirectIps = resolveLogoUrlHost($redirectUrl);
+            if ($redirectIps === null) {
                 aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
                     'original_url' => $logoUrl,
                     'redirect_url' => $redirectUrl,
                 ], 'app');
                 return false;
+            }
+
+            $redirectHost = strtolower(parse_url($redirectUrl, PHP_URL_HOST) ?: '');
+            $redirectPort = parse_url($redirectUrl, PHP_URL_PORT);
+            if ($redirectPort === null) {
+                $redirectPort = (strtolower(parse_url($redirectUrl, PHP_URL_SCHEME) ?: '') === 'https') ? 443 : 80;
+            }
+            $redirectResolveOpts = [];
+            foreach ($redirectIps as $rip) {
+                $redirectResolveOpts[] = $redirectHost . ':' . $redirectPort . ':' . $rip;
             }
 
             $ch = curl_init();
@@ -308,6 +370,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
                 CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
                 CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
                 CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+                CURLOPT_RESOLVE => $redirectResolveOpts,
             ]);
 
             $data = curl_exec($ch);
