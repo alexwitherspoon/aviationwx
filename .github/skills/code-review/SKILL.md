@@ -11,7 +11,7 @@ Review effort level: Balanced for normal PRs, Lite for documentation-only change
 
 ## Review priorities (in order)
 
-1. **Credential exposure** - No API keys, passwords, push_config credentials, or internal identifiers should reach browser JavaScript or client-visible JSON. Check `pages/*.php` output boundaries. Any serialized airport config that reaches the browser must go through `getAirportPageConfig()` (in `lib/config.php`), not `json_encode($airport)` directly.
+1. **Credential exposure** - No API keys, passwords, push_config credentials, or internal identifiers should reach browser JavaScript or client-visible JSON. Check `pages/*.php` output boundaries. Airport config serialized to the browser must use an explicit allowlist, not `json_encode($airport)` directly (once PR #340 merges, that will be `getAirportPageConfig()` in `lib/config.php`).
 2. **Data staleness** - Weather older than the fail-closed threshold (`DEFAULT_STALE_FAILCLOSED_SECONDS`, 10800s = 3h) must be nulled. METAR has a separate threshold. Fields must show "---" when stale, never stale values. Use `nullStaleFieldsBySource()`.
 3. **Units** - Use `WeatherReading` factory methods: `celsius()`, `knots()`, `inHg()`, `feet()`. Never hardcode conversion factors. Document units in PHPDoc.
 4. **Error handling** - No silent failures. Use `aviationwx_log()` for structured logging. Per-airport degradation: one airport's failure must not affect others.
@@ -42,7 +42,7 @@ If CI already checks it, do not re-flag it in review. Focus on runtime behavior 
 
 ## What CI does NOT cover (your real value-add)
 
-- Whether `getAirportPageConfig()` is actually called in `pages/airport.php` instead of `json_encode($airport)` — `pr-checks.yml` grep-checks for function existence in `lib/config.php` but not the call site
+- Whether airport config is serialized through an allowlist rather than `json_encode($airport)` directly (once PR #340's `getAirportPageConfig()` lands, verify the call site is used)
 - Whether a credential-shaped value is reachable from a changed code path at runtime (audit output boundaries in `pages/*.php`, `api/*.php`)
 - Whether staleness enforcement is applied at the call site after aggregation (CI only warns if a stale-threshold symbol is missing, and the `pr-checks.yml` warning greps for `MAX_STALE_HOURS` which does not exist in `lib/constants.php`; the actual constant is `DEFAULT_STALE_FAILCLOSED_SECONDS`)
 - Whether a new weather adapter handles VRB wind direction, non-numeric wind speed, or malformed JSON
@@ -87,7 +87,7 @@ If CI already checks it, do not re-flag it in review. Focus on runtime behavior 
 
 - `CODE_STYLE.md` - full coding standards (PSR-12, PHPDoc, test naming)
 - `docs/ARCHITECTURE.md` - data flow, weather aggregation, webcam pipeline
-- `lib/config.php` - loadConfig(), getAirportPageConfig(), isTestMode()
+- `lib/config.php` - `loadConfig()`, `isTestMode()`, `shouldMockExternalServices()` (`getAirportPageConfig()` lands in PR #340)
 - `lib/constants.php` - `DEFAULT_STALE_FAILCLOSED_SECONDS` (10800s = 3h), `BACKOFF_BASE_SECONDS`
 - `lib/units.php` - weather unit conversions
 - `lib/weather/` - unified fetcher, adapters, aggregator, staleness
