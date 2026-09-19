@@ -495,22 +495,6 @@ Returns system diagnostics information (useful for debugging).
 
 ---
 
-#### `GET /admin/cache-clear.php`
-
-Clears configuration cache (useful after updating `airports.json`).
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Cache cleared"
-}
-```
-
-**Security:** Consider restricting access in production.
-
----
-
 #### `GET /admin/metrics.php`
 
 Returns application metrics (for monitoring systems like Prometheus).
