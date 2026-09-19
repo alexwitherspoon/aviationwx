@@ -388,6 +388,10 @@ function downloadPartnerLogo(string $logoUrl): bool {
 
     $parsed = parse_url($logoUrl);
     $host = $parsed['host'] ?? '';
+    // normalizeBracketedIpv6: parse_url keeps brackets on IPv6 literals
+    if ($host !== '' && $host[0] === '[' && str_ends_with($host, ']')) {
+        $host = substr($host, 1, -1);
+    }
     $port = isset($parsed['port']) ? (int) $parsed['port'] : (strtolower($parsed['scheme'] ?? '') === 'https' ? 443 : 80);
 
     $data = null;
@@ -473,14 +477,18 @@ function downloadPartnerLogo(string $logoUrl): bool {
                 break;
             }
             $redirectHost = strtolower(parse_url($redirectUrl, PHP_URL_HOST) ?: '');
+            if ($redirectHost !== '' && $redirectHost[0] === '[' && str_ends_with($redirectHost, ']')) {
+                $redirectHost = substr($redirectHost, 1, -1);
+            }
             $redirectPort = parse_url($redirectUrl, PHP_URL_PORT);
             if ($redirectPort === null) {
                 $redirectPort = (strtolower(parse_url($redirectUrl, PHP_URL_SCHEME) ?: '') === 'https') ? 443 : 80;
             }
             $redirectResolveOpts = [];
+            $redirectHostEntry = strpos($redirectHost, ':') !== false ? '[' . $redirectHost . ']' : $redirectHost;
             foreach ($redirectIps as $rip) {
                 $addrPart = strpos($rip, ':') !== false ? '[' . $rip . ']' : $rip;
-                $redirectResolveOpts[] = $redirectHost . ':' . $redirectPort . ':' . $addrPart;
+                $redirectResolveOpts[] = $redirectHostEntry . ':' . $redirectPort . ':' . $addrPart;
             }
 
             $ch = curl_init();
