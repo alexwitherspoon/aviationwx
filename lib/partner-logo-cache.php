@@ -93,6 +93,67 @@ function isPrivateIp(string $ip): bool
 }
 
 /**
+ * Parse Location headers from raw HTTP response headers.
+ *
+ * HTTP header field names are case-insensitive; this handles Location,
+ * location, LOCATION, etc.
+ *
+ * @param string $rawHeaders Raw HTTP headers from cURL
+ * @return list<string> Redirect target URLs
+ */
+function parseRedirectLocations(string $rawHeaders): array
+{
+    $locations = [];
+    $headers = explode("\r\n", $rawHeaders);
+    foreach ($headers as $header) {
+        if (stripos($header, 'location:') === 0) {
+            $location = trim(substr($header, 9));
+            if ($location !== '') {
+                $locations[] = $location;
+            }
+        }
+    }
+    return $locations;
+}
+
+/**
+ * Resolve a relative redirect against a base URL.
+ *
+ * Handles protocol-relative (//host/path), root-relative (/path),
+ * and path-relative (path) Location values per RFC 3986.
+ *
+ * @param string $baseUrl The URL that returned the redirect
+ * @param string $redirectUrl The Location header value
+ * @return string|null Absolute URL, or null if unresolvable
+ */
+function resolveRelativeUrl(string $baseUrl, string $redirectUrl): ?string
+{
+    if (parse_url($redirectUrl, PHP_URL_HOST) !== null) {
+        return $redirectUrl;
+    }
+
+    $baseScheme = parse_url($baseUrl, PHP_URL_SCHEME) ?: 'https';
+    $baseHost = parse_url($baseUrl, PHP_URL_HOST) ?: '';
+    $basePort = parse_url($baseUrl, PHP_URL_PORT);
+    $portSuffix = $basePort !== null ? ':' . $basePort : '';
+
+    if (str_starts_with($redirectUrl, '//')) {
+        return $baseScheme . ':' . $redirectUrl;
+    }
+
+    if ($redirectUrl[0] === '/') {
+        return $baseScheme . '://' . $baseHost . $portSuffix . $redirectUrl;
+    }
+
+    $basePath = parse_url($baseUrl, PHP_URL_PATH) ?: '/';
+    $basePath = preg_replace('/\/[^\/]*$/', '', $basePath);
+    if ($basePath === '') {
+        $basePath = '/';
+    }
+    return $baseScheme . '://' . $baseHost . $portSuffix . $basePath . '/' . $redirectUrl;
+}
+
+/**
  * Check whether a URL's host resolves to a public IP.
  *
  * Prevents SSRF by rejecting loopback, link-local, RFC 1918, and
@@ -301,6 +362,7 @@ function downloadPartnerLogo(string $logoUrl): bool {
 
     if ($data === null) {
         $redirectAbort = false;
+        $redirectLocations = [];
         $ch = curl_init();
         // Build CURLOPT_RESOLVE entries, bracketing IPv6 addresses per cURL spec
         $resolveOpts = [];
@@ -313,33 +375,99 @@ function downloadPartnerLogo(string $logoUrl): bool {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => CURL_TIMEOUT,
             CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            // Restrict protocol to HTTP/HTTPS for both initial and redirect requests
+            // Don't auto-follow; validate each redirect manually with DNS pinning
+            CURLOPT_FOLLOWLOCATION => false,
+            // Restrict protocol to HTTP/HTTPS
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
             CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
             // Pin the verified IPs to prevent DNS rebinding between check and fetch
             CURLOPT_RESOLVE => $resolveOpts,
-            // Validate each redirect Location header against SSRF filters
-            CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$redirectAbort) {
-                $line = trim($header);
-                if (stripos($line, 'location:') === 0) {
-                    $location = trim(substr($line, 9));
-                    if ($location !== '' && !isLogoUrlSafe($location)) {
-                        $redirectAbort = true;
-                        return 0;
-                    }
-                }
-                return strlen($header);
-            },
+            // Capture redirect Location headers for manual validation
+            CURLOPT_HEADER => true,
         ]);
 
         $data = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
+
+        // Parse redirect Location from response headers
+        $headers = substr((string) $data, 0, $headerSize);
+        $body = substr((string) $data, $headerSize);
+        if ($headerSize > 0) {
+            $data = $body;
+            $redirectLocations = parseRedirectLocations($headers);
+        }
+
+        // Follow redirects manually, validating each target and pinning DNS
+        $redirectsFollowed = 0;
+        while ($httpCode >= 300 && $httpCode < 400 && $redirectsFollowed < 3) {
+            if (empty($redirectLocations)) {
+                break;
+            }
+            $redirectUrl = array_shift($redirectLocations);
+
+            // Resolve relative redirects against the current URL
+            $redirectUrl = resolveRelativeUrl($logoUrl, $redirectUrl);
+            if ($redirectUrl === null) {
+                $redirectAbort = true;
+                break;
+            }
+
+            if (!isLogoUrlSafe($redirectUrl)) {
+                $redirectAbort = true;
+                break;
+            }
+
+            // Pin DNS for the redirect target
+            $redirectIps = resolveLogoUrlHost($redirectUrl);
+            if ($redirectIps === null) {
+                $redirectAbort = true;
+                break;
+            }
+            $redirectHost = strtolower(parse_url($redirectUrl, PHP_URL_HOST) ?: '');
+            $redirectPort = parse_url($redirectUrl, PHP_URL_PORT);
+            if ($redirectPort === null) {
+                $redirectPort = (strtolower(parse_url($redirectUrl, PHP_URL_SCHEME) ?: '') === 'https') ? 443 : 80;
+            }
+            $redirectResolveOpts = [];
+            foreach ($redirectIps as $rip) {
+                $addrPart = strpos($rip, ':') !== false ? '[' . $rip . ']' : $rip;
+                $redirectResolveOpts[] = $redirectHost . ':' . $redirectPort . ':' . $addrPart;
+            }
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $redirectUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
+                CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+                CURLOPT_RESOLVE => $redirectResolveOpts,
+                CURLOPT_HEADER => true,
+            ]);
+
+            $data = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr((string) $data, 0, $headerSize);
+            $body = substr((string) $data, $headerSize);
+            if ($headerSize > 0) {
+                $data = $body;
+                $redirectLocations = parseRedirectLocations($headers);
+            }
+            curl_close($ch);
+            $redirectsFollowed++;
+            $logoUrl = $redirectUrl;
+        }
 
         if ($redirectAbort) {
             aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
