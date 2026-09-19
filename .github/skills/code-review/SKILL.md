@@ -32,7 +32,6 @@ Review effort level: Balanced for normal PRs, Lite for documentation-only change
 - `BACKOFF_BASE_SECONDS` defined in `lib/constants.php`
 - Rate limiting enforced in `api/weather.php` via `checkRateLimit()`
 - API response sets `Content-Type: application/json`
-- No `eval()`, no `mysql_query`/`mysqli_query`/`pg_query` in production code
 - Required files list (see `test.yml` `required_files` array)
 - Dockerfile uses `php:8.4-apache`, has proftpd and openssh-server
 - Docker Compose files present
@@ -50,6 +49,7 @@ If CI already checks it, do not re-flag it in review. Focus on runtime behavior 
 - Whether integration tests render actual HTML and assert no sentinel credential values appear (not just unit-level allowlist tests)
 - Whether test names follow the repo convention
 - Whether breaking changes to public JSON API shapes have backward-compatible handling
+- Dangerous PHP patterns like `eval()` in production code — `test.yml` only warns and continues, so reviewers must still flag these
 
 ## Severity guidance
 
@@ -79,6 +79,7 @@ If CI already checks it, do not re-flag it in review. Focus on runtime behavior 
 
 ### Security
 - [ ] No credentials, API keys, or tokens in code
+- [ ] No `eval()` or other dangerous PHP functions in production code (CI only warns, does not block)
 - [ ] Input validated
 - [ ] No sensitive data in logs
 - [ ] Per-airport degradation (one airport failure does not affect others)
