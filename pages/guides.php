@@ -149,6 +149,28 @@ if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
 $parsedown = new Parsedown();
 $htmlContent = $parsedown->text($markdownContent);
 
+// Normalize local guide links to extensionless URLs so internal references
+// point to the canonical URL (e.g. "08-camera-configuration.md" becomes
+// "08-camera-configuration"). External links and non-guide documentation
+// links are left intact. Preserves query strings and fragments.
+$htmlContent = preg_replace_callback(
+    '/href="([^"]*\.md(?:\?[^"]*)?(?:#[^"]*)?)"/',
+    function ($m) {
+        $raw = $m[1];
+        // Skip external URLs and absolute paths to other sites
+        if (preg_match('~^[a-z]+://~i', $raw) || preg_match('~^[a-z]+://~i', $raw)) {
+            return $m[0];
+        }
+        // Skip links that aren't local relative paths
+        if (strpos($raw, '://') !== false || strpos($raw, '//') === 0) {
+            return $m[0];
+        }
+        // Strip .md from the path portion, preserving query and fragment
+        return preg_replace('/\.md(?=([?#]|$))/i', '', $m[0]);
+    },
+    $htmlContent
+);
+
 // Set cache headers for CDN
 // Guides are documentation that doesn't change frequently, but we want reasonable cache times
 // Cache for 1 hour, allow stale-while-revalidate for 4 hours
