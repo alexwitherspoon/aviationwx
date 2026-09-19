@@ -64,7 +64,7 @@ function isPrivateIp(string $ip): bool
             || ($first === 198 && ((int) $octets[1] === 18 || (int) $octets[1] === 19))
             || ($first === 198 && (int) $octets[1] === 51 && (int) $octets[2] === 100)
             || ($first === 203 && (int) $octets[1] === 0 && (int) $octets[2] === 113)
-            || $first >= 240
+            || $first >= 224
         ) {
             return true;
         }

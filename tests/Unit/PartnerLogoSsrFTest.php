@@ -58,6 +58,7 @@ class PartnerLogoSsrFTest extends TestCase
             'file scheme' => ['file:///etc/passwd'],
             'ftp scheme' => ['ftp://example.com/logo.png'],
             'IPv4 unspecified' => ['http://0.0.0.0/logo.png'],
+            'IPv4 multicast' => ['http://224.0.0.1/logo.png'],
             'no host' => ['not-a-url'],
             'empty host' => ['http:///logo.png'],
         ];
