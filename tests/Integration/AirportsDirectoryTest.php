@@ -260,5 +260,22 @@ class AirportsDirectoryTest extends TestCase
             'Add to Home Screen section must keep id="add-to-home-screen" for dashboard hamburger hash links'
         );
     }
+
+    /**
+     * Regression test: the airports directory page must not embed the OpenWeatherMap
+     * API key in client-side JavaScript.
+     */
+    public function testAirportsPage_HtmlDoesNotLeakOpenWeatherMapKey()
+    {
+        $output = $this->getAirportsPageContent();
+
+        // The variable name must not appear; if it is reintroduced, this
+        // catches it before any key value reaches the browser.
+        $this->assertStringNotContainsString(
+            'openWeatherMapApiKey',
+            $output,
+            'OpenWeatherMap API key variable must not appear in airports directory HTML'
+        );
+    }
 }
 

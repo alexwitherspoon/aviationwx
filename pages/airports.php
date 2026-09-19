@@ -1553,8 +1553,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     (function() {
         'use strict';
         
-        // Configuration from PHP
-        var openWeatherMapApiKey = <?= json_encode($openWeatherMapApiKey) ?>;
+        // Cloud layer toggle (OWM tiles served server-side via api/map-tiles.php)
         var hasCloudLayer = <?= json_encode($hasCloudLayer) ?>;
         var notamMapLayerRefreshMs = <?= (int)$notamMapLayerRefreshMs ?>;
         
@@ -2117,7 +2116,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         function addCloudsLayer() {
             // Only add cloud layer if API key is configured
-            if (!hasCloudLayer || !openWeatherMapApiKey) {
+            if (!hasCloudLayer) {
                 console.warn('Cloud layer not available: API key not configured');
                 return;
             }

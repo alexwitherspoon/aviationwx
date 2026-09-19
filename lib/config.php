@@ -3162,6 +3162,106 @@ function getListedAirports(array $config): array {
 }
 
 /**
+ * Build a browser-safe subset of an airport config for embedding in page JavaScript.
+ *
+ * The full airports.json entry contains credentials (push_config.username/password,
+ * weather_sources.api_key, bridges.api_key, openweathermap_api_key). This
+ * allowlist selects only the fields that airport-dashboard.js actually reads
+ * from AIRPORT_DATA. New fields must be added here explicitly; the raw $airport
+ * is never serialized.
+ *
+ * Mirrors the allowlist pattern used by formatAirportDetails() in api/v1/airport.php.
+ *
+ * @param array $airport Full airport config entry (from airports.json)
+ * @return array Browser-safe subset with no credential-shaped fields
+ */
+function getAirportPageConfig(array $airport): array
+{
+    $result = [
+        'id' => $airport['id'] ?? null,
+        'name' => $airport['name'] ?? '',
+        'icao' => $airport['icao'] ?? null,
+        'iata' => $airport['iata'] ?? null,
+        'faa' => $airport['faa'] ?? null,
+        'iso_country' => $airport['iso_country'] ?? ($airport['country'] ?? null),
+        'lat' => $airport['lat'] ?? null,
+        'lon' => $airport['lon'] ?? null,
+        'elevation_ft' => $airport['elevation_ft'] ?? null,
+        'timezone' => $airport['timezone'] ?? 'UTC',
+        'timezone_abbreviation' => $airport['timezone_abbreviation'] ?? null,
+        'timezone_offset_hours' => $airport['timezone_offset_hours'] ?? null,
+        'weather_refresh_seconds' => isset($airport['weather_refresh_seconds']) ? (int) $airport['weather_refresh_seconds'] : null,
+        'webcam_refresh_seconds' => isset($airport['webcam_refresh_seconds']) ? (int) $airport['webcam_refresh_seconds'] : null,
+        'maintenance' => !empty($airport['maintenance']),
+        'limited_availability' => !empty($airport['limited_availability']),
+    ];
+
+    if (in_array($airport['access_type'] ?? null, ['public', 'private'], true)) {
+        $result['access_type'] = $airport['access_type'];
+        $result['permission_required'] = !empty($airport['permission_required']);
+    }
+
+    if (isset($airport['tower_status']) && in_array($airport['tower_status'], ['towered', 'non_towered'], true)) {
+        $result['tower_status'] = $airport['tower_status'];
+    }
+
+    if (isset($airport['address']) && is_string($airport['address'])) {
+        $result['address'] = $airport['address'];
+    }
+
+    if (isset($airport['links']) && is_array($airport['links'])) {
+        $result['links'] = array_values(array_filter(array_map(function ($link) {
+            if (!is_array($link) || empty($link['label']) || empty($link['url'])) {
+                return null;
+            }
+            return [
+                'label' => $link['label'],
+                'url' => $link['url'],
+            ];
+        }, $airport['links'])));
+    }
+
+    if (isset($airport['runways']) && is_array($airport['runways'])) {
+        $result['runways'] = array_values(array_map(function ($runway) {
+            return [
+                'name' => $runway['name'] ?? '',
+                'heading_1' => $runway['heading_1'] ?? null,
+                'heading_2' => $runway['heading_2'] ?? null,
+            ];
+        }, $airport['runways']));
+    }
+
+    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+        $result['weather_sources'] = array_values(array_map(function ($source) {
+            // Only METAR station_id is read by dashboard JS; provider-specific
+            // IDs for other sources are internal and omitted.
+            $type = $source['type'] ?? null;
+            $entry = ['type' => $type];
+            if ($type === 'metar') {
+                $entry['station_id'] = $source['station_id'] ?? null;
+            }
+            return $entry;
+        }, $airport['weather_sources']));
+    } else {
+        $result['weather_sources'] = [];
+    }
+
+    if (isset($airport['webcams']) && is_array($airport['webcams'])) {
+        $result['webcams'] = array_values(array_map(function ($cam) {
+            return [
+                'name' => $cam['name'] ?? '',
+                'refresh_seconds' => isset($cam['refresh_seconds']) ? (int) $cam['refresh_seconds'] : null,
+                'enabled' => !isset($cam['enabled']) || $cam['enabled'] !== false,
+            ];
+        }, $airport['webcams']));
+    } else {
+        $result['webcams'] = [];
+    }
+
+    return $result;
+}
+
+/**
  * Check if the system is running in single-airport mode
  * 
  * Single-airport mode is triggered when exactly 1 airport is enabled.

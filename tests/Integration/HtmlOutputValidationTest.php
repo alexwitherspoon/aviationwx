@@ -988,5 +988,42 @@ class HtmlOutputValidationTest extends TestCase
             "geo: URI should include address query parameter when address is available"
         );
     }
+
+    /**
+     * Regression test: the airport page must not serialize credentials into AIRPORT_DATA.
+     *
+     * The test fixture (tests/Fixtures/airports.json.test) contains sentinel
+     * credential values. This test fetches the rendered HTML and asserts that
+     * none of them — or credential-shaped field names — appear in the output.
+     */
+    public function testAirportPage_HtmlDoesNotLeakCredentials()
+    {
+        $html = $this->getCachedHtml('kspb');
+
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
+            return;
+        }
+
+        // Sentinel credential values from the test fixture.
+        $this->assertStringNotContainsString('test_api_key_12345', $html, 'Tempest API key must not appear in HTML');
+        $this->assertStringNotContainsString('test_ambient_api_key', $html, 'Ambient API key must not appear in HTML');
+        $this->assertStringNotContainsString('awxb_000000000000000000000000000000000000000000000001', $html, 'Bridge API key must not appear in HTML');
+
+        // Credential-shaped field names must not appear in AIRPORT_DATA JSON.
+        $credentialPatterns = [
+            'push_config',
+            'api_key',
+            'application_key',
+            'bridge_source_id',
+        ];
+        foreach ($credentialPatterns as $pattern) {
+            $this->assertStringNotContainsString(
+                $pattern,
+                $html,
+                "Credential field name '{$pattern}' must not appear in airport page HTML"
+            );
+        }
+    }
 }
 
