@@ -184,4 +184,29 @@ class PartnerLogoSsrFTest extends TestCase
         $locations = parseRedirectLocations($headers);
         $this->assertSame([], $locations);
     }
+
+    public function testResolveLogoUrlHost_PinsResolvedIpsForRedirects(): void
+    {
+        // resolveLogoUrlHost returns the IPs that should be pinned via CURLOPT_RESOLVE
+        $ips = resolveLogoUrlHost('http://1.1.1.1/logo.png');
+        $this->assertIsArray($ips);
+        $this->assertContains('1.1.1.1', $ips);
+    }
+
+    public function testResolveLogoUrlHost_ReturnsNullForInternalIp(): void
+    {
+        $this->assertNull(resolveLogoUrlHost('http://127.0.0.1/logo.png'));
+        $this->assertNull(resolveLogoUrlHost('http://169.254.169.254/logo.png'));
+    }
+
+    public function testResolveLogoUrlHost_ReturnsNullForNonHttpScheme(): void
+    {
+        $this->assertNull(resolveLogoUrlHost('file:///etc/passwd'));
+    }
+
+    public function testResolveRelativeUrl_PreservesNonDefaultPort(): void
+    {
+        $result = resolveRelativeUrl('https://example.com:8443/path/page.html', '/image.png');
+        $this->assertSame('https://example.com:8443/image.png', $result);
+    }
 }
