@@ -330,14 +330,28 @@ function downloadPartnerLogo(string $logoUrl): bool {
         // Handle manual redirect following with SSRF protection
         $redirectsFollowed = 0;
         while ($httpCode >= 300 && $httpCode < 400 && $redirectUrl !== '' && $redirectUrl !== false && $redirectsFollowed < 3) {
-            // Resolve relative redirects against the original URL
+            // Resolve relative redirects against the original URL's base
             if (parse_url($redirectUrl, PHP_URL_HOST) === null) {
                 $origScheme = parse_url($logoUrl, PHP_URL_SCHEME) ?: 'https';
                 $origHost = parse_url($logoUrl, PHP_URL_HOST) ?: '';
-                $origPort = isset($origPortParts['port']) ? (int)$origPortParts['port'] : ($origScheme === 'https' ? 443 : 80);
-                $redirectUrl = $origScheme . '://' . $origHost .
-                    (parse_url($redirectUrl, PHP_URL_PORT) !== null ? ':' . parse_url($redirectUrl, PHP_URL_PORT) : '') .
-                    $redirectUrl;
+                $origPort = parse_url($logoUrl, PHP_URL_PORT);
+                $portSuffix = ($origPort !== null) ? ':' . $origPort : '';
+
+                // Protocol-relative (//host/path)
+                if (str_starts_with($redirectUrl, '//')) {
+                    $redirectUrl = $origScheme . ':' . $redirectUrl;
+                } elseif ($redirectUrl[0] === '/') {
+                    // Root-relative: scheme://host:port + path
+                    $redirectUrl = $origScheme . '://' . $origHost . $portSuffix . $redirectUrl;
+                } else {
+                    // Path-relative: resolve against original path directory
+                    $origPath = parse_url($logoUrl, PHP_URL_PATH) ?: '/';
+                    $basePath = preg_replace('/\/[^\/]*$/', '', $origPath);
+                    if ($basePath === '') {
+                        $basePath = '/';
+                    }
+                    $redirectUrl = $origScheme . '://' . $origHost . $portSuffix . $basePath . '/' . $redirectUrl;
+                }
             }
 
             $redirectIps = resolveLogoUrlHost($redirectUrl);
