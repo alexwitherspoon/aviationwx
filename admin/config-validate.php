@@ -204,7 +204,6 @@ $info[] = "Production: " . (isProduction() ? 'YES' : 'NO');
     
     <h2>🔧 Actions</h2>
     <ul>
-        <li><a href="/admin/cache-clear.php">Clear Config Cache</a></li>
         <li><a href="/admin/diagnostics.php">Full Diagnostics</a></li>
         <li><a href="/admin/config-validate.php">Refresh This Page</a></li>
     </ul>

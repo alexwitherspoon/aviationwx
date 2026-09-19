@@ -89,7 +89,6 @@ aviationwx.org/
 │   └── refresh-nws-points.php # NWS /points cache warmup (background)
 ├── admin/
 │   ├── diagnostics.php       # System diagnostics endpoint
-│   ├── cache-clear.php       # Cache clearing endpoint
 │   ├── cache-diagnostics.php # Cache diagnostics
 │   └── metrics.php           # Application metrics
 ├── health/

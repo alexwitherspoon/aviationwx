@@ -508,7 +508,6 @@ if ($configFilePath !== null && file_exists($configFilePath)) {
         ?></li>
         <li><a href="/webcam.php?id=kspb&cam=0" target="_blank">Test Webcam API</a></li>
         <li><a href="/scripts/fetch-webcam.php" target="_blank">Test Webcam Fetch Script</a></li>
-        <li><a href="/admin/cache-clear.php" target="_blank" onclick="return confirm('Clear configuration cache? This will force reload of airports.json');">🗑️ Clear Config Cache</a></li>
         <li><a href="/admin/diagnostics.php" target="_blank">🔍 Run Diagnostics Again</a></li>
     </ul>
     

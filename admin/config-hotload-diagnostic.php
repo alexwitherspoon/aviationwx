@@ -49,7 +49,7 @@ if (!$configFilePath || !file_exists($configFilePath)) {
             } else if ($currentSha !== null) {
                 $issues[] = "⚠️ APCu cache SHA does NOT match file SHA (config changed)";
                 $issues[] = "   Cache should be invalidated on next request";
-                $recommendations[] = "Clear APCu cache manually: <a href='/admin/cache-clear.php'>Clear Config Cache</a>";
+                $recommendations[] = "Clear APCu cache manually: deploy a new version or restart the container (config cache is auto-invalidated on config changes by the scheduler)";
             }
         } else {
             $info[] = "ℹ️ APCu cache SHA not found (cache empty or expired)";
@@ -134,7 +134,7 @@ if (!$configFilePath || !file_exists($configFilePath)) {
                 
                 if ($testAirportCount !== $fileAirportCount) {
                     $issues[] = "❌ Config mismatch: loadConfig() returns {$testAirportCount} airports, but file has {$fileAirportCount}";
-                    $recommendations[] = "Clear APCu cache to force reload: <a href='/admin/cache-clear.php'>Clear Config Cache</a>";
+                    $recommendations[] = "Clear APCu cache to force reload: deploy a new version or restart the container";
                 } else {
                     $info[] = "✅ Airport count matches between loadConfig() and file";
                 }
@@ -248,16 +248,15 @@ if (function_exists('apache_get_modules')) {
     
     <h2>🔧 Actions</h2>
     <ul>
-        <li><a href="/admin/cache-clear.php">Clear Config Cache (APCu)</a></li>
         <li><a href="/admin/config-validate.php">Validate Config</a></li>
         <li><a href="/admin/diagnostics.php">Full Diagnostics</a></li>
         <li><a href="/admin/config-hotload-diagnostic.php">Refresh This Page</a></li>
     </ul>
     
-    <h2>📝 Manual Reload Methods</h2>
+    <h2>🔄 Manual Reload Methods</h2>
     <div class="info">
-        <p><strong>Option 1: Clear APCu Cache (Web)</strong></p>
-        <p>Visit <a href="/admin/cache-clear.php">/admin/cache-clear.php</a> to clear APCu cache. Next web request will reload config.</p>
+        <p><strong>Option 1: Deploy a New Version</strong></p>
+        <p>Deploying a new version automatically triggers the scheduler to detect config changes and invalidate the APCu cache. New cache is populated on the next web request.</p>
         
         <p><strong>Option 2: Wait for Scheduler</strong></p>
         <p>Scheduler automatically reloads config every <code>scheduler_config_reload_seconds</code> (default: 60s).</p>
