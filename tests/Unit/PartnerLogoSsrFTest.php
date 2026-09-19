@@ -67,9 +67,9 @@ class PartnerLogoSsrFTest extends TestCase
     public static function safeUrlProvider(): array
     {
         return [
-            'public URL' => ['https://example.com/logo.png'],
-            'public URL with www' => ['https://www.partner.org/images/logo.jpg'],
-            'public URL with port' => ['https://example.com:443/logo.png'],
+            'public IPv4' => ['https://1.1.1.1/logo.png'],
+            'public IPv4 alt' => ['https://8.8.8.8/logo.png'],
+            'public IPv4 with port' => ['http://1.1.1.1:8080/logo.png'],
         ];
     }
 
