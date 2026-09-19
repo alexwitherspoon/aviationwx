@@ -21,11 +21,41 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
 // Get request path
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
 $parsedUri = parse_url($requestUri);
+$rawRequestPath = isset($parsedUri['path']) ? $parsedUri['path'] : '/';
 $requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
 
-// Determine if this is index or a specific guide
-$isIndex = empty($requestPath);
-$guideName = $isIndex ? null : $requestPath;
+// Canonical slug resolved from the request, independent of .md or trailing-slash
+// variants. Empty string means the guides index.
+$canonicalSlug = getGuideCanonicalSlug();
+
+// Redirect variant URLs (trailing slash, .md extension) to the canonical
+// extensionless path. Only after resolving a real guide file; unknown guides
+// remain 404 without a redirect.
+$redirectTarget = null;
+if ($canonicalSlug === '') {
+    if ($requestPath === 'README.md' || $requestPath === 'readme.md') {
+        if (resolveGuideFile('') !== null) {
+            $redirectTarget = getGuideCanonicalUrl('');
+        }
+    }
+} else {
+    if ($rawRequestPath !== '/' . $canonicalSlug) {
+        if (resolveGuideFile($canonicalSlug) !== null) {
+            $redirectTarget = getGuideCanonicalUrl($canonicalSlug);
+        }
+    }
+}
+
+if ($redirectTarget !== null) {
+    // Preserve query string so state parameters survive the redirect.
+    $queryString = $parsedUri['query'] ?? null;
+    if (is_string($queryString) && $queryString !== '') {
+        $redirectTarget .= '?' . $queryString;
+    }
+    http_response_code(301);
+    header('Location: ' . $redirectTarget);
+    exit;
+}
 
 // Guides directory
 $guidesDir = __DIR__ . '/../guides';
@@ -55,7 +85,7 @@ $markdownFile = null;
 $pageTitle = 'Guides - AviationWX.org';
 $pageDescription = 'Documentation and guides for AviationWX.org';
 
-if ($isIndex) {
+if ($canonicalSlug === '') {
     // Index page - use README.md or readme.md
     $readmeFiles = ['README.md', 'readme.md'];
     foreach ($readmeFiles as $readme) {
@@ -71,11 +101,9 @@ if ($isIndex) {
         exit;
     }
 } else {
-    // Individual guide - look for matching file
-    // Strip .md extension if already present to handle both URL formats
-    $guideSlug = preg_replace('/\.md$/i', '', $guideName);
-    $guideFile = $guidesDir . '/' . $guideSlug . '.md';
-    
+    // Individual guide - look for matching file by canonical slug
+    $guideFile = $guidesDir . '/' . $canonicalSlug . '.md';
+
     if (file_exists($guideFile) && is_file($guideFile)) {
         $markdownFile = $guideFile;
     } else {
@@ -140,9 +168,9 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cacheMaxAge) . ' GMT');
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $fileMtime) . ' GMT');
 header('ETag: "' . md5($markdownFile . $fileMtime) . '"');
 
-// Get base URL
+// Canonical identity lives in the resolved slug, not the variant path.
 $baseUrl = getBaseUrl();
-$canonicalUrl = getCanonicalUrl();
+$canonicalUrl = getGuideCanonicalUrl($canonicalSlug);
 
 $mermaidJsPath = __DIR__ . '/../public/js/mermaid.min.js';
 $mermaidJsVersion = is_readable($mermaidJsPath) ? (string) filemtime($mermaidJsPath) : '';
@@ -200,7 +228,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     echo generateStructuredDataScript(generateGuideBreadcrumbs($guideDisplayTitle));
     
     // Article structured data for individual guide pages (not index)
-    if (!$isIndex && $guideDisplayTitle) {
+    if ($canonicalSlug !== '' && $guideDisplayTitle) {
         echo "\n    ";
         // Use file mtime for dates - we don't track original publish date separately
         $dateModified = date('c', $fileMtime);
@@ -234,9 +262,14 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             scroll-margin-top: 2rem;
         }
         
-        /* Container needs min-width to match content so everything scrolls together */
+        /* Let the container shrink on narrow viewports. The previous
+           min-width: 750px forced the document wider than the viewport on
+           mobile, hiding content and breaking zoom. Wide pre/table/mermaid
+           blocks get their own overflow-x: auto below. */
         .container {
-            min-width: 750px; /* Match content min-width so header/footer scale with content */
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
         }
         
         .hero {
@@ -347,14 +380,15 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             background: #e9ecef;
         }
         
-        /* Markdown content */
-        .guides-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
-        }
+         /* Markdown content */
+         .guides-content {
+             background: white;
+             padding: 2rem;
+             border-radius: 8px;
+             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+             width: 100%;
+             box-sizing: border-box;
+         }
         
         /* Markdown styling */
         .guides-content h1 {
@@ -492,6 +526,8 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 1.5rem;
+            overflow-x: auto;
+            display: block;
         }
         
         .guides-content table th,
@@ -539,7 +575,8 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
+            width: 100%;
+            box-sizing: border-box;
         }
         
         /* Apply same markdown styling to index page */
@@ -838,7 +875,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     
     <main>
     <div class="container">
-        <?php if ($isIndex): ?>
+        <?php if ($canonicalSlug === ''): ?>
             <!-- Index page - no sidebar -->
             <div class="guides-index">
                 <?= $htmlContent ?>
@@ -854,7 +891,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
                     <ul>
                         <?php foreach ($allGuides as $guide): 
                             $guideUrl = 'https://guides.aviationwx.org/' . $guide['slug'];
-                            $isActive = ($guide['slug'] === $guideName);
+                            $isActive = ($guide['slug'] === $canonicalSlug);
                         ?>
                             <li>
                                 <a href="<?= htmlspecialchars($guideUrl) ?>" <?= $isActive ? 'class="active"' : '' ?>>
