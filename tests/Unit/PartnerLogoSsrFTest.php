@@ -185,6 +185,19 @@ class PartnerLogoSsrFTest extends TestCase
         $this->assertSame([], $locations);
     }
 
+    public function testParseRedirectLocations_EmptyHeaders(): void
+    {
+        $this->assertSame([], parseRedirectLocations(''));
+    }
+
+    public function testParseRedirectLocations_MultipleLocations(): void
+    {
+        $headers = "HTTP/1.1 302 Found\r\nLocation: https://a.com/x.png\r\nLocation: https://b.com/y.png\r\n";
+        $locations = parseRedirectLocations($headers);
+        $this->assertCount(2, $locations);
+        $this->assertSame('https://a.com/x.png', $locations[0]);
+    }
+
     public function testResolveLogoUrlHost_PinsResolvedIpsForRedirects(): void
     {
         // resolveLogoUrlHost returns the IPs that should be pinned via CURLOPT_RESOLVE
@@ -208,5 +221,35 @@ class PartnerLogoSsrFTest extends TestCase
     {
         $result = resolveRelativeUrl('https://example.com:8443/path/page.html', '/image.png');
         $this->assertSame('https://example.com:8443/image.png', $result);
+    }
+
+    public function testResolveRelativeUrl_QueryOnly(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/page.html', '?q=1');
+        $this->assertSame('https://example.com/path/page.html?q=1', $result);
+    }
+
+    public function testResolveRelativeUrl_QueryOnlyReplacesExistingQuery(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/page.html?old=1', '?new=1');
+        $this->assertSame('https://example.com/path/page.html?new=1', $result);
+    }
+
+    public function testResolveRelativeUrl_FragmentOnly(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/page.html', '#section');
+        $this->assertSame('https://example.com/path/page.html#section', $result);
+    }
+
+    public function testResolveRelativeUrl_PathRelativeNoDoubleSlash(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/page.html', 'image.png');
+        $this->assertSame('https://example.com/image.png', $result);
+    }
+
+    public function testResolveRelativeUrl_PathRelativeSubdirNoDoubleSlash(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/to/page.html', 'image.png');
+        $this->assertSame('https://example.com/path/to/image.png', $result);
     }
 }

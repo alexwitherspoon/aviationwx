@@ -156,12 +156,34 @@ function resolveRelativeUrl(string $baseUrl, string $redirectUrl): ?string
         return $baseScheme . '://' . $baseHost . $portSuffix . $redirectUrl;
     }
 
+    // Query-only (?q=1) or fragment-only (#section) redirects: resolve against the full base URL
+    if ($redirectUrl[0] === '?' || $redirectUrl[0] === '#') {
+        // Replace query or fragment on the base URL (RFC 3986 Section 5.3)
+        $baseParts = parse_url($baseUrl);
+        $result = '';
+        if (isset($baseParts['scheme'])) {
+            $result .= $baseParts['scheme'] . '://';
+        }
+        if (isset($baseParts['host'])) {
+            $result .= $baseParts['host'];
+        }
+        if (isset($baseParts['port'])) {
+            $result .= ':' . $baseParts['port'];
+        }
+        if (isset($baseParts['path'])) {
+            $result .= $baseParts['path'];
+        }
+        return $result . $redirectUrl;
+    }
+
     $basePath = parse_url($baseUrl, PHP_URL_PATH) ?: '/';
     $basePath = preg_replace('/\/[^\/]*$/', '', $basePath);
     if ($basePath === '') {
         $basePath = '/';
     }
-    return $baseScheme . '://' . $baseHost . $portSuffix . $basePath . '/' . $redirectUrl;
+    // Avoid double slash when basePath is '/'
+    $separator = $basePath === '/' ? '' : '/';
+    return $baseScheme . '://' . $baseHost . $portSuffix . $basePath . $separator . $redirectUrl;
 }
 
 /**
@@ -406,12 +428,12 @@ function downloadPartnerLogo(string $logoUrl): bool {
         curl_close($ch);
 
         // Parse redirect Location from response headers
-        $headers = substr((string) $data, 0, $headerSize);
-        $body = substr((string) $data, $headerSize);
-        if ($headerSize > 0) {
-            $data = $body;
-            $redirectLocations = parseRedirectLocations($headers);
-        }
+        $rawData = (string) $data;
+        $headers = substr($rawData, 0, $headerSize);
+        $body = substr($rawData, $headerSize);
+        // Always strip headers from the response when CURLOPT_HEADER is set
+        $data = $body;
+        $redirectLocations = parseRedirectLocations($headers);
 
         // Follow redirects manually, validating each target and pinning DNS
         $redirectsFollowed = 0;
