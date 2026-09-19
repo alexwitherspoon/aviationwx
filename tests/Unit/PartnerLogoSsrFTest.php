@@ -242,6 +242,12 @@ class PartnerLogoSsrFTest extends TestCase
         $this->assertSame('https://example.com/path/page.html?q=1#section', $result);
     }
 
+    public function testResolveLogoUrlHost_BracketedIPv6Loopback_ReturnsFalse(): void
+    {
+        $this->assertNull(resolveLogoUrlHost('http://[::1]/logo.png'));
+        $this->assertNull(resolveLogoUrlHost('http://[::ffff:127.0.0.1]/logo.png'));
+    }
+
     public function testResolveRelativeUrl_FragmentOnly(): void
     {
         $result = resolveRelativeUrl('https://example.com/path/page.html', '#section');

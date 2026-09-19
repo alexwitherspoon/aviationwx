@@ -230,6 +230,10 @@ function resolveLogoUrlHost(string $logoUrl): ?array
     }
 
     $host = strtolower($parsed['host']);
+    // Normalize bracketed IPv6 literals from parse_url: [::1] -> ::1
+    if ($host !== '' && $host[0] === '[' && str_ends_with($host, ']')) {
+        $host = substr($host, 1, -1);
+    }
     $port = isset($parsed['port']) ? (int) $parsed['port'] : ($scheme === 'https' ? 443 : 80);
 
     // If host is a literal IP, check it directly
@@ -403,11 +407,12 @@ function downloadPartnerLogo(string $logoUrl): bool {
         $redirectAbort = false;
         $redirectLocations = [];
         $ch = curl_init();
-        // Build CURLOPT_RESOLVE entries, bracketing IPv6 addresses per cURL spec
+        // Build CURLOPT_RESOLVE entries, bracketing IPv6 hostnames and IPs per cURL spec
         $resolveOpts = [];
+        $hostEntry = strpos($host, ':') !== false ? '[' . $host . ']' : $host;
         foreach ($verifiedIps as $vip) {
             $addrPart = strpos($vip, ':') !== false ? '[' . $vip . ']' : $vip;
-            $resolveOpts[] = $host . ':' . $port . ':' . $addrPart;
+            $resolveOpts[] = $hostEntry . ':' . $port . ':' . $addrPart;
         }
         curl_setopt_array($ch, [
             CURLOPT_URL => $logoUrl,
