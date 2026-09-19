@@ -46,7 +46,13 @@ function isPrivateIp(string $ip): bool
         if ($first === 169 && (int) $octets[1] === 254) {
             return true;
         }
-        if ($first === 0) {
+        // CGNAT (100.64.0.0/10), 0.0.0.0/8, 192.0.0.0/24, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24
+        if ($first === 0 || ($first === 100 && (int) $octets[1] >= 64 && (int) $octets[1] < 128)
+            || ($first === 192 && (int) $octets[1] === 0)
+            || ($first === 198 && ((int) $octets[1] >= 18 && (int) $octets[1] < 65) || (int) $octets[1] === 51)
+            || ($first === 203 && (int) $octets[1] === 0)
+            || ($first === 240) || ($first >= 240)
+        ) {
             return true;
         }
         return false;
@@ -97,27 +103,37 @@ function isLogoUrlSafe(string $logoUrl): bool
 
     $host = strtolower($parsed['host']);
 
+    // Reject unspecified and non-routable IPv4 ranges (0/8, 100.64/10 CGNAT, etc.)
     if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6) !== false) {
         return !isPrivateIp($host);
     }
 
-    // Check both A and AAAA records — getthostbynamel() only returns A records
-    $resolved = @gethostbynamel($host);
-    if ($resolved === false || $resolved === []) {
-        return false;
-    }
+    // Resolve both A and AAAA records; gethostbynamel() only returns A records.
+    // Don't return false early if A records are absent — AAAA-only hosts are valid.
+    $safe = true;
+    $resolvedAny = false;
 
-    foreach ($resolved as $ip) {
-        if (isPrivateIp($ip)) {
-            return false;
+    $arecords = @gethostbynamel($host);
+    if (is_array($arecords)) {
+        foreach ($arecords as $ip) {
+            $resolvedAny = true;
+            if (isPrivateIp($ip)) {
+                return false;
+            }
         }
     }
 
-    // Also check AAAA records (gethostbynamel skips IPv6)
-    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-    if (is_array($records)) {
-        foreach ($records as $rec) {
+    $dnsRecords = @dns_get_record($host, DNS_A | DNS_AAAA);
+    if (is_array($dnsRecords)) {
+        foreach ($dnsRecords as $rec) {
+            if (isset($rec['ip'])) {
+                $resolvedAny = true;
+                if (isPrivateIp($rec['ip'])) {
+                    return false;
+                }
+            }
             if (isset($rec['ipv6'])) {
+                $resolvedAny = true;
                 if (isPrivateIp($rec['ipv6'])) {
                     return false;
                 }
@@ -125,7 +141,7 @@ function isLogoUrlSafe(string $logoUrl): bool
         }
     }
 
-    return true;
+    return $resolvedAny;
 }
 
 /**
@@ -239,43 +255,67 @@ function downloadPartnerLogo(string $logoUrl): bool {
     }
 
     if ($data === null) {
-        $redirectAbort = false;
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $logoUrl,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => CURL_TIMEOUT,
             CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            // Restrict protocol to HTTP/HTTPS; blocks file:// and other schemes via redirects
+            // Don't follow redirects automatically; validate each target manually
+            CURLOPT_FOLLOWLOCATION => false,
+            // Restrict protocol to HTTP/HTTPS for both initial and redirect requests
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
             CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
-            // Validate each redirect Location header against SSRF filters
-            CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$redirectAbort, $logoUrl) {
-                if (str_starts_with(trim($header), 'Location:')) {
-                    $location = trim(substr($header, 9));
-                    if ($location !== '' && !isLogoUrlSafe($location)) {
-                        $redirectAbort = true;
-                        return 0;
-                    }
-                }
-                return strlen($header);
-            },
         ]);
 
         $data = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         curl_close($ch);
 
-        if ($redirectAbort) {
-            aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
-                'url' => $logoUrl,
-            ], 'app');
-            return false;
+        // Handle manual redirect following with SSRF protection
+        $redirectsFollowed = 0;
+        while ($httpCode >= 300 && $httpCode < 400 && $redirectUrl !== '' && $redirectUrl !== false && $redirectsFollowed < 3) {
+            // Resolve relative redirects against the current URL
+            if (parse_url($redirectUrl, PHP_URL_HOST) === null) {
+                $redirectUrl = $logoUrl;
+                $redirectUrl = preg_replace('/^[^?#]*' . preg_quote(parse_url($logoUrl, PHP_URL_PATH) ?? '/', '/') . '.*/',
+                    dirname(parse_url($logoUrl, PHP_URL_PATH) ?: '/'), $redirectUrl);
+                $redirectUrl = parse_url($logoUrl, PHP_URL_SCHEME) . '://' .
+                    parse_url($logoUrl, PHP_URL_HOST) .
+                    $redirectUrl;
+            }
+
+            if (!isLogoUrlSafe($redirectUrl)) {
+                aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
+                    'original_url' => $logoUrl,
+                    'redirect_url' => $redirectUrl,
+                ], 'app');
+                return false;
+            }
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $redirectUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
+                CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
+            ]);
+
+            $data = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+            $redirectsFollowed++;
         }
     }
 
