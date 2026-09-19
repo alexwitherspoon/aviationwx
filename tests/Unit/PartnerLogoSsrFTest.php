@@ -116,4 +116,72 @@ class PartnerLogoSsrFTest extends TestCase
         $this->assertFalse(isPrivateIp('::ffff:8.8.8.8'));
         $this->assertFalse(isPrivateIp('::ffff:1.1.1.1'));
     }
+
+    public function testResolveRelativeUrl_ProtocolRelative_ResolvesWithScheme(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/page.html', '//other.com/image.png');
+        $this->assertSame('https://other.com/image.png', $result);
+    }
+
+    public function testResolveRelativeUrl_ProtocolRelativeHttpBase_ResolvesWithHttp(): void
+    {
+        $result = resolveRelativeUrl('http://example.com/path/page.html', '//other.com/image.png');
+        $this->assertSame('http://other.com/image.png', $result);
+    }
+
+    public function testResolveRelativeUrl_RootRelative_ResolvesWithHostAndPort(): void
+    {
+        $result = resolveRelativeUrl('https://example.com:8443/path/page.html', '/images/logo.png');
+        $this->assertSame('https://example.com:8443/images/logo.png', $result);
+    }
+
+    public function testResolveRelativeUrl_PathRelative_ResolvesWithBasePath(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/to/page.html', 'image.png');
+        $this->assertSame('https://example.com/path/to/image.png', $result);
+    }
+
+    public function testResolveRelativeUrl_AbsoluteUrl_ReturnsAsIs(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/old', 'https://cdn.com/logo.png');
+        $this->assertSame('https://cdn.com/logo.png', $result);
+    }
+
+    public function testResolveRelativeUrl_InternalRedirectBlocked(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/page', '//127.0.0.1/logo.png');
+        $this->assertSame('https://127.0.0.1/logo.png', $result);
+        $this->assertFalse(isLogoUrlSafe($result));
+    }
+
+    public function testParseRedirectLocations_CaseInsensitive(): void
+    {
+        $headers = "HTTP/1.1 302 Found\r\nLocation: https://example.com/new\nX-Custom: header\r\n";
+        $locations = parseRedirectLocations($headers);
+        $this->assertCount(1, $locations);
+        $this->assertSame('https://example.com/new', $locations[0]);
+    }
+
+    public function testParseRedirectLocations_LowercaseLocation(): void
+    {
+        $headers = "HTTP/1.1 302 Found\r\nlocation: https://example.com/new\n";
+        $locations = parseRedirectLocations($headers);
+        $this->assertCount(1, $locations);
+        $this->assertSame('https://example.com/new', $locations[0]);
+    }
+
+    public function testParseRedirectLocations_MixedCase(): void
+    {
+        $headers = "HTTP/1.1 302 Found\r\nLOCATION: https://example.com/new\n";
+        $locations = parseRedirectLocations($headers);
+        $this->assertCount(1, $locations);
+        $this->assertSame('https://example.com/new', $locations[0]);
+    }
+
+    public function testParseRedirectLocations_NoLocation(): void
+    {
+        $headers = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n";
+        $locations = parseRedirectLocations($headers);
+        $this->assertSame([], $locations);
+    }
 }

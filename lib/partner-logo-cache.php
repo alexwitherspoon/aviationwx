@@ -108,7 +108,7 @@ function isPrivateIp(string $ip): bool
 function parseRedirectLocations(string $rawHeaders): array
 {
     $locations = [];
-    $headers = explode("\r\n", $rawHeaders);
+    $headers = preg_split('/\r\n|\n/', $rawHeaders);
     foreach ($headers as $header) {
         if (stripos($header, 'location:') === 0) {
             $location = trim(substr($header, 9));
@@ -132,6 +132,13 @@ function parseRedirectLocations(string $rawHeaders): array
  */
 function resolveRelativeUrl(string $baseUrl, string $redirectUrl): ?string
 {
+    // Protocol-relative redirects (//host/path) — parse_url sees host, but
+    // we need the scheme from the base URL to make it absolute
+    if (str_starts_with($redirectUrl, '//')) {
+        $baseScheme = parse_url($baseUrl, PHP_URL_SCHEME) ?: 'https';
+        return $baseScheme . ':' . $redirectUrl;
+    }
+
     if (parse_url($redirectUrl, PHP_URL_HOST) !== null) {
         return $redirectUrl;
     }
