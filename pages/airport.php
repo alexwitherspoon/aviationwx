@@ -1372,8 +1372,9 @@ let clientClockSkewDetected = (function() {
     return Math.abs(clientUtc - SERVER_TIME_UTC) > CLIENT_CLOCK_SKEW_SECONDS;
 })();
 const AIRPORT_DATA = <?php
-    // Defensive JSON encoding with error handling
-    $airportJson = json_encode($airport, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    // Security: strip credentials via allowlist before serializing to browser
+    $airportPageConfig = getAirportPageConfig($airport);
+    $airportJson = json_encode($airportPageConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     if ($airportJson === false) {
         error_log('JSON encode failed for airport data: ' . json_last_error_msg());
         echo '{}'; // Fallback to empty object
