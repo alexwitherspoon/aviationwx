@@ -13,6 +13,104 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 
 /**
+ * Whether an IP address is private, loopback, or link-local.
+ *
+ * @param string $ip IP address to check
+ * @return bool True when the IP is not publicly routable
+ */
+function isPrivateIp(string $ip): bool
+{
+    if ($ip === '::1') {
+        return true;
+    }
+
+    // IPv4-mapped IPv6 (::ffff:127.0.0.1) — decode and check the embedded IPv4
+    if (str_starts_with($ip, '::ffff:')) {
+        $mapped = substr($ip, 7);
+        if (filter_var($mapped, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            return isPrivateIp($mapped);
+        }
+    }
+
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+        // FILTER_FLAG_NO_PRIV_RANGE blocks RFC 1918 (10.x, 172.16-31.x, 192.168.x)
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE) === false) {
+            return true;
+        }
+        // Also block loopback (127.0.0.0/8) and link-local (169.254.0.0/16)
+        $octets = explode('.', $ip);
+        $first = (int) $octets[0];
+        if ($first === 127) {
+            return true;
+        }
+        if ($first === 169 && (int) $octets[1] === 254) {
+            return true;
+        }
+        return false;
+    }
+
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+        $lower = strtolower($ip);
+        // Reject IPv6 loopback (::1) and link-local (fe80::/10: fe80-fe9f, fff0-ff
+        // also covers fe7f which is not in the standard range but harmless to include)
+        if ($lower === '::1' || $lower[0] === 'f' && $lower[1] === 'e' && (
+            in_array($lower[2], ['8','9','a','b','c','d','e','f'])
+        )) {
+            return true;
+        }
+        // IPv6 unique local addresses (fc00::/7: fc00-fdff)
+        if ($lower[0] === 'f' && ($lower[1] === 'c' || $lower[1] === 'd')) {
+            return true;
+        }
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Check whether a URL's host resolves to a public IP.
+ *
+ * Prevents SSRF by rejecting loopback, link-local, RFC 1918, and
+ * other non-public addresses before any outbound HTTP request.
+ *
+ * @param string $logoUrl Logo URL to check
+ * @return bool True when the URL is safe to fetch (public IP), false when blocked
+ */
+function isLogoUrlSafe(string $logoUrl): bool
+{
+    $parsed = parse_url($logoUrl);
+    if ($parsed === false || !isset($parsed['host']) || $parsed['host'] === '') {
+        return false;
+    }
+
+    // Only allow http and https schemes
+    $scheme = strtolower($parsed['scheme'] ?? '');
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        return false;
+    }
+
+    $host = strtolower($parsed['host']);
+
+    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        return !isPrivateIp($host);
+    }
+
+    $resolved = @gethostbynamel($host);
+    if ($resolved === false || $resolved === []) {
+        return false;
+    }
+
+    foreach ($resolved as $ip) {
+        if (isPrivateIp($ip)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Get cache directory for partner logos
  *
  * Uses CACHE_PARTNERS_DIR from cache-paths.php so layout stays consistent with the rest of the app.
@@ -95,10 +193,18 @@ function isPartnerLogoCacheFresh(string $cacheFile): bool {
  */
 function downloadPartnerLogo(string $logoUrl): bool {
     $cacheFile = getPartnerLogoCacheFile($logoUrl);
-    
+
     // Check if already cached and fresh
     if (isPartnerLogoCacheFresh($cacheFile)) {
         return true;
+    }
+
+    // SSRF protection: reject internal/private IPs before any network request
+    if (!isLogoUrlSafe($logoUrl)) {
+        aviationwx_log('warning', 'partner logo download blocked: unsafe URL', [
+            'url' => $logoUrl,
+        ], 'app');
+        return false;
     }
 
     $data = null;
@@ -123,14 +229,29 @@ function downloadPartnerLogo(string $logoUrl): bool {
             CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
+            // Restrict protocol to HTTP/HTTPS; blocks file:// and other schemes via redirects
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
             CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
         ]);
 
         $data = curl_exec($ch);
+        // After redirects, re-check the final URL to close redirect-based SSRF bypass
+        $finalUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
+
+        if ($finalUrl !== '' && $finalUrl !== false) {
+            if (!isLogoUrlSafe($finalUrl)) {
+                aviationwx_log('warning', 'partner logo download blocked: redirect to unsafe URL', [
+                    'original_url' => $logoUrl,
+                    'redirect_url' => $finalUrl,
+                ], 'app');
+                return false;
+            }
+        }
     }
 
     if ($error !== '') {
