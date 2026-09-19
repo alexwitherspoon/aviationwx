@@ -11,7 +11,7 @@ Review effort level: Balanced for normal PRs, Lite for documentation-only change
 
 ## Review priorities (in order)
 
-1. **Credential exposure** - No API keys, passwords, push_config credentials, or internal identifiers should reach browser JavaScript or client-visible JSON. Check `pages/*.php` output boundaries. Any serialized airport config that reaches the browser must go through `getAirportPageConfig()` (in `lib/config.php`). If PR #340 is unmerged, CI does not yet enforce this so review every output boundary.
+1. **Credential exposure** - No API keys, passwords, push_config credentials, or internal identifiers should reach browser JavaScript or client-visible JSON. Check `pages/*.php` output boundaries. Any serialized airport config that reaches the browser must go through `getAirportPageConfig()` (in `lib/config.php`), not `json_encode($airport)` directly.
 2. **Data staleness** - Weather older than the fail-closed threshold (`DEFAULT_STALE_FAILCLOSED_SECONDS`, 10800s = 3h) must be nulled. METAR has a separate threshold. Fields must show "---" when stale, never stale values. Use `nullStaleFieldsBySource()`.
 3. **Units** - Use `WeatherReading` factory methods: `celsius()`, `knots()`, `inHg()`, `feet()`. Never hardcode conversion factors. Document units in PHPDoc.
 4. **Error handling** - No silent failures. Use `aviationwx_log()` for structured logging. Per-airport degradation: one airport's failure must not affect others.
@@ -25,7 +25,6 @@ Review effort level: Balanced for normal PRs, Lite for documentation-only change
 
 - PHP syntax validation on all `.php` files
 - PHPUnit Unit + Integration suites (including `WeatherCalculationsTest`, `ErrorHandlingTest`, `WeatherAggregatorTest`, `TempestAdapterTest`)
-- `getAirportPageConfig()` exists in `lib/config.php` and is called in `pages/airport.php` instead of `json_encode($airport)` (only after PR #340 merges; before that, audit credential exposure manually)
 - `fetchWeatherUnified()` exists in `lib/weather/UnifiedFetcher.php`
 - `WeatherAggregator` class exists in `lib/weather/WeatherAggregator.php`
 - `calculateFlightCategory()` exists in `lib/weather/calculator.php` and is called in `api/weather.php`
@@ -43,6 +42,7 @@ If CI already checks it, do not re-flag it in review. Focus on runtime behavior 
 
 ## What CI does NOT cover (your real value-add)
 
+- Whether `getAirportPageConfig()` is actually called in `pages/airport.php` instead of `json_encode($airport)` — `pr-checks.yml` grep-checks for function existence in `lib/config.php` but not the call site
 - Whether a credential-shaped value is reachable from a changed code path at runtime (audit output boundaries in `pages/*.php`, `api/*.php`)
 - Whether staleness enforcement is applied at the call site after aggregation (CI only warns if a stale-threshold symbol is missing, and the `pr-checks.yml` warning greps for `MAX_STALE_HOURS` which does not exist in `lib/constants.php`; the actual constant is `DEFAULT_STALE_FAILCLOSED_SECONDS`)
 - Whether a new weather adapter handles VRB wind direction, non-numeric wind speed, or malformed JSON
