@@ -68,6 +68,79 @@ function getBaseUrl() {
 }
 
 /**
+ * Resolve the canonical slug for the current guide request.
+ *
+ * Strips a leading /guides/ prefix (if any), the .md extension, and trailing
+ * slashes so that variants like /guides/08-camera-configuration.md or
+ * /08-camera-configuration/ all collapse to 08-camera-configuration. The
+ * index (README) resolves to the empty string.
+ *
+ * @return string The canonical guide slug, or empty string for the index.
+ */
+function getGuideCanonicalSlug(): string {
+    $path = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/';
+    $path = strtok($path, '?');   // drop query
+    $path = preg_replace('#^/+|/+$#', '', $path); // trim leading/trailing slashes
+
+    // Strip an optional /guides/ prefix so path-based and subdomain routes
+    // resolve to the same canonical slug.
+    if (preg_match('#^guides/(.+)$#', $path, $m)) {
+        $path = $m[1];
+    } elseif (preg_match('#^guides$#', $path)) {
+        return '';
+    }
+
+    // Normalize the file name: drop an optional .md extension and any
+    // trailing slashes so file and directory variants agree.
+    $path = rtrim($path, '/');
+    $path = preg_replace('/\.md$/i', '', $path);
+
+    // Index page has no path component, or a README variant.
+    if ($path === '' || preg_match('#^README$#i', $path)) {
+        return '';
+    }
+
+    return $path;
+}
+
+/**
+ * Resolve a guide slug to a real guide file on disk.
+ *
+ * Returns the slug for a guide that exists, or null when no matching guide
+ * file is found. Used to decide whether a variant request (.md, trailing
+ * slash) should redirect rather than 404.
+ *
+ * @param string $slug Candidate guide slug.
+ * @return string|null The resolved guide slug, or null if not found.
+ */
+function resolveGuideFile(string $slug): ?string {
+    $guidesDir = __DIR__ . '/../guides';
+
+    if ($slug === '') {
+        return file_exists($guidesDir . '/README.md') || file_exists($guidesDir . '/readme.md')
+            ? ''
+            : null;
+    }
+
+    $candidate = $guidesDir . '/' . $slug . '.md';
+    return is_file($candidate) ? $slug : null;
+}
+
+/**
+ * Build the canonical URL for a guide slug.
+ *
+ * @param string $slug The canonical guide slug, or empty string for the index.
+ * @return string Absolute HTTPS canonical URL on the guides subdomain.
+ */
+function getGuideCanonicalUrl(string $slug = ''): string {
+    $baseDomain = getBaseDomain();
+    if ($slug === '') {
+        return 'https://guides.' . $baseDomain . '/';
+    }
+    return 'https://guides.' . $baseDomain . '/' . $slug;
+}
+
+/**
  * Generate Organization structured data (JSON-LD) for homepage
  * 
  * Creates Schema.org Organization structured data for the homepage.

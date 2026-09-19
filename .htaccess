@@ -85,6 +85,12 @@ Options -Indexes
     Deny from all
 </FilesMatch>
 
+# Internal nginx forwarder - not directly accessible
+<FilesMatch "^guide-md\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
 # Deny access to test files and directories
 <FilesMatch "^test">
     Order allow,deny
