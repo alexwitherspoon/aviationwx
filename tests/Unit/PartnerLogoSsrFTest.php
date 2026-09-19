@@ -235,6 +235,12 @@ class PartnerLogoSsrFTest extends TestCase
         $this->assertSame('https://example.com/path/page.html?new=1', $result);
     }
 
+    public function testResolveRelativeUrl_FragmentOnlyPreservesQuery(): void
+    {
+        $result = resolveRelativeUrl('https://example.com/path/page.html?q=1', '#section');
+        $this->assertSame('https://example.com/path/page.html?q=1#section', $result);
+    }
+
     public function testResolveRelativeUrl_FragmentOnly(): void
     {
         $result = resolveRelativeUrl('https://example.com/path/page.html', '#section');

@@ -158,7 +158,7 @@ function resolveRelativeUrl(string $baseUrl, string $redirectUrl): ?string
 
     // Query-only (?q=1) or fragment-only (#section) redirects: resolve against the full base URL
     if ($redirectUrl[0] === '?' || $redirectUrl[0] === '#') {
-        // Replace query or fragment on the base URL (RFC 3986 Section 5.3)
+        // Replace query (for ?) or fragment (for #) on the base URL per RFC 3986
         $baseParts = parse_url($baseUrl);
         $result = '';
         if (isset($baseParts['scheme'])) {
@@ -173,7 +173,13 @@ function resolveRelativeUrl(string $baseUrl, string $redirectUrl): ?string
         if (isset($baseParts['path'])) {
             $result .= $baseParts['path'];
         }
-        return $result . $redirectUrl;
+        if ($redirectUrl[0] === '?') {
+            // ?new=1 replaces existing query, drops fragment
+            return $result . $redirectUrl;
+        }
+        // #section preserves existing query, replaces fragment
+        $query = isset($baseParts['query']) ? '?' . $baseParts['query'] : '';
+        return $result . $query . $redirectUrl;
     }
 
     $basePath = parse_url($baseUrl, PHP_URL_PATH) ?: '/';
