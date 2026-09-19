@@ -19,8 +19,8 @@ docker compose -f docker/docker-compose.prod.yml restart
 # Check scheduler status
 docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Clear config cache
-curl https://aviationwx.org/admin/cache-clear.php
+# Clear config cache (scheduler auto-clears on config changes; restart to force)
+docker compose -f docker/docker-compose.prod.yml restart web
 ```
 
 ---
@@ -262,8 +262,8 @@ docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-w
 ### Configuration Issues
 
 ```bash
-# Clear config cache
-curl https://aviationwx.org/admin/cache-clear.php
+# Clear config cache (scheduler auto-clears on config changes; restart to force)
+docker compose -f docker/docker-compose.prod.yml restart web
 
 # Validate config (inside container)
 docker compose -f docker/docker-compose.prod.yml exec web php -r "require 'lib/config.php'; var_dump(validateAirportsJsonStructure(loadAirportsConfig()));"

@@ -93,7 +93,7 @@ Options -Indexes
 
 # Deny access to dev tools
 # Note: health.php and ready.php are allowed for monitoring/health checks (routed to health/)
-# Admin endpoints are now in admin/ directory and protected separately
+# The admin/ directory has been removed; operator access is via ops.aviationwx.org
 <FilesMatch "^(dev/|test-local\.php|test-local\.sh)$">
     Order allow,deny
     Deny from all
