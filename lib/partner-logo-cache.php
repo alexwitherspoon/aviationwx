@@ -300,18 +300,21 @@ function downloadPartnerLogo(string $logoUrl): bool {
     }
 
     if ($data === null) {
+        $redirectAbort = false;
         $ch = curl_init();
+        // Build CURLOPT_RESOLVE entries, bracketing IPv6 addresses per cURL spec
         $resolveOpts = [];
         foreach ($verifiedIps as $vip) {
-            $resolveOpts[] = $host . ':' . $port . ':' . $vip;
+            $addrPart = strpos($vip, ':') !== false ? '[' . $vip . ']' : $vip;
+            $resolveOpts[] = $host . ':' . $port . ':' . $addrPart;
         }
         curl_setopt_array($ch, [
             CURLOPT_URL => $logoUrl,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => CURL_TIMEOUT,
             CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-            // Don't follow redirects automatically; validate each target manually
-            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
             // Restrict protocol to HTTP/HTTPS for both initial and redirect requests
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
@@ -319,80 +322,30 @@ function downloadPartnerLogo(string $logoUrl): bool {
             CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
             // Pin the verified IPs to prevent DNS rebinding between check and fetch
             CURLOPT_RESOLVE => $resolveOpts,
+            // Validate each redirect Location header against SSRF filters
+            CURLOPT_HEADERFUNCTION => function ($curl, $header) use (&$redirectAbort) {
+                $line = trim($header);
+                if (stripos($line, 'location:') === 0) {
+                    $location = trim(substr($line, 9));
+                    if ($location !== '' && !isLogoUrlSafe($location)) {
+                        $redirectAbort = true;
+                        return 0;
+                    }
+                }
+                return strlen($header);
+            },
         ]);
 
         $data = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         curl_close($ch);
 
-        // Handle manual redirect following with SSRF protection
-        $redirectsFollowed = 0;
-        while ($httpCode >= 300 && $httpCode < 400 && $redirectUrl !== '' && $redirectUrl !== false && $redirectsFollowed < 3) {
-            // Resolve relative redirects against the original URL's base
-            if (parse_url($redirectUrl, PHP_URL_HOST) === null) {
-                $origScheme = parse_url($logoUrl, PHP_URL_SCHEME) ?: 'https';
-                $origHost = parse_url($logoUrl, PHP_URL_HOST) ?: '';
-                $origPort = parse_url($logoUrl, PHP_URL_PORT);
-                $portSuffix = ($origPort !== null) ? ':' . $origPort : '';
-
-                // Protocol-relative (//host/path)
-                if (str_starts_with($redirectUrl, '//')) {
-                    $redirectUrl = $origScheme . ':' . $redirectUrl;
-                } elseif ($redirectUrl[0] === '/') {
-                    // Root-relative: scheme://host:port + path
-                    $redirectUrl = $origScheme . '://' . $origHost . $portSuffix . $redirectUrl;
-                } else {
-                    // Path-relative: resolve against original path directory
-                    $origPath = parse_url($logoUrl, PHP_URL_PATH) ?: '/';
-                    $basePath = preg_replace('/\/[^\/]*$/', '', $origPath);
-                    if ($basePath === '') {
-                        $basePath = '/';
-                    }
-                    $redirectUrl = $origScheme . '://' . $origHost . $portSuffix . $basePath . '/' . $redirectUrl;
-                }
-            }
-
-            $redirectIps = resolveLogoUrlHost($redirectUrl);
-            if ($redirectIps === null) {
-                aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
-                    'original_url' => $logoUrl,
-                    'redirect_url' => $redirectUrl,
-                ], 'app');
-                return false;
-            }
-
-            $redirectHost = strtolower(parse_url($redirectUrl, PHP_URL_HOST) ?: '');
-            $redirectPort = parse_url($redirectUrl, PHP_URL_PORT);
-            if ($redirectPort === null) {
-                $redirectPort = (strtolower(parse_url($redirectUrl, PHP_URL_SCHEME) ?: '') === 'https') ? 443 : 80;
-            }
-            $redirectResolveOpts = [];
-            foreach ($redirectIps as $rip) {
-                $redirectResolveOpts[] = $redirectHost . ':' . $redirectPort . ':' . $rip;
-            }
-
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $redirectUrl,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => CURL_TIMEOUT,
-                CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-                CURLOPT_FOLLOWLOCATION => false,
-                CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-                CURLOPT_USERAGENT => 'AviationWX Partner Logo Bot',
-                CURLOPT_MAXFILESIZE => getCacheFileMaxSizeBytes(),
-                CURLOPT_RESOLVE => $redirectResolveOpts,
-            ]);
-
-            $data = curl_exec($ch);
-            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
-            $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
-            curl_close($ch);
-            $redirectsFollowed++;
+        if ($redirectAbort) {
+            aviationwx_log('warning', 'partner logo download blocked: unsafe redirect target', [
+                'url' => $logoUrl,
+            ], 'app');
+            return false;
         }
     }
 
