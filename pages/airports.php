@@ -116,7 +116,7 @@ foreach ($airports as $airportId => $airport) {
             'name' => $airport['name'],
             'lat' => $airport['lat'],
             'lon' => $airport['lon'],
-            'url' => 'https://' . $airportId . '.aviationwx.org',
+            'url' => 'https://' . strtolower(getPrimaryIdentifier($airportId, $airport)) . '.aviationwx.org',
             'flightCategory' => $flightCategory // null if no METAR data
         ];
     }
@@ -1314,7 +1314,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         <section class="airports-section">
             <div class="airports-grid">
                 <?php foreach ($airports as $airportId => $airport): 
-                    $url = 'https://' . $airportId . '.aviationwx.org';
+                    $url = 'https://' . strtolower(getPrimaryIdentifier($airportId, $airport)) . '.aviationwx.org';
                     $hasMetar = isMetarEnabled($airport);
                     $hasAnyWeather = hasWeatherSources($airport);
                     $weather = $hasAnyWeather ? getAirportWeatherForDirectory($airportId) : [];

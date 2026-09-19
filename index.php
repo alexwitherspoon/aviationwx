@@ -322,7 +322,14 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         // allowing proper canonical URLs. After redirect, unconfigured airports will show 404.
         if ($requestedIdentifier !== $primaryIdentifierUpper) {
             // Determine protocol (HTTPS preferred)
-            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $protocol = 'https';
+            if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+                $protocol = 'https';
+            } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+                $protocol = in_array($_SERVER['HTTP_X_FORWARDED_PROTO'], ['https', 'on']) ? 'https' : 'http';
+            } elseif (!isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
+                $protocol = 'http';
+            }
             
             // Get base domain
             $baseDomain = getBaseDomain();

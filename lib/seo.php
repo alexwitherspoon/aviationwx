@@ -24,9 +24,12 @@ function getCanonicalUrl($airportId = null) {
     // Always use HTTPS for canonical URLs - HTTP redirects to HTTPS via nginx (301)
     $protocol = 'https';
     
-    // If airport ID is provided, use subdomain URL
+    // If airport ID is provided, use subdomain URL based on the primary
+    // identifier (ICAO > IATA > FAA > config key) so that aliases like gic
+    // canonicalize to their primary identifier (kgic).
     if ($airportId) {
-        return $protocol . '://' . $airportId . '.aviationwx.org';
+        $primary = getPrimaryIdentifier($airportId);
+        return $protocol . '://' . strtolower($primary) . '.aviationwx.org';
     }
     
     // Otherwise, use current host (strip www. prefix for consistency)
@@ -212,7 +215,8 @@ function generateWebSiteSchema() {
  * @return array Schema.org Airport JSON-LD structure
  */
 function generateAirportSchema($airport, $airportId) {
-    $airportUrl = 'https://' . $airportId . '.aviationwx.org';
+    $primary = getPrimaryIdentifier($airportId, $airport);
+    $airportUrl = 'https://' . strtolower($primary) . '.aviationwx.org';
     
     $formalIdentifier = getFormalIdentifierForDisplay($airport);
     $descriptionIdentifierSuffix = $formalIdentifier !== null ? ' (' . $formalIdentifier . ')' : '';
