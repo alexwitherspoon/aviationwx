@@ -139,20 +139,27 @@ NGINX;
         $this->assertFileExists($path, 'docker/nginx.conf must exist');
         $content = (string) file_get_contents($path);
 
-        // Deny regex must include all admin endpoint paths
-        $this->assertStringContainsString('clear-cache\.php', $content);
-        $this->assertStringContainsString('diagnostics\.php', $content);
-        $this->assertStringContainsString('metrics\.php', $content);
+        // Match the actual deny location directive (not explanatory comments)
+        $denyMatch = preg_match(
+            '/location\s+~\s+\/(test-local\.php|.*?diagnostics\.php|.*?clear-cache\.php|.*?metrics\.php).*?\{\s*deny all;/s',
+            $content,
+            $denyMatches
+        );
+        $this->assertSame(1, $denyMatch, 'deny location for admin endpoints must use a location directive');
 
-        // No admin proxy routes
-        $this->assertStringNotContainsString('admin/cache-clear.php', $content);
-        $this->assertStringNotContainsString('location = /clear-cache.php', $content);
+        // Generic PHP location must exist
+        $this->assertStringContainsString('location ~* \.php$ {', $content);
 
         // Deny block must appear before generic PHP location
-        $denyPos = strpos($content, 'clear-cache\.php');
-        $phpPos = strpos($content, 'location ~* \\.php$');
-        $this->assertNotFalse($denyPos, 'deny regex must exist');
+        $denyPos = strpos($content, $denyMatches[0]);
+        $phpPos = strpos($content, 'location ~* \.php$');
+        $this->assertNotFalse($denyPos, 'deny location must exist');
         $this->assertNotFalse($phpPos, 'generic PHP location must exist');
-        $this->assertLessThan($phpPos, $denyPos, 'deny regex must come before generic PHP location');
+        $this->assertLessThan($phpPos, $denyPos, 'deny location must come before generic PHP location');
+
+        // No admin proxy routes or symlinks to deleted directories
+        $this->assertStringNotContainsString('proxy_pass http://localhost:8080/admin', $content);
+        $this->assertStringNotContainsString('alias /admin', $content);
+        $this->assertStringNotContainsString('root /admin', $content);
     }
 }
