@@ -128,7 +128,6 @@ NGINX;
             'HTTP ACME server_name must include ops.aviationwx.org'
         );
     }
-}
 
     /**
      * Admin endpoints must be denied before the generic PHP location,
@@ -156,3 +155,4 @@ NGINX;
         $this->assertNotFalse($phpPos, 'generic PHP location must exist');
         $this->assertLessThan($phpPos, $denyPos, 'deny regex must come before generic PHP location');
     }
+}
