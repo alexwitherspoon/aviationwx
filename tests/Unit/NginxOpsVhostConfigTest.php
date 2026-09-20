@@ -139,9 +139,8 @@ NGINX;
         $this->assertFileExists($path, 'docker/nginx.conf must exist');
         $content = (string) file_get_contents($path);
 
-        // Match the complete deny location directive on its line (not comments).
-        // Anchored to start of line, multiline — cannot span blocks.
-        $denyMatch = preg_match(
+        // Match all location directives on their lines (multiline, no cross-block span)
+        preg_match_all(
             '/^(\s*location\s+~\s+\/\S+\s*\{.*$)/m',
             $content,
             $allLocations,
