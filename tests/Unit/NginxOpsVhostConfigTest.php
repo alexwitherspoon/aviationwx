@@ -161,5 +161,10 @@ NGINX;
         $this->assertStringNotContainsString('proxy_pass http://localhost:8080/admin', $content);
         $this->assertStringNotContainsString('alias /admin', $content);
         $this->assertStringNotContainsString('root /admin', $content);
+
+        // Admin directory must be denied
+        $this->assertStringContainsString('admin', $content, 'admin path must be referenced in deny rules');
+        $adminDenyMatch = preg_match('/location\s+~\s+\S*admin.*\{\s*deny all;/s', $content);
+        $this->assertSame(1, $adminDenyMatch, 'admin directory must have a deny location');
     }
 }
