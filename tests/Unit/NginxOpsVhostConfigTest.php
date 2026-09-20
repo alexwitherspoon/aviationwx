@@ -128,4 +128,44 @@ NGINX;
             'HTTP ACME server_name must include ops.aviationwx.org'
         );
     }
+
+    /**
+     * Admin endpoints must be denied before the generic PHP location,
+     * and admin proxy routes must not exist.
+     */
+    public function testNginxDenyBlock_IsBeforePhpLocation_AndNoAdminRoutes(): void
+    {
+        $path = self::nginxConfPath();
+        $this->assertFileExists($path, 'docker/nginx.conf must exist');
+        $content = (string) file_get_contents($path);
+
+        // Match all location directives on their lines (multiline, no cross-block span)
+        preg_match_all(
+            '/^(\s*location\s+~\s+\/\S+\s*\{.*$)/m',
+            $content,
+            $allLocations,
+            PREG_SET_ORDER
+        );
+        // Find the location line that contains diagnostics\.php
+        $denyLine = null;
+        foreach ($allLocations as $m) {
+            if (str_contains($m[0], 'diagnostics\.php')) {
+                $denyLine = $m[0];
+                $denyPos = strpos($content, $m[0]);
+                break;
+            }
+        }
+        $this->assertNotNull($denyLine, 'deny location for admin endpoints must exist');
+        $this->assertNotFalse($denyPos, 'deny location must be found');
+
+        // Generic PHP location must exist after the deny block
+        $phpPos = strpos($content, 'location ~* \.php$');
+        $this->assertNotFalse($phpPos, 'generic PHP location must exist');
+        $this->assertLessThan($phpPos, $denyPos, 'deny location must come before generic PHP location');
+
+        // No admin proxy routes or symlinks to deleted directories
+        $this->assertStringNotContainsString('proxy_pass http://localhost:8080/admin', $content);
+        $this->assertStringNotContainsString('alias /admin', $content);
+        $this->assertStringNotContainsString('root /admin', $content);
+    }
 }

@@ -16,7 +16,6 @@ services:
       - ../lib:/var/www/html/lib:ro
       - ../pages:/var/www/html/pages:ro
       - ../api:/var/www/html/api:ro
-      - ../admin:/var/www/html/admin:ro
       - ../scripts:/var/www/html/scripts:ro
       - ../public:/var/www/html/public:ro
       - ../config:/var/www/html/config:ro
