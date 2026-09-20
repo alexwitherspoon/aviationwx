@@ -899,6 +899,35 @@ function getRateLimitPath(string $identifier): string {
 }
 
 // =============================================================================
+// CRAWLER ADMISSION PATHS (allowlist data, written by the refresh worker)
+// =============================================================================
+
+if (!defined('CACHE_CRAWLER_ADMISSION_DIR')) {
+    define('CACHE_CRAWLER_ADMISSION_DIR', CACHE_BASE_DIR . '/crawler-admission');
+}
+
+/**
+ * Google crawler CIDR list cache path.
+ */
+function getCrawlerGoogleAllowlistPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/google.json';
+}
+
+/**
+ * Bing/Yandex verified-IP allowlist cache path (written by the refresh worker).
+ */
+function getCrawlerVerifiedIpAllowlistPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/verified-ips.json';
+}
+
+/**
+ * Pending Bing/Yandex IP verification queue (request path appends; worker drains).
+ */
+function getCrawlerPendingIpsPath(): string {
+    return CACHE_CRAWLER_ADMISSION_DIR . '/pending-ips.json';
+}
+
+// =============================================================================
 // UPSTREAM RATE LIMIT PATHS (per-credential token buckets)
 // =============================================================================
 
@@ -1354,6 +1383,7 @@ function ensureAllCacheDirs(): array {
         CACHE_PARTNERS_LUM_DIR,
         CACHE_RATE_LIMITS_DIR,
         CACHE_UPSTREAM_LIMITS_DIR,
+        CACHE_CRAWLER_ADMISSION_DIR,
         CACHE_METRICS_DIR,
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,

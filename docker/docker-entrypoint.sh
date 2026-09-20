@@ -208,6 +208,7 @@ STATION_POWER_DIR="${CACHE_DIR}/station-power"
 PARTNERS_DIR="${CACHE_DIR}/partners"
 PARTNERS_LUM_DIR="${PARTNERS_DIR}/lum"
 RATE_LIMITS_DIR="${CACHE_DIR}/rate_limits"
+CRAWLER_ADMISSION_DIR="${CACHE_DIR}/crawler-admission"
 MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
 
 # runuser (util-linux) is required: cache dirs and the scheduler must be created/run as
@@ -240,6 +241,7 @@ ensure_cache_subdirs() {
         "${PARTNERS_DIR}"
         "${PARTNERS_LUM_DIR}"
         "${RATE_LIMITS_DIR}"
+        "${CRAWLER_ADMISSION_DIR}"
         "${METRICS_DIR}"
         "${METRICS_HOURLY_DIR}"
         "${METRICS_DAILY_DIR}"

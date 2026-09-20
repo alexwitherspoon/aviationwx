@@ -24,6 +24,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/client-ip.php';
 require_once __DIR__ . '/weather/density-altitude-performance.php';
 
 // Load public API functions for airport lookup
@@ -53,27 +54,15 @@ function enrichEmbedWeatherForDisplay(array $weather, array $airport, string $ai
 
 /**
  * Get the original client IP address for forwarding to internal API
- * 
- * Determines the actual end-user's IP address from the incoming embed request.
- * This is forwarded to the public API so rate limiting applies per end-user.
- * 
+ *
+ * Relays the identity the rate limiter and Public API use, so per-end-user rate limiting stays
+ * consistent with the counters.
+ *
  * @return string Client IP address
  */
 function getOriginalClientIp(): string
 {
-    // Check for CDN headers first (Cloudflare)
-    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-        return $_SERVER['HTTP_CF_CONNECTING_IP'];
-    }
-    
-    // Check X-Forwarded-For (behind load balancer/proxy)
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-        return trim($ips[0]);
-    }
-    
-    // Direct connection
-    return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    return getClientIp();
 }
 
 /**
