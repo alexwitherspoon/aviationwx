@@ -27,7 +27,7 @@ class NginxMainRealIpTest extends TestCase
         return $content;
     }
 
-    public function testNginxMainConf_HasRealIpHeader_RestrictsToCfRangesReturnsTrue(): void
+    public function testNginxMainConf_RealIpHeader_UsesCloudflareHeader(): void
     {
         $content = $this->readConfig();
         $this->assertStringContainsString(
