@@ -37,6 +37,12 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^\.well-known/aviationwx-upload-ssh-host-keys\.json$ api/upload-ssh-host-keys.php [L]
 
+    # Internal API endpoints should not be indexed by search engines.
+    # These serve JSON/images to the dashboard, not user-facing pages.
+    <If "%{REQUEST_URI} =~ m#^/api/(time|weather|webcam|notam|outage-status|webcam-history)\.php#">
+        Header set X-Robots-Tag "noindex, nofollow"
+    </If>
+
     # Route API endpoints to api/ directory
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^weather\.php$ api/weather.php [L]
