@@ -467,69 +467,11 @@ Returns current outage and banner state for an airport. Used by the airport page
 
 ---
 
-### Admin Endpoints
-
-#### `GET /admin/diagnostics.php`
-
-Returns system diagnostics information (useful for debugging).
-
-**Response Format:**
-```json
-{
-  "system": {
-    "php_version": "8.1.0",
-    "server": "nginx/1.21.0"
-  },
-  "cache": {
-    "apcu_enabled": true,
-    "cache_size": "64M"
-  },
-  "config": {
-    "config_file_exists": true,
-    "config_cache_valid": true
-  }
-}
-```
-
-**Note:** May contain sensitive information. Use with caution in production.
-
----
-
-#### `GET /admin/cache-clear.php`
-
-Clears configuration cache (useful after updating `airports.json`).
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Cache cleared"
-}
-```
-
-**Security:** Consider restricting access in production.
-
----
-
-#### `GET /admin/metrics.php`
-
-Returns application metrics (for monitoring systems like Prometheus).
-
-**Response:** Prometheus-formatted metrics
-
-**Example:**
-```
-# HELP http_requests_total Total number of HTTP requests
-# TYPE http_requests_total counter
-http_requests_total{endpoint="weather"} 1234
-http_requests_total{endpoint="webcam"} 5678
-```
-
----
-
 ### Health Endpoints
 
-#### `GET /health/health.php`
+#### `GET /health.php`
+
+Nginx rewrites to `/health/health.php` (returns JSON with `ok`, `time`, `php_version`, `apcu`, `ffmpeg`, `webcam_cache_dir`).
 
 Simple health check endpoint for monitoring.
 
