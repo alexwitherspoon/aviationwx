@@ -46,9 +46,10 @@ coverage/
 coverage.xml
 *-results.xml
 
-# Environment variables (local overrides only)
+# Environment variables (local overrides only; template is config/env.example)
 .env.local
 .env.*.local
+.env
 
 # Auto-generated configuration files
 config/nginx.conf
