@@ -118,4 +118,26 @@ class GuideRedirectIntegrationTest extends TestCase
             $this->assertSame("https://guides.aviationwx.org/", $location, "Variant {$variant} should redirect to index");
         }
     }
+
+    public function testPathBasedGuideMdRedirectsToCanonical(): void
+    {
+        $baseUrl = getenv("NGINX_TEST_URL");
+        if (!$baseUrl) {
+            $this->markTestSkipped("Set NGINX_TEST_URL to the isolated nginx proxy.");
+        }
+
+        // Path-based .md variant on apex domain. In production this 301s to
+        // the guides subdomain via redirectProductionApexToCanonicalSubdomain.
+        // In the test environment (APP_ENV=testing), the apex redirect does
+        // not fire; instead the .md redirect within guides.php handles it,
+        // returning 301 to the canonical extensionless URL on the subdomains.
+        [$status, $location] = $this->fetch(
+            rtrim($baseUrl, "/") . "/guides/13-using-the-airport-dashboard.md"
+        );
+        $this->assertSame(301, $status, "Path-based .md should redirect");
+        $this->assertSame(
+            "https://guides.aviationwx.org/13-using-the-airport-dashboard",
+            $location
+        );
+    }
 }
