@@ -27,7 +27,7 @@ class NginxMainRealIpTest extends TestCase
         return $content;
     }
 
-    public function testNginxMainConf_HasRealIpHeader(): void
+    public function testNginxMainConf_HasRealIpHeader_RestrictsToCfRangesReturnsTrue(): void
     {
         $content = $this->readConfig();
         $this->assertStringContainsString(
@@ -37,7 +37,7 @@ class NginxMainRealIpTest extends TestCase
         );
     }
 
-    public function testNginxMainConf_HasAllCloudflareIPv4Ranges(): void
+    public function testNginxMainConf_HasAllCloudflareIPv4Ranges_AllRangesPresent(): void
     {
         $content = $this->readConfig();
         $requiredRanges = [
@@ -66,7 +66,7 @@ class NginxMainRealIpTest extends TestCase
         }
     }
 
-    public function testNginxMainConf_HasAllCloudflareIPv6Ranges(): void
+    public function testNginxMainConf_HasAllCloudflareIPv6Ranges_AllRangesPresent(): void
     {
         $content = $this->readConfig();
         $requiredRanges = [
@@ -87,7 +87,7 @@ class NginxMainRealIpTest extends TestCase
         }
     }
 
-    public function testNginxMainConf_RealIpInsideHttpBlock(): void
+    public function testNginxMainConf_RealIpInsideHttpBlock_PlacedInHttpBlockReturnsTrue(): void
     {
         $content = $this->readConfig();
         $realIpPos = strpos($content, 'real_ip_header CF-Connecting-IP');
