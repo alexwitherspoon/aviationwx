@@ -15,7 +15,10 @@ Disallow: /*?*embed*
 # and blocking would prevent Google from following the redirect
 
 # Disallow JavaScript files from indexing (source maps, service workers, etc.)
+# Include query strings (e.g. ?v=1234 cache-busting params) to prevent
+# Google auto-discovering phantom JS URLs like service-worker.js?v=
 Disallow: *.js$
+Disallow: *.js?*
 Disallow: *.js.map$
 # Disallow admin/diagnostic endpoints
 Disallow: /admin/
