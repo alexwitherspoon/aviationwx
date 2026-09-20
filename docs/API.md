@@ -478,14 +478,18 @@ Simple health check endpoint for monitoring.
 **Response:**
 ```json
 {
-  "status": "ok",
-  "timestamp": 1699123456
+  "ok": true,
+  "time": 1699123456,
+  "php_version": "8.4.25",
+  "apcu": true,
+  "ffmpeg": true,
+  "webcam_cache_dir": {"exists": true, "writable": true}
 }
 ```
 
 **HTTP Status Codes:**
-- `200`: Healthy
-- `500`: Unhealthy
+- `200`: Healthy (always returns 200 with JSON body)
+- `502`: Unhealthy (container not ready — Apache or PHP down)
 
 ---
 

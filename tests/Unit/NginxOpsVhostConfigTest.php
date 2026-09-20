@@ -129,3 +129,30 @@ NGINX;
         );
     }
 }
+
+    /**
+     * Admin endpoints must be denied before the generic PHP location,
+     * and admin proxy routes must not exist.
+     */
+    public function testNginxDenyBlock_IsBeforePhpLocation_AndNoAdminRoutes(): void
+    {
+        $path = self::nginxConfPath();
+        $this->assertFileExists($path, 'docker/nginx.conf must exist');
+        $content = (string) file_get_contents($path);
+
+        // Deny regex must include all admin endpoint paths
+        $this->assertStringContainsString('clear-cache\.php', $content);
+        $this->assertStringContainsString('diagnostics\.php', $content);
+        $this->assertStringContainsString('metrics\.php', $content);
+
+        // No admin proxy routes
+        $this->assertStringNotContainsString('admin/cache-clear.php', $content);
+        $this->assertStringNotContainsString('location = /clear-cache.php', $content);
+
+        // Deny block must appear before generic PHP location
+        $denyPos = strpos($content, 'clear-cache\.php');
+        $phpPos = strpos($content, 'location ~* \\.php$');
+        $this->assertNotFalse($denyPos, 'deny regex must exist');
+        $this->assertNotFalse($phpPos, 'generic PHP location must exist');
+        $this->assertLessThan($phpPos, $denyPos, 'deny regex must come before generic PHP location');
+    }

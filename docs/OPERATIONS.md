@@ -19,7 +19,10 @@ docker compose -f docker/docker-compose.prod.yml restart
 # Check scheduler status
 docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Clear config cache (scheduler auto-clears on config changes; restart to force)
+# Clear config cache (scheduler auto-clears on config changes)
+# Restarting `web` reruns docker-entrypoint.sh, which restarts Apache,
+# the scheduler, and flushes persisted circuit-breaker state (docker-entrypoint.sh:277-293).
+# Reserve this for recovery, not routine cache clearing.
 docker compose -f docker/docker-compose.prod.yml restart web
 ```
 
@@ -261,7 +264,10 @@ docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-w
 ### Configuration Issues
 
 ```bash
-# Clear config cache (scheduler auto-clears on config changes; restart to force)
+# Clear config cache (scheduler auto-clears on config changes)
+# Restarting `web` reruns docker-entrypoint.sh, which restarts Apache,
+# the scheduler, and flushes persisted circuit-breaker state (docker-entrypoint.sh:277-293).
+# Reserve this for recovery, not routine cache clearing.
 docker compose -f docker/docker-compose.prod.yml restart web
 
 # Validate config (inside container)
