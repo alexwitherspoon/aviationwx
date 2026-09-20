@@ -156,9 +156,9 @@ NGINX;
             }
         }
         $this->assertNotNull($denyLine, 'deny location for admin endpoints must exist');
-        $this->assertStringNotFalse($denyPos, 'deny location must be found');
+        $this->assertNotFalse($denyPos, 'deny location must be found');
 
-         // Generic PHP location must exist after the deny block
+        // Generic PHP location must exist after the deny block
         $phpPos = strpos($content, 'location ~* \.php$');
         $this->assertNotFalse($phpPos, 'generic PHP location must exist');
         $this->assertLessThan($phpPos, $denyPos, 'deny location must come before generic PHP location');
