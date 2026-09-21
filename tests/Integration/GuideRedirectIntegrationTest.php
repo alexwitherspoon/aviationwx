@@ -4,13 +4,13 @@ use PHPUnit\Framework\TestCase;
 
 class GuideRedirectIntegrationTest extends TestCase
 {
-    private function fetch(string $url): array
+    private function fetch(string $url, string $host = "guides.aviationwx.org"): array
     {
         $curl = curl_init($url);
         curl_setopt_array($curl, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER => true,
-            CURLOPT_HTTPHEADER => ["Host: guides.aviationwx.org"],
+            CURLOPT_HTTPHEADER => ["Host: " . $host],
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_TIMEOUT => 15,
@@ -126,13 +126,13 @@ class GuideRedirectIntegrationTest extends TestCase
             $this->markTestSkipped("Set NGINX_TEST_URL to the isolated nginx proxy.");
         }
 
-        // Path-based .md variant on apex domain. In production this 301s to
-        // the guides subdomain via redirectProductionApexToCanonicalSubdomain.
-        // In the test environment (APP_ENV=testing), the apex redirect does
-        // not fire; instead the .md redirect within guides.php handles it,
-        // returning 301 to the canonical extensionless URL on the subdomains.
+        // Path-based .md variant on the apex domain. The apex-to-guides 301
+        // from redirectProductionApexToCanonicalSubdomain only fires in
+        // production, but guides.php still redirects the .md variant to the
+        // canonical extensionless URL on the guides subdomain regardless.
         [$status, $location] = $this->fetch(
-            rtrim($baseUrl, "/") . "/guides/13-using-the-airport-dashboard.md"
+            rtrim($baseUrl, "/") . "/guides/13-using-the-airport-dashboard.md",
+            "aviationwx.org"
         );
         $this->assertSame(301, $status, "Path-based .md should redirect");
         $this->assertSame(

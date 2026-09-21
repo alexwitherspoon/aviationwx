@@ -537,19 +537,15 @@ function getBaseDomain(): string {
 /**
  * Determine the request protocol (https or http).
  *
- * Checks X-Forwarded-Proto first (for nginx reverse proxy), then the
- * built-in HTTPS server variable. Defaults to https since nginx
- * redirects HTTP to HTTPS.
+ * Checks X-Forwarded-Proto first (set by nginx for proxied requests),
+ * then the HTTPS server variable. Falls back to http when neither
+ * indicates TLS.
  *
  * @return string 'https' or 'http'
  */
 function getRequestProtocol(): string {
     if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-        $proto = strtolower(trim($_SERVER['HTTP_X_FORWARDED_PROTO']));
-        return ($proto === 'https' || $proto === 'on') ? 'https' : 'http';
-    }
-    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-        return 'https';
+        return strtolower(trim($_SERVER['HTTP_X_FORWARDED_PROTO'])) === 'https' ? 'https' : 'http';
     }
     if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
         return 'https';
