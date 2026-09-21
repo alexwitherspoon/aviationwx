@@ -3,8 +3,9 @@
  * Regression tests for docker/nginx-main.conf real_ip configuration.
  *
  * Ensures set_real_ip_from is present for all Cloudflare CIDR ranges and
- * real_ip_header is set to CF-Connecting-IP, so nginx replaces REMOTE_ADDR
- * with the real client IP before proxying to Apache.
+ * real_ip_header is set to CF-Connecting-IP, so nginx rewrites its $remote_addr
+ * variable to the real client IP before proxying to Apache. (PHP's REMOTE_ADDR
+ * is set by Apache from its own TCP peer and is unaffected by this change.)
  *
  * @package AviationWX\Tests\Unit
  */
