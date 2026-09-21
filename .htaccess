@@ -39,7 +39,7 @@ Options -Indexes
 
     # Internal API endpoints should not be indexed by search engines.
     # These serve JSON/images to the dashboard, not user-facing pages.
-    <If "%{REQUEST_URI} =~ m#^/api/(time|weather|webcam|notam|outage-status|webcam-history)\.php#">
+    <If "%{REQUEST_URI} =~ m#^/api/(time|weather|webcam|notam|notam-map|outage-status|webcam-history)\.php#">
         Header set X-Robots-Tag "noindex, nofollow"
     </If>
 
@@ -87,12 +87,6 @@ Options -Indexes
 # Security - Protect sensitive files and directories
 # Deny access to configuration files (both root and config/ directory)
 <FilesMatch "^(airports\.json|airports\.json\.test|composer\.json|composer\.lock|phpunit\.xml|\.env|\.gitignore|SECURITY\.md|nginx\.conf|Dockerfile|docker-compose\.yml|docker-compose\.prod\.yml|Makefile)$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Internal nginx forwarder - not directly accessible
-<FilesMatch "^guide-md\.php$">
     Order allow,deny
     Deny from all
 </FilesMatch>
