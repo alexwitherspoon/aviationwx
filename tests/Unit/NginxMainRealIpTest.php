@@ -27,6 +27,52 @@ class NginxMainRealIpTest extends TestCase
         return $content;
     }
 
+    /**
+     * Find the matching closing brace for the http block, skipping single-quoted
+     * strings and # comments so the log_format JSON braces are not miscounted.
+     */
+    private function findHttpBlockEnd(string $content, int $httpOpen): ?int
+    {
+        $depth = 0;
+        $length = strlen($content);
+        $inSingleQuote = false;
+        $inComment = false;
+
+        for ($i = $httpOpen; $i < $length; $i++) {
+            $char = $content[$i];
+
+            if ($inComment) {
+                if ($char === "\n") {
+                    $inComment = false;
+                }
+                continue;
+            }
+            if ($inSingleQuote) {
+                if ($char === "'") {
+                    $inSingleQuote = false;
+                }
+                continue;
+            }
+            if ($char === '#') {
+                $inComment = true;
+            } elseif ($char === "'") {
+                $inSingleQuote = true;
+            } elseif ($char === '{') {
+                $depth++;
+            } elseif ($char === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * real_ip_header must trust Cloudflare's CF-Connecting-IP header.
+     */
     public function testNginxMainConf_RealIpHeader_UsesCloudflareHeader(): void
     {
         $content = $this->readConfig();
@@ -37,6 +83,9 @@ class NginxMainRealIpTest extends TestCase
         );
     }
 
+    /**
+     * Every Cloudflare IPv4 range must be listed as a trusted proxy.
+     */
     public function testNginxMainConf_HasAllCloudflareIPv4Ranges_AllRangesPresent(): void
     {
         $content = $this->readConfig();
@@ -66,6 +115,9 @@ class NginxMainRealIpTest extends TestCase
         }
     }
 
+    /**
+     * Every Cloudflare IPv6 range must be listed as a trusted proxy.
+     */
     public function testNginxMainConf_HasAllCloudflareIPv6Ranges_AllRangesPresent(): void
     {
         $content = $this->readConfig();
@@ -87,25 +139,22 @@ class NginxMainRealIpTest extends TestCase
         }
     }
 
-    public function testNginxMainConf_RealIpInsideHttpBlock_PlacedInHttpBlockReturnsTrue(): void
+    /**
+     * real_ip_header must live inside the http block, not outside it.
+     */
+    public function testNginxMainConf_RealIpHeader_IsInsideHttpBlock(): void
     {
         $content = $this->readConfig();
         $realIpPos = strpos($content, 'real_ip_header CF-Connecting-IP');
-        $httpOpening = strpos($content, 'http {');
-        $httpClosing = strrpos($content, '}');
+        $httpOpen = strpos($content, 'http {');
 
         $this->assertNotFalse($realIpPos, 'real_ip_header directive must be present');
-        $this->assertNotFalse($httpOpening, 'http block must be present');
-        $this->assertNotFalse($httpClosing, 'http block must be closed');
-        $this->assertGreaterThan(
-            $httpOpening,
-            $realIpPos,
-            'real_ip_header must be inside the http block'
-        );
-        $this->assertLessThan(
-            $httpClosing,
-            $realIpPos,
-            'real_ip_header must be inside the http block'
-        );
+        $this->assertNotFalse($httpOpen, 'http block must be present');
+
+        $httpEnd = $this->findHttpBlockEnd($content, $httpOpen);
+        $this->assertNotNull($httpEnd, 'http block must be closed');
+
+        $this->assertGreaterThan($httpOpen, $realIpPos, 'real_ip_header must be inside the http block');
+        $this->assertLessThan($httpEnd, $realIpPos, 'real_ip_header must be inside the http block');
     }
 }
