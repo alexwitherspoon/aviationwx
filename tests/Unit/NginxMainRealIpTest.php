@@ -107,8 +107,8 @@ class NginxMainRealIpTest extends TestCase
             '131.0.72.0/22',
         ];
         foreach ($requiredRanges as $range) {
-            $this->assertStringContainsString(
-                'set_real_ip_from ' . $range,
+            $this->assertMatchesRegularExpression(
+                '/^\s*set_real_ip_from\s+' . preg_quote($range, '/') . '\s*;/m',
                 $content,
                 "nginx-main.conf must trust CF IPv4 range: {$range}"
             );
@@ -131,8 +131,8 @@ class NginxMainRealIpTest extends TestCase
             '2c0f:f248::/32',
         ];
         foreach ($requiredRanges as $range) {
-            $this->assertStringContainsString(
-                'set_real_ip_from ' . $range,
+            $this->assertMatchesRegularExpression(
+                '/^\s*set_real_ip_from\s+' . preg_quote($range, '/') . '\s*;/m',
                 $content,
                 "nginx-main.conf must trust CF IPv6 range: {$range}"
             );
