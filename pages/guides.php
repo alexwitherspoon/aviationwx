@@ -33,10 +33,11 @@ $canonicalSlug = getGuideCanonicalSlug();
 // remain 404 without a redirect.
 $redirectTarget = null;
 if ($canonicalSlug === '') {
-    if ($requestPath === 'README.md' || $requestPath === 'readme.md') {
-        if (resolveGuideFile('') !== null) {
-            $redirectTarget = getGuideCanonicalUrl('');
-        }
+    // Index is canonical at the bare guides root. Any other path that
+    // resolves to the README (e.g. /README.md, /guides/README.md) is a
+    // variant and redirects to /.
+    if ($rawRequestPath !== '/' && resolveGuideFile('') !== null) {
+        $redirectTarget = getGuideCanonicalUrl('');
     }
 } else {
     if ($rawRequestPath !== '/' . $canonicalSlug) {
@@ -151,22 +152,36 @@ $htmlContent = $parsedown->text($markdownContent);
 
 // Normalize local guide links to extensionless URLs so internal references
 // point to the canonical URL (e.g. "08-camera-configuration.md" becomes
-// "08-camera-configuration"). External links and non-guide documentation
-// links are left intact. Preserves query strings and fragments.
+// "08-camera-configuration"). Only links that resolve to a real guide are
+// rewritten; external, protocol-relative, absolute, and non-guide
+// documentation links are left intact. README maps to the index.
 $htmlContent = preg_replace_callback(
     '/href="([^"]*\.md(?:\?[^"]*)?(?:#[^"]*)?)"/',
     function ($m) {
         $raw = $m[1];
-        // Skip external URLs and absolute paths to other sites
-        if (preg_match('~^[a-z]+://~i', $raw) || preg_match('~^[a-z]+://~i', $raw)) {
+        if (preg_match('/^([^?#]*)(\?[^#]*)?(#[^#]*)?$/', $raw, $parts) !== 1) {
             return $m[0];
         }
-        // Skip links that aren't local relative paths
-        if (strpos($raw, '://') !== false || strpos($raw, '//') === 0) {
+        $path = $parts[1];
+        $suffix = ($parts[2] ?? '') . ($parts[3] ?? '');
+
+        // Only same-site relative links to .md files are candidates.
+        $basename = basename($path);
+        if ($basename === '' || !preg_match('/\.md$/i', $basename)) {
             return $m[0];
         }
-        // Strip .md from the path portion, preserving query and fragment
-        return preg_replace('/\.md(?=([?#]|$))/i', '', $m[0]);
+        $slug = preg_replace('/\.md$/i', '', $basename);
+
+        // README is the index.
+        if (strcasecmp($slug, 'README') === 0) {
+            return 'href="/' . $suffix . '"';
+        }
+
+        // Rewrite only when the slug matches a guide on disk.
+        if (resolveGuideFile($slug) === null) {
+            return $m[0];
+        }
+        return 'href="' . $slug . $suffix . '"';
     },
     $htmlContent
 );
@@ -283,17 +298,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         section[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id] {
             scroll-margin-top: 2rem;
         }
-        
-        /* Let the container shrink on narrow viewports. The previous
-           min-width: 750px forced the document wider than the viewport on
-           mobile, hiding content and breaking zoom. Wide pre/table/mermaid
-           blocks get their own overflow-x: auto below. */
-        .container {
-            width: 100%;
-            max-width: 100%;
-            margin: 0 auto;
-        }
-        
+
         .hero {
             background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
             color: white;
@@ -402,15 +407,15 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             background: #e9ecef;
         }
         
-         /* Markdown content */
-         .guides-content {
-             background: white;
-             padding: 2rem;
-             border-radius: 8px;
-             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-             width: 100%;
-             box-sizing: border-box;
-         }
+        /* Markdown content */
+        .guides-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 100%;
+            box-sizing: border-box;
+        }
         
         /* Markdown styling */
         .guides-content h1 {
