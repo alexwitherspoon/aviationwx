@@ -34,6 +34,10 @@ Disallow: /health/
 # Disallow API v1 endpoints (documented separately in API docs)
 Disallow: /api/v1/
 
+# Disallow internal API endpoints (JSON/image responses for the dashboard,
+# not user-facing indexable pages). Allow: /api/docs/ below re-opens docs.
+Disallow: /api/
+
 # Disallow internal API endpoints
 Disallow: /notam.php
 Disallow: /outage-status.php
