@@ -58,15 +58,7 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^widget\.js$ public/js/widget.js [L]
 
-    # Route admin endpoints to admin/ directory
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^diagnostics\.php$ admin/diagnostics.php [L]
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^clear-cache\.php$ admin/cache-clear.php [L]
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^metrics\.php$ admin/metrics.php [L]
-
-    # Route health check endpoints to health/ directory
+    # Health check endpoints (route to health/ directory)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^health\.php$ health/health.php [L]
     RewriteCond %{REQUEST_FILENAME} !-f
@@ -99,7 +91,7 @@ Options -Indexes
 
 # Deny access to dev tools
 # Note: health.php and ready.php are allowed for monitoring/health checks (routed to health/)
-# Admin endpoints are now in admin/ directory and protected separately
+# The admin/ directory has been removed; operator access is via ops.aviationwx.org
 <FilesMatch "^(dev/|test-local\.php|test-local\.sh)$">
     Order allow,deny
     Deny from all

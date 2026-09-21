@@ -2202,11 +2202,11 @@ jobs:
           echo "✅ Deployment completed successfully (no partial deployment detected)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Check if diagnostics page loads (optional check)
-          if ! curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/diagnostics.php > /dev/null 2>&1; then
-            echo "⚠️  Diagnostics page not accessible (may be expected)"
+          # Check if health endpoint responds
+          if ! curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/health.php > /dev/null 2>&1; then
+            echo "⚠️  Health endpoint not accessible"
           else
-            echo "✓ Diagnostics page accessible"
+            echo "✓ Health endpoint accessible"
           fi
           
           # Check if config-utils.php exists

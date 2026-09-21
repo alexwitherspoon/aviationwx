@@ -87,11 +87,6 @@ aviationwx.org/
 │   ├── fetch-faa-tfr-wfs.php # National FAA TFR WFS → unified airspace store
 │   ├── refresh-metar-bulk.php # AWC national METAR bulk gzip refresh (background)
 │   └── refresh-nws-points.php # NWS /points cache warmup (background)
-├── admin/
-│   ├── diagnostics.php       # System diagnostics endpoint
-│   ├── cache-clear.php       # Cache clearing endpoint
-│   ├── cache-diagnostics.php # Cache diagnostics
-│   └── metrics.php           # Application metrics
 ├── health/
 │   ├── health.php            # Health check endpoint
 │   └── ready.php             # Readiness check endpoint
@@ -693,7 +688,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 
 - **Manual Testing**: `dev/router.php` for local development
 - **Endpoint Testing**: Direct API endpoint testing
-- **Diagnostics**: `/diagnostics.php` for system health
+- **Diagnostics**: System health via `/health.php`
 
 See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 
@@ -798,9 +793,8 @@ Reference-catalog classification, status-page grouping, and health-check rollup 
 
 - **Logging**: Comprehensive file-based logging via `lib/logger.php` (writes to `/var/log/aviationwx/`, persisted on host at `/var/aviationwx/logs`)
 - **Log Rotation**: Logrotate handles rotation (1 rotated file, 100MB max per file)
-- **Metrics**: `/metrics.php` endpoint for monitoring
+- **Metrics**: Application metrics via operator console and status page
 - **Health Checks**: `/health.php` for uptime monitoring
-- **Diagnostics**: `/diagnostics.php` for system information
 - **Status Page**: `/status.php` for system and reference-catalog health (see [OPERATIONS.md](OPERATIONS.md#status-page))
 
 ## Future Improvements

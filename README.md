@@ -182,9 +182,7 @@ AviationWX supports multiple weather data sources. See the [Configuration Guide]
 ## Status & Diagnostics
 
 - **Status Page**: `/status.php` or `status.aviationwx.org` - Real-time system health
-- **Diagnostics**: `/diagnostics.php` - System diagnostics and configuration
 - **Health Check**: `/health.php` - Simple health check endpoint
-- **Clear Cache**: `/clear-cache.php` - Clear configuration cache
 
 ## Software Dependencies
 
