@@ -136,7 +136,9 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     unset($guidesQuery['guides']);
     $guidesQs = !empty($guidesQuery) ? '?' . http_build_query($guidesQuery) : '';
     if (strpos($requestPath, 'guides/') === 0) {
-        $guidesTail = '/' . substr($requestPath, 7);
+        // Strip .md and trailing slash so the apex redirect points at the
+        // canonical extensionless URL, not a variant (avoids a second 301).
+        $guidesTail = '/' . rtrim(preg_replace('/\.md$/i', '', substr($requestPath, 7)), '/');
     } else {
         $guidesTail = '/';
     }

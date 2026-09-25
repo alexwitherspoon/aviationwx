@@ -165,12 +165,14 @@ $htmlContent = preg_replace_callback(
         $path = $parts[1];
         $suffix = ($parts[2] ?? '') . ($parts[3] ?? '');
 
-        // Only same-site relative links to .md files are candidates.
-        $basename = basename($path);
-        if ($basename === '' || !preg_match('/\.md$/i', $basename)) {
+        // Only a bare same-directory filename is a candidate guide link.
+        // Anything with a directory component, a scheme, a protocol-relative
+        // prefix, or a leading slash is external or non-guide documentation.
+        if ($path === '' || strpos($path, '/') !== false || strpos($path, '\\') !== false) {
             return $m[0];
         }
-        $slug = preg_replace('/\.md$/i', '', $basename);
+
+        $slug = preg_replace('/\.md$/i', '', $path);
 
         // README is the index.
         if (strcasecmp($slug, 'README') === 0) {
