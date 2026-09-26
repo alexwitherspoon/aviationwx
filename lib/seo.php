@@ -118,6 +118,12 @@ function resolveGuideFile(string $slug): ?string {
             : null;
     }
 
+    // Guide slugs are numbered lowercase names. Reject anything that could
+    // escape the guides directory via a path separator or dot segment.
+    if (!preg_match('/^\d+-[a-z0-9-]+$/', $slug)) {
+        return null;
+    }
+
     $candidate = $guidesDir . '/' . $slug . '.md';
     return is_file($candidate) ? $slug : null;
 }

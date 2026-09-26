@@ -96,11 +96,10 @@ if ($canonicalSlug === '') {
         exit;
     }
 } else {
-    // Individual guide - look for matching file by canonical slug
-    $guideFile = $guidesDir . '/' . $canonicalSlug . '.md';
-
-    if (file_exists($guideFile) && is_file($guideFile)) {
-        $markdownFile = $guideFile;
+    // Individual guide - resolve the slug to a real file. Unknown or unsafe
+    // slugs (path separators, dot segments) resolve to null and 404.
+    if (resolveGuideFile($canonicalSlug) !== null) {
+        $markdownFile = $guidesDir . '/' . $canonicalSlug . '.md';
     } else {
         // Guide not found
         http_response_code(404);

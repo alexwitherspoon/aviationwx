@@ -69,6 +69,13 @@ class GuideUrlTest extends TestCase
         $this->assertNull(resolveGuideFile("does-not-exist"));
     }
 
+    public function testResolveGuideFile_RejectsPathSegments(): void
+    {
+        $this->assertNull(resolveGuideFile("../README"));
+        $this->assertNull(resolveGuideFile(".."));
+        $this->assertNull(resolveGuideFile("08-camera-configuration/../../etc"));
+    }
+
     public function testResolveGuideFile_IndexResolvesWhenReadmePresent(): void
     {
         $this->assertSame("", resolveGuideFile(""));
