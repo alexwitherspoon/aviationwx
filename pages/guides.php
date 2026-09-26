@@ -234,11 +234,6 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             scroll-margin-top: 2rem;
         }
         
-        /* Container needs min-width to match content so everything scrolls together */
-        .container {
-            min-width: 750px; /* Match content min-width so header/footer scale with content */
-        }
-        
         .hero {
             background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
             color: white;
@@ -353,7 +348,8 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
+            width: 100%;
+            box-sizing: border-box;
         }
         
         /* Markdown styling */
@@ -492,6 +488,8 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 1.5rem;
+            overflow-x: auto;
+            display: block;
         }
         
         .guides-content table th,
@@ -539,7 +537,8 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
+            width: 100%;
+            box-sizing: border-box;
         }
         
         /* Apply same markdown styling to index page */
