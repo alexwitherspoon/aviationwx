@@ -53,7 +53,7 @@ class AirportCanonicalUrlTest extends TestCase
     public function testGenerateAirportSchema_GicUsesKgic(): void
     {
         $airport = [
-            'name' => 'Gulfport-Biloxi International Airport',
+            'name' => 'Idaho County Airport',
             'icao' => 'KGIC',
         ];
         $schema = generateAirportSchema($airport, 'gic');
