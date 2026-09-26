@@ -62,7 +62,8 @@ function getSitemapUrls(): array
     // Airport pages (only listed airports - excludes unlisted from SEO)
     $listedAirports = getListedAirports($config);
     foreach ($listedAirports as $airportId => $airport) {
-        $airportUrl = 'https://' . $airportId . '.aviationwx.org/';
+        $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+        $airportUrl = 'https://' . strtolower($primaryIdentifier) . '.aviationwx.org/';
         
         $weatherCacheFile = getWeatherCachePath($airportId);
         if (file_exists($weatherCacheFile)) {
@@ -75,7 +76,7 @@ function getSitemapUrls(): array
         
         $urls['airports'][] = [
             'loc' => $airportUrl,
-            'title' => strtoupper($airportId) . ' - ' . $airportName,
+            'title' => strtoupper($primaryIdentifier) . ' - ' . $airportName,
             'lastmod' => $lastmod,
             'changefreq' => 'hourly',
             'priority' => '0.8'

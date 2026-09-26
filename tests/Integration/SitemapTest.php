@@ -79,11 +79,12 @@ class SitemapTest extends TestCase
         $airportUrls = array_map(fn($u) => $u['loc'], $urls['airports']);
         
         foreach ($listedAirports as $airportId => $airport) {
-            $expectedUrl = 'https://' . $airportId . '.aviationwx.org/';
+            $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+            $expectedUrl = 'https://' . strtolower($primaryIdentifier) . '.aviationwx.org/';
             $this->assertContains(
                 $expectedUrl,
                 $airportUrls,
-                "Airport {$airportId} should be in sitemap"
+                "Airport {$airportId} (canonical: {$primaryIdentifier}) should be in sitemap"
             );
         }
     }

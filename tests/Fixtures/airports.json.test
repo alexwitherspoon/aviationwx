@@ -158,6 +158,22 @@
         }
       ]
     },
+
+    "gic": {
+      "name": "Gulfport-Biloxi International Airport",
+      "enabled": true,
+      "icao": "KGIC",
+      "iata": null,
+      "faa": null,
+      "address": "Gulfport, Mississippi",
+      "lat": 30.5258,
+      "lon": -89.0667,
+      "elevation_ft": 194,
+      "timezone": "America/Chicago",
+      "access_type": "public",
+      "tower_status": "towered",
+      "weather_sources": []
+    },
     "ksea": {
       "name": "Seattle-Tacoma International Airport",
       "enabled": false,

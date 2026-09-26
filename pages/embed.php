@@ -103,8 +103,8 @@ $airportId = $data['airportId'];
 // Embed widgets should never be indexed - they're meant to be embedded in iframes
 $shouldNoIndex = true;
 
-// Build dashboard URL
-$dashboardUrl = 'https://' . $airportId . '.aviationwx.org';
+// Build dashboard URL from the primary identifier (ICAO > IATA > FAA > config key)
+$dashboardUrl = 'https://' . strtolower(getPrimaryIdentifier($airportId, $airport)) . '.aviationwx.org';
 if (!isProduction()) {
     $dashboardUrl = 'http://localhost:8080';
 }
