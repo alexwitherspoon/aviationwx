@@ -4442,8 +4442,7 @@ function checkClockSkewFromServerTime(serverTimeUtc) {
 // Fetch server time and re-check clock skew (allows detection over time, not just on load)
 async function fetchServerTimeAndCheckSkew() {
     try {
-        const baseUrl = window.location.protocol + '//' + window.location.host;
-        const response = await fetch(baseUrl + '/api/time.php?_=' + Date.now(), { cache: 'no-store' });
+        const response = await fetch('/api/time.php?_=' + Date.now(), { cache: 'no-store' });
         if (response.ok) {
             const data = await response.json();
             const serverTime = data?.time;
