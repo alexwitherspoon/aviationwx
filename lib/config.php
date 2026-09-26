@@ -535,6 +535,25 @@ function getBaseDomain(): string {
 }
 
 /**
+ * Determine the request protocol (https or http).
+ *
+ * X-Forwarded-Proto is set by nginx for proxied requests; the HTTPS server
+ * variable covers direct and local requests. Falls back to http when neither
+ * indicates TLS.
+ *
+ * @return string 'https' or 'http'
+ */
+function getRequestProtocol(): string {
+    if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        return strtolower(trim($_SERVER['HTTP_X_FORWARDED_PROTO'])) === 'https' ? 'https' : 'http';
+    }
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        return 'https';
+    }
+    return 'http';
+}
+
+/**
  * Get public IPv4 address from global config
  * 
  * Used for FTP passive mode (MasqueradeAddress) and other services that need
