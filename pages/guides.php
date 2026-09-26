@@ -501,6 +501,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 1.5rem;
+        }
         
         .guides-content table th,
         .guides-content table td {
