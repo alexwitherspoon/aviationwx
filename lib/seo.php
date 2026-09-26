@@ -68,6 +68,115 @@ function getBaseUrl() {
 }
 
 /**
+ * Resolve the canonical slug for the current guide request.
+ *
+ * Strips a leading /guides/ prefix, the .md extension, and trailing slashes
+ * so variants collapse to one slug. The index (README) resolves to the empty
+ * string.
+ *
+ * @return string The canonical guide slug, or empty string for the index.
+ */
+function getGuideCanonicalSlug(): string {
+    $path = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/';
+    $path = strtok($path, '?');
+    $path = preg_replace('#^/+|/+$#', '', $path);
+
+    // Strip an optional /guides/ prefix so path-based and subdomain routes
+    // resolve to the same canonical slug.
+    if (preg_match('#^guides/(.+)$#', $path, $m)) {
+        $path = $m[1];
+    } elseif (preg_match('#^guides$#', $path)) {
+        return '';
+    }
+
+    $path = rtrim($path, '/');
+    $path = preg_replace('/\.md$/i', '', $path);
+
+    if ($path === '' || preg_match('#^README$#i', $path)) {
+        return '';
+    }
+
+    return $path;
+}
+
+/**
+ * Resolve a guide slug to a real guide file on disk.
+ *
+ * Returns the slug for a guide that exists, or null when no matching guide
+ * file is found. Used to decide whether a variant request (.md, trailing
+ * slash) should redirect rather than 404.
+ *
+ * @param string $slug Candidate guide slug.
+ * @return string|null The resolved guide slug, or null if not found.
+ */
+function resolveGuideFile(string $slug): ?string {
+    $guidesDir = __DIR__ . '/../guides';
+
+    if ($slug === '') {
+        return file_exists($guidesDir . '/README.md') || file_exists($guidesDir . '/readme.md')
+            ? ''
+            : null;
+    }
+
+    $candidate = $guidesDir . '/' . $slug . '.md';
+    return is_file($candidate) ? $slug : null;
+}
+
+/**
+ * Build the canonical URL for a guide slug.
+ *
+ * @param string $slug The canonical guide slug, or empty string for the index.
+ * @return string Absolute HTTPS canonical URL on the guides subdomain.
+ */
+function getGuideCanonicalUrl(string $slug = ''): string {
+    $baseDomain = getBaseDomain();
+    if ($slug === '') {
+        return 'https://guides.' . $baseDomain . '/';
+    }
+    return 'https://guides.' . $baseDomain . '/' . $slug;
+}
+
+/**
+ * Rewrite local guide links in rendered Markdown to extensionless URLs.
+ *
+ * Only bare same-directory .md filenames that resolve to a real guide are
+ * touched; external, rooted, and non-guide documentation links stay intact.
+ * README links to the index.
+ *
+ * @param string $html Rendered guide HTML.
+ * @return string HTML with local guide hrefs normalized.
+ */
+function normalizeGuideLinks(string $html): string {
+    return preg_replace_callback(
+        '/href="([^"]*\.md(?:\?[^"]*)?(?:#[^"]*)?)"/',
+        function ($m) {
+            $raw = $m[1];
+            if (preg_match('/^([^?#]*)(\?[^#]*)?(#[^#]*)?$/', $raw, $parts) !== 1) {
+                return $m[0];
+            }
+            $path = $parts[1];
+            $suffix = ($parts[2] ?? '') . ($parts[3] ?? '');
+
+            // Only a bare same-directory filename is a candidate guide link.
+            if ($path === '' || strpos($path, '/') !== false || strpos($path, '\\') !== false) {
+                return $m[0];
+            }
+
+            $slug = preg_replace('/\.md$/i', '', $path);
+            if (strcasecmp($slug, 'README') === 0) {
+                return 'href="/' . $suffix . '"';
+            }
+
+            if (resolveGuideFile($slug) === null) {
+                return $m[0];
+            }
+            return 'href="' . $slug . $suffix . '"';
+        },
+        $html
+    );
+}
+
+/**
  * Generate Organization structured data (JSON-LD) for homepage
  * 
  * Creates Schema.org Organization structured data for the homepage.
