@@ -160,18 +160,18 @@
     },
 
     "gic": {
-      "name": "Gulfport-Biloxi International Airport",
+      "name": "Idaho County Airport",
       "enabled": true,
       "icao": "KGIC",
       "iata": null,
-      "faa": null,
-      "address": "Gulfport, Mississippi",
-      "lat": 30.5258,
-      "lon": -89.0667,
-      "elevation_ft": 194,
-      "timezone": "America/Chicago",
+      "faa": "GIC",
+      "address": "Grangeville, Idaho",
+      "lat": 45.9426667,
+      "lon": -116.1230278,
+      "elevation_ft": 3313,
+      "timezone": "America/Los_Angeles",
       "access_type": "public",
-      "tower_status": "towered",
+      "tower_status": "nontowered",
       "weather_sources": []
     },
     "ksea": {
