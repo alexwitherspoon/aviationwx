@@ -4,7 +4,7 @@ use PHPUnit\Framework\TestCase;
 
 class NginxPageHostTest extends TestCase
 {
-    public function testPhpPagesReceivePublicHostAndScheme(): void
+    public function testGenericPhpLocation_BehindProxy_ForwardsPublicHostAndScheme(): void
     {
         $config = file_get_contents(__DIR__ . '/../../docker/nginx.conf');
         // Find the generic PHP location block and verify it forwards the

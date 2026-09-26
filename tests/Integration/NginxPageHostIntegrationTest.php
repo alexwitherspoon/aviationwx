@@ -4,7 +4,7 @@ use PHPUnit\Framework\TestCase;
 
 class NginxPageHostIntegrationTest extends TestCase
 {
-    public function testExplicitPhpPageKeepsThePublicCanonicalHost(): void
+    public function testExplicitPhpPage_RequestHost_ReturnsMatchingCanonical(): void
     {
         $baseUrl = getenv("NGINX_TEST_URL");
         if (!$baseUrl) {
