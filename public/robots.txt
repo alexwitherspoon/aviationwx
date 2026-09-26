@@ -45,7 +45,9 @@ Disallow: /outage-status.php
 Disallow: /partner-logo.php
 Disallow: /webcam-history.php
 
-# Allow API documentation page (user-facing)
+# Allow API documentation page (user-facing); both forms cover the docs entry
+# point, which links without a trailing slash.
+Allow: /api/docs
 Allow: /api/docs/
 
 # Disallow access to sensitive areas
