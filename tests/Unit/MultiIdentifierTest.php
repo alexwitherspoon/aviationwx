@@ -284,6 +284,22 @@ class MultiIdentifierTest extends TestCase
     }
     
     /**
+     * Test getPrimaryIdentifier - single-argument form reads full config
+     *
+     * The embed endpoints resolve the dashboard host with the single-argument
+     * form, where null airport loads the full config instead of a projected
+     * array that omits iata/faa. An FAA-identified airport must resolve to its
+     * FAA code ('03S'), not fall back to the config key ('03s').
+     */
+    public function testGetPrimaryIdentifier_SingleArg_ResolvesFaaFromFullConfig()
+    {
+        // '03s' in the fixture has faa='03S' and no icao/iata, so only the
+        // full-config lookup can find the identifier.
+        $result = getPrimaryIdentifier('03s');
+        $this->assertEquals('03S', $result);
+    }
+
+    /**
      * Test getPrimaryIdentifier - Empty/null values
      */
     public function testGetPrimaryIdentifier_EmptyValues()

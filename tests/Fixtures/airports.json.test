@@ -158,6 +158,22 @@
         }
       ]
     },
+
+    "gic": {
+      "name": "Idaho County Airport",
+      "enabled": true,
+      "icao": "KGIC",
+      "iata": null,
+      "faa": "GIC",
+      "address": "Grangeville, Idaho",
+      "lat": 45.9426667,
+      "lon": -116.1230278,
+      "elevation_ft": 3313,
+      "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "weather_sources": []
+    },
     "ksea": {
       "name": "Seattle-Tacoma International Airport",
       "enabled": false,

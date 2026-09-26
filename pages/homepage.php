@@ -1360,7 +1360,8 @@ Best regards,
                 ?>
                 <div class="airports-list">
                     <?php foreach ($airportsOnPage as $airportId => $airport): 
-                        $url = 'https://' . $airportId . '.aviationwx.org';
+                        $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+                        $url = 'https://' . strtolower($primaryIdentifier) . '.aviationwx.org';
                         $hasMetar = isMetarEnabled($airport);
                         // Fetch weather if airport has any weather sources configured
                         $hasAnyWeather = hasWeatherSources($airport);

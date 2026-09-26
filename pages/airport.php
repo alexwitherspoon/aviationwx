@@ -155,7 +155,7 @@ $pageDescription = 'Check current conditions at ' . $displayName .
 $pageKeywords = buildAirportPageKeywords($airport);
 // Get base domain from global config (config.php already loaded at top of file)
 $baseDomain = getBaseDomain();
-$airportUrl = 'https://' . $airportId . '.' . $baseDomain;
+$airportUrl = 'https://' . strtolower($primaryIdentifier) . '.' . $baseDomain;
 $canonicalUrl = $airportUrl; // Always use subdomain URL for canonical
 $ogImage = null; // Will be set to first webcam if available
 
