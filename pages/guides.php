@@ -81,26 +81,18 @@ $pageTitle = 'Guides - AviationWX.org';
 $pageDescription = 'Documentation and guides for AviationWX.org';
 
 if ($canonicalSlug === '') {
-    // Index page - use README.md or readme.md
-    $readmeFiles = ['README.md', 'readme.md'];
-    foreach ($readmeFiles as $readme) {
-        $readmePath = $guidesDir . '/' . $readme;
-        if (file_exists($readmePath)) {
-            $markdownFile = $readmePath;
-            break;
-        }
-    }
-    if (!$markdownFile) {
+    // Index page - resolve the README to a real file.
+    $markdownFile = resolveGuideFile('');
+    if ($markdownFile === null) {
         http_response_code(404);
         include 'error-404-guides.php';
         exit;
     }
 } else {
-    // Individual guide - resolve the slug to a real file. Unknown or unsafe
+    // Individual guide - resolve the slug to its file path. Unknown or unsafe
     // slugs (path separators, dot segments) resolve to null and 404.
-    if (resolveGuideFile($canonicalSlug) !== null) {
-        $markdownFile = $guidesDir . '/' . $canonicalSlug . '.md';
-    } else {
+    $markdownFile = resolveGuideFile($canonicalSlug);
+    if ($markdownFile === null) {
         // Guide not found
         http_response_code(404);
         include 'error-404-guides.php';

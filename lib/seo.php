@@ -102,20 +102,25 @@ function getGuideCanonicalSlug(): string {
 /**
  * Resolve a guide slug to a real guide file on disk.
  *
- * Returns the slug for a guide that exists, or null when no matching guide
- * file is found. Used to decide whether a variant request (.md, trailing
- * slash) should redirect rather than 404.
+ * Returns the path to a guide that exists, or null when the slug is unsafe
+ * or no matching guide file is found. Callers treat null as "does not
+ * resolve" and use the returned path directly for reads.
  *
  * @param string $slug Candidate guide slug.
- * @return string|null The resolved guide slug, or null if not found.
+ * @return string|null The absolute path to the guide file, or null.
  */
 function resolveGuideFile(string $slug): ?string {
     $guidesDir = __DIR__ . '/../guides';
 
     if ($slug === '') {
-        return file_exists($guidesDir . '/README.md') || file_exists($guidesDir . '/readme.md')
-            ? ''
-            : null;
+        // Index resolves to the first present README.
+        foreach (['README.md', 'readme.md'] as $readme) {
+            $path = $guidesDir . '/' . $readme;
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+        return null;
     }
 
     // Guide slugs are numbered lowercase names. Reject anything that could
@@ -124,8 +129,8 @@ function resolveGuideFile(string $slug): ?string {
         return null;
     }
 
-    $candidate = $guidesDir . '/' . $slug . '.md';
-    return is_file($candidate) ? $slug : null;
+    $path = $guidesDir . '/' . $slug . '.md';
+    return is_file($path) ? $path : null;
 }
 
 /**

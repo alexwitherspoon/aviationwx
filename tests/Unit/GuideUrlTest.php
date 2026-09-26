@@ -61,7 +61,10 @@ class GuideUrlTest extends TestCase
 
     public function testResolveGuideFile_FindsExisting(): void
     {
-        $this->assertSame("08-camera-configuration", resolveGuideFile("08-camera-configuration"));
+        $path = resolveGuideFile("08-camera-configuration");
+        $this->assertIsString($path);
+        $this->assertFileExists($path);
+        $this->assertSame("08-camera-configuration.md", basename($path));
     }
 
     public function testResolveGuideFile_ReturnsNullForMissing(): void
@@ -78,7 +81,9 @@ class GuideUrlTest extends TestCase
 
     public function testResolveGuideFile_IndexResolvesWhenReadmePresent(): void
     {
-        $this->assertSame("", resolveGuideFile(""));
+        $path = resolveGuideFile("");
+        $this->assertIsString($path);
+        $this->assertFileExists($path);
     }
 
     public function testGetGuideCanonicalUrl_Index(): void
