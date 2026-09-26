@@ -98,8 +98,8 @@ $airport = $data['airport'];
 $weather = $data['weather'];
 $airportId = $data['airportId'];
 
-// Build dashboard URL
-$dashboardUrl = 'https://' . $airportId . '.aviationwx.org';
+// Build dashboard URL from the primary identifier (ICAO > IATA > FAA > config key)
+$dashboardUrl = 'https://' . strtolower(getPrimaryIdentifier($airportId)) . '.aviationwx.org';
 if (!isProduction()) {
     $dashboardUrl = 'http://localhost:8080';
 }
