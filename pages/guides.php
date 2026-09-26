@@ -134,8 +134,6 @@ if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
 // Parse markdown
 $parsedown = new Parsedown();
 $htmlContent = $parsedown->text($markdownContent);
-
-// Collapse local guide links to extensionless URLs before rendering.
 $htmlContent = normalizeGuideLinks($htmlContent);
 
 // Set cache headers for CDN
