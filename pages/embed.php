@@ -104,7 +104,7 @@ $airportId = $data['airportId'];
 $shouldNoIndex = true;
 
 // Build dashboard URL from the primary identifier (ICAO > IATA > FAA > config key)
-$dashboardUrl = 'https://' . strtolower(getPrimaryIdentifier($airportId, $airport)) . '.aviationwx.org';
+$dashboardUrl = 'https://' . strtolower(getPrimaryIdentifier($airportId)) . '.aviationwx.org';
 if (!isProduction()) {
     $dashboardUrl = 'http://localhost:8080';
 }
