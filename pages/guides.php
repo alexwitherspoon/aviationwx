@@ -121,6 +121,11 @@ if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
 $parsedown = new Parsedown();
 $htmlContent = $parsedown->text($markdownContent);
 
+// Wrap tables in a scrollable container so wide tables scroll on narrow
+// screens without forcing display: block, which breaks border-collapse.
+$htmlContent = str_replace('<table>', '<div class="table-scroll"><table>', $htmlContent);
+$htmlContent = str_replace('</table>', '</table></div>', $htmlContent);
+
 // Set cache headers for CDN
 // Guides are documentation that doesn't change frequently, but we want reasonable cache times
 // Cache for 1 hour, allow stale-while-revalidate for 4 hours
@@ -350,6 +355,10 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             width: 100%;
             box-sizing: border-box;
+            /* Grid items default to min-width: auto (min-content), so wide
+               unbreakable content could still widen the track. Allow the item
+               to shrink so its scrollable children contain their overflow. */
+            min-width: 0;
         }
         
         /* Markdown styling */
@@ -484,13 +493,14 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             font-style: italic;
         }
         
+        .table-scroll {
+            overflow-x: auto;
+        }
+
         .guides-content table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 1.5rem;
-            overflow-x: auto;
-            display: block;
-        }
         
         .guides-content table th,
         .guides-content table td {
