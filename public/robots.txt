@@ -14,8 +14,11 @@ Disallow: /*?*embed*
 # Note: ?airport= query params are NOT blocked - they 301 redirect to subdomains,
 # and blocking would prevent Google from following the redirect
 
-# Disallow JavaScript files from indexing (source maps, service workers, etc.)
+# Disallow JavaScript files from indexing (source maps, service workers, etc.).
+# *.js?* also covers cache-busted URLs like service-worker.js?v= that Google
+# would otherwise keep discovering and crawling.
 Disallow: *.js$
+Disallow: *.js?*
 Disallow: *.js.map$
 # Disallow admin/diagnostic endpoints
 Disallow: /admin/
@@ -31,13 +34,20 @@ Disallow: /health/
 # Disallow API v1 endpoints (documented separately in API docs)
 Disallow: /api/v1/
 
+# Disallow internal API endpoints, which return JSON or images for the
+# dashboard rather than indexable pages. Allow: /api/docs/ below re-opens the
+# user-facing documentation.
+Disallow: /api/
+
 # Disallow internal API endpoints
 Disallow: /notam.php
 Disallow: /outage-status.php
 Disallow: /partner-logo.php
 Disallow: /webcam-history.php
 
-# Allow API documentation page (user-facing)
+# Allow API documentation page (user-facing); both forms cover the docs entry
+# point, which links without a trailing slash.
+Allow: /api/docs
 Allow: /api/docs/
 
 # Disallow access to sensitive areas
