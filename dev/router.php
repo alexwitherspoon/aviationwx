@@ -18,8 +18,12 @@ $parts = explode('.', $host);
 $subdomain = isset($parts[0]) ? $parts[0] : '';
 
 // Serve static files from project root (document root when running php -S)
+// Guide .md files are excluded so they route through index.php, which
+// redirects variants to canonical extensionless URLs.
 $projectRoot = dirname(__DIR__);
-if (file_exists($projectRoot . $path) && is_file($projectRoot . $path)) {
+if (file_exists($projectRoot . $path) && is_file($projectRoot . $path)
+    && !preg_match('/\.md(?:\?|#|$)/i', $path)
+) {
     return false; // Let PHP's built-in server handle it
 }
 
