@@ -17,13 +17,13 @@ class GuideUrlTest extends TestCase
         unset($_SERVER["HTTPS"], $_SERVER["HTTP_HOST"], $_SERVER["REQUEST_URI"]);
     }
 
-    public function testCanonicalSlug_IndexOnSubdomain(): void
+    public function testGetGuideCanonicalSlug_IndexOnSubdomain(): void
     {
         $_SERVER["REQUEST_URI"] = "/";
         $this->assertSame("", getGuideCanonicalSlug());
     }
 
-    public function testCanonicalSlug_IndexVariantPathsCollapse(): void
+    public function testGetGuideCanonicalSlug_IndexVariantPathsCollapse(): void
     {
         $_SERVER["REQUEST_URI"] = "/README.md";
         $this->assertSame("", getGuideCanonicalSlug());
@@ -31,19 +31,19 @@ class GuideUrlTest extends TestCase
         $this->assertSame("", getGuideCanonicalSlug());
     }
 
-    public function testCanonicalSlug_GuidesPrefixStrippedBeforeIndexCheck(): void
+    public function testGetGuideCanonicalSlug_GuidesPrefixStrippedBeforeIndexCheck(): void
     {
         $_SERVER["REQUEST_URI"] = "/guides/README.md";
         $this->assertSame("", getGuideCanonicalSlug());
     }
 
-    public function testCanonicalSlug_GuidesPrefixStripped(): void
+    public function testGetGuideCanonicalSlug_GuidesPrefixStripped(): void
     {
         $_SERVER["REQUEST_URI"] = "/guides/08-camera-configuration";
         $this->assertSame("08-camera-configuration", getGuideCanonicalSlug());
     }
 
-    public function testCanonicalSlug_StripsMdAndTrailingSlash(): void
+    public function testGetGuideCanonicalSlug_StripsMdAndTrailingSlash(): void
     {
         $_SERVER["REQUEST_URI"] = "/08-camera-configuration.md";
         $this->assertSame("08-camera-configuration", getGuideCanonicalSlug());
@@ -53,7 +53,7 @@ class GuideUrlTest extends TestCase
         $this->assertSame("08-camera-configuration", getGuideCanonicalSlug());
     }
 
-    public function testCanonicalSlug_PreservesQueryForResolution(): void
+    public function testGetGuideCanonicalSlug_PreservesQueryForResolution(): void
     {
         $_SERVER["REQUEST_URI"] = "/08-camera-configuration?cam=0&period=day";
         $this->assertSame("08-camera-configuration", getGuideCanonicalSlug());
@@ -74,12 +74,12 @@ class GuideUrlTest extends TestCase
         $this->assertSame("", resolveGuideFile(""));
     }
 
-    public function testCanonicalUrl_Index(): void
+    public function testGetGuideCanonicalUrl_Index(): void
     {
         $this->assertSame("https://guides.aviationwx.org/", getGuideCanonicalUrl(""));
     }
 
-    public function testCanonicalUrl_Guide(): void
+    public function testGetGuideCanonicalUrl_Guide(): void
     {
         $this->assertSame(
             "https://guides.aviationwx.org/08-camera-configuration",

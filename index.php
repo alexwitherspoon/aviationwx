@@ -135,14 +135,18 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     $guidesQuery = $_GET;
     unset($guidesQuery['guides']);
     $guidesQs = !empty($guidesQuery) ? '?' . http_build_query($guidesQuery) : '';
-    if (strpos($requestPath, 'guides/') === 0) {
-        // Strip .md and trailing slash so the apex redirect points at the
-        // canonical extensionless URL, not a variant (avoids a second 301).
-        $guidesTail = '/' . rtrim(preg_replace('/\.md$/i', '', substr($requestPath, 7)), '/');
-    } else {
-        $guidesTail = '/';
+
+    // Resolve the canonical slug and only redirect when the guide (or index)
+    // actually exists. Unknown path-based slugs fall through to guides.php,
+    // which 404s directly instead of redirecting to a page that then 404s.
+    require_once __DIR__ . '/lib/seo.php';
+    $resolvedSlug = getGuideCanonicalSlug();
+    $resolves = $resolvedSlug === ''
+        ? resolveGuideFile('') !== null
+        : resolveGuideFile($resolvedSlug) !== null;
+    if ($resolves) {
+        redirectProductionApexToCanonicalSubdomain('guides', '/' . $resolvedSlug . $guidesQs, $hostWithoutPort, $baseDomain);
     }
-    redirectProductionApexToCanonicalSubdomain('guides', $guidesTail . $guidesQs, $hostWithoutPort, $baseDomain);
 
     // If path-based route, strip 'guides/' prefix so guides.php can handle it correctly
     if (strpos($requestPath, 'guides/') === 0) {
