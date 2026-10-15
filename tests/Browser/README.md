@@ -137,14 +137,14 @@ The snippet below is a minimal example for reference. In this repo, browser test
 ```yaml
 browser-tests:
   name: Browser Compatibility Tests
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-26.04
   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
   
   steps:
-    - uses: actions/checkout@v6.0.2
-    - uses: actions/setup-node@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
-        node-version: '20'
+        node-version: '24'
     
     - name: Install dependencies
       run: |
