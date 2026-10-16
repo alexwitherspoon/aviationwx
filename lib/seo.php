@@ -726,19 +726,27 @@ function generateFaviconTags() {
 /**
  * Get logo URL for structured data
  * 
- * Determines the logo URL for use in structured data. Checks for common logo
- * file names in the favicon directory, falls back to largest favicon, then
- * to about-photo image. Prefers WebP format when available.
+ * Determines the logo URL for use in structured data. Prefers the horizontal
+ * logo (wordmark + icon) in the images directory, then common logo file names
+ * in the favicon directory, then falls back to the largest favicon, then to
+ * the about-photo image. Prefers SVG then PNG/WebP when available.
  * 
  * @return string Absolute URL to logo/image file
  */
 function getLogoUrl() {
     $baseUrl = getBaseUrl();
-    $faviconDir = __DIR__ . '/../public/favicons';
     
-    // Check for common logo file names
-    $logoFiles = ['logo.png', 'logo.jpg', 'logo.svg', 'logo.webp'];
-    foreach ($logoFiles as $logoFile) {
+    // Prefer the horizontal logo (wordmark + icon) in public/images/
+    $imageDir = __DIR__ . '/../public/images';
+    foreach (['logo.svg', 'logo.png', 'logo.webp', 'logo.jpg'] as $logoFile) {
+        if (file_exists($imageDir . '/' . $logoFile)) {
+            return $baseUrl . '/public/images/' . $logoFile;
+        }
+    }
+    
+    // Fall back to common logo file names in the favicon directory
+    $faviconDir = __DIR__ . '/../public/favicons';
+    foreach (['logo.png', 'logo.jpg', 'logo.svg', 'logo.webp'] as $logoFile) {
         if (file_exists($faviconDir . '/' . $logoFile)) {
             return $baseUrl . '/public/favicons/' . $logoFile;
         }

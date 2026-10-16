@@ -650,9 +650,9 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
-     * Test getLogoUrl() - Falls Back to Favicon When No Logo
+     * Test getLogoUrl() - Returns Horizontal Logo
      */
-    public function testGetLogoUrl_FallsBackToFavicon()
+    public function testGetLogoUrl_ReturnsHorizontalLogo()
     {
         $_SERVER['HTTPS'] = 'on';
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
@@ -663,15 +663,8 @@ class SeoUtilsTest extends TestCase
         $this->assertIsString($logoUrl);
         $this->assertStringStartsWith('https://', $logoUrl);
         
-        // Should contain favicons path (no subdirectory after favicon update)
-        $this->assertStringContainsString('/public/favicons', $logoUrl);
-        
-        // Should either be android-chrome-512x512.png or about-photo.jpg (depending on what exists)
-        $this->assertTrue(
-            strpos($logoUrl, 'android-chrome-512x512.png') !== false ||
-            strpos($logoUrl, 'about-photo.jpg') !== false ||
-            strpos($logoUrl, 'about-photo.webp') !== false
-        );
+        // Should resolve to the horizontal brand logo in the images directory
+        $this->assertStringContainsString('/public/images/logo.', $logoUrl);
     }
 
     /**
