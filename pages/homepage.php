@@ -1530,7 +1530,7 @@ Best regards,
                 <strong>Open-source means adaptability.</strong> Need support for new equipment? The community can add it.
             </p>
             <p style="text-align: center; margin-top: 1rem;">
-                🔧 <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500;">View Technical Details & Compatibility →</a>
+                🔧 <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500;">View Technical Details & Compatibility →</a>
             </p>
         </section>
 
@@ -1585,8 +1585,8 @@ Best regards,
                         <h4 style="margin-top: 0; color: #0066cc;">🛬 AviationWX Platform</h4>
                         <p style="font-size: 0.95rem;">Weather dashboard system with data quality checks, multi-source integration, and responsive design.</p>
                         <div style="margin-top: 1rem;">
-                            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a> | 
-                            <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">Contributing Guidelines →</a>
+                            <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a> | 
+                            <a href="https://github.com/alexwitherspoon/aviationwx/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">Contributing Guidelines →</a>
                         </div>
                     </div>
                     
@@ -1627,8 +1627,8 @@ Best regards,
                 <p>We'd love to hear from you! Whether you've found a bug, have a feature suggestion, want to contribute, or just want to say hello.</p>
                 <ul style="margin: 1rem 0 0 2rem;">
                     <li><strong>Email:</strong> <a href="mailto:contact@aviationwx.org">contact@aviationwx.org</a></li>
-                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Report bugs or request features</a></li>
-                    <li><strong>Contribute:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guidelines</a></li>
+                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx/issues" target="_blank" rel="noopener">Report bugs or request features</a></li>
+                    <li><strong>Contribute:</strong> <a href="https://github.com/alexwitherspoon/aviationwx/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guidelines</a></li>
                 </ul>
             </div>
         </section>
@@ -1639,7 +1639,7 @@ Best regards,
                 <a href="https://airports.aviationwx.org">Airports</a> • 
                 <a href="https://guides.aviationwx.org">Guides</a> • 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
                 <a href="https://terms.aviationwx.org">Terms of Service</a> • 
                 <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>

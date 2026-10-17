@@ -208,7 +208,7 @@ function generateOrganizationSchema() {
         'logo' => getLogoUrl(),
         'description' => 'Free real-time aviation weather with live airport webcams and runway conditions for pilots',
         'sameAs' => [
-            'https://github.com/alexwitherspoon/aviationwx.org'
+            'https://github.com/alexwitherspoon/aviationwx'
         ],
         'contactPoint' => [
             '@type' => 'ContactPoint',

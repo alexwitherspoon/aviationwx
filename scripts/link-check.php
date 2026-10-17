@@ -21,7 +21,7 @@ const USER_AGENT = 'AviationWX-LinkCheck/1.0';
 $baseUrl = getenv('BASE_URL') ?: 'https://aviationwx.org';
 $timeoutMinutes = (int) (getenv('TIMEOUT_MINUTES') ?: 30);
 $githubToken = getenv('GITHUB_TOKEN');
-$githubRepo = getenv('GITHUB_REPOSITORY') ?: 'alexwitherspoon/aviationwx.org';
+$githubRepo = getenv('GITHUB_REPOSITORY') ?: 'alexwitherspoon/aviationwx';
 $mentionUser = '@alexwitherspoon';
 
 $startTime = time();
