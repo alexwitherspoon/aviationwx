@@ -278,7 +278,7 @@ Optional **station power** telemetry on airport pages for `limited_availability`
 1. `CONFIG_PATH` when set and the path exists as a regular file (PHPUnit/bootstrap sets this to `tests/Fixtures/airports.json.test`)
 2. `/var/www/html/secrets/airports.json` (Docker production mount)
 3. `config/airports.json` (repository default)
-4. Non-production only: adjacent `aviationwx.org-secrets` / `aviationwx-secrets` paths (local maintainer layout)
+4. Non-production only: adjacent `aviationwx-secrets` path (local maintainer layout)
 5. `/var/www/html/airports.json` (host mount last resort)
 
 See [CONFIGURATION.md](CONFIGURATION.md) for the same list in the operator guide.

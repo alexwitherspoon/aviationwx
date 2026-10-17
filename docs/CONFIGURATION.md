@@ -11,7 +11,7 @@ All configuration lives in a single `airports.json` file with two sections:
 1. **`CONFIG_PATH`** (when set and the path is an existing file)
 2. **`/var/www/html/secrets/airports.json`** (Docker production mount)
 3. **`config/airports.json`** (repository default next to `lib/`)
-4. **Non-production only:** `../aviationwx.org-secrets/airports.json` then `../aviationwx-secrets/airports.json` (local maintainer layout)
+4. **Non-production only:** `../aviationwx-secrets/airports.json` (local maintainer layout)
 5. **`/var/www/html/airports.json`** (host mount last resort)
 
 If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candidates are evaluated in order.
