@@ -321,9 +321,14 @@ Reolink cameras are well-tested with AviationWX and offer reliable scheduled FTP
 
 **Access the FTP settings:**
 
-1. Open Reolink Client on your PC (or use the web interface)
-2. Add your camera and log in
-3. Navigate to: **Device Settings** → **Network** → **Advanced** → **FTP**
+On the mobile app (what most installers use in the field):
+
+1. Go to **Settings** → **More Features** → **FTP**
+2. Tap **FTP Settings**
+
+On the Reolink Client or web interface:
+
+1. Go to **Device Settings** → **Surveillance** → **FTP**
 
 **Enter these settings:**
 
@@ -345,13 +350,14 @@ Reolink cameras are well-tested with AviationWX and offer reliable scheduled FTP
 | Reolink Setting | Recommendation |
 |-----------------|----------------|
 | **File Type** | Images only (not video) |
+| **Overwrite File** | **No** |
 | **Interval** | 60 seconds (1 minute) |
 
 > **Note:** Some Reolink models show "FTP Postpone" for motion-triggered recording. For AviationWX, you want **scheduled/interval uploads**, not motion-triggered.
 
 **Enable the FTP schedule:**
 
-1. Click **FTP Schedule** or **Schedule**
+1. Tap **Timer Schedule** in the app (or **FTP Schedule** / **Schedule** in the Client)
 2. Enable FTP uploads
 3. Set to upload continuously (24/7) or customize for day/night if power-saving
 
