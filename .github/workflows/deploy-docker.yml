@@ -308,16 +308,71 @@ jobs:
               core.setOutput('qa-success', 'true');
             }
 
-  deploy:
+  detect-app-changes:
     runs-on: ubuntu-26.04
     needs: check-prerequisites
+    timeout-minutes: 5
+    outputs:
+      app-changed: ${{ steps.detect.outputs.app-changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check-prerequisites.outputs.deploy-sha }}
+          fetch-depth: 2
+
+      - name: Detect application changes
+        id: detect
+        run: |
+          # Manual dispatch is the explicit force-deploy path, so it always deploys.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch - always deploy"
+            echo "app-changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Compare the deploy commit against its first parent (the previous main
+          # tip). A missing parent means a first commit, so default to deploy.
+          if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            echo "No previous commit to compare - defaulting to deploy"
+            echo "app-changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Paths that never affect the running app. Anything else is app code,
+          # served content, or deployed config and must ship.
+          NON_DEPLOYABLE='^(\.github/|docs/|tests/|dev/)|^(CODEOWNERS|CODE_OF_CONDUCT\.md|CODE_STYLE\.md|CONTRIBUTING\.md|LICENSE|README\.md|Makefile|package\.json|eslint\.config\.js|phpunit\.xml|phpunit\.external-apis\.xml|\.gitignore|\.editorconfig|\.dockerignore)$'
+
+          CHANGED="$(git diff --name-only HEAD~1 HEAD)"
+          if [ -z "$CHANGED" ]; then
+            echo "No files changed - defaulting to deploy"
+            echo "app-changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "Files changed:"
+          printf '%s\n' "$CHANGED" | sed 's/^/  /'
+
+          APP_FILES="$(printf '%s\n' "$CHANGED" | grep -vE "$NON_DEPLOYABLE" || true)"
+          if [ -n "$APP_FILES" ]; then
+            echo "Application files changed - will deploy:"
+            printf '%s\n' "$APP_FILES" | sed 's/^/  /'
+            echo "app-changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Only non-deployable files changed - skipping deploy"
+            echo "app-changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    runs-on: ubuntu-26.04
+    needs: [check-prerequisites, detect-app-changes]
     # Must exceed DEPLOY_WORKER_DRAIN_REFERENCE_MAX_SECONDS (+ grace) plus build/health overhead.
     # Reference drain alone can wait ~120 minutes for in-flight NASR/catalog workers.
     timeout-minutes: 180
     # Only deploy if QA succeeded (or manual dispatch with skip)
     if: |
-      (needs.check-prerequisites.outputs.qa-success == 'true') || 
-      (github.event_name == 'workflow_dispatch' && needs.check-prerequisites.outputs.skip-checks == 'true')
+      ((needs.check-prerequisites.outputs.qa-success == 'true') ||
+       (github.event_name == 'workflow_dispatch' && needs.check-prerequisites.outputs.skip-checks == 'true')) &&
+      (needs.detect-app-changes.outputs.app-changed == 'true')
     steps:
       - name: Use deployment SHA from prerequisites check
         id: determine-sha
