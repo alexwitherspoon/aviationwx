@@ -588,7 +588,8 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 
 ## Need More Help?
 
-- **Technical documentation:** [docs/](https://github.com/alexwitherspoon/aviationwx/tree/main/docs)
+- [docs/DATA_FLOW.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/DATA_FLOW.md) - how weather, webcam, and NOTAM data is fetched, calculated, and shown
+- [docs/SAFETY_CRITICAL_CALCULATIONS.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/SAFETY_CRITICAL_CALCULATIONS.md) - the aviation math behind density altitude, wind, and flight category
 - **Report an issue:** [GitHub Issues](https://github.com/alexwitherspoon/aviationwx/issues)
 - **Contact:** `contact@aviationwx.org`
 

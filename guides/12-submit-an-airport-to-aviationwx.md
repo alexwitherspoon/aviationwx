@@ -95,7 +95,7 @@ Please send:
 How to find/create these:
 - WeatherFlow's API uses a URL pattern like: `.../observations/station/[your_station_id]?token=[your_access_token]` (so we need both the station ID and token).  
 - Create a personal access token in account settings ("Data Authorizations").
-- AviationWX may also call WeatherFlow's **`/stations/{id}`** and **`/observations/device/{id}`** automatically when the federated station observation is empty but hardware is still reporting; you still only send **station ID + token** (no device ID required for typical installs). See [DATA_FLOW.md](../docs/DATA_FLOW.md#tempest-weatherflow-api).
+- AviationWX may also call WeatherFlow's **`/stations/{id}`** and **`/observations/device/{id}`** automatically when the federated station observation is empty but hardware is still reporting; you still only send **station ID + token** (no device ID required for typical installs).
 
 References (if you want the official docs):
 ```text
@@ -284,11 +284,9 @@ Attachments:
 ---
 
 ## "Nerdy" reference (optional)
-If you're technical (or helping someone technical), the full configuration reference lives here:
 
-```text
-https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md
-```
+If you're technical and want the internals, they live in these docs. You don't need any of this to submit an airport.
 
-But you don't need to read that to submit an airport - the checklists above are enough.
+- [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources
+- [docs/DATA_FLOW.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/DATA_FLOW.md) - how weather, webcam, and NOTAM data is fetched, calculated, and shown
 

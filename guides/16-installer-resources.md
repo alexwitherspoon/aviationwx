@@ -4,7 +4,7 @@ Curated parts lists, drawings, and field photos for common AviationWX installs. 
 
 These are reference designs, not mandatory SKUs. Substitute parts when they meet the same siting, power, and data goals. Paths A and B are field-tested; other paths below are placeholders until we publish BOMs and photos.
 
-Questions or to share a working install (photos, BOM tweaks, drawings): [contact@aviationwx.org](mailto:contact@aviationwx.org). Pull requests welcome on [github.com/alexwitherspoon/aviationwx.org](https://github.com/alexwitherspoon/aviationwx.org) under `guides/` and `public/guides/installer-resources/`.
+Questions or to share a working install (photos, BOM tweaks, drawings): [contact@aviationwx.org](mailto:contact@aviationwx.org). Pull requests welcome on [github.com/alexwitherspoon/aviationwx](https://github.com/alexwitherspoon/aviationwx) under `guides/` and `public/guides/installer-resources/`.
 
 Empty sections below mean not documented yet, not disallowed.
 
