@@ -1316,7 +1316,7 @@ if ($themeCookie === 'dark') {
                 <a href="https://airports.aviationwx.org">Airports</a> • 
                 <a href="https://guides.aviationwx.org">Guides</a> • 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
                 <a href="https://terms.aviationwx.org">Terms of Service</a> • 
                 <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>

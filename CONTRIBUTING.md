@@ -11,8 +11,8 @@ This project adheres to a Code of Conduct that all contributors are expected to 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/aviationwx.org.git
-   cd aviationwx.org
+   git clone https://github.com/YOUR_USERNAME/aviationwx.git
+   cd aviationwx
    ```
 3. **Set up local development** - See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions
 

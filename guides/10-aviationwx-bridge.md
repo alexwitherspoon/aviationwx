@@ -290,7 +290,7 @@ The AviationWX Bridge uses the same credential process as direct camera uploads:
 3. **Receive upload details** (server, port, username, password)
 4. **Enter credentials** in the Bridge web console
 
-**Protocol preference:** We recommend **SFTP** by default. Use SFTP in all cases unless FTPS is specifically required for your setup. AviationWX provides credentials for `upload.aviationwx.org` (SFTP port 2222, FTP/FTPS control port 2121 by default). On a **self-hosted** deployment, listener ports are defined in `config.network_ports` (see [Configuration](../docs/CONFIGURATION.md#network-configuration)).
+**Protocol preference:** We recommend **SFTP** by default. Use SFTP in all cases unless FTPS is specifically required for your setup. AviationWX provides credentials for `upload.aviationwx.org` (SFTP port 2222, FTP/FTPS control port 2121 by default). On a **self-hosted** deployment, listener ports are defined in `config.network_ports`.
 
 ---
 
@@ -418,5 +418,11 @@ Before setting up a Bridge, confirm:
 - If you haven't submitted your airport yet, see **Guide 12 - Submit a New Airport**
 - For camera framing and siting, see **Guide 02 - Location & Siting**
 - For direct camera FTP setup (when cameras support it), see **Guide 08 - Camera Configuration**
+
+---
+
+## Technical documentation
+
+- [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources
 
 

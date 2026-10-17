@@ -432,7 +432,7 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                 <h2>7. Open Source</h2>
                 <p>
                     AviationWX.org is open source software, released under the terms specified in our 
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">GitHub repository</a>. 
+                    <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">GitHub repository</a>. 
                     You are welcome to:
                 </p>
                 <ul>
@@ -441,8 +441,8 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                     <li>Report issues and suggest improvements</li>
                 </ul>
                 <p>
-                    Contributions are subject to our <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing Guidelines</a> 
-                    and <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of Conduct</a>.
+                    Contributions are subject to our <a href="https://github.com/alexwitherspoon/aviationwx/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing Guidelines</a> 
+                    and <a href="https://github.com/alexwitherspoon/aviationwx/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of Conduct</a>.
                 </p>
                 
                 <h2>8. Privacy</h2>
@@ -515,7 +515,7 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                 </p>
                 <ul>
                     <li>Email: <a href="mailto:contact@aviationwx.org">contact@aviationwx.org</a></li>
-                    <li>GitHub: <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Open an Issue</a></li>
+                    <li>GitHub: <a href="https://github.com/alexwitherspoon/aviationwx/issues" target="_blank" rel="noopener">Open an Issue</a></li>
                 </ul>
                 
                 <div class="last-updated">
@@ -529,7 +529,7 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                     <a href="https://airports.aviationwx.org">Airports</a> • 
                     <a href="https://guides.aviationwx.org">Guides</a> • 
                     <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                    <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
                     <a href="https://terms.aviationwx.org">Terms of Service</a> • 
                     <a href="https://api.aviationwx.org">API</a> • 
                     <a href="https://status.aviationwx.org">Status</a>

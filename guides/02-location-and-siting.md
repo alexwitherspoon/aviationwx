@@ -60,7 +60,7 @@ AviationWX records **which way each camera points** in config as `approximate_he
 - Record the bearing in **true north** degrees.
 - Aim within about **±10°** when you can (operational target; exact survey is not required for every field).
 
-You will enter this value in the final airport config (see Guide 08 and `docs/CONFIGURATION.md`).
+You will enter this value in the final airport config (see Guide 08).
 
 ### Weather station
 Place it where it reflects **field conditions** (not sheltered, not heat-soaked), while staying safe and permitted.
@@ -213,3 +213,9 @@ If any of these are true, pause and ask the airport sponsor/manager what process
 
 ## Next
 Move to **Mounting Options**: [`03-mounting-options.md`](03-mounting-options.md)
+
+---
+
+## Technical documentation
+
+- [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources

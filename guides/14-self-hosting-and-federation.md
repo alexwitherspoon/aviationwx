@@ -300,8 +300,8 @@ DNS propagation typically takes 5-60 minutes, but can take up to 24 hours global
 ### Step 3: Clone Repository
 
 ```bash
-git clone https://github.com/alexwitherspoon/aviationwx.org.git
-cd aviationwx.org
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
 ```
 
 ### Step 4: Configure Your Airport
@@ -537,11 +537,11 @@ sudo logwatch --detail Med --range today --mailto your@email.com
 ```bash
 # Backup config and data
 mkdir -p /backup
-cp -r /path/to/aviationwx.org/config /backup/
-cp -r /path/to/aviationwx.org/cache /backup/
+cp -r /path/to/aviationwx/config /backup/
+cp -r /path/to/aviationwx/cache /backup/
 
 # Automated daily backups (cron)
-0 2 * * * rsync -av /path/to/aviationwx.org/config /backup/
+0 2 * * * rsync -av /path/to/aviationwx/config /backup/
 ```
 
 **Monitoring recommendations:**
@@ -550,7 +550,7 @@ cp -r /path/to/aviationwx.org/cache /backup/
 - **Log aggregation:** Loki, or cloud provider's log service
 - **Alerts:** Set up email/SMS for downtime or errors
 
-See `docs/DEPLOYMENT.md` for additional production deployment details.
+See [docs/DEPLOYMENT.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/DEPLOYMENT.md) for additional production deployment details.
 
 ---
 
@@ -909,9 +909,10 @@ Your local install continues working normally.
 ## Getting Help
 
 **Self-hosting questions:**
-- Check `docs/LOCAL_SETUP.md` for development setup
-- Check `docs/DEPLOYMENT.md` for production deployment
-- GitHub Issues: https://github.com/alexwitherspoon/aviationwx.org/issues
+- [docs/LOCAL_SETUP.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/LOCAL_SETUP.md) - set up a local copy for development and testing
+- [docs/DEPLOYMENT.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/DEPLOYMENT.md) - deploy to a production server
+- [docs/FEDERATION_ARCHITECTURE.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/FEDERATION_ARCHITECTURE.md) - how self-hosted airports federate into the main platform
+- GitHub Issues: https://github.com/alexwitherspoon/aviationwx/issues
 
 **Federation questions:**
 - Email: `contact@aviationwx.org`

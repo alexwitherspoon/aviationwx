@@ -248,7 +248,7 @@ AviationWX supports the weather station platforms below, plus METAR-only configu
 | **Nav Canada Weather** | Canadian airports (CYAV, CYVR, etc.) | ~5 minutes | No API key needed |
 | **METAR Only** | Official airport weather | Hourly | No API key needed |
 
-Davis WeatherLink intervals depend on subscription; see the [Configuration Guide](../docs/CONFIGURATION.md) (Weather Sources) or [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions).
+Davis WeatherLink intervals depend on subscription; see [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions).
 
 ---
 
@@ -286,7 +286,7 @@ Davis WeatherLink intervals depend on subscription; see the [Configuration Guide
 
 ### How AviationWX reads Tempest data
 
-The integration always calls WeatherFlow's **federated station** observation endpoint first (the same URL pattern documented above). If that response is HTTP success but has **no observation row**, or a row with **no real sensor values** (for example only a timestamp while federation is stuck), AviationWX **automatically** loads station metadata, picks the first **Tempest sensor (`ST`)** device, and reads **`/observations/device/{id}`** so pilots still see current conditions when the sensor is online. You do **not** need a separate device ID in config for a normal hub + one Tempest setup. Details: [DATA_FLOW.md](../docs/DATA_FLOW.md#tempest-weatherflow-api) and [CONFIGURATION.md](../docs/CONFIGURATION.md#tempest-weather).
+The integration always calls WeatherFlow's **federated station** observation endpoint first (the same URL pattern documented above). If that response is HTTP success but has **no observation row**, or a row with **no real sensor values** (for example only a timestamp while federation is stuck), AviationWX **automatically** loads station metadata, picks the first **Tempest sensor (`ST`)** device, and reads **`/observations/device/{id}`** so pilots still see current conditions when the sensor is online. You do **not** need a separate device ID in config for a normal hub + one Tempest setup.
 
 ### API Documentation
 
@@ -521,7 +521,7 @@ The numeric `station_id` for the API is not the public widget `pid` used in embe
 
 ### How AviationWX reads DyaconLive data
 
-AviationWX pulls sensor fields from the DyaconLive API: temperature, humidity, wind (10-minute averages), station pressure, and rain when equipped. Station pressure is converted to sea-level altimeter using airport `elevation_ft`. **Ceiling and visibility are not available** from Dyacon sensor data. Details: [CONFIGURATION.md](../docs/CONFIGURATION.md#dyaconlive).
+AviationWX pulls sensor fields from the DyaconLive API: temperature, humidity, wind (10-minute averages), station pressure, and rain when equipped. Station pressure is converted to sea-level altimeter using airport `elevation_ft`. **Ceiling and visibility are not available** from Dyacon sensor data.
 
 ### DyaconLive Limitations
 
@@ -837,3 +837,10 @@ Even if we can't add support immediately, knowing what the community uses helps 
 
 ## Next
 Next guide covers **how to submit a new airport feed to AviationWX for review and inclusion**, including the validation process for image quality, data sanity, and operational expectations.
+
+---
+
+## Technical documentation
+
+- [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources
+- [docs/DATA_FLOW.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/DATA_FLOW.md) - how weather, webcam, and NOTAM data is fetched, calculated, and shown

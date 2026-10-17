@@ -699,7 +699,7 @@ $attribution = getPublicApiAttributionText();
         <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
             <li><a href="/openapi.json">OpenAPI Specification (JSON)</a></li>
             <li><a href="https://aviationwx.org">AviationWX.org Website</a></li>
-            <li><a href="https://github.com/alexwitherspoon/aviationwx.org">GitHub Repository</a></li>
+            <li><a href="https://github.com/alexwitherspoon/aviationwx">GitHub Repository</a></li>
         </ul>
         
         <?php endif; ?>
@@ -710,7 +710,7 @@ $attribution = getPublicApiAttributionText();
                 <a href="https://airports.aviationwx.org">Airports</a> • 
                 <a href="https://guides.aviationwx.org">Guides</a> • 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
                 <a href="https://terms.aviationwx.org">Terms of Service</a> • 
                 <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>

@@ -575,8 +575,6 @@ Each camera needs `approximate_heading` in the airport config when the airport i
 - Measure after the mount is aimed (see Guide 02).
 - Aim within about **±10°** when possible.
 
-Full schema details: `docs/CONFIGURATION.md`.
-
 ## Decision (write it down)
 
 After configuring your camera, document these details:
@@ -621,3 +619,9 @@ After configuring your camera, document these details:
 2. **Configure your camera**  -  Use the settings in this guide
 3. **Monitor for 24-72 hours**  -  Verify reliable uploads before considering it "done"
 4. **Weather station setup**  -  See **Guide 09** for weather station configuration
+
+---
+
+## Technical documentation
+
+- [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources
