@@ -29,8 +29,8 @@ services:
       # SECRETS CONFIGURATION - Update paths below for your setup
       # =================================================================
       # Option 1: Use the secrets repository (recommended)
-      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
-      # - /path/to/aviationwx.org-secrets/partner-logos:/var/www/html/partner-logos:ro
+      # - /path/to/aviationwx-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+      # - /path/to/aviationwx-secrets/partner-logos:/var/www/html/partner-logos:ro
       #
       # Option 2: Copy airports.json.example to a local file and customize
       # - /path/to/my-airports.json:/var/www/html/secrets/airports.json:ro

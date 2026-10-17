@@ -604,7 +604,7 @@ sudo grep -i 'upload health\|upload probe' /var/aviationwx/logs/app.log | tail -
 
 ```bash
 make config-check
-CONFIG_PATH=/path/to/aviationwx.org-secrets/airports.json make config-check
+CONFIG_PATH=/path/to/aviationwx-secrets/airports.json make config-check
 ```
 
 `php scripts/validate-airports-json.php path/to/airports.json` runs the same NASR cross-check as step 4 when cache is available.

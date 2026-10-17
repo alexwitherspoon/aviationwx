@@ -19,7 +19,7 @@ For developers with access to the secrets repository:
 ```bash
 # 1. Clone both repositories
 git clone https://github.com/alexwitherspoon/aviationwx.git
-git clone git@github.com:org/aviationwx.org-secrets.git
+git clone git@github.com:alexwitherspoon/aviationwx-secrets.git
 
 cd aviationwx
 
@@ -35,8 +35,8 @@ services:
     volumes:
       # ... (keep existing source mounts) ...
       # Add secrets mounts:
-      - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
-      - /path/to/aviationwx.org-secrets/partner-logos:/var/www/html/partner-logos:ro
+      - /path/to/aviationwx-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+      - /path/to/aviationwx-secrets/partner-logos:/var/www/html/partner-logos:ro
     environment:
       - CONFIG_PATH=/var/www/html/secrets/airports.json
 ```

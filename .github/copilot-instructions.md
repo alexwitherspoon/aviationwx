@@ -14,7 +14,7 @@ Repository custom instructions for GitHub Copilot coding agent and code review. 
 - **airports.aviationwx.org**: Airport directory map and listing (in `pages/airports.php`).
 - **embed.aviationwx.org**: Embed generator for external weather widgets.
 - **api.aviationwx.org**: Public API (OpenAPI spec, separate docs).
-- **Secrets**: Production config (`airports.json` with API keys) lives in private repo `aviationwx.org-secrets`.
+- **Secrets**: Production config (`airports.json` with API keys) lives in private repo `aviationwx-secrets`.
 
 ### Technology Stack
 
@@ -46,7 +46,7 @@ Repository custom instructions for GitHub Copilot coding agent and code review. 
 
 - **URL**: http://localhost:8080
 - **DO NOT** use `php -S localhost:8080` – always use Docker.
-- **With secrets**: Mount `aviationwx.org-secrets/airports.json` via `docker-compose.override.yml`, set `CONFIG_PATH`.
+- **With secrets**: Mount `aviationwx-secrets/airports.json` via `docker-compose.override.yml`, set `CONFIG_PATH`.
 
 ### CI Pipeline (.github/workflows/test.yml)
 

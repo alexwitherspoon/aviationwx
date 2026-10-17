@@ -596,7 +596,7 @@ class InvalidAirportIdException extends Exception {}
 
 - **Single config file** - All configuration in `airports.json` (read-only, no database)
 - **Schema validation** - Validate schema on load, fail fast on bad config
-- **CI/CD validation** - Catch config issues during CI/CD (in `../aviationwx.org-secrets/`)
+- **CI/CD validation** - Catch config issues during CI/CD (in `../aviationwx-secrets/`)
 - **Breaking changes** - OK, but must go through full PR process with documentation
 - **Version API adapters** - Enable picking API provider and version in config:
   ```json
