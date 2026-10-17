@@ -395,7 +395,7 @@ function shouldMockExternalServices(): bool {
  * 1. CONFIG_PATH when set and points at an existing regular file
  * 2. /var/www/html/secrets/airports.json (Docker production mount)
  * 3. Repository default config/airports.json
- * 4. Non-production only: adjacent aviationwx-secrets then legacy aviationwx.org-secrets paths
+ * 4. Non-production only: adjacent aviationwx-secrets path
  * 5. /var/www/html/airports.json (host mount last resort)
  *
  * @return string|null Path to an existing regular file, or null if none match
@@ -417,13 +417,9 @@ function resolveAirportsConfigFilePath(): ?string {
     }
 
     if (!isProduction()) {
-        $adjacentPrimary = __DIR__ . '/../../aviationwx-secrets/airports.json';
-        if (file_exists($adjacentPrimary) && is_file($adjacentPrimary)) {
-            return $adjacentPrimary;
-        }
-        $adjacentAlt = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
-        if (file_exists($adjacentAlt) && is_file($adjacentAlt)) {
-            return $adjacentAlt;
+        $adjacent = __DIR__ . '/../../aviationwx-secrets/airports.json';
+        if (file_exists($adjacent) && is_file($adjacent)) {
+            return $adjacent;
         }
     }
 
