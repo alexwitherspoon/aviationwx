@@ -67,6 +67,29 @@ class WifiLoggerAdapterTest extends TestCase
         $this->assertEqualsWithDelta(29.968, $parsed['pressure'], 0.0001);
     }
 
+    public function testParseRawData_NullsPressureOutsideClimateBounds(): void
+    {
+        // 40 inHg is plausible-looking but outside the climate bounds; must not publish.
+        $parsed = WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'altime' => 40000,
+        ]);
+        $this->assertNull($parsed['pressure']);
+    }
+
+    public function testParseRawData_FallsBackToBarWhenAltimeterOutsideClimate(): void
+    {
+        $parsed = WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'altime' => 40000,
+            'bar' => 29968,
+        ]);
+        $this->assertNotNull($parsed);
+        $this->assertEqualsWithDelta(29.968, $parsed['pressure'], 0.0001);
+    }
+
     public function testParseRawData_NullsOutOfRangeRain(): void
     {
         $this->assertNull(WifiLoggerAdapter::parseRawData([

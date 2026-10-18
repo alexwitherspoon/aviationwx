@@ -19,6 +19,7 @@ require_once __DIR__ . '/../../upload/store.php';
 require_once __DIR__ . '/../../upload/ingest.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../units.php';
+require_once __DIR__ . '/../../constants.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
@@ -227,7 +228,7 @@ class WifiLoggerAdapter
         // Altimeter over raw barometer (altimeter is sea-level reduced, what pilots see).
         // Range-check the altimeter first so an out-of-range value falls back to bar.
         $pressureInHg = self::scaled($raw, 'altime', WIFILOGGER_PRESSURE_SCALE);
-        if ($pressureInHg === null || $pressureInHg < 20.0 || $pressureInHg > 45.0) {
+        if ($pressureInHg === null || $pressureInHg < CLIMATE_PRESSURE_MIN_INHG || $pressureInHg > CLIMATE_PRESSURE_MAX_INHG) {
             $pressureInHg = self::scaled($raw, 'bar', WIFILOGGER_PRESSURE_SCALE);
         }
 
@@ -256,7 +257,7 @@ class WifiLoggerAdapter
                 }
             }
         }
-        if ($pressureInHg !== null && ($pressureInHg < 20.0 || $pressureInHg > 45.0)) {
+        if ($pressureInHg !== null && ($pressureInHg < CLIMATE_PRESSURE_MIN_INHG || $pressureInHg > CLIMATE_PRESSURE_MAX_INHG)) {
             $pressureInHg = null;
         }
         if ($rainIn !== null && (!is_finite($rainIn) || $rainIn < 0.0 || $rainIn > 100.0)) {
