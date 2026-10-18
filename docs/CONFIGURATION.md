@@ -702,7 +702,7 @@ and set the interval there. Auth rides on the URL: the device has no API-key hea
 ]
 ```
 
-The raw payload is stored verbatim under `provider_meta.raw` and parsed through the `wifilogger` adapter into a WeatherSnapshot. It uses Davis-native integer units; the scaling lives in one place and fails closed, so a scaling drift nulls a field instead of publishing a wrong value. Wind is true north, same as bridge-local Davis: install the vane to true north. Pinning `wid` and `mac` ahead of time stops a second station, or a leaked URL, from writing weather for someone else's airport.
+The raw payload is stored verbatim under `provider_meta.raw` and parsed through the `wifilogger` adapter into a WeatherSnapshot. It assumes Davis-native integer units; the scaling lives in one place and is range-bounded, but those bounds catch only clearly wrong values, not every unit mismatch (a whole-degree export would parse as tenths and pass). Confirm the integer scales against a captured device payload before operational use. Wind is true north, same as bridge-local Davis: install the vane to true north. Pinning `wid` and `mac` ahead of time stops a second station, or a leaked URL, from writing weather for someone else's airport.
 
 ### Tempest Weather
 

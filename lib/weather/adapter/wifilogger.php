@@ -5,11 +5,11 @@
  * Parses provider_meta.raw from the WiFiLogger "PHP & MySQL" HTTP export
  * (`type: rtd`), stored under cache/upload/weather/{airport}/{wid}/latest.json.
  *
- * Units are Davis-native integers, as documented for the WiFiLogger custom
- * export. Every scale below is isolated in a constant and fail-closed by range
- * check so a scaling drift degrades to a null field, never a wrong value. The
- * exact integer scaling must still be confirmed against the first real unit
- * (firmware 2.63 ship surface only documents the two URL fields).
+ * Units are assumed to be Davis-native integers. Each scale is isolated in a
+ * constant and bounded by range checks, but those checks catch only clearly
+ * out-of-range values; a whole-unit-vs-tenths export (tempout 68 meaning 68 F)
+ * would parse as 6.8 F and pass. Confirm the integer scales against a captured
+ * device payload before operational use.
  */
 
 require_once __DIR__ . '/../data/WeatherReading.php';
