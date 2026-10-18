@@ -936,13 +936,13 @@ function getUploadRejectRoot(): string
 }
 
 /**
- * Path to the per-unit rejected-upload index.
+ * Path to the per-unit rejected-upload log.
  *
  * @return string Absolute file path
  */
-function getUploadRejectUnitsPath(): string
+function getUploadRejectsPath(): string
 {
-    return getUploadRejectRoot() . '/units.json';
+    return getUploadRejectRoot() . '/rejects.json';
 }
 
 // =============================================================================

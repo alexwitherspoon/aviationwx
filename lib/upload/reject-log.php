@@ -197,7 +197,7 @@ function uploadRecordReject(
         return false;
     }
 
-    $path = getUploadRejectUnitsPath();
+    $path = getUploadRejectsPath();
     if ($path === '') {
         return false;
     }

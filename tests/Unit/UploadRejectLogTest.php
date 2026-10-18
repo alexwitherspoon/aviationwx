@@ -48,7 +48,7 @@ class UploadRejectLogTest extends TestCase
 
     private function readUnits(): array
     {
-        $data = bridgeReadJsonFile(getUploadRejectUnitsPath());
+        $data = bridgeReadJsonFile(getUploadRejectsPath());
         return $data['units'] ?? [];
     }
 
