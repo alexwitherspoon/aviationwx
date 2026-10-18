@@ -5,7 +5,8 @@
  * One entry per unique unit (keyed by normalized MAC, then wid, then token hash,
  * then IP), holding only that unit's latest rejected attempt. This self-throttles:
  * a noisy unit keeps overwriting its own slot and cannot crowd other units out of
- * the index. Retention is bounded by a unit cap plus per-entry payload truncation.
+ * the index. Retention is bounded by a per-IP write throttle, a unit cap, and
+ * per-entry payload truncation.
  *
  * The MAC header and payload wid are client-supplied and forgeable. This log is
  * diagnostic only; it never changes the auth boundary (pinned wid + MAC in config).
@@ -213,6 +214,7 @@ function uploadRecordReject(
         } else {
             $max = uploadRejectUnitsMax();
             if (count($units) >= $max) {
+                // Evict the least-recently-seen unit so stale attempts age out before active ones.
                 $evict = null;
                 $evictSeen = null;
                 foreach ($units as $k => $u) {
