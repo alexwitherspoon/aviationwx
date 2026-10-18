@@ -159,6 +159,34 @@ class UploadConfigAuthTest extends TestCase
         $this->assertSame('AA:BB:CC:DD:EE:FF', $binding['mac']);
     }
 
+    public function testValidateUploadConfig_RejectsDuplicateWidCaseInsensitive(): void
+    {
+        $a = $this->validSource();
+        $b = $this->validSource();
+        $b['upload_token'] = 'awxu_000000000000000000000000000000000000000000000002';
+        $b['wid'] = 'STATION-DAVIS-01';
+        $result = validateUploadConfig($this->airportWithSources([$a, $b]));
+        $this->assertTrue(
+            (bool) array_filter($result['errors'], static fn ($e) => str_contains($e, 'duplicate wid')),
+            implode('; ', $result['errors'])
+        );
+    }
+
+    public function testValidateUploadConfig_AcceptsSameWidOnDifferentAirports(): void
+    {
+        $srcA = $this->validSource();
+        $srcB = $this->validSource();
+        $srcB['upload_token'] = 'awxu_000000000000000000000000000000000000000000000002';
+        $config = [
+            'airports' => [
+                'kspb' => ['name' => 'Scappoose', 'icao' => 'KSPB', 'weather_sources' => [$srcA]],
+                'kczk' => ['name' => 'Cascade', 'icao' => 'KCZK', 'weather_sources' => [$srcB]],
+            ],
+        ];
+        $result = validateUploadConfig($config);
+        $this->assertSame([], $result['errors'], implode('; ', $result['errors']));
+    }
+
     public function testResolveUploadApiKey_RejectsUnknown(): void
     {
         $this->assertNull(resolveUploadApiKey(self::FIXTURE_TOKEN, ['airports' => []]));

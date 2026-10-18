@@ -146,6 +146,8 @@ function validateUploadConfig(array $config): array
             continue;
         }
 
+        $seenWidsOnAirport = [];
+
         foreach ($airport['weather_sources'] as $idx => $ws) {
             if (!is_array($ws) || !isUploadCacheBackedWeatherSourceType($ws['type'] ?? null)) {
                 continue;
@@ -190,6 +192,13 @@ function validateUploadConfig(array $config): array
             } elseif (!isValidWifiLoggerWid($ws['wid'])) {
                 $errors[] = "Airport '{$airportCode}' {$label} ({$type}) invalid 'wid' "
                     . '(alphanumeric, hyphens/underscores, 1-64 chars)';
+            } else {
+                $widLower = strtolower($ws['wid']);
+                if (isset($seenWidsOnAirport[$widLower])) {
+                    $errors[] = "Airport '{$airportCode}' {$label} ({$type}) duplicate wid '{$ws['wid']}' "
+                        . '(wids are case-insensitive for cache paths)';
+                }
+                $seenWidsOnAirport[$widLower] = true;
             }
 
             if (!isset($ws['mac']) || !is_string($ws['mac']) || $ws['mac'] === '') {
