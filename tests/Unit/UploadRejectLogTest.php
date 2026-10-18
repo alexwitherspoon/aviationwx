@@ -126,6 +126,16 @@ class UploadRejectLogTest extends TestCase
         $this->assertArrayHasKey('token:' . uploadTokenHash($token), $this->readUnits());
     }
 
+    public function testRecordReject_StoresFullToken(): void
+    {
+        $token = 'awxu_000000000000000000000000000000000000000000000001';
+        uploadRecordReject('INVALID_UPLOAD_TOKEN', null, null, $token, null, null, null, null, 1531754005);
+
+        $entry = $this->readUnits()['token:' . uploadTokenHash($token)];
+        $this->assertSame($token, $entry['last_token']);
+        $this->assertArrayNotHasKey('last_token_hash', $entry);
+    }
+
     public function testRecordReject_EvictsLeastRecentlySeen(): void
     {
         $GLOBALS['uploadRejectUnitsMax'] = 2;

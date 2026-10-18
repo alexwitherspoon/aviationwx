@@ -10,6 +10,10 @@
  *
  * The MAC header and payload wid are client-supplied and forgeable. This log is
  * diagnostic only; it never changes the auth boundary (pinned wid + MAC in config).
+ *
+ * It stores the full upload token so a mis-addressed or typo'd upload can be
+ * diagnosed. That makes it a credential store, so it must never be web-accessible
+ * (see the cache/ deny rules in .htaccess and nginx).
  */
 
 require_once __DIR__ . '/config.php';
@@ -90,7 +94,10 @@ function uploadRejectWriteAllowed(string $ip): bool
 }
 
 /**
- * Short token digest for correlation without storing the token itself.
+ * Short token digest for the unit-key fallback.
+ *
+ * Bounded and opaque so a long or malformed token cannot bloat a key. The full
+ * token is stored in the entry's last_token field for diagnosis.
  *
  * @param string $token Raw token
  * @return string First 16 hex chars of sha256
@@ -155,7 +162,7 @@ function uploadTruncatePayload(?array $payload): mixed
  * @param string $reason Stable reject code (e.g. MAC_MISMATCH)
  * @param string|null $wid Payload wid (observed, may differ from config)
  * @param string|null $macHeader Raw station MAC header
- * @param string|null $token Path token (null when missing)
+ * @param string|null $token Path token (null when missing); stored in full as last_token
  * @param string|null $airport Resolved airport id, when the token resolved
  * @param string|null $expectedWid Config wid, when the token resolved
  * @param string|null $ip Client IP
@@ -178,7 +185,6 @@ function uploadRecordReject(
     $nowIso = gmdate('c', $receivedAt);
     $mac = $macHeader !== null && trim($macHeader) !== '' ? normalizeWifiLoggerMac($macHeader) : null;
     $unitKey = uploadRejectUnitKey($macHeader, $wid, $token, $ip);
-    $tokenHash = $token !== null && $token !== '' ? uploadTokenHash($token) : null;
     $storedPayload = uploadTruncatePayload($payload);
 
     if ($ip !== null && $ip !== '' && !uploadRejectWriteAllowed($ip)) {
@@ -197,7 +203,7 @@ function uploadRecordReject(
         $reason,
         $wid,
         $mac,
-        $tokenHash,
+        $token,
         $airport,
         $expectedWid,
         $ip,
@@ -245,8 +251,8 @@ function uploadRecordReject(
         if ($wid !== null && $wid !== '') {
             $entry['last_wid'] = $wid;
         }
-        if ($tokenHash !== null) {
-            $entry['last_token_hash'] = $tokenHash;
+        if ($token !== null && $token !== '') {
+            $entry['last_token'] = $token;
         }
         if ($airport !== null && $airport !== '') {
             $entry['last_airport'] = $airport;
