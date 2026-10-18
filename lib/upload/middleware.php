@@ -141,7 +141,8 @@ function checkUploadApiRateLimit(string $token, string $endpointClass): array
         if (!$result['allowed']) {
             $allowed = false;
             $windowRetry = $result['reset'] - $now;
-            if ($retryAfter === null || $windowRetry < $retryAfter) {
+            // Blocked until every exhausted window resets, so advertise the longest.
+            if ($retryAfter === null || $windowRetry > $retryAfter) {
                 $retryAfter = max(1, $windowRetry);
             }
         }
