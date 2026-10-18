@@ -2413,6 +2413,12 @@ function validateRuntimeConfigSchema(array $config): array {
         $errors = array_merge($errors, $bridgeResult['errors']);
     }
 
+    require_once __DIR__ . '/upload/config.php';
+    $uploadResult = validateUploadConfig($config);
+    if ($uploadResult['errors'] !== []) {
+        $errors = array_merge($errors, $uploadResult['errors']);
+    }
+
     return [
         'valid' => $errors === [],
         'errors' => $errors,
@@ -4956,7 +4962,7 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['weather_sources'])) {
                 $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'davis_weatherlink_live'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'davis_weatherlink_live', 'wifilogger'];
                 foreach ($airport['weather_sources'] as $idx => $ws) {
                     $label = "weather_sources[{$idx}]";
                     if (!is_array($ws)) {
@@ -5393,6 +5399,15 @@ function validateAirportsJsonStructure(array $config): array {
     }
     foreach ($bridgeValidation['warnings'] as $bridgeWarning) {
         $warnings[] = $bridgeWarning;
+    }
+
+    require_once __DIR__ . '/upload/config.php';
+    $uploadValidation = validateUploadConfig($config);
+    foreach ($uploadValidation['errors'] as $uploadError) {
+        $errors[] = $uploadError;
+    }
+    foreach ($uploadValidation['warnings'] as $uploadWarning) {
+        $warnings[] = $uploadWarning;
     }
     
     return [
