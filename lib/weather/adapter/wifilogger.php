@@ -326,6 +326,12 @@ class WifiLoggerAdapter
         if (!is_numeric($row[$key])) {
             return null;
         }
-        return (float) $row[$key];
+        $value = (float) $row[$key];
+        // Davis-native integers only: a fractional value means the payload is not in
+        // the assumed integer scale, so null it rather than divide-and-misinterpret.
+        if (floor($value) !== $value) {
+            return null;
+        }
+        return $value;
     }
 }

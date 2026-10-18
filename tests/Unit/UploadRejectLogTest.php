@@ -191,13 +191,30 @@ class UploadRejectLogTest extends TestCase
         $this->assertArrayNotHasKey('AA:AA:AA:AA:AA:02', $units);
     }
 
+    public function testRecordReject_ClearsStaleBindingOnUnknownToken(): void
+    {
+        $token = 'awxu_000000000000000000000000000000000000000000000001';
+        uploadRecordReject('MAC_MISMATCH', 'station-other', 'aa:bb:cc:dd:ee:ff', $token, 'kspb', 'station-davis-01', null, null, 1000);
+        uploadRecordReject('INVALID_UPLOAD_TOKEN', null, 'aa:bb:cc:dd:ee:ff', null, null, null, null, null, 2000);
+
+        $entry = $this->readUnits()['AA:BB:CC:DD:EE:FF'];
+        $this->assertSame('INVALID_UPLOAD_TOKEN', $entry['last_reason']);
+        $this->assertNull($entry['last_token']);
+        $this->assertNull($entry['last_airport']);
+        $this->assertNull($entry['expected_wid']);
+        $this->assertNull($entry['last_wid']);
+        $this->assertSame(gmdate('c', 1000), $entry['first_seen_at']);
+        $this->assertSame(2, $entry['attempts']);
+    }
+
     public function testRecordReject_BoundsOversizedWid(): void
     {
         $hugeWid = str_repeat('A', 2000);
         uploadRecordReject('INVALID_UPLOAD_TOKEN', $hugeWid, null, null, null, null, '10.0.0.9', null, 1000);
 
         $entry = $this->readUnits()['ip:10.0.0.9'];
-        $this->assertArrayNotHasKey('last_wid', $entry);
+        $this->assertNull($entry['last_wid']);
+        $this->assertNotSame($hugeWid, $entry['last_wid']);
     }
 
     public function testRecordReject_PreviewIsValidWhenTruncatedOnMultibyte(): void

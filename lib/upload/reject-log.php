@@ -217,13 +217,8 @@ function uploadRecordReject(
     ): array {
         $units = isset($data['units']) && is_array($data['units']) ? $data['units'] : [];
 
-        if (isset($units[$unitKey]) && is_array($units[$unitKey])) {
-            $entry = $units[$unitKey];
-            $entry['last_seen_at'] = $nowIso;
-            $entry['last_seen_unix'] = $receivedAt;
-            $entry['attempts'] = (int) ($entry['attempts'] ?? 0) + 1;
-            $entry['last_reason'] = $reason;
-        } else {
+        $existing = isset($units[$unitKey]) && is_array($units[$unitKey]) ? $units[$unitKey] : null;
+        if ($existing === null) {
             $max = uploadRejectUnitsMax();
             if (count($units) >= $max) {
                 // Evict the least-recently-seen unit so stale attempts age out before active ones.
@@ -242,34 +237,24 @@ function uploadRecordReject(
                     unset($units[$evict]);
                 }
             }
-            $entry = [
-                'first_seen_at' => $nowIso,
-                'last_seen_at' => $nowIso,
-                'last_seen_unix' => $receivedAt,
-                'attempts' => 1,
-                'last_reason' => $reason,
-            ];
         }
 
-        if ($mac !== null) {
-            $entry['mac'] = $mac;
-        }
-        if ($wid !== null && $wid !== '') {
-            $entry['last_wid'] = $wid;
-        }
-        if ($token !== null && $token !== '') {
-            $entry['last_token'] = $token;
-        }
-        if ($airport !== null && $airport !== '') {
-            $entry['last_airport'] = $airport;
-        }
-        if ($expectedWid !== null && $expectedWid !== '') {
-            $entry['expected_wid'] = $expectedWid;
-        }
-        if ($ip !== null && $ip !== '') {
-            $entry['last_ip'] = $ip;
-        }
-        $entry['last_payload'] = $storedPayload;
+        // first_seen_at and attempts are cumulative; every other field describes the
+        // latest attempt, so absent fields overwrite (and can clear) the prior value.
+        $entry = [
+            'first_seen_at' => is_array($existing) && isset($existing['first_seen_at']) ? $existing['first_seen_at'] : $nowIso,
+            'last_seen_at' => $nowIso,
+            'last_seen_unix' => $receivedAt,
+            'attempts' => (is_array($existing) ? (int) ($existing['attempts'] ?? 0) : 0) + 1,
+            'last_reason' => $reason,
+            'mac' => $mac,
+            'last_wid' => $wid !== null && $wid !== '' ? $wid : null,
+            'last_token' => $token !== null && $token !== '' ? $token : null,
+            'last_airport' => $airport !== null && $airport !== '' ? $airport : null,
+            'expected_wid' => $expectedWid !== null && $expectedWid !== '' ? $expectedWid : null,
+            'last_ip' => $ip !== null && $ip !== '' ? $ip : null,
+            'last_payload' => $storedPayload,
+        ];
 
         $units[$unitKey] = $entry;
 

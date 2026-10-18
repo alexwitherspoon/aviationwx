@@ -81,6 +81,22 @@ class WifiLoggerAdapterTest extends TestCase
         ])['precip_accum']);
     }
 
+    public function testParseRawData_NullsFractionalValues(): void
+    {
+        $parsed = WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'tempout' => 67.8,
+            'humout' => 55.5,
+            'windspd' => 8.5,
+            'altime' => 29.968,
+        ]);
+        $this->assertNull($parsed['temperature']);
+        $this->assertNull($parsed['humidity']);
+        $this->assertNull($parsed['wind_speed']);
+        $this->assertNull($parsed['pressure']);
+    }
+
     public function testParseRawData_RejectsMissingOrFutureTutc(): void
     {
         $this->assertNull(WifiLoggerAdapter::parseRawData(['type' => 'rtd']));
