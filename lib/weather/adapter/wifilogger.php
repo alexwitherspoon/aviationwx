@@ -225,8 +225,9 @@ class WifiLoggerAdapter
         $rainIn = self::scaled($raw, 'raindly', WIFILOGGER_RAIN_SCALE);
 
         // Altimeter over raw barometer (altimeter is sea-level reduced, what pilots see).
+        // Range-check the altimeter first so an out-of-range value falls back to bar.
         $pressureInHg = self::scaled($raw, 'altime', WIFILOGGER_PRESSURE_SCALE);
-        if ($pressureInHg === null) {
+        if ($pressureInHg === null || $pressureInHg < 20.0 || $pressureInHg > 45.0) {
             $pressureInHg = self::scaled($raw, 'bar', WIFILOGGER_PRESSURE_SCALE);
         }
 
@@ -257,6 +258,9 @@ class WifiLoggerAdapter
         }
         if ($pressureInHg !== null && ($pressureInHg < 20.0 || $pressureInHg > 45.0)) {
             $pressureInHg = null;
+        }
+        if ($rainIn !== null && (!is_finite($rainIn) || $rainIn < 0.0 || $rainIn > 100.0)) {
+            $rainIn = null;
         }
 
         return [

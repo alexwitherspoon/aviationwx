@@ -55,6 +55,32 @@ class WifiLoggerAdapterTest extends TestCase
         $this->assertEqualsWithDelta(28.5, $parsed['pressure'], 0.0001);
     }
 
+    public function testParseRawData_FallsBackToBarWhenAltimeterOutOfRange(): void
+    {
+        $parsed = WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'altime' => 0,
+            'bar' => 29968,
+        ]);
+        $this->assertNotNull($parsed);
+        $this->assertEqualsWithDelta(29.968, $parsed['pressure'], 0.0001);
+    }
+
+    public function testParseRawData_NullsOutOfRangeRain(): void
+    {
+        $this->assertNull(WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'raindly' => -100,
+        ])['precip_accum']);
+        $this->assertNull(WifiLoggerAdapter::parseRawData([
+            'type' => 'rtd',
+            'tutc' => 1531754005,
+            'raindly' => 65535,
+        ])['precip_accum']);
+    }
+
     public function testParseRawData_RejectsMissingOrFutureTutc(): void
     {
         $this->assertNull(WifiLoggerAdapter::parseRawData(['type' => 'rtd']));
