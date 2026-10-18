@@ -84,6 +84,12 @@
           "bridge_source_id": "station-davis-wll",
           "station_id": "wx-spb-bridge-davis",
           "txid": 1
+        },
+        {
+          "type": "wifilogger",
+          "upload_token": "awxu_000000000000000000000000000000000000000000000001",
+          "wid": "station-davis-01",
+          "mac": "aa:bb:cc:dd:ee:ff"
         }
       ],
       "webcams": [

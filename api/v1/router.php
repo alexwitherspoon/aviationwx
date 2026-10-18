@@ -27,11 +27,16 @@ if (empty($path)) {
 }
 
 $isBridgePath = str_starts_with($path, '/bridge');
+$isUploadPath = str_starts_with($path, '/upload');
 
-// Bridge routes require awxb_ keys (dedicated middleware). Other v1 routes use partner/anonymous auth.
+// Bridge routes require awxb_ keys (dedicated middleware). Upload routes use awxu_
+// path tokens (also dedicated middleware). Other v1 routes use partner/anonymous auth.
 if ($isBridgePath) {
     require_once __DIR__ . '/../../lib/bridge/middleware.php';
     $context = processBridgeApiRequest($path);
+} elseif ($isUploadPath) {
+    require_once __DIR__ . '/../../lib/upload/middleware.php';
+    $context = processUploadApiRequest($path);
 } else {
     $context = processPublicApiRequest();
 }
@@ -48,10 +53,10 @@ try {
     routePublicApiRequest($path, $context);
 } catch (Throwable $e) {
     aviationwx_log('error', 'public api unhandled exception', [
-        'path' => $path,
+        'path' => $isUploadPath ? redactUploadTokenFromPath($path) : $path,
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
-    ], $isBridgePath ? 'bridge' : 'api');
+    ], $isBridgePath ? 'bridge' : ($isUploadPath ? 'upload' : 'api'));
     
     ob_clean();
     sendPublicApiError(
@@ -79,6 +84,9 @@ function routePublicApiRequest(string $path, array $context): void
 
         // POST /v1/bridge/weather
         '#^/bridge/weather$#' => ['file' => 'bridge-weather.php', 'handler' => 'handleBridgeWeather'],
+
+        // POST /v1/upload/weather/wifilogger/{token}
+        '#^/upload/weather/wifilogger/([^/]+)$#' => ['file' => 'upload-weather.php', 'handler' => 'handleWifiLoggerUpload'],
 
         // GET /v1/airports
         '#^/airports$#' => ['file' => 'airports.php', 'handler' => 'handleListAirports'],

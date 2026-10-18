@@ -14,6 +14,8 @@ The **Public API** (`https://api.aviationwx.org/v1/...`) is the supported integr
 
 **Bridge push API:** Field bridges authenticate with required `X-Api-Key` values of shape `awxb_…` (not partner `ak_*` keys) on `GET /v1/bridge/bootstrap`, `POST /v1/bridge/health`, and `POST /v1/bridge/weather`. See OpenAPI (`api/docs/openapi.json`) and [CONFIGURATION.md](CONFIGURATION.md) (AviationWX Bridge). Weather POSTs are provider-tagged with `provider_meta.raw`; public weather requires an explicit `weather_sources` enable row (`bridge_id` + `bridge_source_id`). Rows with `provider_meta.error` are accepted for diagnostics (observation ring only) and never publish as WeatherSnapshot.
 
+**WiFiLogger direct upload:** A WiFiLogger posts `type: rtd` current conditions and `type: registration` first-contact messages to `POST /v1/upload/weather/wifilogger/{token}`. The path token (`awxu_…`) is the credential; `wid` and the `X-WiFiLogger-Sta-MAC` header are pinned second factors. Accepted rtd posts are answered with the vendor envelope `{"error":0,"status":"rtd_ok","content":null,"results":1}`. See [CONFIGURATION.md](CONFIGURATION.md) (WiFiLogger direct upload).
+
 ---
 
 ## Internal Endpoints

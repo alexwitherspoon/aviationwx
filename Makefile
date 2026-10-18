@@ -145,14 +145,14 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	exit_code=$$?; \
 	if [ "$$exit_code" -ne 0 ]; then echo "❌ Integration tests failed (exit $$exit_code)"; exit 1; else echo "✓ Integration tests passed"; fi
 	@echo ""
-	@echo "3b️⃣ Running Native Webcam HTTP Integration Tests..."
+	@echo "3b️⃣ Running Native HTTP Integration Tests..."
 	@set -eu; \
 	cleanup() { $(MAKE) test-down; }; \
 	trap cleanup EXIT; \
 	$(MAKE) test-up; \
 	TEST_CACHE_DIR="/tmp/aviationwx-cache-test" APP_ENV=testing TEST_API_URL="http://127.0.0.1:9080" \
-		vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php --testdox --no-coverage; \
-	echo "✓ Native webcam HTTP integration tests passed"
+		vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php tests/Integration/PublicApiWifiLoggerUploadTest.php --testdox --no-coverage; \
+	echo "✓ Native HTTP integration tests passed"
 	@echo ""
 	@echo "4️⃣  Running Critical Safety Tests..."
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage; \

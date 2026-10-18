@@ -834,6 +834,118 @@ function getBridgeWeatherBucketsCachePath(string $airportId, string $bridgeId, s
 }
 
 // =============================================================================
+// WEATHER UPLOAD (WiFiLogger) CACHE PATHS
+// =============================================================================
+
+if (!defined('CACHE_UPLOAD_WEATHER_DIR')) {
+    define('CACHE_UPLOAD_WEATHER_DIR', CACHE_BASE_DIR . '/upload/weather');
+}
+
+/**
+ * Effective weather-upload cache root (overrideable in tests via $GLOBALS['uploadTestCacheRoot']).
+ *
+ * @return string Absolute directory path without trailing slash
+ */
+function getUploadWeatherCacheRoot(): string
+{
+    if (isset($GLOBALS['uploadTestCacheRoot'])
+        && is_string($GLOBALS['uploadTestCacheRoot'])
+        && $GLOBALS['uploadTestCacheRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['uploadTestCacheRoot'], '/');
+    }
+
+    return CACHE_UPLOAD_WEATHER_DIR;
+}
+
+/**
+ * Directory for one WiFiLogger station's observation cache.
+ *
+ * @param string $airportId Airport id
+ * @param string $sourceId WiFiLogger wid (station id)
+ * @return string Absolute directory path, or empty string if ids are unsafe
+ */
+function getUploadWeatherSourceCacheDir(string $airportId, string $sourceId): string
+{
+    $airport = sanitizeBridgeCachePathSegment($airportId);
+    $source = sanitizeBridgeCachePathSegment($sourceId);
+    if ($airport === '' || $source === '') {
+        return '';
+    }
+    return getUploadWeatherCacheRoot() . '/' . $airport . '/' . $source;
+}
+
+/**
+ * Path to latest accepted observation for a WiFiLogger station.
+ *
+ * @param string $airportId Airport id
+ * @param string $sourceId WiFiLogger wid
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getUploadWeatherLatestCachePath(string $airportId, string $sourceId): string
+{
+    $dir = getUploadWeatherSourceCacheDir($airportId, $sourceId);
+    return $dir === '' ? '' : $dir . '/latest.json';
+}
+
+/**
+ * Path to bounded observation ring (samples.jsonl) for a WiFiLogger station.
+ *
+ * @param string $airportId Airport id
+ * @param string $sourceId WiFiLogger wid
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getUploadWeatherSamplesCachePath(string $airportId, string $sourceId): string
+{
+    $dir = getUploadWeatherSourceCacheDir($airportId, $sourceId);
+    return $dir === '' ? '' : $dir . '/samples.jsonl';
+}
+
+/**
+ * Path to the most recent registration message for a WiFiLogger station.
+ *
+ * @param string $airportId Airport id
+ * @param string $sourceId WiFiLogger wid
+ * @return string Absolute file path, or empty string if ids are unsafe
+ */
+function getUploadRegistrationCachePath(string $airportId, string $sourceId): string
+{
+    $dir = getUploadWeatherSourceCacheDir($airportId, $sourceId);
+    return $dir === '' ? '' : $dir . '/registration.json';
+}
+
+if (!defined('CACHE_UPLOAD_REJECTS_DIR')) {
+    define('CACHE_UPLOAD_REJECTS_DIR', CACHE_BASE_DIR . '/upload/weather-rejects');
+}
+
+/**
+ * Effective upload-reject cache root (overrideable in tests via $GLOBALS['uploadRejectTestRoot']).
+ *
+ * @return string Absolute directory path without trailing slash
+ */
+function getUploadRejectRoot(): string
+{
+    if (isset($GLOBALS['uploadRejectTestRoot'])
+        && is_string($GLOBALS['uploadRejectTestRoot'])
+        && $GLOBALS['uploadRejectTestRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['uploadRejectTestRoot'], '/');
+    }
+
+    return CACHE_UPLOAD_REJECTS_DIR;
+}
+
+/**
+ * Path to the per-unit rejected-upload log.
+ *
+ * @return string Absolute file path
+ */
+function getUploadRejectsPath(): string
+{
+    return getUploadRejectRoot() . '/rejects.json';
+}
+
+// =============================================================================
 // PARTNER LOGO CACHE PATHS
 // =============================================================================
 
