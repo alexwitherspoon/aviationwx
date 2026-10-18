@@ -613,6 +613,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
 
 **Operator:** Optional `operator` on each `weather_sources[]` row is a lowercase slug. Public API `GET /v1/airports?operator=` matches airports.json (configured weathercams and weather sources), not the live fused observation. Optional `has_webcams=true` keeps airports that have weathercams configured; it is not sliced by operator. Optional `has_weather=true` keeps airports that have weather sources configured; it is not sliced by operator. When `operator` is set, `webcam_count` still counts matching weathercams only. `GET /v1/weathercam/bulk` is the partner catalog: listed airports with matching weathercams, nested webcam objects, and absolute image URLs. Matching on that path is weathercams only. The origin catalog is rebuilt when airports.json changes. Omit `operator` to use the type default:
 
@@ -673,6 +674,35 @@ A bridge key alone never publishes weather.
 ```
 
 Weather POSTs carry `provider` (e.g. `davis_weatherlink_live`), `source_id`, and `provider_meta.raw` (station-native payload). Diagnostic rows (`provider_meta.error`) are stored on the observation ring only; they do not replace publish latest or become a public WeatherSnapshot. See OpenAPI `/v1/bridge/*` and [DATA_FLOW.md](DATA_FLOW.md#aviationwx-bridge-push).
+
+### WiFiLogger direct upload
+
+A WiFiLogger running its "Custom Export Setup → HTTP → PHP → MySQL" mode can POST current conditions straight to the platform with no bridge appliance. Point the device's "Your Server" at:
+
+```
+https://api.aviationwx.org/v1/upload/weather/wifilogger/{token}
+```
+
+and set the interval there. Auth rides on the URL: the device has no API-key header field, so the `awxu_` token in the path is the credential. `wid` and the station MAC are pinned second factors. A payload whose `wid` or `X-WiFiLogger-Sta-MAC` does not match is rejected (403) before anything is stored.
+
+**Ops checklist:**
+
+1. Generate a token: `php scripts/generate-upload-api-token.php` (prefix `awxu_` + 48 alphanumeric; do not invent tokens by hand).
+2. Add a `wifilogger` row on the airport (`upload_token`, `wid`, `mac`; optional `station_id` display label).
+3. Paste the full URL into the WiFiLogger "Your Server" field and set the interval.
+
+```json
+"weather_sources": [
+  {
+    "type": "wifilogger",
+    "upload_token": "awxu_…",
+    "wid": "station-scappoose-davis",
+    "mac": "aa:bb:cc:dd:ee:ff"
+  }
+]
+```
+
+The raw payload is stored verbatim under `provider_meta.raw` and parsed through the `wifilogger` adapter into a WeatherSnapshot. It uses Davis-native integer units; the scaling lives in one place and fails closed, so a scaling drift nulls a field instead of publishing a wrong value. Wind is true north, same as bridge-local Davis: install the vane to true north. Pinning `wid` and `mac` ahead of time stops a second station, or a leaked URL, from writing weather for someone else's airport.
 
 ### Tempest Weather
 
