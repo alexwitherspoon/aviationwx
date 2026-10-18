@@ -53,7 +53,7 @@ try {
     routePublicApiRequest($path, $context);
 } catch (Throwable $e) {
     aviationwx_log('error', 'public api unhandled exception', [
-        'path' => $path,
+        'path' => $isUploadPath ? redactUploadTokenFromPath($path) : $path,
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
     ], $isBridgePath ? 'bridge' : ($isUploadPath ? 'upload' : 'api'));

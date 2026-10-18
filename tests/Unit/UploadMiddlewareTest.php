@@ -49,4 +49,17 @@ class UploadMiddlewareTest extends TestCase
     {
         $this->assertSame('upload', classifyUploadEndpoint('/upload/weather/wifilogger/awxu_x'));
     }
+
+    public function testRedactUploadTokenFromPath_MasksToken(): void
+    {
+        $token = 'awxu_000000000000000000000000000000000000000000000001';
+        $redacted = redactUploadTokenFromPath('/upload/weather/wifilogger/' . $token);
+        $this->assertSame('/upload/weather/wifilogger/[redacted]', $redacted);
+        $this->assertStringNotContainsString($token, $redacted);
+    }
+
+    public function testRedactUploadTokenFromPath_LeavesOtherPathsAlone(): void
+    {
+        $this->assertSame('/airports/kspb/weather', redactUploadTokenFromPath('/airports/kspb/weather'));
+    }
 }

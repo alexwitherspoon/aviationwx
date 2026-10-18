@@ -104,6 +104,7 @@ Options -Indexes
     RewriteRule ^dev/ - [F,L]
     RewriteRule ^docs/ - [F,L]
     RewriteRule ^docker/ - [F,L]
+    RewriteRule ^cache/ - [F,L]
     # Allow public/ directory for static assets
     # RewriteRule ^public/ - [L]  # Allow public assets
 </IfModule>

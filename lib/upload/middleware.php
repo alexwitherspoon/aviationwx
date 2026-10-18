@@ -42,6 +42,24 @@ function extractUploadTokenFromPath(string $path): ?string
 }
 
 /**
+ * Redact the upload token from a path for logging.
+ *
+ * The awxu_ token is a URL-path credential; logs must not persist it. The reject
+ * log keeps the full token on disk under cache/ (denied from web access).
+ *
+ * @param string $path Path after /v1 (or a full request path)
+ * @return string Path with the token replaced
+ */
+function redactUploadTokenFromPath(string $path): string
+{
+    return preg_replace(
+        '#/upload/weather/wifilogger/awxu_[A-Za-z0-9]+#',
+        '/upload/weather/wifilogger/[redacted]',
+        $path
+    ) ?? $path;
+}
+
+/**
  * Classify an upload path into a rate-limit class.
  *
  * A single upload class covers all providers for now; future providers
@@ -210,7 +228,7 @@ function processUploadApiRequest(string $path): array
     }
 
     aviationwx_log('info', 'upload api request', [
-        'path' => $path,
+        'path' => redactUploadTokenFromPath($path),
         'airport_id' => $binding['airport_id'],
         'source_id' => $binding['source_id'],
         'endpoint_class' => $endpointClass,
