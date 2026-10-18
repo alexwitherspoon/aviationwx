@@ -9,9 +9,11 @@
 
 require_once __DIR__ . '/keys.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../public-api/middleware.php';
 require_once __DIR__ . '/../public-api/rate-limit.php';
 require_once __DIR__ . '/../public-api/config.php';
 require_once __DIR__ . '/../public-api/response.php';
+require_once __DIR__ . '/../logger.php';
 
 if (!defined('UPLOAD_API_ERROR_INVALID_TOKEN')) {
     define('UPLOAD_API_ERROR_INVALID_TOKEN', 'INVALID_UPLOAD_TOKEN');
@@ -136,4 +138,129 @@ function checkUploadApiRateLimit(string $token, string $endpointClass): array
         'reset' => $reset,
         'retry_after' => $retryAfter,
     ];
+}
+
+/**
+ * Process an upload API request: public API enabled, path token, rate limit.
+ *
+ * Exits with an error response on failure. The token is resolved from the path
+ * (the device cannot send an X-Api-Key header).
+ *
+ * @param string $path Normalized path (e.g. /upload/weather/wifilogger/awxu_...)
+ * @return array{
+ *   airport_id: string,
+ *   source_id: string,
+ *   wid: string,
+ *   mac: string,
+ *   token: string,
+ *   rate_limit: array,
+ *   ip: string
+ * }
+ */
+function processUploadApiRequest(string $path): array
+{
+    if (!isPublicApiEnabled()) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_API_NOT_ENABLED,
+            'Public API is not enabled',
+            404
+        );
+        exit;
+    }
+
+    $token = extractUploadTokenFromPath($path);
+    if ($token === null) {
+        sendPublicApiError(
+            UPLOAD_API_ERROR_INVALID_TOKEN,
+            'Missing upload token in path',
+            401
+        );
+        exit;
+    }
+
+    $binding = resolveUploadApiKey($token);
+    if ($binding === null) {
+        sendPublicApiError(
+            UPLOAD_API_ERROR_INVALID_TOKEN,
+            'Invalid or unknown upload token',
+            401
+        );
+        exit;
+    }
+
+    $endpointClass = classifyUploadEndpoint($path);
+    $rateLimitResult = checkUploadApiRateLimit($token, $endpointClass);
+    foreach (getPublicApiRateLimitHeaders($rateLimitResult) as $name => $value) {
+        header($name . ': ' . $value);
+    }
+    if (!$rateLimitResult['allowed']) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_RATE_LIMITED,
+            'Rate limit exceeded. Try again in ' . $rateLimitResult['retry_after'] . ' seconds.',
+            429,
+            $rateLimitResult['retry_after']
+        );
+        exit;
+    }
+
+    $ip = getPublicApiClientIp();
+    aviationwx_log('info', 'upload api request', [
+        'path' => $path,
+        'airport_id' => $binding['airport_id'],
+        'source_id' => $binding['source_id'],
+        'endpoint_class' => $endpointClass,
+        'ip' => $ip,
+    ], 'upload');
+
+    return [
+        'airport_id' => $binding['airport_id'],
+        'source_id' => $binding['source_id'],
+        'wid' => $binding['wid'],
+        'mac' => $binding['mac'],
+        'token' => $token,
+        'rate_limit' => $rateLimitResult,
+        'ip' => $ip,
+    ];
+}
+
+/**
+ * Read and decode a JSON request body for upload POSTs.
+ *
+ * @param int $maxBytes Maximum body size
+ * @return array{ok: bool, body?: array, error?: string}
+ */
+function uploadReadJsonBody(int $maxBytes = 65536): array
+{
+    $raw = file_get_contents('php://input', false, null, 0, $maxBytes + 1);
+    if ($raw === false) {
+        return ['ok' => false, 'error' => 'Could not read request body'];
+    }
+    if (strlen($raw) > $maxBytes) {
+        return ['ok' => false, 'error' => 'Request body too large'];
+    }
+    if (trim($raw) === '') {
+        return ['ok' => false, 'error' => 'Request body is empty'];
+    }
+    $body = json_decode($raw, true);
+    if (!is_array($body) || json_last_error() !== JSON_ERROR_NONE) {
+        return ['ok' => false, 'error' => 'Request body must be JSON object'];
+    }
+    return ['ok' => true, 'body' => $body];
+}
+
+/**
+ * Send the vendor reply envelope as JSON and exit.
+ *
+ * WiFiLogger expects a JSON body with error/status/... fields on any reply.
+ *
+ * @param array $envelope Envelope from uploadEnvelope()
+ * @param int $httpCode HTTP status code
+ * @return never
+ */
+function sendUploadJsonEnvelope(array $envelope, int $httpCode): never
+{
+    http_response_code($httpCode);
+    header('Content-Type: application/json');
+    echo json_encode($envelope, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
 }
