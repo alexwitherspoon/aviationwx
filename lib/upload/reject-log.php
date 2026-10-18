@@ -122,7 +122,7 @@ function uploadRejectUnitKey(?string $macHeader, ?string $wid, ?string $token, ?
     if ($mac !== null) {
         return $mac;
     }
-    if ($wid !== null && $wid !== '') {
+    if ($wid !== null && $wid !== '' && isValidWifiLoggerWid($wid)) {
         return 'wid:' . $wid;
     }
     if ($token !== null && $token !== '') {
@@ -146,7 +146,8 @@ function uploadTruncatePayload(?array $payload): mixed
         return null;
     }
     $scrubbed = bridgeScrubValue($payload);
-    $json = json_encode($scrubbed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    // ASCII-only encode so the byte-based preview substr never splits a multibyte char.
+    $json = json_encode($scrubbed, JSON_UNESCAPED_SLASHES);
     if ($json === false || strlen($json) <= uploadRejectPayloadMaxBytes()) {
         return $scrubbed;
     }
@@ -183,6 +184,11 @@ function uploadRecordReject(
 ): bool {
     $receivedAt = $receivedAt ?? time();
     $nowIso = gmdate('c', $receivedAt);
+    // Bound the diagnostic wid: an unknown-token request can carry an oversized wid
+    // inside the body limit, and it must never become a key or last_wid intact.
+    if ($wid !== null && $wid !== '' && !isValidWifiLoggerWid($wid)) {
+        $wid = null;
+    }
     $mac = $macHeader !== null && trim($macHeader) !== '' ? normalizeWifiLoggerMac($macHeader) : null;
     $unitKey = uploadRejectUnitKey($macHeader, $wid, $token, $ip);
     $storedPayload = uploadTruncatePayload($payload);

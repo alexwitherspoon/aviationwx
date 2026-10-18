@@ -190,4 +190,23 @@ class UploadRejectLogTest extends TestCase
         $this->assertArrayHasKey('AA:AA:AA:AA:AA:01', $units);
         $this->assertArrayNotHasKey('AA:AA:AA:AA:AA:02', $units);
     }
+
+    public function testRecordReject_BoundsOversizedWid(): void
+    {
+        $hugeWid = str_repeat('A', 2000);
+        uploadRecordReject('INVALID_UPLOAD_TOKEN', $hugeWid, null, null, null, null, '10.0.0.9', null, 1000);
+
+        $entry = $this->readUnits()['ip:10.0.0.9'];
+        $this->assertArrayNotHasKey('last_wid', $entry);
+    }
+
+    public function testRecordReject_PreviewIsValidWhenTruncatedOnMultibyte(): void
+    {
+        $GLOBALS['uploadRejectPayloadMaxBytes'] = 5;
+        uploadRecordReject('MAC_MISMATCH', null, 'aa:bb:cc:dd:ee:ff', null, null, null, null, ['name' => "cafe\u{2603}"], 1000);
+
+        $entry = $this->readUnits()['AA:BB:CC:DD:EE:FF'];
+        $this->assertTrue($entry['last_payload']['_truncated']);
+        $this->assertArrayHasKey('_preview', $entry['last_payload']);
+    }
 }
