@@ -9,6 +9,8 @@
 
 require_once __DIR__ . '/keys.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/ingest.php';
+require_once __DIR__ . '/reject-log.php';
 require_once __DIR__ . '/../public-api/middleware.php';
 require_once __DIR__ . '/../public-api/rate-limit.php';
 require_once __DIR__ . '/../public-api/config.php';
@@ -168,8 +170,11 @@ function processUploadApiRequest(string $path): array
         exit;
     }
 
+    $ip = getPublicApiClientIp();
+
     $token = extractUploadTokenFromPath($path);
     if ($token === null) {
+        uploadLogUnauthorizedAttempt('MISSING_TOKEN', null, $ip);
         sendPublicApiError(
             UPLOAD_API_ERROR_INVALID_TOKEN,
             'Missing upload token in path',
@@ -180,6 +185,7 @@ function processUploadApiRequest(string $path): array
 
     $binding = resolveUploadApiKey($token);
     if ($binding === null) {
+        uploadLogUnauthorizedAttempt('INVALID_UPLOAD_TOKEN', $token, $ip);
         sendPublicApiError(
             UPLOAD_API_ERROR_INVALID_TOKEN,
             'Invalid or unknown upload token',
@@ -203,7 +209,6 @@ function processUploadApiRequest(string $path): array
         exit;
     }
 
-    $ip = getPublicApiClientIp();
     aviationwx_log('info', 'upload api request', [
         'path' => $path,
         'airport_id' => $binding['airport_id'],
@@ -246,6 +251,32 @@ function uploadReadJsonBody(int $maxBytes = 65536): array
         return ['ok' => false, 'error' => 'Request body must be JSON object'];
     }
     return ['ok' => true, 'body' => $body];
+}
+
+/**
+ * Log an unauthorized upload attempt (missing or unknown token) to the reject index.
+ *
+ * Also reads the MAC header and body so a unit aimed at the wrong URL still shows
+ * up under its own key with its payload.
+ *
+ * @param string $reason MISSING_TOKEN|INVALID_UPLOAD_TOKEN
+ * @param string|null $token Path token (null when missing)
+ * @param string $ip Client IP
+ * @return void
+ */
+function uploadLogUnauthorizedAttempt(string $reason, ?string $token, string $ip): void
+{
+    $mac = getWifiLoggerMacHeader();
+    $body = null;
+    $wid = null;
+    $parsed = uploadReadJsonBody(131072);
+    if ($parsed['ok'] && is_array($parsed['body'])) {
+        $body = $parsed['body'];
+        if (isset($body['wid']) && is_string($body['wid'])) {
+            $wid = $body['wid'];
+        }
+    }
+    uploadRecordReject($reason, $wid, $mac, $token, null, null, $ip, $body);
 }
 
 /**

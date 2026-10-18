@@ -13,6 +13,7 @@
 require_once __DIR__ . '/../../lib/upload/middleware.php';
 require_once __DIR__ . '/../../lib/upload/ingest.php';
 require_once __DIR__ . '/../../lib/upload/store.php';
+require_once __DIR__ . '/../../lib/upload/reject-log.php';
 require_once __DIR__ . '/../../lib/logger.php';
 
 /**
@@ -41,8 +42,19 @@ function handleWifiLoggerUpload(array $params, array $context): void
     }
     $body = $parsed['body'];
 
-    $prepared = uploadPrepareWifiLoggerIngest($body, $context, getWifiLoggerMacHeader());
+    $macHeader = getWifiLoggerMacHeader();
+    $prepared = uploadPrepareWifiLoggerIngest($body, $context, $macHeader);
     if (!$prepared['ok']) {
+        uploadRecordReject(
+            $prepared['code'] ?? 'UNKNOWN',
+            is_string($body['wid'] ?? null) ? $body['wid'] : null,
+            $macHeader,
+            $context['token'] ?? null,
+            $context['airport_id'] ?? null,
+            $context['wid'] ?? null,
+            $context['ip'] ?? null,
+            $body
+        );
         aviationwx_log('warning', 'wifilogger ingest reject', [
             'airport_id' => $context['airport_id'],
             'wid' => $context['wid'],

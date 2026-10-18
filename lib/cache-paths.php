@@ -914,6 +914,37 @@ function getUploadRegistrationCachePath(string $airportId, string $sourceId): st
     return $dir === '' ? '' : $dir . '/registration.json';
 }
 
+if (!defined('CACHE_UPLOAD_REJECTS_DIR')) {
+    define('CACHE_UPLOAD_REJECTS_DIR', CACHE_BASE_DIR . '/upload/weather-rejects');
+}
+
+/**
+ * Effective upload-reject cache root (overrideable in tests via $GLOBALS['uploadRejectTestRoot']).
+ *
+ * @return string Absolute directory path without trailing slash
+ */
+function getUploadRejectRoot(): string
+{
+    if (isset($GLOBALS['uploadRejectTestRoot'])
+        && is_string($GLOBALS['uploadRejectTestRoot'])
+        && $GLOBALS['uploadRejectTestRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['uploadRejectTestRoot'], '/');
+    }
+
+    return CACHE_UPLOAD_REJECTS_DIR;
+}
+
+/**
+ * Path to the per-unit rejected-upload index.
+ *
+ * @return string Absolute file path
+ */
+function getUploadRejectUnitsPath(): string
+{
+    return getUploadRejectRoot() . '/units.json';
+}
+
 // =============================================================================
 // PARTNER LOGO CACHE PATHS
 // =============================================================================
