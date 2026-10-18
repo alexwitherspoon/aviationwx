@@ -26,6 +26,7 @@ class UploadRejectLogTest extends TestCase
         unset($GLOBALS['uploadRejectTestRoot']);
         unset($GLOBALS['uploadRejectUnitsMax']);
         unset($GLOBALS['uploadRejectPayloadMaxBytes']);
+        unset($GLOBALS['uploadRejectWritesMinuteMax']);
         $this->removeTree($this->tmpRoot);
         parent::tearDown();
     }
@@ -157,5 +158,26 @@ class UploadRejectLogTest extends TestCase
         $entry = $this->readUnits()['AA:BB:CC:DD:EE:FF'];
         $this->assertTrue($entry['last_payload']['_truncated']);
         $this->assertArrayHasKey('_preview', $entry['last_payload']);
+    }
+
+    public function testRejectWriteGuard_ThrottlesPerIp(): void
+    {
+        $GLOBALS['uploadRejectWritesMinuteMax'] = 2;
+        $ip = 'guard-' . uniqid('', true);
+        $this->assertTrue(uploadRejectWriteAllowed($ip));
+        $this->assertTrue(uploadRejectWriteAllowed($ip));
+        $this->assertFalse(uploadRejectWriteAllowed($ip));
+    }
+
+    public function testRecordReject_SkipsWriteWhenIpThrottled(): void
+    {
+        $GLOBALS['uploadRejectWritesMinuteMax'] = 1;
+        $ip = 'guard-' . uniqid('', true);
+        $this->assertTrue(uploadRecordReject('MAC_MISMATCH', null, 'aa:aa:aa:aa:aa:01', null, null, null, $ip, null, 1000));
+        $this->assertFalse(uploadRecordReject('MAC_MISMATCH', null, 'aa:aa:aa:aa:aa:02', null, null, null, $ip, null, 2000));
+
+        $units = $this->readUnits();
+        $this->assertArrayHasKey('AA:AA:AA:AA:AA:01', $units);
+        $this->assertArrayNotHasKey('AA:AA:AA:AA:AA:02', $units);
     }
 }

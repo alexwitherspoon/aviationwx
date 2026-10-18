@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/../bridge/store.php';
+require_once __DIR__ . '/../public-api/rate-limit.php';
 require_once __DIR__ . '/../cache-paths.php';
 
 if (!defined('UPLOAD_REJECT_UNITS_MAX')) {
@@ -21,6 +22,10 @@ if (!defined('UPLOAD_REJECT_UNITS_MAX')) {
 
 if (!defined('UPLOAD_REJECT_PAYLOAD_MAX_BYTES')) {
     define('UPLOAD_REJECT_PAYLOAD_MAX_BYTES', 2048);
+}
+
+if (!defined('UPLOAD_REJECT_WRITES_MINUTE_MAX')) {
+    define('UPLOAD_REJECT_WRITES_MINUTE_MAX', 120);
 }
 
 /**
@@ -47,6 +52,40 @@ function uploadRejectPayloadMaxBytes(): int
         return $GLOBALS['uploadRejectPayloadMaxBytes'];
     }
     return UPLOAD_REJECT_PAYLOAD_MAX_BYTES;
+}
+
+/**
+ * Per-IP reject-write ceiling (overrideable in tests via $GLOBALS['uploadRejectWritesMinuteMax']).
+ *
+ * @return int
+ */
+function uploadRejectWritesMinuteMax(): int
+{
+    if (isset($GLOBALS['uploadRejectWritesMinuteMax']) && is_int($GLOBALS['uploadRejectWritesMinuteMax']) && $GLOBALS['uploadRejectWritesMinuteMax'] > 0) {
+        return $GLOBALS['uploadRejectWritesMinuteMax'];
+    }
+    return UPLOAD_REJECT_WRITES_MINUTE_MAX;
+}
+
+/**
+ * Whether a reject write from this IP is allowed this minute.
+ *
+ * Keeps unknown-token spammers from churning the reject file; legitimate
+ * misconfigured units post far below the ceiling. Consumes one unit of budget
+ * per check.
+ *
+ * @param string $ip Client IP
+ * @return bool
+ */
+function uploadRejectWriteAllowed(string $ip): bool
+{
+    $result = checkAndIncrementWindow(
+        'upload_reject:ip:' . $ip,
+        'minute',
+        uploadRejectWritesMinuteMax(),
+        60
+    );
+    return $result['allowed'];
 }
 
 /**
@@ -140,6 +179,10 @@ function uploadRecordReject(
     $unitKey = uploadRejectUnitKey($macHeader, $wid, $token, $ip);
     $tokenHash = $token !== null && $token !== '' ? uploadTokenHash($token) : null;
     $storedPayload = uploadTruncatePayload($payload);
+
+    if ($ip !== null && $ip !== '' && !uploadRejectWriteAllowed($ip)) {
+        return false;
+    }
 
     $path = getUploadRejectUnitsPath();
     if ($path === '') {
