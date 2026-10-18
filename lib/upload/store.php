@@ -89,6 +89,39 @@ function uploadLoadRegistration(string $airportId, string $sourceId): ?array
 }
 
 /**
+ * Read a JSON cache file under a shared lock.
+ *
+ * latest.json is rewritten in place (truncate + write) under an exclusive lock,
+ * so an unlocked read can observe empty or partial JSON mid-write and briefly
+ * omit a healthy source. A shared lock waits out the writer.
+ *
+ * @param string $path Absolute file path
+ * @return array|null Decoded array or null
+ */
+function uploadReadJsonFileShared(string $path): ?array
+{
+    if ($path === '' || !is_readable($path)) {
+        return null;
+    }
+    $fp = @fopen($path, 'r');
+    if ($fp === false) {
+        return null;
+    }
+    if (!flock($fp, LOCK_SH)) {
+        fclose($fp);
+        return null;
+    }
+    $raw = stream_get_contents($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : null;
+}
+
+/**
  * Load latest weather observation for a WiFiLogger station.
  *
  * @param string $airportId Airport id
@@ -98,5 +131,5 @@ function uploadLoadRegistration(string $airportId, string $sourceId): ?array
 function uploadLoadWeatherLatest(string $airportId, string $sourceId): ?array
 {
     $path = getUploadWeatherLatestCachePath($airportId, $sourceId);
-    return $path !== '' ? bridgeReadJsonFile($path) : null;
+    return $path !== '' ? uploadReadJsonFileShared($path) : null;
 }

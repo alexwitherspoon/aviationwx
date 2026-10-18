@@ -105,6 +105,14 @@ class UploadWeatherStoreTest extends TestCase
         $this->assertSame(67.8, $latest['provider_meta']['raw']['tempout']);
     }
 
+    public function testSharedRead_ReturnsNullOnEmptyLatest(): void
+    {
+        $path = getUploadWeatherLatestCachePath('kspb', 'station-davis-01');
+        @mkdir(dirname($path), 0755, true);
+        file_put_contents($path, '');
+        $this->assertNull(uploadReadJsonFileShared($path));
+    }
+
     public function testStoreRegistration_WriteAndReload(): void
     {
         $registration = [
