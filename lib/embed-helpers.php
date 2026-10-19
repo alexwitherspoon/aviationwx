@@ -240,14 +240,10 @@ function readWeatherCacheFile(string $airportId): ?array {
  */
 function fetchEmbedDataFromApi(string $airportId): ?array
 {
-    $trimmed = trim($airportId);
-    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 20) {
+    if (!validateAirportId($airportId)) {
         return null;
     }
-    if (!preg_match('/^[a-zA-Z0-9-]+$/i', $trimmed)) {
-        return null;
-    }
-    $normalizedId = strtolower($trimmed);
+    $normalizedId = strtolower(trim($airportId));
 
     $data = fetchEmbedDataFromEmbedApi($normalizedId);
     if ($data !== null) {

@@ -33,6 +33,16 @@ if (!defined('OPERATOR_MAX_LENGTH')) {
     define('OPERATOR_MAX_LENGTH', 64);
 }
 
+// Airport identifiers: lowercase alphanumeric + hyphens, no consecutive hyphens.
+// The max matches the subdomain regex; the same bounds gate config validation,
+// the Public API, embed lookup, and sitemap image generation.
+if (!defined('AIRPORT_ID_MIN_LENGTH')) {
+    define('AIRPORT_ID_MIN_LENGTH', 3);
+}
+if (!defined('AIRPORT_ID_MAX_LENGTH')) {
+    define('AIRPORT_ID_MAX_LENGTH', 50);
+}
+
 if (!defined('DEFAULT_WEATHER_REFRESH')) {
     define('DEFAULT_WEATHER_REFRESH', 60);
 }

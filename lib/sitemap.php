@@ -8,6 +8,29 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/public-api/config.php';
+
+/**
+ * Strip a trailing stream-type annotation from a webcam name. Config names read
+ * like "North Runway Camera (MJPEG)"; the parenthetical repeats the webcam
+ * stream type and is dropped for sitemap display.
+ *
+ * Only recognized stream-type labels are removed. Spatial or operational
+ * qualifiers such as "(North)" or "(Tower)" are rounded and preserved, since
+ * they disambiguate cameras and belong in the image title.
+ *
+ * @param string $name Raw webcam name from config
+ * @return string Display name without a trailing stream-type annotation
+ */
+function cleanWebcamName(string $name): string
+{
+    $cleaned = preg_replace(
+        '/\s*\((?:MJPEG|Static JPEG|Static PNG|RTSP|RTSP Auth)\)\s*$/i',
+        '',
+        $name
+    );
+    return $cleaned !== '' ? $cleaned : $name;
+}
 
 /**
  * Get all sitemap URLs grouped by category
@@ -17,7 +40,8 @@ require_once __DIR__ . '/cache-paths.php';
  *   title: string,
  *   lastmod: string,
  *   changefreq: string,
- *   priority: string
+ *   priority: string,
+ *   images?: array<int, array{loc: string, title: string, caption: string}>
  * }>> URLs grouped by category (main, airports, guides, tools, legal)
  */
 function getSitemapUrls(): array
@@ -74,13 +98,22 @@ function getSitemapUrls(): array
         
         $airportName = $airport['name'] ?? strtoupper($airportId);
         
-        $urls['airports'][] = [
+        $entry = [
             'loc' => $airportUrl,
             'title' => strtoupper($primaryIdentifier) . ' - ' . $airportName,
             'lastmod' => $lastmod,
             'changefreq' => 'hourly',
             'priority' => '0.8'
         ];
+        
+        if (isPublicApiEnabled()) {
+            $images = buildSitemapWebcamImages($airport, $airportId, $airportName);
+            if ($images !== []) {
+                $entry['images'] = $images;
+            }
+        }
+        
+        $urls['airports'][] = $entry;
     }
     
     // Guides
@@ -164,6 +197,76 @@ function getSitemapUrls(): array
 }
 
 /**
+ * Build sitemap image entries for one airport's weathercams.
+ *
+ * Disabled placeholder slots (`enabled: false`, no acquisition inputs) are
+ * skipped; their Public API image endpoint would serve a placeholder, not the
+ * advertised live webcam. Original config indexes are preserved so image URLs
+ * match the Public API webcam index.
+ *
+ * @param array $airport Airport config entry
+ * @param string $airportId Airport ID
+ * @param string $airportName Display name used in captions
+ * @return array<int, array{loc: string, title: string, caption: string}>
+ */
+function buildSitemapWebcamImages(array $airport, string $airportId, string $airportName): array
+{
+    // The Public API rejects IDs over AIRPORT_ID_MAX_LENGTH, so no image URL we
+    // build for them would resolve.
+    if (strlen($airportId) > AIRPORT_ID_MAX_LENGTH) {
+        return [];
+    }
+
+    $webcams = $airport['webcams'] ?? [];
+    if (!is_array($webcams)) {
+        return [];
+    }
+
+    $images = [];
+    foreach ($webcams as $camIndex => $cam) {
+        if (!is_array($cam) || (isset($cam['enabled']) && $cam['enabled'] === false)) {
+            continue;
+        }
+
+        $camName = cleanWebcamName(
+            isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
+                ? $cam['name']
+                : 'Webcam ' . ($camIndex + 1)
+        );
+
+        $images[] = [
+            'loc' => publicApiV1Url(
+                '/airports/' . $airportId . '/webcams/' . $camIndex . '/image',
+                true
+            ),
+            'title' => $camName,
+            'caption' => 'Live ' . $camName . ' webcam at ' . $airportName,
+        ];
+    }
+
+    return $images;
+}
+
+/**
+ * Render one Google Image sitemap block for a webcam image.
+ *
+ * @param array{loc: string, title: string, caption: string} $image
+ * @return string Image XML fragment (indented to match sitemap output)
+ */
+function renderSitemapImageXml(array $image): string
+{
+    $loc = htmlspecialchars($image['loc']);
+    $title = htmlspecialchars($image['title']);
+    $caption = htmlspecialchars($image['caption']);
+
+    return "    <image:image>\n"
+        . "      <image:loc>{$loc}</image:loc>\n"
+        . "      <image:title>{$title}</image:title>\n"
+        . "      <image:caption>{$caption}</image:caption>\n"
+        . "    </image:image>\n";
+}
+
+/**
  * Get flat list of all sitemap URLs
  * 
  * @return array<int, array{
@@ -171,7 +274,8 @@ function getSitemapUrls(): array
  *   title: string,
  *   lastmod: string,
  *   changefreq: string,
- *   priority: string
+ *   priority: string,
+ *   images?: array<int, array{loc: string, title: string, caption: string}>
  * }> Flat array of all URL entries
  */
 function getAllSitemapUrls(): array

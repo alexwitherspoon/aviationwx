@@ -35,6 +35,7 @@ if (empty($urls)) {
 // Start XML output
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' . "\n";
+echo '        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' . "\n";
 echo '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' . "\n";
 echo '        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9' . "\n";
 echo '        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">' . "\n";
@@ -45,6 +46,11 @@ foreach ($urls as $url) {
     echo "    <lastmod>{$url['lastmod']}</lastmod>\n";
     echo "    <changefreq>{$url['changefreq']}</changefreq>\n";
     echo "    <priority>{$url['priority']}</priority>\n";
+    if (!empty($url['images']) && is_array($url['images'])) {
+        foreach ($url['images'] as $image) {
+            echo renderSitemapImageXml($image);
+        }
+    }
     echo "  </url>\n";
 }
 
