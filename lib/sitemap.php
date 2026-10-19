@@ -98,24 +98,7 @@ function getSitemapUrls(): array
             'priority' => '0.8'
         ];
         
-        $images = [];
-        if (!empty($airport['webcams']) && is_array($airport['webcams'])) {
-            foreach ($airport['webcams'] as $camIndex => $cam) {
-                $camName = cleanWebcamName(
-                    isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
-                        ? $cam['name']
-                        : 'Webcam ' . ($camIndex + 1)
-                );
-                $images[] = [
-                    'loc' => publicApiV1Url(
-                        '/airports/' . $airportId . '/webcams/' . $camIndex . '/image',
-                        true
-                    ),
-                    'title' => $camName,
-                    'caption' => 'Live ' . $camName . ' webcam at ' . $airportName,
-                ];
-            }
-        }
+        $images = buildSitemapWebcamImages($airport, $airportId, $airportName);
         if ($images !== []) {
             $entry['images'] = $images;
         }
@@ -201,6 +184,51 @@ function getSitemapUrls(): array
     ];
     
     return $urls;
+}
+
+/**
+ * Build sitemap image entries for one airport's weathercams.
+ *
+ * Disabled placeholder slots (`enabled: false`, no acquisition inputs) are
+ * skipped; their Public API image endpoint would serve a placeholder, not the
+ * advertised live webcam. Original config indexes are preserved so image URLs
+ * match the Public API webcam index.
+ *
+ * @param array $airport Airport config entry
+ * @param string $airportId Airport ID
+ * @param string $airportName Display name used in captions
+ * @return array<int, array{loc: string, title: string, caption: string}>
+ */
+function buildSitemapWebcamImages(array $airport, string $airportId, string $airportName): array
+{
+    $webcams = $airport['webcams'] ?? [];
+    if (!is_array($webcams)) {
+        return [];
+    }
+
+    $images = [];
+    foreach ($webcams as $camIndex => $cam) {
+        if (!is_array($cam) || (isset($cam['enabled']) && $cam['enabled'] === false)) {
+            continue;
+        }
+
+        $camName = cleanWebcamName(
+            isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
+                ? $cam['name']
+                : 'Webcam ' . ($camIndex + 1)
+        );
+
+        $images[] = [
+            'loc' => publicApiV1Url(
+                '/airports/' . $airportId . '/webcams/' . $camIndex . '/image',
+                true
+            ),
+            'title' => $camName,
+            'caption' => 'Live ' . $camName . ' webcam at ' . $airportName,
+        ];
+    }
+
+    return $images;
 }
 
 /**

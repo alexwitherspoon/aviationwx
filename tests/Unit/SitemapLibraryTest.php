@@ -335,6 +335,48 @@ class SitemapLibraryTest extends TestCase
     }
 
     /**
+     * Test disabled webcam slots are skipped when building image entries
+     */
+    public function testBuildSitemapWebcamImages_AllDisabledYieldsNoImages(): void
+    {
+        $airport = [
+            'name' => 'Test Airport',
+            'webcams' => [
+                ['name' => 'Cam A', 'enabled' => false],
+                ['name' => 'Cam B', 'enabled' => false],
+            ],
+        ];
+
+        $this->assertSame(
+            [],
+            buildSitemapWebcamImages($airport, 'ktst', 'Test Airport')
+        );
+    }
+
+    /**
+     * Test a disabled slot between two enabled cameras is skipped and indexes are preserved
+     */
+    public function testBuildSitemapWebcamImages_SkipsDisabledSlotBetweenEnabled(): void
+    {
+        $airport = [
+            'name' => 'Test Airport',
+            'webcams' => [
+                0 => ['name' => 'North Camera'],
+                1 => ['name' => 'South Camera', 'enabled' => false],
+                2 => ['name' => 'Tower Camera'],
+            ],
+        ];
+
+        $images = buildSitemapWebcamImages($airport, 'ktst', 'Test Airport');
+
+        $this->assertCount(2, $images);
+        $this->assertStringEndsWith('/airports/ktst/webcams/0/image', $images[0]['loc']);
+        $this->assertStringEndsWith('/airports/ktst/webcams/2/image', $images[1]['loc']);
+        $this->assertSame('North Camera', $images[0]['title']);
+        $this->assertSame('Tower Camera', $images[1]['title']);
+    }
+
+    /**
      * Test non-airport entries never carry images
      */
     public function testGetSitemapUrls_NonAirportEntriesHaveNoImages(): void
