@@ -147,7 +147,8 @@ $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount >
 // Primary identifier for routing/search; formal identifier for user-facing title/meta
 $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
 $displayName = formatAirportNameWithIdentifier($airport['name'], $airport);
-$pageTitle = $displayName . ' - Live Webcams & Runway Conditions';
+$intentSuffix = 'Live Weather & Webcams';
+$pageTitle = $displayName . ' - ' . $intentSuffix;
 // Optimized meta description - action-oriented, under 160 chars
 $pageDescription = 'Check current conditions at ' . $displayName .
     ($webcamText ? ' - ' . $webcamText . ', real-time wind & weather.' : ' - real-time wind, visibility & weather.') . 
@@ -1308,6 +1309,7 @@ if ($themeCookie === 'dark') {
 
         <!-- Footer -->
         <footer class="footer">
+            <p class="airport-provenance">Live conditions from on-airport weather stations. See the field as it is right now, before you trust the forecast.</p>
             <p class="footer-disclaimer">
                 <em>Data is for advisory use only. Consult official weather sources for flight planning purposes.</em>
             </p>

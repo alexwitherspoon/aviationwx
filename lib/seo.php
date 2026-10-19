@@ -257,6 +257,10 @@ function generateWebSiteSchema() {
  * PostalAddress is omitted when the configured address is GPS-style text
  * (addressLooksLikeGpsCoordinates); location is expressed with GeoCoordinates only.
  *
+ * Metadata only, by contract: no live observation values (flight category, wind,
+ * temperature) belong here. Machine-readable observations go through the vetted API
+ * endpoint, never this schema block.
+ *
  * @param array $airport Airport configuration array
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @return array Schema.org Airport JSON-LD structure
