@@ -343,11 +343,7 @@ class SeoUtilsTest extends TestCase
         $tags = generateSocialMetaTags('Test Title', 'Test Description', 'https://example.com');
         
         $this->assertStringContainsString('og:image', $tags);
-        // Function prefers WebP, falls back to JPG
-        $this->assertTrue(
-            strpos($tags, 'about-photo.webp') !== false || 
-            strpos($tags, 'about-photo.jpg') !== false
-        );
+        $this->assertStringContainsString('logo.png', $tags);
     }
 
     /**

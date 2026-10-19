@@ -163,13 +163,7 @@ $ogImage = null; // Will be set to first webcam if available
 if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     $ogImage = $airportUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=0&fmt=jpg';
 } else {
-    $baseUrl = getBaseUrl();
-    // Prefer WebP for about-photo, fallback to JPG
-    $aboutPhotoWebp = __DIR__ . '/../public/images/about-photo.webp';
-    $aboutPhotoJpg = __DIR__ . '/../public/images/about-photo.jpg';
-    $ogImage = file_exists($aboutPhotoWebp) 
-        ? $baseUrl . '/public/images/about-photo.webp'
-        : $baseUrl . '/public/images/about-photo.jpg';
+    $ogImage = getDefaultSocialCardImageUrl();
 }
 
 // Server-side theme detection - prevents flash by setting initial class
