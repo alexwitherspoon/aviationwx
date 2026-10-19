@@ -296,8 +296,6 @@ class SitemapLibraryTest extends TestCase
                 $this->assertArrayHasKey('title', $image);
                 $this->assertArrayHasKey('caption', $image);
                 $this->assertStringStartsWith('https://', $image['loc']);
-                $this->assertStringContainsString('/webcam.php?id=', $image['loc']);
-                $this->assertStringContainsString('&fmt=jpg', $image['loc']);
                 $this->assertNotEmpty($image['title']);
                 $this->assertNotEmpty($image['caption']);
                 $this->assertStringContainsString($image['title'], $image['caption']);
@@ -309,6 +307,31 @@ class SitemapLibraryTest extends TestCase
             $airportsWithImages,
             'At least one listed airport should carry webcam image entries'
         );
+    }
+
+    /**
+     * Test webcam image URLs point at the Public API host, which Google can crawl.
+     *
+     * Airport hosts block /webcam.php?* in robots.txt, so the sitemap must not
+     * advertise those URLs. The Public API host serves images with no robots
+     * restriction, so its canonical image URLs are the crawlable target.
+     */
+    public function testGetSitemapUrls_WebcamImageUrlsUsePublicApiHost(): void
+    {
+        $urls = getSitemapUrls();
+
+        foreach ($urls['airports'] as $url) {
+            if (!isset($url['images'])) {
+                continue;
+            }
+            foreach ($url['images'] as $image) {
+                $this->assertMatchesRegularExpression(
+                    '#^https://api\.aviationwx\.org/v1/airports/[a-z0-9-]+/webcams/\d+/image$#',
+                    $image['loc'],
+                    "Webcam image URL should use the Public API host: {$image['loc']}"
+                );
+            }
+        }
     }
 
     /**
@@ -330,14 +353,47 @@ class SitemapLibraryTest extends TestCase
     }
 
     /**
-     * Test webcam names are cleaned of their stream-type annotations
+     * Test webcam names are cleaned of their trailing stream-type annotation
      */
-    public function testCleanWebcamName_StripsStreamTypeAnnotations(): void
+    public function testCleanWebcamName_StripsTrailingAnnotations(): void
     {
         $this->assertSame('North Runway Camera', cleanWebcamName('North Runway Camera (MJPEG)'));
         $this->assertSame('West Camera', cleanWebcamName('West Camera (Static JPEG)'));
         $this->assertSame('Tower Camera', cleanWebcamName('Tower Camera (RTSP Auth)'));
         $this->assertSame('Runway Camera', cleanWebcamName('Runway Camera (Full Config)'));
+    }
+
+    /**
+     * Test plain names without an annotation pass through unchanged
+     */
+    public function testCleanWebcamName_LeavesPlainNamesUnchanged(): void
+    {
         $this->assertSame('Test Camera 1', cleanWebcamName('Test Camera 1'));
+        $this->assertSame('WSDOT Test Camera', cleanWebcamName('WSDOT Test Camera'));
+    }
+
+    /**
+     * Test only a trailing annotation is stripped, never a mid-string parenthetical
+     */
+    public function testCleanWebcamName_OnlyTouchesTrailingAnnotation(): void
+    {
+        $this->assertSame('Camera (North) view', cleanWebcamName('Camera (North) view'));
+    }
+
+    /**
+     * Test whitespace adjacent to the annotation is stripped cleanly
+     */
+    public function testCleanWebcamName_HandlesAdjacentWhitespace(): void
+    {
+        $this->assertSame('West Camera', cleanWebcamName('West Camera(Static JPEG)'));
+        $this->assertSame('West Camera', cleanWebcamName('West Camera (Static JPEG) '));
+    }
+
+    /**
+     * Test a name that is only an annotation never becomes an empty string
+     */
+    public function testCleanWebcamName_NeverReturnsEmpty(): void
+    {
+        $this->assertSame('(MJPEG)', cleanWebcamName('(MJPEG)'));
     }
 }

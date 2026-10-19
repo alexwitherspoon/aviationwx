@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/public-api/config.php';
 
 /**
  * Strip the trailing stream-type annotation from a webcam name. Config names read
@@ -106,7 +107,10 @@ function getSitemapUrls(): array
                         : 'Webcam ' . ($camIndex + 1)
                 );
                 $images[] = [
-                    'loc' => $airportUrl . 'webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIndex . '&fmt=jpg',
+                    'loc' => publicApiV1Url(
+                        '/airports/' . $airportId . '/webcams/' . $camIndex . '/image',
+                        true
+                    ),
                     'title' => $camName,
                     'caption' => 'Live ' . $camName . ' webcam at ' . $airportName,
                 ];
