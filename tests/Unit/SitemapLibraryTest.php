@@ -459,8 +459,19 @@ class SitemapLibraryTest extends TestCase
     {
         $this->assertSame('North Runway Camera', cleanWebcamName('North Runway Camera (MJPEG)'));
         $this->assertSame('West Camera', cleanWebcamName('West Camera (Static JPEG)'));
+        $this->assertSame('West Camera', cleanWebcamName('West Camera (Static PNG)'));
+        $this->assertSame('Tower Camera', cleanWebcamName('Tower Camera (RTSP)'));
         $this->assertSame('Tower Camera', cleanWebcamName('Tower Camera (RTSP Auth)'));
-        $this->assertSame('Runway Camera', cleanWebcamName('Runway Camera (Full Config)'));
+    }
+
+    /**
+     * Test meaningful trailing qualifiers are preserved, not stripped
+     */
+    public function testCleanWebcamName_PreservesMeaningfulQualifiers(): void
+    {
+        $this->assertSame('Camera (North)', cleanWebcamName('Camera (North)'));
+        $this->assertSame('Camera (South)', cleanWebcamName('Camera (South)'));
+        $this->assertSame('Tower Camera (PGA)', cleanWebcamName('Tower Camera (PGA)'));
     }
 
     /**

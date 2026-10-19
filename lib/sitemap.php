@@ -11,16 +11,24 @@ require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/public-api/config.php';
 
 /**
- * Strip the trailing stream-type annotation from a webcam name. Config names read
- * like "North Runway Camera (MJPEG)"; the parenthetical repeats the webcam `type`
- * and is dropped for sitemap display.
+ * Strip a trailing stream-type annotation from a webcam name. Config names read
+ * like "North Runway Camera (MJPEG)"; the parenthetical repeats the webcam
+ * stream type and is dropped for sitemap display.
+ *
+ * Only recognized stream-type labels are removed. Spatial or operational
+ * qualifiers such as "(North)" or "(Tower)" are rounded and preserved, since
+ * they disambiguate cameras and belong in the image title.
  *
  * @param string $name Raw webcam name from config
- * @return string Display name without the trailing annotation
+ * @return string Display name without a trailing stream-type annotation
  */
 function cleanWebcamName(string $name): string
 {
-    $cleaned = preg_replace('/\s*\([^()]*\)\s*$/', '', $name);
+    $cleaned = preg_replace(
+        '/\s*\((?:MJPEG|Static JPEG|Static PNG|RTSP|RTSP Auth)\)\s*$/i',
+        '',
+        $name
+    );
     return $cleaned !== '' ? $cleaned : $name;
 }
 
