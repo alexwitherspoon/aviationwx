@@ -147,7 +147,8 @@ $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount >
 // Primary identifier for routing/search; formal identifier for user-facing title/meta
 $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
 $displayName = formatAirportNameWithIdentifier($airport['name'], $airport);
-$pageTitle = $displayName . ' - Live Webcams & Runway Conditions';
+$intentSuffix = 'Live Weather & Webcams';
+$pageTitle = $displayName . ' - ' . $intentSuffix;
 // Optimized meta description - action-oriented, under 160 chars
 $pageDescription = 'Check current conditions at ' . $displayName .
     ($webcamText ? ' - ' . $webcamText . ', real-time wind & weather.' : ' - real-time wind, visibility & weather.') . 
@@ -512,7 +513,28 @@ if ($themeCookie === 'dark') {
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><?= htmlspecialchars($displayName) ?></h1>
+            <h1><?= htmlspecialchars($displayName) ?> - <?= htmlspecialchars($intentSuffix) ?></h1>
+            <p class="airport-identity">
+                <?php
+                $airportIdentityParts = [];
+                if (!empty($airport['icao'])) {
+                    $airportIdentityParts[] = 'ICAO ' . htmlspecialchars((string) $airport['icao']);
+                }
+                if (!empty($airport['iata'])) {
+                    $airportIdentityParts[] = 'IATA ' . htmlspecialchars((string) $airport['iata']);
+                }
+                if (!empty($airport['faa']) && $airport['faa'] !== ($airport['icao'] ?? '')) {
+                    $airportIdentityParts[] = 'FAA ' . htmlspecialchars((string) $airport['faa']);
+                }
+                if (isset($airport['elevation_ft']) && is_numeric($airport['elevation_ft'])) {
+                    $airportIdentityParts[] = 'Elevation ' . (int) round((float) $airport['elevation_ft']) . ' ft';
+                }
+                if ($airportIdentityParts !== []) {
+                    echo implode(' · ', $airportIdentityParts);
+                }
+                ?>
+            </p>
+            <p class="airport-provenance">Live sensor data on this page is measured on-field and verified when the page loads. Wind, temperature, and conditions update every minute. No observation value goes into the HTML.</p>
         </header>
         
         <?php
