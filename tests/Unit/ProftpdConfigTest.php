@@ -36,31 +36,33 @@ class ProftpdConfigTest extends TestCase
             $this->markTestSkipped('proftpd binary not available in CI host');
         }
 
-        $runtimeDir = sys_get_temp_dir() . '/proftpd-test-' . uniqid('', true);
-        mkdir($runtimeDir, 0755, true);
+        $fragDir = sys_get_temp_dir() . '/proftpd-frag-' . uniqid('', true);
+        mkdir($fragDir, 0755, true);
+        // Keep the main config outside the fragment dir, otherwise the rewritten
+        // Include glob below picks it up and proftpd -t recurses into itself.
+        $testConf = sys_get_temp_dir() . '/proftpd-test-' . uniqid('', true) . '.conf';
         $this->addToAssertionCount(0);
-        register_shutdown_function(static function () use ($runtimeDir): void {
-            @unlink($runtimeDir . '/runtime.conf');
-            @unlink($runtimeDir . '/masquerade.conf');
-            @unlink($runtimeDir . '/tls.conf');
-            @unlink($runtimeDir . '/proftpd-test.conf');
-            @rmdir($runtimeDir);
+        register_shutdown_function(static function () use ($fragDir, $testConf): void {
+            @unlink($fragDir . '/runtime.conf');
+            @unlink($fragDir . '/masquerade.conf');
+            @unlink($fragDir . '/tls.conf');
+            @rmdir($fragDir);
+            @unlink($testConf);
         });
 
-        file_put_contents($runtimeDir . '/runtime.conf', "Port 2121\nPassivePorts 49152 49160\n");
+        file_put_contents($fragDir . '/runtime.conf', "Port 2121\nPassivePorts 49152 49160\n");
         file_put_contents(
-            $runtimeDir . '/masquerade.conf',
+            $fragDir . '/masquerade.conf',
             buildProftpdMasqueradeConf([
                 'hostname' => 'upload.example.com',
                 'ipv4' => '51.81.243.160',
                 'ipv6' => '2001:db8::1',
             ])
         );
-        file_put_contents($runtimeDir . '/tls.conf', "<IfModule mod_tls.c>\n  TLSEngine off\n</IfModule>\n");
+        file_put_contents($fragDir . '/tls.conf', "<IfModule mod_tls.c>\n  TLSEngine off\n</IfModule>\n");
 
-        $testConf = $runtimeDir . '/proftpd-test.conf';
         $base = file_get_contents($configPath);
-        $base = str_replace('/etc/proftpd/conf.d/*.conf', $runtimeDir . '/*.conf', $base);
+        $base = str_replace('/etc/proftpd/conf.d/*.conf', $fragDir . '/*.conf', $base);
         file_put_contents($testConf, $base);
 
         exec('proftpd -t -c ' . escapeshellarg($testConf) . ' 2>&1', $output, $returnCode);
