@@ -514,27 +514,8 @@ if ($themeCookie === 'dark') {
         <!-- Header -->
         <header class="header">
             <h1><?= htmlspecialchars($displayName) ?> - <?= htmlspecialchars($intentSuffix) ?></h1>
-            <p class="airport-identity">
-                <?php
-                $airportIdentityParts = [];
-                if (!empty($airport['icao'])) {
-                    $airportIdentityParts[] = 'ICAO ' . htmlspecialchars((string) $airport['icao']);
-                }
-                if (!empty($airport['iata'])) {
-                    $airportIdentityParts[] = 'IATA ' . htmlspecialchars((string) $airport['iata']);
-                }
-                if (!empty($airport['faa']) && $airport['faa'] !== ($airport['icao'] ?? '')) {
-                    $airportIdentityParts[] = 'FAA ' . htmlspecialchars((string) $airport['faa']);
-                }
-                if (isset($airport['elevation_ft']) && is_numeric($airport['elevation_ft'])) {
-                    $airportIdentityParts[] = 'Elevation ' . (int) round((float) $airport['elevation_ft']) . ' ft';
-                }
-                if ($airportIdentityParts !== []) {
-                    echo implode(' · ', $airportIdentityParts);
-                }
-                ?>
-            </p>
-            <p class="airport-provenance">Live sensor data on this page is measured on-field and verified when the page loads. Wind, temperature, and conditions update every minute. No observation value goes into the HTML.</p>
+            <p class="airport-identity"><?= implode(' · ', array_map('htmlspecialchars', buildAirportIdentityParts($airport))) ?></p>
+            <p class="airport-provenance">Live conditions from on-airport weather stations. No forecasts, just instrument readings.</p>
         </header>
         
         <?php

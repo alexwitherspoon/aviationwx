@@ -2898,6 +2898,31 @@ function buildAirportPageKeywords(array $airport): string
 }
 
 /**
+ * Human-readable identity parts for the airport page header (e.g. "ICAO KSPB",
+ * "Elevation 58 ft"). Returns raw values; the caller escapes on output.
+ *
+ * @param array<string, mixed> $airport Airport configuration array
+ * @return string[] Identity parts, ICAO/IATA/FAA/elevation order
+ */
+function buildAirportIdentityParts(array $airport): array
+{
+    $parts = [];
+    if (!empty($airport['icao'])) {
+        $parts[] = 'ICAO ' . (string) $airport['icao'];
+    }
+    if (!empty($airport['iata'])) {
+        $parts[] = 'IATA ' . (string) $airport['iata'];
+    }
+    if (!empty($airport['faa']) && $airport['faa'] !== ($airport['icao'] ?? '')) {
+        $parts[] = 'FAA ' . (string) $airport['faa'];
+    }
+    if (isset($airport['elevation_ft']) && is_numeric($airport['elevation_ft'])) {
+        $parts[] = 'Elevation ' . (int) round((float) $airport['elevation_ft']) . ' ft';
+    }
+    return $parts;
+}
+
+/**
  * Infer ISO 3166-1 alpha-2 from ICAO letter scheme only (K, C, Y, and US Pacific prefixes).
  *
  * Used only inside {@see getEffectiveIso3166Alpha2ForAirport()} when `iso_country` is missing or invalid.

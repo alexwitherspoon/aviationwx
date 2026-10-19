@@ -867,5 +867,37 @@ class MultiIdentifierTest extends TestCase
         
         $this->assertEquals('KPDX', $result);
     }
+
+    public function testBuildAirportIdentityParts_FullIdentifiersAndElevation(): void
+    {
+        $airport = ['icao' => 'KSPB', 'iata' => 'SPB', 'faa' => 'SPB', 'elevation_ft' => 58];
+        $this->assertSame(
+            ['ICAO KSPB', 'IATA SPB', 'FAA SPB', 'Elevation 58 ft'],
+            buildAirportIdentityParts($airport)
+        );
+    }
+
+    public function testBuildAirportIdentityParts_FaaDedupedWhenEqualToIcao(): void
+    {
+        $airport = ['icao' => 'KSPB', 'iata' => null, 'faa' => 'KSPB', 'elevation_ft' => 58];
+        $this->assertSame(
+            ['ICAO KSPB', 'Elevation 58 ft'],
+            buildAirportIdentityParts($airport)
+        );
+    }
+
+    public function testBuildAirportIdentityParts_ZeroAndMissingElevation(): void
+    {
+        $this->assertSame(['ICAO KSPB'], buildAirportIdentityParts(['icao' => 'KSPB']));
+        $this->assertSame(
+            ['ICAO KSPB', 'Elevation 0 ft'],
+            buildAirportIdentityParts(['icao' => 'KSPB', 'elevation_ft' => 0])
+        );
+    }
+
+    public function testBuildAirportIdentityParts_NoIdentifiersOrElevation(): void
+    {
+        $this->assertSame([], buildAirportIdentityParts(['name' => 'Custom Airstrip']));
+    }
 }
 
