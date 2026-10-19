@@ -98,12 +98,7 @@ $pageDescription = 'Make safer go/no-go decisions with free live airport webcams
 $pageKeywords = 'live airport webcams, runway conditions, aviation weather, airport webcams, live weather, pilot weather, airport conditions, aviation webcams, real-time weather, airport cameras';
 $canonicalUrl = getCanonicalUrl();
 $baseUrl = getBaseUrl();
-// Prefer WebP for about-photo, fallback to JPG
-$aboutPhotoWebp = __DIR__ . '/../public/images/about-photo.webp';
-$aboutPhotoJpg = __DIR__ . '/../public/images/about-photo.jpg';
-$ogImage = file_exists($aboutPhotoWebp) 
-    ? $baseUrl . '/public/images/about-photo.webp'
-    : $baseUrl . '/public/images/about-photo.jpg';
+$ogImage = getDefaultSocialCardImageUrl();
 ?>
 <!DOCTYPE html>
 <html lang="en">

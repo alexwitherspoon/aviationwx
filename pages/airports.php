@@ -136,8 +136,7 @@ $pageTitle = 'Airport Network Map - AviationWX.org';
 $pageDescription = 'View all ' . $totalAirports . ' airports in the AviationWX network on an interactive map. Live webcams and real-time weather data for pilots.';
 $pageKeywords = 'airport map, aviation weather network, airport webcams, pilot weather, airport directory';
 $canonicalUrl = 'https://airports.aviationwx.org';
-$baseUrl = getBaseUrl();
-$ogImage = $baseUrl . '/public/images/about-photo.webp';
+$ogImage = getDefaultSocialCardImageUrl();
 
 // Breadcrumbs
 $breadcrumbs = generateBreadcrumbSchema([

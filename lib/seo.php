@@ -591,14 +591,7 @@ function extractMetaDescriptionFromMarkdown($markdownContent, $fallback = 'Aviat
  * @return string HTML meta tags (newline-separated)
  */
 function generateSocialMetaTags($title, $description, $url, $image = null, $type = 'website') {
-    $baseUrl = getBaseUrl();
-    // Prefer WebP for about-photo, fallback to JPG
-    $aboutPhotoWebp = __DIR__ . '/../public/images/about-photo.webp';
-    $aboutPhotoJpg = __DIR__ . '/../public/images/about-photo.jpg';
-    $defaultImage = file_exists($aboutPhotoWebp) 
-        ? $baseUrl . '/public/images/about-photo.webp'
-        : $baseUrl . '/public/images/about-photo.jpg';
-    $image = $image ?: $defaultImage;
+    $image = $image ?: getDefaultSocialCardImageUrl();
     
     $tags = [];
     
@@ -765,6 +758,30 @@ function getLogoUrl() {
     $aboutPhotoWebp = __DIR__ . '/../public/images/about-photo.webp';
     $aboutPhotoJpg = __DIR__ . '/../public/images/about-photo.jpg';
     return file_exists($aboutPhotoWebp) 
+        ? $baseUrl . '/public/images/about-photo.webp'
+        : $baseUrl . '/public/images/about-photo.jpg';
+}
+
+/**
+ * Default social-card image: the raster brand logo. Open Graph and Twitter
+ * cards need a raster (SVG is not rendered there), so this prefers logo.png
+ * over the vector and falls back to the about-photo when no raster logo exists.
+ *
+ * @return string Absolute URL
+ */
+function getDefaultSocialCardImageUrl(): string
+{
+    $baseUrl = getBaseUrl();
+    $imageDir = __DIR__ . '/../public/images';
+    foreach (['logo.png', 'logo.webp', 'logo.jpg'] as $logoFile) {
+        if (file_exists($imageDir . '/' . $logoFile)) {
+            return $baseUrl . '/public/images/' . $logoFile;
+        }
+    }
+
+    $aboutPhotoWebp = __DIR__ . '/../public/images/about-photo.webp';
+    $aboutPhotoJpg = __DIR__ . '/../public/images/about-photo.jpg';
+    return file_exists($aboutPhotoWebp)
         ? $baseUrl . '/public/images/about-photo.webp'
         : $baseUrl . '/public/images/about-photo.jpg';
 }
