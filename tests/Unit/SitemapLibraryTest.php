@@ -328,4 +328,16 @@ class SitemapLibraryTest extends TestCase
             }
         }
     }
+
+    /**
+     * Test webcam names are cleaned of their stream-type annotations
+     */
+    public function testCleanWebcamName_StripsStreamTypeAnnotations(): void
+    {
+        $this->assertSame('North Runway Camera', cleanWebcamName('North Runway Camera (MJPEG)'));
+        $this->assertSame('West Camera', cleanWebcamName('West Camera (Static JPEG)'));
+        $this->assertSame('Tower Camera', cleanWebcamName('Tower Camera (RTSP Auth)'));
+        $this->assertSame('Runway Camera', cleanWebcamName('Runway Camera (Full Config)'));
+        $this->assertSame('Test Camera 1', cleanWebcamName('Test Camera 1'));
+    }
 }

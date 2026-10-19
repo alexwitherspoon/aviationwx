@@ -10,6 +10,20 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
 
 /**
+ * Strip the trailing stream-type annotation from a webcam name. Config names read
+ * like "North Runway Camera (MJPEG)"; the parenthetical repeats the webcam `type`
+ * and is dropped for sitemap display.
+ *
+ * @param string $name Raw webcam name from config
+ * @return string Display name without the trailing annotation
+ */
+function cleanWebcamName(string $name): string
+{
+    $cleaned = preg_replace('/\s*\([^()]*\)\s*$/', '', $name);
+    return $cleaned !== '' ? $cleaned : $name;
+}
+
+/**
  * Get all sitemap URLs grouped by category
  * 
  * @return array<string, array<int, array{
@@ -86,9 +100,11 @@ function getSitemapUrls(): array
         $images = [];
         if (!empty($airport['webcams']) && is_array($airport['webcams'])) {
             foreach ($airport['webcams'] as $camIndex => $cam) {
-                $camName = isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
-                    ? $cam['name']
-                    : 'Webcam ' . ($camIndex + 1);
+                $camName = cleanWebcamName(
+                    isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
+                        ? $cam['name']
+                        : 'Webcam ' . ($camIndex + 1)
+                );
                 $images[] = [
                     'loc' => $airportUrl . 'webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIndex . '&fmt=jpg',
                     'title' => $camName,
