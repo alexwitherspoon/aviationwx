@@ -275,4 +275,57 @@ class SitemapLibraryTest extends TestCase
             }
         }
     }
+
+    /**
+     * Test airport webcams produce image sitemap entries
+     */
+    public function testGetSitemapUrls_AirportWebcamsProduceImageEntries(): void
+    {
+        $urls = getSitemapUrls();
+
+        $airportsWithImages = 0;
+        foreach ($urls['airports'] as $url) {
+            if (!isset($url['images'])) {
+                continue;
+            }
+            $airportsWithImages++;
+            $this->assertIsArray($url['images']);
+            $this->assertNotEmpty($url['images']);
+            foreach ($url['images'] as $image) {
+                $this->assertArrayHasKey('loc', $image);
+                $this->assertArrayHasKey('title', $image);
+                $this->assertArrayHasKey('caption', $image);
+                $this->assertStringStartsWith('https://', $image['loc']);
+                $this->assertStringContainsString('/webcam.php?id=', $image['loc']);
+                $this->assertStringContainsString('&fmt=jpg', $image['loc']);
+                $this->assertNotEmpty($image['title']);
+                $this->assertNotEmpty($image['caption']);
+                $this->assertStringContainsString($image['title'], $image['caption']);
+            }
+        }
+
+        $this->assertGreaterThan(
+            0,
+            $airportsWithImages,
+            'At least one listed airport should carry webcam image entries'
+        );
+    }
+
+    /**
+     * Test non-airport entries never carry images
+     */
+    public function testGetSitemapUrls_NonAirportEntriesHaveNoImages(): void
+    {
+        $urls = getSitemapUrls();
+
+        foreach (['main', 'guides', 'tools', 'legal'] as $category) {
+            foreach ($urls[$category] as $url) {
+                $this->assertArrayNotHasKey(
+                    'images',
+                    $url,
+                    "Non-airport entry in {$category} should not carry images"
+                );
+            }
+        }
+    }
 }

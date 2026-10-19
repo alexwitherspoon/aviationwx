@@ -17,7 +17,8 @@ require_once __DIR__ . '/cache-paths.php';
  *   title: string,
  *   lastmod: string,
  *   changefreq: string,
- *   priority: string
+ *   priority: string,
+ *   images?: array<int, array{loc: string, title: string, caption: string}>
  * }>> URLs grouped by category (main, airports, guides, tools, legal)
  */
 function getSitemapUrls(): array
@@ -74,13 +75,32 @@ function getSitemapUrls(): array
         
         $airportName = $airport['name'] ?? strtoupper($airportId);
         
-        $urls['airports'][] = [
+        $entry = [
             'loc' => $airportUrl,
             'title' => strtoupper($primaryIdentifier) . ' - ' . $airportName,
             'lastmod' => $lastmod,
             'changefreq' => 'hourly',
             'priority' => '0.8'
         ];
+        
+        $images = [];
+        if (!empty($airport['webcams']) && is_array($airport['webcams'])) {
+            foreach ($airport['webcams'] as $camIndex => $cam) {
+                $camName = isset($cam['name']) && is_string($cam['name']) && $cam['name'] !== ''
+                    ? $cam['name']
+                    : 'Webcam ' . ($camIndex + 1);
+                $images[] = [
+                    'loc' => $airportUrl . 'webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIndex . '&fmt=jpg',
+                    'title' => $camName,
+                    'caption' => 'Live ' . $camName . ' webcam at ' . $airportName,
+                ];
+            }
+        }
+        if ($images !== []) {
+            $entry['images'] = $images;
+        }
+        
+        $urls['airports'][] = $entry;
     }
     
     // Guides
@@ -171,7 +191,8 @@ function getSitemapUrls(): array
  *   title: string,
  *   lastmod: string,
  *   changefreq: string,
- *   priority: string
+ *   priority: string,
+ *   images?: array<int, array{loc: string, title: string, caption: string}>
  * }> Flat array of all URL entries
  */
 function getAllSitemapUrls(): array
