@@ -211,6 +211,12 @@ function getSitemapUrls(): array
  */
 function buildSitemapWebcamImages(array $airport, string $airportId, string $airportName): array
 {
+    // The Public API rejects IDs over AIRPORT_ID_MAX_LENGTH, so no image URL we
+    // build for them would resolve.
+    if (strlen($airportId) > AIRPORT_ID_MAX_LENGTH) {
+        return [];
+    }
+
     $webcams = $airport['webcams'] ?? [];
     if (!is_array($webcams)) {
         return [];

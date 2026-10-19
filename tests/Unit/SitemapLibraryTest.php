@@ -377,6 +377,45 @@ class SitemapLibraryTest extends TestCase
     }
 
     /**
+     * Test image entries are omitted for an airport ID the Public API cannot serve
+     */
+    public function testBuildSitemapWebcamImages_OmitsImagesForOverMaxAirportId(): void
+    {
+        $airport = [
+            'name' => 'Test Airport',
+            'webcams' => [['name' => 'North Camera']],
+        ];
+
+        $this->assertSame(
+            [],
+            buildSitemapWebcamImages(
+                $airport,
+                str_repeat('a', AIRPORT_ID_MAX_LENGTH + 1),
+                'Test Airport'
+            )
+        );
+    }
+
+    /**
+     * Test an airport ID at the max length still produces image entries
+     */
+    public function testBuildSitemapWebcamImages_AllowsAirportIdAtMaxLength(): void
+    {
+        $airport = [
+            'name' => 'Test Airport',
+            'webcams' => [['name' => 'North Camera']],
+        ];
+
+        $images = buildSitemapWebcamImages(
+            $airport,
+            str_repeat('a', AIRPORT_ID_MAX_LENGTH),
+            'Test Airport'
+        );
+
+        $this->assertCount(1, $images);
+    }
+
+    /**
      * Test image entries are omitted when the Public API is disabled, while airport pages remain
      */
     public function testGetSitemapUrls_OmitsImagesWhenPublicApiDisabled(): void

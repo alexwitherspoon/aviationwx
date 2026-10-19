@@ -134,9 +134,9 @@ function validateAirportId(?string $id): bool {
     }
     $normalized = strtolower(trim($id));
     
-    // Length check: 3-50 characters (matches subdomain regex)
+    // Length check: bounds shared with the Public API and embed lookup
     $length = strlen($normalized);
-    if ($length < 3 || $length > 50) {
+    if ($length < AIRPORT_ID_MIN_LENGTH || $length > AIRPORT_ID_MAX_LENGTH) {
         return false;
     }
     

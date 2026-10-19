@@ -257,25 +257,20 @@ function logPublicApiRequest(string $ip, ?array $partner, string $tier): void
 
 /**
  * Validate and normalize an airport ID from the request
- * 
+ *
+ * Delegates to the config validator so the Public API accepts exactly the
+ * identifiers the config accepts (length and format are a single source of truth).
+ *
  * @param string $airportId Raw airport ID from request
  * @return string|null Normalized airport ID or null if invalid
  */
 function validatePublicApiAirportId(string $airportId): ?string
 {
-    $trimmed = trim($airportId);
-    
-    // Airport IDs should be 3-10 alphanumeric characters (allow longer for custom IDs)
-    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 20) {
+    if (!validateAirportId($airportId)) {
         return null;
     }
-    
-    // Allow alphanumeric and hyphens (for custom-airport style IDs)
-    if (!preg_match('/^[a-zA-Z0-9-]+$/i', $trimmed)) {
-        return null;
-    }
-    
-    return strtolower($trimmed);
+
+    return strtolower(trim($airportId));
 }
 
 /**
