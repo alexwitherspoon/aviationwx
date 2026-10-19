@@ -2,6 +2,9 @@
 /**
  * VRM API provider: fetches stats and BatterySummary, returns canonical station-power field arrays.
  *
+ * Canonical energy fields are watt-hours. VRM /overallstats mixes Wh (solar_yield, consumption) with
+ * kWh (Pc, Pb), so this provider normalizes everything to Wh on ingest.
+ *
  * Airport page copy lives outside this module. Hour-based time-to-go strings parse to a whole-hour integer
  * string when the text includes an hours unit.
  */
@@ -99,8 +102,8 @@ final class VrmStationPowerProvider
             'battery_volts' => $volts,
             'time_to_go_display' => $ttg,
             'stats_interval' => self::STATS_INTERVAL_15MIN,
-            'solar_daily_kwh_utc' => null,
-            'load_daily_kwh_utc' => null,
+            'solar_daily_wh_utc' => null,
+            'load_daily_wh_utc' => null,
             'solar_daily_wh_local' => null,
             'load_daily_wh_local' => null,
         ];
@@ -271,7 +274,7 @@ final class VrmStationPowerProvider
     }
 
     /**
-     * Merge UTC calendar-day energy totals from /overallstats (stored as kWh, VRM "today" = UTC day).
+     * Merge UTC calendar-day energy totals from /overallstats (Wh; VRM "today" = UTC day).
      *
      * @param array<string,mixed> $canonical Row from normalizeFromStatsResponse
      * @param array<string,mixed>|null $overallJson Decoded overallstats response
@@ -279,9 +282,9 @@ final class VrmStationPowerProvider
      */
     public static function mergeOverallstatsIntoCanonical(array $canonical, ?array $overallJson): array
     {
-        [$solarKwh, $loadKwh] = self::extractTodayKwhFromOverallstats($overallJson);
-        $canonical['solar_daily_kwh_utc'] = $solarKwh;
-        $canonical['load_daily_kwh_utc'] = $loadKwh;
+        [$solarWh, $loadWh] = self::extractTodayWhFromOverallstats($overallJson);
+        $canonical['solar_daily_wh_utc'] = $solarWh;
+        $canonical['load_daily_wh_utc'] = $loadWh;
         return $canonical;
     }
 
@@ -325,7 +328,7 @@ final class VrmStationPowerProvider
      * Integrate hourly average power from /stats for local midnight-to-now (airport timezone).
      *
      * Uses one request with `interval=hours` so each bucket is one hour (avg W x 1 h = Wh).
-     * Without decoded hourly stats, `solar_daily_wh_local` and `load_daily_wh_local` are not set; UTC kWh fields on the row are unchanged.
+     * Without decoded hourly stats, `solar_daily_wh_local` and `load_daily_wh_local` are not set; UTC Wh fields on the row are unchanged.
      *
      * @param array<string,mixed> $canonical Cache row
      * @param array<string,mixed>|null $hourlyStatsJson Decoded /stats response with hourly interval
@@ -465,12 +468,13 @@ final class VrmStationPowerProvider
     }
 
     /**
-     * Read today.totals solar and consumption cumulative energy (kWh) when present.
+     * Read today.totals solar and consumption cumulative energy, normalized to Wh.
+     * solar_yield and consumption arrive in Wh; Pc and Pb arrive in kWh and are scaled.
      *
      * @param array<string,mixed>|null $overallJson
-     * @return array{0: float|null, 1: float|null} solar kWh, load kWh
+     * @return array{0: float|null, 1: float|null} solar Wh, load Wh
      */
-    private static function extractTodayKwhFromOverallstats(?array $overallJson): array
+    private static function extractTodayWhFromOverallstats(?array $overallJson): array
     {
         if ($overallJson === null) {
             return [null, null];
@@ -485,22 +489,22 @@ final class VrmStationPowerProvider
             return [null, null];
         }
 
-        $solarKwh = null;
+        $solarWh = null;
         if (isset($totals['solar_yield']) && is_numeric($totals['solar_yield'])) {
-            $solarKwh = (float) $totals['solar_yield'];
+            $solarWh = (float) $totals['solar_yield'];
         } elseif (
             (isset($totals['Pc']) && is_numeric($totals['Pc']))
             || (isset($totals['Pb']) && is_numeric($totals['Pb']))
         ) {
-            $solarKwh = (float) ($totals['Pc'] ?? 0.0) + (float) ($totals['Pb'] ?? 0.0);
+            $solarWh = ((float) ($totals['Pc'] ?? 0.0) + (float) ($totals['Pb'] ?? 0.0)) * self::KW_TO_W;
         }
 
-        $loadKwh = null;
+        $loadWh = null;
         if (isset($totals['consumption']) && is_numeric($totals['consumption'])) {
-            $loadKwh = (float) $totals['consumption'];
+            $loadWh = (float) $totals['consumption'];
         }
 
-        return [$solarKwh, $loadKwh];
+        return [$solarWh, $loadWh];
     }
 
     /**
@@ -895,7 +899,7 @@ final class VrmStationPowerProvider
     }
 
     /**
-     * Daily aggregate energy totals (kWh) for the UTC calendar day.
+     * Daily aggregate energy totals for the UTC calendar day (units vary; normalized to Wh on extract).
      */
     private static function buildOverallstatsUrl(int $installationId): string
     {

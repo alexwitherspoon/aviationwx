@@ -107,8 +107,8 @@ function stationPowerDashboardFormatCells(array $sp): array
         ? (float) $sp['solar_daily_wh_local']
         : null;
     $solarTodayTitle = 'Cumulative solar energy from local midnight to now (hourly buckets, airport timezone).';
-    if ($solarTodayWh === null && isset($sp['solar_daily_kwh_utc']) && is_numeric($sp['solar_daily_kwh_utc'])) {
-        $solarTodayWh = (float) $sp['solar_daily_kwh_utc'] * 1000.0;
+    if ($solarTodayWh === null && isset($sp['solar_daily_wh_utc']) && is_numeric($sp['solar_daily_wh_utc'])) {
+        $solarTodayWh = (float) $sp['solar_daily_wh_utc'];
         $solarTodayTitle = 'Cumulative solar energy for the UTC calendar day (local-day hourly data unavailable).';
     }
 
@@ -116,8 +116,8 @@ function stationPowerDashboardFormatCells(array $sp): array
         ? (float) $sp['load_daily_wh_local']
         : null;
     $loadTodayTitle = 'Cumulative DC energy from local midnight to now (hourly buckets, airport timezone).';
-    if ($loadTodayWh === null && isset($sp['load_daily_kwh_utc']) && is_numeric($sp['load_daily_kwh_utc'])) {
-        $loadTodayWh = (float) $sp['load_daily_kwh_utc'] * 1000.0;
+    if ($loadTodayWh === null && isset($sp['load_daily_wh_utc']) && is_numeric($sp['load_daily_wh_utc'])) {
+        $loadTodayWh = (float) $sp['load_daily_wh_utc'];
         $loadTodayTitle = 'Cumulative DC energy for the UTC calendar day (local-day hourly data unavailable).';
     }
 

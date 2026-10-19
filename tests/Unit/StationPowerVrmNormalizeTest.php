@@ -39,8 +39,8 @@ final class StationPowerVrmNormalizeTest extends TestCase
         $this->assertNull($canonical['battery_volts']);
         $this->assertNull($canonical['time_to_go_display']);
         $this->assertSame('15mins', $canonical['stats_interval']);
-        $this->assertNull($canonical['solar_daily_kwh_utc']);
-        $this->assertNull($canonical['load_daily_kwh_utc']);
+        $this->assertNull($canonical['solar_daily_wh_utc']);
+        $this->assertNull($canonical['load_daily_wh_utc']);
         $this->assertNull($canonical['solar_daily_wh_local']);
         $this->assertNull($canonical['load_daily_wh_local']);
     }
@@ -169,8 +169,8 @@ final class StationPowerVrmNormalizeTest extends TestCase
 
         $merged = VrmStationPowerProvider::mergeOverallstatsIntoCanonical($base, $overall);
 
-        $this->assertSame(12.5, $merged['solar_daily_kwh_utc']);
-        $this->assertSame(8.25, $merged['load_daily_kwh_utc']);
+        $this->assertSame(12.5, $merged['solar_daily_wh_utc']);
+        $this->assertSame(8.25, $merged['load_daily_wh_utc']);
     }
 
     public function testMergeOverallstatsFallbackPcPlusPbWhenNoSolarYield(): void
@@ -194,8 +194,8 @@ final class StationPowerVrmNormalizeTest extends TestCase
 
         $merged = VrmStationPowerProvider::mergeOverallstatsIntoCanonical($base, $overall);
 
-        $this->assertSame(14.1, $merged['solar_daily_kwh_utc']);
-        $this->assertSame(4.1, $merged['load_daily_kwh_utc']);
+        $this->assertSame(14100.0, $merged['solar_daily_wh_utc']);
+        $this->assertSame(4.1, $merged['load_daily_wh_utc']);
     }
 
     public function testMergeLocalDailyWhFromHourlyStatsUsesLocalMidnightToNow(): void

@@ -46,4 +46,49 @@ final class StationPowerDashboardFormatTest extends TestCase
         $this->assertSame('---', $cells['soc_text']);
         $this->assertFalse($cells['soc_show_meter']);
     }
+
+    public function testFormatCells_UsesUtcWhFallback_WhenLocalAbsent(): void
+    {
+        $sp = ['solar_daily_wh_utc' => 969, 'load_daily_wh_utc' => 866];
+
+        $cells = stationPowerDashboardFormatCells($sp);
+
+        $this->assertSame('969 Wh', $cells['solar_today']);
+        $this->assertStringContainsString('UTC calendar day', $cells['solar_today_title']);
+        $this->assertSame('866 Wh', $cells['load_today']);
+        $this->assertStringContainsString('UTC calendar day', $cells['load_today_title']);
+    }
+
+    public function testFormatCells_LocalTotalsPrecedeUtcTotals(): void
+    {
+        $sp = [
+            'solar_daily_wh_local' => 12000,
+            'solar_daily_wh_utc' => 969,
+            'load_daily_wh_local' => 8000,
+            'load_daily_wh_utc' => 866,
+        ];
+
+        $cells = stationPowerDashboardFormatCells($sp);
+
+        $this->assertSame('12000 Wh', $cells['solar_today']);
+        $this->assertStringContainsString('local midnight', $cells['solar_today_title']);
+        $this->assertSame('8000 Wh', $cells['load_today']);
+        $this->assertStringContainsString('local midnight', $cells['load_today_title']);
+    }
+
+    public function testFormatCells_LocalZeroPrecedesUtcTotals(): void
+    {
+        $sp = [
+            'solar_daily_wh_local' => 0,
+            'solar_daily_wh_utc' => 969,
+            'load_daily_wh_local' => 0,
+            'load_daily_wh_utc' => 866,
+        ];
+
+        $cells = stationPowerDashboardFormatCells($sp);
+
+        $this->assertSame('0 Wh', $cells['solar_today']);
+        $this->assertStringContainsString('local midnight', $cells['solar_today_title']);
+        $this->assertSame('0 Wh', $cells['load_today']);
+    }
 }

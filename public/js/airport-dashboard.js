@@ -4712,8 +4712,8 @@ function displayStationPower(sp) {
     let solarTitle = 'Cumulative solar energy from local midnight to now (hourly buckets, airport timezone).';
     if (sp.solar_daily_wh_local !== null && sp.solar_daily_wh_local !== undefined && !Number.isNaN(Number(sp.solar_daily_wh_local))) {
         solarTodayWh = Number(sp.solar_daily_wh_local);
-    } else if (sp.solar_daily_kwh_utc !== null && sp.solar_daily_kwh_utc !== undefined && !Number.isNaN(Number(sp.solar_daily_kwh_utc))) {
-        solarTodayWh = Number(sp.solar_daily_kwh_utc) * 1000.0;
+    } else if (sp.solar_daily_wh_utc !== null && sp.solar_daily_wh_utc !== undefined && !Number.isNaN(Number(sp.solar_daily_wh_utc))) {
+        solarTodayWh = Number(sp.solar_daily_wh_utc);
         solarTitle = 'Cumulative solar energy for the UTC calendar day (local-day hourly data unavailable).';
     }
     const lblSolar = document.getElementById('station-power-label-solar-today');
@@ -4743,8 +4743,8 @@ function displayStationPower(sp) {
     let loadTitle = 'Cumulative DC energy from local midnight to now (hourly buckets, airport timezone).';
     if (sp.load_daily_wh_local !== null && sp.load_daily_wh_local !== undefined && !Number.isNaN(Number(sp.load_daily_wh_local))) {
         loadTodayWh = Number(sp.load_daily_wh_local);
-    } else if (sp.load_daily_kwh_utc !== null && sp.load_daily_kwh_utc !== undefined && !Number.isNaN(Number(sp.load_daily_kwh_utc))) {
-        loadTodayWh = Number(sp.load_daily_kwh_utc) * 1000.0;
+    } else if (sp.load_daily_wh_utc !== null && sp.load_daily_wh_utc !== undefined && !Number.isNaN(Number(sp.load_daily_wh_utc))) {
+        loadTodayWh = Number(sp.load_daily_wh_utc);
         loadTitle = 'Cumulative DC energy for the UTC calendar day (local-day hourly data unavailable).';
     }
     const lblLoad = document.getElementById('station-power-label-load-today');
