@@ -48,11 +48,7 @@ foreach ($urls as $url) {
     echo "    <priority>{$url['priority']}</priority>\n";
     if (!empty($url['images']) && is_array($url['images'])) {
         foreach ($url['images'] as $image) {
-            echo "    <image:image>\n";
-            echo "      <image:loc>" . htmlspecialchars($image['loc']) . "</image:loc>\n";
-            echo "      <image:title>" . htmlspecialchars($image['title']) . "</image:title>\n";
-            echo "      <image:caption>" . htmlspecialchars($image['caption']) . "</image:caption>\n";
-            echo "    </image:image>\n";
+            echo renderSitemapImageXml($image);
         }
     }
     echo "  </url>\n";

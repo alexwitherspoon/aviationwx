@@ -98,9 +98,11 @@ function getSitemapUrls(): array
             'priority' => '0.8'
         ];
         
-        $images = buildSitemapWebcamImages($airport, $airportId, $airportName);
-        if ($images !== []) {
-            $entry['images'] = $images;
+        if (isPublicApiEnabled()) {
+            $images = buildSitemapWebcamImages($airport, $airportId, $airportName);
+            if ($images !== []) {
+                $entry['images'] = $images;
+            }
         }
         
         $urls['airports'][] = $entry;
@@ -229,6 +231,25 @@ function buildSitemapWebcamImages(array $airport, string $airportId, string $air
     }
 
     return $images;
+}
+
+/**
+ * Render one Google Image sitemap block for a webcam image.
+ *
+ * @param array{loc: string, title: string, caption: string} $image
+ * @return string Image XML fragment (indented to match sitemap output)
+ */
+function renderSitemapImageXml(array $image): string
+{
+    $loc = htmlspecialchars($image['loc']);
+    $title = htmlspecialchars($image['title']);
+    $caption = htmlspecialchars($image['caption']);
+
+    return "    <image:image>\n"
+        . "      <image:loc>{$loc}</image:loc>\n"
+        . "      <image:title>{$title}</image:title>\n"
+        . "      <image:caption>{$caption}</image:caption>\n"
+        . "    </image:image>\n";
 }
 
 /**

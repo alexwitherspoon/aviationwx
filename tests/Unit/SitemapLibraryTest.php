@@ -377,6 +377,64 @@ class SitemapLibraryTest extends TestCase
     }
 
     /**
+     * Test image entries are omitted when the Public API is disabled, while airport pages remain
+     */
+    public function testGetSitemapUrls_OmitsImagesWhenPublicApiDisabled(): void
+    {
+        $fixture = __DIR__ . '/../Fixtures/airports.json.test';
+        $config = json_decode((string) file_get_contents($fixture), true);
+        $this->assertIsArray($config, 'Fixture config should parse');
+        $config['config']['public_api']['enabled'] = false;
+
+        $tempDir = sys_get_temp_dir() . '/aviationwx_sitemap_' . uniqid();
+        @mkdir($tempDir, 0755, true);
+        $tempFile = $tempDir . '/airports.json';
+        file_put_contents($tempFile, json_encode($config, JSON_UNESCAPED_SLASHES));
+
+        $originalPath = getenv('CONFIG_PATH');
+        putenv('CONFIG_PATH=' . $tempFile);
+        clearConfigCache();
+
+        try {
+            $urls = getSitemapUrls();
+
+            $this->assertNotEmpty($urls['airports'], 'Airport pages should remain when the API is disabled');
+            foreach ($urls['airports'] as $url) {
+                $this->assertArrayNotHasKey(
+                    'images',
+                    $url,
+                    'Image entries should be omitted when the Public API is disabled'
+                );
+            }
+        } finally {
+            putenv($originalPath !== false ? 'CONFIG_PATH=' . $originalPath : 'CONFIG_PATH');
+            clearConfigCache();
+            @unlink($tempFile);
+            @rmdir($tempDir);
+        }
+    }
+
+    /**
+     * Test the image XML renderer escapes XML-special characters
+     */
+    public function testRenderSitemapImageXml_EscapesXmlSpecialChars(): void
+    {
+        $xml = renderSitemapImageXml([
+            'loc' => 'https://api.aviationwx.org/v1/airports/ktst/webcams/0/image',
+            'title' => 'North<Tower & "Gate">',
+            'caption' => 'Live North<Tower & "Gate"> webcam',
+        ]);
+
+        $this->assertStringContainsString('<image:image>', $xml);
+        $this->assertStringContainsString('<image:loc>', $xml);
+        $this->assertStringContainsString('&lt;', $xml);
+        $this->assertStringContainsString('&gt;', $xml);
+        $this->assertStringContainsString('&amp;', $xml);
+        $this->assertStringContainsString('&quot;', $xml);
+        $this->assertStringNotContainsString('<Tower', $xml, 'Special characters should be entity-encoded');
+    }
+
+    /**
      * Test non-airport entries never carry images
      */
     public function testGetSitemapUrls_NonAirportEntriesHaveNoImages(): void

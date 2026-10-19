@@ -65,6 +65,44 @@ class SitemapTest extends TestCase
     }
 
     /**
+     * Test the rendered XML sitemap declares the image namespace and emits image blocks
+     */
+    public function testXmlSitemap_RendersImageBlocksWithNamespace(): void
+    {
+        ob_start();
+        require __DIR__ . '/../../api/sitemap.php';
+        $xml = (string) ob_get_clean();
+
+        $this->assertStringContainsString(
+            'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"',
+            $xml,
+            'Rendered sitemap should declare the image namespace'
+        );
+
+        $expectedImages = 0;
+        foreach (getAllSitemapUrls() as $url) {
+            $expectedImages += count($url['images'] ?? []);
+        }
+        $this->assertGreaterThan(0, $expectedImages, 'Fixture should exercise image blocks');
+
+        $sxe = simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NONET);
+        $this->assertNotFalse($sxe, 'Rendered sitemap should be well-formed XML');
+
+        $sxe->registerXPathNamespace('image', 'http://www.google.com/schemas/sitemap-image/1.1');
+        $imageNodes = $sxe->xpath('//image:image');
+        $this->assertCount($expectedImages, $imageNodes, 'Rendered image count should match library images');
+
+        $locs = $sxe->xpath('//image:image/image:loc');
+        $this->assertCount($expectedImages, $locs, 'Every image block should carry a namespaced loc');
+        foreach ($locs as $loc) {
+            $this->assertMatchesRegularExpression(
+                '#^https://api\.aviationwx\.org/v1/airports/[a-z0-9-]+/webcams/\d+/image$#',
+                (string) $loc
+            );
+        }
+    }
+
+    /**
      * Test sitemap includes all enabled airports
      */
     public function testSitemap_IncludesAllListedAirports(): void
