@@ -513,9 +513,7 @@ if ($themeCookie === 'dark') {
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><?= htmlspecialchars($displayName) ?> - <?= htmlspecialchars($intentSuffix) ?></h1>
-            <p class="airport-identity"><?= implode(' · ', array_map('htmlspecialchars', buildAirportIdentityParts($airport))) ?></p>
-            <p class="airport-provenance">Live conditions from on-airport weather stations. See the field as it is right now, before you trust the forecast.</p>
+            <h1><?= htmlspecialchars($displayName) ?></h1>
         </header>
         
         <?php
@@ -1311,6 +1309,7 @@ if ($themeCookie === 'dark') {
 
         <!-- Footer -->
         <footer class="footer">
+            <p class="airport-provenance">Live conditions from on-airport weather stations. See the field as it is right now, before you trust the forecast.</p>
             <p class="footer-disclaimer">
                 <em>Data is for advisory use only. Consult official weather sources for flight planning purposes.</em>
             </p>
