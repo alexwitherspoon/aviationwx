@@ -90,7 +90,7 @@ class ProftpdConfigTest extends TestCase
         $this->assertStringContainsString('UseIPv6', $contents);
         $this->assertMatchesRegularExpression('/^UseIPv6\s+on\b/m', $contents);
         $this->assertStringContainsString('AuthUserFile', $contents);
-        $this->assertStringContainsString('mod_ifsession.c', $contents);
+        $this->assertStringContainsString('mod_tls.c', $contents);
         $this->assertStringContainsString('Umask', $contents);
         $this->assertStringContainsString('002', $contents);
     }
