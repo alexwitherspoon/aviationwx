@@ -515,7 +515,7 @@ if ($themeCookie === 'dark') {
         <header class="header">
             <h1><?= htmlspecialchars($displayName) ?> - <?= htmlspecialchars($intentSuffix) ?></h1>
             <p class="airport-identity"><?= implode(' · ', array_map('htmlspecialchars', buildAirportIdentityParts($airport))) ?></p>
-            <p class="airport-provenance">Live conditions from on-airport weather stations. No forecasts, just instrument readings.</p>
+            <p class="airport-provenance">Live conditions from on-airport weather stations. See the field as it is right now, before you trust the forecast.</p>
         </header>
         
         <?php
