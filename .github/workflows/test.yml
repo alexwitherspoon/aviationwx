@@ -497,7 +497,7 @@ jobs:
           fi
           
           # Check for required components
-          grep -q "FROM php:8.4-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.4-apache" && exit 1)
+          grep -q "FROM php:8.4.27-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.4.27-apache" && exit 1)
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
           
           # Check for push webcam dependencies

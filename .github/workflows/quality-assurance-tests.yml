@@ -560,7 +560,7 @@ jobs:
             exit 1
           fi
           
-          grep -q "FROM php:8.4-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.4-apache" && exit 1)
+          grep -q "FROM php:8.4.27-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.4.27-apache" && exit 1)
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
           grep -q "proftpd" docker/Dockerfile || (echo "❌ proftpd not found in Dockerfile (required for push webcams)" && exit 1)
           grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
