@@ -1653,26 +1653,23 @@ jobs:
             echo "Forcing rebuild without cache due to config changes..."
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             # Force rebuild without cache
-            if ! docker compose -f docker/docker-compose.prod.yml build --no-cache web; then
+            if ! docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web; then
               clear_deploy_drain_markers
               deployment_error \
                 "Docker Build (No Cache)" \
                 "Docker build failed when forcing rebuild without cache" \
-                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Check disk space: df -h\n3. Check Docker daemon: systemctl status docker\n4. Review build logs above for specific errors\n5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache web"
+                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Check disk space: df -h\n3. Check Docker daemon: systemctl status docker\n4. Review build logs above for specific errors\n5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web"
             fi
             # Start containers with the newly built image
-            if ! docker compose -f docker/docker-compose.prod.yml up -d --pull; then
-              echo "⚠️  Warning: Start with --pull failed, trying without --pull..."
-              if ! docker compose -f docker/docker-compose.prod.yml up -d; then
-                clear_deploy_drain_markers
-                deployment_error \
-                  "Container Startup" \
-                  "Failed to start containers after build" \
-                  "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
-              fi
+            if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+              clear_deploy_drain_markers
+              deployment_error \
+                "Container Startup" \
+                "Failed to start containers after build" \
+                "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
             fi
             echo "✓ Containers rebuilt and started successfully (no cache)"
-          elif ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
+          elif ! docker compose -f docker/docker-compose.prod.yml build --pull web; then
             echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
             if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
               clear_deploy_drain_markers
@@ -1681,6 +1678,16 @@ jobs:
                 "Both build attempts (with --pull and without) failed" \
                 "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Verify all required files are present (check Dockerfile COPY commands)\n3. Check network connectivity for pulling base images: ping registry-1.docker.io\n4. Check disk space: df -h\n5. Check Docker daemon: systemctl status docker\n6. Review Docker logs: journalctl -u docker\n7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
             fi
+            echo "✓ Containers built and started successfully"
+          else
+            if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+              clear_deploy_drain_markers
+              deployment_error \
+                "Container Startup" \
+                "Failed to start containers after build" \
+                "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
+            fi
+            echo "✓ Containers built and started successfully"
           fi
 
           # If compose was a no-op, entrypoint never cleared markers - unstick the live scheduler.
