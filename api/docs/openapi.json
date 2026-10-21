@@ -2020,6 +2020,7 @@
           "index",
           "name",
           "image_url",
+          "captured_at",
           "refresh_seconds",
           "approximate_heading",
           "operator",
@@ -2035,6 +2036,11 @@
           "image_url": {
             "type": "string",
             "description": "Current image. Origin-relative /v1 path on GET /airports/{id}/webcams. Absolute canonical Public API v1 URL on GET /weathercam/bulk."
+          },
+          "captured_at": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Unix epoch seconds, UTC, of the current image's capture time. Null when there is no servable current image."
           },
           "history_url": {
             "type": "string",

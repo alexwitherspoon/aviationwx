@@ -237,6 +237,49 @@ class PublicApiWebcamMetadataTest extends TestCase
         }
     }
 
+    public function testFormatWebcamMetadata_CapturedAtReflectsCurrentOriginal(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airportId = 'cap';
+        $camIndex = 0;
+        $ts = 1704067900;
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents(
+            getWebcamOriginalTimestampedPath($airportId, $camIndex, $ts, 'jpg'),
+            "\xFF\xD8\xFF\xD9" . str_repeat("\x00", 8)
+        );
+
+        $airport = ['enabled' => true, 'maintenance' => false];
+        $webcam = ['name' => 'Camera'];
+
+        try {
+            $formatted = formatWebcamMetadata($airportId, $camIndex, $webcam, $airport);
+
+            $this->assertArrayHasKey('captured_at', $formatted);
+            $this->assertSame($ts, $formatted['captured_at']);
+        } finally {
+            $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+            if (is_dir($cacheDir)) {
+                $this->removeTree($cacheDir);
+            }
+        }
+    }
+
+    public function testFormatWebcamMetadata_CapturedAtNullWhenNoServableOriginal(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airport = ['enabled' => true, 'maintenance' => false];
+        $webcam = ['name' => 'Camera'];
+
+        $formatted = formatWebcamMetadata('capnull', 0, $webcam, $airport);
+
+        $this->assertArrayHasKey('captured_at', $formatted);
+        $this->assertNull($formatted['captured_at']);
+    }
+
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {
