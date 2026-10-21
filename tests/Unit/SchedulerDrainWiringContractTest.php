@@ -104,12 +104,12 @@ final class SchedulerDrainWiringContractTest extends TestCase
         // Drain must follow FORCE_REBUILD probes and precede compose recreate.
         $drainPos = strpos($workflow, 'scripts/deploy-drain-workers.sh');
         $forceProbePos = strpos($workflow, 'Verifying Docker config files on server');
-        $upPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml up -d --build --pull');
+        $upPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web');
         $this->assertNotFalse($drainPos);
         $this->assertNotFalse($forceProbePos);
         $this->assertNotFalse($upPos);
         $this->assertTrue($forceProbePos < $drainPos, 'Docker config probe must run before drain');
-        $this->assertTrue($drainPos < $upPos, 'Drain must run before compose up --build --pull');
+        $this->assertTrue($drainPos < $upPos, 'Drain must run before compose build/up');
         $this->assertStringContainsString(
             'Drain in-flight workers immediately before recreate',
             $workflow
