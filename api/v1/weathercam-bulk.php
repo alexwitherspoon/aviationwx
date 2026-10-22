@@ -86,8 +86,9 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
 /**
  * Replace cached live fields with the current original on disk.
  *
- * Catalog rows are config-keyed; format and captured_at are frame identity and
- * are not. Does not write back to cache.
+ * Catalog rows are config-keyed; format and captured_at are frame identity,
+ * which changes per capture, so they are re-resolved rather than cached. Does
+ * not write back to cache.
  *
  * @param list<array<string, mixed>> $airports
  * @return list<array<string, mixed>>

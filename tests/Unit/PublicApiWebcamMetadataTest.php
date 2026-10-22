@@ -280,6 +280,35 @@ class PublicApiWebcamMetadataTest extends TestCase
         $this->assertNull($formatted['captured_at']);
     }
 
+    public function testFormatWebcamImageVariants_ExplicitNullCurrent_DoesNotResolve(): void
+    {
+        self::loadFormatWebcamMetadata();
+
+        $airportId = 'cap';
+        $camIndex = 0;
+        $ts = 1704067900;
+        $framesDir = getWebcamFramesDir($airportId, $camIndex, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents(
+            getWebcamOriginalTimestampedPath($airportId, $camIndex, $ts, 'jpg'),
+            "\xFF\xD8\xFF\xD9" . str_repeat("\x00", 8)
+        );
+
+        try {
+            // A servable original exists on disk, but the caller explicitly
+            // resolved null, which must not be overridden by a second lookup.
+            $images = formatWebcamImageVariants($airportId, $camIndex, false, null, null);
+
+            $this->assertSame('original', $images[0]['variant']);
+            $this->assertArrayNotHasKey('format', $images[0]);
+        } finally {
+            $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+            if (is_dir($cacheDir)) {
+                $this->removeTree($cacheDir);
+            }
+        }
+    }
+
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {

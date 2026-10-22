@@ -180,7 +180,7 @@ function formatWebcamMetadata(
  * @param int $index Weathercam index
  * @param bool $absoluteUrls When true, URLs use the canonical v1 base
  * @param array|null $config Already-loaded configuration
- * @param array{path: string, format: string, timestamp: int}|null $current Resolved current original, or null to resolve here
+ * @param array{path: string, format: string, timestamp: int}|null $current Resolved current original (null when none). Omit to resolve in this call.
  * @return list<array{variant: string, height: int|null, format?: string, url: string}>
  */
 function formatWebcamImageVariants(
@@ -188,12 +188,14 @@ function formatWebcamImageVariants(
     int $index,
     bool $absoluteUrls,
     ?array $config = null,
-    ?array $current = null
+    ?array $current = []
 ): array
 {
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $images = [];
-    $current ??= getCurrentServableWebcamOriginal($airportId, $index);
+    if ($current === []) {
+        $current = getCurrentServableWebcamOriginal($airportId, $index);
+    }
     $original = [
         'variant' => 'original',
         'height' => null,
