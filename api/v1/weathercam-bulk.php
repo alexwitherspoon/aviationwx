@@ -84,9 +84,11 @@ function getWeathercamBulkAirports(?string $operatorFilter): array
 }
 
 /**
- * Replace cached images[0].format with the current original on disk.
+ * Replace cached live fields with the current original on disk.
  *
- * Catalog rows are config-keyed; format is not. Does not write back to cache.
+ * Catalog rows are config-keyed; format and captured_at are frame identity,
+ * which changes per capture, so they are re-resolved rather than cached. Does
+ * not write back to cache.
  *
  * @param list<array<string, mixed>> $airports
  * @return list<array<string, mixed>>
@@ -123,12 +125,15 @@ function refreshWeathercamBulkOriginalFormats(array $airports): array
                 $newWebcams[] = $webcam;
                 continue;
             }
-            $path = getWebcamOriginalPath($airportId, (int) $index);
-            $detected = $path !== null ? detectServableWebcamImageFormat($path) : null;
-            if ($detected !== null) {
-                $original['format'] = $detected;
+            $current = getCurrentServableWebcamOriginal($airportId, (int) $index);
+            if ($current !== null) {
+                $original['format'] = $current['format'];
+                $webcam['captured_at'] = $current['timestamp'];
+                $webcam['captured_at_iso'] = gmdate('c', $current['timestamp']);
             } else {
                 unset($original['format']);
+                $webcam['captured_at'] = null;
+                $webcam['captured_at_iso'] = null;
             }
             $images[0] = $original;
             $webcam['images'] = $images;

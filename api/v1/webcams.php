@@ -142,15 +142,20 @@ function formatWebcamMetadata(
         ?? $airport['webcam_refresh_seconds']
         ?? 60;
 
+    $current = getCurrentServableWebcamOriginal($airportId, $index);
+    $capturedAt = $current['timestamp'] ?? null;
+
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $metadata = [
         'index' => $index,
         'name' => $webcam['name'] ?? 'Camera ' . ($index + 1),
         'image_url' => publicApiV1Url($imagePath, $absoluteUrls),
         'refresh_seconds' => $refreshSeconds,
+        'captured_at' => $capturedAt,
+        'captured_at_iso' => $capturedAt !== null ? gmdate('c', $capturedAt) : null,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
         'operator' => getWeathercamOperator($webcam),
-        'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls, $config),
+        'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls, $config, $current),
     ];
 
     if ($historyEnabled) {
@@ -177,18 +182,22 @@ function formatWebcamMetadata(
  * @param int $index Weathercam index
  * @param bool $absoluteUrls When true, URLs use the canonical v1 base
  * @param array|null $config Already-loaded configuration
+ * @param array{path: string, format: string, timestamp: int}|null $current Resolved current original (null when none). Omit to resolve in this call.
  * @return list<array{variant: string, height: int|null, format?: string, url: string}>
  */
 function formatWebcamImageVariants(
     string $airportId,
     int $index,
     bool $absoluteUrls,
-    ?array $config = null
+    ?array $config = null,
+    ?array $current = []
 ): array
 {
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $images = [];
-    $current = getCurrentServableWebcamOriginal($airportId, $index);
+    if ($current === []) {
+        $current = getCurrentServableWebcamOriginal($airportId, $index);
+    }
     $original = [
         'variant' => 'original',
         'height' => null,

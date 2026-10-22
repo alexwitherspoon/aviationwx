@@ -312,6 +312,77 @@ class PublicApiWeathercamBulkTest extends TestCase
         }
     }
 
+    public function testGetWeathercamBulkAirports_RefreshesCapturedAt(): void
+    {
+        $airportId = 'bulkcap_unit';
+        $cam = 0;
+        $ts = time() - 10;
+        $framesDir = getWebcamFramesDir($airportId, $cam, $ts);
+        ensureCacheDir($framesDir);
+        file_put_contents(
+            getWebcamOriginalTimestampedPath($airportId, $cam, $ts, 'png'),
+            "\x89PNG\r\n\x1a\n" . str_repeat("\x00", 8)
+        );
+
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        rememberWeathercamBulkCatalog([[
+            'id' => $airportId,
+            'webcams' => [[
+                'index' => 0,
+                'images' => [
+                    ['variant' => 'original', 'url' => '/v1/x', 'format' => 'jpg'],
+                ],
+            ]],
+        ]], $sha);
+
+        try {
+            $airports = getWeathercamBulkAirports(null);
+            $row = $this->findAirport($airports, $airportId);
+            $this->assertNotNull($row);
+            $this->assertArrayHasKey('captured_at', $row['webcams'][0]);
+            $this->assertSame($ts, $row['webcams'][0]['captured_at']);
+            $this->assertSame(gmdate('c', $ts), $row['webcams'][0]['captured_at_iso']);
+            $this->assertSame('png', $row['webcams'][0]['images'][0]['format']);
+        } finally {
+            $base = CACHE_WEBCAMS_DIR . '/' . $airportId;
+            if (is_dir($base)) {
+                $it = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::CHILD_FIRST
+                );
+                foreach ($it as $file) {
+                    $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+                }
+                rmdir($base);
+            }
+        }
+    }
+
+    public function testGetWeathercamBulkAirports_MissingOriginal_CapturedAtNull(): void
+    {
+        $airportId = 'bulkcap_null_unit';
+        $sha = getConfigFileSha256();
+        $this->assertNotNull($sha);
+        rememberWeathercamBulkCatalog([[
+            'id' => $airportId,
+            'webcams' => [[
+                'index' => 0,
+                'images' => [
+                    ['variant' => 'original', 'url' => '/v1/x', 'format' => 'jpg'],
+                ],
+            ]],
+        ]], $sha);
+
+        $airports = getWeathercamBulkAirports(null);
+        $row = $this->findAirport($airports, $airportId);
+        $this->assertNotNull($row);
+        $this->assertArrayHasKey('captured_at', $row['webcams'][0]);
+        $this->assertNull($row['webcams'][0]['captured_at']);
+        $this->assertNull($row['webcams'][0]['captured_at_iso']);
+        $this->assertArrayNotHasKey('format', $row['webcams'][0]['images'][0]);
+    }
+
     public function testOpenApiWeathercamBulk_IsCatalogPathWithWeathercamOperator(): void
     {
         $spec = json_decode(
@@ -358,6 +429,10 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertArrayHasKey('image_url', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertArrayHasKey('operator', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertArrayHasKey('images', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertArrayHasKey('captured_at', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertContains('captured_at', $spec['components']['schemas']['Webcam']['required'] ?? []);
+        $this->assertArrayHasKey('captured_at_iso', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertContains('captured_at_iso', $spec['components']['schemas']['Webcam']['required'] ?? []);
         $imageFormat = $spec['components']['schemas']['Webcam']['properties']['images']['items']['properties']['format']['enum'] ?? [];
         $this->assertContains('png', $imageFormat);
         $this->assertNotContains(
