@@ -143,6 +143,7 @@ function formatWebcamMetadata(
         ?? 60;
 
     $current = getCurrentServableWebcamOriginal($airportId, $index);
+    $capturedAt = $current['timestamp'] ?? null;
 
     $imagePath = '/airports/' . $airportId . '/webcams/' . $index . '/image';
     $metadata = [
@@ -150,7 +151,8 @@ function formatWebcamMetadata(
         'name' => $webcam['name'] ?? 'Camera ' . ($index + 1),
         'image_url' => publicApiV1Url($imagePath, $absoluteUrls),
         'refresh_seconds' => $refreshSeconds,
-        'captured_at' => $current['timestamp'] ?? null,
+        'captured_at' => $capturedAt,
+        'captured_at_iso' => $capturedAt !== null ? gmdate('c', $capturedAt) : null,
         'approximate_heading' => formatWebcamApproximateHeadingForApi($webcam),
         'operator' => getWeathercamOperator($webcam),
         'images' => formatWebcamImageVariants($airportId, $index, $absoluteUrls, $config, $current),

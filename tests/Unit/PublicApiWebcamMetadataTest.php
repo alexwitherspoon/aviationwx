@@ -259,6 +259,8 @@ class PublicApiWebcamMetadataTest extends TestCase
 
             $this->assertArrayHasKey('captured_at', $formatted);
             $this->assertSame($ts, $formatted['captured_at']);
+            $this->assertArrayHasKey('captured_at_iso', $formatted);
+            $this->assertSame(gmdate('c', $ts), $formatted['captured_at_iso']);
         } finally {
             $cacheDir = getWebcamCameraDir($airportId, $camIndex);
             if (is_dir($cacheDir)) {
@@ -278,6 +280,8 @@ class PublicApiWebcamMetadataTest extends TestCase
 
         $this->assertArrayHasKey('captured_at', $formatted);
         $this->assertNull($formatted['captured_at']);
+        $this->assertArrayHasKey('captured_at_iso', $formatted);
+        $this->assertNull($formatted['captured_at_iso']);
     }
 
     public function testFormatWebcamImageVariants_ExplicitNullCurrent_DoesNotResolve(): void

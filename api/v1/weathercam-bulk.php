@@ -129,9 +129,11 @@ function refreshWeathercamBulkOriginalFormats(array $airports): array
             if ($current !== null) {
                 $original['format'] = $current['format'];
                 $webcam['captured_at'] = $current['timestamp'];
+                $webcam['captured_at_iso'] = gmdate('c', $current['timestamp']);
             } else {
                 unset($original['format']);
                 $webcam['captured_at'] = null;
+                $webcam['captured_at_iso'] = null;
             }
             $images[0] = $original;
             $webcam['images'] = $images;

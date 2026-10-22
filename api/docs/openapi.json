@@ -2021,6 +2021,7 @@
           "name",
           "image_url",
           "captured_at",
+          "captured_at_iso",
           "refresh_seconds",
           "approximate_heading",
           "operator",
@@ -2041,6 +2042,12 @@
             "type": "integer",
             "nullable": true,
             "description": "Unix epoch seconds, UTC, of the current image's capture time. Null when there is no servable current image."
+          },
+          "captured_at_iso": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "ISO 8601 timestamp, UTC, of the current image's capture time. Null when there is no servable current image."
           },
           "history_url": {
             "type": "string",

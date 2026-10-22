@@ -342,6 +342,7 @@ class PublicApiWeathercamBulkTest extends TestCase
             $this->assertNotNull($row);
             $this->assertArrayHasKey('captured_at', $row['webcams'][0]);
             $this->assertSame($ts, $row['webcams'][0]['captured_at']);
+            $this->assertSame(gmdate('c', $ts), $row['webcams'][0]['captured_at_iso']);
             $this->assertSame('png', $row['webcams'][0]['images'][0]['format']);
         } finally {
             $base = CACHE_WEBCAMS_DIR . '/' . $airportId;
@@ -378,6 +379,7 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertNotNull($row);
         $this->assertArrayHasKey('captured_at', $row['webcams'][0]);
         $this->assertNull($row['webcams'][0]['captured_at']);
+        $this->assertNull($row['webcams'][0]['captured_at_iso']);
         $this->assertArrayNotHasKey('format', $row['webcams'][0]['images'][0]);
     }
 
@@ -429,6 +431,8 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertArrayHasKey('images', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertArrayHasKey('captured_at', $spec['components']['schemas']['Webcam']['properties'] ?? []);
         $this->assertContains('captured_at', $spec['components']['schemas']['Webcam']['required'] ?? []);
+        $this->assertArrayHasKey('captured_at_iso', $spec['components']['schemas']['Webcam']['properties'] ?? []);
+        $this->assertContains('captured_at_iso', $spec['components']['schemas']['Webcam']['required'] ?? []);
         $imageFormat = $spec['components']['schemas']['Webcam']['properties']['images']['items']['properties']['format']['enum'] ?? [];
         $this->assertContains('png', $imageFormat);
         $this->assertNotContains(
