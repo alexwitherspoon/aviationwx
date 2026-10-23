@@ -698,6 +698,7 @@ $attribution = getPublicApiAttributionText();
         <h2>Resources</h2>
         <ul style="color: var(--text-secondary); margin-left: 1.5rem;">
             <li><a href="/openapi.json">OpenAPI Specification (JSON)</a></li>
+            <li><a href="https://aviationwx.org/llms.txt">llms.txt (guidance for AI agents)</a></li>
             <li><a href="https://aviationwx.org">AviationWX.org Website</a></li>
             <li><a href="https://github.com/alexwitherspoon/aviationwx">GitHub Repository</a></li>
         </ul>

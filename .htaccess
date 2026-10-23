@@ -33,6 +33,10 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^robots\.txt$ public/robots.txt [L]
 
+    # Route llms.txt to public/llms.txt
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^llms\.txt$ public/llms.txt [L]
+
     # Upload SFTP SSH host key roster (well-known JSON)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^\.well-known/aviationwx-upload-ssh-host-keys\.json$ api/upload-ssh-host-keys.php [L]
