@@ -1,53 +1,39 @@
 # GitHub Actions Setup
 
-## Quick Start
+Repository secrets required by the CI and deploy workflows.
 
-1. **Add Secrets to Your Repository:**
-   - Go to your GitHub repository
-   - Click **Settings** → **Secrets and variables** → **Actions**
-   - Click **New repository secret**
+## Secrets
 
-2. **Add These Secrets:**
+Add these under **Settings** > **Secrets and variables** > **Actions** > **New repository secret**.
 
-   **Secret 1:** `BLUEHOST_FTP_HOST`
-   - Value: Your FTP hostname (e.g., `aviationwx.org`)
+| Secret | Required | Purpose |
+| --- | --- | --- |
+| `SSH_PRIVATE_KEY` | yes | Private key for the deploy runner. The matching public key must be authorized on the target host. |
+| `HOST` | yes | SSH target hostname or IP. |
+| `USER` | yes | SSH login user on the target host. |
+| `LETSENCRYPT_EMAIL` | yes | Email for TLS certificate registration and renewal notices. |
+| `CLOUDFLARE_API_TOKEN` | yes | Cloudflare DNS API token for the DNS-01 challenge and renewals. |
+| `OPENWEATHERMAP_API_KEY` | no | Used by the weekly upstream API probes. The OpenWeatherMap check skips when unset. |
 
-   **Secret 2:** `BLUEHOST_FTP_USER`
-   - Value: Your Bluehost FTP username
+`GITHUB_TOKEN` is provided automatically and does not need to be added.
 
-   **Secret 3:** `BLUEHOST_FTP_PASSWORD`
-   - Value: Your Bluehost FTP password
+## What runs when
 
-3. **Push to GitHub:**
-   ```bash
-   git push origin main
-   ```
+- Pull requests and pushes to `main`: tests, lint, and CodeQL.
+- `main` after tests pass: `Deploy to Production` runs automatically, or manually from the **Actions** tab.
+- Weekly: link check, upstream API probes, and WMM coefficient verify.
 
-The workflows will automatically:
-- ✅ Test your code on push/PR
-- ✅ Deploy to Bluehost when pushing to `main`
-
-## Viewing Workflow Runs
-
-1. Click **Actions** tab in your GitHub repository
-2. See real-time logs of tests and deployments
-3. Green checkmark = success, red X = failure
+The deploy connects over SSH to `USER@HOST`, builds the image, and recreates the containers with `docker compose -f docker/docker-compose.prod.yml`, bootstraps TLS, then runs post-deploy health checks with rollback.
 
 ## Troubleshooting
 
 ### Tests are failing
 
-- Check the **Actions** tab for error details
-- Run tests locally: `php -l *.php`
-- See `.github/workflows/test.yml` for test commands
+- Check the **Actions** tab for the failing job.
+- Run the suite locally with `make test-ci` (or `make test-unit` for a faster subset).
 
 ### Deployment failed
 
-- Verify FTP credentials are correct
-- Check Bluehost file permissions
-- See `.github/workflows/deploy.yml` for deployment details
-
-### "No secrets found"
-
-GitHub needs the secrets configured before deployment works.
-
+- Confirm `SSH_PRIVATE_KEY`, `HOST`, and `USER` are set and the host accepts the key.
+- Confirm `LETSENCRYPT_EMAIL` and `CLOUDFLARE_API_TOKEN` are set; TLS bootstrap fails without them.
+- See `.github/workflows/deploy-docker.yml` for the exact steps.
