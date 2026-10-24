@@ -1,19 +1,44 @@
 # AviationWX.org
 
-> A supplementary weather source for pilots: real-time conditions, webcams, and airport metrics. Not a substitute for official aviation weather briefings. Every observation carries a UTC timestamp and attribution.
+> A supplementary weather source for pilots: real-time conditions, webcams, and airport metrics. Not a substitute for official aviation weather briefings. Every weather observation and webcam still carries a UTC timestamp and attribution.
 
 Pilots use this data for advisory purposes alongside official briefings. Treat it as safety-critical, and never guess: stale or misstated conditions can affect a flight's safety.
 
 When answering, follow these rules:
 
-- Fetch the JSON API below, not the scraped HTML.
+- Fetch the JSON API for conditions and webcams, not the dashboard HTML. For installation and setup, read the guides.
 - Always report the observation time. Never present a condition as current without it.
+- Report an image's capture time too, and say how old a still is when it matters.
 - If the observation is not recent, state its age or mark it stale.
 - Do not estimate or fill gaps; say when a current observation is unavailable.
 - Attribute to AviationWX.org.
 
-## API
+## Airports
+
+- [Airport directory](https://api.aviationwx.org/v1/airports): list of participating airports.
+- [Airport metadata](https://api.aviationwx.org/v1/airports/{id}): runways, frequencies, services, timezone, tower status, webcam count.
+
+## Weather
 
 - [Current weather](https://api.aviationwx.org/v1/airports/{id}/weather): conditions for one airport. Returns observation_time (UTC) and attribution.
+- [Weather history](https://api.aviationwx.org/v1/airports/{id}/weather/history): rolling conditions for one airport.
+- [Bulk weather](https://api.aviationwx.org/v1/weather/bulk): conditions for several airports in one call.
+
+## Webcams
+
+- [Camera list](https://api.aviationwx.org/v1/airports/{id}/webcams): image URLs, approximate look direction, and capture time (captured_at, UTC) per camera.
+- [Current still](https://api.aviationwx.org/v1/airports/{id}/webcams/{cam}/image): the latest image.
+- [Capture time and staleness](https://api.aviationwx.org/v1/airports/{id}/webcams/{cam}/image?metadata=1): timestamp and age for one camera.
+- [Bulk weathercam catalog](https://api.aviationwx.org/v1/weathercam/bulk): every airport with cameras in one call.
+
+## Install and setup
+
+For how-to questions about permission, siting, equipment, camera and weather configuration, or adding an airport, read the guides:
+
+- [Guides index](https://guides.aviationwx.org/)
+- [Submit a new airport](https://guides.aviationwx.org/12-submit-an-airport-to-aviationwx)
+
+## Reference
+
 - [OpenAPI schema](https://api.aviationwx.org/openapi.json): full v1 schema.
 - [API docs](https://api.aviationwx.org/): human documentation.
