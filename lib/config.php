@@ -648,6 +648,37 @@ function getUploadHealthProbeConnectHost(): string
 }
 
 /**
+ * Whether any configured webcam is a push camera (uploads via FTP/SFTP).
+ *
+ * Same predicate as WebcamWorker::isPushCamera(), lifted to config so the
+ * upload cluster can gate on it. A pull-only site returns false and never
+ * opens upload doors.
+ *
+ * @param array<string, mixed>|null $config Loaded config; loaded when null
+ * @return bool True when at least one configured camera is a push camera
+ */
+function hasPushCamerasConfigured(?array $config = null): bool
+{
+    $config = $config ?? loadConfig();
+
+    foreach ($config['airports'] ?? [] as $airport) {
+        if (!is_array($airport)) {
+            continue;
+        }
+        foreach ($airport['webcams'] ?? [] as $cam) {
+            if (!is_array($cam)) {
+                continue;
+            }
+            if (($cam['type'] ?? null) === 'push' || isset($cam['push_config'])) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
  * Collect usernames from all push webcam push_config entries (lowercase keys).
  *
  * @return array<string, true>

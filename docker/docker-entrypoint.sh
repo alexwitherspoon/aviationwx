@@ -387,24 +387,38 @@ fi
 
 # FTP/SFTP parent dirs: libexec set-cache-permissions (called with cache init above)
 
+# The upload cluster (ProFTPD, sshd, fail2ban, rsyslog, upload probes) boots only
+# when at least one configured camera is a push camera; a pull-only site has no
+# upload doors to open. Fail open on a PHP error, not on an empty result.
+if [ -x /usr/local/bin/php ]; then
+    APP_PHP=/usr/local/bin/php
+else
+    APP_PHP=php
+fi
+UPLOAD_IN_USE="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo hasPushCamerasConfigured() ? "1" : "0";' 2>/dev/null || echo 1)"
+
 # Configure and start ProFTPD (dual-stack; MasqueradeAddress + TLS in conf.d)
 PROFTPD_PID=""
-if [ -f /usr/local/bin/configure-proftpd.sh ]; then
-    # shellcheck source=/dev/null
-    source /usr/local/bin/configure-proftpd.sh
-    CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
-elif [ -f /var/www/html/scripts/configure-proftpd.sh ]; then
-    # shellcheck source=/dev/null
-    source /var/www/html/scripts/configure-proftpd.sh
-    CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
+if [ "$UPLOAD_IN_USE" = "1" ]; then
+    if [ -f /usr/local/bin/configure-proftpd.sh ]; then
+        # shellcheck source=/dev/null
+        source /usr/local/bin/configure-proftpd.sh
+        CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
+    elif [ -f /var/www/html/scripts/configure-proftpd.sh ]; then
+        # shellcheck source=/dev/null
+        source /var/www/html/scripts/configure-proftpd.sh
+        CONFIG_FILE="$CONFIG_FILE" configure_and_start_proftpd || true
+    else
+        echo "⚠️  Warning: configure-proftpd.sh not found - FTP service will not be available"
+    fi
 else
-    echo "⚠️  Warning: configure-proftpd.sh not found - FTP service will not be available"
+    echo "✓ Upload cluster skipped: no push camera configured"
 fi
 
 sleep 1
 
-# Configure and start rsyslog for sshd dedicated logging
-if command -v rsyslogd >/dev/null 2>&1; then
+# Configure and start rsyslog for sshd dedicated logging (upload cluster only)
+if [ "$UPLOAD_IN_USE" = "1" ] && command -v rsyslogd >/dev/null 2>&1; then
     # Ensure rsyslog config directory exists
     mkdir -p /etc/rsyslog.d
     # Create rsyslog config for sshd if it doesn't exist
@@ -446,12 +460,7 @@ else
     echo "⚠️  Warning: /etc/ssh/sshd_config not found - SFTP port not applied"
 fi
 
-# Start sshd when SFTP uploads are enabled (upload_capabilities.sftp)
-if [ -x /usr/local/bin/php ]; then
-    APP_PHP=/usr/local/bin/php
-else
-    APP_PHP=php
-fi
+# Start sshd when a push camera is configured and SFTP uploads are enabled
 SFTP_UPLOAD_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["sftp"] ? "1" : "0";' 2>/dev/null || echo 1)"
 UPLOAD_IPV4_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv4"] ? "1" : "0";' 2>/dev/null || echo 1)"
 UPLOAD_IPV6_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv6"] ? "1" : "0";' 2>/dev/null || echo 1)"
@@ -467,12 +476,14 @@ if [ -f /etc/ssh/sshd_config ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLO
     fi
 fi
 
-if [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
+if [ "$UPLOAD_IN_USE" = "1" ] && [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
     echo "Starting sshd..."
     service ssh start || {
         echo "Error: sshd failed to start"
         exit 1
     }
+elif [ "$UPLOAD_IN_USE" = "0" ]; then
+    echo "sshd skipped: no push camera configured"
 elif [ "$SFTP_UPLOAD_ENABLED" = "1" ]; then
     echo "SFTP uploads disabled via upload_capabilities (no address families enabled)"
 else
@@ -487,7 +498,7 @@ if [ -n "${PROFTPD_PID:-}" ]; then
     fi
 fi
 
-if [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
+if [ "$UPLOAD_IN_USE" = "1" ] && [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
     if ! pgrep -x sshd > /dev/null; then
         echo "Error: sshd is not running"
         exit 1
@@ -495,26 +506,30 @@ if [ "$SFTP_UPLOAD_ENABLED" = "1" ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "
 fi
 
 # Verify ports are listening (give services a moment to bind)
-sleep 2
-if ! netstat -tuln 2>/dev/null | grep -qE ":${FTP_CONTROL_PORT}|:${SFTP_PORT}"; then
-    echo "Warning: FTP/SFTP ports may not be listening yet (expect ${FTP_CONTROL_PORT}, ${SFTP_PORT})"
+if [ "$UPLOAD_IN_USE" = "1" ]; then
+    sleep 2
+    if ! netstat -tuln 2>/dev/null | grep -qE ":${FTP_CONTROL_PORT}|:${SFTP_PORT}"; then
+        echo "Warning: FTP/SFTP ports may not be listening yet (expect ${FTP_CONTROL_PORT}, ${SFTP_PORT})"
+    fi
 fi
 
 echo "All services started successfully"
 
 # Sync FTP/SFTP/FTPS configuration before upload probes (probe accounts live in /etc).
 # Runs in background so Apache startup is not blocked; upload-probe-runner waits for completion.
-echo "Syncing FTP/SFTP/FTPS configuration (background)..."
-: > /tmp/sync-push-config.log || echo "Warning: could not truncate /tmp/sync-push-config.log"
-(cd /var/www/html && timeout 30 /usr/local/bin/php scripts/sync-push-config.php >> /tmp/sync-push-config.log 2>&1 && \
-    echo "✓ FTP/SFTP/FTPS configuration synced successfully" >> /tmp/sync-push-config.log || \
-    echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed or timed out (check /tmp/sync-push-config.log)" >> /tmp/sync-push-config.log) &
-SYNC_PID=$!
+if [ "$UPLOAD_IN_USE" = "1" ]; then
+    echo "Syncing FTP/SFTP/FTPS configuration (background)..."
+    : > /tmp/sync-push-config.log || echo "Warning: could not truncate /tmp/sync-push-config.log"
+    (cd /var/www/html && timeout 30 /usr/local/bin/php scripts/sync-push-config.php >> /tmp/sync-push-config.log 2>&1 && \
+        echo "✓ FTP/SFTP/FTPS configuration synced successfully" >> /tmp/sync-push-config.log || \
+        echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed or timed out (check /tmp/sync-push-config.log)" >> /tmp/sync-push-config.log) &
+    SYNC_PID=$!
 
-# Start upload probe runner (30s) and service watchdog (50s loop) in background
-echo "Starting upload health probe runner..."
-/usr/local/libexec/aviationwx/upload-probe-runner.sh &
-PROBE_RUNNER_PID=$!
+    # Start upload probe runner (30s) in background
+    echo "Starting upload health probe runner..."
+    /usr/local/libexec/aviationwx/upload-probe-runner.sh &
+    PROBE_RUNNER_PID=$!
+fi
 
 echo "Starting service watchdog..."
 /usr/local/bin/service-watchdog.sh &
@@ -524,6 +539,7 @@ WATCHDOG_PID=$!
 trap "kill $PROBE_RUNNER_PID $WATCHDOG_PID 2>/dev/null || true" EXIT
 
 # Write fail2ban jail and sshd-sftp filter for the configured FTP/SFTP ports
+if [ "$UPLOAD_IN_USE" = "1" ]; then
 echo "Configuring fail2ban ports..."
 FTP_FAIL2BAN_PORTS="${FTP_CONTROL_PORT}"
 if [ "$FTP_CONTROL_PORT" -ne "$FTPS_EXPLICIT_TLS_PORT" ]; then
@@ -608,6 +624,7 @@ fi
 
 # Trap signals to clean up fail2ban on exit
 trap "kill $WATCHDOG_PID $FAIL2BAN_PID 2>/dev/null || true" EXIT
+fi
 
 # Configure Apache port and bind address based on environment
 # Production (APP_ENV=production): Listen on 127.0.0.1:8080 (internal, behind nginx)
