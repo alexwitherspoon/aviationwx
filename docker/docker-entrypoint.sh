@@ -389,14 +389,19 @@ fi
 
 # The upload cluster (ProFTPD, sshd, fail2ban, rsyslog, upload probes) boots only
 # when at least one configured camera is a push camera; a pull-only site has no
-# upload doors to open. A PHP error fails open (the || echo 1 below); config that
-# parses but is empty or invalid fails closed on purpose.
+# upload doors to open. If detection cannot run, the cluster stays disabled
+# (fail closed) so a broken boot can never reopen doors.
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
 else
     APP_PHP=php
 fi
-UPLOAD_IN_USE="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo hasPushCamerasConfigured() ? "1" : "0";' 2>/dev/null || echo 1)"
+UPLOAD_IN_USE="0"
+if DETECTED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo hasPushCamerasConfigured() ? "1" : "0";' 2>/dev/null)" && [ -n "$DETECTED" ]; then
+    UPLOAD_IN_USE="$DETECTED"
+else
+    echo "⚠️  Warning: push-camera detection failed; upload cluster stays disabled" >&2
+fi
 
 # Configure and start ProFTPD (dual-stack; MasqueradeAddress + TLS in conf.d)
 PROFTPD_PID=""
