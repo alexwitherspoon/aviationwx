@@ -34,4 +34,32 @@ class UploadHealthProbeWatchdogTest extends TestCase
             'float string' => ['1730123456.5', 1],
         ];
     }
+
+    /**
+     * The watchdog loop calls this gate once per cycle before it decides whether
+     * to monitor and restart ProFTPD/sshd. Cron monitoring is outside the gate.
+     *
+     * @return array<string, array{0: string|null, 1: int}>
+     */
+    public static function uploadMonitoringEnabledProvider(): array
+    {
+        return [
+            'disabled (no push camera)' => ['0', 1],
+            'enabled (push camera)' => ['1', 0],
+            'unset (fail open)' => [null, 0],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('uploadMonitoringEnabledProvider')]
+    public function testUploadMonitoringEnabled_FollowsMasterGate(?string $value, int $expectedExitCode): void
+    {
+        $common = dirname(__DIR__, 2) . '/scripts/upload-daemon-common.sh';
+        $set = $value === null ? '' : ('export UPLOAD_IN_USE=' . escapeshellarg($value) . ' && ');
+        $cmd = sprintf(
+            'bash -c %s',
+            escapeshellarg('. ' . $common . ' && ' . $set . 'upload_monitoring_enabled')
+        );
+        exec($cmd, $output, $code);
+        $this->assertSame($expectedExitCode, $code, implode("\n", $output));
+    }
 }

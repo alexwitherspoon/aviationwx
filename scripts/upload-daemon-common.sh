@@ -7,6 +7,13 @@ WATCHDOG_LOOP_SEC="${WATCHDOG_LOOP_SEC:-50}"
 UPLOAD_PROBE_FAIL_STREAK_THRESHOLD="${UPLOAD_PROBE_FAIL_STREAK_THRESHOLD:-2}"
 UPLOAD_DAEMON_RESTART_MIN_INTERVAL_SEC="${UPLOAD_DAEMON_RESTART_MIN_INTERVAL_SEC:-1800}"
 
+# Master gate for upload monitoring: the entrypoint sets UPLOAD_IN_USE to "1"
+# only when a push camera is configured. Unset defaults to enabled (fail open)
+# so a standalone watchdog keeps the prior monitor-everything behavior.
+upload_monitoring_enabled() {
+    [ "${UPLOAD_IN_USE:-1}" = "1" ]
+}
+
 UPLOAD_PROBE_STATE_FILE="${UPLOAD_PROBE_STATE_FILE:-/var/lib/aviationwx/upload-probe.json}"
 PROFTPD_RESTART_LOCK="${PROFTPD_RESTART_LOCK:-/var/lib/aviationwx/proftpd.restart.lock}"
 SSHD_RESTART_LOCK="${SSHD_RESTART_LOCK:-/var/lib/aviationwx/sshd.restart.lock}"

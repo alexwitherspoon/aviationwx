@@ -533,7 +533,7 @@ if [ "$UPLOAD_IN_USE" = "1" ]; then
 fi
 
 echo "Starting service watchdog..."
-/usr/local/bin/service-watchdog.sh &
+UPLOAD_IN_USE="$UPLOAD_IN_USE" /usr/local/bin/service-watchdog.sh &
 WATCHDOG_PID=$!
 
 # Trap signals to clean up background monitors on exit
