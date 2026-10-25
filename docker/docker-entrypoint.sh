@@ -389,7 +389,8 @@ fi
 
 # The upload cluster (ProFTPD, sshd, fail2ban, rsyslog, upload probes) boots only
 # when at least one configured camera is a push camera; a pull-only site has no
-# upload doors to open. Fail open on a PHP error, not on an empty result.
+# upload doors to open. A PHP error fails open (the || echo 1 below); config that
+# parses but is empty or invalid fails closed on purpose.
 if [ -x /usr/local/bin/php ]; then
     APP_PHP=/usr/local/bin/php
 else
