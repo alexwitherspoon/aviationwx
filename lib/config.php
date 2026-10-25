@@ -648,11 +648,28 @@ function getUploadHealthProbeConnectHost(): string
 }
 
 /**
+ * Whether a single webcam definition is a push camera (uploads via FTP/SFTP).
+ *
+ * Single source of truth for the push predicate, shared by the webcam workers
+ * and hasPushCamerasConfigured().
+ *
+ * @param mixed $cam Webcam definition
+ * @return bool True when the camera pushes via FTP/SFTP
+ */
+function isPushCameraConfig($cam): bool
+{
+    if (!is_array($cam)) {
+        return false;
+    }
+
+    return ($cam['type'] ?? null) === 'push' || isset($cam['push_config']);
+}
+
+/**
  * Whether any configured webcam is a push camera (uploads via FTP/SFTP).
  *
- * Same predicate as WebcamWorker::isPushCamera(), lifted to config so the
- * upload cluster can gate on it. A pull-only site returns false and never
- * opens upload doors.
+ * Used to gate the upload cluster so a pull-only site never opens upload
+ * doors.
  *
  * @param array<string, mixed>|null $config Loaded config; loaded when null
  * @return bool True when at least one configured camera is a push camera
@@ -666,10 +683,7 @@ function hasPushCamerasConfigured(?array $config = null): bool
             continue;
         }
         foreach ($airport['webcams'] ?? [] as $cam) {
-            if (!is_array($cam)) {
-                continue;
-            }
-            if (($cam['type'] ?? null) === 'push' || isset($cam['push_config'])) {
+            if (isPushCameraConfig($cam)) {
                 return true;
             }
         }
