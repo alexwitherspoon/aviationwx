@@ -46,7 +46,7 @@ class UploadHealthProbeWatchdogTest extends TestCase
         return [
             'disabled (no push camera)' => ['0', 1],
             'enabled (push camera)' => ['1', 0],
-            'unset (fail open)' => [null, 0],
+            'unset (fail closed)' => [null, 1],
         ];
     }
 
