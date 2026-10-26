@@ -22,7 +22,7 @@ When answering, follow these rules:
 
 - [Current weather](https://api.aviationwx.org/v1/airports/{id}/weather): conditions for one airport. Returns observation_time (UTC) and attribution.
 - [Weather history](https://api.aviationwx.org/v1/airports/{id}/weather/history): rolling conditions for one airport.
-- [Bulk weather](https://api.aviationwx.org/v1/weather/bulk): conditions for several airports in one call.
+- [Bulk weather](https://api.aviationwx.org/v1/weather/bulk?airports={id1},{id2}): conditions for several airports in one call (comma-separated ids).
 
 ## Webcams
 
