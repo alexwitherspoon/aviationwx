@@ -467,9 +467,9 @@ else
 fi
 
 # Start sshd when a push camera is configured and SFTP uploads are enabled
-SFTP_UPLOAD_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["sftp"] ? "1" : "0";' 2>/dev/null || echo 1)"
-UPLOAD_IPV4_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv4"] ? "1" : "0";' 2>/dev/null || echo 1)"
-UPLOAD_IPV6_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv6"] ? "1" : "0";' 2>/dev/null || echo 1)"
+SFTP_UPLOAD_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["sftp"] ? "1" : "0";' 2>/dev/null || echo 0)"
+UPLOAD_IPV4_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv4"] ? "1" : "0";' 2>/dev/null || echo 0)"
+UPLOAD_IPV6_ENABLED="$("$APP_PHP" -r 'require_once "/var/www/html/lib/config.php"; echo getUploadCapabilities()["ipv6"] ? "1" : "0";' 2>/dev/null || echo 0)"
 
 if [ -f /etc/ssh/sshd_config ] && { [ "$UPLOAD_IPV4_ENABLED" = "1" ] || [ "$UPLOAD_IPV6_ENABLED" = "1" ]; }; then
     sed -i '/^ListenAddress[[:space:]]/d' /etc/ssh/sshd_config

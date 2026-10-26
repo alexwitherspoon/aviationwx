@@ -650,8 +650,9 @@ function getUploadHealthProbeConnectHost(): string
 /**
  * Whether a single webcam definition is a push camera (uploads via FTP/SFTP).
  *
- * Single source of truth for the push predicate, shared by the webcam workers
- * and hasPushCamerasConfigured().
+ * Shared by the webcam workers and the config-level scans that classify a
+ * camera. A few script-level call sites still inline the same check and should
+ * migrate here over time.
  *
  * @param mixed $cam Webcam definition
  * @return bool True when the camera pushes via FTP/SFTP
@@ -709,8 +710,7 @@ function getPushWebcamUsernameIndex(?array $config = null): array
             if (!is_array($cam)) {
                 continue;
             }
-            $isPush = (isset($cam['type']) && $cam['type'] === 'push')
-                || isset($cam['push_config']);
+            $isPush = isPushCameraConfig($cam);
             if (!$isPush || !isset($cam['push_config']['username'])) {
                 continue;
             }
