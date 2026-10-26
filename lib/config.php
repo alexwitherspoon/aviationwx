@@ -648,6 +648,52 @@ function getUploadHealthProbeConnectHost(): string
 }
 
 /**
+ * Whether a single webcam definition is a push camera (uploads via FTP/SFTP).
+ *
+ * Shared by the webcam workers and the config-level scans that classify a
+ * camera. A few script-level call sites still inline the same check and should
+ * migrate here over time.
+ *
+ * @param mixed $cam Webcam definition
+ * @return bool True when the camera pushes via FTP/SFTP
+ */
+function isPushCameraConfig($cam): bool
+{
+    if (!is_array($cam)) {
+        return false;
+    }
+
+    return ($cam['type'] ?? null) === 'push' || isset($cam['push_config']);
+}
+
+/**
+ * Whether any configured webcam is a push camera (uploads via FTP/SFTP).
+ *
+ * Used to gate the upload cluster so a pull-only site never opens upload
+ * doors.
+ *
+ * @param array<string, mixed>|null $config Loaded config; loaded when null
+ * @return bool True when at least one configured camera is a push camera
+ */
+function hasPushCamerasConfigured(?array $config = null): bool
+{
+    $config = $config ?? loadConfig();
+
+    foreach ($config['airports'] ?? [] as $airport) {
+        if (!is_array($airport)) {
+            continue;
+        }
+        foreach ($airport['webcams'] ?? [] as $cam) {
+            if (isPushCameraConfig($cam)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
  * Collect usernames from all push webcam push_config entries (lowercase keys).
  *
  * @return array<string, true>
@@ -664,8 +710,7 @@ function getPushWebcamUsernameIndex(?array $config = null): array
             if (!is_array($cam)) {
                 continue;
             }
-            $isPush = (isset($cam['type']) && $cam['type'] === 'push')
-                || isset($cam['push_config']);
+            $isPush = isPushCameraConfig($cam);
             if (!$isPush || !isset($cam['push_config']['username'])) {
                 continue;
             }

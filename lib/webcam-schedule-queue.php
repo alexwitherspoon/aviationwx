@@ -377,8 +377,7 @@ class WebcamScheduleQueue
      */
     private function isPushCamera(array $webcam): bool
     {
-        return (isset($webcam['type']) && $webcam['type'] === 'push')
-            || isset($webcam['push_config']);
+        return isPushCameraConfig($webcam);
     }
 
     /**

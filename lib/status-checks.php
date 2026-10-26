@@ -958,9 +958,12 @@ function checkFtpSftpServices(): array
         ];
     }
 
+    // A pull-only site has no upload doors, so FTP/SFTP are not required even
+    // when upload_capabilities defaults every flag on.
+    $hasPushCameras = hasPushCamerasConfigured();
     $caps = getUploadCapabilities();
-    $ftpRequired = $caps['plain_ftp'] || $caps['ftps'];
-    $sftpRequired = $caps['sftp'];
+    $ftpRequired = $hasPushCameras && ($caps['plain_ftp'] || $caps['ftps']);
+    $sftpRequired = $hasPushCameras && $caps['sftp'];
 
     $ftpOk = !$ftpRequired || $ftpRunning;
     $sftpOk = !$sftpRequired || $sshdRunning;

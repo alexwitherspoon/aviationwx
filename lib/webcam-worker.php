@@ -607,8 +607,7 @@ class WebcamWorker
      */
     public function isPushCamera(): bool
     {
-        return (isset($this->camConfig['type']) && $this->camConfig['type'] === 'push')
-            || isset($this->camConfig['push_config']);
+        return isPushCameraConfig($this->camConfig);
     }
 }
 

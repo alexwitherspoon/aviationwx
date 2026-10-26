@@ -180,16 +180,18 @@ watchdog_log "INFO" "Service watchdog started (loop=${WATCHDOG_LOOP_SEC}s)"
 while true; do
     set +e
 
-    if ! pgrep -x proftpd >/dev/null 2>&1; then
-        handle_upload_daemon_down "ftps" "proftpd" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
-    else
-        evaluate_probe_protocol "ftps" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
-    fi
+    if upload_monitoring_enabled; then
+        if ! pgrep -x proftpd >/dev/null 2>&1; then
+            handle_upload_daemon_down "ftps" "proftpd" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
+        else
+            evaluate_probe_protocol "ftps" "$FTPS_FAIL_STREAK_FILE" "$FTPS_LAST_RESTART_FILE" restart_proftpd_daemon
+        fi
 
-    if ! pgrep -x sshd >/dev/null 2>&1; then
-        handle_upload_daemon_down "sftp" "sshd" "$SFTP_FAIL_STREAK_FILE" "$SFTP_LAST_RESTART_FILE" restart_container_sshd
-    else
-        evaluate_probe_protocol "sftp" "$SFTP_FAIL_STREAK_FILE" "$SFTP_LAST_RESTART_FILE" restart_container_sshd
+        if ! pgrep -x sshd >/dev/null 2>&1; then
+            handle_upload_daemon_down "sftp" "sshd" "$SFTP_FAIL_STREAK_FILE" "$SFTP_LAST_RESTART_FILE" restart_container_sshd
+        else
+            evaluate_probe_protocol "sftp" "$SFTP_FAIL_STREAK_FILE" "$SFTP_LAST_RESTART_FILE" restart_container_sshd
+        fi
     fi
 
     check_and_restart_cron
