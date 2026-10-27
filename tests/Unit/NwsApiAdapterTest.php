@@ -17,7 +17,7 @@ require_once __DIR__ . '/../../lib/weather/adapter/nws-api-v1.php';
 
 class NwsApiAdapterTest extends TestCase
 {
-    public function testIsValidAirportStation_AcceptsUsConusIcAo(): void
+    public function testIsValidAirportStation_UsConusAirport_ReturnsTrue(): void
     {
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('KJFK'));
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('KSPB'));
@@ -26,12 +26,12 @@ class NwsApiAdapterTest extends TestCase
     /**
      * Regression: FAA small-field AWOS idents keep the K prefix but may contain digits.
      */
-    public function testIsValidAirportStation_AcceptsDigitFaaAwosIdent(): void
+    public function testIsValidAirportStation_DigitFaaAwosIdent_ReturnsTrue(): void
     {
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('K4S2'));
     }
 
-    public function testIsValidAirportStation_AcceptsOtherAirportRegions(): void
+    public function testIsValidAirportStation_OtherAirportRegion_ReturnsTrue(): void
     {
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('PAFA'));
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('PHNL'));
@@ -41,7 +41,7 @@ class NwsApiAdapterTest extends TestCase
         $this->assertTrue(NwsApiAdapter::isValidAirportStation('PWAK'));
     }
 
-    public function testIsValidAirportStation_RejectsNonAirportStations(): void
+    public function testIsValidAirportStation_NonAirportIdent_ReturnsFalse(): void
     {
         // 5-digit mesonet identifiers
         $this->assertFalse(NwsApiAdapter::isValidAirportStation('47682'));
