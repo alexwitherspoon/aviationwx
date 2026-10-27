@@ -20,7 +20,7 @@
  * 
  * Station Validation:
  * This adapter only accepts data from stations matching airport ICAO patterns:
- * - K + 3 letters (US CONUS airports)
+ * - K + 3 alphanumeric (US CONUS airports, including FAA small-field AWOS idents like K4S2)
  * - P + 3 letters (Alaska/Pacific)
  * - PH + 2 letters (Hawaii)
  * - TJ + 2 letters (Puerto Rico)
@@ -77,7 +77,7 @@ class NwsApiAdapter {
     
     /** Valid airport station patterns (ICAO format) */
     private const VALID_STATION_PATTERNS = [
-        '/^K[A-Z]{3}$/',     // US CONUS airports (KJFK, KSPB, KORD)
+        '/^K[A-Z0-9]{3}$/',  // US CONUS airports (KJFK, KSPB, and FAA small-field AWOS idents like K4S2)
         '/^P[A-Z]{3}$/',     // Alaska/Pacific airports (PANC, PAFA)
         '/^PH[A-Z]{2}$/',    // Hawaii airports (PHNL, PHOG)
         '/^TJ[A-Z]{2}$/',    // Puerto Rico airports (TJSJ)
