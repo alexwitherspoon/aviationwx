@@ -493,6 +493,7 @@ $attribution = getPublicApiAttributionText();
         <pre><code>curl -H "X-API-Key: your_api_key" https://api.aviationwx.org/v1/airports</code></pre>
         
         <h2>Endpoints</h2>
+        <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code>).</p>
         
         <div class="endpoint">
             <div class="endpoint-header">
@@ -500,7 +501,15 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List all available airports with basic metadata. Optional <code>operator</code> includes an airport when it has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted (for example metar is faa). Optional <code>has_webcams=true</code> keeps airports that have weathercams configured (not sliced by operator). Optional <code>has_weather=true</code> keeps airports with weather sources configured (not sliced by operator). When <code>operator</code> is set, <code>webcam_count</code> still counts matching weathercams only.</p>
+                <p class="endpoint-desc">Browse the full airport catalog and filter it by operator, maintenance status, or whether a field has webcams or weather.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Keep airports with a matching weathercam or weather-source operator. Lowercased before matching; unknown slugs return 400.</td></tr>
+                    <tr><td><code>has_webcams</code></td><td>string</td><td><code>true</code> or <code>1</code> keeps airports with weathercams; <code>false</code> or <code>0</code> keeps airports without them. Not sliced by operator.</td></tr>
+                    <tr><td><code>has_weather</code></td><td>string</td><td><code>true</code> or <code>1</code> keeps airports with weather sources; <code>false</code> or <code>0</code> keeps airports without them. Not sliced by operator.</td></tr>
+                    <tr><td><code>maintenance</code></td><td>string</td><td><code>false</code> returns operational airports only; <code>true</code> includes maintenance sites.</td></tr>
+                    <tr><td><code>limited_availability</code></td><td>string</td><td><code>true</code> keeps off-grid, solar, or battery sites; <code>false</code> keeps fully available airports.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -510,7 +519,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get detailed metadata for a single airport including runways, frequencies, and services.</p>
+                <p class="endpoint-desc">Get everything about one airport, runways and frequencies included, for a detail page or a preflight look-up.</p>
             </div>
         </div>
         
@@ -520,7 +529,8 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the fused current weather observation. Not filtered by operator.</p>
+                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning.</p>
+                <pre><code>curl https://api.aviationwx.org/v1/airports/kspb/weather</code></pre>
             </div>
         </div>
         
@@ -530,7 +540,12 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather/history</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get 24-hour rolling weather history. Supports <code>hours</code>, <code>resolution</code> parameters. Each observation includes <code>density_altitude</code> and <code>pressure_altitude</code> as integers when available, otherwise <code>null</code>.</p>
+                <p class="endpoint-desc">See how conditions trended over the past 24 hours, with density and pressure altitude on every observation.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>hours</code></td><td>integer</td><td>Hours of history to return, 1 through 24. Default <code>24</code>.</td></tr>
+                    <tr><td><code>resolution</code></td><td>string</td><td><code>all</code>, <code>hourly</code>, or <code>15min</code>. Default <code>all</code>.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -540,7 +555,11 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">List weathercams for an airport. Optional <code>operator</code> returns only weathercams whose operator equals that slug.</p>
+                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Return only weathercams with this operator slug. Omitted returns every camera.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -550,7 +569,17 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams/{cam}/image</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the current webcam image. Native original has no <code>fmt</code> (type is read from the file). <code>fmt</code> is for generated size variants (jpg, webp).</p>
+                <p class="endpoint-desc">Fetch a current webcam frame in its native form, a sized variant, or an FAA-compliant rendering for aviation use.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>profile</code></td><td>string</td><td><code>faa</code> returns a FAA WCPO-compliant image: crop margins to exclude timestamps, 4:3 aspect, quality-capped at 1280x960 or 640x480, always JPG. Other parameters are ignored when set.</td></tr>
+                    <tr><td><code>fmt</code></td><td>string</td><td><code>jpg</code> or <code>webp</code> for generated size variants and dimension transforms. Ignored when profile is set. Omit for the native original.</td></tr>
+                    <tr><td><code>size</code></td><td>string</td><td>Pre-generated height variant such as <code>1080</code> or <code>720</code>. Omit for the native original. A size never generated for this camera returns 400 listing the available sizes. Not combined with width or height.</td></tr>
+                    <tr><td><code>width</code></td><td>integer</td><td>Target width in pixels, 16 through 3840. With height, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
+                    <tr><td><code>height</code></td><td>integer</td><td>Target height in pixels, 16 through 2160. With width, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
+                    <tr><td><code>metadata</code></td><td>string</td><td><code>1</code> returns JSON describing the available formats and variants instead of the image.</td></tr>
+                </table>
+                <pre><code>curl "https://api.aviationwx.org/v1/airports/4s9/webcams/1/image?profile=faa"</code></pre>
             </div>
         </div>
         
@@ -560,7 +589,14 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams/{cam}/history</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get historical webcam frames. Use <code>ts</code> for a specific frame. Omit <code>fmt</code> for the native original; <code>fmt</code> is for generated size variants.</p>
+                <p class="endpoint-desc">Pull past frames to show how a field looked earlier.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>ts</code></td><td>integer</td><td>Timestamp of the frame to retrieve. Returns that specific image.</td></tr>
+                    <tr><td><code>fmt</code></td><td>string</td><td><code>jpg</code> or <code>webp</code> for generated size variants. Only used with <code>ts</code>. Omit for the native original.</td></tr>
+                    <tr><td><code>size</code></td><td>string</td><td>Pre-generated height variant. Only used with <code>ts</code> and never falls back to the original. Omit for the native original.</td></tr>
+                </table>
+                <pre><code>curl "https://api.aviationwx.org/v1/airports/kspb/webcams/0/history?ts=1704067900&amp;fmt=jpg&amp;size=720"</code></pre>
             </div>
         </div>
         
@@ -570,7 +606,11 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/weather/bulk?airports=a,b,c</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get weather for multiple airports in a single request (max <?= getPublicApiBulkMaxAirports() ?> airports).</p>
+                <p class="endpoint-desc">Current weather for several airports in one round trip, for route planning or a multi-airport dashboard.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>airports</code></td><td>string</td><td>Required. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?>.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -580,7 +620,12 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/weathercam/bulk</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">One-query weathercam catalog. Optional <code>operator</code> matches weathercams only (not weather sources). Maintenance sites are excluded by default; <code>maintenance=true</code> includes them. Nested webcam objects include absolute <code>image_url</code> / <code>images</code> URLs. Origin rebuilds when airports.json changes.</p>
+                <p class="endpoint-desc">One call for every weathercam on the platform, with absolute image URLs, for catalogs and directories.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Match weathercams only, not weather sources. Omitted defaults to <code>aviationwx</code>.</td></tr>
+                    <tr><td><code>maintenance</code></td><td>string</td><td><code>true</code> includes airports in maintenance mode; <code>false</code> or omitted excludes them.</td></tr>
+                </table>
             </div>
         </div>
 
@@ -590,7 +635,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/status</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get API health and status information.</p>
+                <p class="endpoint-desc">Confirm the API is up and healthy, for monitoring or a service dashboard.</p>
             </div>
         </div>
         
@@ -600,7 +645,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/operations</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get a scheduler-built production operations snapshot (aggregated health caches and scrubbed log summaries).</p>
+                <p class="endpoint-desc">See platform health and scrubbed log summaries at a glance, for operators.</p>
             </div>
         </div>
         
