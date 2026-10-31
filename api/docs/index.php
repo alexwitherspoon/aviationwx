@@ -3,6 +3,8 @@
  * Public API Documentation Page
  *
  * Landing page for api.aviationwx.org. When the Public API is enabled, displays `getCanonicalPublicApiV1BaseUrl()`.
+ *
+ * Endpoint parameter tables and examples in this page mirror api/docs/openapi.json. Keep the two in sync, with the spec as the source of truth.
  */
 
 require_once __DIR__ . '/../../lib/public-api/config.php';
@@ -266,6 +268,7 @@ $attribution = getPublicApiAttributionText();
         .endpoint-path {
             font-family: 'SFMono-Regular', Consolas, monospace;
             color: var(--text-primary);
+            overflow-wrap: anywhere;
         }
         
         .endpoint-body {
@@ -378,6 +381,8 @@ $attribution = getPublicApiAttributionText();
         .stats {
             display: flex;
             justify-content: center;
+            align-items: flex-end;
+            flex-wrap: wrap;
             gap: 2rem;
             margin: 1.5rem 0;
         }
@@ -395,6 +400,32 @@ $attribution = getPublicApiAttributionText();
         .stat-label {
             color: var(--text-muted);
             font-size: 0.9rem;
+        }
+        
+        .github-link {
+            text-decoration: none;
+            color: inherit;
+            opacity: 0.85;
+        }
+        
+        .github-link .stat-value {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 2.5rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        @media (max-width: 720px) {
+            .container {
+                padding: 1rem;
+            }
+            .stats {
+                gap: 1.25rem;
+            }
+            .endpoint-body {
+                overflow-x: auto;
+            }
         }
         
         <?php if (!$apiEnabled): ?>
@@ -437,6 +468,16 @@ $attribution = getPublicApiAttributionText();
                     <div class="stat-value">v<?= htmlspecialchars(getPublicApiVersion()) ?></div>
                     <div class="stat-label">API Version</div>
                 </div>
+                <div class="stat">
+                    <div class="stat-value"><?php $docSha = getGitSha(); echo $docSha ? htmlspecialchars(substr($docSha, 0, 7)) : 'n/a'; ?></div>
+                    <div class="stat-label">Build</div>
+                </div>
+                <a class="stat github-link" href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" aria-label="AviationWX source on GitHub" title="Source on GitHub">
+                    <div class="stat-value">
+                        <svg viewBox="0 0 16 16" width="28" height="28" fill="currentColor" role="img" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+                    </div>
+                    <div class="stat-label">Code Repo</div>
+                </a>
             </div>
         </header>
         
@@ -491,9 +532,11 @@ $attribution = getPublicApiAttributionText();
         
         <p>To use an API key, include it in the <code>X-API-Key</code> header:</p>
         <pre><code>curl -H "X-API-Key: your_api_key" https://api.aviationwx.org/v1/airports</code></pre>
+        <p>Anonymous requests count against a shared IP bucket. To reach the partner tier, send <code>X-API-Key</code> on every request, image requests included. An invalid key returns 401 and does not fall back to anonymous.</p>
+        <p>Request a partner key through the <a href="https://aviationwx.org#contact">contact</a> link.</p>
         
         <h2>Endpoints</h2>
-        <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code>).</p>
+        <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code> and <code>nws</code> is <code>nws</code>).</p>
         
         <div class="endpoint">
             <div class="endpoint-header">
@@ -529,8 +572,47 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning.</p>
+                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning. Every response <code>meta</code> carries <code>observation_time</code> and attribution. Compare that timestamp to the current time and do not present an observation as current once it is stale.</p>
                 <pre><code>curl https://api.aviationwx.org/v1/airports/kspb/weather</code></pre>
+                <pre><code>{
+  "success": true,
+  "meta": {
+    "api_version": "1",
+    "request_time": "2026-10-30T12:05:00Z",
+    "attribution": "<?= htmlspecialchars($attribution) ?>",
+    "airport_id": "kspb",
+    "airport_name": "Scappoose Industrial Airpark",
+    "observation_time": "2026-10-30T12:04:00Z",
+    "units": { ... },
+    "sunrise_sunset_timezone": "America/Los_Angeles"
+  },
+  "weather": {
+    "flight_category": "VFR",
+    "temperature": 12.5,
+    "dewpoint": 7.0,
+    "humidity": 68,
+    "wind_speed": 8,
+    "wind_direction": 320,
+    "visibility": 10,
+    "ceiling": 4500,
+    "observation_time": "2026-10-30T12:04:00Z",
+    ...
+  }
+}</code></pre>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method">GET</span>
+                <span class="endpoint-path">/v1/airports/{id}/embed</span>
+            </div>
+            <div class="endpoint-body">
+                <p class="endpoint-desc">Get everything an embed widget needs in one payload, or a differential update for gentle polling.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>refresh</code></td><td>string</td><td><code>1</code> returns only the topics that changed. Omit or <code>0</code> for the full payload.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -555,11 +637,35 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want.</p>
+                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want. Each webcam carries <code>captured_at</code> and <code>captured_at_iso</code>, so image age is available without an extra request, and each image also embeds its capture time in EXIF metadata.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
                     <tr><td><code>operator</code></td><td>string</td><td>Return only weathercams with this operator slug. Omitted returns every camera.</td></tr>
                 </table>
+                <pre><code>{
+  "index": 0,
+  "name": "Mulino 4S9 - NW Facing",
+  "image_url": "/v1/airports/4s9/webcams/0/image",
+  "refresh_seconds": 60,
+  "captured_at": 1793361840,
+  "captured_at_iso": "2026-10-30T12:04:00Z",
+  "approximate_heading": 315,
+  "operator": "aviationwx",
+  "images": [
+    {
+      "variant": "original",
+      "height": null,
+      "format": "jpg",
+      "url": "/v1/airports/4s9/webcams/0/image"
+    },
+    {
+      "variant": "720",
+      "height": 720,
+      "format": "jpg",
+      "url": "/v1/airports/4s9/webcams/0/image?size=720"
+    }
+  ]
+}</code></pre>
             </div>
         </div>
         
@@ -578,6 +684,7 @@ $attribution = getPublicApiAttributionText();
                     <tr><td><code>width</code></td><td>integer</td><td>Target width in pixels, 16 through 3840. With height, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
                     <tr><td><code>height</code></td><td>integer</td><td>Target height in pixels, 16 through 2160. With width, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
                     <tr><td><code>metadata</code></td><td>string</td><td><code>1</code> returns JSON describing the available formats and variants instead of the image.</td></tr>
+                    <tr><td><code>download</code></td><td>string</td><td><code>1</code> serves the native original as a download with an attachment filename instead of inline.</td></tr>
                 </table>
                 <pre><code>curl "https://api.aviationwx.org/v1/airports/4s9/webcams/1/image?profile=faa"</code></pre>
             </div>
@@ -603,13 +710,15 @@ $attribution = getPublicApiAttributionText();
         <div class="endpoint">
             <div class="endpoint-header">
                 <span class="method">GET</span>
-                <span class="endpoint-path">/v1/weather/bulk?airports=a,b,c</span>
+                <span class="endpoint-path">/v1/weather/bulk</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Current weather for several airports in one round trip, for route planning or a multi-airport dashboard.</p>
+                <p class="endpoint-desc">Current weather for several airports, or every listed airport when <code>airports</code> is omitted, in one round trip.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
-                    <tr><td><code>airports</code></td><td>string</td><td>Required. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?>.</td></tr>
+                    <tr><td><code>airports</code></td><td>string</td><td>Optional. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?> when present. Omit for all listed airports.</td></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Keep airports whose weather sources match this operator. <code>aviationwx</code> keeps non-FAA/NWS/institutional sources.</td></tr>
+                    <tr><td><code>maintenance</code></td><td>string</td><td><code>true</code> includes maintenance airports; <code>false</code> or omitted (default) excludes them.</td></tr>
                 </table>
             </div>
         </div>
@@ -623,7 +732,8 @@ $attribution = getPublicApiAttributionText();
                 <p class="endpoint-desc">One call for every weathercam on the platform, with absolute image URLs, for catalogs and directories.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
-                    <tr><td><code>operator</code></td><td>string</td><td>Match weathercams only, not weather sources. Omitted defaults to <code>aviationwx</code>.</td></tr>
+                    <tr><td><code>airports</code></td><td>string</td><td>Optional. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?> when present. Omit for all listed airports.</td></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Match weathercams only, not weather sources. Omitted returns every camera.</td></tr>
                     <tr><td><code>maintenance</code></td><td>string</td><td><code>true</code> includes airports in maintenance mode; <code>false</code> or omitted excludes them.</td></tr>
                 </table>
             </div>
@@ -656,7 +766,7 @@ $attribution = getPublicApiAttributionText();
   "meta": {
     "api_version": "1",
     "request_time": "2024-12-24T10:00:00Z",
-    "attribution": "<?= htmlspecialchars($attribution) ?>"
+    "attribution": "<?= htmlspecialchars($attribution) ?>",
   },
   "weather": { ... }
 }</code></pre>
@@ -670,6 +780,17 @@ $attribution = getPublicApiAttributionText();
     "retry_after": 45
   }
 }</code></pre>
+        <p>All errors use this shape. Recognized <code>code</code> values:</p>
+        <table>
+            <tr><th>Code</th><th>Meaning</th></tr>
+            <tr><td><code>INVALID_REQUEST</code></td><td>Malformed request, unknown endpoint, or invalid parameter.</td></tr>
+            <tr><td><code>INVALID_API_KEY</code></td><td>The API key is invalid or disabled.</td></tr>
+            <tr><td><code>AIRPORT_NOT_FOUND</code></td><td>The airport identifier does not exist.</td></tr>
+            <tr><td><code>WEBCAM_NOT_FOUND</code></td><td>The webcam index does not exist for this airport.</td></tr>
+            <tr><td><code>RATE_LIMITED</code></td><td>Rate limit exceeded. <code>retry_after</code> says when to try again.</td></tr>
+            <tr><td><code>API_NOT_ENABLED</code></td><td>The API is not enabled for this deployment.</td></tr>
+            <tr><td><code>SERVICE_UNAVAILABLE</code></td><td>Temporary outage or no data available right now.</td></tr>
+        </table>
         
         <h2>Rate Limit Headers</h2>
         <p>Every response includes rate limit information:</p>

@@ -33,12 +33,69 @@ function handleGetWeathercamBulk(array $params, array $context): void
         );
         return;
     }
+    $operator = $operatorParse['value'];
 
     // Maintenance sites are excluded by default. maintenance=true opts back into
     // them; maintenance=false is the same as omitting it. Mirrors the airports
     // list endpoint's maintenance param but keeps the default exclusionary.
     $maintenanceFilter = parsePublicApiOptionalBooleanQuery('maintenance');
-    $catalog = getWeathercamBulkAirports($operatorParse['value']);
+
+    $airportsParam = $_GET['airports'] ?? '';
+    $airportsProvided = is_string($airportsParam) && trim($airportsParam) !== '';
+
+    $meta = [
+        'total' => 0,
+        'webcam_count' => 0,
+        'coordinate_system' => 'WGS84',
+    ];
+
+    if ($airportsProvided) {
+        $rawIds = [];
+        foreach (explode(',', $airportsParam) as $rawId) {
+            $trimmed = trim($rawId);
+            if ($trimmed !== '') {
+                $rawIds[] = $trimmed;
+            }
+        }
+
+        if (empty($rawIds)) {
+            sendPublicApiError(
+                PUBLIC_API_ERROR_INVALID_REQUEST,
+                'No valid airport IDs provided',
+                400
+            );
+            return;
+        }
+
+        if (count($rawIds) > getPublicApiBulkMaxAirports()) {
+            sendPublicApiError(
+                PUBLIC_API_ERROR_INVALID_REQUEST,
+                'Too many airports requested. Maximum is ' . getPublicApiBulkMaxAirports(),
+                400
+            );
+            return;
+        }
+
+        $config = loadConfig();
+        if ($config === null) {
+            $config = ['airports' => []];
+        }
+
+        $errors = [];
+        $selection = resolveWeathercamBulkSelection(
+            $config,
+            $rawIds,
+            $maintenanceFilter === true,
+            $errors
+        );
+        $catalog = getWeathercamBulkAirportsForIds($config, $selection, $operator);
+        if (!empty($errors)) {
+            $meta['errors'] = $errors;
+        }
+    } else {
+        $catalog = getWeathercamBulkAirports($operator);
+    }
+
     if ($maintenanceFilter === null || $maintenanceFilter === false) {
         $catalog = array_values(array_filter($catalog, function ($airport) {
             return is_array($airport) && !($airport['maintenance'] ?? false);
@@ -48,16 +105,87 @@ function handleGetWeathercamBulk(array $params, array $context): void
     foreach ($catalog as $airport) {
         $webcamCount += count($airport['webcams'] ?? []);
     }
+    $meta['total'] = count($catalog);
+    $meta['webcam_count'] = $webcamCount;
 
     // images[0].format is read from disk, so this payload is not hour-stable metadata.
     sendPublicApiCacheHeaders('live');
     sendPublicApiSuccess(
         ['airports' => $catalog],
-        [
-            'total' => count($catalog),
-            'webcam_count' => $webcamCount,
-            'coordinate_system' => 'WGS84',
-        ]
+        $meta
+    );
+}
+
+/**
+ * Resolve explicitly requested airport ids for the weathercam bulk endpoint.
+ *
+ * @param array{airports?: array<string, mixed>} $config Loaded config
+ * @param list<string> $rawIds Raw airport id strings from the query
+ * @param bool $includeMaintenance True when maintenance airports are allowed
+ * @param array<string, string> $errors Populated with id-level error messages
+ * @return list<string> Resolved airport ids, deduplicated and case-normalized
+ */
+function resolveWeathercamBulkSelection(array $config, array $rawIds, bool $includeMaintenance, array &$errors): array
+{
+    $airports = $config['airports'] ?? [];
+    $selection = [];
+    $seen = [];
+
+    foreach ($rawIds as $rawId) {
+        $airportId = validatePublicApiAirportId($rawId);
+        if ($airportId === null) {
+            $errors[$rawId] = 'Invalid airport ID format';
+            continue;
+        }
+        if (isset($seen[$airportId])) {
+            continue;
+        }
+        $seen[$airportId] = true;
+
+        $airport = $airports[$airportId] ?? null;
+        if (!is_array($airport) || !isAirportEnabled($airport)) {
+            $errors[$rawId] = 'Airport not found';
+            continue;
+        }
+        if (!$includeMaintenance && ($airport['maintenance'] ?? false) === true) {
+            $errors[$rawId] = 'Airport not found';
+            continue;
+        }
+
+        $selection[] = $airportId;
+    }
+
+    return $selection;
+}
+
+/**
+ * Build and refresh a weathercam catalog for an explicit airport selection.
+ *
+ * Mirrors getWeathercamBulkAirports() without the config-SHA catalog cache, so
+ * a transient explicit request reads the current config directly. Rows keep
+ * the catalog's alphabetical ordering.
+ *
+ * @param array{airports?: array<string, mixed>} $config Loaded config
+ * @param list<string> $airportIds Resolved airport ids
+ * @param string|null $operatorFilter Weathercam operator slug, or null for all
+ * @return list<array<string, mixed>> Airport rows with weathercams
+ */
+function getWeathercamBulkAirportsForIds(array $config, array $airportIds, ?string $operatorFilter): array
+{
+    $airports = $config['airports'] ?? [];
+    $rows = [];
+    foreach ($airportIds as $airportId) {
+        $airport = $airports[$airportId] ?? null;
+        if (is_array($airport)) {
+            $rows[$airportId] = $airport;
+        }
+    }
+
+    return refreshWeathercamBulkOriginalFormats(
+        filterWeathercamBulkAirportsByOperator(
+            buildWeathercamBulkAirports($rows, null, $config),
+            $operatorFilter
+        )
     );
 }
 

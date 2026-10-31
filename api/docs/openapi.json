@@ -29,7 +29,7 @@
     "/airports": {
       "get": {
         "summary": "List all airports",
-        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted. Optional has_webcams keeps airports that have weathercams configured; it is not sliced by operator. Optional has_weather keeps airports that have weather sources configured; it is not sliced by operator. When operator is set, webcam_count still counts matching weathercams only.",
+        "description": "Browse the catalog of enabled airports and filter it by operator, availability, or whether a field has webcams or weather.",
         "operationId": "listAirports",
         "tags": ["Airports"],
         "parameters": [
@@ -57,7 +57,7 @@
           {
             "name": "has_webcams",
             "in": "query",
-            "description": "Filter by whether the airport has weathercams. Use 'true' or '1' for airports with one or more weathercams; use 'false' or '0' for none. Not sliced by operator.",
+            "description": "Filter by weathercams: 'true' or '1' keeps airports with cameras; 'false' or '0' keeps airports without them. Not sliced by operator.",
             "schema": {
               "type": "string",
               "enum": ["true", "false", "1", "0"]
@@ -66,7 +66,7 @@
           {
             "name": "has_weather",
             "in": "query",
-            "description": "Filter by whether the airport has weather sources configured. Use 'true' or '1' for airports with weather; use 'false' or '0' for none. Not sliced by operator; weather remains the fused observation.",
+            "description": "Filter by weather sources: 'true' or '1' keeps airports with weather; 'false' or '0' keeps airports without them. Not sliced by operator.",
             "schema": {
               "type": "string",
               "enum": ["true", "false", "1", "0"]
@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Original (no `size`, no `width`/`height`):** serves the native original file unmodified, at its native dimensions and format. The native type (jpg, png, or webp) is read from the file and returned in Content-Type. A file that is not one of those types is not served.\n\n**Sized variants (`size`):** serve a pre-generated variant. A size that was never generated for this camera is a 400 listing the available sizes, not a 503.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Exact height-based variant from the pre-generated set (no cropping or size fallback)\n- Neither: Native original, served unmodified\n\nsize may be omitted or set to original. Numeric size, width, and height values must be complete canonical integers within their documented ranges; malformed values return 400.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
+        "description": "Returns the current webcam image: the native original, a scaled or sized variant, an FAA-compliant rendering, or metadata about the available formats and sizes. Omit the parameters to get the stored original in its native format. Served images also embed the capture time in EXIF metadata.",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -319,7 +319,7 @@
           {
             "name": "profile",
             "in": "query",
-            "description": "Output profile. 'faa' applies FAA WCPO-compliant settings: crop margins to exclude timestamps, 4:3 aspect ratio, quality-capped dimensions (1280x960 or 640x480), JPG format. Other parameters are ignored when profile is set.",
+            "description": "faa returns an FAA WCPO-compliant image: 4:3 aspect, crop margins to exclude timestamps, quality-capped at 1280x960 or 640x480, always JPG. Other parameters are ignored.",
             "schema": {
               "type": "string",
               "enum": ["faa"]
@@ -328,7 +328,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants and dimension transforms (ignored when profile=faa). Not valid when requesting the original directly, which is always served in its native format. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants and dimension transforms. Ignored when profile is set. Omit for the native original.",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -337,7 +337,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Exact height-based variant from the pre-generated set (no cropping or fallback to the original). Omit for the native original. A size that was never generated returns 400 listing the available sizes. Mutually exclusive with width/height. Ignored when profile is set.",
+            "description": "Pre-generated height variant, for example 720 or 1080. Omit for the native original. A size never generated for this camera returns 400 listing the available sizes. Not combined with width or height.",
             "schema": {
               "default": "original",
               "oneOf": [
@@ -356,7 +356,7 @@
           {
             "name": "width",
             "in": "query",
-            "description": "Target width in pixels (16-3840). When used with height, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
+            "description": "Target width in pixels (16-3840). With height, center-crops to the aspect ratio then scales; alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
@@ -367,7 +367,7 @@
           {
             "name": "height",
             "in": "query",
-            "description": "Target height in pixels (16-2160). When used with width, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
+            "description": "Target height in pixels (16-2160). With width, center-crops to the aspect ratio then scales; alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
@@ -378,7 +378,17 @@
           {
             "name": "metadata",
             "in": "query",
-            "description": "When set to '1', returns JSON metadata about available formats and variants instead of the image. Useful for discovering what formats and sizes are available for the current image.",
+            "description": "When set to '1', returns JSON metadata about the available formats and variants instead of the image.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"],
+              "example": "1"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "description": "When set to '1', serves the native original as a download with a Content-Disposition attachment filename instead of inline.",
             "schema": {
               "type": "string",
               "enum": ["1"],
@@ -425,7 +435,7 @@
     "/airports/{id}/webcams/{cam}/history": {
       "get": {
         "summary": "Get webcam history",
-        "description": "Returns list of historical webcam frames, or a specific frame image when ts is provided.\n\nWhen ts is set, omit fmt for the native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. fmt applies only to generated size variants. fmt with no size, or with size=original, returns 400. ts must be a complete canonical integer. size may be omitted, set to original, or supplied as a complete canonical integer. Malformed values return 400. Requested heights are exact and never fall back to the original.",
+        "description": "Returns the list of historical frames for a camera, or one frame's image when ts is supplied. The format and size parameters apply to generated variants.",
         "operationId": "getWebcamHistory",
         "tags": ["Webcams"],
         "parameters": [
@@ -447,7 +457,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants. Not valid on the original. Only used with ts. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants. Only used with ts; omit for the native original.",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -456,7 +466,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Exact height-based variant from the pre-generated set. Only used with ts and never falls back to the original. Omit size and fmt when requesting the native original.",
+            "description": "Pre-generated height variant. Only used with ts and never falls back to the original.",
             "schema": {
               "oneOf": [
                 {
@@ -501,18 +511,29 @@
     "/weather/bulk": {
       "get": {
         "summary": "Get weather for multiple airports",
-        "description": "Returns current weather for multiple airports in a single request.",
+        "description": "Returns current weather for multiple airports in a single request. When airports is omitted, weather for all listed airports is returned.",
         "operationId": "getWeatherBulk",
         "tags": ["Weather"],
         "parameters": [
           {
             "name": "airports",
             "in": "query",
-            "required": true,
-            "description": "Comma-separated list of airport IDs (max 10)",
+            "description": "Comma-separated airport identifiers. When present, limited to the configured maximum for this deployment. Omit to return weather for all listed airports.",
             "schema": {
               "type": "string",
               "example": "kspb,kczk,kpfc"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Operator"
+          },
+          {
+            "name": "maintenance",
+            "in": "query",
+            "description": "Include maintenance airports: 'true' includes them; 'false' or omitted excludes them.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
             }
           }
         ],
@@ -539,17 +560,26 @@
     "/weathercam/bulk": {
       "get": {
         "summary": "Weathercam catalog",
-        "description": "One-query catalog of listed airports that have matching weathercams. Nested webcam objects match GET /airports/{id}/webcams, with absolute image and history URLs. Optional operator matches weathercams only; weather sources do not affect membership. Airports with no matching weathercam are omitted. Unlike GET /weather/bulk, this is a full catalog (no airports query and no max-airport cap). The origin response is rebuilt when airports.json changes.",
+        "description": "One-query catalog of airports that have matching weathercams. Each webcam carries absolute image and history URLs.",
         "operationId": "getWeathercamBulk",
         "tags": ["Webcams"],
         "parameters": [
+          {
+            "name": "airports",
+            "in": "query",
+            "description": "Comma-separated airport identifiers. When present, limited to the configured maximum for this deployment. Omit to return all listed airports.",
+            "schema": {
+              "type": "string",
+              "example": "kspb,kczk"
+            }
+          },
           {
             "$ref": "#/components/parameters/WeathercamOperator"
           },
           {
             "name": "maintenance",
             "in": "query",
-            "description": "Maintenance sites are excluded by default. Use 'true' to include airports in maintenance mode; 'false' or omitted excludes them.",
+            "description": "Include maintenance airports: 'true' includes them; 'false' or omitted excludes them.",
             "schema": {
               "type": "string",
               "enum": ["true", "false"]
@@ -773,7 +803,7 @@
       "WeathercamOperator": {
         "name": "operator",
         "in": "query",
-        "description": "Weathercam operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json weathercams only; omitted weathercam operator is aviationwx. Airports with no matching weathercam are omitted. Weather sources do not affect membership.",
+        "description": "Weathercam operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json weathercams only: an omitted operator returns every weathercam, and a config row without an operator defaults to aviationwx. Airports with no matching weathercam are omitted. Weather sources do not affect membership.",
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",
@@ -976,6 +1006,15 @@
             "properties": {
               "code": {
                 "type": "string",
+                "enum": [
+                  "INVALID_REQUEST",
+                  "INVALID_API_KEY",
+                  "AIRPORT_NOT_FOUND",
+                  "WEBCAM_NOT_FOUND",
+                  "RATE_LIMITED",
+                  "API_NOT_ENABLED",
+                  "SERVICE_UNAVAILABLE"
+                ],
                 "example": "AIRPORT_NOT_FOUND"
               },
               "message": {
@@ -1839,7 +1878,28 @@
             "type": "boolean"
           },
           "meta": {
-            "$ref": "#/components/schemas/Meta"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "airport_id": {
+                    "type": "string"
+                  },
+                  "airport_name": {
+                    "type": "string"
+                  },
+                  "observation_time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "ISO 8601 observation timestamp for the current fused report, UTC. Null when no observation is available."
+                  }
+                }
+              }
+            ]
           },
           "weather": {
             "$ref": "#/components/schemas/Weather"
