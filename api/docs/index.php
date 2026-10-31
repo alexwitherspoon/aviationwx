@@ -32,6 +32,7 @@ $baseUrl = getBaseUrl();
 // Rate limits
 $anonymousLimits = getPublicApiRateLimits('anonymous');
 $partnerLimits = getPublicApiRateLimits('partner');
+$attribution = getPublicApiAttributionText();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -578,7 +579,7 @@ $partnerLimits = getPublicApiRateLimits('partner');
   "meta": {
     "api_version": "1",
     "request_time": "2026-10-30T12:05:00Z",
-    "attribution": "Data from AviationWX.org",
+    "attribution": "<?= htmlspecialchars($attribution) ?>",
     "airport_id": "kspb",
     "airport_name": "Scappoose Industrial Airpark",
     "observation_time": "2026-10-30T12:04:00Z",
@@ -764,7 +765,7 @@ $partnerLimits = getPublicApiRateLimits('partner');
   "meta": {
     "api_version": "1",
     "request_time": "2024-12-24T10:00:00Z",
-    "attribution": "Data from AviationWX.org",
+    "attribution": "<?= htmlspecialchars($attribution) ?>",
   },
   "weather": { ... }
 }</code></pre>
@@ -847,7 +848,7 @@ $partnerLimits = getPublicApiRateLimits('partner');
         <div class="warning">
             <strong>Required:</strong> All applications using this API must display attribution:
             <br><br>
-            <code>Data from AviationWX.org</code>
+            <code><?= htmlspecialchars($attribution) ?></code>
         </div>
         
         <h2>Terms of Use</h2>
