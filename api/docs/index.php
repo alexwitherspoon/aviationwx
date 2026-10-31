@@ -596,7 +596,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want. Each webcam carries <code>captured_at</code> and <code>captured_at_iso</code>, so image age is available without an extra request.</p>
+                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want. Each webcam carries <code>captured_at</code> and <code>captured_at_iso</code>, so image age is available without an extra request, and each image also embeds its capture time in EXIF metadata.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
                     <tr><td><code>operator</code></td><td>string</td><td>Return only weathercams with this operator slug. Omitted returns every camera.</td></tr>
