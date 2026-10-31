@@ -57,7 +57,7 @@
           {
             "name": "has_webcams",
             "in": "query",
-            "description": "Filter by whether the airport has weathercams. Use 'true' or '1' for airports with one or more weathercams; use 'false' or '0' for none. Not sliced by operator.",
+            "description": "Filter by weathercams: 'true' or '1' keeps airports with cameras; 'false' or '0' keeps airports without them. Not sliced by operator.",
             "schema": {
               "type": "string",
               "enum": ["true", "false", "1", "0"]
@@ -66,7 +66,7 @@
           {
             "name": "has_weather",
             "in": "query",
-            "description": "Filter by whether the airport has weather sources configured. Use 'true' or '1' for airports with weather; use 'false' or '0' for none. Not sliced by operator; weather remains the fused observation.",
+            "description": "Filter by weather sources: 'true' or '1' keeps airports with weather; 'false' or '0' keeps airports without them. Not sliced by operator.",
             "schema": {
               "type": "string",
               "enum": ["true", "false", "1", "0"]
@@ -319,7 +319,7 @@
           {
             "name": "profile",
             "in": "query",
-            "description": "Output profile. 'faa' applies FAA WCPO-compliant settings: crop margins to exclude timestamps, 4:3 aspect ratio, quality-capped dimensions (1280x960 or 640x480), JPG format. Other parameters are ignored when profile is set.",
+            "description": "faa returns an FAA WCPO-compliant image: 4:3 aspect, crop margins to exclude timestamps, quality-capped at 1280x960 or 640x480, always JPG. Other parameters are ignored.",
             "schema": {
               "type": "string",
               "enum": ["faa"]
@@ -328,7 +328,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants and dimension transforms (ignored when profile=faa). Not valid when requesting the original directly, which is always served in its native format. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants and dimension transforms. Ignored when profile is set. Omit for the native original.",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -337,7 +337,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Exact height-based variant from the pre-generated set (no cropping or fallback to the original). Omit for the native original. A size that was never generated returns 400 listing the available sizes. Mutually exclusive with width/height. Ignored when profile is set.",
+            "description": "Pre-generated height variant, for example 720 or 1080. Omit for the native original. A size never generated for this camera returns 400 listing the available sizes. Not combined with width or height.",
             "schema": {
               "default": "original",
               "oneOf": [
@@ -356,7 +356,7 @@
           {
             "name": "width",
             "in": "query",
-            "description": "Target width in pixels (16-3840). When used with height, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
+            "description": "Target width in pixels (16-3840). With height, center-crops to the aspect ratio then scales; alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
@@ -367,7 +367,7 @@
           {
             "name": "height",
             "in": "query",
-            "description": "Target height in pixels (16-2160). When used with width, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
+            "description": "Target height in pixels (16-2160). With width, center-crops to the aspect ratio then scales; alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
@@ -378,7 +378,7 @@
           {
             "name": "metadata",
             "in": "query",
-            "description": "When set to '1', returns JSON metadata about available formats and variants instead of the image. Useful for discovering what formats and sizes are available for the current image.",
+            "description": "When set to '1', returns JSON metadata about the available formats and variants instead of the image.",
             "schema": {
               "type": "string",
               "enum": ["1"],
@@ -457,7 +457,7 @@
           {
             "name": "fmt",
             "in": "query",
-            "description": "Image format for generated size variants. Not valid on the original. Only used with ts. Must be enabled in airports.json (jpg always; webp when config.webcam_generate_webp is true).",
+            "description": "Image format for generated size variants. Only used with ts; omit for the native original.",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"]
@@ -466,7 +466,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Exact height-based variant from the pre-generated set. Only used with ts and never falls back to the original. Omit size and fmt when requesting the native original.",
+            "description": "Pre-generated height variant. Only used with ts and never falls back to the original.",
             "schema": {
               "oneOf": [
                 {
@@ -559,7 +559,7 @@
           {
             "name": "maintenance",
             "in": "query",
-            "description": "Maintenance sites are excluded by default. Use 'true' to include airports in maintenance mode; 'false' or omitted excludes them.",
+            "description": "Include maintenance airports: 'true' includes them; 'false' or omitted excludes them.",
             "schema": {
               "type": "string",
               "enum": ["true", "false"]

@@ -491,6 +491,8 @@ $attribution = getPublicApiAttributionText();
         
         <p>To use an API key, include it in the <code>X-API-Key</code> header:</p>
         <pre><code>curl -H "X-API-Key: your_api_key" https://api.aviationwx.org/v1/airports</code></pre>
+        <p>Anonymous requests count against a shared IP bucket. To reach the partner tier, send <code>X-API-Key</code> on every request, image requests included. An invalid key returns 401 and does not fall back to anonymous.</p>
+        <p>Request a partner key through the <a href="https://aviationwx.org#contact">contact</a> link.</p>
         
         <h2>Endpoints</h2>
         <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code> and <code>nws</code> is <code>nws</code>).</p>
@@ -529,8 +531,33 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning. Every response <code>meta</code> carries <code>observation_time</code> and attribution, so freshness and source travel with the data.</p>
+                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning. Every response <code>meta</code> carries <code>observation_time</code> and attribution. Compare that timestamp to the current time and do not present an observation as current once it is stale.</p>
                 <pre><code>curl https://api.aviationwx.org/v1/airports/kspb/weather</code></pre>
+                <pre><code>{
+  "success": true,
+  "meta": {
+    "api_version": "1",
+    "request_time": "2026-10-30T12:05:00Z",
+    "attribution": "Weather data from AviationWX.org",
+    "airport_id": "kspb",
+    "airport_name": "Scappoose Industrial Airpark",
+    "observation_time": "2026-10-30T12:04:00Z",
+    "units": { ... },
+    "sunrise_sunset_timezone": "America/Los_Angeles"
+  },
+  "weather": {
+    "flight_category": "VFR",
+    "temperature": 12.5,
+    "dewpoint": 7.0,
+    "humidity": 68,
+    "wind_speed": 8,
+    "wind_direction": 320,
+    "visibility": 10,
+    "ceiling": 4500,
+    "observation_time": "2026-10-30T12:04:00Z",
+    ...
+  }
+}</code></pre>
             </div>
         </div>
         
@@ -569,7 +596,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want.</p>
+                <p class="endpoint-desc">See which cameras a field has and who runs them, so you can pick the image you want. Each webcam carries <code>captured_at</code> and <code>captured_at_iso</code>, so image age is available without an extra request.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
                     <tr><td><code>operator</code></td><td>string</td><td>Return only weathercams with this operator slug. Omitted returns every camera.</td></tr>
@@ -685,6 +712,17 @@ $attribution = getPublicApiAttributionText();
     "retry_after": 45
   }
 }</code></pre>
+        <p>All errors use this shape. Recognized <code>code</code> values:</p>
+        <table>
+            <tr><th>Code</th><th>Meaning</th></tr>
+            <tr><td><code>INVALID_REQUEST</code></td><td>Malformed request, unknown endpoint, or invalid parameter.</td></tr>
+            <tr><td><code>INVALID_API_KEY</code></td><td>The API key is invalid or disabled.</td></tr>
+            <tr><td><code>AIRPORT_NOT_FOUND</code></td><td>The airport identifier does not exist.</td></tr>
+            <tr><td><code>WEBCAM_NOT_FOUND</code></td><td>The webcam index does not exist for this airport.</td></tr>
+            <tr><td><code>RATE_LIMITED</code></td><td>Rate limit exceeded. <code>retry_after</code> says when to try again.</td></tr>
+            <tr><td><code>API_NOT_ENABLED</code></td><td>The API is not enabled for this deployment.</td></tr>
+            <tr><td><code>SERVICE_UNAVAILABLE</code></td><td>Temporary outage or no data available right now.</td></tr>
+        </table>
         
         <h2>Rate Limit Headers</h2>
         <p>Every response includes rate limit information:</p>
