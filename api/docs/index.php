@@ -709,7 +709,7 @@ $partnerLimits = getPublicApiRateLimits('partner');
         <div class="endpoint">
             <div class="endpoint-header">
                 <span class="method">GET</span>
-                <span class="endpoint-path">/v1/weather/bulk?airports=a,b,c</span>
+                <span class="endpoint-path">/v1/weather/bulk</span>
             </div>
             <div class="endpoint-body">
                 <p class="endpoint-desc">Current weather for several airports, or every listed airport when <code>airports</code> is omitted, in one round trip.</p>
