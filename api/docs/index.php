@@ -712,10 +712,12 @@ $partnerLimits = getPublicApiRateLimits('partner');
                 <span class="endpoint-path">/v1/weather/bulk?airports=a,b,c</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Current weather for several airports in one round trip, for route planning or a multi-airport dashboard.</p>
+                <p class="endpoint-desc">Current weather for several airports, or every listed airport when <code>airports</code> is omitted, in one round trip.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
-                    <tr><td><code>airports</code></td><td>string</td><td>Required. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?>.</td></tr>
+                    <tr><td><code>airports</code></td><td>string</td><td>Optional. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?> when present. Omit for all listed airports.</td></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Keep airports whose weather sources match this operator. <code>aviationwx</code> keeps non-FAA/NWS/institutional sources.</td></tr>
+                    <tr><td><code>maintenance</code></td><td>string</td><td><code>true</code> includes maintenance airports; <code>false</code> or omitted (default) excludes them.</td></tr>
                 </table>
             </div>
         </div>

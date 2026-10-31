@@ -511,18 +511,29 @@
     "/weather/bulk": {
       "get": {
         "summary": "Get weather for multiple airports",
-        "description": "Returns current weather for multiple airports in a single request.",
+        "description": "Returns current weather for multiple airports in a single request. When airports is omitted, weather for all listed airports is returned.",
         "operationId": "getWeatherBulk",
         "tags": ["Weather"],
         "parameters": [
           {
             "name": "airports",
             "in": "query",
-            "required": true,
-            "description": "Comma-separated airport identifiers, up to the configured maximum for this deployment.",
+            "description": "Comma-separated airport identifiers. When present, limited to the configured maximum for this deployment. Omit to return weather for all listed airports.",
             "schema": {
               "type": "string",
               "example": "kspb,kczk,kpfc"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Operator"
+          },
+          {
+            "name": "maintenance",
+            "in": "query",
+            "description": "Include maintenance airports: 'true' includes them; 'false' or omitted excludes them.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
             }
           }
         ],

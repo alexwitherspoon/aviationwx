@@ -463,7 +463,7 @@ class PublicApiWeathercamBulkTest extends TestCase
         }
         $this->assertIsArray($fmt);
         $this->assertArrayNotHasKey('default', $fmt['schema'] ?? []);
-        $this->assertStringContainsString('Not valid on the original', $fmt['description'] ?? '');
+        $this->assertStringContainsString('omit for the native original', $fmt['description'] ?? '');
         $this->assertIsArray($size);
         $this->assertArrayNotHasKey('default', $size['schema'] ?? []);
 
