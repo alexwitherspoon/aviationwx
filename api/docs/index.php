@@ -3,6 +3,8 @@
  * Public API Documentation Page
  *
  * Landing page for api.aviationwx.org. When the Public API is enabled, displays `getCanonicalPublicApiV1BaseUrl()`.
+ *
+ * Endpoint parameter tables and examples in this page mirror api/docs/openapi.json. Keep the two in sync, with the spec as the source of truth.
  */
 
 require_once __DIR__ . '/../../lib/public-api/config.php';
@@ -437,6 +439,13 @@ $attribution = getPublicApiAttributionText();
                     <div class="stat-value">v<?= htmlspecialchars(getPublicApiVersion()) ?></div>
                     <div class="stat-label">API Version</div>
                 </div>
+                <div class="stat">
+                    <div class="stat-value"><?php $docSha = getGitSha(); echo $docSha ? htmlspecialchars(substr($docSha, 0, 7)) : 'n/a'; ?></div>
+                    <div class="stat-label">Build</div>
+                </div>
+                <a class="github-link" href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" aria-label="AviationWX source on GitHub" title="Source on GitHub" style="align-self:center; margin-left:12px; opacity:.85; color:inherit;">
+                    <svg viewBox="0 0 16 16" width="24" height="24" fill="currentColor" role="img" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+                </a>
             </div>
         </header>
         
@@ -601,6 +610,30 @@ $attribution = getPublicApiAttributionText();
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
                     <tr><td><code>operator</code></td><td>string</td><td>Return only weathercams with this operator slug. Omitted returns every camera.</td></tr>
                 </table>
+                <pre><code>{
+  "index": 0,
+  "name": "Mulino 4S9 - NW Facing",
+  "image_url": "/v1/airports/4s9/webcams/0/image",
+  "refresh_seconds": 60,
+  "captured_at": 1793361840,
+  "captured_at_iso": "2026-10-30T12:04:00Z",
+  "approximate_heading": 315,
+  "operator": "aviationwx",
+  "images": [
+    {
+      "variant": "original",
+      "height": null,
+      "format": "jpg",
+      "url": "/v1/airports/4s9/webcams/0/image"
+    },
+    {
+      "variant": "720",
+      "height": 720,
+      "format": "jpg",
+      "url": "/v1/airports/4s9/webcams/0/image?size=720"
+    }
+  ]
+}</code></pre>
             </div>
         </div>
         
