@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image: the native original, a scaled or sized variant, an FAA-compliant rendering, or metadata about the available formats and sizes. Omit the parameters to get the stored original in its native format.",
+        "description": "Returns the current webcam image: the native original, a scaled or sized variant, an FAA-compliant rendering, or metadata about the available formats and sizes. Omit the parameters to get the stored original in its native format. Served images also embed the capture time in EXIF metadata.",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -986,6 +986,15 @@
             "properties": {
               "code": {
                 "type": "string",
+                "enum": [
+                  "INVALID_REQUEST",
+                  "INVALID_API_KEY",
+                  "AIRPORT_NOT_FOUND",
+                  "WEBCAM_NOT_FOUND",
+                  "RATE_LIMITED",
+                  "API_NOT_ENABLED",
+                  "SERVICE_UNAVAILABLE"
+                ],
                 "example": "AIRPORT_NOT_FOUND"
               },
               "message": {
