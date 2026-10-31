@@ -380,7 +380,7 @@ $attribution = getPublicApiAttributionText();
         .stats {
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-end;
             gap: 2rem;
             margin: 1.5rem 0;
         }
@@ -411,6 +411,7 @@ $attribution = getPublicApiAttributionText();
             align-items: center;
             justify-content: center;
             height: 2.5rem;
+            margin-bottom: 0.2rem;
         }
         
         <?php if (!$apiEnabled): ?>
