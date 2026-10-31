@@ -268,6 +268,7 @@ $attribution = getPublicApiAttributionText();
         .endpoint-path {
             font-family: 'SFMono-Regular', Consolas, monospace;
             color: var(--text-primary);
+            overflow-wrap: anywhere;
         }
         
         .endpoint-body {
@@ -381,6 +382,7 @@ $attribution = getPublicApiAttributionText();
             display: flex;
             justify-content: center;
             align-items: flex-end;
+            flex-wrap: wrap;
             gap: 2rem;
             margin: 1.5rem 0;
         }
@@ -412,6 +414,18 @@ $attribution = getPublicApiAttributionText();
             justify-content: center;
             height: 2.5rem;
             margin-bottom: 0.2rem;
+        }
+        
+        @media (max-width: 720px) {
+            .container {
+                padding: 1rem;
+            }
+            .stats {
+                gap: 1.25rem;
+            }
+            .endpoint-body {
+                overflow-x: auto;
+            }
         }
         
         <?php if (!$apiEnabled): ?>
