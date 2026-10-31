@@ -493,7 +493,7 @@ $attribution = getPublicApiAttributionText();
         <pre><code>curl -H "X-API-Key: your_api_key" https://api.aviationwx.org/v1/airports</code></pre>
         
         <h2>Endpoints</h2>
-        <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code>).</p>
+        <p class="endpoint-desc">Replace <code>{id}</code> and <code>{cam}</code> with the airport identifier and webcam index (for example <code>kspb</code> and <code>0</code>). The <code>operator</code> parameter filters by a network slug; on airport endpoints it also covers weather-source type defaults (for example <code>metar</code> is <code>faa</code> and <code>nws</code> is <code>nws</code>).</p>
         
         <div class="endpoint">
             <div class="endpoint-header">
@@ -529,8 +529,22 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/weather</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning.</p>
+                <p class="endpoint-desc">Get the single current weather picture for an airport, fused across sources, for display or flight planning. Every response <code>meta</code> carries <code>observation_time</code> and attribution, so freshness and source travel with the data.</p>
                 <pre><code>curl https://api.aviationwx.org/v1/airports/kspb/weather</code></pre>
+            </div>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method">GET</span>
+                <span class="endpoint-path">/v1/airports/{id}/embed</span>
+            </div>
+            <div class="endpoint-body">
+                <p class="endpoint-desc">Get everything an embed widget needs in one payload, or a differential update for gentle polling.</p>
+                <table>
+                    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                    <tr><td><code>refresh</code></td><td>string</td><td><code>1</code> returns only the topics that changed. Omit or <code>0</code> for the full payload.</td></tr>
+                </table>
             </div>
         </div>
         
@@ -578,6 +592,7 @@ $attribution = getPublicApiAttributionText();
                     <tr><td><code>width</code></td><td>integer</td><td>Target width in pixels, 16 through 3840. With height, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
                     <tr><td><code>height</code></td><td>integer</td><td>Target height in pixels, 16 through 2160. With width, center-crops to the aspect ratio then scales. Ignored when profile is set.</td></tr>
                     <tr><td><code>metadata</code></td><td>string</td><td><code>1</code> returns JSON describing the available formats and variants instead of the image.</td></tr>
+                    <tr><td><code>download</code></td><td>string</td><td><code>1</code> serves the native original as a download with an attachment filename instead of inline.</td></tr>
                 </table>
                 <pre><code>curl "https://api.aviationwx.org/v1/airports/4s9/webcams/1/image?profile=faa"</code></pre>
             </div>

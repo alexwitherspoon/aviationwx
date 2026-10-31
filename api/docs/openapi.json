@@ -29,7 +29,7 @@
     "/airports": {
       "get": {
         "summary": "List all airports",
-        "description": "Returns a list of all enabled airports with basic metadata. Optional operator includes an airport when airports.json has one or more weathercams or weather sources with that operator, including weather-source type defaults when operator is omitted. Optional has_webcams keeps airports that have weathercams configured; it is not sliced by operator. Optional has_weather keeps airports that have weather sources configured; it is not sliced by operator. When operator is set, webcam_count still counts matching weathercams only.",
+        "description": "Browse the catalog of enabled airports and filter it by operator, availability, or whether a field has webcams or weather.",
         "operationId": "listAirports",
         "tags": ["Airports"],
         "parameters": [
@@ -306,7 +306,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Original (no `size`, no `width`/`height`):** serves the native original file unmodified, at its native dimensions and format. The native type (jpg, png, or webp) is read from the file and returned in Content-Type. A file that is not one of those types is not served.\n\n**Sized variants (`size`):** serve a pre-generated variant. A size that was never generated for this camera is a 400 listing the available sizes, not a 503.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Exact height-based variant from the pre-generated set (no cropping or size fallback)\n- Neither: Native original, served unmodified\n\nsize may be omitted or set to original. Numeric size, width, and height values must be complete canonical integers within their documented ranges; malformed values return 400.\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
+        "description": "Returns the current webcam image: the native original, a scaled or sized variant, an FAA-compliant rendering, or metadata about the available formats and sizes. Omit the parameters to get the stored original in its native format.",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -384,6 +384,16 @@
               "enum": ["1"],
               "example": "1"
             }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "description": "When set to '1', serves the native original as a download with a Content-Disposition attachment filename instead of inline.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"],
+              "example": "1"
+            }
           }
         ],
         "responses": {
@@ -425,7 +435,7 @@
     "/airports/{id}/webcams/{cam}/history": {
       "get": {
         "summary": "Get webcam history",
-        "description": "Returns list of historical webcam frames, or a specific frame image when ts is provided.\n\nWhen ts is set, omit fmt for the native original. Format is read from the file (jpg, png, or webp) and returned in Content-Type. fmt applies only to generated size variants. fmt with no size, or with size=original, returns 400. ts must be a complete canonical integer. size may be omitted, set to original, or supplied as a complete canonical integer. Malformed values return 400. Requested heights are exact and never fall back to the original.",
+        "description": "Returns the list of historical frames for a camera, or one frame's image when ts is supplied. The format and size parameters apply to generated variants.",
         "operationId": "getWebcamHistory",
         "tags": ["Webcams"],
         "parameters": [
@@ -509,7 +519,7 @@
             "name": "airports",
             "in": "query",
             "required": true,
-            "description": "Comma-separated list of airport IDs (max 10)",
+            "description": "Comma-separated airport identifiers, up to the configured maximum for this deployment.",
             "schema": {
               "type": "string",
               "example": "kspb,kczk,kpfc"
@@ -539,7 +549,7 @@
     "/weathercam/bulk": {
       "get": {
         "summary": "Weathercam catalog",
-        "description": "One-query catalog of listed airports that have matching weathercams. Nested webcam objects match GET /airports/{id}/webcams, with absolute image and history URLs. Optional operator matches weathercams only; weather sources do not affect membership. Airports with no matching weathercam are omitted. Unlike GET /weather/bulk, this is a full catalog (no airports query and no max-airport cap). The origin response is rebuilt when airports.json changes.",
+        "description": "One-query catalog of airports that have matching weathercams. Each webcam carries absolute image and history URLs.",
         "operationId": "getWeathercamBulk",
         "tags": ["Webcams"],
         "parameters": [
@@ -1839,7 +1849,28 @@
             "type": "boolean"
           },
           "meta": {
-            "$ref": "#/components/schemas/Meta"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Meta"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "airport_id": {
+                    "type": "string"
+                  },
+                  "airport_name": {
+                    "type": "string"
+                  },
+                  "observation_time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "ISO 8601 observation timestamp for the current fused report, UTC. Null when no observation is available."
+                  }
+                }
+              }
+            ]
           },
           "weather": {
             "$ref": "#/components/schemas/Weather"
