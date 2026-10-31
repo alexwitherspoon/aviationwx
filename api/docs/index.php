@@ -732,7 +732,8 @@ $attribution = getPublicApiAttributionText();
                 <p class="endpoint-desc">One call for every weathercam on the platform, with absolute image URLs, for catalogs and directories.</p>
                 <table>
                     <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
-                    <tr><td><code>operator</code></td><td>string</td><td>Match weathercams only, not weather sources. Omitted defaults to <code>aviationwx</code>.</td></tr>
+                    <tr><td><code>airports</code></td><td>string</td><td>Optional. Comma-separated airport identifiers, up to <?= getPublicApiBulkMaxAirports() ?> when present. Omit for all listed airports.</td></tr>
+                    <tr><td><code>operator</code></td><td>string</td><td>Match weathercams only, not weather sources. Omitted returns every camera.</td></tr>
                     <tr><td><code>maintenance</code></td><td>string</td><td><code>true</code> includes airports in maintenance mode; <code>false</code> or omitted excludes them.</td></tr>
                 </table>
             </div>

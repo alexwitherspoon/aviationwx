@@ -565,6 +565,15 @@
         "tags": ["Webcams"],
         "parameters": [
           {
+            "name": "airports",
+            "in": "query",
+            "description": "Comma-separated airport identifiers. When present, limited to the configured maximum for this deployment. Omit to return all listed airports.",
+            "schema": {
+              "type": "string",
+              "example": "kspb,kczk"
+            }
+          },
+          {
             "$ref": "#/components/parameters/WeathercamOperator"
           },
           {
@@ -794,7 +803,7 @@
       "WeathercamOperator": {
         "name": "operator",
         "in": "query",
-        "description": "Weathercam operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json weathercams only; omitted weathercam operator is aviationwx. Airports with no matching weathercam are omitted. Weather sources do not affect membership.",
+        "description": "Weathercam operating-network slug. Query values are lowercased before matching. Invalid slugs return 400. Matching uses airports.json weathercams only: an omitted operator returns every weathercam, and a config row without an operator defaults to aviationwx. Airports with no matching weathercam are omitted. Weather sources do not affect membership.",
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$",

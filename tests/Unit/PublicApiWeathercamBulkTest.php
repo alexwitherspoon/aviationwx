@@ -405,9 +405,9 @@ class PublicApiWeathercamBulkTest extends TestCase
             }
         }
         $this->assertContains('operator', $names);
+        $this->assertContains('airports', $names);
         $this->assertNotContains('has_webcams', $names);
         $this->assertNotContains('has_weather', $names);
-        $this->assertNotContains('airports', $names);
 
         $description = $spec['components']['parameters']['WeathercamOperator']['description'] ?? '';
         $this->assertStringContainsString('weathercam', strtolower($description));
@@ -472,5 +472,63 @@ class PublicApiWeathercamBulkTest extends TestCase
         $this->assertArrayHasKey('image/png', $content);
         $this->assertArrayHasKey('image/webp', $content);
         $this->assertArrayHasKey('400', $op['responses'] ?? []);
+    }
+
+    /**
+     * @return array{airports?: array<string, mixed>}
+     */
+    private function fixtureConfig(): array
+    {
+        return json_decode(
+            (string) file_get_contents(__DIR__ . '/../Fixtures/airports.json.test'),
+            true
+        );
+    }
+
+    public function testResolveWeathercamBulkSelection_Explicit_ValidatesAndDedupes(): void
+    {
+        $errors = [];
+        $selection = resolveWeathercamBulkSelection(
+            $this->fixtureConfig(),
+            ['kspb', 'KSPB', 'nope', 'bad!'],
+            false,
+            $errors
+        );
+
+        $this->assertSame(['kspb'], $selection, 'Case variants and duplicates resolve to one id');
+        $this->assertArrayHasKey('nope', $errors, 'Unknown but well-formed id is reported as not found');
+        $this->assertArrayHasKey('bad!', $errors, 'Malformed id is reported as invalid');
+    }
+
+    public function testResolveWeathercamBulkSelection_MaintenanceRequiresOptIn(): void
+    {
+        $errors = [];
+        $without = resolveWeathercamBulkSelection($this->fixtureConfig(), ['pdx'], false, $errors);
+
+        $this->assertSame([], $without);
+        $this->assertArrayHasKey('pdx', $errors, 'Maintenance airport needs maintenance=true');
+
+        $errors2 = [];
+        $with = resolveWeathercamBulkSelection($this->fixtureConfig(), ['pdx'], true, $errors2);
+        $this->assertSame(['pdx'], $with);
+        $this->assertSame([], $errors2);
+    }
+
+    public function testGetWeathercamBulkAirportsForIds_OmitsAirportsWithoutMatchingCams(): void
+    {
+        $catalog = getWeathercamBulkAirportsForIds($this->fixtureConfig(), ['kspb', '03s'], null);
+
+        $this->assertNotNull($this->findAirport($catalog, 'kspb'));
+        $this->assertNull($this->findAirport($catalog, '03s'), 'Airports with no weathercams are omitted');
+    }
+
+    public function testGetWeathercamBulkAirportsForIds_OperatorSliceApplies(): void
+    {
+        $catalog = getWeathercamBulkAirportsForIds($this->fixtureConfig(), ['kspb'], 'wsdot');
+
+        $kspb = $this->findAirport($catalog, 'kspb');
+        $this->assertNotNull($kspb);
+        $this->assertCount(1, $kspb['webcams']);
+        $this->assertSame('WSDOT Test Camera', $kspb['webcams'][0]['name']);
     }
 }
