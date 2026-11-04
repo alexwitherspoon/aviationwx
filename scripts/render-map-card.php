@@ -36,7 +36,7 @@ const MAP_CARD_CREDIT_FONT_SIZE = 10;
  * a given day. MAP_CARD_SEED overrides it for one-off previews; the scheduler
  * never sets it, so production stays date-deterministic.
  *
- * @return int
+ * @return int Deterministic render seed
  */
 function mapCardSeed(): int
 {
@@ -54,7 +54,7 @@ function mapCardSeed(): int
  * Reads the cached weather-maps.json when fresh, otherwise refreshes it from
  * upstream, then returns the last radar.past[].path basename as a 12-hex id.
  *
- * @return string|null
+ * @return string|null 12-hex radar frame id, or null when unavailable
  */
 function mapCardResolveRadarFrameId(): ?string
 {
@@ -125,7 +125,7 @@ function mapCardResolveRadarFrameId(): ?string
  * #1a1a1a 1.5-unit round-join stroke) on a transparent background, so
  * compositing it matches the browser instead of approximating it in GD.
  *
- * @param int $size
+ * @param int $size Marker edge length in pixels
  * @return GdImage|null Null when the asset is missing or unreadable.
  */
 function mapCardBuildMarker(int $size): ?GdImage
@@ -151,7 +151,7 @@ function mapCardBuildMarker(int $size): ?GdImage
 /**
  * Best available TTF font for card text, or null when none is installed.
  *
- * @return string|null
+ * @return string|null Path to a TTF font, or null when none is installed
  */
 function mapCardFontPath(): ?string
 {
@@ -171,7 +171,7 @@ function mapCardFontPath(): ?string
 /**
  * Composite the brand logo into the top-left corner over the map.
  *
- * @param GdImage $im
+ * @param GdImage $im Canvas to draw onto
  * @return void
  */
 function mapCardDrawLogo(GdImage $im): void
@@ -206,7 +206,7 @@ function mapCardDrawLogo(GdImage $im): void
  * Draw the visible credit bar across the bottom: OSM/cloud/radar attribution
  * on the left and the "as of" UTC stamp on the right.
  *
- * @param GdImage $im
+ * @param GdImage $im Canvas to draw onto
  * @param string $stamp Human-readable UTC render stamp
  * @return void
  */

@@ -19,7 +19,7 @@ if (!defined('MAP_TILE_RAIN_CACHE_TTL')) {
 /**
  * OpenWeatherMap layers the proxy allows.
  *
- * @return list<string>
+ * @return list<string> OpenWeatherMap layer keys the proxy allows
  */
 function mapTilesOwmLayers(): array
 {
@@ -41,7 +41,7 @@ function mapTilesOwmLayers(): array
  * @param int $y Tile y
  * @param string $owmApiKey OpenWeatherMap API key (required for OWM layers)
  * @param string|null $rainFrameId RainViewer 12-hex radar frame id
- * @return string|null
+ * @return string|null Upstream URL, or null when the layer is unsupported
  */
 function mapTilesUpstreamUrl(string $layer, int $z, int $x, int $y, string $owmApiKey = '', ?string $rainFrameId = null): ?string
 {
@@ -71,7 +71,7 @@ function mapTilesUpstreamUrl(string $layer, int $z, int $x, int $y, string $owmA
  * @param int $x Tile x
  * @param int $y Tile y
  * @param string|null $rainFrameId RainViewer radar frame id
- * @return array{ok: bool, bytes: ?string, from_cache: bool, http_code: ?int, error: ?string, cache_path: string}
+ * @return array{ok: bool, bytes: ?string, from_cache: bool, http_code: ?int, error: ?string, cache_path: string} Result with tile bytes and cache/error state
  */
 function fetchMapTile(string $layer, int $z, int $x, int $y, ?string $rainFrameId = null): array
 {

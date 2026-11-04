@@ -24,11 +24,11 @@ if (!defined('MAP_CARD_TILE_SIZE')) {
 /**
  * Great-circle distance in kilometers.
  *
- * @param float $lat1
- * @param float $lon1
- * @param float $lat2
- * @param float $lon2
- * @return float
+ * @param float $lat1 Latitude of first point in degrees
+ * @param float $lon1 Longitude of first point in degrees
+ * @param float $lat2 Latitude of second point in degrees
+ * @param float $lon2 Longitude of second point in degrees
+ * @return float Great-circle distance in kilometers
  */
 function mapCardDistanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
 {
@@ -47,7 +47,7 @@ function mapCardDistanceKm(float $lat1, float $lon1, float $lat2, float $lon2): 
  *
  * @param float $lon Longitude in degrees
  * @param int $z Zoom level
- * @return float
+ * @return float Fractional tile X, unscaled to pixels
  */
 function mapCardLonToTileX(float $lon, int $z): float
 {
@@ -60,7 +60,7 @@ function mapCardLonToTileX(float $lon, int $z): float
  *
  * @param float $lat Latitude in degrees
  * @param int $z Zoom level
- * @return float
+ * @return float Fractional tile Y, unscaled to pixels
  */
 function mapCardLatToTileY(float $lat, int $z): float
 {
@@ -74,10 +74,10 @@ function mapCardLatToTileY(float $lat, int $z): float
 /**
  * Pixel coordinate within the global tile grid for a point at a zoom.
  *
- * @param float $lat
- * @param float $lon
+ * @param float $lat Latitude in degrees
+ * @param float $lon Longitude in degrees
  * @param int $z Zoom level
- * @return array{0: float, 1: float} [px, py]
+ * @return array{0: float, 1: float} Global pixel coordinate [px, py]
  */
 function mapCardPointPixel(float $lat, float $lon, int $z): array
 {
@@ -90,9 +90,9 @@ function mapCardPointPixel(float $lat, float $lon, int $z): array
 /**
  * Global pixel bounding box over a set of points at a zoom.
  *
- * @param list<array{lat: float, lon: float}> $points
+ * @param list<array{lat: float, lon: float}> $points Points to bound
  * @param int $z Zoom level
- * @return array{minX: float, minY: float, maxX: float, maxY: float}
+ * @return array{minX: float, minY: float, maxX: float, maxY: float} Global pixel bounding box
  */
 function mapCardPixelBounds(array $points, int $z): array
 {
@@ -114,10 +114,10 @@ function mapCardPixelBounds(array $points, int $z): array
  * Date-seeded and index-keyed, so every node renders the same view for a day
  * without sharing RNG state.
  *
- * @param int $seed
- * @param int $index
- * @param int $upperBound
- * @return int
+ * @param int $seed Deterministic seed
+ * @param int $index Draw index within the seed
+ * @param int $upperBound Exclusive upper bound
+ * @return int Value in [0, $upperBound)
  */
 function mapCardPseudoRandom(int $seed, int $index, int $upperBound): int
 {
@@ -135,10 +135,10 @@ function mapCardPseudoRandom(int $seed, int $index, int $upperBound): int
  * near it, then the nearest neighbors join it until $minCount is reached (or the
  * whole list when there are fewer available).
  *
- * @param list<array{id: string, lat: float, lon: float}> $points
- * @param int $seed
+ * @param list<array{id: string, lat: float, lon: float}> $points Configured airports with coordinates
+ * @param int $seed Deterministic seed
  * @param int $densityKm Radius used to score how dense an airport's neighborhood is
- * @return list<array{id: string, lat: float, lon: float}>
+ * @return list<array{id: string, lat: float, lon: float}> Chosen focus airports
  */
 function mapCardSelectFocus(array $points, int $seed, int $densityKm = 60): array
 {
@@ -215,9 +215,9 @@ function mapCardSelectFocus(array $points, int $seed, int $densityKm = 60): arra
  * @param list<array{lat: float, lon: float}> $points
  * @param int $width Canvas width in pixels
  * @param int $height Canvas height in pixels
- * @param int $maxZoom
- * @param int $marginPx
- * @return int
+ * @param int $maxZoom Highest zoom level to try
+ * @param int $marginPx Pixel margin added around the point span
+ * @return int Highest zoom level that still fits
  */
 function mapCardChooseZoom(array $points, int $width, int $height, int $maxZoom, int $marginPx = 80): int
 {
