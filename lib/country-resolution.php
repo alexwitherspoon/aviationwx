@@ -100,6 +100,53 @@ function countryNameFromIso3166Alpha2(?string $alpha2): ?string
 }
 
 /**
+ * Human-readable subdivision name for an ISO 3166-2 code (bundled table).
+ *
+ * @param string|null $code ISO 3166-2 code such as US-OR (any case)
+ * @return string|null Subdivision name such as "Oregon", or null when unknown
+ */
+function subdivisionNameFromIso3166(?string $code): ?string
+{
+    if ($code === null) {
+        return null;
+    }
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return null;
+    }
+    static $names = null;
+    static $warned = false;
+    if ($names === null) {
+        $names = [];
+        $path = __DIR__ . '/data/iso3166-subdivision-names.csv';
+        if (is_readable($path)) {
+            $fh = fopen($path, 'r');
+            if ($fh !== false) {
+                fgetcsv($fh, null, ',', '"', '\\'); // skip header
+                while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
+                    if (count($row) >= 2) {
+                        $c = strtoupper(trim((string) $row[0]));
+                        $name = trim((string) $row[1]);
+                        if ($c !== '' && $name !== '') {
+                            $names[$c] = $name;
+                        }
+                    }
+                }
+                fclose($fh);
+            }
+        }
+        if ($names === [] && !$warned) {
+            $warned = true;
+            error_log(
+                'aviationwx country-resolution: iso3166-subdivision-names.csv missing, unreadable, or empty; '
+                . 'subdivisionNameFromIso3166() returns null until the file is restored.'
+            );
+        }
+    }
+    return $names[$code] ?? null;
+}
+
+/**
  * Parse Natural Earth-style Admin-0 GeoJSON into a normalized feature list for hit testing.
  *
  * Each element has `iso_a2` and `parts`. Each part has `exterior` and `holes` rings (vertices as

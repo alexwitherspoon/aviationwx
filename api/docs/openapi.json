@@ -1368,6 +1368,16 @@
             "nullable": true,
             "description": "Human-readable country name. Null when country is unknown."
           },
+          "region": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO 3166-2 first-level subdivision (e.g. US-OR). Null when unknown or the country has no useful admin-1."
+          },
+          "region_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable subdivision name (e.g. Oregon). Null when region is null."
+          },
           "timezone": {
             "type": "string",
             "description": "IANA timezone identifier (e.g., America/Denver)"

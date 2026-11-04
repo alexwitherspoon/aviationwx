@@ -263,3 +263,68 @@ function ourAirportsLoadAirportCentersAndFaaMappingFromDisk(): array
 
     return ['centers' => $centers, 'faa_to_icao' => $faaToIcao];
 }
+
+/**
+ * Parse airports.csv into a code-to-ISO-3166-2-region map.
+ *
+ * Every usable identifier on a row (ident, gps_code, icao_code, iata_code,
+ * local_code) maps to that row's uppercase iso_region, so a config airport can
+ * be matched by any of its codes. Read once per process.
+ *
+ * @return array<string, string> Uppercase code => uppercase ISO 3166-2 region
+ */
+function ourAirportsLoadIsoRegionByCode(): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $map = [];
+
+    $path = ourAirportsCsvPath('airports');
+    if (!is_readable($path)) {
+        return $cache = $map;
+    }
+
+    $csv = @file_get_contents($path);
+    if ($csv === false || $csv === '') {
+        return $cache = $map;
+    }
+
+    $lines = str_getcsv($csv, "\n", '"', '\\');
+    if ($lines === [] || count($lines) < 2) {
+        return $cache = $map;
+    }
+
+    $header = str_getcsv(array_shift($lines), ',', '"', '\\');
+    $idx = array_flip(array_map('trim', $header));
+
+    $regionIdx = $idx['iso_region'] ?? null;
+    $codeIdxs = [];
+    foreach (['ident', 'gps_code', 'icao_code', 'iata_code', 'local_code'] as $col) {
+        $codeIdxs[] = $idx[$col] ?? null;
+    }
+
+    if ($regionIdx === null) {
+        return $cache = $map;
+    }
+
+    foreach ($lines as $line) {
+        $row = str_getcsv($line, ',', '"', '\\');
+        $region = strtoupper(trim((string) ($row[$regionIdx] ?? '')));
+        if ($region === '') {
+            continue;
+        }
+        foreach ($codeIdxs as $colIdx) {
+            if ($colIdx === null) {
+                continue;
+            }
+            $code = strtoupper(trim((string) ($row[$colIdx] ?? '')));
+            if ($code !== '') {
+                $map[$code] = $region;
+            }
+        }
+    }
+
+    return $cache = $map;
+}

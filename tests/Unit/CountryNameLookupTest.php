@@ -31,4 +31,12 @@ class CountryNameLookupTest extends TestCase
         $this->assertNull(countryNameFromIso3166Alpha2(''));
         $this->assertNull(countryNameFromIso3166Alpha2(null));
     }
+
+    public function testSubdivisionNameFromIso3166(): void
+    {
+        $this->assertSame('Oregon', subdivisionNameFromIso3166('US-OR'));
+        $this->assertSame('Ontario', subdivisionNameFromIso3166('ca-on'));
+        $this->assertNull(subdivisionNameFromIso3166('ZZ-ZZ'));
+        $this->assertNull(subdivisionNameFromIso3166(null));
+    }
 }
