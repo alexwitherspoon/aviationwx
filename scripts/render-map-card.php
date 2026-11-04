@@ -26,6 +26,10 @@ const MAP_CARD_MARGIN_PX = 80;
 const MAP_CARD_MARKER_SIZE = 32;
 const MAP_CARD_RADAR_CACHE_FILE = CACHE_BASE_DIR . '/rainviewer/weather-maps.json';
 const MAP_CARD_RADAR_CACHE_TTL = 300;
+const MAP_CARD_LOGO_WIDTH = 231;
+const MAP_CARD_LOGO_MARGIN = 14;
+const MAP_CARD_CREDIT_HEIGHT = 30;
+const MAP_CARD_CREDIT_FONT_SIZE = 10;
 
 /**
  * Render seed. Defaults to the UTC date so every node renders the same view for
@@ -115,86 +119,126 @@ function mapCardResolveRadarFrameId(): ?string
 }
 
 /**
- * The client airplane marker as an ordered list of [x, y] points in its 24-unit
- * viewBox. The nose arc (SVG A commands) is expanded into a smooth semicircle.
+ * Build the grey airplane marker from the committed raster of the client's SVG.
  *
- * @return list<array{0: float, 1: float}>
+ * public/images/airport-marker.png is the exact dashboard icon path (grey fill,
+ * #1a1a1a 1.5-unit round-join stroke) on a transparent background, so
+ * compositing it matches the browser instead of approximating it in GD.
+ *
+ * @param int $size
+ * @return GdImage|null Null when the asset is missing or unreadable.
  */
-function mapCardPlaneOutline(): array
+function mapCardBuildMarker(int $size): ?GdImage
 {
-    $pts = [[21.0, 16.0], [21.0, 14.0], [13.0, 9.0], [13.0, 3.5]];
-
-    $cx = 11.5;
-    $cy = 3.5;
-    $r = 1.5;
-    $segments = 12;
-    for ($i = 0; $i <= $segments; $i++) {
-        $theta = M_PI * $i / $segments;
-        $pts[] = [$cx + $r * cos($theta), $cy - $r * sin($theta)];
+    $asset = __DIR__ . '/../public/images/airport-marker.png';
+    $src = @imagecreatefrompng($asset);
+    if ($src === false) {
+        aviationwx_log('warning', 'map card: marker asset missing', ['path' => $asset], 'app');
+        return null;
     }
 
-    return array_merge($pts, [
-        [10.0, 9.0], [2.0, 14.0], [2.0, 16.0], [10.0, 13.5], [10.0, 19.0],
-        [8.0, 20.5], [8.0, 22.0], [11.5, 21.0], [15.0, 22.0], [15.0, 20.5],
-        [13.0, 19.0], [13.0, 13.5],
-    ]);
+    $marker = imagecreatetruecolor($size, $size);
+    imagealphablending($marker, false);
+    imagesavealpha($marker, true);
+    $blank = imagecolorallocatealpha($marker, 0, 0, 0, 127);
+    imagefilledrectangle($marker, 0, 0, $size, $size, $blank);
+    imagecopyresampled($marker, $src, 0, 0, 0, 0, $size, $size, imagesx($src), imagesy($src));
+    imagedestroy($src);
+
+    return $marker;
 }
 
 /**
- * Build the grey airplane marker once as an anti-aliased RGBA image.
+ * Best available TTF font for card text, or null when none is installed.
  *
- * Rasterized at a supersampled resolution then resampled down so the marker
- * edges and nose arc stay smooth at 32px. The background is transparent so the
- * marker composites over the map.
- *
- * @param int $size
- * @param int $supersample
- * @return GdImage
+ * @return string|null
  */
-function mapCardBuildMarker(int $size, int $supersample = 4): GdImage
+function mapCardFontPath(): ?string
 {
-    $big = $size * $supersample;
-    $k = $big / 24.0;
-
-    $bigIm = imagecreatetruecolor($big, $big);
-    imagealphablending($bigIm, false);
-    imagesavealpha($bigIm, true);
-    $blank = imagecolorallocatealpha($bigIm, 0, 0, 0, 127);
-    imagefilledrectangle($bigIm, 0, 0, $big, $big, $blank);
-
-    $strokePoints = [];
-    foreach (mapCardPlaneOutline() as [$ux, $uy]) {
-        $strokePoints[] = (int) round($ux * $k);
-        $strokePoints[] = (int) round($uy * $k);
+    foreach ([
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    ] as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
     }
 
-    // Insets the solid grey fill toward the shape centroid so a thin dark rim
-    // remains, matching the client marker's stroke. The 4x downsample then
-    // anti-aliases the rim and the nose arc.
-    $cx = 11.5;
-    $cy = 12.0;
-    $inset = 0.85;
-    $fillPoints = [];
-    foreach (mapCardPlaneOutline() as [$ux, $uy]) {
-        $fillPoints[] = (int) round((($ux - $cx) * $inset + $cx) * $k);
-        $fillPoints[] = (int) round((($uy - $cy) * $inset + $cy) * $k);
+    return null;
+}
+
+/**
+ * Composite the brand logo into the top-left corner over the map.
+ *
+ * @param GdImage $im
+ * @return void
+ */
+function mapCardDrawLogo(GdImage $im): void
+{
+    $logoPath = __DIR__ . '/../public/images/logo.png';
+    if (!is_file($logoPath)) {
+        return;
+    }
+    $logo = @imagecreatefrompng($logoPath);
+    if ($logo === false) {
+        return;
     }
 
-    imagealphablending($bigIm, true);
-    $fill = imagecolorallocate($bigIm, 158, 158, 158);
-    $stroke = imagecolorallocate($bigIm, 26, 26, 26);
-    imagefilledpolygon($bigIm, $strokePoints, $stroke);
-    imagefilledpolygon($bigIm, $fillPoints, $fill);
+    $srcW = imagesx($logo);
+    $srcH = imagesy($logo);
+    $w = MAP_CARD_LOGO_WIDTH;
+    $h = (int) round($srcH * ($w / $srcW));
 
-    $small = imagecreatetruecolor($size, $size);
-    imagealphablending($small, false);
-    imagesavealpha($small, true);
-    $sblank = imagecolorallocatealpha($small, 0, 0, 0, 127);
-    imagefilledrectangle($small, 0, 0, $size, $size, $sblank);
-    imagecopyresampled($small, $bigIm, 0, 0, 0, 0, $size, $size, $big, $big);
-    imagedestroy($bigIm);
+    $scaled = imagecreatetruecolor($w, $h);
+    imagealphablending($scaled, false);
+    imagesavealpha($scaled, true);
+    $blank = imagecolorallocatealpha($scaled, 0, 0, 0, 127);
+    imagefilledrectangle($scaled, 0, 0, $w, $h, $blank);
+    imagecopyresampled($scaled, $logo, 0, 0, 0, 0, $w, $h, $srcW, $srcH);
 
-    return $small;
+    imagecopy($im, $scaled, MAP_CARD_LOGO_MARGIN, MAP_CARD_LOGO_MARGIN, 0, 0, $w, $h);
+    imagedestroy($scaled);
+    imagedestroy($logo);
+}
+
+/**
+ * Draw the visible credit bar across the bottom: OSM/cloud/radar attribution
+ * on the left and the "as of" UTC stamp on the right.
+ *
+ * @param GdImage $im
+ * @param string $stamp Human-readable UTC render stamp
+ * @return void
+ */
+function mapCardDrawCredit(GdImage $im, string $stamp): void
+{
+    $credit = '© OpenStreetMap contributors · Clouds © OpenWeatherMap · Radar © RainViewer';
+    $asOf = 'as of ' . $stamp;
+
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $barTop = $h - MAP_CARD_CREDIT_HEIGHT;
+
+    // Translucent dark band so the credit stays legible over any map color.
+    $band = imagecolorallocatealpha($im, 0, 0, 0, 80);
+    imagefilledrectangle($im, 0, $barTop, $w, $h, $band);
+
+    $white = imagecolorallocate($im, 255, 255, 255);
+    $size = MAP_CARD_CREDIT_FONT_SIZE;
+    $pad = MAP_CARD_LOGO_MARGIN;
+    $font = mapCardFontPath();
+
+    if ($font !== null && function_exists('imagettftext')) {
+        $baseline = $barTop + $size + (int) round((MAP_CARD_CREDIT_HEIGHT - $size) / 2);
+        imagettftext($im, $size, 0, $pad, $baseline, $white, $font, $credit);
+        $box = imagettfbbox($size, 0, $font, $asOf);
+        $asOfW = (int) ($box[2] - $box[0]);
+        imagettftext($im, $size, 0, $w - $pad - $asOfW, $baseline, $white, $font, $asOf);
+    } else {
+        // Built-in font fallback; © and · drop out, keep the OSM credit so the
+        // attribution stays visible even without FreeType.
+        imagestring($im, 3, $pad, $barTop + 10, '(c) OpenStreetMap contributors', $white);
+    }
 }
 
 /**
@@ -310,17 +354,23 @@ function renderMapCard(): bool
     $marker = mapCardBuildMarker(MAP_CARD_MARKER_SIZE);
 
     $markerCount = 0;
-    $halfMarker = (int) (MAP_CARD_MARKER_SIZE / 2);
-    foreach ($points as $p) {
-        [$gx, $gy] = mapCardPointPixel($p['lat'], $p['lon'], $zoom);
-        $x = (int) round($gx - $originX);
-        $y = (int) round($gy - $originY);
-        if ($x >= 0 && $x < MAP_CARD_CANVAS_WIDTH && $y >= 0 && $y < MAP_CARD_CANVAS_HEIGHT) {
-            imagecopy($im, $marker, $x - $halfMarker, $y - $halfMarker, 0, 0, MAP_CARD_MARKER_SIZE, MAP_CARD_MARKER_SIZE);
-            $markerCount++;
+    if ($marker !== null) {
+        $halfMarker = (int) (MAP_CARD_MARKER_SIZE / 2);
+        foreach ($points as $p) {
+            [$gx, $gy] = mapCardPointPixel($p['lat'], $p['lon'], $zoom);
+            $x = (int) round($gx - $originX);
+            $y = (int) round($gy - $originY);
+            if ($x >= 0 && $x < MAP_CARD_CANVAS_WIDTH && $y >= 0 && $y < MAP_CARD_CANVAS_HEIGHT) {
+                imagecopy($im, $marker, $x - $halfMarker, $y - $halfMarker, 0, 0, MAP_CARD_MARKER_SIZE, MAP_CARD_MARKER_SIZE);
+                $markerCount++;
+            }
         }
+        imagedestroy($marker);
     }
-    imagedestroy($marker);
+
+    $stamp = gmdate('Y-m-d H:i') . ' UTC';
+    mapCardDrawLogo($im);
+    mapCardDrawCredit($im, $stamp);
 
     ensureCacheDir(CACHE_SOCIAL_DIR);
     $tmpFile = CACHE_SOCIAL_DIR . '/airports-map.png.tmp.' . getmypid();
@@ -332,7 +382,6 @@ function renderMapCard(): bool
     }
     imagedestroy($im);
 
-    $stamp = gmdate('Y-m-d H:i\Z');
     $argv = [
         'exiftool', '-overwrite_original', '-q', '-P',
         '-Copyright=© OpenStreetMap contributors · Cloud data © OpenWeatherMap · Radar © RainViewer · AviationWX.org',

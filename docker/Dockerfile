@@ -17,6 +17,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git \
     unzip \
     ffmpeg \
+    fonts-dejavu-core \
     libimage-exiftool-perl \
     cron \
     proftpd-core \
