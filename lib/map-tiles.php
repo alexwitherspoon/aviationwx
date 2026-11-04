@@ -77,10 +77,10 @@ function fetchMapTile(string $layer, int $z, int $x, int $y, ?string $rainFrameI
 {
     $isRain = $layer === 'rainviewer';
     $isOsm = $layer === 'osm';
-    $config = loadConfig();
 
     $apiKey = '';
     if (!$isRain && !$isOsm) {
+        $config = loadConfig();
         $apiKey = $config['config']['openweathermap_api_key'] ?? '';
         if ($apiKey === '') {
             return [
@@ -138,13 +138,23 @@ function fetchMapTile(string $layer, int $z, int $x, int $y, ?string $rainFrameI
     }
 
     // Best-effort cache write: suppress errors and serve the tile even if the
-    // disk write fails rather than failing the request.
+    // disk write fails rather than failing the request. Write to a temp file
+    // then rename so concurrent readers never see a half-written tile.
     $cacheDir = dirname($cachePath);
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0755, true);
     }
     if (is_dir($cacheDir) && is_writable($cacheDir)) {
-        @file_put_contents($cachePath, $bytes);
+        $tmpPath = @tempnam($cacheDir, 'tile-');
+        if ($tmpPath !== false) {
+            if (@file_put_contents($tmpPath, $bytes) !== false) {
+                if (!@rename($tmpPath, $cachePath)) {
+                    @unlink($tmpPath);
+                }
+            } else {
+                @unlink($tmpPath);
+            }
+        }
     }
 
     return [
