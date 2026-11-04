@@ -278,6 +278,7 @@ function ourAirportsLoadAirportCentersAndFaaMappingFromDisk(): array
 function ourAirportsParseIsoRegionFromCsv(string $csvContent): array
 {
     $map = [];
+    $ambiguous = [];
 
     $lines = str_getcsv($csvContent, "\n", '"', '\\');
     if ($lines === [] || count($lines) < 2) {
@@ -300,8 +301,8 @@ function ourAirportsParseIsoRegionFromCsv(string $csvContent): array
     foreach ($lines as $line) {
         $row = str_getcsv($line, ',', '"', '\\');
         $region = strtoupper(trim((string) ($row[$regionIdx] ?? '')));
-        // OurAirports marks "no useful admin-1" with a trailing -XX sentinel.
-        if ($region === '' || str_ends_with($region, '-XX')) {
+        // OurAirports uses -XX and -U-A to mark "no useful admin-1".
+        if ($region === '' || str_ends_with($region, '-XX') || str_ends_with($region, '-U-A')) {
             continue;
         }
         foreach ($codeIdxs as $colIdx) {
@@ -309,10 +310,18 @@ function ourAirportsParseIsoRegionFromCsv(string $csvContent): array
                 continue;
             }
             $code = strtoupper(trim((string) ($row[$colIdx] ?? '')));
-            if ($code !== '') {
-                $map[$code] = $region;
+            if ($code === '') {
+                continue;
             }
+            if (isset($map[$code]) && $map[$code] !== $region) {
+                $ambiguous[$code] = true;
+            }
+            $map[$code] = $region;
         }
+    }
+
+    foreach (array_keys($ambiguous) as $code) {
+        unset($map[$code]);
     }
 
     return $map;
