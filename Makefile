@@ -362,6 +362,7 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	@echo "Cleaning test cache for fresh state..."
 	@rm -rf /tmp/aviationwx-cache-test
 	@mkdir -p /tmp/aviationwx-cache-test
+	@test -f vendor/bin/phpunit || (echo "❌ vendor/bin/phpunit missing; run 'composer install' first" >&2; exit 1)
 	@docker compose -f docker/docker-compose.test.yml build
 	@docker compose -f docker/docker-compose.test.yml up -d
 	@echo "Waiting for test container to be healthy..."
