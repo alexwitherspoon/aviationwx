@@ -582,7 +582,9 @@ $workRegistry->registerEnqueueTick('map_card', function (int $now) use (&$lastMa
             return;
         }
     }
-    if (($now - $lastMapCardRenderAttempt) < 60) {
+    // Retry at most every 15 minutes so an upstream outage does not pile up
+    // overlapping renders or hammer the tile providers.
+    if (($now - $lastMapCardRenderAttempt) < 900) {
         return;
     }
     $script = __DIR__ . '/render-map-card.php';

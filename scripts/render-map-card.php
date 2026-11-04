@@ -204,6 +204,20 @@ function mapCardBuildMarker(int $size, int $supersample = 4): GdImage
  */
 function renderMapCard(): bool
 {
+    // Serialize renders so a slow or retried run never overlaps the next tick's
+    // spawn. The lock releases when this process exits.
+    ensureCacheDir(CACHE_SOCIAL_DIR);
+    $lockFp = @fopen(CACHE_SOCIAL_DIR . '/render.lock', 'c');
+    if ($lockFp === false) {
+        aviationwx_log('error', 'map card: cannot open render lock', [], 'app');
+        return false;
+    }
+    if (!@flock($lockFp, LOCK_EX | LOCK_NB)) {
+        fclose($lockFp);
+        aviationwx_log('info', 'map card: render already in progress, skipping', [], 'app');
+        return false;
+    }
+
     if (!function_exists('imagecreatetruecolor')) {
         aviationwx_log('error', 'map card: GD extension unavailable', [], 'app');
         return false;
