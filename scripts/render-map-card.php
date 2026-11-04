@@ -317,11 +317,13 @@ function renderMapCard(): bool
     imagealphablending($im, true);
 
     $baseTiles = 0;
+    $expectedBaseTiles = 0;
     for ($ty = $tileMinY; $ty <= $tileMaxY; $ty++) {
         for ($tx = $tileMin; $tx <= $tileMax; $tx++) {
             if ($tx < 0 || $tx > $gridMax || $ty < 0 || $ty > $gridMax) {
                 continue;
             }
+            $expectedBaseTiles++;
             $dstX = $tx * MAP_CARD_TILE_SIZE - (int) $originX;
             $dstY = $ty * MAP_CARD_TILE_SIZE - (int) $originY;
 
@@ -343,9 +345,11 @@ function renderMapCard(): bool
         }
     }
 
-    if ($baseTiles === 0) {
-        aviationwx_log('error', 'map card: no OSM base tiles rendered', [
+    if ($expectedBaseTiles === 0 || $baseTiles !== $expectedBaseTiles) {
+        aviationwx_log('error', 'map card: incomplete OSM base', [
             'zoom' => $zoom,
+            'base_tiles' => $baseTiles,
+            'expected_tiles' => $expectedBaseTiles,
         ], 'app');
         imagedestroy($im);
         return false;
