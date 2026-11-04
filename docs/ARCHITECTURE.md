@@ -169,7 +169,7 @@ Part of the **Internal API** (see [API.md](API.md)): JSON for the web dashboard;
 
 **Work registry (`lib/scheduler-work-registry.php`)**: Drain-aware registration of scheduler work
 - ProcessPools register with `setPool` (weather, webcam, NOTAM, station power, plus each reference job). Replacing a pool that still has active children keeps the prior pool in a retiring set until idle or force-terminate, so drain counts stay accurate across config-driven recreation. Reference pools pass class `reference` so drain force timing can differ from live pools.
-- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush). The `reference_data` tick uses `referenceDataEnqueueDueJobs()` for dependency-aware size-1 pool enqueue (not fire-and-forget `exec`).
+- Enqueue and background-start logic registers with `registerEnqueueTick` (named ticks such as weather, webcam, reference data, status prewarm, map card, metrics spill/daily/weekly/cleanup/health, variant and upstream health flush). The `reference_data` tick uses `referenceDataEnqueueDueJobs()` for dependency-aware size-1 pool enqueue (not fire-and-forget `exec`).
 - Each loop: cleanup finished pool workers, evaluate deploy drain, then run registered enqueue ticks only when new work is allowed
 - Active worker counts and force-terminate iterate registered pools only
 - New gated work is added by registering a pool and/or tick; ungated paths stay outside the registry (stuck-worker heartbeat cleanup remains in-process control-plane work)

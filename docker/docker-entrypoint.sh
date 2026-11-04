@@ -209,6 +209,7 @@ PARTNERS_DIR="${CACHE_DIR}/partners"
 PARTNERS_LUM_DIR="${PARTNERS_DIR}/lum"
 RATE_LIMITS_DIR="${CACHE_DIR}/rate_limits"
 MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
+SOCIAL_DIR="${CACHE_DIR}/social"
 
 # runuser (util-linux) is required: cache dirs and the scheduler must be created/run as
 # www-data, never as root, so webcam cache permissions stay consistent with Apache.
@@ -246,6 +247,7 @@ ensure_cache_subdirs() {
         "${METRICS_WEEKLY_DIR}"
         "${METRICS_SPILL_DIR}"
         "${MAP_TILES_DIR}"
+        "${SOCIAL_DIR}"
     )
     if [ -d "${CACHE_DIR}" ] && ! runuser -u www-data -- test -w "${CACHE_DIR}" 2>/dev/null; then
         chown www-data:www-data "${CACHE_DIR}" 2>/dev/null || true
