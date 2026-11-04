@@ -384,11 +384,11 @@ function rememberWeathercamBulkCatalogIfConfigShaStable(
  */
 function weathercamBulkRegionFingerprint(): string
 {
-    if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE')) {
+    if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE') || !is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
         return '';
     }
-    $mtime = @filemtime(CACHE_OURAIRPORTS_REGIONS_FILE);
-    return $mtime !== false ? (string) $mtime : '';
+    $hash = @hash_file('sha256', CACHE_OURAIRPORTS_REGIONS_FILE);
+    return $hash !== false ? $hash : '';
 }
 
 /**

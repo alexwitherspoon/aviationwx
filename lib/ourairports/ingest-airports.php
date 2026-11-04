@@ -302,15 +302,21 @@ function ourAirportsParseIsoRegionFromCsv(string $csvContent): array
         $row = str_getcsv($line, ',', '"', '\\');
         $region = strtoupper(trim((string) ($row[$regionIdx] ?? '')));
         // OurAirports uses -XX and -U-A to mark "no useful admin-1".
-        if ($region === '' || str_ends_with($region, '-XX') || str_ends_with($region, '-U-A')) {
-            continue;
-        }
+        $isSentinel = $region === '' || str_ends_with($region, '-XX') || str_ends_with($region, '-U-A');
+
         foreach ($codeIdxs as $colIdx) {
             if ($colIdx === null) {
                 continue;
             }
             $code = strtoupper(trim((string) ($row[$colIdx] ?? '')));
             if ($code === '') {
+                continue;
+            }
+            if ($isSentinel) {
+                // An unassigned row still removes its identifiers from the map,
+                // so a valid region for the same code cannot win over an airport
+                // that has no admin-1 assignment.
+                $ambiguous[$code] = true;
                 continue;
             }
             if (isset($map[$code]) && $map[$code] !== $region) {

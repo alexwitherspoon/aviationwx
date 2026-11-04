@@ -67,6 +67,7 @@ try {
 
     if (is_readable(ourAirportsCsvPath('airports'))) {
         ingestOurAirportsIdentityFromDisk();
+        ingestOurAirportsRegionsFromDisk();
     }
 
     if (is_readable(ourAirportsCsvPath('airport_frequencies'))) {
