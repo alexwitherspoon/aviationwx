@@ -1,0 +1,113 @@
+# CodeRabbit configuration for aviationwx (aviationwx.org)
+# Public repo. Free (OSS) tier.
+#
+# Intent: keep the review focused on the safety-critical surface (weather data
+# correctness, staleness handling, unit conversions, error handling) and on the
+# deploy/CD safety of the Docker and GitHub Actions files. Only run linters that
+# map one-to-one to tooling this repo already uses, so each finding is actionable.
+
+language: en-US
+enable_free_tier: true
+
+tone_instructions: "Plain, direct technical English. Lead with safety and correctness: staleness, units, error handling, credential and resource hygiene. Cite file and line. Skip filler praise and pure-style nitpicks. No em dashes."
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  abort_on_close: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+
+  # Comment-only. No auto-approval or merge gating for a solo-maintainer repo.
+  auto_approvals:
+    enabled: false
+
+  # Skip generated and vendored content so review effort goes to real changes.
+  path_filters:
+    - "!vendor/**"
+    - "!cache/**"
+    - "!node_modules/**"
+    - "!tests/Browser/node_modules/**"
+    - "!tests/Browser/playwright-report/**"
+    - "!tests/Browser/test-results/**"
+    - "!data/wmm/**"
+    - "!*.lock"
+
+  # Point, don't duplicate: the staleness/units/error-handling/credential/test
+  # rules live in .github/skills/code-review/SKILL.md and copilot-instructions.md,
+  # referenced below. path_instructions only carry what those docs do not say.
+  path_instructions:
+    - path: "scripts/*.sh"
+      instructions: |
+        Live ops scripts (deploy drain, cache permissions, SFTP chroot repair). Verify
+        set -euo pipefail, quoting, idempotency, and no secrets.
+    - path: "docker/**"
+      instructions: |
+        CD surface. Verify pinned base image, no secrets baked in, and that
+        docker-compose.prod.yml stays consistent with docker-compose.yml.
+    - path: ".github/workflows/**"
+      instructions: |
+        CI/CD. Require pinned action SHAs with version comments and minimal permissions
+        blocks, and keep deploy-docker.yml rollback and health-check guarantees intact.
+
+  tools:
+    shellcheck: { enabled: true }
+    eslint: { enabled: true }
+    hadolint: { enabled: true }
+    actionlint: { enabled: true }
+    zizmor: { enabled: true }
+    gitleaks: { enabled: true }
+    # Disabled: same-language redundancy or no matching config in this repo.
+    # Avoids false positives that would drown the safety-critical signal.
+    phpstan: { enabled: false }
+    phpcs: { enabled: false }
+    phpmd: { enabled: false }
+    semgrep: { enabled: false }
+    opengrep: { enabled: false }
+    trufflehog: { enabled: false }
+    checkov: { enabled: false }
+    trivy: { enabled: false }
+    osvScanner: { enabled: false }
+    markdownlint: { enabled: false }
+    languagetool: { enabled: false }
+    biome: { enabled: false }
+    oxc: { enabled: false }
+    stylelint: { enabled: false }
+    htmlhint: { enabled: false }
+    vale: { enabled: false }
+    yamllint: { enabled: false }
+    ruff: { enabled: false }
+    flake8: { enabled: false }
+    pylint: { enabled: false }
+    golangci-lint: { enabled: false }
+    clang: { enabled: false }
+    cppcheck: { enabled: false }
+
+chat:
+  auto_reply: true
+  art: true
+
+knowledge_base:
+  linked_repositories:
+    - repository: "alexwitherspoon/aviationwx-bridge"
+      instructions: "Go daemon that captures local camera snapshots and uploads them to aviationwx.org over SFTP. Breakage in upload endpoints or SSH host-key handling affects this site."
+    - repository: "alexwitherspoon/aviationwx-archiver"
+      instructions: "Python Docker utility that downloads and archives aviationwx.org webcam images. Changes to webcam API routes and image formats affect it."
+  code_guidelines:
+    # Review rules are pointed at, not restated, so they cannot drift from CI.
+    filePatterns:
+      - "**/CODE_STYLE.md"
+      - "**/CONTRIBUTING.md"
+      - ".github/skills/code-review/SKILL.md"
+      - ".github/copilot-instructions.md"
+      - "docs/SAFETY_CRITICAL_CALCULATIONS.md"
+      - "docs/ARCHITECTURE.md"
+      - "docs/DEPLOYMENT.md"
