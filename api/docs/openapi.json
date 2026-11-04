@@ -1358,6 +1358,16 @@
           "elevation_ft": {
             "type": "integer"
           },
+          "country": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO 3166-1 alpha-2 country code (uppercase). Null when unknown."
+          },
+          "country_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable country name. Null when country is unknown."
+          },
           "timezone": {
             "type": "string",
             "description": "IANA timezone identifier (e.g., America/Denver)"

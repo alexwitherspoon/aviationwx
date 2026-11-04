@@ -53,6 +53,53 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
 }
 
 /**
+ * Human-readable country name for an ISO 3166-1 alpha-2 code (bundled table).
+ *
+ * @param string|null $alpha2 Any-case alpha-2 code
+ * @return string|null Name, or null when the code is null or unknown
+ */
+function countryNameFromIso3166Alpha2(?string $alpha2): ?string
+{
+    if ($alpha2 === null) {
+        return null;
+    }
+    $alpha2 = strtoupper(trim($alpha2));
+    if (strlen($alpha2) !== 2 || !ctype_alpha($alpha2)) {
+        return null;
+    }
+    static $names = null;
+    static $warned = false;
+    if ($names === null) {
+        $names = [];
+        $path = __DIR__ . '/data/iso3166-country-names.csv';
+        if (is_readable($path)) {
+            $fh = fopen($path, 'r');
+            if ($fh !== false) {
+                fgetcsv($fh, null, ',', '"', '\\'); // skip header
+                while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
+                    if (count($row) >= 2) {
+                        $code = strtoupper(trim((string) $row[0]));
+                        $name = trim((string) $row[1]);
+                        if ($code !== '' && $name !== '') {
+                            $names[$code] = $name;
+                        }
+                    }
+                }
+                fclose($fh);
+            }
+        }
+        if ($names === [] && !$warned) {
+            $warned = true;
+            error_log(
+                'aviationwx country-resolution: iso3166-country-names.csv missing, unreadable, or empty; '
+                . 'countryNameFromIso3166Alpha2() returns null until the file is restored.'
+            );
+        }
+    }
+    return $names[$alpha2] ?? null;
+}
+
+/**
  * Parse Natural Earth-style Admin-0 GeoJSON into a normalized feature list for hit testing.
  *
  * Each element has `iso_a2` and `parts`. Each part has `exterior` and `holes` rings (vertices as

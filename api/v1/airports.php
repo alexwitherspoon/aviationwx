@@ -109,6 +109,8 @@ function formatAirportSummary(string $airportId, array $airport, ?string $operat
     $baseDomain = getBaseDomain();
     $url = 'https://' . $airportId . '.' . $baseDomain . '/';
 
+    $country = getEffectiveIso3166Alpha2ForAirport($airport);
+
     return [
         'id' => $airportId,
         'name' => $airport['name'] ?? '',
@@ -118,6 +120,8 @@ function formatAirportSummary(string $airportId, array $airport, ?string $operat
         'lat' => $airport['lat'] ?? null,
         'lon' => $airport['lon'] ?? null,
         'elevation_ft' => $airport['elevation_ft'] ?? null,
+        'country' => $country,
+        'country_name' => $country !== null ? countryNameFromIso3166Alpha2($country) : null,
         'timezone' => $airport['timezone'] ?? 'UTC',
         'magnetic_declination' => getMagneticDeclination($airport),
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
