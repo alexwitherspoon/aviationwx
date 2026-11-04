@@ -379,6 +379,12 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 		docker compose -f docker/docker-compose.test.yml logs; \
 		exit 1; \
 	fi'
+	# Host-run make targets (test-ci, test-local, test-e2e) still write webcam
+	# frames from the host into this bind-mounted cache, so keep the webcams tree
+	# writable by both users (#298). CI's native-HTTP step no longer depends on
+	# this and runs in-container instead. Keep the SFTP chroot (/var/sftp) untouched.
+	@docker compose -f docker/docker-compose.test.yml exec -T web \
+		sh -c 'mkdir -p /var/www/html/cache/webcams && chmod -R a+rwX /var/www/html/cache/webcams'
 
 test-down: ## Stop isolated test container
 	@echo "Stopping isolated test environment..."
