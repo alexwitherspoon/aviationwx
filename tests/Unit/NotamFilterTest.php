@@ -249,8 +249,8 @@ class NotamFilterTest extends TestCase {
                 'id' => 'A1032/2026',
                 'text' => 'BOI RWY 10L/28R CLSD EXC XNG',
                 'location' => 'KBOI',
-                'start_time_utc' => '2026-04-11T14:55:00.000Z',
-                'end_time_utc' => '2026-11-01T18:00:00.000Z',
+                'start_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() - 3600),
+                'end_time_utc' => gmdate('Y-m-d\TH:i:s\Z', time() + 90000),
             ],
             [
                 'id' => '06/140/2026',
