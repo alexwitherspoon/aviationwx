@@ -2,7 +2,7 @@
 /**
  * Map Tile Proxy
  * 
- * Proxies and caches map tiles from OpenWeatherMap and RainViewer.
+ * Proxies and caches map tiles from OpenStreetMap, OpenWeatherMap and RainViewer.
  * 
  * Benefits:
  * - Server-side caching reduces external API calls
@@ -12,6 +12,7 @@
  * - Graceful degradation if services unavailable
  * 
  * URL Formats:
+ * - OpenStreetMap: /api/map-tiles.php?layer=osm&z=5&x=10&y=12
  * - OpenWeatherMap: /api/map-tiles.php?layer=clouds_new&z=5&x=10&y=12
  * - RainViewer: /api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&radar={frameId}
  *   Frame id: 12 hex chars, basename of radar.past[].path from /api/rainviewer-weather-maps.php
@@ -21,7 +22,8 @@
  * - Our proxy: 300 requests/minute per client IP (prevents abuse)
  * - OpenWeatherMap free tier: 60 calls/min, 1M/month
  * - RainViewer (as of Jan 2026): 100 requests/min per server IP, zoom ≤7 only
- * 
+ * - OpenStreetMap: public tile server; descriptive User-Agent and attribution required
+ *
  * RainViewer API Changes (January 2026):
  * - Tiled API limited to zoom level 7 maximum
  * - Rate limit reduced to 100 requests/IP/minute
@@ -34,6 +36,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/map-tiles.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/metrics.php';
@@ -116,7 +119,8 @@ if (empty($layer) || $z === null || $x === null || $y === null) {
 
 // Determine tile provider based on layer
 $isRainViewer = ($layer === 'rainviewer');
-$isOpenWeatherMap = !$isRainViewer;
+$isOsm = ($layer === 'osm');
+$isOpenWeatherMap = !$isRainViewer && !$isOsm;
 
 $rainFrameId = null;
 if ($isRainViewer) {
@@ -134,28 +138,23 @@ if ($isRainViewer) {
 }
 
 // Validate layer name
-$allowedOWMLayers = [
-    'clouds_new',        // Cloud cover
-    'precipitation_new', // Precipitation/rain
-    'temp_new',         // Temperature
-    'wind_new',         // Wind speed
-    'pressure_new',     // Atmospheric pressure
-];
+$allowedOWMLayers = mapTilesOwmLayers();
+$allLayers = array_merge($allowedOWMLayers, ['rainviewer', 'osm']);
 
-if (!$isRainViewer && !in_array($layer, $allowedOWMLayers)) {
+if ($isOpenWeatherMap && !in_array($layer, $allowedOWMLayers)) {
     http_response_code(400);
     header('Content-Type: application/json');
     echo json_encode([
         'error' => 'Invalid layer',
-        'allowed' => array_merge($allowedOWMLayers, ['rainviewer']),
-        'hint' => 'Use rainviewer for radar, clouds_new for cloud cover'
+        'allowed' => $allLayers,
+        'hint' => 'Use rainviewer for radar, clouds_new for cloud cover, osm for the base map'
     ]);
     exit;
 }
 
 // Validate zoom level
 // RainViewer: Limited to zoom 0-7 as of January 2026
-// OpenWeatherMap: Supports zoom 0-19
+// OpenStreetMap and OpenWeatherMap: Supports zoom 0-19
 $maxZoom = $isRainViewer ? 7 : 19;
 if ($z < 0 || $z > $maxZoom) {
     http_response_code(400);
@@ -174,135 +173,55 @@ if ($x < 0 || $x >= $maxTileCoord || $y < 0 || $y >= $maxTileCoord) {
     exit;
 }
 
-// Load config (only needed for OpenWeatherMap)
-$apiKey = '';
-if ($isOpenWeatherMap) {
-    $config = loadConfig();
-    $apiKey = $config['config']['openweathermap_api_key'] ?? '';
-    
-    // Return error if API key not configured
-    if (empty($apiKey)) {
-        http_response_code(503);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'OpenWeatherMap API key not configured']);
-        exit;
-    }
-}
+// Fetch (or cache-hit) the tile through the shared provider code path.
+$result = fetchMapTile($layer, $z, $x, $y, $rainFrameId);
 
-// Get cache path for this tile
-// For RainViewer, include frame id in cache path segment for isolation
-$cacheLayer = $isRainViewer ? "rainviewer_{$rainFrameId}" : $layer;
-$cachePath = getMapTileCachePath($cacheLayer, $z, $x, $y);
-$cacheDir = dirname($cachePath);
-
-// Define cache TTL based on layer type
-if ($isRainViewer) {
-    // RainViewer radar updates every 10 minutes, cache for 15 minutes
-    define('TILE_CACHE_TTL', 900);
-} else {
-    // OpenWeatherMap data changes slowly, cache for 1 hour
-    define('TILE_CACHE_TTL', 3600);
-}
-
-// Check if cached tile exists and is fresh
-$useCachedTile = false;
-if (file_exists($cachePath)) {
-    $age = time() - filemtime($cachePath);
-    if ($age < TILE_CACHE_TTL) {
-        $useCachedTile = true;
-    }
-}
-
-// Serve cached tile if available
-if ($useCachedTile) {
-    // Track tile serve
-    $source = $isRainViewer ? 'rainviewer' : 'openweathermap';
-    metrics_track_tile_serve($source);
-    
-    require_once __DIR__ . '/../lib/http-integrity.php';
-    $mtime = filemtime($cachePath);
-    if (addIntegrityHeadersForFile($cachePath, $mtime)) {
-        exit;
-    }
-    // Set appropriate headers for cached content
-    header('Content-Type: image/png');
-    header('Cache-Control: public, max-age=' . (TILE_CACHE_TTL - $age));
-    header('X-Cache: HIT');
-    
-    readfile($cachePath);
-    exit;
-}
-
-// Tile not cached or stale - fetch from upstream
-if ($isRainViewer) {
-    // RainViewer tile URL: frame id from weather-maps path (not Unix time)
-    $tileUrl = "https://tilecache.rainviewer.com/v2/radar/{$rainFrameId}/256/{$z}/{$x}/{$y}/6/1_1.png";
-} else {
-    // OpenWeatherMap tile URL
-    $tileUrl = "https://tile.openweathermap.org/map/{$layer}/{$z}/{$x}/{$y}.png?appid={$apiKey}";
-}
-
-// Use cURL for fetching with timeout
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $tileUrl);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_USERAGENT, 'AviationWX/1.0 (Tile Proxy)');
-
-$tileData = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$error = curl_error($ch);
-
-// Handle upstream errors
-if ($httpCode !== 200) {
-    http_response_code($httpCode);
+if (!$result['ok']) {
+    $code = $result['http_code'] ?? 502;
+    http_response_code($code);
     header('Content-Type: application/json');
     header('X-Cache: MISS');
-    
-    // Provide helpful error messages based on provider and status
-    if ($httpCode === 401) {
-        echo json_encode(['error' => 'Invalid OpenWeatherMap API key']);
-    } elseif ($httpCode === 429) {
+
+    if ($code === 503) {
+        echo json_encode(['error' => 'OpenWeatherMap API key not configured']);
+    } elseif ($code === 429) {
         $provider = $isRainViewer ? 'RainViewer' : 'OpenWeatherMap';
         echo json_encode(['error' => "{$provider} rate limit exceeded", 'retry_after' => 60]);
-    } elseif ($httpCode === 404) {
+    } elseif ($code === 401) {
+        echo json_encode(['error' => 'Invalid OpenWeatherMap API key']);
+    } elseif ($code === 404) {
         echo json_encode(['error' => 'Tile not found']);
     } else {
-        $provider = $isRainViewer ? 'RainViewer' : 'OpenWeatherMap';
-        echo json_encode(['error' => 'Upstream error', 'provider' => $provider, 'code' => $httpCode, 'message' => $error]);
+        $provider = $isRainViewer ? 'RainViewer' : ($isOsm ? 'OpenStreetMap' : 'OpenWeatherMap');
+        echo json_encode(['error' => 'Upstream error', 'provider' => $provider, 'code' => $code, 'message' => $result['error'] ?? '']);
     }
     exit;
 }
 
-// Validate tile data (should be PNG image)
-if (strlen($tileData) < 100 || substr($tileData, 0, 4) !== "\x89PNG") {
-    http_response_code(502);
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'Invalid tile data received from upstream']);
-    exit;
-}
-
-// Ensure cache directory exists
-if (!is_dir($cacheDir)) {
-    @mkdir($cacheDir, 0755, true);
-}
-
-// Save tile to cache (best effort - don't fail if cache write fails)
-if (is_dir($cacheDir) && is_writable($cacheDir)) {
-    @file_put_contents($cachePath, $tileData);
-}
-
-// Track tile serve
-$source = $isRainViewer ? 'rainviewer' : 'openweathermap';
+$source = $isRainViewer ? 'rainviewer' : ($isOsm ? 'osm' : 'openweathermap');
 metrics_track_tile_serve($source);
 
 require_once __DIR__ . '/../lib/http-integrity.php';
-$digest = computeContentDigestFromString($tileData);
-$md5 = computeContentMd5FromString($tileData);
-$etag = '"' . base64_encode(hash('sha256', $tileData, true)) . '"';
+
+$ttl = $isRainViewer ? MAP_TILE_RAIN_CACHE_TTL : MAP_TILE_CACHE_TTL;
+
+if ($result['from_cache']) {
+    $mtime = filemtime($result['cache_path']);
+    if (addIntegrityHeadersForFile($result['cache_path'], $mtime)) {
+        exit;
+    }
+    header('Content-Type: image/png');
+    header('Cache-Control: public, max-age=' . ($ttl - (time() - $mtime)));
+    header('X-Cache: HIT');
+
+    echo $result['bytes'];
+    exit;
+}
+
+$bytes = $result['bytes'];
+$digest = computeContentDigestFromString($bytes);
+$md5 = computeContentMd5FromString($bytes);
+$etag = '"' . base64_encode(hash('sha256', $bytes, true)) . '"';
 if (maybeSend304IfUnchanged($etag, time())) {
     exit;
 }
@@ -310,8 +229,8 @@ header('ETag: ' . $etag);
 header('Content-Digest: ' . $digest);
 header('Content-MD5: ' . $md5);
 header('Content-Type: image/png');
-header('Content-Length: ' . strlen($tileData));
-header('Cache-Control: public, max-age=' . TILE_CACHE_TTL);
+header('Content-Length: ' . strlen($bytes));
+header('Cache-Control: public, max-age=' . $ttl);
 header('X-Cache: MISS');
 
-echo $tileData;
+echo $bytes;
