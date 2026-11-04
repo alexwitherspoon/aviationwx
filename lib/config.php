@@ -3050,10 +3050,19 @@ function getEffectiveIso3166RegionForAirport(string $airportId, array $airport):
         return null;
     }
 
+    $country = getEffectiveIso3166Alpha2ForAirport($airport);
+
     foreach (ourAirportsCacheLookupIdentsForAirport($airportId, $airport) as $candidate) {
-        if (isset($regionByCode[$candidate])) {
-            return $regionByCode[$candidate];
+        if (!isset($regionByCode[$candidate])) {
+            continue;
         }
+        $region = $regionByCode[$candidate];
+        // Guard against identifier collisions: a code shared with another
+        // country's airport must not leak that country's admin-1 region.
+        if ($country !== null && !str_starts_with($region, $country . '-')) {
+            continue;
+        }
+        return $region;
     }
 
     return null;

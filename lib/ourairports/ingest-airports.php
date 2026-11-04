@@ -301,7 +301,7 @@ function ourAirportsLoadIsoRegionByCode(): array
 
     $regionIdx = $idx['iso_region'] ?? null;
     $codeIdxs = [];
-    foreach (['ident', 'gps_code', 'icao_code', 'iata_code', 'local_code'] as $col) {
+    foreach (['ident', 'gps_code', 'icao_code', 'local_code'] as $col) {
         $codeIdxs[] = $idx[$col] ?? null;
     }
 
@@ -312,7 +312,8 @@ function ourAirportsLoadIsoRegionByCode(): array
     foreach ($lines as $line) {
         $row = str_getcsv($line, ',', '"', '\\');
         $region = strtoupper(trim((string) ($row[$regionIdx] ?? '')));
-        if ($region === '') {
+        // OurAirports marks "no useful admin-1" with a trailing -XX sentinel.
+        if ($region === '' || str_ends_with($region, '-XX')) {
             continue;
         }
         foreach ($codeIdxs as $colIdx) {
