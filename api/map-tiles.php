@@ -178,21 +178,22 @@ $result = fetchMapTile($layer, $z, $x, $y, $rainFrameId);
 
 if (!$result['ok']) {
     $code = $result['http_code'] ?? 502;
+    $provider = $isRainViewer ? 'RainViewer' : ($isOsm ? 'OpenStreetMap' : 'OpenWeatherMap');
     http_response_code($code);
     header('Content-Type: application/json');
     header('X-Cache: MISS');
 
-    if ($code === 503) {
+    // The local "key not configured" failure is the only non-OK 503 with an
+    // empty cache path; an upstream 503 falls through to the generic error.
+    if ($isOpenWeatherMap && $code === 503 && ($result['cache_path'] ?? '') === '') {
         echo json_encode(['error' => 'OpenWeatherMap API key not configured']);
     } elseif ($code === 429) {
-        $provider = $isRainViewer ? 'RainViewer' : 'OpenWeatherMap';
         echo json_encode(['error' => "{$provider} rate limit exceeded", 'retry_after' => 60]);
-    } elseif ($code === 401) {
+    } elseif ($isOpenWeatherMap && $code === 401) {
         echo json_encode(['error' => 'Invalid OpenWeatherMap API key']);
     } elseif ($code === 404) {
         echo json_encode(['error' => 'Tile not found']);
     } else {
-        $provider = $isRainViewer ? 'RainViewer' : ($isOsm ? 'OpenStreetMap' : 'OpenWeatherMap');
         echo json_encode(['error' => 'Upstream error', 'provider' => $provider, 'code' => $code, 'message' => $result['error'] ?? '']);
     }
     exit;
