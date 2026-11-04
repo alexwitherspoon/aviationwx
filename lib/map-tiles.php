@@ -129,7 +129,9 @@ function fetchMapTile(string $layer, int $z, int $x, int $y, ?string $rainFrameI
     if ($httpCode !== 200 || !is_string($bytes) || strlen($bytes) < 100 || substr($bytes, 0, 4) !== "\x89PNG") {
         return [
             'ok' => false, 'bytes' => null, 'from_cache' => false,
-            'http_code' => $httpCode !== 200 ? $httpCode : 502,
+            // cURL reports transport failures (timeout, DNS, refusal, TLS) as 0, and
+            // http_response_code(0) would not set a real status, so normalize to 502.
+            'http_code' => ($httpCode >= 100 && $httpCode !== 200) ? $httpCode : 502,
             'error' => $httpCode !== 200 ? ($error ?: 'Upstream error') : 'Invalid tile data',
             'cache_path' => $cachePath,
         ];
