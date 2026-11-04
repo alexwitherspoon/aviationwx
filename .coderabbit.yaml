@@ -19,12 +19,10 @@ reviews:
   collapse_walkthrough: true
   abort_on_close: true
 
+  # Draft PRs are the only hold. Everything else gets reviewed.
   auto_review:
     enabled: true
     drafts: false
-    ignore_title_keywords:
-      - "WIP"
-      - "DO NOT MERGE"
 
   # Comment-only. No auto-approval or merge gating for a solo-maintainer repo.
   auto_approvals:
@@ -67,6 +65,8 @@ reviews:
     gitleaks: { enabled: true }
     # Disabled: same-language redundancy or no matching config in this repo.
     # Avoids false positives that would drown the safety-critical signal.
+    ast-grep: { enabled: false }
+    checkmake: { enabled: false }
     phpstan: { enabled: false }
     phpcs: { enabled: false }
     phpmd: { enabled: false }
@@ -104,10 +104,7 @@ knowledge_base:
   code_guidelines:
     # Review rules are pointed at, not restated, so they cannot drift from CI.
     filePatterns:
-      - "**/CODE_STYLE.md"
-      - "**/CONTRIBUTING.md"
-      - ".github/skills/code-review/SKILL.md"
-      - ".github/copilot-instructions.md"
-      - "docs/SAFETY_CRITICAL_CALCULATIONS.md"
-      - "docs/ARCHITECTURE.md"
-      - "docs/DEPLOYMENT.md"
+      - files: "CODE_STYLE.md,CONTRIBUTING.md,.github/skills/code-review/SKILL.md,.github/copilot-instructions.md"
+        applyTo: "**"
+      - files: "docs/SAFETY_CRITICAL_CALCULATIONS.md,docs/ARCHITECTURE.md,docs/DEPLOYMENT.md"
+        applyTo: "**"
