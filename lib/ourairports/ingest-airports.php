@@ -265,35 +265,23 @@ function ourAirportsLoadAirportCentersAndFaaMappingFromDisk(): array
 }
 
 /**
- * Parse airports.csv into a code-to-ISO-3166-2-region map.
+ * Parse airports.csv content into a code-to-ISO-3166-2-region map.
  *
- * Every usable identifier on a row (ident, gps_code, icao_code, iata_code,
- * local_code) maps to that row's uppercase iso_region, so a config airport can
- * be matched by any of its codes. Read once per process.
+ * Every usable identifier on a row (ident, gps_code, icao_code, local_code)
+ * maps to that row's uppercase iso_region, so a config airport can be matched
+ * by any of its codes. iata_code is excluded because no candidate key is an
+ * IATA code, and it only adds collision surface.
  *
+ * @param string $csvContent Raw airports.csv
  * @return array<string, string> Uppercase code => uppercase ISO 3166-2 region
  */
-function ourAirportsLoadIsoRegionByCode(): array
+function ourAirportsParseIsoRegionFromCsv(string $csvContent): array
 {
-    static $cache = null;
-    if ($cache !== null) {
-        return $cache;
-    }
     $map = [];
 
-    $path = ourAirportsCsvPath('airports');
-    if (!is_readable($path)) {
-        return $cache = $map;
-    }
-
-    $csv = @file_get_contents($path);
-    if ($csv === false || $csv === '') {
-        return $cache = $map;
-    }
-
-    $lines = str_getcsv($csv, "\n", '"', '\\');
+    $lines = str_getcsv($csvContent, "\n", '"', '\\');
     if ($lines === [] || count($lines) < 2) {
-        return $cache = $map;
+        return $map;
     }
 
     $header = str_getcsv(array_shift($lines), ',', '"', '\\');
@@ -306,7 +294,7 @@ function ourAirportsLoadIsoRegionByCode(): array
     }
 
     if ($regionIdx === null) {
-        return $cache = $map;
+        return $map;
     }
 
     foreach ($lines as $line) {
@@ -324,6 +312,99 @@ function ourAirportsLoadIsoRegionByCode(): array
             if ($code !== '') {
                 $map[$code] = $region;
             }
+        }
+    }
+
+    return $map;
+}
+
+/**
+ * Build the region JSON cache from raw airports.csv on disk.
+ */
+function ingestOurAirportsRegionsFromDisk(): bool
+{
+    $path = ourAirportsCsvPath('airports');
+    if (!is_readable($path)) {
+        return false;
+    }
+
+    $csvContent = @file_get_contents($path);
+    if ($csvContent === false || $csvContent === '') {
+        return false;
+    }
+
+    $map = ourAirportsParseIsoRegionFromCsv($csvContent);
+    if ($map === []) {
+        return false;
+    }
+
+    ensureCacheDir(CACHE_BASE_DIR);
+    $tmp = CACHE_OURAIRPORTS_REGIONS_FILE . '.tmp.' . getmypid();
+    $json = json_encode($map, JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false || !@rename($tmp, CACHE_OURAIRPORTS_REGIONS_FILE)) {
+        @unlink($tmp);
+        return false;
+    }
+
+    aviationwx_log('info', 'OurAirports region cache ingested from disk', [
+        'code_count' => count($map),
+    ], 'app');
+
+    return true;
+}
+
+/**
+ * True when the region JSON is older than airports.csv on disk.
+ */
+function ourAirportsRegionsCacheIsStale(): bool
+{
+    if (!is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
+        return false;
+    }
+
+    if (!is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
+        return true;
+    }
+
+    return (int) filemtime(CACHE_OURAIRPORTS_AIRPORTS_CSV) > (int) filemtime(CACHE_OURAIRPORTS_REGIONS_FILE);
+}
+
+/**
+ * Load the code-to-ISO-3166-2-region map, preferring the cron-built JSON cache.
+ *
+ * Re-ingests from airports.csv when the cache is stale, and falls back to a
+ * direct CSV parse when no cache exists. Read once per process.
+ *
+ * @return array<string, string> Uppercase code => uppercase ISO 3166-2 region
+ */
+function ourAirportsLoadIsoRegionByCode(): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    if (ourAirportsRegionsCacheIsStale() && is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
+        ingestOurAirportsRegionsFromDisk();
+    }
+
+    $map = [];
+    if (is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
+        $decoded = @json_decode((string) @file_get_contents(CACHE_OURAIRPORTS_REGIONS_FILE), true);
+        if (is_array($decoded)) {
+            $map = $decoded;
+        }
+    }
+
+    // Fallback: parse the CSV directly when no cache is available.
+    if ($map === [] && is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
+        $csvContent = @file_get_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV);
+        if ($csvContent !== false && $csvContent !== '') {
+            $map = ourAirportsParseIsoRegionFromCsv($csvContent);
         }
     }
 
