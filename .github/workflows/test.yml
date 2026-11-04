@@ -95,12 +95,12 @@ jobs:
 
       - name: Run native HTTP integration tests
         run: |
-          TEST_CACHE_DIR=/tmp/aviationwx-cache-test \
-          TEST_API_URL=http://127.0.0.1:9080 \
-          APP_ENV=testing \
-          vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php tests/Integration/PublicApiWifiLoggerUploadTest.php \
-            --testdox \
-            --no-coverage
+          docker compose -f docker/docker-compose.test.yml exec -u www-data -T web \
+            env TEST_CACHE_DIR=/var/www/html/cache TEST_API_URL=http://127.0.0.1 APP_ENV=testing \
+            php vendor/bin/phpunit \
+              tests/Integration/PublicApiWebcamTest.php \
+              tests/Integration/PublicApiWifiLoggerUploadTest.php \
+              --testdox --no-coverage
 
       - name: Stop isolated API test stack
         if: always()
