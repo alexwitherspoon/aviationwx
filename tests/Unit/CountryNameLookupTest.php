@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for the bundled ISO 3166-1 country-name lookup.
+ * Tests for the bundled ISO 3166 name lookups (country and subdivision).
  */
 class CountryNameLookupTest extends TestCase
 {

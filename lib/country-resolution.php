@@ -53,6 +53,48 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
 }
 
 /**
+ * Load a two-column "code,name" CSV into an uppercased code => name map.
+ *
+ * @param string $path Absolute path to the vendored CSV
+ * @param string $warnTag Short label for the missing-file warning
+ * @return array<string, string>
+ */
+function countryResolutionLoadCodeNameCsv(string $path, string $warnTag): array
+{
+    static $loaded = [];
+    if (isset($loaded[$path])) {
+        return $loaded[$path];
+    }
+
+    $map = [];
+    if (is_readable($path)) {
+        $fh = fopen($path, 'r');
+        if ($fh !== false) {
+            fgetcsv($fh, null, ',', '"', '\\'); // skip header
+            while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
+                if (count($row) >= 2) {
+                    $code = strtoupper(trim((string) $row[0]));
+                    $name = trim((string) $row[1]);
+                    if ($code !== '' && $name !== '') {
+                        $map[$code] = $name;
+                    }
+                }
+            }
+            fclose($fh);
+        }
+    }
+
+    if ($map === []) {
+        error_log(
+            'aviationwx country-resolution: ' . $warnTag . ' missing, unreadable, or empty; '
+            . 'name lookup returns null until the file is restored.'
+        );
+    }
+
+    return $loaded[$path] = $map;
+}
+
+/**
  * Human-readable country name for an ISO 3166-1 alpha-2 code (bundled table).
  *
  * @param string|null $alpha2 Any-case alpha-2 code
@@ -67,35 +109,7 @@ function countryNameFromIso3166Alpha2(?string $alpha2): ?string
     if (strlen($alpha2) !== 2 || !ctype_alpha($alpha2)) {
         return null;
     }
-    static $names = null;
-    static $warned = false;
-    if ($names === null) {
-        $names = [];
-        $path = __DIR__ . '/data/iso3166-country-names.csv';
-        if (is_readable($path)) {
-            $fh = fopen($path, 'r');
-            if ($fh !== false) {
-                fgetcsv($fh, null, ',', '"', '\\'); // skip header
-                while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
-                    if (count($row) >= 2) {
-                        $code = strtoupper(trim((string) $row[0]));
-                        $name = trim((string) $row[1]);
-                        if ($code !== '' && $name !== '') {
-                            $names[$code] = $name;
-                        }
-                    }
-                }
-                fclose($fh);
-            }
-        }
-        if ($names === [] && !$warned) {
-            $warned = true;
-            error_log(
-                'aviationwx country-resolution: iso3166-country-names.csv missing, unreadable, or empty; '
-                . 'countryNameFromIso3166Alpha2() returns null until the file is restored.'
-            );
-        }
-    }
+    $names = countryResolutionLoadCodeNameCsv(__DIR__ . '/data/iso3166-country-names.csv', 'iso3166-country-names.csv');
     return $names[$alpha2] ?? null;
 }
 
@@ -114,35 +128,7 @@ function subdivisionNameFromIso3166(?string $code): ?string
     if ($code === '') {
         return null;
     }
-    static $names = null;
-    static $warned = false;
-    if ($names === null) {
-        $names = [];
-        $path = __DIR__ . '/data/iso3166-subdivision-names.csv';
-        if (is_readable($path)) {
-            $fh = fopen($path, 'r');
-            if ($fh !== false) {
-                fgetcsv($fh, null, ',', '"', '\\'); // skip header
-                while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
-                    if (count($row) >= 2) {
-                        $c = strtoupper(trim((string) $row[0]));
-                        $name = trim((string) $row[1]);
-                        if ($c !== '' && $name !== '') {
-                            $names[$c] = $name;
-                        }
-                    }
-                }
-                fclose($fh);
-            }
-        }
-        if ($names === [] && !$warned) {
-            $warned = true;
-            error_log(
-                'aviationwx country-resolution: iso3166-subdivision-names.csv missing, unreadable, or empty; '
-                . 'subdivisionNameFromIso3166() returns null until the file is restored.'
-            );
-        }
-    }
+    $names = countryResolutionLoadCodeNameCsv(__DIR__ . '/data/iso3166-subdivision-names.csv', 'iso3166-subdivision-names.csv');
     return $names[$code] ?? null;
 }
 
