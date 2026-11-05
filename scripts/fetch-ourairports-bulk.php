@@ -28,7 +28,7 @@ if (basename($scriptName) !== basename(__FILE__) && $scriptName !== __FILE__) {
 
 initWorkerTimeout(OURAIRPORTS_BULK_WORKER_TIMEOUT, 'ourairports_bulk');
 
-if (!ourAirportsBulkNeedsFetch()) {
+if (!ourAirportsBulkNeedsFetch() && !ourAirportsRegionsCacheIsStale()) {
     exit(0);
 }
 
@@ -41,6 +41,7 @@ if ($lock === false) {
 try {
     $downloadedAny = false;
     $failures = 0;
+    $regionFailed = false;
 
     foreach (ourAirportsCsvFileKeys() as $fileKey) {
         if (!ourAirportsFileNeedsFetch($fileKey)) {
@@ -69,6 +70,7 @@ try {
         ingestOurAirportsIdentityFromDisk();
         if (!ingestOurAirportsRegionsFromDisk()) {
             aviationwx_log('warning', 'ourairports region cache rebuild failed', [], 'app');
+            $regionFailed = true;
         }
     }
 
@@ -79,9 +81,10 @@ try {
     aviationwx_log('info', 'ourairports bulk fetch complete', [
         'downloaded_any' => $downloadedAny,
         'failures' => $failures,
+        'region_ingest_failed' => $regionFailed,
     ], 'app');
 
-    exit($failures > 0 && !$downloadedAny ? 1 : 0);
+    exit(($failures > 0 && !$downloadedAny) || $regionFailed ? 1 : 0);
 } finally {
     ourAirportsReleaseExclusiveLock($lock, CACHE_OURAIRPORTS_BULK_LOCK);
 }
