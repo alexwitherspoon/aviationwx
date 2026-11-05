@@ -15,7 +15,7 @@
 
 require_once __DIR__ . '/airports.php';
 require_once __DIR__ . '/webcams.php';
-require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
+require_once __DIR__ . '/../../lib/ourairports/ingest-airports.php';
 
 /**
  * Handle GET /v1/weathercam/bulk request
