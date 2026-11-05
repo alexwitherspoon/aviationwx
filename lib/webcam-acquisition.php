@@ -466,20 +466,17 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('write_failed', 'federated');
         }
 
-        // Validate and add EXIF
-        $timestamp = time();
-        if (!$this->ensureExif($stagingPath, $timestamp)) {
-            @unlink($stagingPath);
-            $this->recordFailure('exif_add_failed', 'transient');
-            return AcquisitionResult::failure('exif_add_failed', 'federated');
-        }
-
+        // Trust the federated source's capture time. A healthy aviationwx.org
+        // instance ships a normalized UTC timestamp, so adopt it; fail closed when
+        // it is missing or unreasonable rather than substituting our fetch time
+        // and debating a time the hub already established.
         $exifCheck = $this->validateExifTimestamp($stagingPath);
         if (!$exifCheck['valid']) {
             @unlink($stagingPath);
             $this->recordFailure('exif_invalid: ' . $exifCheck['reason'], 'transient');
             return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
         }
+        $timestamp = $exifCheck['timestamp'];
 
         if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {
             aviationwx_log('warning', 'Failed to save webcam pull metadata', [
