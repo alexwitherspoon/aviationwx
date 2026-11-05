@@ -189,8 +189,8 @@ class ProcessingPipeline
                 ]);
             }
 
-            // Step 3: EXIF validation
-            $exifResult = $this->validateExif($imagePath, $timestamp);
+            // Step 3: EXIF validation (fail closed on missing or invalid timestamp)
+            $exifResult = $this->validateExif($imagePath);
             if (!$exifResult['valid']) {
                 $this->recordRejection($imagePath, 'exif_' . $exifResult['reason'], [
                     'source' => $sourceType,
@@ -201,11 +201,8 @@ class ProcessingPipeline
                 ]);
             }
 
-            // Use validated timestamp (may have been adjusted)
-            $validatedTimestamp = $exifResult['timestamp'] ?? $timestamp;
-
-            // Step 4: Generate variants
-            $variantResult = $this->generateVariants($imagePath, $validatedTimestamp);
+            // Step 4: Generate variants, stamped with the acquisition's capture timestamp
+            $variantResult = $this->generateVariants($imagePath, $timestamp);
             if ($variantResult['original'] === null) {
                 return PipelineResult::failure('variant_generation_failed', [
                     'source' => $sourceType
@@ -213,7 +210,7 @@ class ProcessingPipeline
             }
 
             // Step 5: Store variant manifest
-            $this->storeVariantManifest($validatedTimestamp, $variantResult);
+            $this->storeVariantManifest($timestamp, $variantResult);
 
             // Step 6: History cleanup
             $this->cleanupHistory();
@@ -227,7 +224,7 @@ class ProcessingPipeline
                 'airport' => $this->airportId,
                 'cam' => $this->camIndex,
                 'source' => $sourceType,
-                'timestamp' => $validatedTimestamp,
+                'timestamp' => $timestamp,
                 'variants' => count($variantResult['variants']),
                 'duration_ms' => $elapsed
             ], 'app');
@@ -235,7 +232,7 @@ class ProcessingPipeline
             return PipelineResult::success(
                 $variantResult['original'],
                 $variantResult['variants'],
-                $validatedTimestamp,
+                $timestamp,
                 [
                     'source' => $sourceType,
                     'width' => $variantResult['metadata']['width'] ?? $this->imageWidth,
@@ -330,11 +327,14 @@ class ProcessingPipeline
     }
 
     /**
-     * Validate EXIF data
+     * Validate EXIF data and fail closed when the timestamp is missing or invalid.
+     *
+     * Returns no timestamp: the acquisition already established the capture time,
+     * so the pipeline keeps the timestamp passed to process() rather than
+     * substituting one read back out of EXIF.
      */
-    private function validateExif(string $imagePath, int $timestamp): array
+    private function validateExif(string $imagePath): array
     {
-        // Check if EXIF exists
         $exifCheck = validateExifTimestamp($imagePath);
 
         if (!$exifCheck['valid']) {
@@ -344,16 +344,7 @@ class ProcessingPipeline
             ];
         }
 
-        // Use EXIF timestamp if available, otherwise use provided timestamp
-        $exifTimestamp = $exifCheck['timestamp'] ?? 0;
-        if ($exifTimestamp > 0) {
-            $timestamp = $exifTimestamp;
-        }
-
-        return [
-            'valid' => true,
-            'timestamp' => $timestamp
-        ];
+        return ['valid' => true];
     }
 
     /**

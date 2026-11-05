@@ -277,4 +277,50 @@ class WebcamPipelineTest extends TestCase
         $night = $pipeline->process($path, strtotime('2026-06-15 00:00:00 UTC'), 'test');
         $this->assertNotSame('error_frame', $night->errorReason, 'Night black frame must pass error detection via the forwarded timestamp');
     }
+
+    /**
+     * validateExif validates and fails closed, but it must not supply a
+     * timestamp the pipeline could use to override the capture time from the
+     * acquisition. A valid EXIF passes without a timestamp in the result.
+     */
+    public function testValidateExif_ReturnsNoOverrideTimestamp(): void
+    {
+        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
+        if ($whichCode !== 0) {
+            $this->markTestSkipped('exiftool not available');
+        }
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/stamped_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $fill = imagecolorallocate($img, 120, 200, 60);
+        imagefilledrectangle($img, 0, 0, 319, 239, $fill);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $stamp = time() - 60;
+        exec(sprintf(
+            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
+            escapeshellarg(gmdate('Y:m:d H:i:s', $stamp)),
+            escapeshellarg(gmdate('Y:m:d', $stamp)),
+            escapeshellarg(gmdate('H:i:s', $stamp)),
+            escapeshellarg($path)
+        ), $exifOut, $exifCode);
+        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
+
+        $reflection = new ReflectionMethod(ProcessingPipeline::class, 'validateExif');
+        $reflection->setAccessible(true);
+        $result = $reflection->invoke($pipeline, $path);
+
+        $this->assertTrue($result['valid'], 'A valid EXIF timestamp must pass validation');
+        $this->assertArrayNotHasKey(
+            'timestamp',
+            $result,
+            'validateExif must not supply a timestamp that could override the capture time'
+        );
+    }
 }
