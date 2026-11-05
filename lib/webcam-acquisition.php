@@ -1138,10 +1138,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get the normalized capture time. Fail closed when it is missing: the
-        // daylight phase cannot be classified without it, and falling back to
-        // the processing clock would misread a delayed upload's phase.
-        $timestamp = getSourceCaptureTime($uploadFile);
+        // Get the normalized UTC capture time from GPS. Fail closed when it is
+        // missing: the daylight phase cannot be classified without it, and a
+        // camera-local DateTimeOriginal would be misread as UTC.
+        $timestamp = getGpsUtcTimestampFromExif($uploadFile);
         if ($timestamp <= 0) {
             $this->consumeEvaluatedUpload($uploadFile, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
@@ -1933,10 +1933,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get the normalized capture time. Fail closed when it is missing: the
-        // daylight phase cannot be classified without it, and falling back to
-        // the processing clock would misread a delayed upload's phase.
-        $timestamp = getSourceCaptureTime($filePath);
+        // Get the normalized UTC capture time from GPS. Fail closed when it is
+        // missing: the daylight phase cannot be classified without it, and a
+        // camera-local DateTimeOriginal would be misread as UTC.
+        $timestamp = getGpsUtcTimestampFromExif($filePath);
         if ($timestamp <= 0) {
             $this->consumeEvaluatedUpload($filePath, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
