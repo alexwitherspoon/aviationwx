@@ -67,7 +67,9 @@ try {
 
     if (is_readable(ourAirportsCsvPath('airports'))) {
         ingestOurAirportsIdentityFromDisk();
-        ingestOurAirportsRegionsFromDisk();
+        if (!ingestOurAirportsRegionsFromDisk()) {
+            aviationwx_log('warning', 'ourairports region cache rebuild failed', [], 'app');
+        }
     }
 
     if (is_readable(ourAirportsCsvPath('airport_frequencies'))) {

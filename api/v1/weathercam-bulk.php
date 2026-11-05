@@ -384,11 +384,20 @@ function rememberWeathercamBulkCatalogIfConfigShaStable(
  */
 function weathercamBulkRegionFingerprint(): string
 {
-    if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE') || !is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
+    if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE')) {
         return '';
     }
-    $hash = @hash_file('sha256', CACHE_OURAIRPORTS_REGIONS_FILE);
-    return $hash !== false ? $hash : '';
+    if (is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
+        $hash = @hash_file('sha256', CACHE_OURAIRPORTS_REGIONS_FILE);
+        return $hash !== false ? $hash : '';
+    }
+    // No region JSON cache: the loader reads airports.csv directly, so the
+    // fingerprint must reflect the CSV source instead.
+    if (defined('CACHE_OURAIRPORTS_AIRPORTS_CSV') && is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
+        $hash = @hash_file('sha256', CACHE_OURAIRPORTS_AIRPORTS_CSV);
+        return $hash !== false ? $hash : '';
+    }
+    return '';
 }
 
 /**
