@@ -317,28 +317,9 @@ class PublicApiWebcamTest extends TestCase
             $inline = $this->apiRequest(
                 '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
             );
-
-            // TEMP DIAGNOSTIC: surface the frame the app resolves as "current".
-            $meta = $this->apiRequest(
-                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1'
-            );
-            $resolvedTs = $meta['json']['data']['timestamp'] ?? null;
-            fwrite(STDERR, sprintf(
-                "DIAG nearTs=%d (%s UTC) resolvedTimestamp=%s (%s) age_seconds=%s\n",
-                $nearTs,
-                gmdate('Y-m-d H:i:s', $nearTs),
-                var_export($resolvedTs, true),
-                $meta['json']['data']['timestamp_iso'] ?? 'n/a',
-                var_export($meta['json']['data']['age_seconds'] ?? null, true)
-            ));
-
             $this->assertSame(200, $inline['status']);
             $inlineCache = $inline['headers']['Cache-Control'] ?? '';
-            $this->assertStringContainsString(
-                'no-store',
-                $inlineCache,
-                'resolvedTimestamp=' . var_export($resolvedTs, true) . ' nearTs=' . $nearTs
-            );
+            $this->assertStringContainsString('no-store', $inlineCache);
             $this->assertMatchesRegularExpression('/max-age=0/', $inlineCache);
             $this->assertMatchesRegularExpression('/s-maxage=0/', $inlineCache);
 
