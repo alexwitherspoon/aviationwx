@@ -976,5 +976,67 @@ class WebcamErrorDetectorTest extends TestCase
             getUniformColorVarianceThreshold($airport, $midnightUtc)
         );
     }
+
+    public function testIsNightBlackFrame_NightBlackFrame_ReturnsTrue(): void
+    {
+        $img = $this->createSolidTestImageResource(320, 240, 0, 0, 0);
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $midnightUtc = strtotime('2026-06-15 00:00:00 UTC');
+
+        $this->assertTrue(
+            isNightBlackFrame($img, 320, 240, $airport, $midnightUtc),
+            'Equator midnight black frame must be treated as night black'
+        );
+    }
+
+    public function testIsNightBlackFrame_DayPhase_ReturnsFalse(): void
+    {
+        $img = $this->createSolidTestImageResource(320, 240, 0, 0, 0);
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $noonUtc = strtotime('2026-06-15 12:00:00 UTC');
+
+        $this->assertFalse(
+            isNightBlackFrame($img, 320, 240, $airport, $noonUtc),
+            'A black frame during the day must not be exempted'
+        );
+    }
+
+    public function testIsNightBlackFrame_BrightFrameAtNight_ReturnsFalse(): void
+    {
+        $img = $this->createSolidTestImageResource(320, 240, 180, 180, 180);
+        if ($img === null) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $midnightUtc = strtotime('2026-06-15 00:00:00 UTC');
+
+        $this->assertFalse(
+            isNightBlackFrame($img, 320, 240, $airport, $midnightUtc),
+            'A grey frame at night is not black and must not be exempted'
+        );
+    }
+
+    public function testDetectErrorFrame_BlackFrameWithoutAirport_StillRejected(): void
+    {
+        $path = $this->createTestImage(320, 240, static function (): array {
+            return [0, 0, 0];
+        });
+
+        $result = detectErrorFrame($path);
+
+        $this->assertTrue(
+            $result['is_error'],
+            'Without an airport the detector must stay fail-safe and reject a black frame'
+        );
+    }
 }
 

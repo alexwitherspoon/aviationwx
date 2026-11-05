@@ -1146,6 +1146,12 @@ if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD_NIGHT')) {
 if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
     define('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE', 50); // Only need ~50 samples for this check
 }
+// Night scenes can be legitimately near-black and indistinguishable from a dead
+// sensor. Frames averaging below this brightness (0-255) at night are accepted
+// outright rather than rejected as blank.
+if (!defined('WEBCAM_ERROR_NIGHT_BLACK_MAX_BRIGHTNESS')) {
+    define('WEBCAM_ERROR_NIGHT_BLACK_MAX_BRIGHTNESS', 20);
+}
 // Truncated JPEG: GD fills undecoded bottom rows as solid mid-grey (~128). Reject when
 // a contiguous decoder-grey band from the bottom meets MIN_EMPTY_ROWS (default: last line).
 if (!defined('WEBCAM_ERROR_EMPTY_BAND_ROW_STEP')) {
