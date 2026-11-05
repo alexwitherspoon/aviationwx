@@ -1132,10 +1132,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get timestamp from EXIF
+        // Get the normalized capture time. Fail closed when it is missing: the
+        // daylight phase cannot be classified without it, and falling back to
+        // the processing clock would misread a delayed upload's phase.
         $timestamp = getSourceCaptureTime($uploadFile);
         if ($timestamp <= 0) {
-            $timestamp = time();
+            $this->consumeEvaluatedUpload($uploadFile, 'no_capture_time');
+            return AcquisitionResult::failure('no_capture_time', 'push');
         }
 
         // Cross-validate EXIF against upload mtime (timestamp drift check)
@@ -1206,6 +1209,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             'invalid_exif_timestamp' => true,
             'timestamp_drift' => true,
             'no_exif_timestamp' => true,
+            'no_capture_time' => true,
             'size_too_small' => true,
             'size_limit_exceeded' => true,
             'extension_not_allowed' => true,
@@ -1923,10 +1927,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get timestamp from EXIF
+        // Get the normalized capture time. Fail closed when it is missing: the
+        // daylight phase cannot be classified without it, and falling back to
+        // the processing clock would misread a delayed upload's phase.
         $timestamp = getSourceCaptureTime($filePath);
         if ($timestamp <= 0) {
-            $timestamp = time();
+            $this->consumeEvaluatedUpload($filePath, 'no_capture_time');
+            return AcquisitionResult::failure('no_capture_time', 'push');
         }
 
         // Cross-validate EXIF against upload mtime (timestamp drift check)
