@@ -408,20 +408,42 @@ function ourAirportsLoadIsoRegionByCode(): array
     }
 
     $map = [];
+    $sourceHash = '';
+
     if (is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
-        $decoded = @json_decode((string) @file_get_contents(CACHE_OURAIRPORTS_REGIONS_FILE), true);
-        if (is_array($decoded)) {
+        $raw = @file_get_contents(CACHE_OURAIRPORTS_REGIONS_FILE);
+        $decoded = is_string($raw) ? @json_decode($raw, true) : null;
+        if (is_array($decoded) && $decoded !== []) {
             $map = $decoded;
+            $sourceHash = hash('sha256', $raw);
         }
     }
 
-    // Fallback: parse the CSV directly when no cache is available.
+    // Fallback: parse the CSV directly when no usable cache is available.
     if ($map === [] && is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
         $csvContent = @file_get_contents(CACHE_OURAIRPORTS_AIRPORTS_CSV);
         if ($csvContent !== false && $csvContent !== '') {
             $map = ourAirportsParseIsoRegionFromCsv($csvContent);
+            $sourceHash = hash('sha256', (string) $csvContent);
         }
     }
 
+    $GLOBALS['_aviationwx_ourairports_region_hash'] = $sourceHash;
+
     return $cache = $map;
+}
+
+/**
+ * SHA-256 of the exact source bytes the loader parsed into the region map.
+ *
+ * Resolves the loader first (read-once per process), so the digest always
+ * matches the map a consumer just resolved rather than racing a cron rewrite.
+ *
+ * @return string SHA-256 hex digest, or '' when no source was parsed
+ */
+function ourAirportsRegionSourceHash(): string
+{
+    ourAirportsLoadIsoRegionByCode();
+
+    return $GLOBALS['_aviationwx_ourairports_region_hash'] ?? '';
 }
