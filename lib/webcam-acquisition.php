@@ -476,6 +476,15 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             $this->recordFailure('exif_invalid: ' . $exifCheck['reason'], 'transient');
             return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
         }
+
+        // A partial payload means the source is not actually healthy. Require both
+        // the UTC GPS time and the local DateTimeOriginal, since a local-only
+        // DateTimeOriginal would otherwise be misread as UTC near a phase boundary.
+        if (!hasCompleteWebcamExif($stagingPath)) {
+            @unlink($stagingPath);
+            $this->recordFailure('exif_incomplete', 'transient');
+            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_gps_or_datetime_original']);
+        }
         $timestamp = $exifCheck['timestamp'];
 
         if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {

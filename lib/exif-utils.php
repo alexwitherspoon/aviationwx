@@ -277,6 +277,21 @@ function hasExifTimestamp(string $filePath): bool {
 }
 
 /**
+ * Check whether an image carries a complete capture-time EXIF payload: both the
+ * UTC GPS timestamp and the local DateTimeOriginal.
+ *
+ * A healthy AviationWX source writes both on every processed image, so a
+ * federated frame missing either field is malformed and must not be trusted.
+ *
+ * @param string $filePath Path to image
+ * @return bool True when both the GPS UTC and DateTimeOriginal fields are present
+ */
+function hasCompleteWebcamExif(string $filePath): bool {
+    return getGpsUtcTimestampFromExif($filePath) > 0
+        && getDateTimeOriginalTimestamp($filePath) > 0;
+}
+
+/**
  * Execute exiftool with timeout and retry
  *
  * Uses proc_open() with an argv array (no shell) for reliable termination and to avoid defunct shells.

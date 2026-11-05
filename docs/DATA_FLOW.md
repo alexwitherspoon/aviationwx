@@ -1315,7 +1315,7 @@ The webcam processing pipeline uses three main components:
   - **HTTP conditional + checksum**: Same as Static JPEG (ETag + checksum skip when unchanged)
   - Supports API key authentication
   - Validates image data before saving
-- **Capture time**: The source is a healthy AviationWX instance that ships a normalized UTC timestamp in EXIF, so that time is adopted as the capture time. A missing, invalid, or unreasonable timestamp fails closed rather than falling back to the local fetch time
+- **Capture time**: The source is a healthy AviationWX instance that ships a complete EXIF payload (the UTC GPS time and the local `DateTimeOriginal`), so the UTC time is adopted as the capture time. A missing, invalid, or unreasonable timestamp, or a partial payload, fails closed rather than falling back to the local fetch time
 
 ### Source Types (Push Cameras)
 
