@@ -258,11 +258,12 @@ abstract class BaseAcquisitionStrategy implements AcquisitionStrategy
      * @param string $imagePath Path to image file
      * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); avoids redundant load when caller has it
      * @param string|null $sourceFormat Source bitstream format (jpg, png, webp) for truncation-pad model
+     * @param int|null $timestamp Capture time for daylight-phase checks (null = now)
      * @return array{is_error: bool, confidence: float, reasons: array}
      */
-    protected function detectErrorFrame(string $imagePath, $gdImage = null, ?string $sourceFormat = null): array
+    protected function detectErrorFrame(string $imagePath, $gdImage = null, ?string $sourceFormat = null, ?int $timestamp = null): array
     {
-        return detectErrorFrame($imagePath, $this->airportConfig, $gdImage, $sourceFormat);
+        return detectErrorFrame($imagePath, $this->airportConfig, $gdImage, $sourceFormat, $timestamp);
     }
 }
 
@@ -567,8 +568,9 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                     continue;
                 }
 
-                // Check for error frames
-                $errorCheck = $this->detectErrorFrame($jpegTmp, null, 'jpg');
+                // Check for error frames (capture time is fetch time for pull cameras)
+                $timestamp = time();
+                $errorCheck = $this->detectErrorFrame($jpegTmp, null, 'jpg', $timestamp);
                 if ($errorCheck['is_error']) {
                     aviationwx_log('warning', 'RTSP error frame detected', [
                         'airport' => $this->airportId,
@@ -581,7 +583,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 }
 
                 // Add EXIF
-                $timestamp = time();
                 if (!$this->ensureExif($jpegTmp, $timestamp)) {
                     @unlink($jpegTmp);
                     continue; // Retry
@@ -699,6 +700,9 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         require_once __DIR__ . '/webcam-history.php';
         require_once __DIR__ . '/webcam-rejection-logger.php';
 
+        // Capture time is fetch time for pull cameras; use it for daylight-phase checks
+        $timestamp = time();
+
         // PNG: validate IEND on raw bytes before PNG→JPEG so re-encoded EOI is not treated as source proof
         if ($isPng) {
             if (!isPngDataComplete($data)) {
@@ -724,7 +728,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 $this->recordFailure('write_failed', 'transient');
                 return AcquisitionResult::failure('write_failed', $this->sourceType);
             }
-            $errorCheck = $this->detectErrorFrame($stagingPath, $img, 'png');
+            $errorCheck = $this->detectErrorFrame($stagingPath, $img, 'png', $timestamp);
             if ($errorCheck['is_error']) {
                 saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
                     'source' => $this->sourceType,
@@ -757,7 +761,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 return AcquisitionResult::failure('incomplete_upload', $this->sourceType);
             }
 
-            $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg');
+            $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg', $timestamp);
             if ($errorCheck['is_error']) {
                 saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
                     'source' => $this->sourceType,
@@ -772,7 +776,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Add and validate EXIF
-        $timestamp = time();
         if (!$this->ensureExif($stagingPath, $timestamp)) {
             @unlink($stagingPath);
             $this->recordFailure('exif_add_failed', 'transient');
@@ -887,8 +890,9 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('incomplete_upload', 'mjpeg');
         }
 
-        // Check for error frames
-        $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg');
+        // Check for error frames (capture time is fetch time for pull cameras)
+        $timestamp = time();
+        $errorCheck = $this->detectErrorFrame($stagingPath, null, 'jpg', $timestamp);
         if ($errorCheck['is_error']) {
             require_once __DIR__ . '/webcam-rejection-logger.php';
             saveRejectedWebcam($stagingPath, $this->airportId, $this->camIndex, 'error_frame', [
@@ -902,7 +906,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Add and validate EXIF
-        $timestamp = time();
         if (!$this->ensureExif($stagingPath, $timestamp)) {
             @unlink($stagingPath);
             $this->recordFailure('exif_add_failed', 'transient');
@@ -1438,7 +1441,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Error frames: format-specific truncation pads, uniform color, Blue Iris borders, etc.
-        $errorCheck = $this->detectErrorFrame($file, $testImg, $format);
+        // Use the source capture time so a delayed upload is classified by when the
+        // frame was captured, not when it was processed.
+        $captureTime = getSourceCaptureTime($file);
+        $errorCheck = $this->detectErrorFrame($file, $testImg, $format, $captureTime > 0 ? $captureTime : null);
         unset($testImg); // Free memory before EXIF check
         if ($errorCheck['is_error']) {
             require_once __DIR__ . '/webcam-rejection-logger.php';

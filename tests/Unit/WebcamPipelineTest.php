@@ -216,4 +216,36 @@ class WebcamPipelineTest extends TestCase
         $this->assertEquals(0, $result->getVariantCount(), 'Failure should have 0 variants');
         $this->assertEmpty($result->getPromotedFormats(), 'Failure should have no promoted formats');
     }
+
+    /**
+     * checkErrorFrame must forward the capture timestamp to the detector. A
+     * solid black frame is accepted at midnight and rejected at noon only when
+     * the timestamp reaches the daylight-phase check.
+     */
+    public function testCheckErrorFrame_ForwardsCaptureTimestamp(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $reflection = new ReflectionMethod(ProcessingPipeline::class, 'checkErrorFrame');
+        $reflection->setAccessible(true);
+
+        $midnight = strtotime('2026-06-15 00:00:00 UTC');
+        $night = $reflection->invoke($pipeline, $path, null, $midnight);
+        $this->assertTrue($night['passed'], 'Night black frame must pass error detection');
+
+        $noon = strtotime('2026-06-15 12:00:00 UTC');
+        $day = $reflection->invoke($pipeline, $path, null, $noon);
+        $this->assertFalse($day['passed'], 'Day black frame must fail error detection');
+    }
 }
