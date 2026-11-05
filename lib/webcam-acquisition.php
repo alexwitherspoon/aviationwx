@@ -1139,10 +1139,15 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Get the normalized UTC capture time from GPS. Fail closed when it is
-        // missing: the daylight phase cannot be classified without it, and a
-        // camera-local DateTimeOriginal would be misread as UTC.
+        // genuinely absent: the daylight phase cannot be classified without it, and
+        // a camera-local DateTimeOriginal would be misread as UTC. A read failure
+        // from exiftool being down is a transient infra problem, so preserve the
+        // upload for retry instead of consuming it.
         $timestamp = getGpsUtcTimestampFromExif($uploadFile);
         if ($timestamp <= 0) {
+            if (!isExiftoolAvailable()) {
+                return AcquisitionResult::skip('exiftool_unavailable', 'push');
+            }
             $this->consumeEvaluatedUpload($uploadFile, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
         }
@@ -1934,10 +1939,15 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Get the normalized UTC capture time from GPS. Fail closed when it is
-        // missing: the daylight phase cannot be classified without it, and a
-        // camera-local DateTimeOriginal would be misread as UTC.
+        // genuinely absent: the daylight phase cannot be classified without it, and
+        // a camera-local DateTimeOriginal would be misread as UTC. A read failure
+        // from exiftool being down is a transient infra problem, so preserve the
+        // upload for retry instead of consuming it.
         $timestamp = getGpsUtcTimestampFromExif($filePath);
         if ($timestamp <= 0) {
+            if (!isExiftoolAvailable()) {
+                return AcquisitionResult::skip('exiftool_unavailable', 'push');
+            }
             $this->consumeEvaluatedUpload($filePath, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
         }
