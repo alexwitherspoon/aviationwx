@@ -1390,6 +1390,19 @@ if (!defined('CACHE_MAP_TILES_DIR')) {
     define('CACHE_MAP_TILES_DIR', CACHE_BASE_DIR . '/map_tiles');
 }
 
+// =============================================================================
+// SOCIAL CARD CACHE
+// =============================================================================
+
+if (!defined('CACHE_SOCIAL_DIR')) {
+    define('CACHE_SOCIAL_DIR', CACHE_BASE_DIR . '/social');
+}
+
+/** Rendered airport directory social card (1200x630 PNG). */
+if (!defined('CACHE_SOCIAL_MAP_CARD_FILE')) {
+    define('CACHE_SOCIAL_MAP_CARD_FILE', CACHE_SOCIAL_DIR . '/airports-map.png');
+}
+
 /**
  * Get directory for map tile cache (by layer type)
  * 
@@ -1472,6 +1485,7 @@ function ensureAllCacheDirs(): array {
         CACHE_METRICS_WEEKLY_DIR,
         CACHE_METRICS_SPILL_DIR,
         CACHE_MAP_TILES_DIR,
+        CACHE_SOCIAL_DIR,
     ];
     
     $results = [];

@@ -69,6 +69,7 @@ $lastFaaTfrWfsRefresh = 0;
 $lastNmsFdcAirspaceRefresh = 0;
 $lastNwsPointsMissingLog = 0;
 $lastNmsFdcAirspaceMissingLog = 0;
+$lastMapCardRenderAttempt = 0;
 $deployDrainAnnounced = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -568,6 +569,34 @@ $workRegistry->registerEnqueueTick('metrics_health', function (int $now) use (&$
     exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
     reapZombies();
     $lastMetricsHealthCheck = $now;
+});
+
+$workRegistry->registerEnqueueTick('map_card', function (int $now) use (&$lastMapCardRenderAttempt): void {
+    if ((int) gmdate('H', $now) < MAP_CARD_RENDER_HOUR_UTC) {
+        return;
+    }
+    // Once per UTC day: skip if the card was rendered today already.
+    if (is_file(CACHE_SOCIAL_MAP_CARD_FILE)) {
+        $mtime = filemtime(CACHE_SOCIAL_MAP_CARD_FILE);
+        if ($mtime !== false && gmdate('Y-m-d', $mtime) === gmdate('Y-m-d', $now)) {
+            return;
+        }
+    }
+    // Retry at most every 15 minutes so an upstream outage does not pile up
+    // overlapping renders or hammer the tile providers.
+    if (($now - $lastMapCardRenderAttempt) < 900) {
+        return;
+    }
+    $script = __DIR__ . '/render-map-card.php';
+    if (!file_exists($script)) {
+        $lastMapCardRenderAttempt = $now;
+        aviationwx_log('warning', 'scheduler: render-map-card.php missing', ['path' => $script], 'app');
+        return;
+    }
+    $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+    exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    reapZombies();
+    $lastMapCardRenderAttempt = $now;
 });
 
 // Main scheduler loop

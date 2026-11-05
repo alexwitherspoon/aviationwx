@@ -43,6 +43,7 @@ STATION_POWER_DIR="${CACHE_DIR}/station-power"
 PARTNERS_DIR="${CACHE_DIR}/partners"
 RATE_LIMITS_DIR="${CACHE_DIR}/rate_limits"
 MAP_TILES_DIR="${CACHE_DIR}/map_tiles"
+SOCIAL_DIR="${CACHE_DIR}/social"
 
 echo "set-cache-permissions: CACHE_DIR=${CACHE_DIR} SFTP_DIR=${SFTP_DIR}"
 
@@ -64,7 +65,7 @@ if [ -d "${CACHE_DIR}" ]; then
         chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
     fi
     # Writable app data under cache (www-data); ftp/ is re-owned root below for ProFTPD
-    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}"; do
+    for _d in "${PEAK_GUSTS_DIR}" "${TEMP_EXTREMES_DIR}" "${RUNWAYS_DIR}" "${NOTAM_DIR}" "${PARTNERS_DIR}" "${RATE_LIMITS_DIR}" "${MAP_TILES_DIR}" "${SOCIAL_DIR}"; do
         if [ -d "${_d}" ]; then
             chmod 775 "${_d}" 2>/dev/null || true
         fi

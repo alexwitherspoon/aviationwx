@@ -77,6 +77,13 @@ if (!defined('DEPLOY_DRAIN_DONE_BASENAME')) {
     define('DEPLOY_DRAIN_DONE_BASENAME', 'deploy-drain.done');
 }
 
+// Airport directory social card (the region-zoomed weather map rendered daily):
+// UTC hour the scheduler renders the card. The date-seeded random focus changes
+// each day; rendering is scheduled, never on request.
+if (!defined('MAP_CARD_RENDER_HOUR_UTC')) {
+    define('MAP_CARD_RENDER_HOUR_UTC', 18);
+}
+
 // RTSP/ffmpeg timeouts
 if (!defined('RTSP_DEFAULT_TIMEOUT')) {
     define('RTSP_DEFAULT_TIMEOUT', 10);

@@ -136,7 +136,16 @@ $pageTitle = 'Airport Network Map - AviationWX.org';
 $pageDescription = 'View all ' . $totalAirports . ' airports in the AviationWX network on an interactive map. Live webcams and real-time weather data for pilots.';
 $pageKeywords = 'airport map, aviation weather network, airport webcams, pilot weather, airport directory';
 $canonicalUrl = 'https://airports.aviationwx.org';
+
+// Prefer the rendered regional map card; fall back to the default brand logo
+// until the first scheduled render exists. The mtime busts the shared cache.
 $ogImage = getDefaultSocialCardImageUrl();
+if (is_file(CACHE_SOCIAL_MAP_CARD_FILE)) {
+    $cardMtime = filemtime(CACHE_SOCIAL_MAP_CARD_FILE);
+    if ($cardMtime !== false) {
+        $ogImage = getBaseUrl() . '/api/social-card.php?v=' . $cardMtime;
+    }
+}
 
 // Breadcrumbs
 $breadcrumbs = generateBreadcrumbSchema([
