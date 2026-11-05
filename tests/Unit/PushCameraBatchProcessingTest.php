@@ -483,11 +483,11 @@ class PushCameraBatchProcessingTest extends TestCase
         $result = $strategy->acquireFile($path);
 
         if ($correctedIsNight) {
-            $this->assertNotSame(
-                'error_frame',
-                $result->errorReason,
-                'A black frame at true-night UTC must not be rejected as error_frame'
+            $this->assertTrue(
+                $result->success,
+                'A black frame at true-night UTC must be accepted'
             );
+            $this->assertNull($result->errorReason, 'Accepted frames must carry no error reason');
         } else {
             $this->assertSame('error_frame', $result->errorReason, 'A black frame in daylight must be rejected as error_frame');
         }
