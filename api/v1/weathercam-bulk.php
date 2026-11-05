@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/airports.php';
 require_once __DIR__ . '/webcams.php';
+require_once __DIR__ . '/../../lib/ourairports/ingest-airports.php';
 
 /**
  * Handle GET /v1/weathercam/bulk request
@@ -388,14 +389,16 @@ function rememberWeathercamBulkCatalog(array $airports, ?string $sha = null): vo
     if ($sha === null || $sha === '') {
         return;
     }
+    $regionsFp = ourAirportsRegionSourceHash();
 
     $GLOBALS['_aviationwx_weathercam_bulk_sha'] = $sha;
+    $GLOBALS['_aviationwx_weathercam_bulk_regions_fp'] = $regionsFp;
     $GLOBALS['_aviationwx_weathercam_bulk_airports'] = $airports;
 
     if (function_exists('apcu_store')) {
         apcu_store(
             'aviationwx_weathercam_bulk',
-            ['sha' => $sha, 'airports' => $airports],
+            ['sha' => $sha, 'regions_fp' => $regionsFp, 'airports' => $airports],
             CONFIG_CACHE_TTL
         );
     }
@@ -410,10 +413,12 @@ function recallWeathercamBulkCatalog(): ?array
     if ($sha === null || $sha === '') {
         return null;
     }
+    $regionsFp = ourAirportsRegionSourceHash();
 
     $localSha = $GLOBALS['_aviationwx_weathercam_bulk_sha'] ?? null;
+    $localRegionsFp = $GLOBALS['_aviationwx_weathercam_bulk_regions_fp'] ?? null;
     $localAirports = $GLOBALS['_aviationwx_weathercam_bulk_airports'] ?? null;
-    if ($localSha === $sha && is_array($localAirports)) {
+    if ($localSha === $sha && $localRegionsFp === $regionsFp && is_array($localAirports)) {
         return $localAirports;
     }
 
@@ -422,10 +427,12 @@ function recallWeathercamBulkCatalog(): ?array
         if (
             is_array($cached)
             && ($cached['sha'] ?? '') === $sha
+            && ($cached['regions_fp'] ?? '') === $regionsFp
             && isset($cached['airports'])
             && is_array($cached['airports'])
         ) {
             $GLOBALS['_aviationwx_weathercam_bulk_sha'] = $sha;
+            $GLOBALS['_aviationwx_weathercam_bulk_regions_fp'] = $regionsFp;
             $GLOBALS['_aviationwx_weathercam_bulk_airports'] = $cached['airports'];
             return $cached['airports'];
         }
@@ -440,6 +447,7 @@ function recallWeathercamBulkCatalog(): ?array
 function resetWeathercamBulkCatalogCache(): void
 {
     $GLOBALS['_aviationwx_weathercam_bulk_sha'] = null;
+    $GLOBALS['_aviationwx_weathercam_bulk_regions_fp'] = null;
     $GLOBALS['_aviationwx_weathercam_bulk_airports'] = null;
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_weathercam_bulk');

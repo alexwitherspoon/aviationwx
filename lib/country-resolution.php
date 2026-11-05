@@ -53,6 +53,86 @@ function countryResolutionIsValidIso3166Alpha2(string $code): bool
 }
 
 /**
+ * Load a two-column "code,name" CSV into an uppercased code => name map.
+ *
+ * @param string $path Absolute path to the vendored CSV
+ * @param string $warnTag Short label for the missing-file warning
+ * @return array<string, string>
+ */
+function countryResolutionLoadCodeNameCsv(string $path, string $warnTag): array
+{
+    static $loaded = [];
+    if (isset($loaded[$path])) {
+        return $loaded[$path];
+    }
+
+    $map = [];
+    if (is_readable($path)) {
+        $fh = fopen($path, 'r');
+        if ($fh !== false) {
+            fgetcsv($fh, null, ',', '"', '\\'); // skip header
+            while (($row = fgetcsv($fh, null, ',', '"', '\\')) !== false) {
+                if (count($row) >= 2) {
+                    $code = strtoupper(trim((string) $row[0]));
+                    $name = trim((string) $row[1]);
+                    if ($code !== '' && $name !== '') {
+                        $map[$code] = $name;
+                    }
+                }
+            }
+            fclose($fh);
+        }
+    }
+
+    if ($map === []) {
+        error_log(
+            'aviationwx country-resolution: ' . $warnTag . ' missing, unreadable, or empty; '
+            . 'name lookup returns null until the file is restored.'
+        );
+    }
+
+    return $loaded[$path] = $map;
+}
+
+/**
+ * Human-readable country name for an ISO 3166-1 alpha-2 code (bundled table).
+ *
+ * @param string|null $alpha2 Any-case alpha-2 code
+ * @return string|null Name, or null when the code is null or unknown
+ */
+function countryNameFromIso3166Alpha2(?string $alpha2): ?string
+{
+    if ($alpha2 === null) {
+        return null;
+    }
+    $alpha2 = strtoupper(trim($alpha2));
+    if (strlen($alpha2) !== 2 || !ctype_alpha($alpha2)) {
+        return null;
+    }
+    $names = countryResolutionLoadCodeNameCsv(__DIR__ . '/data/iso3166-country-names.csv', 'iso3166-country-names.csv');
+    return $names[$alpha2] ?? null;
+}
+
+/**
+ * Human-readable subdivision name for an ISO 3166-2 code (bundled table).
+ *
+ * @param string|null $code ISO 3166-2 code such as US-OR (any case)
+ * @return string|null Subdivision name such as "Oregon", or null when unknown
+ */
+function subdivisionNameFromIso3166(?string $code): ?string
+{
+    if ($code === null) {
+        return null;
+    }
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return null;
+    }
+    $names = countryResolutionLoadCodeNameCsv(__DIR__ . '/data/iso3166-subdivision-names.csv', 'iso3166-subdivision-names.csv');
+    return $names[$code] ?? null;
+}
+
+/**
  * Parse Natural Earth-style Admin-0 GeoJSON into a normalized feature list for hit testing.
  *
  * Each element has `iso_a2` and `parts`. Each part has `exterior` and `holes` rings (vertices as

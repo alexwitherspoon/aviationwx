@@ -1231,6 +1231,10 @@ if (!defined('CACHE_OURAIRPORTS_FILE')) {
     define('CACHE_OURAIRPORTS_FILE', CACHE_BASE_DIR . '/ourairports_data.json');
 }
 
+if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE')) {
+    define('CACHE_OURAIRPORTS_REGIONS_FILE', CACHE_BASE_DIR . '/ourairports_regions.json');
+}
+
 if (!defined('CACHE_OURAIRPORTS_DIR')) {
     define('CACHE_OURAIRPORTS_DIR', CACHE_BASE_DIR . '/ourairports');
 }

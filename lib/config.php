@@ -3030,6 +3030,45 @@ function getEffectiveIso3166Alpha2ForAirport(array $airport): ?string {
 }
 
 /**
+ * Resolve the ISO 3166-2 admin-1 region for an airport via OurAirports data.
+ *
+ * Matches the airport's candidate codes (ourairports_ident, icao, faa, config
+ * id) against the OurAirports airports.csv identifiers and returns that row's
+ * iso_region. Null when no Admin-1 match exists.
+ *
+ * @param string $airportId Airport config key
+ * @param array<string, mixed> $airport Airport configuration
+ * @return string|null Uppercase ISO 3166-2 region, or null when unknown
+ */
+function getEffectiveIso3166RegionForAirport(string $airportId, array $airport): ?string
+{
+    require_once __DIR__ . '/ourairports/ingest-airports.php';
+    require_once __DIR__ . '/airport-ourairports.php';
+
+    $regionByCode = ourAirportsLoadIsoRegionByCode();
+    if ($regionByCode === []) {
+        return null;
+    }
+
+    $country = getEffectiveIso3166Alpha2ForAirport($airport);
+
+    foreach (ourAirportsCacheLookupIdentsForAirport($airportId, $airport) as $candidate) {
+        if (!isset($regionByCode[$candidate])) {
+            continue;
+        }
+        $region = $regionByCode[$candidate];
+        // Guard against identifier collisions: a code shared with another
+        // country's airport must not leak that country's admin-1 region.
+        if ($country !== null && !str_starts_with($region, $country . '-')) {
+            continue;
+        }
+        return $region;
+    }
+
+    return null;
+}
+
+/**
  * Infer aviation link region from full airport config (effective ISO maps to a link bundle id).
  *
  * Uses getEffectiveIso3166Alpha2ForAirport() then {@see aviationLinkRegionFromIso()} (e.g. us, ca, eu, unknown).
