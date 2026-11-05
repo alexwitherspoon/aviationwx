@@ -1152,6 +1152,21 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             }
         }
 
+        // Error frames: run after EXIF normalization so the daylight-phase check
+        // uses the corrected capture time, not the camera's local time.
+        $errorCheck = $this->detectErrorFrame($uploadFile, null, null, $timestamp);
+        if ($errorCheck['is_error']) {
+            require_once __DIR__ . '/webcam-rejection-logger.php';
+            saveRejectedWebcam($uploadFile, $this->airportId, $this->camIndex, 'error_frame', [
+                'source' => 'push',
+                'confidence' => $errorCheck['confidence'],
+                'reasons' => $errorCheck['reasons']
+            ]);
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            $this->consumeEvaluatedUpload($uploadFile, 'error_frame');
+            return AcquisitionResult::failure('error_frame', 'push', $errorCheck);
+        }
+
         // Move to staging (the image is now validated)
         $stagingPath = $this->getStagingPath();
         if (!@rename($uploadFile, $stagingPath)) {
@@ -1426,34 +1441,19 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return $incomplete;
         }
 
-        // Validate GD can parse the image; pass to detectErrorFrame to avoid redundant load
-        $testImg = null;
+        // Validate GD can parse the image. Error-frame detection runs later, after
+        // EXIF normalization, so the daylight-phase check sees the corrected capture time.
         if (function_exists('imagecreatefromstring')) {
             $imageData = @file_get_contents($file);
             if ($imageData === false) {
                 return ['valid' => false, 'reason' => 'file_read_error'];
             }
             $testImg = @imagecreatefromstring($imageData);
+            unset($imageData);
             if ($testImg === false) {
                 return ['valid' => false, 'reason' => 'image_corrupt'];
             }
-            unset($imageData);
-        }
-
-        // Error frames: format-specific truncation pads, uniform color, Blue Iris borders, etc.
-        // Use the source capture time so a delayed upload is classified by when the
-        // frame was captured, not when it was processed.
-        $captureTime = getSourceCaptureTime($file);
-        $errorCheck = $this->detectErrorFrame($file, $testImg, $format, $captureTime > 0 ? $captureTime : null);
-        unset($testImg); // Free memory before EXIF check
-        if ($errorCheck['is_error']) {
-            require_once __DIR__ . '/webcam-rejection-logger.php';
-            saveRejectedWebcam($file, $this->airportId, $this->camIndex, 'error_frame', [
-                'source' => 'push',
-                'confidence' => $errorCheck['confidence'],
-                'reasons' => $errorCheck['reasons']
-            ]);
-            return ['valid' => false, 'reason' => 'error_frame', 'details' => $errorCheck];
+            $testImg = null;
         }
 
         // Validate EXIF timestamp
@@ -1941,6 +1941,21 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
                 $this->consumeEvaluatedUpload($filePath, 'timestamp_drift');
                 return AcquisitionResult::failure('timestamp_drift', 'push', ['drift_seconds' => $drift]);
             }
+        }
+
+        // Error frames: run after EXIF normalization so the daylight-phase check
+        // uses the corrected capture time, not the camera's local time.
+        $errorCheck = $this->detectErrorFrame($filePath, null, null, $timestamp);
+        if ($errorCheck['is_error']) {
+            require_once __DIR__ . '/webcam-rejection-logger.php';
+            saveRejectedWebcam($filePath, $this->airportId, $this->camIndex, 'error_frame', [
+                'source' => 'push',
+                'confidence' => $errorCheck['confidence'],
+                'reasons' => $errorCheck['reasons']
+            ]);
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            $this->consumeEvaluatedUpload($filePath, 'error_frame');
+            return AcquisitionResult::failure('error_frame', 'push', $errorCheck);
         }
 
         // Move to staging
