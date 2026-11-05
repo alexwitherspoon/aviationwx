@@ -380,19 +380,23 @@ function rememberWeathercamBulkCatalogIfConfigShaStable(
  * Fingerprint of the OurAirports region cache, so the catalog invalidates when
  * iso_region data changes independent of the config SHA.
  *
- * @return string Region cache mtime as a string, or '' when absent
+ * @return string SHA-256 of the effective region source, or '' when absent
  */
 function weathercamBulkRegionFingerprint(): string
 {
     if (!defined('CACHE_OURAIRPORTS_REGIONS_FILE')) {
         return '';
     }
+    // Hash the JSON only when it holds a usable region map; otherwise the
+    // loader falls back to parsing airports.csv, so the CSV is the source that
+    // must invalidate the catalog.
     if (is_readable(CACHE_OURAIRPORTS_REGIONS_FILE)) {
-        $hash = @hash_file('sha256', CACHE_OURAIRPORTS_REGIONS_FILE);
-        return $hash !== false ? $hash : '';
+        $decoded = @json_decode((string) @file_get_contents(CACHE_OURAIRPORTS_REGIONS_FILE), true);
+        if (is_array($decoded) && $decoded !== []) {
+            $hash = @hash_file('sha256', CACHE_OURAIRPORTS_REGIONS_FILE);
+            return $hash !== false ? $hash : '';
+        }
     }
-    // No region JSON cache: the loader reads airports.csv directly, so the
-    // fingerprint must reflect the CSV source instead.
     if (defined('CACHE_OURAIRPORTS_AIRPORTS_CSV') && is_readable(CACHE_OURAIRPORTS_AIRPORTS_CSV)) {
         $hash = @hash_file('sha256', CACHE_OURAIRPORTS_AIRPORTS_CSV);
         return $hash !== false ? $hash : '';
