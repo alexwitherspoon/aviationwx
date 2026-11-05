@@ -25,6 +25,7 @@ require_once __DIR__ . '/weather/utils.php';
  * @param array|null $airport Airport config for phase-aware uniform-color thresholds (optional)
  * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); when provided, skips file load
  * @param string|null $sourceFormat Source bitstream format (jpg, png, webp); selects truncation pad model
+ * @param int|null $timestamp Unix time for phase (null = now)
  * @return array {
  *   'is_error' => bool,
  *   'confidence' => float,
@@ -32,7 +33,7 @@ require_once __DIR__ . '/weather/utils.php';
  *   'reasons' => array
  * }
  */
-function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null, ?string $sourceFormat = null): array {
+function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null, ?string $sourceFormat = null, ?int $timestamp = null): array {
     $img = null;
 
     $isGdImage = ($gdImage instanceof \GdImage)
@@ -79,14 +80,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         ];
     }
 
-    // A healthy camera on an unlit scene at night produces an essentially black
-    // frame, which is indistinguishable from a dead sensor. Accept those rather
-    // than reject real data; a sensor that is black around the clock still gets
-    // caught by the daytime uniform-color check.
-    if (isNightBlackFrame($img, $width, $height, $airport)) {
-        return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['night_black_frame']];
-    }
-
     $emptyBandCheck = detectTruncationPadBand($img, $width, $height, $normalizedFormat);
     if ($emptyBandCheck['is_empty_band']) {
         return [
@@ -95,6 +88,15 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
             'error_score' => 0.95,
             'reasons' => [$emptyBandCheck['reason']]
         ];
+    }
+
+    // A healthy camera on an unlit scene at night produces an essentially black
+    // frame, which is indistinguishable from a dead sensor. Accept those rather
+    // than reject real data; a sensor that is black around the clock still gets
+    // caught by the daytime uniform-color check. The truncation-pad check above
+    // still rejects a partially-decoded frame before this runs.
+    if (isNightBlackFrame($img, $width, $height, $airport, $timestamp)) {
+        return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['night_black_frame']];
     }
 
     $uniformCheck = detectUniformColor($img, $width, $height, $airport);

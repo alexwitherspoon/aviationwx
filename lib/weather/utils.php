@@ -490,6 +490,32 @@ define('DAYLIGHT_PHASE_NAUTICAL_TWILIGHT', 'nautical'); // Sun 6-12° below hori
 define('DAYLIGHT_PHASE_NIGHT', 'night');                // Sun >12° below horizon (dark)
 
 /**
+ * Classify daylight phase from the sun's altitude above/below the horizon.
+ *
+ * Used when sunrise/sunset events do not exist (polar day or night) and when
+ * twilight events are absent (high-latitude summer where nautical twilight
+ * never ends), so the phase always reflects the actual sun position.
+ *
+ * @param float $lat
+ * @param float $lon
+ * @param int $timestamp
+ * @return string One of DAYLIGHT_PHASE_* values
+ */
+function daylightPhaseFromSunAltitude(float $lat, float $lon, int $timestamp): string {
+    $sunPosition = getSunAltitude($lat, $lon, $timestamp);
+    if ($sunPosition > 0.0) {
+        return DAYLIGHT_PHASE_DAY;
+    }
+    if ($sunPosition > -6.0) {
+        return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
+    }
+    if ($sunPosition > -12.0) {
+        return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
+    }
+    return DAYLIGHT_PHASE_NIGHT;
+}
+
+/**
  * Get current daylight phase for airport location
  * 
  * Determines lighting conditions based on sun position:
@@ -539,17 +565,7 @@ function getDaylightPhase(array $airport, ?int $timestamp = null): string
     }
 
     if ($sunInfo['sunrise'] === null || $sunInfo['sunset'] === null) {
-        $sunPosition = getSunAltitude($lat, $lon, $timestamp);
-        if ($sunPosition > 0.0) {
-            return DAYLIGHT_PHASE_DAY;
-        }
-        if ($sunPosition > -6.0) {
-            return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
-        }
-        if ($sunPosition > -12.0) {
-            return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
-        }
-        return DAYLIGHT_PHASE_NIGHT;
+        return daylightPhaseFromSunAltitude($lat, $lon, $timestamp);
     }
 
     $sunrise = $sunInfo['sunrise'];
@@ -571,7 +587,11 @@ function getDaylightPhase(array $airport, ?int $timestamp = null): string
         return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
     }
 
-    return DAYLIGHT_PHASE_NIGHT;
+    // No matching sunrise or twilight window. At high latitudes in summer the
+    // sun can stay in nautical twilight all "night", leaving nautical dawn and
+    // dusk null even though the phase is not full night. Classify by altitude
+    // so that case is not mislabeled as night.
+    return daylightPhaseFromSunAltitude($lat, $lon, $timestamp);
 }
 
 /**

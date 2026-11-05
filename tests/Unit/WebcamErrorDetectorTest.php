@@ -1038,5 +1038,49 @@ class WebcamErrorDetectorTest extends TestCase
             'Without an airport the detector must stay fail-safe and reject a black frame'
         );
     }
+
+    public function testDetectErrorFrame_NightBlackFrame_Accepted(): void
+    {
+        $path = $this->createTestImage(320, 240, static function (): array {
+            return [0, 0, 0];
+        });
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $midnightUtc = strtotime('2026-06-15 00:00:00 UTC');
+
+        $result = detectErrorFrame($path, $airport, null, null, $midnightUtc);
+
+        $this->assertFalse($result['is_error'], 'A black frame in true night must be accepted');
+        $this->assertContains('night_black_frame', $result['reasons']);
+    }
+
+    public function testDetectErrorFrame_NightWithTruncatedPngPad_StillRejected(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $img = imagecreatetruecolor(320, 240);
+        // Dark but textured top (brightness 0-23, enough variance to read as
+        // content), solid black bottom quarter (incomplete PNG paint).
+        for ($y = 0; $y < 180; $y++) {
+            for ($x = 0; $x < 320; $x++) {
+                $v = ($x * 13 + $y * 7) % 24;
+                $color = imagecolorallocate($img, $v, $v, $v);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 180, 319, 239, $black);
+        $path = $this->testImageDir . '/pad_' . uniqid() . '.png';
+        imagepng($img, $path);
+        imagedestroy($img);
+
+        $airport = ['lat' => 0.0, 'lon' => 0.0];
+        $midnightUtc = strtotime('2026-06-15 00:00:00 UTC');
+
+        $result = detectErrorFrame($path, $airport, null, 'png', $midnightUtc);
+
+        $this->assertTrue($result['is_error'], 'A black PNG bottom pad must be rejected even at night');
+    }
 }
 
