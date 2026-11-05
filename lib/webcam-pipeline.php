@@ -329,14 +329,20 @@ class ProcessingPipeline
     /**
      * Validate EXIF data and fail closed when the timestamp is missing or invalid.
      *
-     * For push the capture time also must agree with the EXIF timestamp, because
-     * push derives its capture time from EXIF after normalization. Pull and
-     * federated use fetch time as the capture time and may preserve a source
-     * EXIF timestamp that differs, so no agreement check applies there.
+     * For push the capture time also must agree with the EXIF timestamp within
+     * the allowed variance, because push derives its capture time from the
+     * normalized EXIF and a larger gap is a bug. Pull and federated trust the
+     * acquisition's capture time directly (fetch time for pull, the validated
+     * source EXIF for federated), so there is no second claim to reconcile.
      *
      * Returns no timestamp: the acquisition established the capture time, so the
      * pipeline keeps the timestamp passed to process() for detection, storage,
      * and the variant filename.
+     *
+     * @param string $imagePath Path to the staging image file
+     * @param int $timestamp Capture time established by the acquisition
+     * @param string $sourceType Source type identifier (push, mjpeg, federated, etc.)
+     * @return array{valid: bool, reason?: string}
      */
     private function validateExif(string $imagePath, int $timestamp, string $sourceType): array
     {

@@ -1315,6 +1315,7 @@ The webcam processing pipeline uses three main components:
   - **HTTP conditional + checksum**: Same as Static JPEG (ETag + checksum skip when unchanged)
   - Supports API key authentication
   - Validates image data before saving
+- **Capture time**: The source is a healthy AviationWX instance that ships a normalized UTC timestamp in EXIF, so that time is adopted as the capture time. A missing, invalid, or unreasonable timestamp fails closed rather than falling back to the local fetch time
 
 ### Source Types (Push Cameras)
 
@@ -1428,9 +1429,9 @@ The webcam processing pipeline uses three main components:
 6. **Processing Pipeline**
    - **Single Image Load**: GD resource loaded once from staging file
    - **Error Frame Detection**: Uniform color; format-specific truncation pads (caller format or magic-byte detect; unresolved format rejected); Blue Iris borders
-   - **Uniform-color detection is phase-aware**: the variance ceiling and the night-black exemption both use the daylight phase at the image capture time (fetch time for pull cameras, normalized EXIF for push), not the processing time. A near-black frame in true night with known airport coordinates is accepted as `night_black_frame`, since a dead sensor looks the same as a healthy camera aimed at an unlit scene. Truncated bottom pads still reject at night, and a sensor stuck black at all hours is caught by the daytime check the next day
+   - **Uniform-color detection is phase-aware**: the variance ceiling and the night-black exemption both use the daylight phase at the image capture time (fetch time for pull cameras, the normalized EXIF for push, the source EXIF for federated), not the processing time. A near-black frame in true night with known airport coordinates is accepted as `night_black_frame`, since a dead sensor looks the same as a healthy camera aimed at an unlit scene. Truncated bottom pads still reject at night, and a sensor stuck black at all hours is caught by the daytime check the next day
    - **Bitstream Completeness**: JPEG EOI / PNG IEND on source bytes / WebP RIFF size match before EXIF mutation and promotion
-   - **EXIF Validation**: Ensures valid timestamp, adds if missing
+   - **EXIF Validation**: Fail closed on a missing, invalid, or unreasonable timestamp; a push frame also rejects when its capture time disagrees with EXIF beyond `WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS`
    - **EXIF Normalization**: Converts to UTC, adds GPS timestamp fields
    - **Variant Generation**: Creates 1080p, 720p, 360p variants
    - **Format Generation**: Creates JPEG and WebP formats
