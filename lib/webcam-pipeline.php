@@ -176,7 +176,7 @@ class ProcessingPipeline
             }
 
             // Step 2: Error frame detection (format-specific truncation pads)
-            $errorCheck = $this->checkErrorFrame($imagePath, $loadResult['format'] ?? null);
+            $errorCheck = $this->checkErrorFrame($imagePath, $loadResult['format'] ?? null, $timestamp);
             if (!$errorCheck['passed']) {
                 $this->recordRejection($imagePath, $errorCheck['reason'], [
                     'source' => $sourceType,
@@ -310,11 +310,12 @@ class ProcessingPipeline
      *
      * @param string $imagePath Path to image file
      * @param string|null $sourceFormat Bitstream format from loadImage (jpg, png, webp)
+     * @param int|null $timestamp Capture time for daylight-phase checks (null = now)
      * @return array{passed: bool, reason?: string, confidence?: float, details?: array}
      */
-    private function checkErrorFrame(string $imagePath, ?string $sourceFormat = null): array
+    private function checkErrorFrame(string $imagePath, ?string $sourceFormat = null, ?int $timestamp = null): array
     {
-        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage, $sourceFormat);
+        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage, $sourceFormat, $timestamp);
 
         if ($result['is_error']) {
             return [
