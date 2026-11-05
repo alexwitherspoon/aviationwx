@@ -1218,6 +1218,9 @@ if (!defined('WEBCAM_EXIF_MIN_VALID_YEAR')) {
 if (!defined('WEBCAM_EXIF_MAX_VALID_YEAR')) {
     define('WEBCAM_EXIF_MAX_VALID_YEAR', 2100); // After 2100 = garbage/corrupted EXIF
 }
+if (!defined('WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS')) {
+    define('WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS', 5); // Max seconds between the acquisition capture time and EXIF before rejecting
+}
 
 // exiftool execution (safety-critical: retry transient failures, timeout prevents hang)
 if (!defined('EXIFTOOL_TIMEOUT_SECONDS')) {

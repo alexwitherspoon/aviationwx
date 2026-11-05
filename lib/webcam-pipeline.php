@@ -190,7 +190,7 @@ class ProcessingPipeline
             }
 
             // Step 3: EXIF validation (fail closed on missing or invalid timestamp)
-            $exifResult = $this->validateExif($imagePath);
+            $exifResult = $this->validateExif($imagePath, $timestamp, $sourceType);
             if (!$exifResult['valid']) {
                 $this->recordRejection($imagePath, 'exif_' . $exifResult['reason'], [
                     'source' => $sourceType,
@@ -329,11 +329,16 @@ class ProcessingPipeline
     /**
      * Validate EXIF data and fail closed when the timestamp is missing or invalid.
      *
-     * Returns no timestamp: the acquisition already established the capture time,
-     * so the pipeline keeps the timestamp passed to process() rather than
-     * substituting one read back out of EXIF.
+     * For push the capture time also must agree with the EXIF timestamp, because
+     * push derives its capture time from EXIF after normalization. Pull and
+     * federated use fetch time as the capture time and may preserve a source
+     * EXIF timestamp that differs, so no agreement check applies there.
+     *
+     * Returns no timestamp: the acquisition established the capture time, so the
+     * pipeline keeps the timestamp passed to process() for detection, storage,
+     * and the variant filename.
      */
-    private function validateExif(string $imagePath): array
+    private function validateExif(string $imagePath, int $timestamp, string $sourceType): array
     {
         $exifCheck = validateExifTimestamp($imagePath);
 
@@ -342,6 +347,16 @@ class ProcessingPipeline
                 'valid' => false,
                 'reason' => $exifCheck['reason'] ?? 'invalid_timestamp'
             ];
+        }
+
+        if ($sourceType === 'push') {
+            $exifTimestamp = $exifCheck['timestamp'] ?? 0;
+            if (abs($timestamp - $exifTimestamp) > WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS) {
+                return [
+                    'valid' => false,
+                    'reason' => 'capture_time_mismatch'
+                ];
+            }
         }
 
         return ['valid' => true];

@@ -279,11 +279,12 @@ class WebcamPipelineTest extends TestCase
     }
 
     /**
-     * validateExif validates and fails closed, but it must not supply a
-     * timestamp the pipeline could use to override the capture time from the
-     * acquisition. A valid EXIF passes without a timestamp in the result.
+     * For a push source, validateExif must accept a capture time that agrees
+     * with the image's EXIF timestamp and reject one that drifts beyond the
+     * variance tolerance. It returns no timestamp, so nothing can override the
+     * acquisition's capture time.
      */
-    public function testValidateExif_ReturnsNoOverrideTimestamp(): void
+    public function testValidateExif_EnforcesCaptureTimeAgreement(): void
     {
         exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
         if ($whichCode !== 0) {
@@ -314,13 +315,21 @@ class WebcamPipelineTest extends TestCase
 
         $reflection = new ReflectionMethod(ProcessingPipeline::class, 'validateExif');
         $reflection->setAccessible(true);
-        $result = $reflection->invoke($pipeline, $path);
 
-        $this->assertTrue($result['valid'], 'A valid EXIF timestamp must pass validation');
+        $matching = $reflection->invoke($pipeline, $path, $stamp, 'push');
+        $this->assertTrue($matching['valid'], 'A matching capture time must pass validation');
         $this->assertArrayNotHasKey(
             'timestamp',
-            $result,
+            $matching,
             'validateExif must not supply a timestamp that could override the capture time'
+        );
+
+        $mismatched = $reflection->invoke($pipeline, $path, $stamp + 10, 'push');
+        $this->assertFalse($mismatched['valid'], 'A capture time drifting beyond tolerance must be rejected');
+        $this->assertSame(
+            'capture_time_mismatch',
+            $mismatched['reason'] ?? null,
+            'Rejections must fail closed with a clear reason'
         );
     }
 }

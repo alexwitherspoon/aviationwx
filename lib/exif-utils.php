@@ -1353,11 +1353,11 @@ function getTimestampForExif(string $filePath): int {
  * Priority order:
  * 1. Existing EXIF DateTimeOriginal (if valid) - ensures GPS fields added
  * 2. Filename/folder timestamp pattern
- * 3. File mtime
- * 4. Provided fallback timestamp
+ * 3. Provided fallback timestamp (explicit capture time)
+ * 4. File mtime
  *
  * @param string $filePath Path to image file
- * @param int|null $fallbackTimestamp Fallback if no other timestamp found
+ * @param int|null $fallbackTimestamp Explicit capture timestamp, preferred over file mtime (null = derive from filename/mtime)
  * @param string $timezone IANA timezone for EXIF
  * @param array<string, mixed>|null $context Optional context for error logs (airport_id, cam_index, source_type)
  * @return bool True if image has valid EXIF, false otherwise
@@ -1384,18 +1384,18 @@ function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, st
         return true;
     }
 
-    // Priority 1: Try to extract from filename/folder
+    // Priority 1: capture timestamp from the camera's own filename
     $filenameResult = parseFilenameTimestamp($filePath);
     $timestamp = $filenameResult['found'] ? $filenameResult['timestamp'] : 0;
-    
-    // Priority 2: Try mtime
-    if ($timestamp <= 0) {
-        $timestamp = @filemtime($filePath) ?: 0;
-    }
-    
-    // Priority 3: Use provided fallback
+
+    // Priority 2: explicit capture timestamp the caller already knows (pull passes fetch time)
     if ($timestamp <= 0 && $fallbackTimestamp > 0) {
         $timestamp = $fallbackTimestamp;
+    }
+
+    // Priority 3: file mtime
+    if ($timestamp <= 0) {
+        $timestamp = @filemtime($filePath) ?: 0;
     }
     
     // No valid timestamp found

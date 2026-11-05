@@ -279,6 +279,31 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertEquals($firstExifTimestamp, $secondExifTimestamp,
             'ensureImageHasExif() must preserve existing EXIF DateTimeOriginal');
     }
+
+    /**
+     * An explicit capture timestamp must win over file mtime, so the pull path's
+     * returned fetch time and the EXIF it writes agree exactly.
+     */
+    public function testEnsureImageHasExif_PrefersProvidedTimestampOverMtime()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $testFile = $this->createTestJpeg('test_prefer_provided_ts.jpg');
+        // Age the file mtime so it clearly disagrees with the provided timestamp.
+        touch($testFile, time() - 3600);
+
+        $captureTime = time();
+        $result = ensureImageHasExif($testFile, $captureTime);
+
+        $this->assertTrue($result, 'ensureImageHasExif() must return true');
+        $this->assertSame(
+            $captureTime,
+            getExifTimestamp($testFile),
+            'EXIF capture time must be the provided timestamp, not file mtime'
+        );
+    }
     
     // ========================================
     // CRITICAL TEST 5: exiftool Command Syntax Must Be Valid
