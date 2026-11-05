@@ -248,4 +248,33 @@ class WebcamPipelineTest extends TestCase
         $day = $reflection->invoke($pipeline, $path, null, $noon);
         $this->assertFalse($day['passed'], 'Day black frame must fail error detection');
     }
+
+    /**
+     * process() must forward the capture timestamp to error detection. A black
+     * frame at noon fails as error_frame; at midnight the night-black exemption
+     * fires, so the same frame fails later on EXIF instead. If process() dropped
+     * the timestamp, the midnight frame would fall back to processing time and
+     * be rejected as error_frame during daytime.
+     */
+    public function testProcess_ForwardsCaptureTimestampToErrorDetection(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $day = $pipeline->process($path, strtotime('2026-06-15 12:00:00 UTC'), 'test');
+        $this->assertSame('error_frame', $day->errorReason, 'Day black frame must be rejected as error_frame');
+
+        $night = $pipeline->process($path, strtotime('2026-06-15 00:00:00 UTC'), 'test');
+        $this->assertNotSame('error_frame', $night->errorReason, 'Night black frame must pass error detection via the forwarded timestamp');
+    }
 }
