@@ -99,7 +99,7 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['night_black_frame']];
     }
 
-    $uniformCheck = detectUniformColor($img, $width, $height, $airport);
+    $uniformCheck = detectUniformColor($img, $width, $height, $airport, $timestamp);
     if ($uniformCheck['is_uniform']) {
         return [
             'is_error' => true,
@@ -391,6 +391,7 @@ function getUniformColorVarianceThreshold(?array $airport = null, ?int $timestam
  * @param int $width Image width
  * @param int $height Image height
  * @param array|null $airport Airport config with lat/lon for phase-aware threshold (optional)
+ * @param int|null $timestamp Unix time for phase (null = now)
  * @return array {
  *   'is_uniform' => bool,      // True if image is essentially one color
  *   'variance' => float,       // Calculated max variance across channels
@@ -398,11 +399,11 @@ function getUniformColorVarianceThreshold(?array $airport = null, ?int $timestam
  *   'reason' => string         // Descriptive reason string for logging
  * }
  */
-function detectUniformColor($img, int $width, int $height, ?array $airport = null): array {
+function detectUniformColor($img, int $width, int $height, ?array $airport = null, ?int $timestamp = null): array {
     $sampleSize = defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE') 
         ? WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE 
         : 50;
-    $threshold = getUniformColorVarianceThreshold($airport);
+    $threshold = getUniformColorVarianceThreshold($airport, $timestamp);
     
     // Sample pixels in a grid pattern across the image
     $gridSize = (int)ceil(sqrt($sampleSize));
