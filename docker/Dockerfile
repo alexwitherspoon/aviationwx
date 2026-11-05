@@ -12,6 +12,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
+    libwebp-dev \
     libzip-dev \
     curl \
     git \
@@ -34,7 +35,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     python3 \
     libcap2-bin \
     tini \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd zip pcntl \
     && pecl channel-update pecl.php.net \
     && pecl install -a apcu \

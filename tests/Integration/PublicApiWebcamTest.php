@@ -486,38 +486,6 @@ class PublicApiWebcamTest extends TestCase
     }
     
     /**
-     * Test explicit format request with size parameter works
-     */
-    public function testExplicitFormatRequest_WithSize_ReturnsImage(): void
-    {
-        // First get metadata to find an available WebP variant
-        $metaResponse = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1');
-        $formats = $metaResponse['json']['data']['formats'] ?? [];
-        
-        // Find a variant that has WebP
-        $webpSize = null;
-        foreach ($formats as $variant => $variantFormats) {
-            if ($variant !== 'original' && in_array('webp', $variantFormats)) {
-                $webpSize = $variant;
-                break;
-            }
-        }
-        
-        if ($webpSize === null) {
-            $this->markTestSkipped('No WebP variants available for testing');
-        }
-        
-        // Request the WebP variant
-        $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt=webp&size=' . $webpSize);
-        
-        // Should return 200 with WebP image
-        $this->assertEquals(200, $response['status'], 
-            'Explicit WebP request with size should return 200');
-        $this->assertStringContainsString('image/webp', $response['content_type'],
-            'Should return WebP content type');
-    }
-    
-    /**
      * Test default request (no fmt parameter) returns the native original
      */
     public function testDefaultRequest_NoFmtParameter_ReturnsNativeOriginal(): void

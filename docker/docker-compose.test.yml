@@ -40,6 +40,9 @@ services:
       - ../health:/var/www/html/health:ro
       # PHPUnit config is dockerignored from the image build context
       - ../phpunit.xml:/var/www/html/phpunit.xml:ro
+      # Dev dependencies (phpunit) are dockerignored and absent from the image;
+      # mount the host vendor read-only so the native HTTP tests can run in here.
+      - ../vendor:/var/www/html/vendor:ro
       # ISOLATED test cache directory (separate from dev)
       - /tmp/aviationwx-cache-test:/var/www/html/cache
       # SFTP chroot directory (SSH chroot requires root-owned parent dirs)

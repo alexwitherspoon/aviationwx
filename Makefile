@@ -362,6 +362,7 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	@echo "Cleaning test cache for fresh state..."
 	@rm -rf /tmp/aviationwx-cache-test
 	@mkdir -p /tmp/aviationwx-cache-test
+	@test -f vendor/bin/phpunit || (echo "❌ vendor/bin/phpunit missing; run 'composer install' first" >&2; exit 1)
 	@docker compose -f docker/docker-compose.test.yml build
 	@docker compose -f docker/docker-compose.test.yml up -d
 	@echo "Waiting for test container to be healthy..."
@@ -378,10 +379,10 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 		docker compose -f docker/docker-compose.test.yml logs; \
 		exit 1; \
 	fi'
-	# The container (root) writes webcam frames into the bind-mounted cache while
-	# unit/integration phpunit runs on the host (non-root). Normalize the webcams
-	# frame dir inside the container so the host runner can unlink/rewrite frames,
-	# avoiding Permission denied (#298). Keep the SFTP chroot (/var/sftp) untouched.
+	# Host-run make targets (test-ci, test-local, test-e2e) still write webcam
+	# frames from the host into this bind-mounted cache, so keep the webcams tree
+	# writable by both users (#298). CI's native-HTTP step no longer depends on
+	# this and runs in-container instead. Keep the SFTP chroot (/var/sftp) untouched.
 	@docker compose -f docker/docker-compose.test.yml exec -T web \
 		sh -c 'mkdir -p /var/www/html/cache/webcams && chmod -R a+rwX /var/www/html/cache/webcams'
 
