@@ -496,9 +496,9 @@ define('DAYLIGHT_PHASE_NIGHT', 'night');                // Sun >12° below horiz
  * twilight events are absent (high-latitude summer where nautical twilight
  * never ends), so the phase always reflects the actual sun position.
  *
- * @param float $lat
- * @param float $lon
- * @param int $timestamp
+ * @param float $lat Latitude in degrees
+ * @param float $lon Longitude in degrees
+ * @param int $timestamp Unix timestamp to classify
  * @return string One of DAYLIGHT_PHASE_* values
  */
 function daylightPhaseFromSunAltitude(float $lat, float $lon, int $timestamp): string {
