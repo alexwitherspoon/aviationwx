@@ -80,6 +80,28 @@ class DaylightPhaseTest extends TestCase
             'Rovaniemi on summer solstice noon: sun never sets, should be day');
     }
 
+    /**
+     * High-latitude summer: the sun rises and sets, but stays above -12 degrees
+     * all "night", so nautical twilight never ends. Must not be labeled night.
+     */
+    public function testGetDaylightPhase_NauticalTwilightAllNight_ReturnsNauticalNotNight(): void
+    {
+        $airport = [
+            'lat' => 58.0,
+            'lon' => 0.0,
+            'timezone' => 'UTC',
+        ];
+        $summerMidnight = strtotime('2026-06-21 00:00:00 UTC');
+
+        $phase = getDaylightPhase($airport, $summerMidnight);
+
+        $this->assertEquals(
+            DAYLIGHT_PHASE_NAUTICAL_TWILIGHT,
+            $phase,
+            '58N summer midnight: sun is in nautical twilight, not full night'
+        );
+    }
+
     public function testIsDaytime_ReturnsBoolean(): void
     {
         $airport = [

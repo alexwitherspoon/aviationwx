@@ -25,6 +25,7 @@ require_once __DIR__ . '/weather/utils.php';
  * @param array|null $airport Airport config for phase-aware uniform-color thresholds (optional)
  * @param \GdImage|resource|null $gdImage Pre-loaded GD image (optional); when provided, skips file load
  * @param string|null $sourceFormat Source bitstream format (jpg, png, webp); selects truncation pad model
+ * @param int|null $timestamp Unix time for phase (null = now)
  * @return array {
  *   'is_error' => bool,
  *   'confidence' => float,
@@ -32,7 +33,7 @@ require_once __DIR__ . '/weather/utils.php';
  *   'reasons' => array
  * }
  */
-function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null, ?string $sourceFormat = null): array {
+function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = null, ?string $sourceFormat = null, ?int $timestamp = null): array {
     $img = null;
 
     $isGdImage = ($gdImage instanceof \GdImage)
@@ -89,7 +90,16 @@ function detectErrorFrame(string $imagePath, ?array $airport = null, $gdImage = 
         ];
     }
 
-    $uniformCheck = detectUniformColor($img, $width, $height, $airport);
+    // A healthy camera on an unlit scene at night produces an essentially black
+    // frame, which is indistinguishable from a dead sensor. Accept those rather
+    // than reject real data; a sensor that is black around the clock still gets
+    // caught by the daytime uniform-color check. The truncation-pad check above
+    // still rejects a partially-decoded frame before this runs.
+    if (isNightBlackFrame($img, $width, $height, $airport, $timestamp)) {
+        return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['night_black_frame']];
+    }
+
+    $uniformCheck = detectUniformColor($img, $width, $height, $airport, $timestamp);
     if ($uniformCheck['is_uniform']) {
         return [
             'is_error' => true,
@@ -282,6 +292,55 @@ function calculateVariance(array $values): float {
 }
 
 /**
+ * True when the airport is in night phase and the frame is essentially black.
+ *
+ * A healthy camera pointed at an unlit scene at night yields a near-black frame
+ * (sensor noise only), which is indistinguishable from a dead sensor or lens
+ * cap. Rejecting every black night frame drops real data, so detectErrorFrame
+ * accepts them instead. The daytime uniform-color check still catches a sensor
+ * that stays black around the clock.
+ *
+ * @param resource|\GdImage $img GD image
+ * @param int $width Image width
+ * @param int $height Image height
+ * @param array|null $airport Airport config with lat/lon
+ * @param int|null $timestamp Unix time for phase (null = now)
+ * @return bool True when the airport is in night phase and the frame is essentially black
+ */
+function isNightBlackFrame($img, int $width, int $height, ?array $airport = null, ?int $timestamp = null): bool
+{
+    if ($airport === null || !isset($airport['lat']) || !isset($airport['lon'])) {
+        return false;
+    }
+    if (getDaylightPhase($airport, $timestamp) !== DAYLIGHT_PHASE_NIGHT) {
+        return false;
+    }
+
+    $maxBrightness = defined('WEBCAM_ERROR_NIGHT_BLACK_MAX_BRIGHTNESS')
+        ? (float) WEBCAM_ERROR_NIGHT_BLACK_MAX_BRIGHTNESS
+        : 20.0;
+    $sampleSize = defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')
+        ? (int) WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE
+        : 50;
+
+    $gridSize = (int) ceil(sqrt($sampleSize));
+    $stepX = max(1, (int) floor($width / $gridSize));
+    $stepY = max(1, (int) floor($height / $gridSize));
+
+    $brightnessSum = 0.0;
+    $count = 0;
+    for ($y = (int) floor($stepY / 2); $y < $height; $y += $stepY) {
+        for ($x = (int) floor($stepX / 2); $x < $width; $x += $stepX) {
+            $rgb = imagecolorat($img, $x, $y);
+            $brightnessSum += ((($rgb >> 16) & 0xFF) + (($rgb >> 8) & 0xFF) + ($rgb & 0xFF)) / 3.0;
+            $count++;
+        }
+    }
+
+    return $count >= 10 && ($brightnessSum / $count) < $maxBrightness;
+}
+
+/**
  * Max channel variance below which the image is treated as a single solid color.
  *
  * Day and civil twilight use the default constant. Nautical twilight uses a middle value.
@@ -332,6 +391,7 @@ function getUniformColorVarianceThreshold(?array $airport = null, ?int $timestam
  * @param int $width Image width
  * @param int $height Image height
  * @param array|null $airport Airport config with lat/lon for phase-aware threshold (optional)
+ * @param int|null $timestamp Unix time for phase (null = now)
  * @return array {
  *   'is_uniform' => bool,      // True if image is essentially one color
  *   'variance' => float,       // Calculated max variance across channels
@@ -339,11 +399,11 @@ function getUniformColorVarianceThreshold(?array $airport = null, ?int $timestam
  *   'reason' => string         // Descriptive reason string for logging
  * }
  */
-function detectUniformColor($img, int $width, int $height, ?array $airport = null): array {
+function detectUniformColor($img, int $width, int $height, ?array $airport = null, ?int $timestamp = null): array {
     $sampleSize = defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE') 
         ? WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE 
         : 50;
-    $threshold = getUniformColorVarianceThreshold($airport);
+    $threshold = getUniformColorVarianceThreshold($airport, $timestamp);
     
     // Sample pixels in a grid pattern across the image
     $gridSize = (int)ceil(sqrt($sampleSize));

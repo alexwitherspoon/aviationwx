@@ -425,6 +425,102 @@ class PushCameraBatchProcessingTest extends TestCase
         $this->assertFileDoesNotExist($path2, 'error_frame must still consume inbox file');
     }
 
+    /**
+     * A black frame's accept/reject is decided by the daylight phase at the
+     * capture time. The push path must classify it with the normalized UTC time,
+     * not the camera-local DateTimeOriginal read as UTC. A non-UTC camera writes
+     * a local time whose raw phase is the opposite of the corrected phase, so a
+     * regression that runs detection before EXIF normalization gets the result
+     * backwards.
+     */
+    public function testAcquireFile_BlackFrame_UsesNormalizedCaptureTime(): void
+    {
+        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
+        if ($whichCode !== 0) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $airport = ['lat' => 0.0, 'lon' => 0.0, 'timezone' => 'UTC'];
+        $strategy = $this->createStrategyWithUploadDir($this->testDir, $airport);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $mtime = time() - 30;
+        $correctedIsNight = getDaylightPhase($airport, $mtime) === DAYLIGHT_PHASE_NIGHT;
+
+        // Pick a whole-hour offset behind UTC whose raw phase flips the corrected
+        // phase. Backward offsets are the only usable direction: a future raw
+        // time trips the EXIF future check. A flip is not available during the
+        // short window near local evening, so skip rather than flake.
+        $offsetHours = null;
+        for ($h = -1; $h >= -12; $h--) {
+            $raw = $mtime + $h * 3600;
+            $rawIsNight = getDaylightPhase($airport, $raw) === DAYLIGHT_PHASE_NIGHT;
+            if ($rawIsNight !== $correctedIsNight) {
+                $offsetHours = $h;
+                break;
+            }
+        }
+        if ($offsetHours === null) {
+            $this->markTestSkipped('no whole-hour timezone offset flips the phase at this time of day');
+        }
+
+        // Stamp only DateTimeOriginal (no GPS), as a non-UTC camera does.
+        $localDateTime = gmdate('Y:m:d H:i:s', $mtime + $offsetHours * 3600);
+        exec(sprintf(
+            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
+            escapeshellarg($localDateTime),
+            escapeshellarg($path)
+        ), $exifOut, $exifCode);
+        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
+        touch($path, $mtime); // exiftool rewrites mtime; restore the upload time
+
+        $result = $strategy->acquireFile($path);
+
+        if ($correctedIsNight) {
+            $this->assertTrue(
+                $result->success,
+                'A black frame at true-night UTC must be accepted'
+            );
+            $this->assertNull($result->errorReason, 'Accepted frames must carry no error reason');
+        } else {
+            $this->assertSame('error_frame', $result->errorReason, 'A black frame in daylight must be rejected as error_frame');
+        }
+    }
+
+    /**
+     * Error-frame detection moved out of the pre-normalize validation step to
+     * after EXIF normalization. A black frame must not be rejected here, even
+     * though a solid color would otherwise read as a uniform-color error. If
+     * detection is restored to this step, the black frame fails as error_frame
+     * using the unnormalized capture time.
+     */
+    public function testValidateUploadedImage_DoesNotRejectErrorFrame(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $strategy = $this->createStrategyWithUploadDir($this->testDir, ['lat' => 0.0, 'lon' => 0.0, 'timezone' => 'UTC']);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $reflection = new ReflectionMethod(PushAcquisitionStrategy::class, 'validateUploadedImage');
+        $result = $reflection->invoke($strategy, $path);
+
+        $this->assertNotSame('error_frame', $result['reason'] ?? null, 'validateUploadedImage must not reject error frames before EXIF normalization');
+    }
+
     // ========================================
     // Helper Methods
     // ========================================
@@ -434,13 +530,13 @@ class PushCameraBatchProcessingTest extends TestCase
      * 
      * Uses reflection to set the private uploadDir property.
      */
-    private function createStrategyWithUploadDir(string $uploadDir): PushAcquisitionStrategy
+    private function createStrategyWithUploadDir(string $uploadDir, array $airportConfig = ['name' => 'Test Airport', 'timezone' => 'UTC']): PushAcquisitionStrategy
     {
         $strategy = new PushAcquisitionStrategy(
             'test',
             0,
             ['push_config' => ['username' => 'testuser']],
-            ['name' => 'Test Airport', 'timezone' => 'UTC']
+            $airportConfig
         );
         
         // Use reflection to set the upload directories array (accessible by default since PHP 8.1)

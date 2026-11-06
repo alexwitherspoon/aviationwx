@@ -176,7 +176,7 @@ class ProcessingPipeline
             }
 
             // Step 2: Error frame detection (format-specific truncation pads)
-            $errorCheck = $this->checkErrorFrame($imagePath, $loadResult['format'] ?? null);
+            $errorCheck = $this->checkErrorFrame($imagePath, $loadResult['format'] ?? null, $timestamp);
             if (!$errorCheck['passed']) {
                 $this->recordRejection($imagePath, $errorCheck['reason'], [
                     'source' => $sourceType,
@@ -189,8 +189,8 @@ class ProcessingPipeline
                 ]);
             }
 
-            // Step 3: EXIF validation
-            $exifResult = $this->validateExif($imagePath, $timestamp);
+            // Step 3: EXIF validation (fail closed on missing or invalid timestamp)
+            $exifResult = $this->validateExif($imagePath, $timestamp, $sourceType);
             if (!$exifResult['valid']) {
                 $this->recordRejection($imagePath, 'exif_' . $exifResult['reason'], [
                     'source' => $sourceType,
@@ -201,11 +201,8 @@ class ProcessingPipeline
                 ]);
             }
 
-            // Use validated timestamp (may have been adjusted)
-            $validatedTimestamp = $exifResult['timestamp'] ?? $timestamp;
-
-            // Step 4: Generate variants
-            $variantResult = $this->generateVariants($imagePath, $validatedTimestamp);
+            // Step 4: Generate variants, stamped with the acquisition's capture timestamp
+            $variantResult = $this->generateVariants($imagePath, $timestamp);
             if ($variantResult['original'] === null) {
                 return PipelineResult::failure('variant_generation_failed', [
                     'source' => $sourceType
@@ -213,7 +210,7 @@ class ProcessingPipeline
             }
 
             // Step 5: Store variant manifest
-            $this->storeVariantManifest($validatedTimestamp, $variantResult);
+            $this->storeVariantManifest($timestamp, $variantResult);
 
             // Step 6: History cleanup
             $this->cleanupHistory();
@@ -227,7 +224,7 @@ class ProcessingPipeline
                 'airport' => $this->airportId,
                 'cam' => $this->camIndex,
                 'source' => $sourceType,
-                'timestamp' => $validatedTimestamp,
+                'timestamp' => $timestamp,
                 'variants' => count($variantResult['variants']),
                 'duration_ms' => $elapsed
             ], 'app');
@@ -235,7 +232,7 @@ class ProcessingPipeline
             return PipelineResult::success(
                 $variantResult['original'],
                 $variantResult['variants'],
-                $validatedTimestamp,
+                $timestamp,
                 [
                     'source' => $sourceType,
                     'width' => $variantResult['metadata']['width'] ?? $this->imageWidth,
@@ -310,11 +307,12 @@ class ProcessingPipeline
      *
      * @param string $imagePath Path to image file
      * @param string|null $sourceFormat Bitstream format from loadImage (jpg, png, webp)
+     * @param int|null $timestamp Capture time for daylight-phase checks (null = now)
      * @return array{passed: bool, reason?: string, confidence?: float, details?: array}
      */
-    private function checkErrorFrame(string $imagePath, ?string $sourceFormat = null): array
+    private function checkErrorFrame(string $imagePath, ?string $sourceFormat = null, ?int $timestamp = null): array
     {
-        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage, $sourceFormat);
+        $result = detectErrorFrame($imagePath, $this->airportConfig, $this->gdImage, $sourceFormat, $timestamp);
 
         if ($result['is_error']) {
             return [
@@ -329,11 +327,25 @@ class ProcessingPipeline
     }
 
     /**
-     * Validate EXIF data
+     * Validate EXIF data and fail closed when the timestamp is missing or invalid.
+     *
+     * For push the capture time also must agree with the EXIF timestamp within
+     * the allowed variance, because push derives its capture time from the
+     * normalized EXIF and a larger gap is a bug. Pull and federated trust the
+     * acquisition's capture time directly (fetch time for pull, the validated
+     * source EXIF for federated), so there is no second claim to reconcile.
+     *
+     * Returns no timestamp: the acquisition established the capture time, so the
+     * pipeline keeps the timestamp passed to process() for detection, storage,
+     * and the variant filename.
+     *
+     * @param string $imagePath Path to the staging image file
+     * @param int $timestamp Capture time established by the acquisition
+     * @param string $sourceType Source type identifier (push, mjpeg, federated, etc.)
+     * @return array{valid: bool, reason?: string}
      */
-    private function validateExif(string $imagePath, int $timestamp): array
+    private function validateExif(string $imagePath, int $timestamp, string $sourceType): array
     {
-        // Check if EXIF exists
         $exifCheck = validateExifTimestamp($imagePath);
 
         if (!$exifCheck['valid']) {
@@ -343,16 +355,17 @@ class ProcessingPipeline
             ];
         }
 
-        // Use EXIF timestamp if available, otherwise use provided timestamp
-        $exifTimestamp = $exifCheck['timestamp'] ?? 0;
-        if ($exifTimestamp > 0) {
-            $timestamp = $exifTimestamp;
+        if ($sourceType === 'push') {
+            $exifTimestamp = $exifCheck['timestamp'] ?? 0;
+            if (abs($timestamp - $exifTimestamp) > WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS) {
+                return [
+                    'valid' => false,
+                    'reason' => 'capture_time_mismatch'
+                ];
+            }
         }
 
-        return [
-            'valid' => true,
-            'timestamp' => $timestamp
-        ];
+        return ['valid' => true];
     }
 
     /**

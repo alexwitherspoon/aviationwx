@@ -279,6 +279,69 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertEquals($firstExifTimestamp, $secondExifTimestamp,
             'ensureImageHasExif() must preserve existing EXIF DateTimeOriginal');
     }
+
+    /**
+     * An explicit capture timestamp must win over file mtime, so the pull path's
+     * returned fetch time and the EXIF it writes agree exactly.
+     */
+    public function testEnsureImageHasExif_PrefersProvidedTimestampOverMtime()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $testFile = $this->createTestJpeg('test_prefer_provided_ts.jpg');
+        // Age the file mtime so it clearly disagrees with the provided timestamp.
+        touch($testFile, time() - 3600);
+
+        $captureTime = time();
+        $result = ensureImageHasExif($testFile, $captureTime);
+
+        $this->assertTrue($result, 'ensureImageHasExif() must return true');
+        $this->assertSame(
+            $captureTime,
+            getExifTimestamp($testFile),
+            'EXIF capture time must be the provided timestamp, not file mtime'
+        );
+    }
+
+    /**
+     * A complete capture-time payload carries both the UTC GPS time and the
+     * local DateTimeOriginal. Federated sources are trusted only when both are
+     * present; a partial payload means the source is not actually healthy.
+     */
+    public function testHasCompleteWebcamExif_RequiresBothFields()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $complete = $this->createTestJpeg('complete.jpg');
+        $this->assertTrue(addExifTimestamp($complete, time()), 'addExifTimestamp must succeed');
+        $this->assertTrue(hasCompleteWebcamExif($complete), 'Both fields present must count as complete');
+
+        $localOnly = $this->createTestJpeg('local_only.jpg');
+        exec(sprintf(
+            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
+            escapeshellarg(gmdate('Y:m:d H:i:s', time())),
+            escapeshellarg($localOnly)
+        ), $out, $code);
+        $this->assertSame(0, $code, 'exiftool must stamp the fixture: ' . implode("\n", $out));
+        $this->assertFalse(hasCompleteWebcamExif($localOnly), 'Local time without GPS UTC must be incomplete');
+
+        $gpsOnly = $this->createTestJpeg('gps_only.jpg');
+        exec(sprintf(
+            'exiftool -overwrite_original -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
+            escapeshellarg(gmdate('Y:m:d', time())),
+            escapeshellarg(gmdate('H:i:s', time())),
+            escapeshellarg($gpsOnly)
+        ), $out, $code);
+        $this->assertSame(0, $code, 'exiftool must stamp the fixture: ' . implode("\n", $out));
+        $this->assertFalse(hasCompleteWebcamExif($gpsOnly), 'GPS UTC without local time must be incomplete');
+
+        $none = $this->createTestJpeg('none.jpg');
+        $this->assertFalse(hasCompleteWebcamExif($none), 'A bare image must be incomplete');
+    }
     
     // ========================================
     // CRITICAL TEST 5: exiftool Command Syntax Must Be Valid

@@ -216,4 +216,120 @@ class WebcamPipelineTest extends TestCase
         $this->assertEquals(0, $result->getVariantCount(), 'Failure should have 0 variants');
         $this->assertEmpty($result->getPromotedFormats(), 'Failure should have no promoted formats');
     }
+
+    /**
+     * checkErrorFrame must forward the capture timestamp to the detector. A
+     * solid black frame is accepted at midnight and rejected at noon only when
+     * the timestamp reaches the daylight-phase check.
+     */
+    public function testCheckErrorFrame_ForwardsCaptureTimestamp(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $reflection = new ReflectionMethod(ProcessingPipeline::class, 'checkErrorFrame');
+        $reflection->setAccessible(true);
+
+        $midnight = strtotime('2026-06-15 00:00:00 UTC');
+        $night = $reflection->invoke($pipeline, $path, null, $midnight);
+        $this->assertTrue($night['passed'], 'Night black frame must pass error detection');
+
+        $noon = strtotime('2026-06-15 12:00:00 UTC');
+        $day = $reflection->invoke($pipeline, $path, null, $noon);
+        $this->assertFalse($day['passed'], 'Day black frame must fail error detection');
+    }
+
+    /**
+     * process() must forward the capture timestamp to error detection. A black
+     * frame at noon fails as error_frame; at midnight the night-black exemption
+     * fires, so the same frame fails later on EXIF instead. If process() dropped
+     * the timestamp, the midnight frame would fall back to processing time and
+     * be rejected as error_frame during daytime.
+     */
+    public function testProcess_ForwardsCaptureTimestampToErrorDetection(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/black_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagefilledrectangle($img, 0, 0, 319, 239, $black);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $day = $pipeline->process($path, strtotime('2026-06-15 12:00:00 UTC'), 'test');
+        $this->assertSame('error_frame', $day->errorReason, 'Day black frame must be rejected as error_frame');
+
+        $night = $pipeline->process($path, strtotime('2026-06-15 00:00:00 UTC'), 'test');
+        $this->assertNotSame('error_frame', $night->errorReason, 'Night black frame must pass error detection via the forwarded timestamp');
+    }
+
+    /**
+     * For a push source, validateExif must accept a capture time that agrees
+     * with the image's EXIF timestamp and reject one that drifts beyond the
+     * variance tolerance. It returns no timestamp, so nothing can override the
+     * acquisition's capture time.
+     */
+    public function testValidateExif_EnforcesCaptureTimeAgreement(): void
+    {
+        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
+        if ($whichCode !== 0) {
+            $this->markTestSkipped('exiftool not available');
+        }
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD library not available');
+        }
+
+        $pipeline = ProcessingPipelineFactory::create('kspb', 0, [], ['lat' => 0.0, 'lon' => 0.0]);
+
+        $path = $this->testDir . '/stamped_' . uniqid() . '.jpg';
+        $img = imagecreatetruecolor(320, 240);
+        $fill = imagecolorallocate($img, 120, 200, 60);
+        imagefilledrectangle($img, 0, 0, 319, 239, $fill);
+        imagejpeg($img, $path, 90);
+        imagedestroy($img);
+
+        $stamp = time() - 60;
+        exec(sprintf(
+            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
+            escapeshellarg(gmdate('Y:m:d H:i:s', $stamp)),
+            escapeshellarg(gmdate('Y:m:d', $stamp)),
+            escapeshellarg(gmdate('H:i:s', $stamp)),
+            escapeshellarg($path)
+        ), $exifOut, $exifCode);
+        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
+
+        $reflection = new ReflectionMethod(ProcessingPipeline::class, 'validateExif');
+        $reflection->setAccessible(true);
+
+        $matching = $reflection->invoke($pipeline, $path, $stamp, 'push');
+        $this->assertTrue($matching['valid'], 'A matching capture time must pass validation');
+        $this->assertArrayNotHasKey(
+            'timestamp',
+            $matching,
+            'validateExif must not supply a timestamp that could override the capture time'
+        );
+
+        $mismatched = $reflection->invoke($pipeline, $path, $stamp + 10, 'push');
+        $this->assertFalse($mismatched['valid'], 'A capture time drifting beyond tolerance must be rejected');
+        $this->assertSame(
+            'capture_time_mismatch',
+            $mismatched['reason'] ?? null,
+            'Rejections must fail closed with a clear reason'
+        );
+    }
 }
