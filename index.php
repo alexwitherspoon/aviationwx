@@ -119,20 +119,26 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 
 // Match discover subdomain exactly (e.g., discover.aviationwx.org)
 if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
-    // A tour of a single airport is pointless, so single-airport deployments
-    // redirect to that dashboard the same way the other feature subdomains do.
-    if (isSingleAirportMode()) {
-        $singleAirportId = getSingleAirportId();
-        if ($singleAirportId) {
-            $protocol = getRequestProtocol();
-            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
-            header('Location: ' . $redirectUrl, true, 302);
-            exit;
+    // Serve the shell only for the bare host and the /discover path. The shell
+    // iframes /airports and /?airport= on this same host, so those requests
+    // must fall through to their real pages below instead of nesting the shell.
+    $servesDiscoverShell = ($requestPath === '' || $requestPath === 'discover') && !$isAirportRequest;
+    if ($servesDiscoverShell) {
+        // A tour of a single airport is pointless, so single-airport deployments
+        // redirect to that dashboard the same way the other feature subdomains do.
+        if (isSingleAirportMode()) {
+            $singleAirportId = getSingleAirportId();
+            if ($singleAirportId) {
+                $protocol = getRequestProtocol();
+                $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+                header('Location: ' . $redirectUrl, true, 302);
+                exit;
+            }
         }
-    }
 
-    include 'pages/discover.php';
-    exit;
+        include 'pages/discover.php';
+        exit;
+    }
 }
 
 // Guides via path or query; production apex/www 301 to guides subdomain
