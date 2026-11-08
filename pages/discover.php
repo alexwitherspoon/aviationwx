@@ -45,14 +45,14 @@ if (isset($_GET['health']) && $_GET['health'] !== '') {
 // calls this when its deck is exhausted, not on every transition.
 if (isset($_GET['pool']) && $_GET['pool'] === '1') {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['airports' => discoverBuildOperationalDeck(loadConfig())], JSON_INVALID_UTF8_SUBSTITUTE);
+    echo json_encode(['airports' => discoverGetCachedOperationalDeck(loadConfig())], JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
 // HTML shell: compute and shuffle the initial deck once so the booth has an
 // airport to show the moment the page finishes loading.
 $discoverConfig = loadConfig();
-$discoverDeck = discoverBuildOperationalDeck($discoverConfig);
+$discoverDeck = discoverGetCachedOperationalDeck($discoverConfig);
 shuffle($discoverDeck);
 // Substitute invalid bytes so a stray config value can never break the inline
 // script and leave the booth with a dead page.
@@ -144,6 +144,7 @@ header('Content-Type: text/html; charset=utf-8');
         var FLY_TIMEOUT_MS = 8000;          // cap on waiting for the map flight
         var SETTLE_MS = 2500;               // hold after the flight before the fade
         var PREWARM_TIMEOUT_MS = 15000;     // cap on waiting for a dashboard to load
+        var SKIP_DELAY_MS = 3000;           // settle pause after skipping a failed dashboard
         var FADE_MS = 1200;                 // matches the CSS opacity transition
         var SCROLL_FIRST_DELAY_MS = 8000;   // let the top of the dashboard read first
         var SCROLL_CYCLE_MS = 60000;        // one down-and-up pan per minute
@@ -270,26 +271,31 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function prewarmDashboard(airport) {
+            // Resolves true when the dashboard fires load within the budget and
+            // false when it times out, so the shell can skip a dashboard that
+            // never finished loading instead of dwelling on a blank iframe.
             return new Promise(function (resolve) {
-                var finished = false;
+                var settled = false;
 
-                function finish() {
-                    if (finished) {
+                function finish(loaded) {
+                    if (settled) {
                         return;
                     }
-                    finished = true;
+                    settled = true;
                     dashFrame.removeEventListener('load', onLoad);
-                    hideScrollbars();
-                    resolve();
+                    if (loaded) {
+                        hideScrollbars();
+                    }
+                    resolve(loaded);
                 }
 
                 function onLoad() {
-                    finish();
+                    finish(true);
                 }
 
                 dashFrame.addEventListener('load', onLoad);
                 dashFrame.src = '/?airport=' + encodeURIComponent(airport.primary);
-                setTimeout(finish, PREWARM_TIMEOUT_MS);
+                setTimeout(function () { finish(false); }, PREWARM_TIMEOUT_MS);
             });
         }
 
@@ -409,17 +415,28 @@ header('Content-Type: text/html; charset=utf-8');
                 return flyTo(airport.id)
                     .then(function () { return delay(SETTLE_MS); })
                     .then(function () { return prewarm; })
-                    .then(function () {
+                    .then(function (loaded) {
+                        if (!loaded) {
+                            // The dashboard never finished loading; hold the
+                            // map on the airport rather than dwelling on a
+                            // blank iframe, then move on to the next airport.
+                            setCaption('');
+                            return false;
+                        }
                         setLayerVisible(mapFrame, false);
                         setLayerVisible(dashFrame, true);
                         setCaption('');
-                        return delay(FADE_MS);
+                        return delay(FADE_MS).then(function () { return true; });
                     })
-                    .then(dwell)
-                    .then(function () {
-                        setLayerVisible(dashFrame, false);
-                        setLayerVisible(mapFrame, true);
-                        return delay(FADE_MS).then(runCycle);
+                    .then(function (shown) {
+                        if (!shown) {
+                            return delay(SKIP_DELAY_MS).then(runCycle);
+                        }
+                        return dwell().then(function () {
+                            setLayerVisible(dashFrame, false);
+                            setLayerVisible(mapFrame, true);
+                            return delay(FADE_MS).then(runCycle);
+                        });
                     });
             });
         }
