@@ -552,6 +552,13 @@ class ExifUtilsTest extends TestCase
         $this->assertSame('error', classifyGpsRead(1, []));
     }
 
+    public function testClassifyGpsRead_UnwrittenExitSentinel_ReturnsError()
+    {
+        // readGpsUtcTimestampFromExif initializes the exit code to -1 so a
+        // failed exec that never writes it still classifies as an error.
+        $this->assertSame('error', classifyGpsRead(-1, []));
+    }
+
     public function testClassifyGpsRead_ZeroExitEmptyOutput_ReturnsAbsent()
     {
         $this->assertSame('absent', classifyGpsRead(0, []));

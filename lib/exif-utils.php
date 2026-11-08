@@ -201,8 +201,14 @@ function readGpsUtcTimestampFromExif(string $filePath): array {
     );
     
     $output = [];
-    $return = 0;
-    @exec($cmd, $output, $return);
+    $return = -1;
+    $execResult = @exec($cmd, $output, $return);
+    if ($execResult === false) {
+        // exec() could not start the command (fork failure, disabled exec).
+        // It leaves the exit code unwritten, so without this check the empty
+        // output would be misread as an absent field and delete a valid frame.
+        return ['status' => 'error', 'timestamp' => 0];
+    }
     
     $status = classifyGpsRead($return, $output);
     $timestamp = $status === 'ok' ? parseGpsExiftoolOutput($output) : 0;
