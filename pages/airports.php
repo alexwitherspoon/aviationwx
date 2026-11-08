@@ -2553,6 +2553,42 @@ $breadcrumbs = generateBreadcrumbSchema([
                 });
             });
         }
+        
+        // ========================================================================
+        // FEATURE: Discover Kiosk (fly the map to an airport on request)
+        // ========================================================================
+        // The discover booth tour loads this page in a same-origin iframe and
+        // asks it to fly to an airport before fading that airport's dashboard
+        // in. The done message lets the shell hold the fade until the flight
+        // has settled, so the booth never cuts a zoom in half.
+        window.addEventListener('message', function(event) {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+            var data = event.data;
+            if (!data || data.type !== 'discover-fly-to' || typeof data.id !== 'string') {
+                return;
+            }
+            
+            var target = null;
+            allMarkers.forEach(function(marker) {
+                if (marker._airportData && marker._airportData.id === data.id) {
+                    target = marker;
+                }
+            });
+            if (!target) {
+                return;
+            }
+            
+            // Slow, eased flight well under the booth's 15s transition budget.
+            map.flyTo(target.getLatLng(), 11, { duration: 5, easeLinearity: 0.25 });
+            map.once('moveend', function() {
+                window.parent.postMessage(
+                    { type: 'discover-fly-to-done', id: data.id },
+                    window.location.origin
+                );
+            });
+        });
     })();
     </script>
 </body>
