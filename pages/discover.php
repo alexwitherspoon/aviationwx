@@ -276,9 +276,11 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function prewarmDashboard(airport) {
-            // Resolves true when the dashboard fires load within the budget and
-            // false when it times out, so the shell can skip a dashboard that
-            // never finished loading instead of dwelling on a blank iframe.
+            // Resolves true only when the dashboard actually loaded and is a
+            // real dashboard. A 500 or 404 error document also fires iframe
+            // load, so the load event alone must not count as success. The
+            // #status-banners container is rendered by every airport dashboard
+            // and never by an error page.
             return new Promise(function (resolve) {
                 var settled = false;
 
@@ -294,8 +296,17 @@ header('Content-Type: text/html; charset=utf-8');
                     resolve(loaded);
                 }
 
+                function isDashboardReady() {
+                    try {
+                        var doc = dashFrame.contentDocument;
+                        return !!doc && !!doc.getElementById('status-banners');
+                    } catch (e) {
+                        return false;
+                    }
+                }
+
                 function onLoad() {
-                    finish(true);
+                    finish(isDashboardReady());
                 }
 
                 dashFrame.addEventListener('load', onLoad);
