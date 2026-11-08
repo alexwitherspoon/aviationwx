@@ -16,6 +16,13 @@ class PublicApiWebcamTest extends TestCase
     private static $testCam = 0;
     private static bool $fixtureReady = false;
     
+    /**
+     * Establish the API base URL and gate the suite on the isolated test cache.
+     *
+     * The gate keeps fixtures from ever being created against a real or shared
+     * cache: the suite only runs when TEST_CACHE_DIR identifies the isolated
+     * HTTP test directory.
+     */
     public static function setUpBeforeClass(): void
     {
         self::$apiBaseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
@@ -31,6 +38,13 @@ class PublicApiWebcamTest extends TestCase
         self::$fixtureReady = true;
     }
 
+    /**
+     * Reset the webcam fixture tree before each test.
+     *
+     * Owning a clean current-original state per test keeps the suite order-
+     * independent; no test can leak a re-pointed symlink or a seeded frame into
+     * the next.
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -38,10 +52,6 @@ class PublicApiWebcamTest extends TestCase
             $this->markTestSkipped('TEST_CACHE_DIR must identify the isolated HTTP test cache');
         }
 
-        // Reset the webcam fixture tree before every test so no test can leak a
-        // re-pointed symlink or a seeded frame into the next. Owning a clean
-        // current-original state per test is what keeps the suite order-
-        // independent.
         self::removeFixtureTree();
         self::createTestImages();
     }
