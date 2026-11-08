@@ -183,6 +183,7 @@ class SitemapTest extends TestCase
             'https://embed.aviationwx.org/',
             'https://terms.aviationwx.org/',
             'https://guides.aviationwx.org/',
+            'https://discover.aviationwx.org/',
             'https://aviationwx.org/sitemap'
         ];
         

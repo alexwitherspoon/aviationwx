@@ -73,7 +73,6 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <meta name="robots" content="noindex,nofollow">
     <title>Discover - AviationWX.org</title>
     <style>
         /* Full-bleed kiosk shell. The child pages are the display; the shell is
