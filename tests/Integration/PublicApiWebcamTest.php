@@ -29,8 +29,6 @@ class PublicApiWebcamTest extends TestCase
         }
 
         self::$fixtureReady = true;
-        self::removeFixtureTree();
-        self::createTestImages();
     }
 
     protected function setUp(): void
@@ -39,6 +37,13 @@ class PublicApiWebcamTest extends TestCase
         if (!self::$fixtureReady) {
             $this->markTestSkipped('TEST_CACHE_DIR must identify the isolated HTTP test cache');
         }
+
+        // Reset the webcam fixture tree before every test so no test can leak a
+        // re-pointed symlink or a seeded frame into the next. Owning a clean
+        // current-original state per test is what keeps the suite order-
+        // independent.
+        self::removeFixtureTree();
+        self::createTestImages();
     }
 
     public static function tearDownAfterClass(): void
