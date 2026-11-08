@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd zip pcntl \
     && pecl channel-update pecl.php.net \
-    && pecl install -a apcu \
+    && pecl install apcu-5.1.27 \
     && docker-php-ext-enable apcu \
     && setcap cap_sys_nice+ep /usr/bin/nice \
     && rm -rf /var/lib/apt/lists/*
