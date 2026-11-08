@@ -118,6 +118,8 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 }
 
 // Match discover subdomain exactly (e.g., discover.aviationwx.org)
+// Reserves the label: this block runs before airport-subdomain detection, so
+// no airport id can ever claim the discover host for a dashboard.
 if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     // Serve the shell only for the bare host and the /discover path. The shell
     // iframes /airports and /?airport= on this same host, so those requests

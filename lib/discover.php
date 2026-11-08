@@ -46,6 +46,10 @@ function discoverSelectOperationalAirports(array $airports, array $statusById): 
  * of the status page (the discover HTML embed and the ?pool=1 refresh) use this;
  * the per-transition re-check uses checkAirportHealth directly for a single id.
  *
+ * The deck is listed airports only: getListedAirports drops unlisted (hidden)
+ * airports, and the selector below drops any status other than operational,
+ * which leaves maintenance, degraded, and down airports out as well.
+ *
  * @param array|null $config Loaded config; an empty deck results when null
  * @return array List of eligible airports in config order (caller shuffles)
  */

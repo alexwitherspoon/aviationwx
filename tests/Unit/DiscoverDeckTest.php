@@ -59,6 +59,15 @@ class DiscoverDeckTest extends TestCase
         $this->assertSame(['kspb'], array_column($deck, 'id'));
     }
 
+    public function testDiscoverSelectOperationalAirports_MaintenanceExcluded(): void
+    {
+        $status = ['kspb' => 'operational', 'pdx' => 'maintenance'];
+
+        $deck = discoverSelectOperationalAirports($this->airports, $status);
+
+        $this->assertSame(['kspb'], array_column($deck, 'id'));
+    }
+
     public function testDiscoverSelectOperationalAirports_EmptyStatusMap_ReturnsEmpty(): void
     {
         $deck = discoverSelectOperationalAirports($this->airports, []);

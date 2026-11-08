@@ -29,11 +29,16 @@ if (php_sapi_name() !== 'cli' && !headers_sent()) {
 if (isset($_GET['health']) && $_GET['health'] !== '') {
     $healthConfig = loadConfig();
     $healthAirportId = strtolower(trim((string) $_GET['health']));
-    // Fail closed: an unknown id or a failed read is never operational.
+    // Fail closed and listed-only: an unknown, unlisted, or failed read is
+    // never operational, so a hidden airport cannot surface in the tour or
+    // have its status probed through this endpoint.
     $healthStatus = 'down';
-    if ($healthConfig !== null && isset($healthConfig['airports'][$healthAirportId])) {
-        $healthResult = checkAirportHealth($healthAirportId, $healthConfig['airports'][$healthAirportId]);
-        $healthStatus = $healthResult['status'] ?? 'down';
+    if ($healthConfig !== null) {
+        $listedAirports = getListedAirports($healthConfig);
+        if (isset($listedAirports[$healthAirportId])) {
+            $healthResult = checkAirportHealth($healthAirportId, $listedAirports[$healthAirportId]);
+            $healthStatus = $healthResult['status'] ?? 'down';
+        }
     }
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['id' => $healthAirportId, 'status' => $healthStatus]);
