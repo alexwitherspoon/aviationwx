@@ -229,8 +229,10 @@ if (isset($_GET['airports']) || $requestPath === 'airports') {
     exit;
 }
 
-// Discover booth tour via path; production apex/www redirect to discover subdomain
-if ($requestPath === 'discover') {
+// Discover via path, local development only. Production reaches the booth only
+// through the discover.aviationwx.org subdomain, so the path is not a public
+// route and falls through to the general 404 below.
+if (!isProduction() && $requestPath === 'discover') {
     // In single-airport mode there is no tour to run, so redirect to the
     // single airport dashboard the same way the other pages do.
     if (isSingleAirportMode()) {
@@ -244,7 +246,6 @@ if ($requestPath === 'discover') {
         }
     }
 
-    redirectProductionApexToCanonicalSubdomain('discover', '/', $hostWithoutPort, $baseDomain);
     include 'pages/discover.php';
     exit;
 }
