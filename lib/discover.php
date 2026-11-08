@@ -82,6 +82,14 @@ function discoverBuildOperationalDeck(?array $config): array
  */
 function discoverGetCachedOperationalDeck(?array $config, int $ttlSeconds = 30): array
 {
+    // A null config has no deck, and caching the resulting empty list would
+    // turn a transient config failure into a 30 second idle for the booth.
+    // Return without reading or writing either cache so the failure clears on
+    // the next call.
+    if ($config === null) {
+        return [];
+    }
+
     $cacheKey = 'discover_operational_deck';
     $cacheFile = CACHE_BASE_DIR . '/discover_operational_deck.json';
 
@@ -116,7 +124,14 @@ function discoverGetCachedOperationalDeck(?array $config, int $ttlSeconds = 30):
     }
     $encoded = json_encode(['cached_at' => time(), 'data' => $deck]);
     if ($encoded !== false) {
-        @file_put_contents($cacheFile, $encoded, LOCK_EX);
+        // Write to a temp file and rename over the cache so a concurrent
+        // reader never sees a partial JSON body (it just recomputes instead).
+        $tmpFile = @tempnam(CACHE_BASE_DIR, 'discover_deck_');
+        if ($tmpFile !== false && @file_put_contents($tmpFile, $encoded) === strlen($encoded)) {
+            @rename($tmpFile, $cacheFile);
+        } elseif ($tmpFile !== false) {
+            @unlink($tmpFile);
+        }
     }
 
     return $deck;
