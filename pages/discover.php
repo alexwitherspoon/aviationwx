@@ -438,10 +438,18 @@ header('Content-Type: text/html; charset=utf-8');
                             setCaption('');
                             return false;
                         }
-                        setLayerVisible(mapFrame, false);
-                        setLayerVisible(dashFrame, true);
-                        setCaption('');
-                        return delay(FADE_MS).then(function () { return true; });
+                        return isOperational(airport.id).then(function (stillOk) {
+                            setCaption('');
+                            if (!stillOk) {
+                                // The airport can go unhealthy during the
+                                // flight and prewarm; check again just before
+                                // revealing so a dead dashboard is not dwelled.
+                                return false;
+                            }
+                            setLayerVisible(mapFrame, false);
+                            setLayerVisible(dashFrame, true);
+                            return delay(FADE_MS).then(function () { return true; });
+                        });
                     })
                     .then(function (shown) {
                         if (!shown) {
