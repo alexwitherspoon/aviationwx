@@ -254,22 +254,24 @@ function handleGetWebcamImage(array $params, array $context): void
         $filenameStamp = gmdate('Y-m-d_His', $currentOriginal['timestamp']) . '_UTC';
         $filename = strtolower($airportId) . "_{$camIndex}_{$filenameStamp}." . $format;
 
-        // Latest download is mutable. Over-age frames use the stale policy (no-store,
-        // flagged); fresh frames below the threshold use the normal refresh TTL (they
-        // flip to stale at the threshold, which is re-evaluated here).
+        // Latest download is mutable. The cache policy is the same three-way
+        // classification as the inline path: over-age frames are no-store and
+        // flagged, near-boundary frames are no-store, and fresh frames use the
+        // refresh TTL.
         $captureTimestamp = $currentOriginal['timestamp'];
-        $stale = $captureTimestamp > 0 && (time() - $captureTimestamp) > getWebcamStaleFailclosedSeconds($webcam, $airport);
-        if ($stale) {
+        $webcamRefresh = webcamRefreshInterval($airport, $webcam);
+        $classification = webcamCaptureCacheClassification(
+            $captureTimestamp,
+            getWebcamStaleFailclosedSeconds($webcam, $airport),
+            $webcamRefresh,
+            time()
+        );
+        if ($classification === 'stale') {
             $headers = webcamStaleHeaders($airportId, $camIndex, $captureTimestamp, $webcam, $airport)['headers'];
+        } elseif ($classification === 'near_boundary') {
+            $headers = getNoStoreCacheHeaders(0);
         } else {
-            $webcamRefresh = webcamRefreshInterval($airport, $webcam);
-            $age = max(0, time() - $captureTimestamp);
-            $remaining = max(0, getWebcamStaleFailclosedSeconds($webcam, $airport) - $age);
-            if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
-                $headers = getNoStoreCacheHeaders(0);
-            } else {
-                $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
-            }
+            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
         }
         foreach ($headers as $name => $value) {
             header($name . ': ' . $value);
@@ -704,18 +706,20 @@ function sendImageResponse(
     $webcamRefresh = webcamRefreshInterval($airport, $cam);
 
     // Over-age: last known good frame, served as 200 but no-store and flagged
-    // stale; fresh frames below the threshold use the normal refresh TTL.
-    $stale = $timestamp > 0 && (time() - $timestamp) > getWebcamStaleFailclosedSeconds($cam, $airport);
-    if ($stale) {
+    // stale. Near-boundary frames (fresh but about to fail closed) are no-store
+    // so a cache cannot outlive the boundary. Fresh frames use the refresh TTL.
+    $classification = webcamCaptureCacheClassification(
+        $timestamp,
+        getWebcamStaleFailclosedSeconds($cam, $airport),
+        $webcamRefresh,
+        time()
+    );
+    if ($classification === 'stale') {
         $headers = webcamStaleHeaders($airportId, $camIndex, $timestamp, $cam, $airport)['headers'];
+    } elseif ($classification === 'near_boundary') {
+        $headers = getNoStoreCacheHeaders(0);
     } else {
-        $age = max(0, time() - $timestamp);
-        $remaining = max(0, getWebcamStaleFailclosedSeconds($cam, $airport) - $age);
-        if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $webcamRefresh) {
-            $headers = getNoStoreCacheHeaders(0);
-        } else {
-            $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
-        }
+        $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
     }
     foreach ($headers as $name => $value) {
         header($name . ': ' . $value);
