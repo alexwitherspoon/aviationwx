@@ -546,4 +546,44 @@ class ExifUtilsTest extends TestCase
         
         $this->assertNull($result, "Year {$futureYear} should be rejected");
     }
+
+    public function testClassifyGpsRead_NonZeroExit_ReturnsError()
+    {
+        $this->assertSame('error', classifyGpsRead(1, []));
+    }
+
+    public function testClassifyGpsRead_ZeroExitEmptyOutput_ReturnsAbsent()
+    {
+        $this->assertSame('absent', classifyGpsRead(0, []));
+    }
+
+    public function testClassifyGpsRead_ZeroExitGarbageOutput_ReturnsAbsent()
+    {
+        $this->assertSame('absent', classifyGpsRead(0, ['not a date']));
+    }
+
+    public function testClassifyGpsRead_ZeroExitValidOutput_ReturnsOk()
+    {
+        $this->assertSame('ok', classifyGpsRead(0, ['2024:12:26', '15:30:45']));
+    }
+
+    public function testParseGpsExiftoolOutput_ValidLines_ReturnsUtcTimestamp()
+    {
+        // gmmktime is calendar math independent of the server default timezone,
+        // matching the explicit UTC suffix the parser applies.
+        $expected = gmmktime(15, 30, 45, 12, 26, 2024);
+        $this->assertSame($expected, parseGpsExiftoolOutput(['2024:12:26', '15:30:45']));
+    }
+
+    public function testParseGpsExiftoolOutput_Garbage_ReturnsZero()
+    {
+        $this->assertSame(0, parseGpsExiftoolOutput(['garbage']));
+    }
+
+    public function testReadGpsUtcTimestampFromExif_MissingFile_ReturnsError()
+    {
+        $result = readGpsUtcTimestampFromExif('/nonexistent/definitely-not-here.jpg');
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
 }

@@ -173,8 +173,25 @@ function getExifTimestamp(string $filePath): int {
  * @return int Unix timestamp (UTC), or 0 if not available
  */
 function getGpsUtcTimestampFromExif(string $filePath): int {
+    $result = readGpsUtcTimestampFromExif($filePath);
+    return $result['timestamp'];
+}
+
+/**
+ * Read the GPS UTC timestamp, distinguishing a failed read from a missing field.
+ *
+ * Consumers react differently to these two outcomes. A read error is transient
+ * (exiftool missing, a corrupt file it cannot open, a crash) and must be retried
+ * or preserved; an absent field is a genuine rejection of the image. The
+ * integer-only read collapsed both to 0 and let callers delete valid data on a
+ * transient blip.
+ *
+ * @param string $filePath Path to image file
+ * @return array{status: string, timestamp: int} status is 'ok', 'absent', or 'error'
+ */
+function readGpsUtcTimestampFromExif(string $filePath): array {
     if (!file_exists($filePath)) {
-        return 0;
+        return ['status' => 'error', 'timestamp' => 0];
     }
     
     // Use exiftool to get GPS timestamp (more reliable than PHP's exif_read_data for GPS)
@@ -187,10 +204,40 @@ function getGpsUtcTimestampFromExif(string $filePath): int {
     $return = 0;
     @exec($cmd, $output, $return);
     
-    if ($return !== 0 || empty($output)) {
-        return 0;
-    }
+    $status = classifyGpsRead($return, $output);
+    $timestamp = $status === 'ok' ? parseGpsExiftoolOutput($output) : 0;
     
+    return ['status' => $status, 'timestamp' => $timestamp];
+}
+
+/**
+ * Classify an exiftool GPS read from its exit code and output.
+ *
+ * Pure so the three-state split is unit-testable without exiftool installed.
+ *
+ * @param int $returnCode exiftool exit code
+ * @param array<int, string> $outputLines Raw exiftool stdout lines
+ * @return string 'error', 'absent', or 'ok'
+ */
+function classifyGpsRead(int $returnCode, array $outputLines): string {
+    if ($returnCode !== 0) {
+        return 'error';
+    }
+    if (empty($outputLines)) {
+        return 'absent';
+    }
+    return parseGpsExiftoolOutput($outputLines) > 0 ? 'ok' : 'absent';
+}
+
+/**
+ * Parse exiftool GPS output lines into a UTC timestamp.
+ *
+ * Output format: "YYYY:MM:DD" and "HH:MM:SS" on separate lines.
+ *
+ * @param array<int, string> $output Raw exiftool output lines
+ * @return int Unix timestamp (UTC), or 0 when the lines do not form a valid time
+ */
+function parseGpsExiftoolOutput(array $output): int {
     // Output format: "YYYY:MM:DD" and "HH:MM:SS" on separate lines
     $combined = implode(' ', array_map('trim', $output));
     
