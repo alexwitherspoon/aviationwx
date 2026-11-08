@@ -9,6 +9,7 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/status-checks.php';
 
 /**
  * Select the airports eligible for the discover tour.
@@ -35,4 +36,28 @@ function discoverSelectOperationalAirports(array $airports, array $statusById): 
         ];
     }
     return $deck;
+}
+
+/**
+ * Build the current operational deck from a loaded config.
+ *
+ * Runs the full per-airport health scan once. Callers that need it at the cost
+ * of the status page (the discover HTML embed and the ?pool=1 refresh) use this;
+ * the per-transition re-check uses checkAirportHealth directly for a single id.
+ *
+ * @param array|null $config Loaded config; an empty deck results when null
+ * @return array List of eligible airports in config order (caller shuffles)
+ */
+function discoverBuildOperationalDeck(?array $config): array
+{
+    if ($config === null) {
+        return [];
+    }
+
+    $airports = getListedAirports($config);
+    $statusById = [];
+    foreach ($airports as $airportId => $airport) {
+        $statusById[$airportId] = checkAirportHealth($airportId, $airport)['status'] ?? 'down';
+    }
+    return discoverSelectOperationalAirports($airports, $statusById);
 }
