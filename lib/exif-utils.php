@@ -1000,6 +1000,24 @@ function copyExifMetadata(string $sourceFile, string $destFile): bool {
  */
 function validateExifTimestamp(string $filePath): array {
     $timestamp = getExifTimestamp($filePath);
+    return validateExifTimestampValue($timestamp);
+}
+
+/**
+ * Validate an already-read EXIF timestamp value against the range checks.
+ *
+ * Kept separate from validateExifTimestamp() so callers that already hold the
+ * capture time (a tri-state GPS read, for example) can run the same checks
+ * without a second read racing the first.
+ *
+ * @param int $timestamp Unix timestamp to validate
+ * @return array {
+ *   'valid' => bool,
+ *   'timestamp' => int,
+ *   'reason' => string|null
+ * }
+ */
+function validateExifTimestampValue(int $timestamp): array {
     $now = time();
     
     // No EXIF timestamp - REJECT

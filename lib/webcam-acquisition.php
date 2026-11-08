@@ -469,23 +469,37 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         // Trust the federated source's capture time. A healthy aviationwx.org
         // instance ships a normalized UTC timestamp, so adopt it; fail closed when
         // it is missing or unreasonable rather than substituting our fetch time
-        // and debating a time the hub already established.
-        $exifCheck = $this->validateExifTimestamp($stagingPath);
-        if (!$exifCheck['valid']) {
+        // and debating a time the hub already established. One GPS read drives
+        // both the gate and the adopted value, so a transient read failure stays
+        // distinct from a missing field and cannot fall through to local time.
+        $gpsRead = readGpsUtcTimestampFromExif($stagingPath);
+        if ($gpsRead['status'] === 'error') {
             @unlink($stagingPath);
-            $this->recordFailure('exif_invalid: ' . $exifCheck['reason'], 'transient');
-            return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
+            $this->recordFailure('exif_gps_read_failed', 'transient');
+            return AcquisitionResult::failure('exif_gps_read_failed', 'federated');
         }
-
-        // A partial payload means the source is not actually healthy. Require both
-        // the UTC GPS time and the local DateTimeOriginal, since a local-only
-        // DateTimeOriginal would otherwise be misread as UTC near a phase boundary.
-        if (!hasCompleteWebcamExif($stagingPath)) {
+        if ($gpsRead['status'] === 'absent') {
             @unlink($stagingPath);
             $this->recordFailure('exif_incomplete', 'transient');
-            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_gps_or_datetime_original']);
+            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_gps']);
         }
-        $timestamp = $exifCheck['timestamp'];
+
+        // A partial payload means the source is not actually healthy. Require the
+        // local DateTimeOriginal alongside GPS, since a local-only DateTimeOriginal
+        // would otherwise be misread as UTC near a phase boundary.
+        if (getDateTimeOriginalTimestamp($stagingPath) <= 0) {
+            @unlink($stagingPath);
+            $this->recordFailure('exif_incomplete', 'transient');
+            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_datetime_original']);
+        }
+
+        $sanityCheck = validateExifTimestampValue($gpsRead['timestamp']);
+        if (!$sanityCheck['valid']) {
+            @unlink($stagingPath);
+            $this->recordFailure('exif_invalid: ' . $sanityCheck['reason'], 'transient');
+            return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $sanityCheck['reason']]);
+        }
+        $timestamp = $gpsRead['timestamp'];
 
         if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {
             aviationwx_log('warning', 'Failed to save webcam pull metadata', [
