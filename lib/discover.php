@@ -123,14 +123,19 @@ function discoverGetCachedOperationalDeck(?array $config, int $ttlSeconds = 30):
         @apcu_store($cacheKey, $deck, $ttlSeconds);
     }
     $encoded = json_encode(['cached_at' => time(), 'data' => $deck]);
-    if ($encoded !== false) {
+    if ($encoded !== false && ensureCacheDir(CACHE_BASE_DIR)) {
         // Write to a temp file and rename over the cache so a concurrent
         // reader never sees a partial JSON body (it just recomputes instead).
+        // The directory is ensured first so tempnam lands on the same
+        // filesystem and the rename stays atomic; a failed write or rename
+        // leaves no temp file behind.
         $tmpFile = @tempnam(CACHE_BASE_DIR, 'discover_deck_');
-        if ($tmpFile !== false && @file_put_contents($tmpFile, $encoded) === strlen($encoded)) {
-            @rename($tmpFile, $cacheFile);
-        } elseif ($tmpFile !== false) {
-            @unlink($tmpFile);
+        if ($tmpFile !== false) {
+            if (@file_put_contents($tmpFile, $encoded) !== strlen($encoded)
+                || !@rename($tmpFile, $cacheFile)
+            ) {
+                @unlink($tmpFile);
+            }
         }
     }
 
