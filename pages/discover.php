@@ -57,6 +57,9 @@ shuffle($discoverDeck);
 // Substitute invalid bytes so a stray config value can never break the inline
 // script and leave the booth with a dead page.
 $discoverDeckJson = json_encode($discoverDeck, JSON_INVALID_UTF8_SUBSTITUTE);
+if ($discoverDeckJson === false) {
+    $discoverDeckJson = '[]';
+}
 
 header('Content-Type: text/html; charset=utf-8');
 ?>
