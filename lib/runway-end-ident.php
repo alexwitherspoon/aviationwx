@@ -27,13 +27,49 @@ function canonicalizeRunwayEndIdent(string $endId): ?string
 }
 
 /**
+ * Magnetic heading for a cardinal runway end ident (N, NE, SW, ...).
+ *
+ * OurAirports and NASR occasionally name a runway end by compass point instead
+ * of a numeric designator, for example a private strip published as N/S or
+ * NE/SW. Cardinal points are already magnetic, so the mapping is fixed and
+ * needs no declination correction.
+ *
+ * @param string $endId Runway end ident (e.g. N, ne, SW)
+ * @return int|null Heading in degrees, or null when not a cardinal direction
+ */
+function parseCardinalRunwayEndHeading(string $endId): ?int
+{
+    $headingByDirection = [
+        'N' => 360,
+        'NE' => 45,
+        'E' => 90,
+        'SE' => 135,
+        'S' => 180,
+        'SW' => 225,
+        'W' => 270,
+        'NW' => 315,
+    ];
+
+    $direction = strtoupper(trim($endId));
+
+    return $headingByDirection[$direction] ?? null;
+}
+
+/**
  * Parse a runway end ident into magnetic heading degrees.
  *
- * Returns null when the ident is not a valid runway number (1-36, optional L/C/R).
- * Unlike parseIdentHeading(), does not treat invalid idents as 360° north.
+ * Cardinal direction idents resolve to their magnetic bearing; otherwise the
+ * ident must be a runway number (1-36, optional L/C/R) and a non-numeric,
+ * non-cardinal ident returns null. Unlike parseIdentHeading(), does not treat
+ * invalid idents as 360° north.
  */
 function parseRunwayEndIdentMagneticHeading(string $endId): ?float
 {
+    $cardinal = parseCardinalRunwayEndHeading($endId);
+    if ($cardinal !== null) {
+        return (float) $cardinal;
+    }
+
     $canonical = canonicalizeRunwayEndIdent($endId);
     if ($canonical === null) {
         return null;
