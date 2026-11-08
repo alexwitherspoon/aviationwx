@@ -202,11 +202,16 @@ function readGpsUtcTimestampFromExif(string $filePath): array {
     
     $output = [];
     $return = -1;
+    if (!function_exists('exec')) {
+        // exec removed by disable_functions; without this guard the call
+        // throws an Error instead of reaching the read-error branch.
+        return ['status' => 'error', 'timestamp' => 0];
+    }
     $execResult = @exec($cmd, $output, $return);
     if ($execResult === false) {
-        // exec() could not start the command (fork failure, disabled exec).
-        // It leaves the exit code unwritten, so without this check the empty
-        // output would be misread as an absent field and delete a valid frame.
+        // exec() could not start the command (fork failure). It leaves the
+        // exit code unwritten, so without this check the empty output would be
+        // misread as an absent field and delete a valid frame.
         return ['status' => 'error', 'timestamp' => 0];
     }
     
