@@ -346,23 +346,40 @@ class ProcessingPipeline
      */
     private function validateExif(string $imagePath, int $timestamp, string $sourceType): array
     {
-        $exifCheck = validateExifTimestamp($imagePath);
+        if ($sourceType === 'push') {
+            $gpsRead = readGpsUtcTimestampFromExif($imagePath);
 
+            // A transient read failure cannot be a rejection: the acquisition
+            // already established and range-checked the capture time, so this
+            // cross-check defers to it rather than flagging a false mismatch.
+            if ($gpsRead['status'] === 'error') {
+                return ['valid' => true];
+            }
+
+            // GPS was normalized into the image at acquisition; its absence
+            // here means that normalization did not stick.
+            if ($gpsRead['status'] === 'absent') {
+                return ['valid' => false, 'reason' => 'capture_time_mismatch'];
+            }
+
+            $sanity = validateExifTimestampValue($gpsRead['timestamp']);
+            if (!$sanity['valid']) {
+                return ['valid' => false, 'reason' => $sanity['reason'] ?? 'invalid_timestamp'];
+            }
+
+            if (abs($timestamp - $gpsRead['timestamp']) > WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS) {
+                return ['valid' => false, 'reason' => 'capture_time_mismatch'];
+            }
+
+            return ['valid' => true];
+        }
+
+        $exifCheck = validateExifTimestamp($imagePath);
         if (!$exifCheck['valid']) {
             return [
                 'valid' => false,
                 'reason' => $exifCheck['reason'] ?? 'invalid_timestamp'
             ];
-        }
-
-        if ($sourceType === 'push') {
-            $exifTimestamp = $exifCheck['timestamp'] ?? 0;
-            if (abs($timestamp - $exifTimestamp) > WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS) {
-                return [
-                    'valid' => false,
-                    'reason' => 'capture_time_mismatch'
-                ];
-            }
         }
 
         return ['valid' => true];

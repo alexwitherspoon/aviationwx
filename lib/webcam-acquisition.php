@@ -469,23 +469,37 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         // Trust the federated source's capture time. A healthy aviationwx.org
         // instance ships a normalized UTC timestamp, so adopt it; fail closed when
         // it is missing or unreasonable rather than substituting our fetch time
-        // and debating a time the hub already established.
-        $exifCheck = $this->validateExifTimestamp($stagingPath);
-        if (!$exifCheck['valid']) {
+        // and debating a time the hub already established. One GPS read drives
+        // both the gate and the adopted value, so a transient read failure stays
+        // distinct from a missing field and cannot fall through to local time.
+        $gpsRead = readGpsUtcTimestampFromExif($stagingPath);
+        if ($gpsRead['status'] === 'error') {
             @unlink($stagingPath);
-            $this->recordFailure('exif_invalid: ' . $exifCheck['reason'], 'transient');
-            return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
+            $this->recordFailure('exif_gps_read_failed', 'transient');
+            return AcquisitionResult::failure('exif_gps_read_failed', 'federated');
         }
-
-        // A partial payload means the source is not actually healthy. Require both
-        // the UTC GPS time and the local DateTimeOriginal, since a local-only
-        // DateTimeOriginal would otherwise be misread as UTC near a phase boundary.
-        if (!hasCompleteWebcamExif($stagingPath)) {
+        if ($gpsRead['status'] === 'absent') {
             @unlink($stagingPath);
             $this->recordFailure('exif_incomplete', 'transient');
-            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_gps_or_datetime_original']);
+            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_gps']);
         }
-        $timestamp = $exifCheck['timestamp'];
+
+        // A partial payload means the source is not actually healthy. Require the
+        // local DateTimeOriginal alongside GPS, since a local-only DateTimeOriginal
+        // would otherwise be misread as UTC near a phase boundary.
+        if (getDateTimeOriginalTimestamp($stagingPath) <= 0) {
+            @unlink($stagingPath);
+            $this->recordFailure('exif_incomplete', 'transient');
+            return AcquisitionResult::failure('exif_incomplete', 'federated', ['reason' => 'missing_datetime_original']);
+        }
+
+        $sanityCheck = validateExifTimestampValue($gpsRead['timestamp']);
+        if (!$sanityCheck['valid']) {
+            @unlink($stagingPath);
+            $this->recordFailure('exif_invalid: ' . $sanityCheck['reason'], 'transient');
+            return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $sanityCheck['reason']]);
+        }
+        $timestamp = $gpsRead['timestamp'];
 
         if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {
             aviationwx_log('warning', 'Failed to save webcam pull metadata', [
@@ -1138,19 +1152,18 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get the normalized UTC capture time from GPS. Fail closed when it is
-        // genuinely absent: the daylight phase cannot be classified without it, and
-        // a camera-local DateTimeOriginal would be misread as UTC. A read failure
-        // from exiftool being down is a transient infra problem, so preserve the
-        // upload for retry instead of consuming it.
-        $timestamp = getGpsUtcTimestampFromExif($uploadFile);
-        if ($timestamp <= 0) {
-            if (!isExiftoolAvailable()) {
-                return AcquisitionResult::skip('exiftool_unavailable', 'push');
-            }
+        // Get the normalized UTC capture time from GPS. A read error is transient
+        // (exiftool missing or failing) and must keep the upload for retry; a
+        // genuinely absent field is a bad image and is consumed.
+        $gpsRead = readGpsUtcTimestampFromExif($uploadFile);
+        if ($gpsRead['status'] === 'error') {
+            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+        }
+        if ($gpsRead['status'] === 'absent') {
             $this->consumeEvaluatedUpload($uploadFile, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
         }
+        $timestamp = $gpsRead['timestamp'];
 
         // Cross-validate EXIF against upload mtime (timestamp drift check)
         $uploadMtime = @filemtime($uploadFile);
@@ -1938,19 +1951,18 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
         }
 
-        // Get the normalized UTC capture time from GPS. Fail closed when it is
-        // genuinely absent: the daylight phase cannot be classified without it, and
-        // a camera-local DateTimeOriginal would be misread as UTC. A read failure
-        // from exiftool being down is a transient infra problem, so preserve the
-        // upload for retry instead of consuming it.
-        $timestamp = getGpsUtcTimestampFromExif($filePath);
-        if ($timestamp <= 0) {
-            if (!isExiftoolAvailable()) {
-                return AcquisitionResult::skip('exiftool_unavailable', 'push');
-            }
+        // Get the normalized UTC capture time from GPS. A read error is transient
+        // (exiftool missing or failing) and must keep the upload for retry; a
+        // genuinely absent field is a bad image and is consumed.
+        $gpsRead = readGpsUtcTimestampFromExif($filePath);
+        if ($gpsRead['status'] === 'error') {
+            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+        }
+        if ($gpsRead['status'] === 'absent') {
             $this->consumeEvaluatedUpload($filePath, 'no_capture_time');
             return AcquisitionResult::failure('no_capture_time', 'push');
         }
+        $timestamp = $gpsRead['timestamp'];
 
         // Cross-validate EXIF against upload mtime (timestamp drift check)
         $uploadMtime = @filemtime($filePath);
