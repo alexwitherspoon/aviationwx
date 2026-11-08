@@ -117,6 +117,32 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
+// Match discover subdomain exactly (e.g., discover.aviationwx.org)
+// Reserves the label: this block runs before airport-subdomain detection, so
+// no airport id can ever claim the discover host for a dashboard.
+if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // Serve the shell only for the bare host and the /discover path. The shell
+    // iframes /airports and /?airport= on this same host, so those requests
+    // must fall through to their real pages below instead of nesting the shell.
+    $servesDiscoverShell = ($requestPath === '' || $requestPath === 'discover') && !$isAirportRequest;
+    if ($servesDiscoverShell) {
+        // A tour of a single airport is pointless, so single-airport deployments
+        // redirect to that dashboard the same way the other feature subdomains do.
+        if (isSingleAirportMode()) {
+            $singleAirportId = getSingleAirportId();
+            if ($singleAirportId) {
+                $protocol = getRequestProtocol();
+                $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+                header('Location: ' . $redirectUrl, true, 302);
+                exit;
+            }
+        }
+
+        include 'pages/discover.php';
+        exit;
+    }
+}
+
 // Guides via path or query; production apex/www 301 to guides subdomain
 // Config must be loaded before guides.php
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
@@ -203,6 +229,27 @@ if (isset($_GET['airports']) || $requestPath === 'airports') {
     exit;
 }
 
+// Discover via path, local development only. Production reaches the booth only
+// through the discover.aviationwx.org subdomain, so the path is not a public
+// route and falls through to the general 404 below.
+if (!isProduction() && $requestPath === 'discover') {
+    // In single-airport mode there is no tour to run, so redirect to the
+    // single airport dashboard the same way the other pages do.
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = getRequestProtocol();
+            $baseDomain = getBaseDomain();
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+
+    include 'pages/discover.php';
+    exit;
+}
+
 // Terms via path or query; production apex/www redirect to terms subdomain
 if (isset($_GET['terms']) || $requestPath === 'terms') {
     $termsQuery = $_GET;
@@ -268,7 +315,7 @@ if (!$isAirportRequest) {
             if (count($hostParts) >= 3) {
                 $potentialId = $hostParts[0];
                 // Exclude known non-airport subdomains
-                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed', 'airports'])) {
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed', 'airports', 'discover'])) {
                     $isAirportRequest = true;
                     $rawAirportIdentifier = $potentialId;
                 }
