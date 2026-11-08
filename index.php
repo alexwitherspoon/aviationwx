@@ -117,6 +117,24 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
+// Match discover subdomain exactly (e.g., discover.aviationwx.org)
+if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // A tour of a single airport is pointless, so single-airport deployments
+    // redirect to that dashboard the same way the other feature subdomains do.
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = getRequestProtocol();
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+
+    include 'pages/discover.php';
+    exit;
+}
+
 // Guides via path or query; production apex/www 301 to guides subdomain
 // Config must be loaded before guides.php
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
@@ -203,6 +221,26 @@ if (isset($_GET['airports']) || $requestPath === 'airports') {
     exit;
 }
 
+// Discover booth tour via path; production apex/www redirect to discover subdomain
+if ($requestPath === 'discover') {
+    // In single-airport mode there is no tour to run, so redirect to the
+    // single airport dashboard the same way the other pages do.
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = getRequestProtocol();
+            $baseDomain = getBaseDomain();
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+
+    redirectProductionApexToCanonicalSubdomain('discover', '/', $hostWithoutPort, $baseDomain);
+    include 'pages/discover.php';
+    exit;
+}
+
 // Terms via path or query; production apex/www redirect to terms subdomain
 if (isset($_GET['terms']) || $requestPath === 'terms') {
     $termsQuery = $_GET;
@@ -268,7 +306,7 @@ if (!$isAirportRequest) {
             if (count($hostParts) >= 3) {
                 $potentialId = $hostParts[0];
                 // Exclude known non-airport subdomains
-                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed', 'airports'])) {
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed', 'airports', 'discover'])) {
                     $isAirportRequest = true;
                     $rawAirportIdentifier = $potentialId;
                 }
