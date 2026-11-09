@@ -512,4 +512,21 @@ class FetchRunwaysTest extends TestCase
 
         $this->assertEmpty($segments);
     }
+
+    public function testHeadingBasedRunwayToSegment_InvalidIdentifierMatch_ReturnsNull(): void
+    {
+        // Runway 09/18 with headings 90/270 - the identifiers don't match the
+        // heading-based interpretation (heading 90° should be runway 09, but
+        // heading 270° should be runway 27, not 18)
+        $rw = [
+            'le_ident' => '09',
+            'he_ident' => '18',
+            'le_heading_degT' => 90,
+            'he_heading_degT' => 270,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
+    }
 }
