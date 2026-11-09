@@ -283,7 +283,7 @@ function handleGetWebcamImage(array $params, array $context): void
             $originalFile,
             $mtime,
             $opened['size'],
-            $stale ? $captureTimestamp : null
+            ($classification === 'stale') ? $captureTimestamp : null
         )) {
             fclose($opened['handle']);
             exit;
@@ -732,7 +732,7 @@ function sendImageResponse(
         $cacheFile,
         $mtime,
         $opened['size'],
-        $stale ? $timestamp : null
+        ($classification === 'stale') ? $timestamp : null
     )) {
         fclose($opened['handle']);
         return;
