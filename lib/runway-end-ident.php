@@ -71,7 +71,7 @@ function cardinalRunwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): b
     $headingA = parseCardinalRunwayEndHeading($endIdA);
     $headingB = parseCardinalRunwayEndHeading($endIdB);
 
-    return $headingA !== null && $headingB !== null && (($headingA + 180) % 360) === $headingB;
+    return $headingA !== null && $headingB !== null && abs($headingA - $headingB) === 180;
 }
 
 /**
