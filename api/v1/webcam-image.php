@@ -266,7 +266,8 @@ function handleGetWebcamImage(array $params, array $context): void
             $webcamRefresh,
             time()
         );
-        if ($classification === 'stale') {
+        $stale = $classification === 'stale';
+        if ($stale) {
             $headers = webcamStaleHeaders($airportId, $camIndex, $captureTimestamp, $webcam, $airport)['headers'];
         } elseif ($classification === 'near_boundary') {
             $headers = getNoStoreCacheHeaders(0);
@@ -283,7 +284,7 @@ function handleGetWebcamImage(array $params, array $context): void
             $originalFile,
             $mtime,
             $opened['size'],
-            ($classification === 'stale') ? $captureTimestamp : null
+            $stale ? $captureTimestamp : null
         )) {
             fclose($opened['handle']);
             exit;
@@ -714,7 +715,8 @@ function sendImageResponse(
         $webcamRefresh,
         time()
     );
-    if ($classification === 'stale') {
+    $stale = $classification === 'stale';
+    if ($stale) {
         $headers = webcamStaleHeaders($airportId, $camIndex, $timestamp, $cam, $airport)['headers'];
     } elseif ($classification === 'near_boundary') {
         $headers = getNoStoreCacheHeaders(0);
@@ -732,7 +734,7 @@ function sendImageResponse(
         $cacheFile,
         $mtime,
         $opened['size'],
-        ($classification === 'stale') ? $timestamp : null
+        $stale ? $timestamp : null
     )) {
         fclose($opened['handle']);
         return;
