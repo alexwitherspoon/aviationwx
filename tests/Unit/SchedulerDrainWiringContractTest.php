@@ -101,15 +101,18 @@ final class SchedulerDrainWiringContractTest extends TestCase
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
 
-        // Drain must follow FORCE_REBUILD probes and precede compose recreate.
-        $drainPos = strpos($workflow, 'scripts/deploy-drain-workers.sh');
-        $forceProbePos = strpos($workflow, 'Verifying Docker config files on server');
-        $upPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web');
+        // The drain pauses workers only for the recreate, so it must follow the
+        // image build and precede docker compose up. The build is always
+        // cache-busted and does not touch the running container, so pausing
+        // workers for its whole duration would leave observations stale.
+        $drainPos = strpos($workflow, 'chmod +x scripts/deploy-drain-workers.sh');
+        $buildPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web');
+        $upPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml up -d;');
         $this->assertNotFalse($drainPos);
-        $this->assertNotFalse($forceProbePos);
+        $this->assertNotFalse($buildPos);
         $this->assertNotFalse($upPos);
-        $this->assertTrue($forceProbePos < $drainPos, 'Docker config probe must run before drain');
-        $this->assertTrue($drainPos < $upPos, 'Drain must run before compose build/up');
+        $this->assertTrue($buildPos < $drainPos, 'Image build must run before drain');
+        $this->assertTrue($drainPos < $upPos, 'Drain must run before compose up');
         $this->assertStringContainsString(
             'Drain in-flight workers immediately before recreate',
             $workflow
