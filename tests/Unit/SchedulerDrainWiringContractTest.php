@@ -130,6 +130,17 @@ final class SchedulerDrainWiringContractTest extends TestCase
         );
     }
 
+    public function testWorkflow_RebuildsUnconditionally(): void
+    {
+        $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
+
+        // The image bakes the app code, so the cache-busted build must run on
+        // every deploy. Guard against a conditional FORCE_REBUILD slipping back
+        // in and silently skipping the build, drain, and up block.
+        $this->assertStringContainsString('FORCE_REBUILD="true"', $workflow);
+        $this->assertStringNotContainsString('FORCE_REBUILD="${{', $workflow);
+    }
+
     public function testWorkflow_DeployComposeDoesNotRedirectSshHeredocStdin(): void
     {
         $workflow = (string) file_get_contents($this->root . '/.github/workflows/deploy-docker.yml');
