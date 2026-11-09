@@ -165,21 +165,19 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Coordinate-less runway: keep if it's cardinal OR has heading data.
+            // Coordinate-less runway: keep if it's cardinal OR has numeric heading data.
             // We keep runways with heading data because the headings tell us the
             // actual orientation, even if the runway numbers aren't exact reciprocals
             // (e.g., Elk City, ID runway 14/35 where the runway isn't straight).
             if (cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
                 // Cardinal strips (N/S, NE/SW) are valid without coordinates.
-                $hasHeadingData = false;
             } elseif ($leHeadingIdx !== null && $heHeadingIdx !== null
-                && isset($row[$leHeadingIdx]) && $row[$leHeadingIdx] !== ''
-                && isset($row[$heHeadingIdx]) && $row[$heHeadingIdx] !== '') {
-                // Runway with heading data is valid, even if runway numbers aren't
-                // reciprocal (e.g., 14/35 for non-straight runway).
-                $hasHeadingData = true;
+                && isset($row[$leHeadingIdx]) && is_numeric($row[$leHeadingIdx])
+                && isset($row[$heHeadingIdx]) && is_numeric($row[$heHeadingIdx])) {
+                // Runway with numeric heading data is valid, even if runway numbers
+                // aren't reciprocal (e.g., 14/35 for non-straight runway).
             } else {
-                // Neither cardinal nor heading-based valid; skip.
+                // Neither cardinal nor numeric heading-based valid; skip.
                 continue;
             }
         }
