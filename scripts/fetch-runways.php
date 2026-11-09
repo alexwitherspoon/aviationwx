@@ -449,9 +449,9 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
  * The runtime will convert true → magnetic using the airport's declination.
  *
  * @param array $rw Runway row with le_ident, he_ident, and heading fields
- * @param float $declinationDeg Airport magnetic declination (positive = East)
  * @param string $source Source label ('faa', 'ourairports')
- * @return array<string, mixed>|null Segment, or null when headings are missing
+ * @return array<string, mixed>|null Segment, or null when headings are missing or
+ *         runway ends don't match the heading-based orientation
  */
 function headingBasedRunwayToSegment(array $rw, string $source): ?array
 {
@@ -480,6 +480,25 @@ function headingBasedRunwayToSegment(array $rw, string $source): ?array
     $delta = fmod(abs($leHeading - $heHeading), 360.0);
     $delta = min($delta, 360.0 - $delta);
     if (abs($delta - 180.0) > 20.0) {
+        return null;
+    }
+
+    // Validate that runway identifiers match the heading-based interpretation.
+    // Convert headings to runway numbers and compare (e.g., 90° -> 09, 270° -> 27).
+    // For non-straight runways (like 14/35 where 14+18=32≠35), allow some tolerance.
+    // We use 2 runway number units (20°) tolerance for non-straight runways.
+    $leRunwayNum = (int) round($leHeading / 10);
+    $heRunwayNum = (int) round($heHeading / 10);
+
+    // Parse the runway identifiers to get their numeric components
+    $leNum = (int) substr(trim($leIdent), 0, 2);
+    $heNum = (int) substr(trim($heIdent), 0, 2);
+
+    // Check if the identifier numbers are consistent with heading-based numbers
+    // Allow 2 runway number units (20°) tolerance for non-straight runways
+    $leDiff = abs($leRunwayNum - $leNum);
+    $heDiff = abs($heRunwayNum - $heNum);
+    if ($leDiff > 2 || $heDiff > 2) {
         return null;
     }
 
