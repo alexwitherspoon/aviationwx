@@ -49,7 +49,6 @@ if ($requestPath === 'api/docs' || strpos($requestPath, 'api/docs/') === 0) {
 }
 
 $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
-$hostWithoutPort = preg_replace('/:\d+$/', '', $hostWithoutPort);
 if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
     // Route to status page
     include 'pages/status.php';
@@ -79,6 +78,7 @@ if ($config === null) {
 
 // Check for guides subdomain (after config is loaded so getBaseDomain() works)
 $baseDomain = getBaseDomain();
+$hostWithoutPort = preg_replace('/:\d+$/', '', $host);
 // Match guides subdomain exactly (e.g., guides.aviationwx.org)
 if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // In single-airport mode, redirect to the single airport dashboard
@@ -290,7 +290,7 @@ if (isset($_GET['embed'])) {
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
     // Remove port from host if present
-    $hostWithoutPort = preg_replace('/:\d+$/', '', $hostWithoutPort);
+    $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
     $baseDomain = getBaseDomain();
     
     // In non-production environments, skip subdomain parsing for local development hosts
@@ -306,7 +306,7 @@ if (!$isAirportRequest) {
     if (!$isLocalDevHost) {
         // Match subdomain pattern (e.g., kspb.aviationwx.org or 03s.aviationwx.org)
         $pattern = '/^([a-z0-9-]{3,50})\.' . preg_quote($baseDomain, '/') . '$/';
-        if (preg_match($pattern, $host, $matches)) {
+        if (preg_match($pattern, $hostWithoutPort, $matches)) {
             $isAirportRequest = true;
             $rawAirportIdentifier = $matches[1];
         } else {
