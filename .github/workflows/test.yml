@@ -100,6 +100,7 @@ jobs:
             php vendor/bin/phpunit \
               tests/Integration/PublicApiWebcamTest.php \
               tests/Integration/PublicApiWifiLoggerUploadTest.php \
+              tests/Integration/SubdomainRoutingTest.php \
               --testdox --no-coverage
 
       - name: Stop isolated API test stack
