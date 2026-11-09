@@ -58,10 +58,12 @@ function parseCardinalRunwayEndHeading(string $endId): ?int
 /**
  * Parse a runway end ident into magnetic heading degrees.
  *
- * Cardinal direction idents resolve to their magnetic bearing; otherwise the
- * ident must be a runway number (1-36, optional L/C/R) and a non-numeric,
- * non-cardinal ident returns null. Unlike parseIdentHeading(), does not treat
- * invalid idents as 360° north.
+ * Cardinal direction idents resolve to their magnetic bearing, numeric idents
+ * resolve to their runway number times ten, and any other ident returns null.
+ * Unlike parseIdentHeading(), does not treat invalid idents as 360° north.
+ *
+ * @param string $endId Runway end ident, numeric (09, 28L) or cardinal (N, NE)
+ * @return float|null Magnetic heading in degrees, or null when not numeric or cardinal
  */
 function parseRunwayEndIdentMagneticHeading(string $endId): ?float
 {

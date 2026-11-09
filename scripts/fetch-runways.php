@@ -430,9 +430,12 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
 }
 
 /**
- * Transform raw runway endpoints to normalized segments
+ * Build normalized compass segments from raw runway rows.
  *
- * @param array $runways Raw runways with lat1,lon1,lat2,lon2
+ * Coordinate rows are projected and scaled to fit; coordinate-less cardinal
+ * rows are synthesized as through-center segments from their ident bearing.
+ *
+ * @param array<array<string, mixed>> $runways Runway rows
  * @param float $centerLat Airport center latitude
  * @param float $centerLon Airport center longitude
  * @return array Segments in normalized -1..1 space
