@@ -165,10 +165,9 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep a full
-            // cardinal pair so the compass can draw a line, drop anything else.
-            if (parseCardinalRunwayEndHeading($leIdentVal) === null
-                || parseCardinalRunwayEndHeading($heIdentVal) === null) {
+            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep an
+            // opposite cardinal pair so the compass can draw a line, drop the rest.
+            if (!cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
                 continue;
             }
         }
@@ -302,10 +301,9 @@ function parseFaaRunwaysFromHandle($handle): array
         $heIdent = count($parts) === 2 ? trim($parts[1]) : $rwyId;
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal strips (N/S, NE/SW) have no end coordinates; keep a full
-            // cardinal pair for compass rendering, drop anything else.
-            if (parseCardinalRunwayEndHeading($leIdent) === null
-                || parseCardinalRunwayEndHeading($heIdent) === null) {
+            // Cardinal strips (N/S, NE/SW) have no end coordinates; keep an
+            // opposite cardinal pair for compass rendering, drop the rest.
+            if (!cardinalRunwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
                 continue;
             }
         }
@@ -408,16 +406,15 @@ function runwayHasCoordinates(array $runway): bool
  * @param string $leIdent Low-end ident (e.g. N, NE)
  * @param string $heIdent High-end ident (e.g. S, SW)
  * @param string $source Source label ('faa', 'ourairports')
- * @return array<string, mixed>|null Segment, or null when either end is not cardinal
+ * @return array<string, mixed>|null Segment, or null when the ends are not a reciprocal cardinal pair
  */
 function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $source): ?array
 {
-    $leHeading = parseCardinalRunwayEndHeading($leIdent);
-    $heHeading = parseCardinalRunwayEndHeading($heIdent);
-    if ($leHeading === null || $heHeading === null) {
+    if (!cardinalRunwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
         return null;
     }
 
+    $leHeading = parseCardinalRunwayEndHeading($leIdent);
     $angle = ($leHeading * M_PI) / 180;
     $length = 0.9;
 

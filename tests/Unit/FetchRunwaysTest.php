@@ -418,4 +418,23 @@ class FetchRunwaysTest extends TestCase
         $this->assertNull($parsed['02ID'][0]['lat1']);
         $this->assertArrayNotHasKey('12ID', $parsed);
     }
+
+    public function testParseOurAirportsRunwaysFromPath_NonOppositeCardinalWithoutCoordinates_DropsRow(): void
+    {
+        $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
+        file_put_contents(
+            $path,
+            "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
+            . "1,KSKEW,2000,40,TURF,1,0,N,E,,,,,,0,0\n",
+            LOCK_EX
+        );
+
+        $this->assertSame([], parseOurAirportsRunwaysFromPath($path));
+    }
+
+    public function testCardinalRunwayToSegment_NonOpposite_ReturnsNull(): void
+    {
+        $this->assertNull(cardinalRunwayToSegment('N', 'E', 'ourairports'));
+        $this->assertNull(cardinalRunwayToSegment('N', 'N', 'ourairports'));
+    }
 }

@@ -56,6 +56,25 @@ function parseCardinalRunwayEndHeading(string $endId): ?int
 }
 
 /**
+ * Whether two cardinal runway end idents are opposite ends of the same strip.
+ *
+ * Cardinal runways come in reciprocal pairs (N/S, NE/SW, E/W, NW/SE). Any
+ * other pairing, such as N/E or a repeated N/N, is malformed and must be
+ * dropped rather than drawn as a bogus compass line.
+ *
+ * @param string $endIdA First cardinal end ident (e.g. N, NE)
+ * @param string $endIdB Second cardinal end ident (e.g. S, SW)
+ * @return bool True when both idents are cardinal and 180° apart
+ */
+function cardinalRunwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): bool
+{
+    $headingA = parseCardinalRunwayEndHeading($endIdA);
+    $headingB = parseCardinalRunwayEndHeading($endIdB);
+
+    return $headingA !== null && $headingB !== null && (($headingA + 180) % 360) === $headingB;
+}
+
+/**
  * Parse a runway end ident into magnetic heading degrees.
  *
  * Cardinal direction idents resolve to their magnetic bearing, numeric idents

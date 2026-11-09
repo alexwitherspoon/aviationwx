@@ -56,4 +56,20 @@ class RunwayEndIdentTest extends TestCase
         $this->assertNull(parseCardinalRunwayEndHeading('09'));
         $this->assertNull(parseCardinalRunwayEndHeading('NNE'));
     }
+
+    public function testCardinalRunwayEndIdentsAreReciprocal_Opposite_ReturnsTrue(): void
+    {
+        $this->assertTrue(cardinalRunwayEndIdentsAreReciprocal('N', 'S'));
+        $this->assertTrue(cardinalRunwayEndIdentsAreReciprocal('NE', 'SW'));
+        $this->assertTrue(cardinalRunwayEndIdentsAreReciprocal('E', 'W'));
+        $this->assertTrue(cardinalRunwayEndIdentsAreReciprocal('nw', 'se'));
+    }
+
+    public function testCardinalRunwayEndIdentsAreReciprocal_NonOpposite_ReturnsFalse(): void
+    {
+        $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('N', 'E'));
+        $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('N', 'N'));
+        $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('N', '27'));
+        $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('09', '27'));
+    }
 }
