@@ -279,6 +279,9 @@ function normalizeLatLonToSegment(array $center, array $p0, array $p1, string $i
 /**
  * Convert manual runway config (heading-based) to segment format
  *
+ * The segment shape mirrors cardinalRunwayToSegment() in
+ * scripts/fetch-runways.php; keep the two in sync.
+ *
  * @param array $runways Array of { name, heading_1, heading_2 }
  * @return array Array of segments (lines through center)
  */
