@@ -262,20 +262,22 @@ class FetchRunwaysTest extends TestCase
         $this->assertSame(200, $meta['fetched_at'] ?? null);
     }
 
-    public function testParseOurAirportsRunwaysFromPath_MissingCoordinates_SkipsRow(): void
+    public function testParseOurAirportsRunwaysFromPath_MissingCoordinates_HeadingFallback(): void
     {
         $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
         file_put_contents(
             $path,
             "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
-            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,90,270,0,0\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,,90,270,0,0\n"
             . "2,KTEST,3000,75,ASPH,1,0,09,27,45.0,-122.0,45.1,-121.9,90,270,0,0\n",
             LOCK_EX
         );
 
         $parsed = parseOurAirportsRunwaysFromPath($path);
-        $this->assertArrayNotHasKey('KBAD', $parsed);
+        // KBAD has missing coordinates but valid heading data (90/270), so it's kept
+        $this->assertArrayHasKey('KBAD', $parsed);
         $this->assertArrayHasKey('KTEST', $parsed);
+        $this->assertSame(3000, $parsed['KBAD'][0]['length_ft']);
         $this->assertSame(3000, $parsed['KTEST'][0]['length_ft']);
     }
 
@@ -331,14 +333,22 @@ class FetchRunwaysTest extends TestCase
         file_put_contents(
             $path,
             "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
-            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,90,270,0,0\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,,90,270,0,0\n"
             . "2,KCARD,2000,40,TURF,1,0,N,S,,,,,,0,0\n",
             LOCK_EX
         );
 
         $parsed = parseOurAirportsRunwaysFromPath($path);
-        $this->assertArrayNotHasKey('KBAD', $parsed);
+        // KBAD now kept because heading-based synthesis can handle it
+        $this->assertArrayHasKey('KBAD', $parsed);
         $this->assertArrayHasKey('KCARD', $parsed);
+        // KBAD has coordinate-less runway with heading data
+        $this->assertNull($parsed['KBAD'][0]['lat1']);
+        $this->assertSame('09', $parsed['KBAD'][0]['le_ident']);
+        $this->assertSame('27', $parsed['KBAD'][0]['he_ident']);
+        $this->assertSame(90, $parsed['KBAD'][0]['le_heading_degT']);
+        $this->assertSame(270, $parsed['KBAD'][0]['he_heading_degT']);
+        // KCARD has cardinal runway (no coordinates)
         $this->assertNull($parsed['KCARD'][0]['lat1']);
         $this->assertSame('N', $parsed['KCARD'][0]['le_ident']);
         $this->assertSame('S', $parsed['KCARD'][0]['he_ident']);

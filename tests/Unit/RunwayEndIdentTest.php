@@ -76,4 +76,30 @@ class RunwayEndIdentTest extends TestCase
         $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('N', '27'));
         $this->assertFalse(cardinalRunwayEndIdentsAreReciprocal('09', '27'));
     }
+
+    public function testRunwayEndIdentsAreReciprocal_NumericWithSuffixes(): void
+    {
+        // Same suffixes (L/L, R/R)
+        $this->assertTrue(runwayEndIdentsAreReciprocal('09L', '27L'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('09R', '27R'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('15C', '33C'));
+        
+        // Opposite suffixes (L/R, R/L)
+        $this->assertTrue(runwayEndIdentsAreReciprocal('09L', '27R'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('09R', '27L'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('15L', '33R'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('15R', '33L'));
+        
+        // Non-reciprocal numbers with same suffix
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09L', '15L'));
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09R', '15R'));
+        
+        // Non-reciprocal numbers with opposite suffix
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09L', '15R'));
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09R', '15L'));
+        
+        // Same ident (should be false)
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09L', '09L'));
+        $this->assertFalse(runwayEndIdentsAreReciprocal('09R', '09R'));
+    }
 }

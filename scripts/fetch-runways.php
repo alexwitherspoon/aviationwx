@@ -165,9 +165,19 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep an
-            // opposite cardinal pair so the compass can draw a line, drop the rest.
-            if (!cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
+            // Coordinate-less runway: keep if it's cardinal OR has valid numeric reciprocal
+            // runway ends with heading data for heading-based synthesis.
+            if (cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
+                // Cardinal strips (N/S, NE/SW) are valid without coordinates.
+                $hasHeadingData = false;
+            } elseif (runwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)
+                && $leHeadingIdx !== null && $heHeadingIdx !== null
+                && isset($row[$leHeadingIdx]) && $row[$leHeadingIdx] !== ''
+                && isset($row[$heHeadingIdx]) && $row[$heHeadingIdx] !== '') {
+                // Numeric runway ends (15/33, 09L/27R) with heading data are valid.
+                $hasHeadingData = true;
+            } else {
+                // Neither cardinal nor heading-based valid; skip.
                 continue;
             }
         }
