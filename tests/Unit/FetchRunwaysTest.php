@@ -324,4 +324,71 @@ class FetchRunwaysTest extends TestCase
 
         $this->assertSame(3, readPreviousRunwaysCacheAirportCount());
     }
+
+    public function testParseOurAirportsRunwaysFromPath_CardinalWithoutCoordinates_KeepsRow(): void
+    {
+        $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
+        file_put_contents(
+            $path,
+            "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,90,270,0,0\n"
+            . "2,KCARD,2000,40,TURF,1,0,N,S,,,,,,0,0\n",
+            LOCK_EX
+        );
+
+        $parsed = parseOurAirportsRunwaysFromPath($path);
+        $this->assertArrayNotHasKey('KBAD', $parsed);
+        $this->assertArrayHasKey('KCARD', $parsed);
+        $this->assertNull($parsed['KCARD'][0]['lat1']);
+        $this->assertSame('N', $parsed['KCARD'][0]['le_ident']);
+        $this->assertSame('S', $parsed['KCARD'][0]['he_ident']);
+    }
+
+    public function testRunwaysToSegments_CardinalRunway_SynthesizesNorthSouthSegment(): void
+    {
+        $segments = runwaysToSegments(
+            [
+                [
+                    'lat1' => null,
+                    'lon1' => null,
+                    'lat2' => null,
+                    'lon2' => null,
+                    'le_ident' => 'N',
+                    'he_ident' => 'S',
+                    'source' => 'ourairports',
+                ],
+            ],
+            45.0,
+            -120.0
+        );
+
+        $this->assertCount(1, $segments);
+        $this->assertSame('N', $segments[0]['le_ident']);
+        $this->assertSame('ourairports', $segments[0]['source']);
+        $this->assertEqualsWithDelta(0.0, $segments[0]['start'][0], 0.0001);
+        $this->assertEqualsWithDelta(0.9, $segments[0]['start'][1], 0.0001);
+        $this->assertEqualsWithDelta(0.0, $segments[0]['end'][0], 0.0001);
+        $this->assertEqualsWithDelta(-0.9, $segments[0]['end'][1], 0.0001);
+    }
+
+    public function testRunwaysToSegments_NonCardinalRunwayWithoutCoordinates_SkipsRow(): void
+    {
+        $segments = runwaysToSegments(
+            [
+                [
+                    'lat1' => null,
+                    'lon1' => null,
+                    'lat2' => null,
+                    'lon2' => null,
+                    'le_ident' => '09',
+                    'he_ident' => '27',
+                    'source' => 'ourairports',
+                ],
+            ],
+            45.0,
+            -120.0
+        );
+
+        $this->assertSame([], $segments);
+    }
 }
