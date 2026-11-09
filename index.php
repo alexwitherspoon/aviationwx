@@ -49,6 +49,7 @@ if ($requestPath === 'api/docs' || strpos($requestPath, 'api/docs/') === 0) {
 }
 
 $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
+$hostWithoutPort = preg_replace('/:\d+$/', '', $hostWithoutPort);
 if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
     // Route to status page
     include 'pages/status.php';
@@ -78,9 +79,8 @@ if ($config === null) {
 
 // Check for guides subdomain (after config is loaded so getBaseDomain() works)
 $baseDomain = getBaseDomain();
-$hostWithoutPort = preg_replace('/:\d+$/', '', $host);
 // Match guides subdomain exactly (e.g., guides.aviationwx.org)
-if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // In single-airport mode, redirect to the single airport dashboard
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
@@ -98,14 +98,14 @@ if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 }
 
 // Match terms subdomain exactly (e.g., terms.aviationwx.org)
-if (preg_match('/^terms\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+if (preg_match('/^terms\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // Route to terms of service page
     include 'pages/terms.php';
     exit;
 }
 
 // Match embed subdomain exactly (e.g., embed.aviationwx.org)
-if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // Check if render=1 parameter is set - if so, show embed widget
     // Otherwise show configurator (with optional pre-selected airport from URL)
     if (isset($_GET['render']) && $_GET['render'] === '1' && isset($_GET['airport']) && !empty($_GET['airport'])) {
@@ -120,7 +120,7 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 // Match discover subdomain exactly (e.g., discover.aviationwx.org)
 // Reserves the label: this block runs before airport-subdomain detection, so
 // no airport id can ever claim the discover host for a dashboard.
-if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+if (preg_match('/^discover\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // Serve the shell only for the bare host and the /discover path. The shell
     // iframes /airports and /?airport= on this same host, so those requests
     // must fall through to their real pages below instead of nesting the shell.
@@ -188,7 +188,7 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
 }
 
 // Match airports subdomain exactly (e.g., airports.aviationwx.org)
-if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $hostWithoutPort)) {
     // In single-airport mode, redirect to the single airport dashboard
     if (isSingleAirportMode()) {
         $singleAirportId = getSingleAirportId();
@@ -290,7 +290,7 @@ if (isset($_GET['embed'])) {
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
     // Remove port from host if present
-    $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
+    $hostWithoutPort = preg_replace('/:\d+$/', '', $hostWithoutPort);
     $baseDomain = getBaseDomain();
     
     // In non-production environments, skip subdomain parsing for local development hosts
