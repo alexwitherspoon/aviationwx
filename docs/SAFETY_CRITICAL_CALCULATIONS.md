@@ -546,6 +546,7 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - **Lat/lon runways** (manual or FAA/OurAirports): Geographic bearing = true north. Rotated to magnetic in `getRunwaySegmentsForAirport()` before returning.
 - **Heading-based runways** (`heading_1`/`heading_2`): Runway numbers = magnetic north. No rotation.
 - **Cardinal runways** (compass-point idents, e.g. `N/S`, `NE/SW`): no coordinates or numeric designator, so the ident resolves to its fixed magnetic bearing and a through-center segment is synthesized. No rotation.
+- **Heading-based synthesis** (numeric runway numbers without coordinates): When OurAirports or FAA publish runway end identifiers (e.g. `15/33`) with true north headings but no end coordinates, segments are synthesized from the true headings. The runtime converts true → magnetic using the airport's declination.
 
 ### Runway display (dashboard per-end HW/XW)
 
