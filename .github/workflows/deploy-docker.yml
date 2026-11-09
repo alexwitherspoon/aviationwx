@@ -1448,70 +1448,6 @@ jobs:
           echo "  • Config: /etc/fail2ban/jail.d/aviationwx-sshd.conf"
           EOF
 
-      - name: Check for Docker config changes
-        id: docker-config-changed
-        run: |
-          echo "Checking for Docker configuration file changes..."
-          
-          # workflow_run/workflow_dispatch only - github.event.before unavailable
-          PREV_SHA="${{ steps.previous-commit.outputs.previous_commit_sha }}"
-          CURRENT_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
-          
-          # Docker config files that require image rebuild
-          DOCKER_CONFIG_FILES=(
-            "docker/Dockerfile"
-            "docker/proftpd.conf"
-            "docker/sshd_config"
-            "docker/docker-entrypoint.sh"
-            "scripts/set-cache-permissions.sh"
-            "scripts/repair-sftp-chroot-permissions.sh"
-            "scripts/repair-ftp-upload-permissions.sh"
-            "scripts/maybe-run-refresh-upload-endpoints.sh"
-            "scripts/refresh-upload-endpoints.php"
-            "docker/logrotate-proftpd"
-            "docker/logrotate-sshd"
-            "docker/fail2ban-jail.conf"
-            "docker/fail2ban-proftpd.conf"
-            "docker/fail2ban-sshd.conf"
-            "docker/docker-compose.prod.yml"
-            "scripts/service-watchdog.sh"
-            "scripts/setup-letsencrypt.sh"
-            "scripts/certbot-deploy-hook.sh"
-            "scripts/configure-proftpd.sh"
-            "scripts/enable-upload-ftps.sh"
-            "scripts/create-sftp-user.sh"
-            "config/crontab"
-          )
-          
-          CONFIG_CHANGED="false"
-          
-          # If we have a previous commit, check what changed
-          if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "0000000000000000000000000000000000000000" ]; then
-            echo "Comparing changes from $PREV_SHA to $CURRENT_SHA..."
-            for file in "${DOCKER_CONFIG_FILES[@]}"; do
-              if git diff --name-only "$PREV_SHA" "$CURRENT_SHA" | grep -q "^${file}$"; then
-                echo "  ✓ $file changed"
-                CONFIG_CHANGED="true"
-              fi
-            done
-          else
-            # No previous commit (initial deploy or can't determine), assume config might have changed
-            echo "⚠️  Cannot determine previous commit, will check for config changes on server"
-            CONFIG_CHANGED="unknown"
-          fi
-          
-          if [ "$CONFIG_CHANGED" = "true" ]; then
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "⚠️  Docker configuration files changed - will force rebuild"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          elif [ "$CONFIG_CHANGED" = "unknown" ]; then
-            echo "⚠️  Will verify config changes on server and rebuild if needed"
-          else
-            echo "✓ No Docker configuration file changes detected"
-          fi
-          
-          echo "config_changed=$CONFIG_CHANGED" >> $GITHUB_OUTPUT
-
       - name: Deploy environment configuration
         run: |
           GIT_SHA="${{ steps.determine-sha.outputs.deploy_sha_short }}"
@@ -1556,8 +1492,11 @@ jobs:
           GIT_SHA="${{ steps.determine-sha.outputs.deploy_sha_short }}"
           echo "Deploying with GIT_SHA: ${GIT_SHA}"
           
-          # Determine if we need to force rebuild
-          FORCE_REBUILD="${{ steps.docker-config-changed.outputs.config_changed }}"
+          # The image bakes the whole app tree (Dockerfile COPY . /var/www/html), so a
+          # Docker-config-only rebuild trigger left app-code changes (index.php,
+          # lib/, pages/, api/) running on a stale image. Always force a full,
+          # cache-busted rebuild so the baked code matches the deployed SHA.
+          FORCE_REBUILD="true"
           
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
           set -euo pipefail
@@ -1575,63 +1514,6 @@ jobs:
           export DOCKER_BUILDKIT=1
           export COMPOSE_DOCKER_CLI_BUILD=1
           
-          # Check for Docker config changes on server (fallback if git diff didn't work)
-          if [ "$FORCE_REBUILD" = "unknown" ] || [ "$FORCE_REBUILD" = "false" ]; then
-            echo "Verifying Docker config files on server..."
-            CONFIG_CHANGED="false"
-            
-            # Docker config files that require image rebuild
-            DOCKER_CONFIG_FILES=(
-              "docker/Dockerfile"
-              "docker/proftpd.conf"
-              "docker/sshd_config"
-              "docker/docker-entrypoint.sh"
-              "scripts/set-cache-permissions.sh"
-              "scripts/repair-sftp-chroot-permissions.sh"
-              "scripts/repair-ftp-upload-permissions.sh"
-              "scripts/maybe-run-refresh-upload-endpoints.sh"
-              "scripts/refresh-upload-endpoints.php"
-              "docker/logrotate-proftpd"
-              "docker/logrotate-sshd"
-              "docker/fail2ban-jail.conf"
-              "docker/fail2ban-proftpd.conf"
-              "docker/fail2ban-sshd.conf"
-              "docker/docker-compose.prod.yml"
-              "scripts/service-watchdog.sh"
-              "scripts/setup-letsencrypt.sh"
-              "scripts/certbot-deploy-hook.sh"
-              "scripts/configure-proftpd.sh"
-              "scripts/enable-upload-ftps.sh"
-              "scripts/create-sftp-user.sh"
-              "config/crontab"
-            )
-            
-            # Check if any config file was modified more recently than the Docker image
-            if docker images aviationwx:latest --format "{{.CreatedAt}}" 2>/dev/null | head -1 | grep -q .; then
-              IMAGE_TIME=\$(docker images aviationwx:latest --format "{{.CreatedAt}}" 2>/dev/null | head -1)
-              IMAGE_TIMESTAMP=\$(date -d "\$IMAGE_TIME" +%s 2>/dev/null || echo 0)
-              
-              for file in "\${DOCKER_CONFIG_FILES[@]}"; do
-                if [ -f "\$file" ]; then
-                  FILE_TIMESTAMP=\$(stat -c %Y "\$file" 2>/dev/null || stat -f %m "\$file" 2>/dev/null || echo 0)
-                  if [ "\$FILE_TIMESTAMP" -gt "\$IMAGE_TIMESTAMP" ]; then
-                    echo "  ✓ \$file is newer than Docker image"
-                    CONFIG_CHANGED="true"
-                  fi
-                fi
-              done
-            else
-              # No image exists, must rebuild
-              CONFIG_CHANGED="true"
-            fi
-            
-            if [ "\$CONFIG_CHANGED" = "true" ]; then
-              FORCE_REBUILD="true"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "⚠️  Docker configuration files changed - will force rebuild"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            fi
-          fi
 
           clear_deploy_drain_markers() {
             # Shared host mount; no host PHP. Entrypoint also clears on successful recreate.
@@ -1647,10 +1529,12 @@ jobs:
             echo "⚠️  deploy-drain-workers.sh missing - skipping worker drain"
           fi
           
-          # Build arguments for cache invalidation
+          # Always do a full, cache-busted rebuild so the baked app code matches the
+          # deployed SHA. The image COPYs the whole tree, so skipping the rebuild
+          # on app-only changes leaves a stale image.
           if [ "$FORCE_REBUILD" = "true" ]; then
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Forcing rebuild without cache due to config changes..."
+            echo "Rebuilding the image without cache to bake the latest code..."
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             # Force rebuild without cache
             if ! docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web; then
@@ -1669,25 +1553,6 @@ jobs:
                 "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
             fi
             echo "✓ Containers rebuilt and started successfully (no cache)"
-          elif ! docker compose -f docker/docker-compose.prod.yml build --pull web; then
-            echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
-            if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
-              clear_deploy_drain_markers
-              deployment_error \
-                "Docker Build/Start" \
-                "Both build attempts (with --pull and without) failed" \
-                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Verify all required files are present (check Dockerfile COPY commands)\n3. Check network connectivity for pulling base images: ping registry-1.docker.io\n4. Check disk space: df -h\n5. Check Docker daemon: systemctl status docker\n6. Review Docker logs: journalctl -u docker\n7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
-            fi
-            echo "✓ Containers built and started successfully"
-          else
-            if ! docker compose -f docker/docker-compose.prod.yml up -d; then
-              clear_deploy_drain_markers
-              deployment_error \
-                "Container Startup" \
-                "Failed to start containers after build" \
-                "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
-            fi
-            echo "✓ Containers built and started successfully"
           fi
 
           # If compose was a no-op, entrypoint never cleared markers - unstick the live scheduler.
