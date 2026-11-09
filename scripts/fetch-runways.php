@@ -453,13 +453,13 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
  * @param string $source Source label ('faa', 'ourairports')
  * @return array<string, mixed>|null Segment, or null when headings are missing
  */
-function headingBasedRunwayToSegment(array $rw, float $declinationDeg, string $source): ?array
+function headingBasedRunwayToSegment(array $rw, string $source): ?array
 {
     $leIdent = $rw['le_ident'] ?? '';
     $heIdent = $rw['he_ident'] ?? '';
 
     // Reject same ident (e.g., 15/15) - clearly invalid data
-    if ($leIdent === $heIdent) {
+    if (strcasecmp(trim($leIdent), trim($heIdent)) === 0) {
         return null;
     }
 
@@ -474,6 +474,14 @@ function headingBasedRunwayToSegment(array $rw, float $declinationDeg, string $s
     // Use true headings directly; runtime will convert to magnetic
     $leHeading = (float) $leHeading;
     $heHeading = (float) $heHeading;
+
+    // Headings must be roughly opposite (within 20 degrees tolerance).
+    // Delta of 180° is perfectly opposite; 160-200° is acceptable.
+    $delta = fmod(abs($leHeading - $heHeading), 360.0);
+    $delta = min($delta, 360.0 - $delta);
+    if (abs($delta - 180.0) > 20.0) {
+        return null;
+    }
 
     // Use the low-end heading for the segment angle
     $angle = ($leHeading * M_PI) / 180;
@@ -500,11 +508,9 @@ function headingBasedRunwayToSegment(array $rw, float $declinationDeg, string $s
  * @param array<array<string, mixed>> $runways Runway rows
  * @param float $centerLat Airport center latitude
  * @param float $centerLon Airport center longitude
- * @param float $declinationDeg Airport magnetic declination (positive = East), used when
- *        runway headings need conversion from true to magnetic north
  * @return array Segments in normalized -1..1 space
  */
-function runwaysToSegments(array $runways, float $centerLat, float $centerLon, float $declinationDeg = 0.0): array {
+function runwaysToSegments(array $runways, float $centerLat, float $centerLon): array {
     $scaleLon = 111320 * cos($centerLat * M_PI / 180) / 1000;
     $scaleLat = 110540 / 1000;
 
@@ -550,7 +556,6 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon, f
             // Try heading-based (numeric runway numbers with true/magnetic headings)
             $headingBased = headingBasedRunwayToSegment(
                 $rw,
-                $declinationDeg,
                 (string) ($rw['source'] ?? 'programmatic')
             );
             if ($headingBased !== null) {
