@@ -391,4 +391,30 @@ class FetchRunwaysTest extends TestCase
 
         $this->assertSame([], $segments);
     }
+
+    public function testParseOurAirportsRunwaysFromPath_PartialCardinalWithoutCoordinates_DropsRow(): void
+    {
+        $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
+        file_put_contents(
+            $path,
+            "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
+            . "1,KMIX,2000,40,TURF,1,0,N,27,,,,,,0,0\n",
+            LOCK_EX
+        );
+
+        $this->assertSame([], parseOurAirportsRunwaysFromPath($path));
+    }
+
+    public function testParseFaaRunways_CardinalWithoutCoordinates_KeepsRow(): void
+    {
+        $csv = "ARPT_ID,RWY_ID,LAT1_DECIMAL,LONG1_DECIMAL,LAT2_DECIMAL,LONG2_DECIMAL\n"
+            . "02ID,N/S,,,,\n"
+            . "12ID,18/36,,,,\n";
+
+        $parsed = parseFaaRunways($csv);
+        $this->assertArrayHasKey('02ID', $parsed);
+        $this->assertSame('N', $parsed['02ID'][0]['le_ident']);
+        $this->assertNull($parsed['02ID'][0]['lat1']);
+        $this->assertArrayNotHasKey('12ID', $parsed);
+    }
 }

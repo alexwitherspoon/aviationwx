@@ -165,10 +165,10 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal-named strips (N/S, NE/SW) never carry coordinates; keep them
-            // so the compass can still draw a line. Drop other coordinate-less rows.
+            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep a full
+            // cardinal pair so the compass can draw a line, drop anything else.
             if (parseCardinalRunwayEndHeading($leIdentVal) === null
-                && parseCardinalRunwayEndHeading($heIdentVal) === null) {
+                || parseCardinalRunwayEndHeading($heIdentVal) === null) {
                 continue;
             }
         }
@@ -302,10 +302,10 @@ function parseFaaRunwaysFromHandle($handle): array
         $heIdent = count($parts) === 2 ? trim($parts[1]) : $rwyId;
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal-named strips (N/S, NE/SW) have no end coordinates; keep them
-            // for compass rendering. Drop other coordinate-less rows.
+            // Cardinal strips (N/S, NE/SW) have no end coordinates; keep a full
+            // cardinal pair for compass rendering, drop anything else.
             if (parseCardinalRunwayEndHeading($leIdent) === null
-                && parseCardinalRunwayEndHeading($heIdent) === null) {
+                || parseCardinalRunwayEndHeading($heIdent) === null) {
                 continue;
             }
         }
