@@ -108,3 +108,35 @@ function sendNoStoreCacheHeaders(int $maxAgeSeconds = 0): void
     }
 }
 
+/**
+ * Classify a webcam capture's cache policy from its age against the fail-closed
+ * boundary.
+ *
+ * Three outcomes, in order:
+ * - 'stale': capture age exceeds the fail-closed threshold. Served as the last
+ *   known good frame with no-store.
+ * - 'near_boundary': still fresh but within the refresh plus stale-while-
+ *   revalidate window of the threshold. Served no-store so a cached copy cannot
+ *   outlive the boundary.
+ * - 'fresh': comfortably under the threshold. Served with the normal refresh TTL.
+ *
+ * Pure so the boundary logic is unit-testable without HTTP or wall-clock time.
+ *
+ * @param int $timestamp Capture timestamp (Unix); non-positive means no capture
+ * @param int $failclosedSeconds Age at which the capture fails closed (stale)
+ * @param int $refreshSeconds Webcam refresh interval
+ * @param int $now Current Unix time, injected for determinism
+ * @return string 'stale', 'near_boundary', or 'fresh'
+ */
+function webcamCaptureCacheClassification(int $timestamp, int $failclosedSeconds, int $refreshSeconds, int $now): string
+{
+    if ($timestamp > 0 && ($now - $timestamp) > $failclosedSeconds) {
+        return 'stale';
+    }
+    $remaining = max(0, $failclosedSeconds - max(0, $now - $timestamp));
+    if ($remaining <= STALE_WHILE_REVALIDATE_SECONDS + $refreshSeconds) {
+        return 'near_boundary';
+    }
+    return 'fresh';
+}
+
