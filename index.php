@@ -306,7 +306,8 @@ if (!$isAirportRequest) {
     if (!$isLocalDevHost) {
         // Match subdomain pattern (e.g., kspb.aviationwx.org or 03s.aviationwx.org)
         $pattern = '/^([a-z0-9-]{3,50})\.' . preg_quote($baseDomain, '/') . '$/';
-        if (preg_match($pattern, $hostWithoutPort, $matches)) {
+        // www is an nginx-level redirect in production, never an airport id
+        if (preg_match($pattern, $hostWithoutPort, $matches) && $matches[1] !== 'www') {
             $isAirportRequest = true;
             $rawAirportIdentifier = $matches[1];
         } else {

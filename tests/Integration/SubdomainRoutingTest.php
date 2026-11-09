@@ -71,6 +71,21 @@ final class SubdomainRoutingTest extends TestCase
         ];
     }
 
+    #[DataProvider('wwwHostProvider')]
+    public function testWwwHostServesHomepageNotAirport404(string $host): void
+    {
+        [$status] = $this->request('/', $host);
+        $this->assertSame(200, $status, "{$host} should serve the homepage, not an airport 404");
+    }
+
+    public static function wwwHostProvider(): array
+    {
+        return [
+            'www' => ['www.aviationwx.org'],
+            'www with port' => ['www.aviationwx.org:8443'],
+        ];
+    }
+
     public function testUnknownSubdomainReturns404(): void
     {
         [$status] = $this->request('/', 'nope.aviationwx.org');
