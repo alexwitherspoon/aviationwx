@@ -559,7 +559,7 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - NASR `heading_mag` and config `heading_mag` are magnetic and used as-is.
 - OurAirports `true_alignment` is converted to magnetic with `getMagneticDeclination()` (config → global → WMM), matching the wind compass and density altitude performance.
 - When declination is unavailable and only `true_alignment` exists, prefer runway end ident parsing before using raw true degrees.
-- Cardinal runway ends (`N`, `NE`, `SW`) resolve directly to their magnetic bearing from the ident; no true-to-magnetic conversion applies.
+- Cardinal runway ends (`N`, `NE`, `SW`) resolve through ident parsing to their fixed, already-magnetic bearing.
 
 **Component formulas** (signed, magnetic):
 - Headwind: `wind_speed * cos(runway_heading - wind_from)`

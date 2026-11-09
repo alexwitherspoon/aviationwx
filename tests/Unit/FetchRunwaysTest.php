@@ -365,6 +365,7 @@ class FetchRunwaysTest extends TestCase
         $this->assertCount(1, $segments);
         $this->assertSame('N', $segments[0]['le_ident']);
         $this->assertSame('ourairports', $segments[0]['source']);
+        $this->assertTrue($segments[0]['magnetic']);
         $this->assertEqualsWithDelta(0.0, $segments[0]['start'][0], 0.0001);
         $this->assertEqualsWithDelta(0.9, $segments[0]['start'][1], 0.0001);
         $this->assertEqualsWithDelta(0.0, $segments[0]['end'][0], 0.0001);

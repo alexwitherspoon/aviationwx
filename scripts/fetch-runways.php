@@ -402,6 +402,9 @@ function runwayHasCoordinates(array $runway): bool
  * orientation, so draw a unit-length segment through the center at the
  * low-end bearing, matching the shape manualRunwaysToSegments() builds.
  *
+ * The bearing is magnetic, so the segment is flagged `magnetic` and must skip
+ * the true-to-magnetic rotation applied to coordinate-derived segments.
+ *
  * @param string $leIdent Low-end ident (e.g. N, NE)
  * @param string $heIdent High-end ident (e.g. S, SW)
  * @param string $source Source label ('faa', 'ourairports')
@@ -426,6 +429,7 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
         'ident_at_start' => trim($heIdent),
         'ident_at_end' => trim($leIdent),
         'source' => $source === '' ? 'programmatic' : $source,
+        'magnetic' => true,
     ];
 }
 

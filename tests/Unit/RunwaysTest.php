@@ -334,4 +334,29 @@ class RunwaysTest extends TestCase
         $this->assertSame('27', $rows[0]['ends'][1]['end_id']);
         $this->assertArrayNotHasKey('true_alignment', $rows[0]['ends'][0]);
     }
+
+    public function testRotateRunwaySegmentsToMagnetic_SkipsMagneticSegments(): void
+    {
+        $segments = [
+            ['start' => [0.0, 0.9], 'end' => [0.0, -0.9], 'magnetic' => true],
+        ];
+
+        $result = rotateRunwaySegmentsToMagnetic($segments, 15.0);
+
+        $this->assertSame([0.0, 0.9], $result[0]['start']);
+        $this->assertSame([0.0, -0.9], $result[0]['end']);
+    }
+
+    public function testRotateRunwaySegmentsToMagnetic_RotatesCoordinateSegments(): void
+    {
+        $segments = [
+            ['start' => [0.0, 0.9], 'end' => [0.0, -0.9]],
+        ];
+
+        $result = rotateRunwaySegmentsToMagnetic($segments, 15.0);
+
+        // A due-north coordinate point shifts sideways by sin(15°) at 15° declination.
+        $this->assertEqualsWithDelta(-0.2329, $result[0]['start'][0], 0.0001);
+        $this->assertEqualsWithDelta(0.8693, $result[0]['start'][1], 0.0001);
+    }
 }
