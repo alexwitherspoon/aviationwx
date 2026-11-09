@@ -262,20 +262,22 @@ class FetchRunwaysTest extends TestCase
         $this->assertSame(200, $meta['fetched_at'] ?? null);
     }
 
-    public function testParseOurAirportsRunwaysFromPath_MissingCoordinates_SkipsRow(): void
+    public function testParseOurAirportsRunwaysFromPath_MissingCoordinates_HeadingFallback(): void
     {
         $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
         file_put_contents(
             $path,
             "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
-            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,90,270,0,0\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,,90,270,0,0\n"
             . "2,KTEST,3000,75,ASPH,1,0,09,27,45.0,-122.0,45.1,-121.9,90,270,0,0\n",
             LOCK_EX
         );
 
         $parsed = parseOurAirportsRunwaysFromPath($path);
-        $this->assertArrayNotHasKey('KBAD', $parsed);
+        // KBAD has missing coordinates but valid heading data (90/270), so it's kept
+        $this->assertArrayHasKey('KBAD', $parsed);
         $this->assertArrayHasKey('KTEST', $parsed);
+        $this->assertSame(3000, $parsed['KBAD'][0]['length_ft']);
         $this->assertSame(3000, $parsed['KTEST'][0]['length_ft']);
     }
 
@@ -331,14 +333,22 @@ class FetchRunwaysTest extends TestCase
         file_put_contents(
             $path,
             "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
-            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,90,270,0,0\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,,90,270,0,0\n"
             . "2,KCARD,2000,40,TURF,1,0,N,S,,,,,,0,0\n",
             LOCK_EX
         );
 
         $parsed = parseOurAirportsRunwaysFromPath($path);
-        $this->assertArrayNotHasKey('KBAD', $parsed);
+        // KBAD now kept because heading-based synthesis can handle it
+        $this->assertArrayHasKey('KBAD', $parsed);
         $this->assertArrayHasKey('KCARD', $parsed);
+        // KBAD has coordinate-less runway with heading data
+        $this->assertNull($parsed['KBAD'][0]['lat1']);
+        $this->assertSame('09', $parsed['KBAD'][0]['le_ident']);
+        $this->assertSame('27', $parsed['KBAD'][0]['he_ident']);
+        $this->assertSame(90, $parsed['KBAD'][0]['le_heading_degT']);
+        $this->assertSame(270, $parsed['KBAD'][0]['he_heading_degT']);
+        // KCARD has cardinal runway (no coordinates)
         $this->assertNull($parsed['KCARD'][0]['lat1']);
         $this->assertSame('N', $parsed['KCARD'][0]['le_ident']);
         $this->assertSame('S', $parsed['KCARD'][0]['he_ident']);
@@ -436,5 +446,87 @@ class FetchRunwaysTest extends TestCase
     {
         $this->assertNull(cardinalRunwayToSegment('N', 'E', 'ourairports'));
         $this->assertNull(cardinalRunwayToSegment('N', 'N', 'ourairports'));
+    }
+
+    public function testHeadingBasedRunwayToSegment_WithTrueHeadings(): void
+    {
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '33',
+            'le_heading_degT' => 167,
+            'he_heading_degT' => 347,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('15', $seg['le_ident']);
+        $this->assertSame('33', $seg['he_ident']);
+        $this->assertFalse($seg['magnetic']);
+    }
+
+    public function testHeadingBasedRunwayToSegment_SameEnd_ReturnsNull(): void
+    {
+        // Same runway ident (15/15) is invalid - it's the same end twice
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '15',
+            'le_heading_degT' => 167,
+            'he_heading_degT' => 167,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
+    }
+
+    public function testHeadingBasedRunwayToSegment_NonReciprocalHeadingBased_SynthesizesSegment(): void
+    {
+        // Elk City, ID runway 14/35 - runway isn't straight, so 14+18=32≠35
+        // But we have heading data, so we should synthesize a segment anyway
+        $rw = [
+            'le_ident' => '14',
+            'he_ident' => '35',
+            'le_heading_degT' => 145,
+            'he_heading_degT' => 325,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('14', $seg['le_ident']);
+        $this->assertSame('35', $seg['he_ident']);
+        $this->assertFalse($seg['magnetic']);
+    }
+
+    public function testHeadingBasedRunwayToSegment_MissingHeadings_ReturnsNull(): void
+    {
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '33',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
+    }
+
+    public function testHeadingBasedRunwayToSegment_InvalidIdentifierMatch_ReturnsNull(): void
+    {
+        // Runway 09/18 with headings 90/270 - the identifiers don't match the
+        // heading-based interpretation (heading 90° should be runway 09, but
+        // heading 270° should be runway 27, not 18)
+        $rw = [
+            'le_ident' => '09',
+            'he_ident' => '18',
+            'le_heading_degT' => 90,
+            'he_heading_degT' => 270,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
     }
 }

@@ -106,7 +106,8 @@ function parseRunwayEndIdentMagneticHeading(string $endId): ?float
 /**
  * Whether two runway end idents are opposite ends of the same strip.
  *
- * Requires canonical numeric designators that differ by 18 (1-36) and matching L/C/R suffixes.
+ * For runway numbers: differs by 18 (1-36) with matching L/C/R suffixes (e.g. 09/27, 09L/27L).
+ * For runway numbers with opposite suffixes: L/R, C/R, R/L are valid opposites (e.g. 09L/27R).
  */
 function runwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): bool
 {
@@ -123,7 +124,12 @@ function runwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): bool
 
     $suffixA = $matchesA[2] ?? '';
     $suffixB = $matchesB[2] ?? '';
-    if ($suffixA !== $suffixB) {
+    
+    // Check suffix relationship: either same or opposite
+    // Opposites: L↔R, C↔C (C is its own opposite), R↔L
+    $isSameSuffix = $suffixA === $suffixB;
+    $isOppositeSuffix = ($suffixA === 'L' && $suffixB === 'R') || ($suffixA === 'R' && $suffixB === 'L');
+    if (!$isSameSuffix && !$isOppositeSuffix) {
         return false;
     }
 

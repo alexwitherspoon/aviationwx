@@ -165,9 +165,19 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep an
-            // opposite cardinal pair so the compass can draw a line, drop the rest.
-            if (!cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
+            // Coordinate-less runway: keep if it's cardinal OR has numeric heading data.
+            // We keep runways with heading data because the headings tell us the
+            // actual orientation, even if the runway numbers aren't exact reciprocals
+            // (e.g., Elk City, ID runway 14/35 where the runway isn't straight).
+            if (cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
+                // Cardinal strips (N/S, NE/SW) are valid without coordinates.
+            } elseif ($leHeadingIdx !== null && $heHeadingIdx !== null
+                && isset($row[$leHeadingIdx]) && is_numeric($row[$leHeadingIdx])
+                && isset($row[$heHeadingIdx]) && is_numeric($row[$heHeadingIdx])) {
+                // Runway with numeric heading data is valid, even if runway numbers
+                // aren't reciprocal (e.g., 14/35 for non-straight runway).
+            } else {
+                // Neither cardinal nor numeric heading-based valid; skip.
                 continue;
             }
         }
@@ -431,10 +441,88 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
 }
 
 /**
+ * Synthesize a through-center compass segment for a runway with heading data but no coordinates.
+ *
+ * OurAirports and FAA sometimes publish runway end identifiers (like "15/33" or even
+ * non-reciprocal like "14/35" for non-straight runways) with true north headings but
+ * without end coordinates. These are synthesized as segments with the true headings.
+ * The runtime will convert true → magnetic using the airport's declination.
+ *
+ * @param array $rw Runway row with le_ident, he_ident, and heading fields
+ * @param string $source Source label ('faa', 'ourairports')
+ * @return array<string, mixed>|null Segment, or null when headings are missing or
+ *         runway ends don't match the heading-based orientation
+ */
+function headingBasedRunwayToSegment(array $rw, string $source): ?array
+{
+    $leIdent = $rw['le_ident'] ?? '';
+    $heIdent = $rw['he_ident'] ?? '';
+
+    // Reject same ident (e.g., 15/15) - clearly invalid data
+    if (strcasecmp(trim($leIdent), trim($heIdent)) === 0) {
+        return null;
+    }
+
+    // Prefer true headings if present (the column name has T suffix)
+    $leHeading = $rw['le_heading_degT'] ?? $rw['le_heading_deg'] ?? null;
+    $heHeading = $rw['he_heading_degT'] ?? $rw['he_heading_deg'] ?? null;
+
+    if ($leHeading === null || $heHeading === null) {
+        return null;
+    }
+
+    // Use true headings directly; runtime will convert to magnetic
+    $leHeading = (float) $leHeading;
+    $heHeading = (float) $heHeading;
+
+    // Headings must be roughly opposite (within 20 degrees tolerance).
+    // Delta of 180° is perfectly opposite; 160-200° is acceptable.
+    $delta = fmod(abs($leHeading - $heHeading), 360.0);
+    $delta = min($delta, 360.0 - $delta);
+    if (abs($delta - 180.0) > 20.0) {
+        return null;
+    }
+
+    // Validate that runway identifiers match the heading-based interpretation.
+    // Convert headings to runway numbers and compare (e.g., 90° -> 09, 270° -> 27).
+    // For non-straight runways (like 14/35 where 14+18=32≠35), allow some tolerance.
+    // We use 2 runway number units (20°) tolerance for non-straight runways.
+    $leRunwayNum = (int) round($leHeading / 10);
+    $heRunwayNum = (int) round($heHeading / 10);
+
+    // Parse the runway identifiers to get their numeric components
+    $leNum = (int) substr(trim($leIdent), 0, 2);
+    $heNum = (int) substr(trim($heIdent), 0, 2);
+
+    // Check if the identifier numbers are consistent with heading-based numbers
+    // Allow 2 runway number units (20°) tolerance for non-straight runways
+    $leDiff = abs($leRunwayNum - $leNum);
+    $heDiff = abs($heRunwayNum - $heNum);
+    if ($leDiff > 2 || $heDiff > 2) {
+        return null;
+    }
+
+    // Use the low-end heading for the segment angle
+    $angle = ($leHeading * M_PI) / 180;
+    $length = 0.9;
+
+    return [
+        'start' => [sin($angle) * $length, cos($angle) * $length],
+        'end' => [-sin($angle) * $length, -cos($angle) * $length],
+        'le_ident' => trim($leIdent),
+        'he_ident' => trim($heIdent),
+        'ident_at_start' => trim($heIdent),
+        'ident_at_end' => trim($leIdent),
+        'source' => $source === '' ? 'programmatic' : $source,
+        'magnetic' => false,
+    ];
+}
+
+/**
  * Build normalized compass segments from raw runway rows.
  *
- * Coordinate rows are projected and scaled to fit; coordinate-less cardinal
- * rows are synthesized as through-center segments from their ident bearing.
+ * Coordinate rows are projected and scaled to fit; coordinate-less rows are synthesized
+ * as through-center segments from their ident bearing or heading data.
  *
  * @param array<array<string, mixed>> $runways Runway rows
  * @param float $centerLat Airport center latitude
@@ -474,6 +562,7 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
     $segments = [];
     foreach ($runways as $rw) {
         if (!runwayHasCoordinates($rw)) {
+            // Try cardinal first (N/S, NE/SW, etc.)
             $cardinal = cardinalRunwayToSegment(
                 $rw['le_ident'] ?? '',
                 $rw['he_ident'] ?? '',
@@ -481,6 +570,16 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             );
             if ($cardinal !== null) {
                 $segments[] = $cardinal;
+                continue;
+            }
+            // Try heading-based (numeric runway numbers with true/magnetic headings)
+            $headingBased = headingBasedRunwayToSegment(
+                $rw,
+                (string) ($rw['source'] ?? 'programmatic')
+            );
+            if ($headingBased !== null) {
+                $segments[] = $headingBased;
+                continue;
             }
             continue;
         }
