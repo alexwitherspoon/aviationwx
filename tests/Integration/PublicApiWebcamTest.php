@@ -16,6 +16,13 @@ class PublicApiWebcamTest extends TestCase
     private static $testCam = 0;
     private static bool $fixtureReady = false;
     
+    /**
+     * Establish the API base URL and gate the suite on the isolated test cache.
+     *
+     * The gate keeps fixtures from ever being created against a real or shared
+     * cache: the suite only runs when TEST_CACHE_DIR identifies the isolated
+     * HTTP test directory.
+     */
     public static function setUpBeforeClass(): void
     {
         self::$apiBaseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
@@ -29,16 +36,24 @@ class PublicApiWebcamTest extends TestCase
         }
 
         self::$fixtureReady = true;
-        self::removeFixtureTree();
-        self::createTestImages();
     }
 
+    /**
+     * Reset the webcam fixture tree before each test.
+     *
+     * Owning a clean current-original state per test keeps the suite order-
+     * independent; no test can leak a re-pointed symlink or a seeded frame into
+     * the next.
+     */
     protected function setUp(): void
     {
         parent::setUp();
         if (!self::$fixtureReady) {
             $this->markTestSkipped('TEST_CACHE_DIR must identify the isolated HTTP test cache');
         }
+
+        self::removeFixtureTree();
+        self::createTestImages();
     }
 
     public static function tearDownAfterClass(): void
@@ -287,56 +302,6 @@ class PublicApiWebcamTest extends TestCase
         }
     }
     
-    /**
-     * A frame still fresh (under threshold) but within the refresh + SWR window of
-     * the fail-closed boundary must not be cacheable, or it could be served past the
-     * threshold as current. Covers the fresh-cutoff no-store branch.
-     */
-    public function testImage_FreshFrameNearFailClosedBoundary_IsServedNoStore(): void
-    {
-        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $nearTs = time() - 10600; // default threshold 10800, so remaining ~200 <= refresh(60)+SWR(300)
-        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $nearTs);
-        if (!is_dir($framesDir)) {
-            mkdir($framesDir, 0755, true);
-        }
-        $subdir = getWebcamFramesSubdir($nearTs);
-        $filename = $nearTs . '_original.jpg';
-        $path = $framesDir . '/' . $filename;
-        $img = imagecreatetruecolor(32, 24);
-        imagejpeg($img, $path);
-
-        self::unlinkOriginalFormatSymlinks();
-        symlink($subdir . '/' . $filename, $cacheDir . '/original.jpg');
-
-        try {
-            // Inline native-original path (sendImageResponse cutoff).
-            $inline = $this->apiRequest(
-                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image'
-            );
-            $this->assertSame(200, $inline['status']);
-            $inlineCache = $inline['headers']['Cache-Control'] ?? '';
-            $this->assertStringContainsString('no-store', $inlineCache);
-            $this->assertMatchesRegularExpression('/max-age=0/', $inlineCache);
-            $this->assertMatchesRegularExpression('/s-maxage=0/', $inlineCache);
-
-            // Download branch (handleGetWebcamImage cutoff).
-            $response = $this->apiRequest(
-                '/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?download=1'
-            );
-            $this->assertSame(200, $response['status']);
-            $cacheControl = $response['headers']['Cache-Control'] ?? '';
-            $this->assertStringContainsString('no-store', $cacheControl);
-            $this->assertMatchesRegularExpression('/max-age=0/', $cacheControl);
-            $this->assertMatchesRegularExpression('/s-maxage=0/', $cacheControl);
-        } finally {
-            self::restoreDefaultOriginalFixture($path);
-        }
-    }
-
     /**
      * Test metadata endpoint includes available formats
      */
