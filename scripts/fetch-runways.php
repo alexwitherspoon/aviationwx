@@ -431,17 +431,68 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
 }
 
 /**
+ * Synthesize a through-center compass segment for a runway with heading data but no coordinates.
+ *
+ * OurAirports and FAA sometimes publish runway end identifiers (like "15/33") with true
+ * north headings but without end coordinates. These are synthesized as segments with the
+ * true headings. The runtime will convert true → magnetic using the airport's declination.
+ *
+ * @param array $rw Runway row with le_ident, he_ident, and heading fields
+ * @param float $declinationDeg Airport magnetic declination (positive = East)
+ * @param string $source Source label ('faa', 'ourairports')
+ * @return array<string, mixed>|null Segment, or null when the ends are not reciprocal
+ */
+function headingBasedRunwayToSegment(array $rw, float $declinationDeg, string $source): ?array
+{
+    $leIdent = $rw['le_ident'] ?? '';
+    $heIdent = $rw['he_ident'] ?? '';
+
+    if (!runwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
+        return null;
+    }
+
+    // Prefer true headings if present (the column name has T suffix)
+    $leHeading = $rw['le_heading_degT'] ?? $rw['le_heading_deg'] ?? null;
+    $heHeading = $rw['he_heading_degT'] ?? $rw['he_heading_deg'] ?? null;
+
+    if ($leHeading === null || $heHeading === null) {
+        return null;
+    }
+
+    // Use true headings directly; runtime will convert to magnetic
+    $leHeading = (float) $leHeading;
+    $heHeading = (float) $heHeading;
+
+    // Use the low-end heading for the segment angle
+    $angle = ($leHeading * M_PI) / 180;
+    $length = 0.9;
+
+    return [
+        'start' => [sin($angle) * $length, cos($angle) * $length],
+        'end' => [-sin($angle) * $length, -cos($angle) * $length],
+        'le_ident' => trim($leIdent),
+        'he_ident' => trim($heIdent),
+        'ident_at_start' => trim($heIdent),
+        'ident_at_end' => trim($leIdent),
+        'source' => $source === '' ? 'programmatic' : $source,
+        'magnetic' => false,
+    ];
+}
+
+/**
  * Build normalized compass segments from raw runway rows.
  *
- * Coordinate rows are projected and scaled to fit; coordinate-less cardinal
- * rows are synthesized as through-center segments from their ident bearing.
+ * Coordinate rows are projected and scaled to fit; coordinate-less rows are synthesized
+ * as through-center segments from their ident bearing or heading data.
  *
  * @param array<array<string, mixed>> $runways Runway rows
  * @param float $centerLat Airport center latitude
  * @param float $centerLon Airport center longitude
+ * @param float $declinationDeg Airport magnetic declination (positive = East), used when
+ *        runway headings need conversion from true to magnetic north
  * @return array Segments in normalized -1..1 space
  */
-function runwaysToSegments(array $runways, float $centerLat, float $centerLon): array {
+function runwaysToSegments(array $runways, float $centerLat, float $centerLon, float $declinationDeg = 0.0): array {
     $scaleLon = 111320 * cos($centerLat * M_PI / 180) / 1000;
     $scaleLat = 110540 / 1000;
 
@@ -474,6 +525,7 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
     $segments = [];
     foreach ($runways as $rw) {
         if (!runwayHasCoordinates($rw)) {
+            // Try cardinal first (N/S, NE/SW, etc.)
             $cardinal = cardinalRunwayToSegment(
                 $rw['le_ident'] ?? '',
                 $rw['he_ident'] ?? '',
@@ -481,6 +533,17 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             );
             if ($cardinal !== null) {
                 $segments[] = $cardinal;
+                continue;
+            }
+            // Try heading-based (numeric runway numbers with true/magnetic headings)
+            $headingBased = headingBasedRunwayToSegment(
+                $rw,
+                $declinationDeg,
+                (string) ($rw['source'] ?? 'programmatic')
+            );
+            if ($headingBased !== null) {
+                $segments[] = $headingBased;
+                continue;
             }
             continue;
         }

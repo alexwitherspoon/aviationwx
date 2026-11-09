@@ -437,4 +437,48 @@ class FetchRunwaysTest extends TestCase
         $this->assertNull(cardinalRunwayToSegment('N', 'E', 'ourairports'));
         $this->assertNull(cardinalRunwayToSegment('N', 'N', 'ourairports'));
     }
+
+    public function testHeadingBasedRunwayToSegment_WithTrueHeadings(): void
+    {
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '33',
+            'le_heading_degT' => 167,
+            'he_heading_degT' => 347,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('15', $seg['le_ident']);
+        $this->assertSame('33', $seg['he_ident']);
+        $this->assertFalse($seg['magnetic']);
+    }
+
+    public function testHeadingBasedRunwayToSegment_NonReciprocal_ReturnsNull(): void
+    {
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '15',
+            'le_heading_degT' => 167,
+            'he_heading_degT' => 167,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
+    }
+
+    public function testHeadingBasedRunwayToSegment_MissingHeadings_ReturnsNull(): void
+    {
+        $rw = [
+            'le_ident' => '15',
+            'he_ident' => '33',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertEmpty($segments);
+    }
 }
