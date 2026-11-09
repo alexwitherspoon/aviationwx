@@ -466,8 +466,9 @@ class FetchRunwaysTest extends TestCase
         $this->assertFalse($seg['magnetic']);
     }
 
-    public function testHeadingBasedRunwayToSegment_NonReciprocal_ReturnsNull(): void
+    public function testHeadingBasedRunwayToSegment_SameEnd_ReturnsNull(): void
     {
+        // Same runway ident (15/15) is invalid - it's the same end twice
         $rw = [
             'le_ident' => '15',
             'he_ident' => '15',
@@ -478,6 +479,26 @@ class FetchRunwaysTest extends TestCase
         $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
 
         $this->assertEmpty($segments);
+    }
+
+    public function testHeadingBasedRunwayToSegment_NonReciprocalHeadingBased_SynthesizesSegment(): void
+    {
+        // Elk City, ID runway 14/35 - runway isn't straight, so 14+18=32≠35
+        // But we have heading data, so we should synthesize a segment anyway
+        $rw = [
+            'le_ident' => '14',
+            'he_ident' => '35',
+            'le_heading_degT' => 145,
+            'he_heading_degT' => 325,
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 45.8, -116.7, 14.0);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('14', $seg['le_ident']);
+        $this->assertSame('35', $seg['he_ident']);
+        $this->assertFalse($seg['magnetic']);
     }
 
     public function testHeadingBasedRunwayToSegment_MissingHeadings_ReturnsNull(): void

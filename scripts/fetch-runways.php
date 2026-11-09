@@ -165,16 +165,18 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
 
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            // Coordinate-less runway: keep if it's cardinal OR has valid numeric reciprocal
-            // runway ends with heading data for heading-based synthesis.
+            // Coordinate-less runway: keep if it's cardinal OR has heading data.
+            // We keep runways with heading data because the headings tell us the
+            // actual orientation, even if the runway numbers aren't exact reciprocals
+            // (e.g., Elk City, ID runway 14/35 where the runway isn't straight).
             if (cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
                 // Cardinal strips (N/S, NE/SW) are valid without coordinates.
                 $hasHeadingData = false;
-            } elseif (runwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)
-                && $leHeadingIdx !== null && $heHeadingIdx !== null
+            } elseif ($leHeadingIdx !== null && $heHeadingIdx !== null
                 && isset($row[$leHeadingIdx]) && $row[$leHeadingIdx] !== ''
                 && isset($row[$heHeadingIdx]) && $row[$heHeadingIdx] !== '') {
-                // Numeric runway ends (15/33, 09L/27R) with heading data are valid.
+                // Runway with heading data is valid, even if runway numbers aren't
+                // reciprocal (e.g., 14/35 for non-straight runway).
                 $hasHeadingData = true;
             } else {
                 // Neither cardinal nor heading-based valid; skip.
@@ -443,21 +445,23 @@ function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $sourc
 /**
  * Synthesize a through-center compass segment for a runway with heading data but no coordinates.
  *
- * OurAirports and FAA sometimes publish runway end identifiers (like "15/33") with true
- * north headings but without end coordinates. These are synthesized as segments with the
- * true headings. The runtime will convert true → magnetic using the airport's declination.
+ * OurAirports and FAA sometimes publish runway end identifiers (like "15/33" or even
+ * non-reciprocal like "14/35" for non-straight runways) with true north headings but
+ * without end coordinates. These are synthesized as segments with the true headings.
+ * The runtime will convert true → magnetic using the airport's declination.
  *
  * @param array $rw Runway row with le_ident, he_ident, and heading fields
  * @param float $declinationDeg Airport magnetic declination (positive = East)
  * @param string $source Source label ('faa', 'ourairports')
- * @return array<string, mixed>|null Segment, or null when the ends are not reciprocal
+ * @return array<string, mixed>|null Segment, or null when headings are missing
  */
 function headingBasedRunwayToSegment(array $rw, float $declinationDeg, string $source): ?array
 {
     $leIdent = $rw['le_ident'] ?? '';
     $heIdent = $rw['he_ident'] ?? '';
 
-    if (!runwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
+    // Reject same ident (e.g., 15/15) - clearly invalid data
+    if ($leIdent === $heIdent) {
         return null;
     }
 
