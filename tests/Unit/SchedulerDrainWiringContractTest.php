@@ -105,7 +105,7 @@ final class SchedulerDrainWiringContractTest extends TestCase
         // image build and precede docker compose up. The build is always
         // cache-busted and does not touch the running container, so pausing
         // workers for its whole duration would leave observations stale.
-        $drainPos = strpos($workflow, 'chmod +x scripts/deploy-drain-workers.sh');
+        $drainPos = strpos($workflow, 'scripts/deploy-drain-workers.sh || echo');
         $buildPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web');
         $upPos = strpos($workflow, 'docker compose -f docker/docker-compose.prod.yml up -d;');
         $this->assertNotFalse($drainPos);
