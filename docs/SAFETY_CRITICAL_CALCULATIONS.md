@@ -545,6 +545,7 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 
 - **Lat/lon runways** (manual or FAA/OurAirports): Geographic bearing = true north. Rotated to magnetic in `getRunwaySegmentsForAirport()` before returning.
 - **Heading-based runways** (`heading_1`/`heading_2`): Runway numbers = magnetic north. No rotation.
+- **Cardinal runways** (compass-point idents, e.g. `N/S`, `NE/SW`): no coordinates or numeric designator, so the ident resolves to its fixed magnetic bearing and a through-center segment is synthesized. No rotation.
 
 ### Runway display (dashboard per-end HW/XW)
 
@@ -558,6 +559,7 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - NASR `heading_mag` and config `heading_mag` are magnetic and used as-is.
 - OurAirports `true_alignment` is converted to magnetic with `getMagneticDeclination()` (config → global → WMM), matching the wind compass and density altitude performance.
 - When declination is unavailable and only `true_alignment` exists, prefer runway end ident parsing before using raw true degrees.
+- Cardinal runway ends (`N`, `NE`, `SW`) resolve directly to their magnetic bearing from the ident; no true-to-magnetic conversion applies.
 
 **Component formulas** (signed, magnetic):
 - Headwind: `wind_speed * cos(runway_heading - wind_from)`
