@@ -15,6 +15,7 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/runways.php';
+require_once __DIR__ . '/../lib/runway-end-ident.php';
 require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
 require_once __DIR__ . '/../lib/ourairports/http.php';
 require_once __DIR__ . '/../lib/ourairports/refresh.php';
@@ -159,8 +160,16 @@ function parseOurAirportsRunwaysFromHandle($handle): array
         $lon1 = $leLon !== null && isset($row[$leLon]) && $row[$leLon] !== '' ? (float) $row[$leLon] : null;
         $lat2 = $heLat !== null && isset($row[$heLat]) && $row[$heLat] !== '' ? (float) $row[$heLat] : null;
         $lon2 = $heLon !== null && isset($row[$heLon]) && $row[$heLon] !== '' ? (float) $row[$heLon] : null;
+
+        $leIdentVal = $leIdent !== null ? trim((string) ($row[$leIdent] ?? '')) : '';
+        $heIdentVal = $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '';
+
         if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            continue;
+            // Cardinal strips (N/S, NE/SW) never carry coordinates; keep an
+            // opposite cardinal pair so the compass can draw a line, drop the rest.
+            if (!cardinalRunwayEndIdentsAreReciprocal($leIdentVal, $heIdentVal)) {
+                continue;
+            }
         }
 
         $isClosed = $closedIdx !== null && isset($row[$closedIdx]) && (int) $row[$closedIdx] === 1;
@@ -179,8 +188,8 @@ function parseOurAirportsRunwaysFromHandle($handle): array
             'lon1' => $lon1,
             'lat2' => $lat2,
             'lon2' => $lon2,
-            'le_ident' => $leIdent !== null ? trim((string) ($row[$leIdent] ?? '')) : '',
-            'he_ident' => $heIdent !== null ? trim((string) ($row[$heIdent] ?? '')) : '',
+            'le_ident' => $leIdentVal,
+            'he_ident' => $heIdentVal,
             'length_ft' => $lengthFt,
             'width_ft' => $widthFt,
             'surface' => $surfaceIdx !== null ? trim((string) ($row[$surfaceIdx] ?? '')) : '',
@@ -285,14 +294,19 @@ function parseFaaRunwaysFromHandle($handle): array
         $lon1 = isset($idx[$lon1Key], $row[$idx[$lon1Key]]) && $row[$idx[$lon1Key]] !== '' ? (float) $row[$idx[$lon1Key]] : null;
         $lat2 = isset($idx[$lat2Key], $row[$idx[$lat2Key]]) && $row[$idx[$lat2Key]] !== '' ? (float) $row[$idx[$lat2Key]] : null;
         $lon2 = isset($idx[$lon2Key], $row[$idx[$lon2Key]]) && $row[$idx[$lon2Key]] !== '' ? (float) $row[$idx[$lon2Key]] : null;
-        if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
-            continue;
-        }
 
         $rwyId = isset($idx[$rwyKey], $row[$idx[$rwyKey]]) ? trim((string) $row[$idx[$rwyKey]]) : '';
         $parts = explode('/', $rwyId);
         $leIdent = count($parts) === 2 ? trim($parts[0]) : $rwyId;
         $heIdent = count($parts) === 2 ? trim($parts[1]) : $rwyId;
+
+        if ($lat1 === null || $lon1 === null || $lat2 === null || $lon2 === null) {
+            // Cardinal strips (N/S, NE/SW) have no end coordinates; keep an
+            // opposite cardinal pair for compass rendering, drop the rest.
+            if (!cardinalRunwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
+                continue;
+            }
+        }
 
         if (!isset($byAirport[$airportId])) {
             $byAirport[$airportId] = [];
@@ -365,9 +379,64 @@ function bearingFromNormalized(float $x, float $y): float {
 }
 
 /**
- * Transform raw runway endpoints to normalized segments
+ * Whether a parsed runway row carries both runway-end coordinates.
  *
- * @param array $runways Raw runways with lat1,lon1,lat2,lon2
+ * @param array<string, mixed> $runway Parsed runway row
+ * @return bool True when all four coordinate fields are present and non-null
+ */
+function runwayHasCoordinates(array $runway): bool
+{
+    return ($runway['lat1'] ?? null) !== null
+        && ($runway['lon1'] ?? null) !== null
+        && ($runway['lat2'] ?? null) !== null
+        && ($runway['lon2'] ?? null) !== null;
+}
+
+/**
+ * Synthesize a through-center compass segment for a cardinal runway end pair.
+ *
+ * Cardinal-named strips (N/S, NE/SW) carry runway ends but no end coordinates,
+ * so the coordinate path cannot place them. A runway line only needs
+ * orientation, so draw a unit-length segment through the center at the
+ * low-end bearing, matching the shape manualRunwaysToSegments() builds.
+ *
+ * The bearing is magnetic, so the segment is flagged `magnetic` and must skip
+ * the true-to-magnetic rotation applied to coordinate-derived segments.
+ *
+ * @param string $leIdent Low-end ident (e.g. N, NE)
+ * @param string $heIdent High-end ident (e.g. S, SW)
+ * @param string $source Source label ('faa', 'ourairports')
+ * @return array<string, mixed>|null Segment, or null when the ends are not a reciprocal cardinal pair
+ */
+function cardinalRunwayToSegment(string $leIdent, string $heIdent, string $source): ?array
+{
+    if (!cardinalRunwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
+        return null;
+    }
+
+    $leHeading = parseCardinalRunwayEndHeading($leIdent);
+    $angle = ($leHeading * M_PI) / 180;
+    $length = 0.9;
+
+    return [
+        'start' => [sin($angle) * $length, cos($angle) * $length],
+        'end' => [-sin($angle) * $length, -cos($angle) * $length],
+        'le_ident' => trim($leIdent),
+        'he_ident' => trim($heIdent),
+        'ident_at_start' => trim($heIdent),
+        'ident_at_end' => trim($leIdent),
+        'source' => $source === '' ? 'programmatic' : $source,
+        'magnetic' => true,
+    ];
+}
+
+/**
+ * Build normalized compass segments from raw runway rows.
+ *
+ * Coordinate rows are projected and scaled to fit; coordinate-less cardinal
+ * rows are synthesized as through-center segments from their ident bearing.
+ *
+ * @param array<array<string, mixed>> $runways Runway rows
  * @param float $centerLat Airport center latitude
  * @param float $centerLon Airport center longitude
  * @return array Segments in normalized -1..1 space
@@ -378,6 +447,9 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
 
     $points = [];
     foreach ($runways as $rw) {
+        if (!runwayHasCoordinates($rw)) {
+            continue;
+        }
         $x1 = ($rw['lon1'] - $centerLon) * $scaleLon;
         $y1 = ($rw['lat1'] - $centerLat) * $scaleLat;
         $x2 = ($rw['lon2'] - $centerLon) * $scaleLon;
@@ -401,6 +473,18 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
 
     $segments = [];
     foreach ($runways as $rw) {
+        if (!runwayHasCoordinates($rw)) {
+            $cardinal = cardinalRunwayToSegment(
+                $rw['le_ident'] ?? '',
+                $rw['he_ident'] ?? '',
+                (string) ($rw['source'] ?? 'programmatic')
+            );
+            if ($cardinal !== null) {
+                $segments[] = $cardinal;
+            }
+            continue;
+        }
+
         $x1 = ($rw['lon1'] - $centerLon) * $scaleLon * $scale;
         $y1 = ($rw['lat1'] - $centerLat) * $scaleLat * $scale;
         $x2 = ($rw['lon2'] - $centerLon) * $scaleLon * $scale;
@@ -450,8 +534,20 @@ function resolveRunwayEntryCenter(array $runways, array $airportCenters, string 
     if ($center !== null) {
         return $center;
     }
-    $lats = array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2'));
-    $lons = array_merge(array_column($runways, 'lon1'), array_column($runways, 'lon2'));
+    $lats = array_values(array_filter(
+        array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2')),
+        'is_numeric'
+    ));
+    $lons = array_values(array_filter(
+        array_merge(array_column($runways, 'lon1'), array_column($runways, 'lon2')),
+        'is_numeric'
+    ));
+
+    if ($lats === [] || $lons === []) {
+        // No coordinate-bearing runways (cardinal-only strip); center is arbitrary
+        // because synthesized segments are drawn through center by bearing.
+        return ['lat' => 0.0, 'lon' => 0.0];
+    }
 
     return [
         'lat' => array_sum($lats) / count($lats),

@@ -39,6 +39,9 @@ function runwaysSegmentsAreInTrueNorth(array $airport): bool {
 /**
  * Rotate runway segments from true north to magnetic north for display
  *
+ * Segments flagged `magnetic` are already in the magnetic frame and skip
+ * rotation; rotating them would apply declination twice and skew the line.
+ *
  * @param array $segments Segments with start/end [x,y]
  * @param float $declination Declination (positive=East)
  * @return array Rotated segments
@@ -49,6 +52,10 @@ function rotateRunwaySegmentsToMagnetic(array $segments, float $declination): ar
     }
     $rotated = [];
     foreach ($segments as $seg) {
+        if (!empty($seg['magnetic'])) {
+            $rotated[] = $seg;
+            continue;
+        }
         $s = $seg['start'] ?? [0, 0];
         $e = $seg['end'] ?? [0, 0];
         $rs = rotatePointTrueToMagnetic((float) $s[0], (float) $s[1], $declination);
@@ -278,6 +285,9 @@ function normalizeLatLonToSegment(array $center, array $p0, array $p1, string $i
 
 /**
  * Convert manual runway config (heading-based) to segment format
+ *
+ * The segment shape mirrors cardinalRunwayToSegment() in
+ * scripts/fetch-runways.php; keep the two in sync.
  *
  * @param array $runways Array of { name, heading_1, heading_2 }
  * @return array Array of segments (lines through center)
