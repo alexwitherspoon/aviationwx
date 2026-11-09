@@ -1521,14 +1521,6 @@ jobs:
             rm -f "${CACHE_DIR}/deploy-drain.flag" "${CACHE_DIR}/deploy-drain.done" 2>/dev/null || true
           }
           
-          # Drain in-flight workers immediately before recreate; Apache stays up. Soft-fail only.
-          if [ -f scripts/deploy-drain-workers.sh ]; then
-            chmod +x scripts/deploy-drain-workers.sh
-            scripts/deploy-drain-workers.sh || echo "⚠️  Worker drain helper returned non-zero - continuing deploy"
-          else
-            echo "⚠️  deploy-drain-workers.sh missing - skipping worker drain"
-          fi
-          
           # Always do a full, cache-busted rebuild so the baked app code matches the
           # deployed SHA. The image COPYs the whole tree, so skipping the rebuild
           # on app-only changes leaves a stale image.
@@ -1543,6 +1535,13 @@ jobs:
                 "Docker Build (No Cache)" \
                 "Docker build failed when forcing rebuild without cache" \
                 "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Check disk space: df -h\n3. Check Docker daemon: systemctl status docker\n4. Review build logs above for specific errors\n5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache --pull web"
+            fi
+            # Drain in-flight workers immediately before recreate; Apache stays up. Soft-fail only.
+            if [ -f scripts/deploy-drain-workers.sh ]; then
+              chmod +x scripts/deploy-drain-workers.sh
+              scripts/deploy-drain-workers.sh || echo "⚠️  Worker drain helper returned non-zero - continuing deploy"
+            else
+              echo "⚠️  deploy-drain-workers.sh missing - skipping worker drain"
             fi
             # Start containers with the newly built image
             if ! docker compose -f docker/docker-compose.prod.yml up -d; then
