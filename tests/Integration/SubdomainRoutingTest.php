@@ -16,6 +16,9 @@ final class SubdomainRoutingTest extends TestCase
 {
     private string $baseUrl;
 
+    /**
+     * Skips unless the isolated test stack URL is configured.
+     */
     protected function setUp(): void
     {
         $url = getenv('TEST_API_URL');
@@ -25,6 +28,9 @@ final class SubdomainRoutingTest extends TestCase
         $this->baseUrl = rtrim($url, '/');
     }
 
+    /**
+     * A feature subdomain serves its own page, not an airport 404.
+     */
     #[DataProvider('featureSubdomainProvider')]
     public function testFeatureSubdomainServesItsPage(string $host): void
     {
@@ -32,6 +38,9 @@ final class SubdomainRoutingTest extends TestCase
         $this->assertSame(200, $status, "{$host}/ should serve its page, not an airport 404");
     }
 
+    /**
+     * Feature subdomains routed by index.php.
+     */
     public static function featureSubdomainProvider(): array
     {
         return [
@@ -44,6 +53,9 @@ final class SubdomainRoutingTest extends TestCase
         ];
     }
 
+    /**
+     * The discover host serves the health endpoint, which proves the shell route.
+     */
     public function testDiscoverSubdomainServesHealthEndpoint(): void
     {
         // The bare shell runs a per-airport health scan. The single-id health
@@ -56,6 +68,9 @@ final class SubdomainRoutingTest extends TestCase
         $this->assertSame('down', $data['status'] ?? null);
     }
 
+    /**
+     * Routing ignores a port on the Host header.
+     */
     #[DataProvider('portedHostProvider')]
     public function testSubdomainRoutingIgnoresPort(string $host): void
     {
@@ -63,6 +78,9 @@ final class SubdomainRoutingTest extends TestCase
         $this->assertSame(200, $status, "{$host} should route the same with a port");
     }
 
+    /**
+     * Hosts with ports used by the port-insensitivity cases.
+     */
     public static function portedHostProvider(): array
     {
         return [
@@ -71,6 +89,9 @@ final class SubdomainRoutingTest extends TestCase
         ];
     }
 
+    /**
+     * www is a homepage redirect, never an airport id.
+     */
     #[DataProvider('wwwHostProvider')]
     public function testWwwHostServesHomepageNotAirport404(string $host): void
     {
@@ -78,6 +99,9 @@ final class SubdomainRoutingTest extends TestCase
         $this->assertSame(200, $status, "{$host} should serve the homepage, not an airport 404");
     }
 
+    /**
+     * Hosts that must land on the homepage.
+     */
     public static function wwwHostProvider(): array
     {
         return [
@@ -86,6 +110,9 @@ final class SubdomainRoutingTest extends TestCase
         ];
     }
 
+    /**
+     * An unknown single-label subdomain stays a 404.
+     */
     public function testUnknownSubdomainReturns404(): void
     {
         [$status] = $this->request('/', 'nope.aviationwx.org');
@@ -93,6 +120,8 @@ final class SubdomainRoutingTest extends TestCase
     }
 
     /**
+     * Send a GET request with an explicit Host header.
+     *
      * @return array{0:int,1:string}
      */
     private function request(string $path, string $host): array

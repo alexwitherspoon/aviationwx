@@ -18,11 +18,17 @@ final class RouterHostDerivationTest extends TestCase
 {
     private string $router;
 
+    /**
+     * Load the router source once per test.
+     */
     protected function setUp(): void
     {
         $this->router = (string) file_get_contents(dirname(__DIR__, 2) . '/index.php');
     }
 
+    /**
+     * The port stripping reads $host, never the variable being assigned.
+     */
     public function testHostStrippingReadsHostNotItself(): void
     {
         $this->assertStringContainsString(
@@ -37,6 +43,9 @@ final class RouterHostDerivationTest extends TestCase
         );
     }
 
+    /**
+     * Each feature subdomain must match the port-stripped host.
+     */
     public function testFeatureSubdomainsMatchThePortStrippedHost(): void
     {
         foreach (['guides', 'terms', 'embed', 'discover', 'airports'] as $label) {
@@ -50,6 +59,9 @@ final class RouterHostDerivationTest extends TestCase
         }
     }
 
+    /**
+     * The airport subdomain pattern matches the port-stripped host.
+     */
     public function testAirportSubdomainMatchesThePortStrippedHost(): void
     {
         $line = $this->lineContaining('preg_match($pattern,');
@@ -61,6 +73,9 @@ final class RouterHostDerivationTest extends TestCase
         );
     }
 
+    /**
+     * Return the first router line containing the needle, or null.
+     */
     private function lineContaining(string $needle): ?string
     {
         foreach (explode("\n", $this->router) as $line) {
