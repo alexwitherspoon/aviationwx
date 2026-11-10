@@ -1499,7 +1499,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             // Transient read error (exiftool missing or failing after ensureImageHasExif succeeded)
             // Preserve the upload for retry; don't consume it
             if (($exifCheck['read_status'] ?? null) === 'error') {
-                return ['valid' => true]; // Skip this validation pass, preserve upload
+                return ['valid' => false, 'reason' => 'exif_read_error', 'details' => $exifCheck];
             }
             return ['valid' => false, 'reason' => 'exif_invalid', 'details' => $exifCheck];
         }
