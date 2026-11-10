@@ -359,4 +359,116 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(-0.2329, $result[0]['start'][0], 0.0001);
         $this->assertEqualsWithDelta(0.8693, $result[0]['start'][1], 0.0001);
     }
+
+    public function testCenterRunwaySegments_MovesOffsetSegmentToCenter(): void
+    {
+        // S68 production segment: midpoint (0.19, 0.1984) before centering.
+        $segments = [[
+            'start' => [-0.5172498849657649, 0.3275310232482313],
+            'end' => [0.8973320115491645, 0.06924782342521857],
+            'le_ident' => '08',
+            'he_ident' => '26',
+        ]];
+
+        $centered = centerRunwaySegments($segments);
+        $midX = ($centered[0]['start'][0] + $centered[0]['end'][0]) / 2;
+        $midY = ($centered[0]['start'][1] + $centered[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
+    public function testCenterRunwaySegments_IsIdempotent(): void
+    {
+        $segments = [[
+            'start' => [-0.4, 0.3],
+            'end' => [0.8, 0.1],
+        ]];
+
+        $once = centerRunwaySegments($segments);
+        $twice = centerRunwaySegments($once);
+
+        $this->assertEqualsWithDelta($once[0]['start'][0], $twice[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['start'][1], $twice[0]['start'][1], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['end'][0], $twice[0]['end'][0], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['end'][1], $twice[0]['end'][1], 1e-9);
+    }
+
+    public function testCenterRunwaySegments_PreservesRelativeGeometry(): void
+    {
+        $segments = [
+            ['start' => [-0.2, 0.1], 'end' => [0.2, 0.1]],
+            ['start' => [0.1, -0.3], 'end' => [0.1, 0.3]],
+        ];
+
+        $centered = centerRunwaySegments($segments);
+
+        $this->assertEqualsWithDelta(0.4, $centered[0]['end'][0] - $centered[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta(0.6, $centered[1]['end'][1] - $centered[1]['start'][1], 1e-9);
+        $this->assertEqualsWithDelta(
+            $segments[1]['start'][0] - $segments[0]['start'][0],
+            $centered[1]['start'][0] - $centered[0]['start'][0],
+            1e-9
+        );
+    }
+
+    public function testGetRunwaySegmentsForAirport_CentersManualLatLonRunway(): void
+    {
+        $airport = [
+            'lat' => 46.49129867553711,
+            'lon' => -116.2770004272461,
+            'runways' => [[
+                'name' => '08/26',
+                '08' => ['lat' => 46.4910, 'lon' => -116.2790],
+                '26' => ['lat' => 46.4925, 'lon' => -116.2750],
+            ]],
+        ];
+
+        $segments = getRunwaySegmentsForAirport('synthetic', $airport);
+        $this->assertNotNull($segments);
+        $midX = ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2;
+        $midY = ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
+    public function testCenterRunwaySegments_RescalesToRadiusAfterShifting(): void
+    {
+        $segments = [[
+            'start' => [0.0, 0.0],
+            'end' => [0.0, 2.0],
+        ]];
+
+        $centered = centerRunwaySegments($segments);
+        $midX = ($centered[0]['start'][0] + $centered[0]['end'][0]) / 2;
+        $midY = ($centered[0]['start'][1] + $centered[0]['end'][1]) / 2;
+        $max = max(
+            sqrt($centered[0]['start'][0] ** 2 + $centered[0]['start'][1] ** 2),
+            sqrt($centered[0]['end'][0] ** 2 + $centered[0]['end'][1] ** 2)
+        );
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+        $this->assertEqualsWithDelta(0.9, $max, 1e-9);
+        $this->assertEqualsWithDelta(1.8, $centered[0]['end'][1] - $centered[0]['start'][1], 1e-9);
+    }
+
+    public function testGetRunwaySegmentsForAirport_CentersFileCacheSegments(): void
+    {
+        $airport = [
+            'lat' => 46.49129867553711,
+            'lon' => -116.2770004272461,
+            'icao' => 'OFFSETTEST',
+        ];
+
+        $segments = getRunwaySegmentsForAirport('offsettest', $airport);
+        $this->assertNotNull($segments);
+        $this->assertNotEmpty($segments);
+        $midX = ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2;
+        $midY = ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
 }

@@ -72,7 +72,7 @@ function rotateRunwaySegmentsToMagnetic(array $segments, float $declination): ar
  * Get runway segments for an airport (unified format for frontend)
  *
  * Returns array of segments: [{ start: [x,y], end: [x,y], le_ident, he_ident, source }, ...]
- * Coordinates are normalized -1..1, centered on airport, North = +y.
+ * Coordinates are normalized -1..1, centered on the runway endpoint centroid, North = +y.
  * Segments in true north are rotated to magnetic for display (compass alignment).
  *
  * @param string $airportId Airport identifier (e.g. kspb, cyav)
@@ -89,7 +89,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         } else {
             $segments = manualRunwaysToSegments($airport['runways']);
         }
-        return rotateSegmentsIfTrueNorth($segments, $airport);
+        return rotateSegmentsIfTrueNorth(centerRunwaySegments($segments), $airport);
     }
 
     // Programmatic: check APCu, then file cache (invalidate APCu when file is newer)
@@ -102,7 +102,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         if ($mtimeSuccess && $fileMtime > 0 && (int) $storedMtime === (int) $fileMtime) {
             $cached = @apcu_fetch($apcuKey, $success);
             if ($success && $cached !== false && is_array($cached)) {
-                return rotateSegmentsIfTrueNorth($cached, $airport);
+                return rotateSegmentsIfTrueNorth(centerRunwaySegments($cached), $airport);
             }
         }
     }
@@ -112,7 +112,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         return null;
     }
 
-    // Warm APCu when available; always return file/fixture segments either way
+    // Warm APCu when available.
     if (function_exists('apcu_store')) {
         @apcu_store($apcuKey, $segments, RUNWAYS_APCU_TTL);
         if ($fileMtime > 0) {
@@ -120,7 +120,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         }
     }
 
-    return rotateSegmentsIfTrueNorth($segments, $airport);
+    return rotateSegmentsIfTrueNorth(centerRunwaySegments($segments), $airport);
 }
 
 /**
@@ -137,6 +137,76 @@ function rotateSegmentsIfTrueNorth(array $segments, array $airport): array {
     require_once __DIR__ . '/config.php';
     $declination = getMagneticDeclination($airport);
     return rotateRunwaySegmentsToMagnetic($segments, $declination);
+}
+
+/**
+ * Center a runway segment set on the centroid of its endpoints.
+ *
+ * Segments are projected against the airport reference point upstream, which
+ * can sit well off the runway. The compass is centered on the airport, so an
+ * off-center runway reads as a broken diagram. Shifting by the endpoint
+ * centroid centers the runway system while preserving the relative geometry of
+ * multiple runways. Rescaling keeps the farthest endpoint inside the drawing
+ * radius after the shift.
+ *
+ * @param array<int, array<string, mixed>> $segments Segments with start/end [x,y]
+ * @return array<int, array<string, mixed>> Centered segments
+ */
+function centerRunwaySegments(array $segments): array {
+    if ($segments === []) {
+        return $segments;
+    }
+
+    $sumX = 0.0;
+    $sumY = 0.0;
+    $count = 0;
+    foreach ($segments as $segment) {
+        foreach (['start', 'end'] as $key) {
+            if (!isset($segment[$key][0], $segment[$key][1])) {
+                continue;
+            }
+            $sumX += (float) $segment[$key][0];
+            $sumY += (float) $segment[$key][1];
+            $count++;
+        }
+    }
+    if ($count === 0) {
+        return $segments;
+    }
+
+    $centerX = $sumX / $count;
+    $centerY = $sumY / $count;
+
+    $maxDistance = 0.0;
+    foreach ($segments as $segment) {
+        foreach (['start', 'end'] as $key) {
+            if (!isset($segment[$key][0], $segment[$key][1])) {
+                continue;
+            }
+            $x = (float) $segment[$key][0] - $centerX;
+            $y = (float) $segment[$key][1] - $centerY;
+            $maxDistance = max($maxDistance, sqrt($x * $x + $y * $y));
+        }
+    }
+
+    // The builder scales the farthest endpoint to 0.9; keep that after shifting.
+    $scale = $maxDistance > 0.9 ? 0.9 / $maxDistance : 1.0;
+
+    $centered = [];
+    foreach ($segments as $segment) {
+        foreach (['start', 'end'] as $key) {
+            if (!isset($segment[$key][0], $segment[$key][1])) {
+                continue;
+            }
+            $segment[$key] = [
+                ((float) $segment[$key][0] - $centerX) * $scale,
+                ((float) $segment[$key][1] - $centerY) * $scale,
+            ];
+        }
+        $centered[] = $segment;
+    }
+
+    return $centered;
 }
 
 /**

@@ -114,6 +114,27 @@
       "center_lat": 45.7710278,
       "center_lon": -122.8618333
     },
+    "OFFSETTEST": {
+      "segments": [
+        {
+          "start": [
+            -0.42897064750069436,
+            0.4368159775809093
+          ],
+          "end": [
+            0.8894925912743931,
+            -0.1371237764502045
+          ],
+          "le_ident": "08",
+          "he_ident": "26",
+          "ident_at_start": "08",
+          "ident_at_end": "26",
+          "source": "faa"
+        }
+      ],
+      "center_lat": 46.49129867553711,
+      "center_lon": -116.2770004272461
+    },
     "ZZOA": {
       "center_lat": 45.0,
       "center_lon": -122.0,
