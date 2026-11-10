@@ -153,8 +153,9 @@ function rotateSegmentsIfTrueNorth(array $segments, array $airport): array {
  * can sit well off the runway. The compass is centered on the airport, so an
  * off-center runway reads as a broken diagram. Shifting by the endpoint
  * centroid centers the runway system while preserving the relative geometry of
- * multiple runways. Rescaling keeps the farthest endpoint inside the drawing
- * radius after the shift.
+ * multiple runways. The rescale caps the farthest endpoint at the drawing
+ * radius; it never scales up, so a runway far from the reference point draws
+ * smaller rather than being stretched.
  *
  * @param array<int, array<string, mixed>> $segments Segments with start/end [x,y]
  * @return array<int, array<string, mixed>> Centered segments
@@ -196,7 +197,9 @@ function centerRunwaySegments(array $segments): array {
         }
     }
 
-    // The builder scales the farthest endpoint to 0.9; keep that after shifting.
+    // Cap the farthest endpoint at the builder's 0.9 radius after shifting.
+    // Centering never scales up, so a runway far from the reference point draws
+    // smaller instead of being stretched to full length.
     $scale = $maxDistance > 0.9 ? 0.9 / $maxDistance : 1.0;
 
     $centered = [];
