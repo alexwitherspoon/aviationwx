@@ -359,4 +359,279 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(-0.2329, $result[0]['start'][0], 0.0001);
         $this->assertEqualsWithDelta(0.8693, $result[0]['start'][1], 0.0001);
     }
+
+    public function testCenterRunwaySegments_OffsetSegment_CentersOnMidpoint(): void
+    {
+        // S68 production segment: midpoint (0.19, 0.1984) before centering.
+        $segments = [[
+            'start' => [-0.5172498849657649, 0.3275310232482313],
+            'end' => [0.8973320115491645, 0.06924782342521857],
+            'le_ident' => '08',
+            'he_ident' => '26',
+        ]];
+
+        $centered = centerRunwaySegments($segments);
+        $midX = ($centered[0]['start'][0] + $centered[0]['end'][0]) / 2;
+        $midY = ($centered[0]['start'][1] + $centered[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
+    public function testCenterRunwaySegments_AppliedTwice_ReturnsSameSegments(): void
+    {
+        $segments = [[
+            'start' => [-0.4, 0.3],
+            'end' => [0.8, 0.1],
+        ]];
+
+        $once = centerRunwaySegments($segments);
+        $twice = centerRunwaySegments($once);
+
+        $this->assertEqualsWithDelta($once[0]['start'][0], $twice[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['start'][1], $twice[0]['start'][1], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['end'][0], $twice[0]['end'][0], 1e-9);
+        $this->assertEqualsWithDelta($once[0]['end'][1], $twice[0]['end'][1], 1e-9);
+    }
+
+    public function testCenterRunwaySegments_MultipleRunways_PreservesRelativeGeometry(): void
+    {
+        $segments = [
+            ['start' => [-0.2, 0.1], 'end' => [0.2, 0.1]],
+            ['start' => [0.1, -0.3], 'end' => [0.1, 0.3]],
+        ];
+
+        $centered = centerRunwaySegments($segments);
+
+        $this->assertEqualsWithDelta(0.4, $centered[0]['end'][0] - $centered[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta(0.6, $centered[1]['end'][1] - $centered[1]['start'][1], 1e-9);
+        $this->assertEqualsWithDelta(
+            $segments[1]['start'][0] - $segments[0]['start'][0],
+            $centered[1]['start'][0] - $centered[0]['start'][0],
+            1e-9
+        );
+    }
+
+    public function testGetRunwaySegmentsForAirport_ManualLatLonOffset_ReturnsCenteredSegments(): void
+    {
+        $airport = [
+            'lat' => 46.49129867553711,
+            'lon' => -116.2770004272461,
+            'runways' => [[
+                'name' => '08/26',
+                '08' => ['lat' => 46.4910, 'lon' => -116.2790],
+                '26' => ['lat' => 46.4925, 'lon' => -116.2750],
+            ]],
+        ];
+
+        $segments = getRunwaySegmentsForAirport('synthetic', $airport);
+        $this->assertNotNull($segments);
+        $midX = ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2;
+        $midY = ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
+    public function testCenterRunwaySegments_ShiftedBeyondRadius_RescalesToRadius(): void
+    {
+        $segments = [[
+            'start' => [0.0, 0.0],
+            'end' => [0.0, 2.0],
+        ]];
+
+        $centered = centerRunwaySegments($segments);
+        $midX = ($centered[0]['start'][0] + $centered[0]['end'][0]) / 2;
+        $midY = ($centered[0]['start'][1] + $centered[0]['end'][1]) / 2;
+        $max = max(
+            sqrt($centered[0]['start'][0] ** 2 + $centered[0]['start'][1] ** 2),
+            sqrt($centered[0]['end'][0] ** 2 + $centered[0]['end'][1] ** 2)
+        );
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+        $this->assertEqualsWithDelta(0.9, $max, 1e-9);
+        $this->assertEqualsWithDelta(1.8, $centered[0]['end'][1] - $centered[0]['start'][1], 1e-9);
+    }
+
+    public function testGetRunwaySegmentsForAirport_FileCacheOffset_ReturnsCenteredSegments(): void
+    {
+        // OFFSETTEST is stored uncentered in the fixture; keep it that way so
+        // this test does not pass vacuously.
+        $airport = [
+            'lat' => 46.49129867553711,
+            'lon' => -116.2770004272461,
+            'icao' => 'OFFSETTEST',
+        ];
+
+        $segments = getRunwaySegmentsForAirport('offsettest', $airport);
+        $this->assertNotNull($segments);
+        $this->assertNotEmpty($segments);
+        $midX = ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2;
+        $midY = ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_NumericIdents_ReturnsThroughCenterSegment(): void
+    {
+        $runways = [[
+            'rwy_id' => '15/33',
+            'ends' => [
+                ['end_id' => '15', 'heading_mag' => 150],
+                ['end_id' => '33', 'heading_mag' => 330],
+            ],
+            'is_helipad' => false,
+            'closed' => false,
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways, 'nasr');
+
+        $this->assertCount(1, $segments);
+        $this->assertSame('15', $segments[0]['le_ident']);
+        $this->assertSame('33', $segments[0]['he_ident']);
+        $this->assertSame('33', $segments[0]['ident_at_start']);
+        $this->assertSame('15', $segments[0]['ident_at_end']);
+        $this->assertSame('nasr', $segments[0]['source']);
+        $this->assertTrue($segments[0]['synthesized']);
+        $this->assertTrue($segments[0]['magnetic']);
+        $this->assertEqualsWithDelta(0.45, $segments[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta(-0.7794, $segments[0]['start'][1], 1e-4);
+        $this->assertEqualsWithDelta(
+            0.0,
+            ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2,
+            1e-9
+        );
+        $this->assertEqualsWithDelta(
+            0.0,
+            ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2,
+            1e-9
+        );
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_CardinalIdents_ReturnsThroughCenterSegment(): void
+    {
+        $runways = [[
+            'ends' => [
+                ['end_id' => 'N'],
+                ['end_id' => 'S'],
+            ],
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways);
+
+        $this->assertCount(1, $segments);
+        $this->assertEqualsWithDelta(0.0, $segments[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta(0.9, $segments[0]['start'][1], 1e-9);
+        $this->assertSame('S', $segments[0]['ident_at_start']);
+        $this->assertSame('N', $segments[0]['ident_at_end']);
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_MissingHeadings_UsesIdentHeadings(): void
+    {
+        $runways = [[
+            'ends' => [
+                ['end_id' => '09'],
+                ['end_id' => '27'],
+            ],
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways);
+
+        $this->assertCount(1, $segments);
+        $this->assertTrue($segments[0]['magnetic']);
+        $this->assertEqualsWithDelta(0.9, $segments[0]['start'][0], 1e-9);
+        $this->assertEqualsWithDelta(0.0, $segments[0]['start'][1], 1e-9);
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_TrueAlignment_LeavesMagneticUnset(): void
+    {
+        $runways = [[
+            'ends' => [
+                ['end_id' => '08', 'true_alignment' => 95],
+                ['end_id' => '26', 'true_alignment' => 275],
+            ],
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('magnetic', $segments[0]);
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_HelipadAndClosed_ReturnsEmpty(): void
+    {
+        $runways = [
+            [
+                'is_helipad' => true,
+                'ends' => [['end_id' => 'H1'], ['end_id' => 'H2']],
+            ],
+            [
+                'closed' => true,
+                'ends' => [['end_id' => '01'], ['end_id' => '19']],
+            ],
+        ];
+
+        $this->assertSame([], synthesizeRunwaySegmentsFromDisplay($runways));
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_InvalidIdents_ReturnsEmpty(): void
+    {
+        $runways = [[
+            'ends' => [
+                ['end_id' => 'XX'],
+                ['end_id' => 'YY'],
+            ],
+        ]];
+
+        $this->assertSame([], synthesizeRunwaySegmentsFromDisplay($runways));
+    }
+
+    public function testGetRunwaySegmentsForAirport_CacheMissWithDeclination_DoesNotDoubleRotate(): void
+    {
+        require_once __DIR__ . '/../../lib/nasr/cache.php';
+        require_once __DIR__ . '/../../lib/runway-display.php';
+
+        resetNasrAptCacheMemo();
+        setNasrAptCacheForTesting([
+            'schema_version' => NASR_APT_SCHEMA_VERSION,
+            'airports' => [
+                'OR8TEST' => [
+                    'runways' => [[
+                        'rwy_id' => '15/33',
+                        'length_ft' => 1606,
+                        'surface' => 'TURF',
+                        'ends' => [
+                            ['end_id' => '15', 'true_alignment' => 150],
+                            ['end_id' => '33', 'true_alignment' => 330],
+                        ],
+                    ]],
+                ],
+            ],
+        ]);
+
+        try {
+            $airport = [
+                'id' => 'or8test',
+                'icao' => 'OR8TEST',
+                'lat' => 45.805833,
+                'lon' => -116.688689,
+                'magnetic_declination' => 15,
+            ];
+
+            $segments = getRunwaySegmentsForAirport('or8test', $airport);
+        } finally {
+            resetNasrAptCacheMemo();
+        }
+
+        $this->assertNotNull($segments);
+        $this->assertNotEmpty($segments);
+        $this->assertTrue($segments[0]['magnetic']);
+
+        // The display converts true 150 to magnetic 135; the magnetic flag keeps
+        // the read path from applying declination a second time.
+        $bearing = rad2deg(atan2($segments[0]['start'][0], $segments[0]['start'][1]));
+        $this->assertEqualsWithDelta(135.0, $bearing, 0.5);
+    }
 }

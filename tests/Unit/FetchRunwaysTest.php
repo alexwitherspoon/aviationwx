@@ -382,6 +382,31 @@ class FetchRunwaysTest extends TestCase
         $this->assertEqualsWithDelta(-0.9, $segments[0]['end'][1], 0.0001);
     }
 
+    public function testRunwaysToSegments_CentersCoordinateRunwayOnItsMidpoint(): void
+    {
+        // Coordinates sit northeast of the airport center, like S68.
+        $segments = runwaysToSegments(
+            [[
+                'lat1' => 45.0010,
+                'lon1' => -120.0010,
+                'lat2' => 45.0025,
+                'lon2' => -119.9990,
+                'le_ident' => '08',
+                'he_ident' => '26',
+                'source' => 'faa',
+            ]],
+            45.0,
+            -120.0
+        );
+
+        $this->assertCount(1, $segments);
+        $midX = ($segments[0]['start'][0] + $segments[0]['end'][0]) / 2;
+        $midY = ($segments[0]['start'][1] + $segments[0]['end'][1]) / 2;
+
+        $this->assertEqualsWithDelta(0.0, $midX, 1e-9);
+        $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
+    }
+
     public function testRunwaysToSegments_NonCardinalRunwayWithoutCoordinates_SkipsRow(): void
     {
         $segments = runwaysToSegments(

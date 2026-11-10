@@ -617,7 +617,7 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             'source' => $rw['source'] ?? 'programmatic',
         ];
     }
-    return $segments;
+    return centerRunwaySegments($segments);
 }
 
 /**
