@@ -162,15 +162,25 @@ function readExifTimestamp(string $filePath): array {
     if ($gpsRead['status'] === 'ok') {
         return ['status' => 'ok', 'timestamp' => $gpsRead['timestamp']];
     }
-    if ($gpsRead['status'] === 'error') {
-        return ['status' => 'error', 'timestamp' => 0];
+    if ($gpsRead['status'] === 'absent') {
+        // GPS field not present, try DateTimeOriginal as fallback
+        $dtRead = readDateTimeOriginalFromExif($filePath);
+        if ($dtRead['status'] === 'ok') {
+            return ['status' => 'ok', 'timestamp' => $dtRead['timestamp']];
+        }
+        return $dtRead;  // error or absent
     }
-    // GPS absent, try DateTimeOriginal fallback
+    // GPS read returned error (transient). Try DateTimeOriginal as fallback.
     $dtRead = readDateTimeOriginalFromExif($filePath);
     if ($dtRead['status'] === 'ok') {
         return ['status' => 'ok', 'timestamp' => $dtRead['timestamp']];
     }
-    return $dtRead;  // error or absent
+    if ($dtRead['status'] === 'error') {
+        // Both GPS and DateTimeOriginal reads failed - return error
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    // DateTimeOriginal absent, but GPS error - return the GPS error
+    return ['status' => 'error', 'timestamp' => 0];
 }
 
 /**
@@ -205,6 +215,10 @@ function readDateTimeOriginalFromExif(string $filePath): array {
 function tryReadDateTimeOriginalWithPhpExif(string $filePath): array {
     $exif = @exif_read_data($filePath, 'EXIF', true);
     if ($exif === false) {
+        // Note: exif_read_data() returns false for unreadable files AND for files
+        // without EXIF headers. We can't distinguish these cases, so 'absent' may
+        // also mean the file is unreadable. The exiftool fallback below handles
+        // this case.
         return ['status' => 'absent', 'timestamp' => 0];
     }
     
@@ -223,7 +237,9 @@ function tryReadDateTimeOriginalWithPhpExif(string $filePath): array {
     $timestamp = @strtotime($formatted . ' UTC');
     
     if ($timestamp === false || $timestamp <= 0) {
-        return ['status' => 'error', 'timestamp' => 0];
+        // Malformed timestamp (exif_read_data returned something that couldn't be parsed)
+        // This is a valid read but the timestamp is invalid - return absent, not error.
+        return ['status' => 'absent', 'timestamp' => 0];
     }
     
     return ['status' => 'ok', 'timestamp' => (int)$timestamp];
@@ -265,7 +281,9 @@ function tryReadDateTimeOriginalWithExiftool(string $filePath): array {
     $timestamp = @strtotime($formatted . ' UTC');
     
     if ($timestamp === false || $timestamp <= 0) {
-        return ['status' => 'error', 'timestamp' => 0];
+        // Malformed timestamp (exiftool returned something that couldn't be parsed)
+        // This is a valid read but the timestamp is invalid - return absent, not error.
+        return ['status' => 'absent', 'timestamp' => 0];
     }
     
     return ['status' => 'ok', 'timestamp' => (int)$timestamp];
@@ -276,6 +294,10 @@ function tryReadDateTimeOriginalWithExiftool(string $filePath): array {
  * 
  * WARNING: This returns the camera's local time interpreted as UTC.
  * Only use this as a fallback when GPS fields are not available.
+ * 
+ * Note: This function returns 0 for both missing EXIF data and read errors
+ * (exiftool unavailable, file not readable). Callers that need to distinguish
+ * these outcomes should use readDateTimeOriginalFromExif() instead.
  * 
  * @param string $filePath Path to image
  * @return int Unix timestamp, or 0 if not found/invalid
