@@ -12,6 +12,7 @@ require_once __DIR__ . '/airport-ourairports.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/heading-conversion.php';
+require_once __DIR__ . '/runway-end-ident.php';
 
 /** APCu key prefix for runway segments per airport */
 const RUNWAYS_APCU_PREFIX = 'aviationwx_runways_';
@@ -107,13 +108,19 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         }
     }
 
+    $fromCache = true;
     $segments = loadRunwaySegmentsFromFileCache($airportId, $airport);
     if ($segments === null) {
+        $fromCache = false;
+        $segments = loadRunwaySegmentsFromDisplay($airport, $airportId);
+    }
+    if ($segments === []) {
         return null;
     }
 
-    // Warm APCu when available.
-    if (function_exists('apcu_store')) {
+    // Warm APCu when available. The display fallback is not cached here because
+    // its source (NASR or config) is separate from the runways cache file.
+    if ($fromCache && function_exists('apcu_store')) {
         @apcu_store($apcuKey, $segments, RUNWAYS_APCU_TTL);
         if ($fileMtime > 0) {
             @apcu_store(RUNWAYS_APCU_MTIME_KEY, $fileMtime, RUNWAYS_APCU_TTL);
@@ -207,6 +214,95 @@ function centerRunwaySegments(array $segments): array {
     }
 
     return $centered;
+}
+
+/**
+ * Build through-center segments from display runways.
+ *
+ * Some small airports have runway ends in the display data (NASR, OurAirports,
+ * or config) but no geometry in the runways cache. A runway line only needs
+ * orientation, so draw each pair through the center at its first end's heading.
+ * Magnetic headings are flagged so the true-to-magnetic rotation is skipped.
+ *
+ * @param array<int, array<string, mixed>> $displayRunways Display runways
+ * @param string $source Source label for the segment
+ * @return array<int, array<string, mixed>> Segments
+ */
+function synthesizeRunwaySegmentsFromDisplay(array $displayRunways, string $source = 'display'): array
+{
+    $segments = [];
+    foreach ($displayRunways as $runway) {
+        if (!is_array($runway) || !empty($runway['is_helipad']) || !empty($runway['closed'])) {
+            continue;
+        }
+        $ends = $runway['ends'] ?? null;
+        if (!is_array($ends) || count($ends) < 2) {
+            continue;
+        }
+        $first = is_array($ends[0]) ? $ends[0] : [];
+        $second = is_array($ends[1]) ? $ends[1] : [];
+        $firstId = trim((string) ($first['end_id'] ?? ''));
+        $secondId = trim((string) ($second['end_id'] ?? ''));
+        if ($firstId === '' || $secondId === '') {
+            continue;
+        }
+
+        $magnetic = true;
+        if (isset($first['heading_mag']) && is_numeric($first['heading_mag'])) {
+            $heading = (float) $first['heading_mag'];
+        } elseif (isset($first['true_alignment']) && is_numeric($first['true_alignment'])) {
+            // Raw rows can carry true alignment; the display formatter normally
+            // converts it to heading_mag before this helper sees it.
+            $heading = (float) $first['true_alignment'];
+            $magnetic = false;
+        } else {
+            $parsed = parseRunwayEndIdentMagneticHeading($firstId);
+            if ($parsed === null) {
+                continue;
+            }
+            $heading = $parsed;
+        }
+
+        $angle = $heading * M_PI / 180;
+        $length = 0.9;
+        $segment = [
+            'start' => [sin($angle) * $length, cos($angle) * $length],
+            'end' => [-sin($angle) * $length, -cos($angle) * $length],
+            'le_ident' => $firstId,
+            'he_ident' => $secondId,
+            'ident_at_start' => $secondId,
+            'ident_at_end' => $firstId,
+            'source' => $source,
+            'synthesized' => true,
+        ];
+        if ($magnetic) {
+            $segment['magnetic'] = true;
+        }
+        $segments[] = $segment;
+    }
+
+    return $segments;
+}
+
+/**
+ * Synthesize segments from display runways when the cache has no geometry.
+ *
+ * @param array $airport Airport config
+ * @param string $airportId Airport identifier
+ * @return array<int, array<string, mixed>> Segments, empty when none
+ */
+function loadRunwaySegmentsFromDisplay(array $airport, string $airportId): array
+{
+    require_once __DIR__ . '/runway-display.php';
+
+    $display = getRunwayDisplayForAirport($airport, $airportId, ['include_notam_closures' => false]);
+    if (!is_array($display)) {
+        return [];
+    }
+
+    $source = is_string($display['runway_source'] ?? null) ? $display['runway_source'] : 'display';
+
+    return synthesizeRunwaySegmentsFromDisplay($display['runways'] ?? [], $source);
 }
 
 /**
