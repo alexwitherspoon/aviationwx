@@ -360,7 +360,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.8693, $result[0]['start'][1], 0.0001);
     }
 
-    public function testCenterRunwaySegments_MovesOffsetSegmentToCenter(): void
+    public function testCenterRunwaySegments_OffsetSegment_CentersOnMidpoint(): void
     {
         // S68 production segment: midpoint (0.19, 0.1984) before centering.
         $segments = [[
@@ -378,7 +378,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
     }
 
-    public function testCenterRunwaySegments_IsIdempotent(): void
+    public function testCenterRunwaySegments_AppliedTwice_ReturnsSameSegments(): void
     {
         $segments = [[
             'start' => [-0.4, 0.3],
@@ -394,7 +394,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta($once[0]['end'][1], $twice[0]['end'][1], 1e-9);
     }
 
-    public function testCenterRunwaySegments_PreservesRelativeGeometry(): void
+    public function testCenterRunwaySegments_MultipleRunways_PreservesRelativeGeometry(): void
     {
         $segments = [
             ['start' => [-0.2, 0.1], 'end' => [0.2, 0.1]],
@@ -412,7 +412,7 @@ class RunwaysTest extends TestCase
         );
     }
 
-    public function testGetRunwaySegmentsForAirport_CentersManualLatLonRunway(): void
+    public function testGetRunwaySegmentsForAirport_ManualLatLonOffset_ReturnsCenteredSegments(): void
     {
         $airport = [
             'lat' => 46.49129867553711,
@@ -433,7 +433,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
     }
 
-    public function testCenterRunwaySegments_RescalesToRadiusAfterShifting(): void
+    public function testCenterRunwaySegments_ShiftedBeyondRadius_RescalesToRadius(): void
     {
         $segments = [[
             'start' => [0.0, 0.0],
@@ -454,8 +454,10 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(1.8, $centered[0]['end'][1] - $centered[0]['start'][1], 1e-9);
     }
 
-    public function testGetRunwaySegmentsForAirport_CentersFileCacheSegments(): void
+    public function testGetRunwaySegmentsForAirport_FileCacheOffset_ReturnsCenteredSegments(): void
     {
+        // OFFSETTEST is stored uncentered in the fixture; keep it that way so
+        // this test does not pass vacuously.
         $airport = [
             'lat' => 46.49129867553711,
             'lon' => -116.2770004272461,
@@ -472,7 +474,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $midY, 1e-9);
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_NumericRunway(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_NumericIdents_ReturnsThroughCenterSegment(): void
     {
         $runways = [[
             'rwy_id' => '15/33',
@@ -508,7 +510,7 @@ class RunwaysTest extends TestCase
         );
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_CardinalRunway(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_CardinalIdents_ReturnsThroughCenterSegment(): void
     {
         $runways = [[
             'ends' => [
@@ -526,7 +528,7 @@ class RunwaysTest extends TestCase
         $this->assertSame('N', $segments[0]['ident_at_end']);
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_FallsBackToIdentHeadings(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_MissingHeadings_UsesIdentHeadings(): void
     {
         $runways = [[
             'ends' => [
@@ -543,7 +545,7 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $segments[0]['start'][1], 1e-9);
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_UsesTrueAlignment(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_TrueAlignment_LeavesMagneticUnset(): void
     {
         $runways = [[
             'ends' => [
@@ -558,7 +560,7 @@ class RunwaysTest extends TestCase
         $this->assertArrayNotHasKey('magnetic', $segments[0]);
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_SkipsHelipadAndClosed(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_HelipadAndClosed_ReturnsEmpty(): void
     {
         $runways = [
             [
@@ -574,7 +576,7 @@ class RunwaysTest extends TestCase
         $this->assertSame([], synthesizeRunwaySegmentsFromDisplay($runways));
     }
 
-    public function testSynthesizeRunwaySegmentsFromDisplay_SkipsInvalidIdents(): void
+    public function testSynthesizeRunwaySegmentsFromDisplay_InvalidIdents_ReturnsEmpty(): void
     {
         $runways = [[
             'ends' => [
@@ -586,7 +588,7 @@ class RunwaysTest extends TestCase
         $this->assertSame([], synthesizeRunwaySegmentsFromDisplay($runways));
     }
 
-    public function testGetRunwaySegmentsForAirport_FallsBackToDisplayWithoutDoubleRotation(): void
+    public function testGetRunwaySegmentsForAirport_CacheMissWithDeclination_DoesNotDoubleRotate(): void
     {
         require_once __DIR__ . '/../../lib/nasr/cache.php';
         require_once __DIR__ . '/../../lib/runway-display.php';

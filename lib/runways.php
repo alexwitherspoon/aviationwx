@@ -72,7 +72,7 @@ function rotateRunwaySegmentsToMagnetic(array $segments, float $declination): ar
 /**
  * Get runway segments for an airport (unified format for frontend)
  *
- * Returns array of segments: [{ start: [x,y], end: [x,y], le_ident, he_ident, source }, ...]
+ * Returns array of segments: [{ start: [x,y], end: [x,y], le_ident, he_ident, source, magnetic?, synthesized? }, ...]
  * Coordinates are normalized -1..1, centered on the runway endpoint centroid, North = +y.
  * Segments in true north are rotated to magnetic for display (compass alignment).
  *
@@ -197,9 +197,7 @@ function centerRunwaySegments(array $segments): array {
         }
     }
 
-    // Cap the farthest endpoint at the builder's 0.9 radius after shifting.
-    // Centering never scales up, so a runway far from the reference point draws
-    // smaller instead of being stretched to full length.
+    // Cap at the builder's 0.9 radius; centering never scales up.
     $scale = $maxDistance > 0.9 ? 0.9 / $maxDistance : 1.0;
 
     $centered = [];
@@ -296,6 +294,7 @@ function synthesizeRunwaySegmentsFromDisplay(array $displayRunways, string $sour
  */
 function loadRunwaySegmentsFromDisplay(array $airport, string $airportId): array
 {
+    // Lazy require: runway-display.php requires this file.
     require_once __DIR__ . '/runway-display.php';
 
     $display = getRunwayDisplayForAirport($airport, $airportId, ['include_notam_closures' => false]);
