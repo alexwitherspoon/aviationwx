@@ -414,18 +414,18 @@ function parseGpsExiftoolOutput(array $output): int {
 /**
  * Check if image has EXIF DateTimeOriginal
  * 
- * Returns true when a valid timestamp is present OR when a transient error
- * occurred (preserving the image for retry). Returns false only when the
- * timestamp is genuinely absent (no readable timestamp in EXIF).
+ * Returns true when a valid timestamp is present (status 'ok' with timestamp > 0)
+ * OR when a transient error occurred (status 'error'). Returns false only when
+ * the timestamp is genuinely absent (status 'absent').
+ * 
+ * Callers that need to distinguish transient errors from missing EXIF should
+ * use readExifTimestamp() directly and check the status field.
  * 
  * @param string $filePath Path to image
  * @return bool True if EXIF timestamp exists and is parseable, or transient error
  */
 function hasExifTimestamp(string $filePath): bool {
     $result = readExifTimestamp($filePath);
-    // Return true for 'ok' status (valid timestamp) OR 'error' status (transient failure)
-    // This preserves uploads for retry when exiftool fails momentarily.
-    // Only return false when status is 'absent' (no readable timestamp).
     return $result['status'] !== 'absent';
 }
 
