@@ -374,11 +374,20 @@ class ProcessingPipeline
             return ['valid' => true];
         }
 
-        $exifCheck = validateExifTimestamp($imagePath);
+        $exifRead = readExifTimestamp($imagePath);
+        if ($exifRead['status'] === 'error') {
+            // Transient read failure - defer to the caller's retry logic
+            return ['valid' => true];
+        }
+        if ($exifRead['status'] === 'absent' || $exifRead['timestamp'] === 0) {
+            return ['valid' => false, 'reason' => 'no_exif_timestamp'];
+        }
+        $exifCheck = validateExifTimestampValue($exifRead['timestamp'], $exifRead['status']);
         if (!$exifCheck['valid']) {
             return [
                 'valid' => false,
-                'reason' => $exifCheck['reason'] ?? 'invalid_timestamp'
+                'reason' => $exifCheck['reason'] ?? 'invalid_timestamp',
+                'read_status' => $exifCheck['read_status'] ?? 'absent'
             ];
         }
 

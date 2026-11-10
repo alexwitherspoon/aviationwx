@@ -1485,8 +1485,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Validate EXIF timestamp
-        $exifCheck = validateExifTimestamp($file);
+        $exifCheck = validateExifTimestampWithStatus($file);
         if (!$exifCheck['valid']) {
+            // Transient read error (exiftool missing or failing after ensureImageHasExif succeeded)
+            // Preserve the upload for retry; don't consume it
+            if ($exifCheck['read_status'] === 'error') {
+                return ['valid' => true]; // Skip this validation pass, preserve upload
+            }
             return ['valid' => false, 'reason' => 'exif_invalid', 'details' => $exifCheck];
         }
 

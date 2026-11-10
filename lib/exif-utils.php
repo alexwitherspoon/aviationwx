@@ -146,21 +146,143 @@ function requireExiftool(): bool {
  * @return int Unix timestamp (UTC), or 0 if not found/invalid
  */
 function getExifTimestamp(string $filePath): int {
+    $result = readExifTimestamp($filePath);
+    return $result['timestamp'];
+}
+
+/**
+ * Read EXIF timestamp, distinguishing a failed read from an absent field.
+ *
+ * @param string $filePath Path to image
+ * @return array{status: string, timestamp: int} status is 'ok', 'absent', or 'error'
+ */
+function readExifTimestamp(string $filePath): array {
+    // Try GPS UTC first (authoritative)
+    $gpsRead = readGpsUtcTimestampFromExif($filePath);
+    if ($gpsRead['status'] === 'ok') {
+        return ['status' => 'ok', 'timestamp' => $gpsRead['timestamp']];
+    }
+    if ($gpsRead['status'] === 'error') {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    // GPS absent, try DateTimeOriginal fallback
+    $dtRead = readDateTimeOriginalFromExif($filePath);
+    if ($dtRead['status'] === 'ok') {
+        return ['status' => 'ok', 'timestamp' => $dtRead['timestamp']];
+    }
+    return $dtRead;  // error or absent
+}
+
+/**
+ * Read DateTimeOriginal timestamp from EXIF, distinguishing a failed read from a missing field.
+ *
+ * @param string $filePath Path to image file
+ * @return array{status: string, timestamp: int} status is 'ok', 'absent', or 'error'
+ */
+function readDateTimeOriginalFromExif(string $filePath): array {
     if (!file_exists($filePath)) {
-        return 0;
+        return ['status' => 'error', 'timestamp' => 0];
     }
     
-    // Priority 1: GPS UTC timestamp (added by our pipeline via normalizeExifToUtc)
-    // GPS fields are always UTC per EXIF spec - this is the authoritative source
-    $gpsTimestamp = getGpsUtcTimestampFromExif($filePath);
-    if ($gpsTimestamp > 0) {
-        return $gpsTimestamp;
+    // Try PHP's native exif_read_data first (faster)
+    if (function_exists('exif_read_data')) {
+        $result = tryReadDateTimeOriginalWithPhpExif($filePath);
+        if ($result['status'] !== 'absent') {
+            return $result;
+        }
     }
     
-    // Priority 2: DateTimeOriginal (local time) - fallback for images without GPS fields
-    // WARNING: This may be in camera's local timezone, not UTC
-    // Only used for legacy images before GPS requirement was added
-    return getDateTimeOriginalTimestamp($filePath);
+    // Fallback to exiftool for images where PHP can't read EXIF
+    return tryReadDateTimeOriginalWithExiftool($filePath);
+}
+
+/**
+ * Try to read DateTimeOriginal using PHP's native exif_read_data.
+ *
+ * @param string $filePath Path to image file
+ * @return array{status: string, timestamp: int}
+ */
+function tryReadDateTimeOriginalWithPhpExif(string $filePath): array {
+    $exif = @exif_read_data($filePath, 'EXIF', true);
+    if ($exif === false) {
+        return ['status' => 'absent', 'timestamp' => 0];
+    }
+    
+    // Check various locations where DateTimeOriginal might be stored
+    $dateTime = $exif['EXIF']['DateTimeOriginal'] 
+             ?? $exif['DateTimeOriginal'] 
+             ?? $exif['IFD0']['DateTime']
+             ?? null;
+    
+    if ($dateTime === null) {
+        return ['status' => 'absent', 'timestamp' => 0];
+    }
+    
+    // Parse EXIF format: "2024:12:26 15:30:45"
+    $formatted = str_replace(':', '-', substr($dateTime, 0, 10)) . substr($dateTime, 10);
+    $timestamp = @strtotime($formatted . ' UTC');
+    
+    if ($timestamp === false || $timestamp <= 0) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    
+    return ['status' => 'ok', 'timestamp' => (int)$timestamp];
+}
+
+/**
+ * Try to read DateTimeOriginal using exiftool.
+ *
+ * @param string $filePath Path to image file
+ * @return array{status: string, timestamp: int}
+ */
+function tryReadDateTimeOriginalWithExiftool(string $filePath): array {
+    // exiftool to get DateTimeOriginal
+    $cmd = sprintf(
+        'exiftool -s3 -DateTimeOriginal %s 2>/dev/null',
+        escapeshellarg($filePath)
+    );
+    
+    $output = [];
+    $return = -1;
+    if (!function_exists('exec')) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    $execResult = @exec($cmd, $output, $return);
+    if ($execResult === false) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    
+    // Classify based on exit code and output
+    if ($return !== 0) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    
+    if (empty($output)) {
+        return ['status' => 'absent', 'timestamp' => 0];
+    }
+    
+    $formatted = str_replace(':', '-', substr($output[0], 0, 10)) . substr($output[0], 10);
+    $timestamp = @strtotime($formatted . ' UTC');
+    
+    if ($timestamp === false || $timestamp <= 0) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
+    
+    return ['status' => 'ok', 'timestamp' => (int)$timestamp];
+}
+
+/**
+ * Get DateTimeOriginal timestamp from EXIF (local time, legacy fallback)
+ * 
+ * WARNING: This returns the camera's local time interpreted as UTC.
+ * Only use this as a fallback when GPS fields are not available.
+ * 
+ * @param string $filePath Path to image
+ * @return int Unix timestamp, or 0 if not found/invalid
+ */
+function getDateTimeOriginalTimestamp(string $filePath): int {
+    $result = readDateTimeOriginalFromExif($filePath);
+    return $result['timestamp'];
 }
 
 /**
@@ -261,63 +383,6 @@ function parseGpsExiftoolOutput(array $output): int {
         $timestamp = @strtotime($dateStr);
         if ($timestamp !== false && $timestamp > 0) {
             return (int)$timestamp;
-        }
-    }
-    
-    return 0;
-}
-
-/**
- * Get DateTimeOriginal timestamp from EXIF (local time, legacy fallback)
- * 
- * WARNING: This returns the camera's local time interpreted as UTC.
- * Only use this as a fallback when GPS fields are not available.
- * 
- * @param string $filePath Path to image
- * @return int Unix timestamp, or 0 if not found/invalid
- */
-function getDateTimeOriginalTimestamp(string $filePath): int {
-    if (!file_exists($filePath)) {
-        return 0;
-    }
-    
-    // Try PHP's native exif_read_data first (faster)
-    if (function_exists('exif_read_data')) {
-        $exif = @exif_read_data($filePath, 'EXIF', true);
-        if ($exif !== false) {
-            // Check various locations where DateTimeOriginal might be stored
-            $dateTime = $exif['EXIF']['DateTimeOriginal'] 
-                     ?? $exif['DateTimeOriginal'] 
-                     ?? $exif['IFD0']['DateTime']
-                     ?? null;
-            
-            if ($dateTime !== null) {
-                // Parse EXIF format: "2024:12:26 15:30:45"
-                // Convert to: "2024-12-26 15:30:45"
-                // NOTE: This is local time, but we parse as UTC for backwards compatibility
-                $formatted = str_replace(':', '-', substr($dateTime, 0, 10)) . substr($dateTime, 10);
-                $timestamp = @strtotime($formatted . ' UTC');
-                
-                if ($timestamp !== false && $timestamp > 0) {
-                    return $timestamp;
-                }
-            }
-        }
-    }
-    
-    // Fallback to exiftool for images where PHP can't read EXIF
-    $cmd = sprintf(
-        'exiftool -s3 -DateTimeOriginal %s 2>/dev/null',
-        escapeshellarg($filePath)
-    );
-    $output = @exec($cmd, $outputLines, $exitCode);
-    
-    if ($exitCode === 0 && !empty($output)) {
-        $formatted = str_replace(':', '-', substr($output, 0, 10)) . substr($output, 10);
-        $timestamp = @strtotime($formatted . ' UTC');
-        
-        if ($timestamp !== false && $timestamp > 0) {
-            return $timestamp;
         }
     }
     
@@ -452,11 +517,15 @@ function runExiftoolWithRetry(array $argv): array
  * @throws RuntimeException If exiftool not available (unless in test mode)
  */
 function addExifTimestamp(string $filePath, ?int $timestamp = null, string $timezone = 'UTC', bool $preserveOriginalDateTime = false, ?array $context = null): bool {
-    // In test mode without exiftool, simulate success
+    // In test mode without exiftool, simulate success only when the file exists.
+    // When file doesn't exist, we still want the function to fail as expected by tests.
     if (function_exists('isTestMode') && isTestMode()) {
         exec('which exiftool 2>/dev/null', $output, $exitCode);
         if ($exitCode !== 0) {
-            return true; // Simulate success in test mode
+            if (!file_exists($filePath)) {
+                return false; // File doesn't exist, return false for test consistency
+            }
+            return true; // Simulate success in test mode when exiftool unavailable
         }
     }
     
@@ -596,10 +665,14 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
     }
     
     // Extract camera's EXIF timestamp (most accurate, but may be local time)
-    $exifTimestamp = getExifTimestamp($filePath);
+    $exifRead = readExifTimestamp($filePath);
     
     // Case A: No EXIF or unparseable → REJECT
-    if ($exifTimestamp === 0) {
+    // If read failed (transient), skip this image for retry; don't consume it
+    if ($exifRead['status'] === 'error') {
+        return false; // Return false to allow retry, don't consume the upload
+    }
+    if ($exifRead['status'] === 'absent' || $exifRead['timestamp'] === 0) {
         aviationwx_log('warn', 'Push camera image rejected: no valid EXIF timestamp', [
             'file' => basename($filePath),
             'airport' => $airportId,
@@ -608,6 +681,8 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
         logWebcamRejection($airportId, $camIndex, 'no_exif', 'No valid EXIF DateTimeOriginal found', $filePath);
         return false;
     }
+    
+    $exifTimestamp = $exifRead['timestamp'];
     
     // Calculate time difference
     $diff = $mtime - $exifTimestamp;
@@ -1028,15 +1103,35 @@ function validateExifTimestamp(string $filePath): array {
  *   'reason' => string|null
  * }
  */
-function validateExifTimestampValue(int $timestamp): array {
+function validateExifTimestampValue(int $timestamp, string $readStatus = 'ok'): array {
     $now = time();
+    
+    if ($readStatus === 'error') {
+        // Transient read error - return special code
+        return [
+            'valid' => false,
+            'timestamp' => 0,
+            'reason' => 'exif_read_error',
+            'read_status' => 'error'
+        ];
+    }
+    if ($readStatus === 'absent') {
+        // Genuine absence - reject
+        return [
+            'valid' => false,
+            'timestamp' => 0,
+            'reason' => 'no_exif_timestamp',
+            'read_status' => 'absent'
+        ];
+    }
     
     // No EXIF timestamp - REJECT
     if ($timestamp === 0) {
         return [
             'valid' => false,
             'timestamp' => 0,
-            'reason' => 'no_exif_timestamp'
+            'reason' => 'no_exif_timestamp',
+            'read_status' => 'absent'
         ];
     }
     
@@ -1046,7 +1141,8 @@ function validateExifTimestampValue(int $timestamp): array {
         return [
             'valid' => false,
             'timestamp' => $timestamp,
-            'reason' => sprintf('year_too_old_%d', $year)
+            'reason' => sprintf('year_too_old_%d', $year),
+            'read_status' => 'ok'
         ];
     }
     
@@ -1055,7 +1151,8 @@ function validateExifTimestampValue(int $timestamp): array {
         return [
             'valid' => false,
             'timestamp' => $timestamp,
-            'reason' => sprintf('year_too_future_%d', $year)
+            'reason' => sprintf('year_too_future_%d', $year),
+            'read_status' => 'ok'
         ];
     }
     
@@ -1066,7 +1163,8 @@ function validateExifTimestampValue(int $timestamp): array {
         return [
             'valid' => false,
             'timestamp' => $timestamp,
-            'reason' => sprintf('future_by_%d_seconds', $deltaSeconds)
+            'reason' => sprintf('future_by_%d_seconds', $deltaSeconds),
+            'read_status' => 'ok'
         ];
     }
     
@@ -1077,7 +1175,8 @@ function validateExifTimestampValue(int $timestamp): array {
         return [
             'valid' => false,
             'timestamp' => $timestamp,
-            'reason' => sprintf('stale_by_%.1f_hours', $ageHours)
+            'reason' => sprintf('stale_by_%.1f_hours', $ageHours),
+            'read_status' => 'ok'
         ];
     }
     
@@ -1085,8 +1184,25 @@ function validateExifTimestampValue(int $timestamp): array {
     return [
         'valid' => true,
         'timestamp' => $timestamp,
-        'reason' => null
+        'reason' => null,
+        'read_status' => 'ok'
     ];
+}
+
+/**
+ * Validate image EXIF timestamp, distinguishing a failed read from an absent field.
+ *
+ * @param string $filePath Path to image
+ * @return array {
+ *   'valid' => bool,
+ *   'timestamp' => int,
+ *   'reason' => string|null,
+ *   'read_status' => string
+ * }
+ */
+function validateExifTimestampWithStatus(string $filePath): array {
+    $result = readExifTimestamp($filePath);
+    return validateExifTimestampValue($result['timestamp'], $result['status']);
 }
 
 /**
