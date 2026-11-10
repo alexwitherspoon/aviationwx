@@ -396,7 +396,11 @@ function parseGpsExiftoolOutput(array $output): int {
  * @return bool True if EXIF timestamp exists and is parseable
  */
 function hasExifTimestamp(string $filePath): bool {
-    return getExifTimestamp($filePath) > 0;
+    // Use the tri-state read to distinguish transient errors from missing EXIF.
+    // If the read failed (error status) but the timestamp > 0, the EXIF exists
+    // and the error is transient - return true so callers don't quarantine.
+    $result = readExifTimestamp($filePath);
+    return $result['timestamp'] > 0;
 }
 
 /**
@@ -410,8 +414,10 @@ function hasExifTimestamp(string $filePath): bool {
  * @return bool True when both the GPS UTC and DateTimeOriginal fields are present
  */
 function hasCompleteWebcamExif(string $filePath): bool {
-    return getGpsUtcTimestampFromExif($filePath) > 0
-        && getDateTimeOriginalTimestamp($filePath) > 0;
+    $gpsRead = readGpsUtcTimestampFromExif($filePath);
+    $dtRead = readDateTimeOriginalFromExif($filePath);
+    return $gpsRead['status'] === 'ok' && $gpsRead['timestamp'] > 0
+        && $dtRead['status'] === 'ok' && $dtRead['timestamp'] > 0;
 }
 
 /**
