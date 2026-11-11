@@ -173,7 +173,10 @@ function readExifTimestamp(string $filePath): array {
     // GPS read returned error (transient). Try DateTimeOriginal as fallback.
     $dtRead = readDateTimeOriginalFromExif($filePath);
     if ($dtRead['status'] === 'ok') {
-        return ['status' => 'ok', 'timestamp' => $dtRead['timestamp']];
+        // DateTimeOriginal read succeeded after GPS error.
+        // Return 'error' status so callers know GPS read failed (for future-time
+        // checks that rely on GPS data) and should retry instead of rejecting.
+        return ['status' => 'error', 'timestamp' => 0];
     }
     if ($dtRead['status'] === 'error') {
         // Both GPS and DateTimeOriginal reads failed - return error
@@ -1129,10 +1132,12 @@ function validateExifTimestamp(string $filePath): array {
  * without a second read racing the first.
  *
  * @param int $timestamp Unix timestamp to validate
+ * @param string $readStatus The read status from readExifTimestamp(): 'ok', 'absent', or 'error'
  * @return array {
  *   'valid' => bool,
  *   'timestamp' => int,
- *   'reason' => string|null
+ *   'reason' => string|null,
+ *   'read_status' => string
  * }
  */
 function validateExifTimestampValue(int $timestamp, string $readStatus = 'ok'): array {
