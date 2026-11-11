@@ -170,19 +170,10 @@ function readExifTimestamp(string $filePath): array {
         }
         return $dtRead;  // error or absent
     }
-    // GPS read returned error (transient). Try DateTimeOriginal as fallback.
-    $dtRead = readDateTimeOriginalFromExif($filePath);
-    if ($dtRead['status'] === 'ok') {
-        // DateTimeOriginal read succeeded after GPS error.
-        // Return 'error' status so callers know GPS read failed (for future-time
-        // checks that rely on GPS data) and should retry instead of rejecting.
-        return ['status' => 'error', 'timestamp' => 0];
-    }
-    if ($dtRead['status'] === 'error') {
-        // Both GPS and DateTimeOriginal reads failed - return error
-        return ['status' => 'error', 'timestamp' => 0];
-    }
-    // DateTimeOriginal absent, but GPS error - return the GPS error
+    // GPS read failed (transient). GPS is the authoritative UTC source for
+    // future-time validation; a DateTimeOriginal fallback would be local time
+    // and could fail the UTC-based check. Return error so callers retry
+    // instead of consuming the upload.
     return ['status' => 'error', 'timestamp' => 0];
 }
 
