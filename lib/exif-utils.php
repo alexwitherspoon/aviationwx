@@ -157,23 +157,40 @@ function getExifTimestamp(string $filePath): int {
  * @return array{status: string, timestamp: int} status is 'ok', 'absent', or 'error'
  */
 function readExifTimestamp(string $filePath): array {
-    // Try GPS UTC first (authoritative)
     $gpsRead = readGpsUtcTimestampFromExif($filePath);
+    if ($gpsRead['status'] === 'ok') {
+        return resolveExifTimestampStatus($gpsRead, null);
+    }
+    $dtRead = readDateTimeOriginalFromExif($filePath);
+    return resolveExifTimestampStatus($gpsRead, $dtRead);
+}
+
+/**
+ * Resolve the final tri-state from GPS and DateTimeOriginal read results.
+ *
+ * Pure so the fallback logic is unit-testable without exiftool.
+ *
+ * GPS is the authoritative UTC source. When GPS is absent, DateTimeOriginal
+ * is a valid fallback. When GPS read failed (transient), a DateTimeOriginal
+ * fallback would be local time and could fail the UTC-based future-time check,
+ * so the result is always 'error' to trigger retry.
+ *
+ * @param array{status: string, timestamp: int} $gpsRead GPS read result
+ * @param array{status: string, timestamp: int}|null $dtRead DateTimeOriginal result, null when GPS was ok
+ * @return array{status: string, timestamp: int}
+ */
+function resolveExifTimestampStatus(array $gpsRead, ?array $dtRead): array {
     if ($gpsRead['status'] === 'ok') {
         return ['status' => 'ok', 'timestamp' => $gpsRead['timestamp']];
     }
     if ($gpsRead['status'] === 'absent') {
-        // GPS field not present, try DateTimeOriginal as fallback
-        $dtRead = readDateTimeOriginalFromExif($filePath);
-        if ($dtRead['status'] === 'ok') {
-            return ['status' => 'ok', 'timestamp' => $dtRead['timestamp']];
+        if ($dtRead !== null) {
+            return $dtRead['status'] === 'ok'
+                ? ['status' => 'ok', 'timestamp' => $dtRead['timestamp']]
+                : $dtRead;
         }
-        return $dtRead;  // error or absent
+        return ['status' => 'absent', 'timestamp' => 0];
     }
-    // GPS read failed (transient). GPS is the authoritative UTC source for
-    // future-time validation; a DateTimeOriginal fallback would be local time
-    // and could fail the UTC-based check. Return error so callers retry
-    // instead of consuming the upload.
     return ['status' => 'error', 'timestamp' => 0];
 }
 

@@ -594,6 +594,69 @@ class ExifUtilsTest extends TestCase
         $this->assertSame(0, $result['timestamp']);
     }
 
+    public function testResolveExifTimestampStatus_GpsOk_ReturnsGpsTimestamp()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'ok', 'timestamp' => 1700000000],
+            null
+        );
+        $this->assertSame('ok', $result['status']);
+        $this->assertSame(1700000000, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtOk_ReturnsDtTimestamp()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'ok', 'timestamp' => 1700000123]
+        );
+        $this->assertSame('ok', $result['status']);
+        $this->assertSame(1700000123, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtAbsent_ReturnsAbsent()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'absent', 'timestamp' => 0]
+        );
+        $this->assertSame('absent', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtError_ReturnsError()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'error', 'timestamp' => 0]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsErrorDtOk_ReturnsError()
+    {
+        // GPS is the authoritative UTC source. A DateTimeOriginal fallback
+        // would be local time and could fail the UTC-based future-time check,
+        // so GPS error always yields error regardless of DT result.
+        $result = resolveExifTimestampStatus(
+            ['status' => 'error', 'timestamp' => 0],
+            ['status' => 'ok', 'timestamp' => 1700000456]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsErrorDtAbsent_ReturnsError()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'error', 'timestamp' => 0],
+            ['status' => 'absent', 'timestamp' => 0]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
     public function testReadDateTimeOriginalFromExif_UnreadableFile_ReturnsError()
     {
         // Skip when running as root: chmod 000 is bypassed for root, so
