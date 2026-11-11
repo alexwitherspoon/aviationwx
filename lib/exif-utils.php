@@ -196,6 +196,12 @@ function readDateTimeOriginalFromExif(string $filePath): array {
     if (!file_exists($filePath)) {
         return ['status' => 'error', 'timestamp' => 0];
     }
+    // A file that exists but is unreadable is a transient I/O error (permissions,
+    // NFS hiccup, disk pressure). Classify as 'error' so callers preserve the
+    // upload for retry instead of quarantining it as 'absent'.
+    if (!is_readable($filePath)) {
+        return ['status' => 'error', 'timestamp' => 0];
+    }
     
     // Try PHP's native exif_read_data first (faster)
     if (function_exists('exif_read_data')) {
@@ -218,10 +224,9 @@ function readDateTimeOriginalFromExif(string $filePath): array {
 function tryReadDateTimeOriginalWithPhpExif(string $filePath): array {
     $exif = @exif_read_data($filePath, 'EXIF', true);
     if ($exif === false) {
-        // Note: exif_read_data() returns false for unreadable files AND for files
-        // without EXIF headers. We can't distinguish these cases, so 'absent' may
-        // also mean the file is unreadable. The exiftool fallback below handles
-        // this case.
+        // Unreadable files are handled upstream in readDateTimeOriginalFromExif()
+        // via is_readable(). Reaching here means the file is readable but has no
+        // EXIF headers, so 'absent' is the correct classification.
         return ['status' => 'absent', 'timestamp' => 0];
     }
     

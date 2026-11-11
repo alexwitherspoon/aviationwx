@@ -593,4 +593,25 @@ class ExifUtilsTest extends TestCase
         $this->assertSame('error', $result['status']);
         $this->assertSame(0, $result['timestamp']);
     }
+
+    public function testReadDateTimeOriginalFromExif_UnreadableFile_ReturnsError()
+    {
+        // Skip when running as root: chmod 000 is bypassed for root, so
+        // is_readable() stays true and we can't exercise the error branch.
+        if (function_exists('posix_getuid') && posix_getuid() === 0) {
+            $this->markTestSkipped('Running as root; chmod 000 does not prevent reads.');
+        }
+
+        $tmpFile = $this->testDir . '/unreadable_test.jpg';
+        file_put_contents($tmpFile, 'fake image data');
+        chmod($tmpFile, 0000);
+
+        $this->assertFalse(is_readable($tmpFile), 'Precondition: file must be unreadable');
+
+        $result = readDateTimeOriginalFromExif($tmpFile);
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+
+        chmod($tmpFile, 0644);
+    }
 }
