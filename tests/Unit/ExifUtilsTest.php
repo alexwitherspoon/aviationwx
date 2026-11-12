@@ -593,4 +593,88 @@ class ExifUtilsTest extends TestCase
         $this->assertSame('error', $result['status']);
         $this->assertSame(0, $result['timestamp']);
     }
+
+    public function testResolveExifTimestampStatus_GpsOk_ReturnsGpsTimestamp()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'ok', 'timestamp' => 1700000000],
+            null
+        );
+        $this->assertSame('ok', $result['status']);
+        $this->assertSame(1700000000, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtOk_ReturnsDtTimestamp()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'ok', 'timestamp' => 1700000123]
+        );
+        $this->assertSame('ok', $result['status']);
+        $this->assertSame(1700000123, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtAbsent_ReturnsAbsent()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'absent', 'timestamp' => 0]
+        );
+        $this->assertSame('absent', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsAbsentDtError_ReturnsError()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'absent', 'timestamp' => 0],
+            ['status' => 'error', 'timestamp' => 0]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsErrorDtOk_ReturnsError()
+    {
+        // GPS is the authoritative UTC source. A DateTimeOriginal fallback
+        // would be local time and could fail the UTC-based future-time check,
+        // so GPS error always yields error regardless of DT result.
+        $result = resolveExifTimestampStatus(
+            ['status' => 'error', 'timestamp' => 0],
+            ['status' => 'ok', 'timestamp' => 1700000456]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testResolveExifTimestampStatus_GpsErrorDtAbsent_ReturnsError()
+    {
+        $result = resolveExifTimestampStatus(
+            ['status' => 'error', 'timestamp' => 0],
+            ['status' => 'absent', 'timestamp' => 0]
+        );
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+    }
+
+    public function testReadDateTimeOriginalFromExif_UnreadableFile_ReturnsError()
+    {
+        // Skip when running as root: chmod 000 is bypassed for root, so
+        // is_readable() stays true and we can't exercise the error branch.
+        if (function_exists('posix_getuid') && posix_getuid() === 0) {
+            $this->markTestSkipped('Running as root; chmod 000 does not prevent reads.');
+        }
+
+        $tmpFile = $this->testDir . '/unreadable_test.jpg';
+        file_put_contents($tmpFile, 'fake image data');
+        chmod($tmpFile, 0000);
+
+        $this->assertFalse(is_readable($tmpFile), 'Precondition: file must be unreadable');
+
+        $result = readDateTimeOriginalFromExif($tmpFile);
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(0, $result['timestamp']);
+
+        chmod($tmpFile, 0644);
+    }
 }

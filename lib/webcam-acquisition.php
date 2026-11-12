@@ -1142,6 +1142,15 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure($reason, 'push', $validationResult);
         }
 
+        // Check for transient EXIF read error before normalizing (exiftool missing or
+        // failing momentarily). Preserve the upload for retry; don't consume it.
+        // normalizeExifToUtc returns false for transient errors, which would consume
+        // the upload, so we check for errors first.
+        $exifRead = readExifTimestamp($uploadFile);
+        if ($exifRead['status'] === 'error') {
+            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+        }
+
         // Normalize EXIF timestamp
         $timezone = $this->getTimezone();
         if (!normalizeExifToUtc($uploadFile, $this->airportId, $this->camIndex, $timezone)) {
@@ -1485,8 +1494,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Validate EXIF timestamp
-        $exifCheck = validateExifTimestamp($file);
+        $exifCheck = validateExifTimestampWithStatus($file);
         if (!$exifCheck['valid']) {
+            // Transient read error (exiftool missing or failing after ensureImageHasExif succeeded)
+            // Preserve the upload for retry; don't consume it
+            if (($exifCheck['read_status'] ?? null) === 'error') {
+                return ['valid' => false, 'reason' => 'exif_read_error', 'details' => $exifCheck];
+            }
             return ['valid' => false, 'reason' => 'exif_invalid', 'details' => $exifCheck];
         }
 
@@ -1940,6 +1954,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
             $this->consumeEvaluatedUpload($filePath, $reason);
             return AcquisitionResult::failure($reason, 'push', $validationResult);
+        }
+
+        // Check for transient EXIF read error before normalizing (exiftool missing or
+        // failing momentarily). Preserve the upload for retry; don't consume it.
+        $exifRead = readExifTimestamp($filePath);
+        if ($exifRead['status'] === 'error') {
+            return AcquisitionResult::skip('exiftool_read_failed', 'push');
         }
 
         // Normalize EXIF timestamp to UTC
