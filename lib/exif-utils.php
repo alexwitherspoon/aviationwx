@@ -25,7 +25,6 @@ const EXIF_TIMEZONE_DETECTION_VARIANCE = 600;       // 10 minutes (tolerance aro
  * Check if exiftool is available
  * 
  * Caches result for performance. Required for pipeline operation.
- * In test mode, assumes exiftool is available to allow testing without it installed.
  * 
  * @return bool True if available
  */
@@ -33,13 +32,8 @@ function isExiftoolAvailable(): bool {
     static $available = null;
     
     if ($available === null) {
-        // In test mode, assume exiftool is available to allow testing
-        if (function_exists('isTestMode') && isTestMode()) {
-            $available = true;
-        } else {
-            exec('which exiftool 2>/dev/null', $output, $exitCode);
-            $available = ($exitCode === 0);
-        }
+        exec('which exiftool 2>/dev/null', $output, $exitCode);
+        $available = ($exitCode === 0);
     }
     
     return $available;
@@ -110,17 +104,11 @@ function getExiftoolVersion(): ?string
  *
  * Throws RuntimeException if exiftool is not installed.
  * Call at startup of scripts that need EXIF functionality.
- * In test mode, requirement is waived.
  *
  * @return bool Always returns true
  * @throws RuntimeException If exiftool not found
  */
 function requireExiftool(): bool {
-    // In test mode, waive the requirement
-    if (function_exists('isTestMode') && isTestMode()) {
-        return true;
-    }
-    
     if (!isExiftoolAvailable()) {
         throw new RuntimeException(
             'exiftool is required but not available. ' .
@@ -562,21 +550,9 @@ function runExiftoolWithRetry(array $argv): array
  * @param bool $preserveOriginalDateTime If true, keep existing DateTimeOriginal (only update GPS)
  * @param array<string, mixed>|null $context Optional context for error logs (airport_id, cam_index, source_type)
  * @return bool True on success
- * @throws RuntimeException If exiftool not available (unless in test mode)
+ * @throws RuntimeException If exiftool not available
  */
 function addExifTimestamp(string $filePath, ?int $timestamp = null, string $timezone = 'UTC', bool $preserveOriginalDateTime = false, ?array $context = null): bool {
-    // In test mode without exiftool, simulate success only when the file exists.
-    // When file doesn't exist, we still want the function to fail as expected by tests.
-    if (function_exists('isTestMode') && isTestMode()) {
-        exec('which exiftool 2>/dev/null', $output, $exitCode);
-        if ($exitCode !== 0) {
-            if (!file_exists($filePath)) {
-                return false; // File doesn't exist, return false for test consistency
-            }
-            return true; // Simulate success in test mode when exiftool unavailable
-        }
-    }
-    
     requireExiftool();
     
     if (!file_exists($filePath)) {
@@ -987,14 +963,6 @@ function logWebcamRejection(string $airportId, int $camIndex, string $reason, st
  * @return bool True on success
  */
 function addAviationWxMetadata(string $filePath, string $airportId, int $camIndex, ?string $airportName = null): bool {
-    // In test mode without exiftool, simulate success
-    if (function_exists('isTestMode') && isTestMode()) {
-        exec('which exiftool 2>/dev/null', $output, $exitCode);
-        if ($exitCode !== 0) {
-            return true; // Simulate success in test mode
-        }
-    }
-    
     if (!file_exists($filePath)) {
         return false;
     }
@@ -1059,14 +1027,6 @@ function addAviationWxMetadata(string $filePath, string $airportId, int $camInde
  * @return bool True on success, false on exiftool failure
  */
 function copyExifMetadata(string $sourceFile, string $destFile): bool {
-    // In test mode without exiftool, simulate success
-    if (function_exists('isTestMode') && isTestMode()) {
-        exec('which exiftool 2>/dev/null', $output, $exitCode);
-        if ($exitCode !== 0) {
-            return true; // Simulate success in test mode
-        }
-    }
-
     requireExiftool();
 
     if (!file_exists($sourceFile)) {

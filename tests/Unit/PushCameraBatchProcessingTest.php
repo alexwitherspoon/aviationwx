@@ -325,7 +325,7 @@ class PushCameraBatchProcessingTest extends TestCase
     {
         exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
         if ($whichCode !== 0) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $strategy = $this->createStrategyWithUploadDir($this->testDir);
@@ -437,7 +437,7 @@ class PushCameraBatchProcessingTest extends TestCase
     {
         exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
         if ($whichCode !== 0) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $airport = ['lat' => 0.0, 'lon' => 0.0, 'timezone' => 'UTC'];
