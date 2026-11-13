@@ -233,21 +233,29 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             right: 0;
             bottom: 0;
             z-index: 11;
-            background: #1a1a1a;
+            background: #000;
             color: #fff;
-            text-align: center;
-            padding: 0.8rem 1rem;
+            padding: 0.45rem 0.7rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            line-height: 1.2;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
             pointer-events: none;
         }
-        #cam-label .cam-label-title {
-            font-size: 1.4rem;
-            font-weight: bold;
-            line-height: 1.2;
+        #cam-label .cam-label-name {
+            flex: 1;
+            text-align: left;
+            min-width: 0;
+            word-break: break-word;
         }
-        #cam-label .cam-label-sub {
-            font-size: 0.85rem;
+        #cam-label .cam-label-updated {
+            flex-shrink: 0;
+            font-size: 0.75rem;
             color: #ccc;
-            margin-top: 0.2rem;
+            text-align: right;
         }
         .message {
             position: fixed;
@@ -273,8 +281,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 <img id="cam-img" alt="Airport webcam">
             </div>
             <div id="cam-label">
-                <div class="cam-label-title" id="cam-label-title"></div>
-                <div class="cam-label-sub" id="cam-label-sub"></div>
+                <span class="cam-label-name" id="cam-label-name"></span>
+                <span class="cam-label-updated" id="cam-label-updated">Last Updated: --</span>
             </div>
         </div>
     </div>
@@ -305,8 +313,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var mapLayer = document.getElementById('map-layer');
         var camLayer = document.getElementById('cam-layer');
         var camImg = document.getElementById('cam-img');
-        var camLabelTitle = document.getElementById('cam-label-title');
-        var camLabelSub = document.getElementById('cam-label-sub');
+        var camLabelName = document.getElementById('cam-label-name');
+        var camLabelUpdated = document.getElementById('cam-label-updated');
         var windOverlay = document.getElementById('wind-overlay');
         var conditionsOverlay = document.getElementById('conditions-overlay');
         var windCanvas = document.getElementById('wind-canvas');
@@ -324,6 +332,28 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 
         function delay(ms) {
             return new Promise(function (res) { setTimeout(res, ms); });
+        }
+        // Relative time for the cam "Last Updated" label, matching the
+        // dashboard's format (Xs / Xm / Xh ago).
+        function formatRelativeTime(seconds) {
+            if (isNaN(seconds) || seconds < 0) {
+                return '--';
+            }
+            if (seconds < 60) {
+                return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
+            }
+            if (seconds < 3600) {
+                var minutes = Math.floor(seconds / 60);
+                return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
+            }
+            if (seconds < 86400) {
+                var hours = Math.floor(seconds / 3600);
+                var rem = Math.floor((seconds % 3600) / 60);
+                return hours + (hours === 1 ? ' hour' : ' hours') + ' ' +
+                    rem + (rem === 1 ? ' minute' : ' minutes') + ' ago';
+            }
+            var days = Math.floor(seconds / 86400);
+            return days + (days === 1 ? ' day' : ' days') + ' ago';
         }
         function shuffle(list) {
             for (var i = list.length - 1; i > 0; i--) {
@@ -530,19 +560,36 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     return;
                 }
                 var idx = 0;
+                var displayIdx = 0;
+                var tickTimer = null;
+                camLabelName.textContent = airport.name || airport.id;
                 camImg.classList.add('cam-img--show');
+
+                // Show the age of the current frame, re-evaluated each second
+                // like the dashboard's label until the frame changes.
+                function tick() {
+                    var ts = frames[displayIdx] && frames[displayIdx].timestamp;
+                    var age = (typeof ts === 'number') ? (Date.now() / 1000) - ts : null;
+                    camLabelUpdated.textContent = 'Last Updated: ' +
+                        (age != null ? formatRelativeTime(age) : '--');
+                    tickTimer = setTimeout(tick, 1000);
+                }
+                tick();
+
                 function step() {
                     if (idx >= frames.length) {
+                        if (tickTimer) { clearTimeout(tickTimer); }
                         resolve();
                         return;
                     }
                     camImg.src = frames[idx].url;
-                    camLabelTitle.textContent = airport.name || airport.id;
-                    camLabelSub.textContent = 'Camera ' + (camIndex + 1);
+                    displayIdx = idx;
                     // Preload the next frame while this one shows.
                     if (idx + 1 < frames.length) {
                         preload(frames[idx + 1].url);
                     }
+                    // tick() reads the displayed frame by index, so it tracks
+                    // the age of the frame actually on screen.
                     idx++;
                     setTimeout(step, FRAME_MS);
                 }
