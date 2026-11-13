@@ -412,7 +412,7 @@ if ($discoverMenuAirportsJson === false) {
             params.set('mode', activeMode);
             params.set('scope', scope.value);
             params.set('tourDuration', tourDuration.value);
-            return '/discover?' + params.toString();
+            return window.location.origin + '/discover?' + params.toString();
         }
 
         function selectModeCard(mode) {
