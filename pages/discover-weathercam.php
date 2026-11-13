@@ -453,12 +453,34 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 .then(function (data) {
                     var w = data && data.weather ? data.weather : null;
                     if (!w) { throw new Error('no weather'); }
-                    renderWeather(w);
+                    return loadRunways(airport).then(function (runways) {
+                        renderWeather(w, runways);
+                    });
                 })
                 .catch(function () {
                     windReadout.textContent = '--';
                     conditionsBody.textContent = 'Unavailable';
                 });
+        }
+
+        // The compass draws the airport's runways, from the same public API the
+        // embed widget uses. Airports without runways in config return [] and
+        // the rose renders without a runway line.
+        function loadRunways(airport) {
+            return fetch('/api/v1/airports/' + encodeURIComponent(airport.id))
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    var a = data && data.airport;
+                    var list = (a && Array.isArray(a.runways)) ? a.runways : [];
+                    // drawWindCompass reads heading_1/heading_2 off each runway.
+                    return list.map(function (r) {
+                        return {
+                            heading_1: (typeof r.heading_1 === 'number') ? r.heading_1 : null,
+                            heading_2: (typeof r.heading_2 === 'number') ? r.heading_2 : null
+                        };
+                    });
+                })
+                .catch(function () { return []; });
         }
 
         // A row in the current-conditions panel, matching the widget's metric
@@ -471,7 +493,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 '</div>';
         }
 
-        function drawWind(weather) {
+        function drawWind(weather, runways) {
             // Use the shared compass so the rose matches the dashboard and the
             // embed widget. direction.variable is false when there is a heading.
             if (!window.AviationWX || typeof window.AviationWX.drawWindCompass !== 'function') {
@@ -484,7 +506,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 windSpeed: (typeof weather.wind_speed === 'number') ? weather.wind_speed : null,
                 windDirection: dir,
                 isVRB: isVRB,
-                runways: [],
+                runways: runways || [],
                 isDark: true,
                 size: 'large',
                 cssSize: 210,
@@ -492,8 +514,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             });
         }
 
-        function renderWeather(w) {
-            drawWind(w);
+        function renderWeather(w, runways) {
+            drawWind(w, runways);
 
             var speed = (typeof w.wind_speed === 'number') ? Math.round(w.wind_speed) : null;
             var gust = (typeof w.gust_speed === 'number') ? Math.round(w.gust_speed) : null;
