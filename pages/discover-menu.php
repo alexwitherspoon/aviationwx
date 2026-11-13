@@ -170,12 +170,6 @@ if ($discoverMenuAirportsJson === false) {
             display: block;
             background: #0b0f14;
         }
-        .preview-frame--portrait {
-            /* Dashboard tour is a portrait page; keep a tall, centered frame. */
-            aspect-ratio: 3 / 4;
-            width: auto;
-            max-width: 480px;
-        }
 
         .controls {
             background: var(--panel);
@@ -438,8 +432,6 @@ if ($discoverMenuAirportsJson === false) {
             if (!MODES[mode]) { return; }
             activeMode = mode;
             selectModeCard(mode);
-            // Dashboard tour previews portrait; weathercam previews landscape.
-            previewFrame.classList.toggle('preview-frame--portrait', mode === 'dashboard');
             render();
         }
 
@@ -484,8 +476,6 @@ if ($discoverMenuAirportsJson === false) {
         });
 
         buildScopeOptions();
-        // Start on Dashboard Tour (portrait).
-        previewFrame.classList.add('preview-frame--portrait');
         render();
     })();
     </script>
