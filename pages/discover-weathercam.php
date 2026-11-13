@@ -187,6 +187,13 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             color: #e6edf3;
             font-weight: 600;
         }
+        .wind-details {
+            margin-top: 0.6rem;
+            min-width: 15rem;
+        }
+        .wind-details .metric-row {
+            padding: 0.22rem 0;
+        }
         .conditions-overlay {
             right: 1rem;
             bottom: 1rem;
@@ -308,6 +315,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     <div class="overlay wind-overlay" id="wind-overlay">
         <canvas id="wind-canvas" width="210" height="210"></canvas>
         <div class="wind-readout" id="wind-readout">--</div>
+        <div class="wind-details" id="wind-details"></div>
     </div>
     <div class="overlay conditions-overlay" id="conditions-overlay">
         <h3>Current Conditions</h3>
@@ -339,6 +347,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var conditionsOverlay = document.getElementById('conditions-overlay');
         var windCanvas = document.getElementById('wind-canvas');
         var windReadout = document.getElementById('wind-readout');
+        var windDetails = document.getElementById('wind-details');
         var conditionsBody = document.getElementById('conditions-body');
         var message = document.getElementById('message');
 
@@ -536,8 +545,39 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             });
         }
 
+        // The lower-left wind module mirrors the dashboard's Runway Wind
+        // details: speed, direction (magnetic), gusting, gust factor, and the
+        // day's peak gust. Values mirror the dashboard's rendering.
+        function renderWindDetails(w) {
+            var speed = (typeof w.wind_speed === 'number') ? w.wind_speed : null;
+            var gust = (typeof w.gust_speed === 'number') ? w.gust_speed : null;
+            var wd = w.wind_direction || {};
+            var mag = (typeof wd.magnetic_north === 'number') ? wd.magnetic_north : null;
+            var isVRB = !!wd.variable;
+            var calm = speed != null && speed < 3;
+
+            var speedTxt = (speed == null) ? '--' : (calm ? 'Calm' : Math.round(speed) + ' kt');
+            var dirTxt = '---';
+            if (!calm) {
+                if (isVRB) { dirTxt = 'VRB'; }
+                else if (mag != null) { dirTxt = Math.round(mag) + '&deg;'; }
+            }
+            var gustTxt = (gust != null && gust > 0) ? Math.round(gust) + ' kt' : '--';
+            var gustFactor = (speed != null && gust != null) ? (typeof w.gust_factor === 'number' ? Math.round(w.gust_factor) + ' kt' : '--') : '--';
+            var peak = (typeof w.peak_gust_today === 'number' && w.peak_gust_today > 0) ? Math.round(w.peak_gust_today) + ' kt' : '--';
+
+            var rows = '';
+            rows += metricRow('Wind Speed', speedTxt);
+            rows += metricRow('Wind Direction', dirTxt);
+            rows += metricRow('Gusting', gustTxt);
+            rows += metricRow('Gust Factor', gustFactor);
+            rows += metricRow('Today\'s Peak Gust', peak);
+            windDetails.innerHTML = rows;
+        }
+
         function renderWeather(w, runways) {
             drawWind(w, runways);
+            renderWindDetails(w);
 
             var speed = (typeof w.wind_speed === 'number') ? Math.round(w.wind_speed) : null;
             var gust = (typeof w.gust_speed === 'number') ? Math.round(w.gust_speed) : null;
@@ -565,7 +605,6 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var rows = '';
             rows += metricRow('Temperature', tempF);
             rows += metricRow('Dewpoint', dewF);
-            rows += metricRow('Wind', windTxt);
             rows += metricRow('Visibility', vis);
             rows += metricRow('Ceiling', ceil);
             rows += metricRow('Clouds', cloud);
