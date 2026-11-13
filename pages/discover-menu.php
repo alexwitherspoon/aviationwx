@@ -161,7 +161,6 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
         }
         .mode-card h4 { font-size: 1rem; color: #222; margin-bottom: 0.15rem; }
         .mode-card p { margin: 0; color: #666; font-size: 0.85rem; }
-        .mode-card .check { color: #0066cc; font-size: 1.2rem; line-height: 1; }
 
         .field { margin-bottom: 1rem; }
         .field:last-child { margin-bottom: 0; }
@@ -306,14 +305,12 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                                 <h4>Dashboard Tour</h4>
                                 <p>Fly the map to each airport, then scroll its live dashboard.</p>
                             </div>
-                            <span class="check">&#10003;</span>
                         </div>
                         <div class="mode-card" id="mode-weathercam" role="button" tabindex="0">
                             <div>
                                 <h4>Weathercam Tour</h4>
                                 <p>Fly to each airport for context, then play its webcams.</p>
                             </div>
-                            <span class="check"></span>
                         </div>
                     </div>
                 </div>
