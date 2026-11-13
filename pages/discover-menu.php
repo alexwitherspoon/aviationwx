@@ -237,14 +237,6 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             grid-template-columns: 1fr 1fr;
             gap: 0 1rem;
         }
-        .panel h3 .units-hint {
-            font-size: 0.7rem;
-            font-weight: 500;
-            text-transform: none;
-            letter-spacing: 0;
-            color: #999;
-            margin-left: 0.35rem;
-        }
 
         .url-row {
             display: flex;
@@ -355,8 +347,8 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                     </div>
                 </div>
 
-                <div class="panel">
-                    <h3>Units <span class="units-hint">weathercam only</span></h3>
+                <div class="panel hidden" id="units-panel">
+                    <h3>Units</h3>
                     <div class="units-grid">
                         <div class="field">
                             <label for="unitTemp">Temperature</label>
@@ -527,6 +519,12 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             if (!MODES[mode]) { return; }
             activeMode = mode;
             selectModeCard(mode);
+            // Only the weathercam tour takes unit params, so the units panel
+            // appears for it and hides for the dashboard tour.
+            var unitsPanel = document.getElementById('units-panel');
+            if (unitsPanel) {
+                unitsPanel.classList.toggle('hidden', mode !== 'weathercam');
+            }
             render();
         }
 
