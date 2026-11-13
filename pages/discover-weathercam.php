@@ -278,6 +278,15 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             letter-spacing: 0.5px;
             color: #9aa7b4;
         }
+        .module-updated {
+            margin-top: 0.6rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #2a3441;
+            font-size: 0.72rem;
+            color: #9aa7b4;
+            text-align: right;
+        }
+        .module-updated span { color: #cfd8e0; }
         .metric-row {
             display: flex;
             justify-content: space-between;
@@ -388,10 +397,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         <canvas id="wind-canvas" width="210" height="210"></canvas>
         <div class="wind-readout" id="wind-readout">--</div>
         <div class="wind-details" id="wind-details"></div>
+        <div class="module-updated">Last Updated: <span id="wind-updated">--</span></div>
     </div>
     <div class="overlay conditions-overlay" id="conditions-overlay">
         <h3>Current Conditions</h3>
         <div id="conditions-body">Loading...</div>
+        <div class="module-updated">Last Updated: <span id="conditions-updated">--</span></div>
     </div>
     <div class="brand" id="brand"><img src="/public/images/logo.svg" alt="AviationWX.org"></div>
     <div class="page-title" id="page-title"></div>
@@ -435,8 +446,22 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var windCanvas = document.getElementById('wind-canvas');
         var windReadout = document.getElementById('wind-readout');
         var windDetails = document.getElementById('wind-details');
+        var windUpdated = document.getElementById('wind-updated');
         var conditionsBody = document.getElementById('conditions-body');
+        var conditionsUpdated = document.getElementById('conditions-updated');
         var message = document.getElementById('message');
+
+        // Track the per-module "Last Updated" tick timers so they reset when an
+        // airport changes. Each module has its own timer slot.
+        function makeModuleTimer() {
+            var t = { timer: null };
+            t.clear = function () {
+                if (t.timer) { clearTimeout(t.timer); t.timer = null; }
+            };
+            return t;
+        }
+        var windUpdateTimer = makeModuleTimer();
+        var conditionsUpdateTimer = makeModuleTimer();
 
         var MAP_DWELL_MS = 15000;          // hold the map after flying to an airport
         var FRAME_MS = 500;                // history player pacing (2 FPS), matches the dashboard player
@@ -471,6 +496,17 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             }
             var days = Math.floor(seconds / 86400);
             return days + (days === 1 ? ' day' : ' days') + ' ago';
+        }
+        // Show a module's "Last Updated: Xs ago", ticking each second.
+        function renderModuleUpdated(el, ts, timerRef) {
+            if (!el) { return; }
+            var render = function () {
+                var age = (typeof ts === 'number') ? (Date.now() / 1000) - ts : null;
+                el.textContent = age != null ? formatRelativeTime(age) : '--';
+                if (timerRef && timerRef.timer) { clearTimeout(timerRef.timer); }
+                timerRef.timer = setTimeout(render, 1000);
+            };
+            render();
         }
         function shuffle(list) {
             for (var i = list.length - 1; i > 0; i--) {
@@ -725,6 +761,22 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             windReadout.innerHTML = windTxt;
 
             conditionsBody.innerHTML = renderConditions(w);
+
+            // Last-updated footers per module. The wind footer uses the wind
+            // observation time; the conditions footer prefers the METAR
+            // visibility time so it reflects the aviation data, falling back to
+            // the overall observation otherwise.
+            var obs = (w._field_obs_time_map && typeof w._field_obs_time_map === 'object')
+                ? w._field_obs_time_map
+                : {};
+            var windTs = (typeof obs.wind_speed === 'number') ? obs.wind_speed
+                : ((typeof w.last_updated === 'number') ? w.last_updated : null);
+            var condTs = (typeof obs.visibility === 'number') ? obs.visibility
+                : ((typeof w.last_updated === 'number') ? w.last_updated : null);
+            windUpdateTimer.clear();
+            conditionsUpdateTimer.clear();
+            renderModuleUpdated(windUpdated, windTs, windUpdateTimer);
+            renderModuleUpdated(conditionsUpdated, condTs, conditionsUpdateTimer);
         }
 
         // Mirror the dashboard's Current Conditions grid on the right panel.
