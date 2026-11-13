@@ -100,6 +100,30 @@ final class SubdomainRoutingTest extends TestCase
     }
 
     /**
+     * mode=weathercam selects the weathercam loop page, its deck bootstrap,
+     * and the map element, not the menu or the dashboard tour.
+     */
+    public function testDiscoverWeathercamRendersWhenModeWeathercam(): void
+    {
+        [$status, $body] = $this->request('/?mode=weathercam', 'discover.aviationwx.org');
+        $this->assertSame(200, $status);
+        $this->assertStringContainsString('DISCOVER_WEATHERCAM_DECK', $body);
+        $this->assertStringContainsString('id="map"', $body);
+        $this->assertStringNotContainsString('id="discover-map"', $body);
+    }
+
+    /**
+     * The weathercam page stays off the search index, like the tour and any
+     * configured discover page.
+     */
+    public function testDiscoverWeathercamPageIsNoindex(): void
+    {
+        [$status, $body] = $this->request('/?mode=weathercam', 'discover.aviationwx.org');
+        $this->assertSame(200, $status);
+        $this->assertStringContainsString('name="robots" content="noindex, nofollow"', $body);
+    }
+
+    /**
      * Routing ignores a port on the Host header.
      */
     #[DataProvider('portedHostProvider')]

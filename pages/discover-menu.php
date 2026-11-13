@@ -106,16 +106,6 @@ if ($discoverMenuAirportsJson === false) {
         }
         .mode-card h2 { margin: 0 0 0.25rem; font-size: 1.1rem; }
         .mode-card p { margin: 0; color: var(--muted); }
-        .mode-card--muted {
-            opacity: 0.7;
-        }
-        .soon-tag {
-            margin-top: 0.35rem;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: var(--accent);
-        }
 
         .controls {
             background: var(--panel);
@@ -222,13 +212,12 @@ if ($discoverMenuAirportsJson === false) {
                 </div>
                 <button type="button" id="pick-dashboard">Choose</button>
             </div>
-            <div class="mode-card mode-card--muted">
+            <div class="mode-card">
                 <div>
                     <h2>Weathercam Loop</h2>
                     <p>Fly to each airport for context, then play its webcams.</p>
-                    <p class="soon-tag">Coming soon</p>
                 </div>
-                <button type="button" id="pick-weathercam" disabled>Choose</button>
+                <button type="button" id="pick-weathercam">Choose</button>
             </div>
         </div>
 
@@ -238,7 +227,7 @@ if ($discoverMenuAirportsJson === false) {
                 <label for="mode">Mode</label>
                 <select id="mode">
                     <option value="dashboard">Dashboard Tour</option>
-                    <option value="weathercam" disabled>Weathercam Loop (coming soon)</option>
+                    <option value="weathercam">Weathercam Loop</option>
                 </select>
             </div>
             <div class="field">
@@ -386,6 +375,7 @@ if ($discoverMenuAirportsJson === false) {
         }
 
         document.getElementById('pick-dashboard').addEventListener('click', function () { chooseMode('dashboard'); });
+        document.getElementById('pick-weathercam').addEventListener('click', function () { chooseMode('weathercam'); });
 
         buildScopeOptions();
         render();

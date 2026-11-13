@@ -59,6 +59,10 @@ if (isset($_GET['pool']) && $_GET['pool'] === '1') {
 // or unhandled falls back to the menu so a stale link never lands on a dead
 // screen.
 $discoverMode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
+if ($discoverMode === 'weathercam') {
+    require_once __DIR__ . '/discover-weathercam.php';
+    exit;
+}
 if ($discoverMode !== 'dashboard') {
     require_once __DIR__ . '/discover-menu.php';
     exit;
