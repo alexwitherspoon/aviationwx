@@ -54,6 +54,16 @@ if (isset($_GET['pool']) && $_GET['pool'] === '1') {
     exit;
 }
 
+// Mode dispatch. The bare /discover path is the menu; a configured flow is
+// requested with ?mode=dashboard (tour) or ?mode=weathercam. Anything absent
+// or unhandled falls back to the menu so a stale link never lands on a dead
+// screen.
+$discoverMode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
+if ($discoverMode !== 'dashboard') {
+    require_once __DIR__ . '/discover-menu.php';
+    exit;
+}
+
 // HTML shell: compute and shuffle the initial deck once so the booth has an
 // airport to show the moment the page finishes loading.
 $discoverConfig = loadConfig();
@@ -73,6 +83,8 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <!-- The tour runs on configured URLs (?mode=dashboard), so keep it off the index. -->
+    <meta name="robots" content="noindex, nofollow">
     <title>Discover - AviationWX.org</title>
     <style>
         /* Full-bleed kiosk shell. The child pages are the display; the shell is

@@ -76,11 +76,24 @@ final class SubdomainRoutingTest extends TestCase
     }
 
     /**
-     * The discover host renders the shell, not an airport 404 or the homepage.
+     * The discover host renders the menu at the bare path, not an airport 404
+     * or the homepage. Menu never runs the per-airport health scan.
      */
-    public function testDiscoverShellRenders(): void
+    public function testDiscoverMenuRendersAtBarePath(): void
     {
         [$status, $body] = $this->request('/', 'discover.aviationwx.org');
+        $this->assertSame(200, $status);
+        $this->assertStringContainsString('id="preview"', $body);
+        $this->assertStringContainsString('Dashboard Tour', $body);
+    }
+
+    /**
+     * mode=dashboard selects the dashboard tour shell; the idle masthead and
+     * the DISCOVER_DECK bootstrap belong to the tour, not the menu.
+     */
+    public function testDiscoverTourRendersWhenModeDashboard(): void
+    {
+        [$status, $body] = $this->request('/?mode=dashboard', 'discover.aviationwx.org');
         $this->assertSame(200, $status);
         $this->assertStringContainsString('id="discover-map"', $body);
         $this->assertStringContainsString('DISCOVER_DECK', $body);
