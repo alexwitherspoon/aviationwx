@@ -393,10 +393,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             layer.classList.toggle('layer--hidden', !visible);
         }
         // The weather overlays sit over the map to give context while an
-        // airport is located, then hide so the webcam is unobstructed.
+        // airport is located, then hide so the webcam is unobstructed. The
+        // airport title rides on the map too, so it hides with the rest.
         function setWeatherOverlays(visible) {
             windOverlay.style.display = visible ? 'block' : 'none';
             conditionsOverlay.style.display = visible ? 'block' : 'none';
+            pageTitle.style.display = visible ? 'block' : 'none';
         }
 
         function isOperational(id) {
