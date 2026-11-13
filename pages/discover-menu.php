@@ -2,10 +2,11 @@
 /**
  * Discover menu: pick a demo mode and scope, get a configured URL.
  *
- * The landing page for the discover kiosk. It renders one card per demo mode
- * and a scope selector, then shows a live preview URL for the configured
- * combination. The URL carries every choice in query params, so a screen can
- * bookmark or be pointed at one specific flow. Play/Load navigates there.
+ * The landing page for the discover kiosk, styled to match the embed
+ * generator. It renders one card per demo mode and a scope selector, then
+ * shows a live preview and a full URL for the configured combination. The URL
+ * carries every choice in query params, so a display can be pointed at one
+ * specific flow.
  *
  * This file is included from pages/discover.php only when no mode (or an
  * unhandled mode) was requested. It owns its own full document; the shell does
@@ -13,6 +14,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/seo.php';
 
 header('Content-Type: text/html; charset=utf-8');
 
@@ -47,6 +49,11 @@ $discoverMenuAirportsJson = json_encode($discoverMenuAirports, JSON_INVALID_UTF8
 if ($discoverMenuAirportsJson === false) {
     $discoverMenuAirportsJson = '[]';
 }
+
+$baseDomain = getBaseDomain();
+$pageTitle = 'Discover - AviationWX.org';
+$pageDescription = 'Configure and play the AviationWX demo kiosk: a dashboard tour or a landscape weathercam loop you can bookmark onto a display screen.';
+$canonicalUrl = 'https://discover.' . $baseDomain;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -56,39 +63,48 @@ if ($discoverMenuAirportsJson === false) {
     <?php if ($discoverMenuNoIndex): ?>
     <meta name="robots" content="noindex, nofollow">
     <?php endif; ?>
-    <title>Discover - AviationWX.org</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+
+    <?php
+    echo generateFaviconTags();
+    echo "\n    ";
+    echo generateEnhancedMetaTags($pageDescription, 'discover, demo, airport webcams, weather kiosk, digital signage');
+    echo "\n    ";
+    echo generateCanonicalTag($canonicalUrl);
+    ?>
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
-        :root {
-            --bg: #0b0f14;
-            --panel: #141a22;
-            --panel-border: #2a3441;
-            --text: #e6edf3;
-            --muted: #9aa7b4;
-            --accent: #4c9aff;
-            --accent-hover: #6aadff;
-        }
-        * { box-sizing: border-box; }
-        html, body {
-            margin: 0;
-            padding: 0;
-            background: var(--bg);
-            color: var(--text);
-            font-family: system-ui, -apple-system, sans-serif;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
             min-height: 100vh;
         }
-        .wrap {
-            max-width: 1640px;
+
+        .container {
+            max-width: 1600px;
             margin: 0 auto;
-            padding: 2.5rem 1.5rem 4rem;
+            padding: 1.5rem;
         }
-        h1 {
-            font-size: 1.6rem;
-            margin: 0 0 0.25rem;
+
+        .page-heading {
+            margin-bottom: 1.5rem;
         }
-        .tagline {
-            color: var(--muted);
-            margin: 0 0 2rem;
+        .page-heading h1 {
+            font-size: 1.5rem;
+            color: #222;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
+        .page-heading p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
         .main-layout {
             display: grid;
             grid-template-columns: minmax(340px, 400px) 3fr;
@@ -103,64 +119,110 @@ if ($discoverMenuAirportsJson === false) {
         .left-panel {
             min-width: 0;
         }
+
+        /* Panels and controls, site-light like the embed generator */
+        .panel {
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .panel h3 {
+            color: #0066cc;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.9rem;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.6rem;
+        }
+        .panel:last-child { margin-bottom: 0; }
+
         .modes {
             display: grid;
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: 0.75rem;
         }
         .mode-card {
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            padding: 1.25rem 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
+            border: 1px solid #d9d9d9;
+            border-radius: 8px;
+            padding: 0.9rem 1rem;
             cursor: pointer;
-            transition: border-color 0.15s, background-color 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            transition: border-color 0.15s, background 0.15s;
         }
-        .mode-card:hover { border-color: var(--accent); }
+        .mode-card:hover { border-color: #0066cc; }
         .mode-card--active {
-            border-color: var(--accent);
-            background: #1a2634;
+            border-color: #0066cc;
+            background: #f0f7ff;
         }
-        .mode-card h2 { margin: 0 0 0.25rem; font-size: 1.1rem; }
-        .mode-card p { margin: 0; color: var(--muted); }
-        .mode-card .check {
-            color: var(--accent);
-            font-size: 1.3rem;
-            line-height: 1;
+        .mode-card h4 { font-size: 1rem; color: #222; margin-bottom: 0.15rem; }
+        .mode-card p { margin: 0; color: #666; font-size: 0.85rem; }
+        .mode-card .check { color: #0066cc; font-size: 1.2rem; line-height: 1; }
+
+        .field { margin-bottom: 1rem; }
+        .field:last-child { margin-bottom: 0; }
+        .field label {
+            display: block;
+            color: #666;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
         }
-        .mode-card--active .check { content: '\2713'; }
+        .field select {
+            width: 100%;
+            padding: 0.55rem 0.7rem;
+            background: #f8f9fa;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            color: #333;
+            font-size: 0.95rem;
+        }
+        .field select:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        /* Right column */
+        .right-column {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .right-column .panel { margin-bottom: 0; }
 
         .preview-panel {
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
             overflow: hidden;
         }
         .preview-header {
-            padding: 0.9rem 1.2rem;
-            border-bottom: 1px solid var(--panel-border);
+            padding: 0.8rem 1.2rem;
+            border-bottom: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .preview-header h3 {
-            margin: 0;
-            font-size: 1rem;
-            color: var(--text);
-        }
-        .preview-header span {
-            color: var(--muted);
+            color: #0066cc;
             font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+            border: 0;
+            padding: 0;
         }
+        .preview-header span { color: #888; font-size: 0.8rem; }
         .preview-body {
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 1rem;
+            background: #0b0f14;
         }
         .preview-frame {
             width: 100%;
@@ -170,128 +232,80 @@ if ($discoverMenuAirportsJson === false) {
             display: block;
             background: #0b0f14;
         }
-        .right-column {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-        .right-column .controls {
-            margin-bottom: 0;
-        }
-
-        .controls {
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .controls h3 {
-            margin: 0 0 1rem;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--muted);
-        }
-        .field {
-            margin-bottom: 1rem;
-        }
-        .field:last-child { margin-bottom: 0; }
-        .field label {
-            display: block;
-            color: var(--muted);
-            font-size: 0.85rem;
-            margin-bottom: 0.35rem;
-        }
-        .field select,
-        .field input {
-            width: 100%;
-            padding: 0.6rem 0.75rem;
-            background: #0f141b;
-            border: 1px solid var(--panel-border);
-            border-radius: 6px;
-            color: var(--text);
-            font-size: 0.95rem;
-        }
-        .field select:focus,
-        .field input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
 
         .url-row {
             display: flex;
             gap: 0.6rem;
             align-items: center;
         }
-        .url-row .preview {
+        .url-row .url-value {
             flex: 1;
-            background: #0f141b;
-            border: 1px solid var(--panel-border);
+            background: #f8f9fa;
+            border: 1px solid #d9d9d9;
             border-radius: 6px;
-            padding: 0.6rem 0.75rem;
+            padding: 0.55rem 0.7rem;
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 0.8rem;
-            color: var(--text);
+            color: #333;
             overflow-x: auto;
             white-space: nowrap;
         }
         button {
             border: 0;
             border-radius: 6px;
-            padding: 0.6rem 1rem;
+            padding: 0.55rem 1rem;
             font-size: 0.9rem;
             cursor: pointer;
-            background: var(--accent);
+            background: #0066cc;
             color: #fff;
             white-space: nowrap;
         }
-        button:hover { background: var(--accent-hover); }
+        button:hover { background: #0052a3; }
         button.secondary {
-            background: transparent;
-            border: 1px solid var(--panel-border);
-            color: var(--text);
+            background: #fff;
+            border: 1px solid #d9d9d9;
+            color: #333;
         }
-        button.secondary:hover { background: #1a222c; }
-        button:disabled {
-            background: transparent;
-            border: 1px solid var(--panel-border);
-            color: var(--muted);
-            cursor: not-allowed;
-        }
-        .hint { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+        button.secondary:hover { background: #f0f0f0; }
+        .hint { color: #888; font-size: 0.8rem; margin-top: 0.5rem; }
+
         .footer {
-            margin-top: 2rem;
-            color: var(--muted);
-            font-size: 0.85rem;
             text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-size: 0.85rem;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 2rem;
         }
-        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a { color: #0066cc; text-decoration: none; }
         .footer a:hover { text-decoration: underline; }
         .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div class="wrap">
-        <h1>AviationWX Discover</h1>
-        <p class="tagline">Pick a demo, choose what to show, and point a display at the URL.</p>
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+
+    <div class="container">
+        <div class="page-heading">
+            <h1>✈️ Discover</h1>
+            <p>Configure the demo kiosk, preview it, and copy a URL to point a display at.</p>
+        </div>
 
         <div class="main-layout">
             <div class="left-panel">
-                <div class="controls">
+                <div class="panel">
                     <h3>Mode</h3>
                     <div class="modes">
                         <div class="mode-card mode-card--active" id="mode-dashboard" role="button" tabindex="0">
                             <div>
-                                <h2>Dashboard Tour</h2>
+                                <h4>Dashboard Tour</h4>
                                 <p>Fly the map to each airport, then scroll its live dashboard.</p>
                             </div>
                             <span class="check">&#10003;</span>
                         </div>
                         <div class="mode-card" id="mode-weathercam" role="button" tabindex="0">
                             <div>
-                                <h2>Weathercam Loop</h2>
+                                <h4>Weathercam Loop</h4>
                                 <p>Fly to each airport for context, then play its webcams.</p>
                             </div>
                             <span class="check"></span>
@@ -299,7 +313,7 @@ if ($discoverMenuAirportsJson === false) {
                     </div>
                 </div>
 
-                <div class="controls">
+                <div class="panel">
                     <h3>Configure</h3>
                     <div class="field">
                         <label for="scope">Scope</label>
@@ -340,22 +354,31 @@ if ($discoverMenuAirportsJson === false) {
                     </div>
                 </div>
 
-                <div class="controls">
+                <div class="panel">
                     <h3>URL</h3>
                     <div class="url-row">
-                        <div class="preview" id="preview" aria-live="polite"></div>
+                        <div class="url-value" id="preview" aria-live="polite"></div>
                         <button type="button" id="copy">Copy</button>
-                        <button type="button" id="play">Play</button>
+                        <button type="button" class="secondary" id="play">Play</button>
                     </div>
                     <p class="hint">Bookmark the URL, or paste it into a display screen. This page stays off the search index when configured.</p>
                 </div>
             </div>
         </div>
-
-        <div class="footer">
-            <a href="https://aviationwx.org">aviationwx.org</a> &middot; Built for pilots, by pilots
-        </div>
     </div>
+
+    <footer class="footer">
+        <p>
+            &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> &middot;
+            <a href="https://airports.aviationwx.org">Airports</a> &middot;
+            <a href="https://guides.aviationwx.org">Guides</a> &middot;
+            <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> &middot;
+            <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener">Open Source</a> &middot;
+            <a href="https://terms.aviationwx.org">Terms of Service</a> &middot;
+            <a href="https://api.aviationwx.org">API</a> &middot;
+            <a href="https://status.aviationwx.org">Status</a>
+        </p>
+    </footer>
 
     <script>
     (function () {
