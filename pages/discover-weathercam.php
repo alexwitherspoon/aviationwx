@@ -97,6 +97,35 @@ if (isset($_GET['tourDuration']) && preg_match('/^[1-9][0-9]*$/', (string) $_GET
     }
 }
 
+// Display units, following the embed generator's param names, so a display
+// can choose units without touching code. Values are validated, not echoed
+// back raw, so a bogus param just falls back to the default unit.
+$discoverWeathercamUnits = [
+    'temp' => 'F',
+    'dist' => 'ft',
+    'wind' => 'kt',
+    'baro' => 'inHg',
+];
+foreach (['temp', 'dist', 'wind', 'baro'] as $unitKey) {
+    if (!isset($_GET[$unitKey])) {
+        continue;
+    }
+    $raw = strtolower(trim((string) $_GET[$unitKey]));
+    if ($unitKey === 'temp' && ($raw === 'f' || $raw === 'c')) {
+        $discoverWeathercamUnits[$unitKey] = strtoupper($raw);
+    } elseif ($unitKey === 'dist' && ($raw === 'ft' || $raw === 'm')) {
+        $discoverWeathercamUnits[$unitKey] = $raw;
+    } elseif ($unitKey === 'wind' && in_array($raw, ['kt', 'mph', 'kmh'], true)) {
+        $discoverWeathercamUnits[$unitKey] = $raw;
+    } elseif ($unitKey === 'baro' && in_array($raw, ['inhg', 'hpa', 'mmhg'], true)) {
+        $discoverWeathercamUnits[$unitKey] = ($raw === 'inhg') ? 'inHg' : $raw;
+    }
+}
+$discoverWeathercamUnitsJson = json_encode($discoverWeathercamUnits, JSON_INVALID_UTF8_SUBSTITUTE);
+if ($discoverWeathercamUnitsJson === false) {
+    $discoverWeathercamUnitsJson = '{}';
+}
+
 $discoverWeathercamDeckJson = json_encode($discoverWeathercamDeck, JSON_INVALID_UTF8_SUBSTITUTE);
 if ($discoverWeathercamDeckJson === false) {
     $discoverWeathercamDeckJson = '[]';
@@ -331,11 +360,21 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     window.DISCOVER_WEATHERCAM_DECK = <?= $discoverWeathercamDeckJson ?>;
     window.DISCOVER_WEATHERCAM_SCOPE = <?= json_encode($discoverWeathercamScope) ?>;
     window.DISCOVER_WEATHERCAM_DURATION_MIN = <?= json_encode($discoverWeathercamDuration) ?>;
+    window.DISCOVER_WEATHERCAM_UNITS = <?= $discoverWeathercamUnitsJson ?>;
     (function () {
         'use strict';
         var fullDeck = Array.isArray(window.DISCOVER_WEATHERCAM_DECK) ? window.DISCOVER_WEATHERCAM_DECK.slice() : [];
         var runningDeck = shuffle(fullDeck.slice());
         var passRemaining = runningDeck.length;
+
+        var UNITS = window.DISCOVER_WEATHERCAM_UNITS && typeof window.DISCOVER_WEATHERCAM_UNITS === 'object'
+            ? window.DISCOVER_WEATHERCAM_UNITS
+            : {};
+        var TEMP_UNIT = (UNITS.temp === 'C') ? 'C' : 'F';
+        var DIST_UNIT = (UNITS.dist === 'm') ? 'm' : 'ft';
+        var WIND_UNIT = (UNITS.wind === 'mph') ? 'mph' : ((UNITS.wind === 'kmh') ? 'kmh' : 'kt');
+        var BARO_UNIT_RAW = UNITS.baro ? String(UNITS.baro).toLowerCase() : 'inhg';
+        var BARO_UNIT = (BARO_UNIT_RAW === 'hpa') ? 'hPa' : ((BARO_UNIT_RAW === 'mmhg') ? 'mmHg' : 'inHg');
 
         var mapLayer = document.getElementById('map-layer');
         var camLayer = document.getElementById('cam-layer');
@@ -524,6 +563,34 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 '</div>';
         }
 
+        // Unit-aware formatting for the metric rows. The weather API reports
+        // °F, knots, inHg, and statute miles internally; these convert for
+        // display when the configured unit differs.
+        function fmtTempF(f) {
+            if (f == null) { return '--'; }
+            return TEMP_UNIT === 'C' ? Math.round((f - 32) * 5 / 9) + '&deg;C' : Math.round(f) + '&deg;F';
+        }
+        function fmtWindKt(kt) {
+            if (kt == null) { return '--'; }
+            if (WIND_UNIT === 'mph') { return Math.round(kt * 1.15078) + ' mph'; }
+            if (WIND_UNIT === 'kmh') { return Math.round(kt * 1.852) + ' km/h'; }
+            return Math.round(kt) + ' kt';
+        }
+        function fmtDistFt(ft) {
+            if (ft == null) { return '--'; }
+            return DIST_UNIT === 'm' ? Math.round(ft * 0.3048) + ' m' : Math.round(ft) + ' ft';
+        }
+        function fmtPressureInHg(inHg) {
+            if (inHg == null) { return '--'; }
+            if (BARO_UNIT === 'hPa') { return Math.round(inHg * 33.8639) + ' hPa'; }
+            if (BARO_UNIT === 'mmHg') { return Math.round(inHg * 25.4) + ' mmHg'; }
+            return inHg.toFixed(2) + ' inHg';
+        }
+        function fmtVisibilitySm(sm) {
+            if (sm == null) { return '--'; }
+            return DIST_UNIT === 'm' ? Math.round(sm * 1.60934) + ' km' : Math.round(sm) + ' SM';
+        }
+
         function drawWind(weather, runways) {
             // Use the shared compass so the rose matches the dashboard and the
             // embed widget. direction.variable is false when there is a heading.
@@ -556,15 +623,15 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var isVRB = !!wd.variable;
             var calm = speed != null && speed < 3;
 
-            var speedTxt = (speed == null) ? '--' : (calm ? 'Calm' : Math.round(speed) + ' kt');
+            var speedTxt = (speed == null) ? '--' : (calm ? 'Calm' : fmtWindKt(speed));
             var dirTxt = '---';
             if (!calm) {
                 if (isVRB) { dirTxt = 'VRB'; }
                 else if (mag != null) { dirTxt = Math.round(mag) + '&deg;'; }
             }
-            var gustTxt = (gust != null && gust > 0) ? Math.round(gust) + ' kt' : '--';
-            var gustFactor = (speed != null && gust != null) ? (typeof w.gust_factor === 'number' ? Math.round(w.gust_factor) + ' kt' : '--') : '--';
-            var peak = (typeof w.peak_gust_today === 'number' && w.peak_gust_today > 0) ? Math.round(w.peak_gust_today) + ' kt' : '--';
+            var gustTxt = (gust != null && gust > 0) ? fmtWindKt(gust) : '--';
+            var gustFactor = (speed != null && gust != null) ? (typeof w.gust_factor === 'number' ? fmtWindKt(w.gust_factor) : '--') : '--';
+            var peak = (typeof w.peak_gust_today === 'number' && w.peak_gust_today > 0) ? fmtWindKt(w.peak_gust_today) : '--';
 
             var rows = '';
             rows += metricRow('Wind Speed', speedTxt);
@@ -583,8 +650,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var gust = (typeof w.gust_speed === 'number') ? Math.round(w.gust_speed) : null;
             var windTxt = '--';
             if (speed != null) {
-                windTxt = speed + ' kt';
-                if (gust != null) { windTxt += ' G' + gust; }
+                windTxt = fmtWindKt(speed);
+                if (gust != null) { windTxt += ' G' + Math.round(gust) + (WIND_UNIT === 'mph' ? ' mph' : (WIND_UNIT === 'kmh' ? ' km/h' : ' kt')); }
             }
             var wd = w.wind_direction || {};
             if (typeof wd.magnetic_north === 'number') {
@@ -612,10 +679,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     rows += metricRow('Condition', cat, 'status-' + cat.toLowerCase());
                 }
                 if (typeof w.visibility === 'number') {
-                    rows += metricRow('Visibility', Math.round(w.visibility) + ' SM');
+                    rows += metricRow('Visibility', fmtVisibilitySm(w.visibility));
                 }
                 if (typeof w.ceiling === 'number') {
-                    rows += metricRow('Ceiling', Math.round(w.ceiling) + ' ft');
+                    rows += metricRow('Ceiling', fmtDistFt(w.ceiling));
                 }
                 if (typeof w.cloud_cover === 'string' && w.cloud_cover) {
                     rows += metricRow('Clouds', w.cloud_cover);
@@ -623,34 +690,36 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             }
 
             if (typeof w.temperature_f === 'number') {
-                rows += metricRow('Temperature', Math.round(w.temperature_f) + '&deg;F');
+                rows += metricRow('Temperature', fmtTempF(w.temperature_f));
             }
             if (typeof w.temp_high_today === 'number') {
-                rows += metricRow('Today\'s High', Math.round(w.temp_high_today) + '&deg;F');
+                rows += metricRow('Today\'s High', fmtTempF(w.temp_high_today));
             }
             if (typeof w.temp_low_today === 'number') {
-                rows += metricRow('Today\'s Low', Math.round(w.temp_low_today) + '&deg;F');
+                rows += metricRow('Today\'s Low', fmtTempF(w.temp_low_today));
             }
             if (typeof w.density_altitude === 'number') {
-                rows += metricRow('Density Altitude', Math.round(w.density_altitude) + ' ft');
+                rows += metricRow('Density Altitude', fmtDistFt(w.density_altitude));
             }
             if (typeof w.pressure === 'number') {
-                rows += metricRow('Pressure', w.pressure.toFixed(2) + ' inHg');
+                rows += metricRow('Pressure', fmtPressureInHg(w.pressure));
             }
             if (typeof w.pressure_altitude === 'number') {
-                rows += metricRow('Pressure Altitude', Math.round(w.pressure_altitude) + ' ft');
+                rows += metricRow('Pressure Altitude', fmtDistFt(w.pressure_altitude));
             }
             if (typeof w.humidity === 'number') {
                 rows += metricRow('Humidity', Math.round(w.humidity) + '%');
             }
             if (typeof w.dewpoint_f === 'number') {
-                rows += metricRow('Dewpoint', Math.round(w.dewpoint_f) + '&deg;F');
+                rows += metricRow('Dewpoint', fmtTempF(w.dewpoint_f));
             }
             if (typeof w.dewpoint_spread === 'number') {
-                rows += metricRow('Dewpoint Spread', Math.round(w.dewpoint_spread) + '&deg;F');
+                rows += metricRow('Dewpoint Spread', fmtTempF(w.dewpoint_spread));
             }
             if (typeof w.precip_accum === 'number') {
-                rows += metricRow('Rainfall Today', Math.round(w.precip_accum * 100) / 100 + ' in');
+                var rainaltIn = Math.round(w.precip_accum * 100) / 100;
+                rows += metricRow('Rainfall Today',
+                    DIST_UNIT === 'm' ? (Math.round(w.precip_accum * 2.54 * 100) / 100) + ' cm' : rainaltIn + ' in');
             }
             if (typeof w.sunrise === 'string' && w.sunrise) {
                 rows += metricRow('Sunrise', w.sunrise);
