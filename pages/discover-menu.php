@@ -232,6 +232,19 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             display: block;
             background: #0b0f14;
         }
+        .units-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 1rem;
+        }
+        .panel h3 .units-hint {
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #999;
+            margin-left: 0.35rem;
+        }
 
         .url-row {
             display: flex;
@@ -341,6 +354,42 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                         </select>
                     </div>
                 </div>
+
+                <div class="panel">
+                    <h3>Units <span class="units-hint">weathercam only</span></h3>
+                    <div class="units-grid">
+                        <div class="field">
+                            <label for="unitTemp">Temperature</label>
+                            <select id="unitTemp">
+                                <option value="F" selected>&deg;F</option>
+                                <option value="C">&deg;C</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="unitDist">Distance</label>
+                            <select id="unitDist">
+                                <option value="ft" selected>ft / SM</option>
+                                <option value="m">m / km</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="unitWind">Wind</label>
+                            <select id="unitWind">
+                                <option value="kt" selected>kt</option>
+                                <option value="mph">mph</option>
+                                <option value="kmh">km/h</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="unitBaro">Pressure</label>
+                            <select id="unitBaro">
+                                <option value="inHg" selected>inHg</option>
+                                <option value="hPa">hPa</option>
+                                <option value="mmHg">mmHg</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="right-column">
@@ -394,6 +443,10 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
         var activeMode = 'dashboard';
         var scope = document.getElementById('scope');
         var tourDuration = document.getElementById('tourDuration');
+        var unitTemp = document.getElementById('unitTemp');
+        var unitDist = document.getElementById('unitDist');
+        var unitWind = document.getElementById('unitWind');
+        var unitBaro = document.getElementById('unitBaro');
         var preview = document.getElementById('preview');
         var previewFrame = document.getElementById('preview-frame');
         var previewModeLabel = document.getElementById('preview-mode-label');
@@ -446,6 +499,14 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             params.set('mode', activeMode);
             params.set('scope', scope.value);
             params.set('tourDuration', tourDuration.value);
+            // The unit params only apply to the weathercam tour, so only append
+            // them there; the dashboard tour ignores them.
+            if (activeMode === 'weathercam') {
+                if (unitTemp.value !== 'F') { params.set('temp', unitTemp.value); }
+                if (unitDist.value !== 'ft') { params.set('dist', unitDist.value); }
+                if (unitWind.value !== 'kt') { params.set('wind', unitWind.value); }
+                if (unitBaro.value !== 'inHg') { params.set('baro', unitBaro.value); }
+            }
             return window.location.origin + '/discover?' + params.toString();
         }
 
@@ -471,6 +532,10 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
 
         scope.addEventListener('change', render);
         tourDuration.addEventListener('change', render);
+        unitTemp.addEventListener('change', render);
+        unitDist.addEventListener('change', render);
+        unitWind.addEventListener('change', render);
+        unitBaro.addEventListener('change', render);
 
         Object.keys(MODES).forEach(function (m) {
             var card = document.getElementById(MODES[m].id);
