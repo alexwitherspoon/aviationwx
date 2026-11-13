@@ -18,6 +18,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/discover.php';
+require_once __DIR__ . '/../lib/runways.php';
 
 // Deck + scope assembly mirrors the tour and the menu. Health stays with the
 // cached operational deck (30s) so a per-page load does not rescan every
@@ -49,6 +50,8 @@ foreach ($discoverWeathercamOperational as $entry) {
     }
     $country = getEffectiveIso3166Alpha2ForAirport($ap);
     $region = getEffectiveIso3166RegionForAirport($id, $ap);
+    $segments = getRunwaySegmentsForAirport($id, $ap);
+    $segments = is_array($segments) ? $segments : [];
     $discoverWeathercamDeck[] = [
         'id' => $id,
         'primary' => $entry['primary'],
@@ -60,6 +63,13 @@ foreach ($discoverWeathercamOperational as $entry) {
         'country' => $country,
         'country_name' => $country !== null ? countryNameFromIso3166Alpha2($country) : null,
         'webcam_count' => count($webcams),
+        // Normalized runway segments, already rotated to magnetic north by
+        // getRunwaySegmentsForAirport, so the compass matches the dashboard.
+        'runway_segments' => $segments,
+        'magnetic_declination' => getMagneticDeclination($ap),
+        // Staleness thresholds so the compass draws the wind only while fresh.
+        'stale_failclosed_seconds' => getStaleFailclosedSeconds($ap),
+        'metar_stale_failclosed_seconds' => getMetarStaleFailclosedSeconds(),
     ];
 }
 
@@ -356,6 +366,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     <div class="message" id="message" style="display:none;"></div>
 
     <script src="/public/js/leaflet.js"></script>
+    <script src="/public/js/runway-label-layout.js"></script>
+    <script src="/public/js/wind-compass-resize-utils.js"></script>
     <script src="/public/js/wind-visual.js"></script>
     <script>
     window.DISCOVER_WEATHERCAM_DECK = <?= $discoverWeathercamDeckJson ?>;
@@ -525,34 +537,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 .then(function (data) {
                     var w = data && data.weather ? data.weather : null;
                     if (!w) { throw new Error('no weather'); }
-                    return loadRunways(airport).then(function (runways) {
-                        renderWeather(w, runways);
-                    });
+                    renderWeather(w, airport);
                 })
                 .catch(function () {
                     windReadout.textContent = '--';
                     conditionsBody.textContent = 'Unavailable';
                 });
-        }
-
-        // The compass draws the airport's runways, from the same public API the
-        // embed widget uses. Airports without runways in config return [] and
-        // the rose renders without a runway line.
-        function loadRunways(airport) {
-            return fetch('/api/v1/airports/' + encodeURIComponent(airport.id))
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    var a = data && data.airport;
-                    var list = (a && Array.isArray(a.runways)) ? a.runways : [];
-                    // drawWindCompass reads heading_1/heading_2 off each runway.
-                    return list.map(function (r) {
-                        return {
-                            heading_1: (typeof r.heading_1 === 'number') ? r.heading_1 : null,
-                            heading_2: (typeof r.heading_2 === 'number') ? r.heading_2 : null
-                        };
-                    });
-                })
-                .catch(function () { return []; });
         }
 
         // A row in the current-conditions panel, matching the widget's metric
@@ -593,24 +583,41 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             return DIST_UNIT === 'm' ? Math.round(sm * 1.60934) + ' km' : Math.round(sm) + ' SM';
         }
 
-        function drawWind(weather, runways) {
-            // Use the shared compass so the rose matches the dashboard and the
-            // embed widget. direction.variable is false when there is a heading.
+        function drawWind(weather, airport) {
+            // Use the shared full-mode compass so the rose matches the dashboard
+            // exactly: magnetic offset rotation, runway segments, wind-rose
+            // petals, and staleness-aware rendering. Full mode needs the deck's
+            // runway segments and thresholds plus the weather's obs-time map.
             if (!window.AviationWX || typeof window.AviationWX.drawWindCompass !== 'function') {
                 return;
             }
+            var ap = airport || {};
             var wd = weather.wind_direction || {};
-            var dir = (typeof wd.magnetic_north === 'number') ? wd.magnetic_north : null;
-            var isVRB = !!wd.variable;
+            var lastHourObj = weather.last_hour_wind || null;
+            var lastHourSectors = (lastHourObj && Array.isArray(lastHourObj.sectors)) ? lastHourObj.sectors : null;
             window.AviationWX.drawWindCompass(windCanvas, {
                 windSpeed: (typeof weather.wind_speed === 'number') ? weather.wind_speed : null,
-                windDirection: dir,
-                isVRB: isVRB,
-                runways: runways || [],
+                windDirection: (typeof wd.magnetic_north === 'number') ? wd.magnetic_north : null,
+                isVRB: !!wd.variable,
                 isDark: true,
-                size: 'large',
+                night: false,
+                size: 'full',
                 cssSize: 210,
-                fullMode: false
+                fullMode: {
+                    runwaySegments: Array.isArray(ap.runway_segments) ? ap.runway_segments : [],
+                    lastHourWind: lastHourSectors,
+                    periodLabel: (lastHourObj && lastHourObj.period_label) ? lastHourObj.period_label : 'last hour',
+                    windDirectionMagnetic: (typeof wd.magnetic_north === 'number') ? wd.magnetic_north : null,
+                    magneticDeclination: (typeof ap.magnetic_declination === 'number') ? ap.magnetic_declination : 0,
+                    fieldObsTimeMap: (weather._field_obs_time_map && typeof weather._field_obs_time_map === 'object')
+                        ? weather._field_obs_time_map
+                        : {},
+                    isMetarOnly: false,
+                    staleFailclosedSeconds: (typeof ap.stale_failclosed_seconds === 'number') ? ap.stale_failclosed_seconds : 10800,
+                    metarStaleFailclosedSeconds: (typeof ap.metar_stale_failclosed_seconds === 'number')
+                        ? ap.metar_stale_failclosed_seconds
+                        : 10800
+                }
             });
         }
 
@@ -644,8 +651,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             windDetails.innerHTML = rows;
         }
 
-        function renderWeather(w, runways) {
-            drawWind(w, runways);
+        function renderWeather(w, airport) {
+            drawWind(w, airport);
             renderWindDetails(w);
 
             var speed = (typeof w.wind_speed === 'number') ? Math.round(w.wind_speed) : null;
