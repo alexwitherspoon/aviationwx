@@ -392,6 +392,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 
         var MAP_DWELL_MS = 15000;          // hold the map after flying to an airport
         var FRAME_MS = 500;                // history player pacing (2 FPS), matches the dashboard player
+        var SINGLE_FRAME_DWELL_MS = 30000; // hold a lone webcam image for a readable beat
         var HEALTH_TIMEOUT_MS = 5000;       // cap on the per-airport health re-check
         var IDLE_RETRY_MS = 30000;          // retry when the deck is empty
         var DURATION_MS = Math.max(60000, (window.DISCOVER_WEATHERCAM_DURATION_MIN || 5) * 60 * 1000);
@@ -796,7 +797,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     // tick() reads the displayed frame by index, so it tracks
                     // the age of the frame actually on screen.
                     idx++;
-                    setTimeout(step, FRAME_MS);
+                    // A lone image gets a longer beat so it reads as a deliberate
+                    // still rather than a near-instant flash.
+                    var pause = (frames.length === 1) ? SINGLE_FRAME_DWELL_MS : FRAME_MS;
+                    setTimeout(step, pause);
                 }
                 step();
             });
