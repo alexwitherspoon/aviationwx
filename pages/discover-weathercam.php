@@ -207,6 +207,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         .wind-overlay { left: 1rem; bottom: 1rem; }
         .wind-overlay canvas {
             display: block;
+            margin: 0 auto;
             width: 210px;
             height: 210px;
         }
