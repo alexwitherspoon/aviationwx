@@ -52,7 +52,7 @@ if ($discoverMenuAirportsJson === false) {
 
 $baseDomain = getBaseDomain();
 $pageTitle = 'Discover - AviationWX.org';
-$pageDescription = 'Configure and play the AviationWX demo kiosk: a dashboard tour or a landscape weathercam loop you can bookmark onto a display screen.';
+$pageDescription = 'Configure and play the AviationWX demo kiosk: a dashboard tour or a landscape weathercam tour you can bookmark onto a display screen.';
 $canonicalUrl = 'https://discover.' . $baseDomain;
 ?>
 <!DOCTYPE html>
@@ -305,7 +305,7 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                         </div>
                         <div class="mode-card" id="mode-weathercam" role="button" tabindex="0">
                             <div>
-                                <h4>Weathercam Loop</h4>
+                                <h4>Weathercam Tour</h4>
                                 <p>Fly to each airport for context, then play its webcams.</p>
                             </div>
                             <span class="check"></span>
@@ -389,7 +389,7 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
         // Mode is chosen by the two cards, not a dropdown.
         var MODES = {
             dashboard: { id: 'mode-dashboard', label: 'Dashboard Tour' },
-            weathercam: { id: 'mode-weathercam', label: 'Weathercam Loop' }
+            weathercam: { id: 'mode-weathercam', label: 'Weathercam Tour' }
         };
         var activeMode = 'dashboard';
         var scope = document.getElementById('scope');

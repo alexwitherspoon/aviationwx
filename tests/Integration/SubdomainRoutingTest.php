@@ -100,7 +100,7 @@ final class SubdomainRoutingTest extends TestCase
     }
 
     /**
-     * mode=weathercam selects the weathercam loop page, its deck bootstrap,
+     * mode=weathercam selects the weathercam tour page, its deck bootstrap,
      * and the map element, not the menu or the dashboard tour.
      */
     public function testDiscoverWeathercamRendersWhenModeWeathercam(): void

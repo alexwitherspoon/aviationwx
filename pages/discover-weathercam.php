@@ -1,6 +1,6 @@
 <?php
 /**
- * Discover weathercam loop: map-first context, then live webcams.
+ * Discover weathercam tour: map-first context, then live webcams.
  *
  * A landscape kiosk view. For each airport in the rotation it shows the map,
  * flies to the airport, dwells briefly so the viewer reads location and the
@@ -31,7 +31,7 @@ if ($discoverWeathercamConfig === null) {
 }
 $discoverWeathercamOperational = discoverGetCachedOperationalDeck($discoverWeathercamConfig);
 
-// The weathercam loop needs an airport's webcams and their history. Enrich the
+// The weathercam tour needs an airport's webcams and their history. Enrich the
 // operational deck with webcam presence and region metadata so the client can
 // apply scope and skip airports without cameras, without a second pass.
 $discoverWeathercamDeck = [];
@@ -112,7 +112,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <!-- Configured page (mode + scope); keep out of the search index. -->
     <meta name="robots" content="noindex, nofollow">
-    <title>Weathercam Loop - AviationWX.org</title>
+    <title>Weathercam Tour - AviationWX.org</title>
     <link rel="stylesheet" href="/public/css/leaflet.css">
     <style>
         * { box-sizing: border-box; }
@@ -167,25 +167,51 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         .overlay {
             position: fixed;
             z-index: 10;
-            background: rgba(11, 15, 20, 0.85);
+            background: rgba(11, 15, 20, 0.88);
             border: 1px solid #2a3441;
             border-radius: 10px;
-            padding: 0.9rem 1.1rem;
-            font-size: 0.95rem;
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
             line-height: 1.5;
-            max-width: 30vw;
             pointer-events: none;
         }
-        .overlay h3 {
-            margin: 0 0 0.35rem;
+        .wind-overlay { left: 1.5rem; top: 50%; transform: translateY(-50%); }
+        .wind-overlay canvas {
+            display: block;
+            width: 210px;
+            height: 210px;
+        }
+        .wind-overlay .wind-readout {
+            text-align: center;
+            margin-top: 0.4rem;
+            color: #e6edf3;
+            font-weight: 600;
+        }
+        .conditions-overlay {
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            min-width: 15rem;
+        }
+        .conditions-overlay h3 {
+            margin: 0 0 0.6rem;
             font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: #9aa7b4;
         }
-        .wind-overlay { left: 1.5rem; top: 50%; transform: translateY(-50%); }
-        .metar-overlay { right: 1.5rem; top: 50%; transform: translateY(-50%); font-family: 'Menlo', 'Monaco', monospace; font-size: 0.85rem; }
-        .conditions-overlay { left: 50%; bottom: 1.5rem; transform: translateX(-50%); text-align: center; min-width: 24vw; }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.28rem 0;
+        }
+        .metric-row .label { color: #9aa7b4; }
+        .metric-row .value { color: #e6edf3; font-weight: 600; }
+        .metric-row .status-vfr { color: #35c46f; }
+        .metric-row .status-mvfr { color: #4c9aff; }
+        .metric-row .status-ifr { color: #f0835a; }
+        .metric-row .status-lifr { color: #e25ad0; }
         .brand {
             position: fixed;
             top: 14px;
@@ -241,20 +267,18 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     </div>
 
     <div class="overlay wind-overlay" id="wind-overlay">
-        <h3>Wind</h3>
-        <div id="wind-body">--</div>
-    </div>
-    <div class="overlay metar-overlay" id="metar-overlay">
-        <h3>METAR</h3>
-        <div id="metar-body">--</div>
+        <canvas id="wind-canvas" width="210" height="210"></canvas>
+        <div class="wind-readout" id="wind-readout">--</div>
     </div>
     <div class="overlay conditions-overlay" id="conditions-overlay">
-        <div id="conditions-body">--</div>
+        <h3>Current Conditions</h3>
+        <div id="conditions-body">Loading...</div>
     </div>
     <div class="brand" id="brand"><img src="/public/images/logo.svg" alt="AviationWX.org"></div>
     <div class="message" id="message" style="display:none;"></div>
 
     <script src="/public/js/leaflet.js"></script>
+    <script src="/public/js/wind-visual.js"></script>
     <script>
     window.DISCOVER_WEATHERCAM_DECK = <?= $discoverWeathercamDeckJson ?>;
     window.DISCOVER_WEATHERCAM_SCOPE = <?= json_encode($discoverWeathercamScope) ?>;
@@ -269,8 +293,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var camLayer = document.getElementById('cam-layer');
         var camImg = document.getElementById('cam-img');
         var camLabel = document.getElementById('cam-label');
-        var windBody = document.getElementById('wind-body');
-        var metarBody = document.getElementById('metar-body');
+        var windCanvas = document.getElementById('wind-canvas');
+        var windReadout = document.getElementById('wind-readout');
         var conditionsBody = document.getElementById('conditions-body');
         var message = document.getElementById('message');
 
@@ -380,38 +404,77 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     renderWeather(w);
                 })
                 .catch(function () {
-                    windBody.innerHTML = '<span class="label">--</span>';
-                    metarBody.textContent = 'unavailable';
-                    conditionsBody.textContent = 'Weather unavailable';
+                    windReadout.textContent = '--';
+                    conditionsBody.textContent = 'Unavailable';
                 });
         }
-        function renderWeather(w) {
-            var dir = (w.wind_direction && typeof w.wind_direction.magnetic === 'number')
-                ? w.wind_direction.magnetic
-                : (typeof w.wind_direction === 'number' ? w.wind_direction : null);
-            var speed = (typeof w.wind_speed === 'number') ? w.wind_speed : null;
-            var gust = (typeof w.gust_speed === 'number') ? w.gust_speed : null;
-            var windTxt = '--';
-            if (dir != null && speed != null) {
-                windTxt = dir + '&deg; / ' + speed + ' kt';
-                if (gust != null) { windTxt += ' G' + gust; }
-            } else if (speed != null) {
-                windTxt = 'calm (' + speed + ')';
+
+        // A row in the current-conditions panel, matching the widget's metric
+        // rows: muted label on the left, bold value on the right.
+        function metricRow(label, value, cls) {
+            var valueCls = cls ? ' class="' + cls + '"' : '';
+            return '<div class="metric-row">' +
+                '<span class="label">' + label + '</span>' +
+                '<span class="value"' + valueCls + '>' + value + '</span>' +
+                '</div>';
+        }
+
+        function drawWind(weather) {
+            // Use the shared compass so the rose matches the dashboard and the
+            // embed widget. direction.variable is false when there is a heading.
+            if (!window.AviationWX || typeof window.AviationWX.drawWindCompass !== 'function') {
+                return;
             }
-            windBody.innerHTML = windTxt;
+            var wd = weather.wind_direction || {};
+            var dir = (typeof wd.magnetic_north === 'number') ? wd.magnetic_north : null;
+            var isVRB = !!wd.variable;
+            window.AviationWX.drawWindCompass(windCanvas, {
+                windSpeed: (typeof weather.wind_speed === 'number') ? weather.wind_speed : null,
+                windDirection: dir,
+                isVRB: isVRB,
+                runways: [],
+                isDark: true,
+                size: 'large',
+                cssSize: 210,
+                fullMode: false
+            });
+        }
 
-            var temp = (typeof w.temperature_f === 'number') ? Math.round(w.temperature_f) + '&deg;F'
-                : (typeof w.temperature === 'number') ? Math.round(w.temperature) + '&deg;C' : '--';
-            var vis = (typeof w.visibility === 'number') ? w.visibility + ' SM' : '--';
-            var pressure = (typeof w.pressure === 'number') ? Math.round(w.pressure) + ' hPa' : '--';
-            var line = [temp, vis, pressure].join('  |  ');
-            metarBody.innerHTML = line;
+        function renderWeather(w) {
+            drawWind(w);
 
-            var cond = [];
-            if (typeof w.cloud_cover === 'string' && w.cloud_cover) cond.push(w.cloud_cover);
-            if (typeof w.flight_category === 'string' && w.flight_category) cond.push(w.flight_category);
-            conditionsBody.innerHTML = (cond.length ? cond.join(' · ') : 'Current conditions') +
-                '  (' + new Date().toLocaleTimeString() + ')';
+            var speed = (typeof w.wind_speed === 'number') ? Math.round(w.wind_speed) : null;
+            var gust = (typeof w.gust_speed === 'number') ? Math.round(w.gust_speed) : null;
+            var windTxt = '--';
+            if (speed != null) {
+                windTxt = speed + ' kt';
+                if (gust != null) { windTxt += ' G' + gust; }
+            }
+            var wd = w.wind_direction || {};
+            if (typeof wd.magnetic_north === 'number') {
+                windTxt = wd.magnetic_north + '&deg; ' + windTxt;
+            } else if (wd.variable) {
+                windTxt = 'VRB ' + windTxt;
+            }
+            windReadout.innerHTML = windTxt;
+
+            var tempF = (typeof w.temperature_f === 'number') ? Math.round(w.temperature_f) + '&deg;F' : '--';
+            var dewF = (typeof w.dewpoint_f === 'number') ? Math.round(w.dewpoint_f) + '&deg;F' : '--';
+            var vis = (typeof w.visibility === 'number') ? Math.round(w.visibility) + ' SM' : '--';
+            var ceil = (typeof w.ceiling === 'number') ? Math.round(w.ceiling) + ' ft' : '--';
+            var cloud = (typeof w.cloud_cover === 'string' && w.cloud_cover) ? w.cloud_cover : '--';
+            var cat = (typeof w.flight_category === 'string' && w.flight_category) ? w.flight_category : '--';
+            var catCls = 'status-' + String(cat).toLowerCase();
+
+            var rows = '';
+            rows += metricRow('Temperature', tempF);
+            rows += metricRow('Dewpoint', dewF);
+            rows += metricRow('Wind', windTxt);
+            rows += metricRow('Visibility', vis);
+            rows += metricRow('Ceiling', ceil);
+            rows += metricRow('Clouds', cloud);
+            rows += metricRow('Category', cat, catCls);
+            conditionsBody.innerHTML = rows;
         }
 
         // ---- Webcam history player ----
