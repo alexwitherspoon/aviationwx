@@ -86,7 +86,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     public function testGetExifTimestamp_PrioritizesGpsUtcOverDateTimeOriginal()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_gps_priority.jpg');
@@ -129,7 +129,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     public function testGetExifTimestamp_FallsBackToDateTimeOriginalIfNoGps()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_no_gps.jpg');
@@ -156,7 +156,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     public function testGetSourceCaptureTime_PrioritizesGpsUtc()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_source_capture.jpg');
@@ -257,7 +257,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     public function testNormalizeExifToUtc_DetectsTimezoneAndAddsGpsFields()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_normalize.jpg');
@@ -299,7 +299,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
     public function testNormalizeExifToUtc_PreservesOriginalDateTimeOriginal()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_preserve_local.jpg');

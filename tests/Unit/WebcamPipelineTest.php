@@ -288,7 +288,7 @@ class WebcamPipelineTest extends TestCase
     {
         exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
         if ($whichCode !== 0) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         if (!function_exists('imagecreatetruecolor')) {
             $this->markTestSkipped('GD library not available');

@@ -80,7 +80,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithValidImage_SucceedsAndAddsExif()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_add_exif.jpg');
@@ -119,7 +119,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithValidImage_AddsGpsTimestamp()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_gps_timestamp.jpg');
@@ -153,7 +153,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithValidImage_AddsGpsDateStamp()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_gps_date.jpg');
@@ -184,7 +184,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithValidImage_AddsAllAttributionFields()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_attribution.jpg');
@@ -231,7 +231,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testEnsureImageHasExif_WithImageWithoutExif_AddsExif()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_ensure_exif.jpg');
@@ -257,7 +257,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testEnsureImageHasExif_WithImageWithExif_PreservesExistingExif()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_preserve_exif.jpg');
@@ -287,7 +287,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testEnsureImageHasExif_PrefersProvidedTimestampOverMtime()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_prefer_provided_ts.jpg');
@@ -313,7 +313,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testHasCompleteWebcamExif_RequiresBothFields()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $complete = $this->createTestJpeg('complete.jpg');
@@ -358,7 +358,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_CommandSyntax_DoesNotProduceShellErrors()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_command_syntax.jpg');
@@ -394,7 +394,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function exifPipeline_FromNoExifToValidated_Succeeds()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         $testFile = $this->createTestJpeg('test_full_pipeline.jpg');
@@ -467,7 +467,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WritesLocalTime_BasedOnTimezone()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         // Use a specific UTC timestamp
@@ -508,7 +508,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_GpsFieldsAreUtc()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
         
         // Use a timestamp where UTC differs from most local timezones
@@ -547,7 +547,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithCorruptImage_ReturnsFalse()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         // Create file that exiftool cannot process (not a valid image)
@@ -569,7 +569,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testEnsureImageHasExif_WhenGpsAddFails_ReturnsFalse()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_readonly.jpg');
@@ -602,7 +602,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testAddExifTimestamp_WithValidImage_CompletesWithinTimeout()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $testFile = $this->createTestJpeg('test_timeout.jpg');
@@ -645,7 +645,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testGetExiftoolVersion_WhenExiftoolAvailable_ReturnsVersionString()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $version = getExiftoolVersion();
@@ -661,7 +661,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testGetExiftoolVersion_IsCached()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $v1 = getExiftoolVersion();
@@ -679,7 +679,7 @@ class ExifPipelineCriticalTest extends TestCase
     public function testCopyExifMetadata_WhenWebpDestAndExiftoolFails_LogsIncludeExiftoolVersion()
     {
         if (!$this->hasExiftool) {
-            $this->markTestSkipped('exiftool not available');
+            $this->fail('Install libimage-exiftool-perl');
         }
 
         $sourceFile = $this->createTestJpeg('source.jpg');
