@@ -15,9 +15,12 @@ require_once __DIR__ . '/cache-paths.php';
 /**
  * Select the airports eligible for the discover tour.
  *
- * An airport is eligible only when its current status is operational. Missing
- * status entries fail closed (excluded), so a failed health read can never put
- * an airport on the booth screen.
+ * An airport is eligible when it is still usable: operational or degraded. A
+ * degraded airport (one source stale but not all sources expired) still
+ * serves usable data, so it stays in the tour. Fully down airports (no
+ * healthy sources) are excluded, as are maintenance airports. Missing status
+ * entries fail closed (excluded), so a failed health read can never put an
+ * airport on the booth screen.
  *
  * @param array $airports Airport config entries keyed by airport id
  * @param array $statusById Map of airport id to health status string
@@ -27,7 +30,8 @@ function discoverSelectOperationalAirports(array $airports, array $statusById): 
 {
     $deck = [];
     foreach ($airports as $airportId => $airport) {
-        if (($statusById[$airportId] ?? null) !== 'operational') {
+        $status = $statusById[$airportId] ?? null;
+        if ($status !== 'operational' && $status !== 'degraded') {
             continue;
         }
         $deck[] = [
@@ -47,8 +51,9 @@ function discoverSelectOperationalAirports(array $airports, array $statusById): 
  * the per-transition re-check uses checkAirportHealth directly for a single id.
  *
  * The deck is listed airports only: getListedAirports drops unlisted (hidden)
- * airports, and the selector below drops any status other than operational,
- * which leaves maintenance, degraded, and down airports out as well.
+ * airports, and the selector below drops down and maintenance airports while
+ * keeping operational and degraded ones, so a partially degraded airport
+ * still tours as long as it has usable data.
  *
  * @param array|null $config Loaded config; an empty deck results when null
  * @return array List of eligible airports in config order (caller shuffles)

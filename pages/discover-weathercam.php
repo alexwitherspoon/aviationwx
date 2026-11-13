@@ -41,18 +41,26 @@ $listedById = [];
 foreach ($listedAirports as $aid => $ap) {
     $listedById[$aid] = $ap;
 }
-foreach ($discoverWeathercamOperational as $entry) {
-    $id = $entry['id'];
+
+// Build one deck entry for a listed airport. Returns null when the airport is
+// not listed or has no webcams, so such airports never surface. The entry is
+// the same regardless of whether the airport is operational, degraded, or
+// down; the deck-scope pass decides which of those are included.
+$discoverWeathercamBuildEntry = function (string $id, array $entry) use ($listedById): ?array {
+    $id = strtolower($id);
     $ap = $listedById[$id] ?? null;
-    $webcams = (is_array($ap) && isset($ap['webcams']) && is_array($ap['webcams'])) ? $ap['webcams'] : [];
+    if ($ap === null) {
+        return null;  // unlisted: never surfaces
+    }
+    $webcams = isset($ap['webcams']) && is_array($ap['webcams']) ? $ap['webcams'] : [];
     if (count($webcams) === 0) {
-        continue;  // No webcam, not a weathercam-loop airport.
+        return null;  // no webcam: not a weathercam-loop airport
     }
     $country = getEffectiveIso3166Alpha2ForAirport($ap);
     $region = getEffectiveIso3166RegionForAirport($id, $ap);
     $segments = getRunwaySegmentsForAirport($id, $ap);
     $segments = is_array($segments) ? $segments : [];
-    $discoverWeathercamDeck[] = [
+    return [
         'id' => $id,
         'primary' => $entry['primary'],
         'name' => $entry['name'],
@@ -71,23 +79,41 @@ foreach ($discoverWeathercamOperational as $entry) {
         'stale_failclosed_seconds' => getStaleFailclosedSeconds($ap),
         'metar_stale_failclosed_seconds' => getMetarStaleFailclosedSeconds(),
     ];
+};
+
+foreach ($discoverWeathercamOperational as $entry) {
+    $built = $discoverWeathercamBuildEntry($entry['id'], $entry);
+    if ($built !== null) {
+        $discoverWeathercamDeck[] = $built;
+    }
 }
 
-// Requested scope. all = the operational deck; a region id (US-OR) filters by
-// region; an airport id pins one airport. A specific airport that is not
-// operational stays out, matching the tour's fail-closed rule.
+// Requested scope. all = the deck; a region id (US-OR) filters by region; an
+// airport id pins one airport.
 $discoverWeathercamScope = isset($_GET['scope']) ? strtolower(trim((string) $_GET['scope'])) : 'all';
 if ($discoverWeathercamScope !== '' && $discoverWeathercamScope !== 'all') {
     if (isset($listedById[$discoverWeathercamScope])) {
-        // Specific airport.
+        // Specific airport. The user asked for it by name, so show it even if
+        // it is degraded or down, as long as it is listed and has a webcam.
         $discoverWeathercamDeck = array_values(array_filter(
             $discoverWeathercamDeck,
             function ($entry) use ($discoverWeathercamScope) {
                 return strtolower($entry['id']) === $discoverWeathercamScope;
             }
         ));
+        if ($discoverWeathercamDeck === []) {
+            // Not in the operational/degraded deck (e.g. down). Build it from
+            // the listed config directly so the chosen airport still shows.
+            $entry = ['id' => $discoverWeathercamScope, 'primary' => '', 'name' => ''];
+            $listedAp = $listedById[$discoverWeathercamScope];
+            $entry['primary'] = getPrimaryIdentifier($discoverWeathercamScope, $listedAp);
+            $entry['name'] = is_string($listedAp['name'] ?? null) ? $listedAp['name'] : (string) $discoverWeathercamScope;
+            $built = $discoverWeathercamBuildEntry($discoverWeathercamScope, $entry);
+            if ($built !== null) {
+                $discoverWeathercamDeck[] = $built;
+            }
+        }
     } else {
-        // Try a region id (ISO 3166-2, e.g. US-OR).
         $regionLower = $discoverWeathercamScope;
         $discoverWeathercamDeck = array_values(array_filter(
             $discoverWeathercamDeck,
@@ -97,6 +123,12 @@ if ($discoverWeathercamScope !== '' && $discoverWeathercamScope !== 'all') {
         ));
     }
 }
+
+// True when the scope pinned a specific airport by id. A pinned airport shows
+// even when degraded or down; the show-time health gate is skipped for it.
+$discoverWeathercamSpecific = $discoverWeathercamScope !== ''
+    && $discoverWeathercamScope !== 'all'
+    && isset($listedById[$discoverWeathercamScope]);
 
 // Dwell (minutes per airport, soft ceiling) - default 5, clamped to 1-60.
 $discoverWeathercamDuration = 5;
@@ -372,6 +404,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     <script>
     window.DISCOVER_WEATHERCAM_DECK = <?= $discoverWeathercamDeckJson ?>;
     window.DISCOVER_WEATHERCAM_SCOPE = <?= json_encode($discoverWeathercamScope) ?>;
+    window.DISCOVER_WEATHERCAM_SPECIFIC = <?= $discoverWeathercamSpecific ? 'true' : 'false' ?>;
     window.DISCOVER_WEATHERCAM_DURATION_MIN = <?= json_encode($discoverWeathercamDuration) ?>;
     window.DISCOVER_WEATHERCAM_UNITS = <?= $discoverWeathercamUnitsJson ?>;
     (function () {
@@ -388,6 +421,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var WIND_UNIT = (UNITS.wind === 'mph') ? 'mph' : ((UNITS.wind === 'kmh') ? 'kmh' : 'kt');
         var BARO_UNIT_RAW = UNITS.baro ? String(UNITS.baro).toLowerCase() : 'inhg';
         var BARO_UNIT = (BARO_UNIT_RAW === 'hpa') ? 'hPa' : ((BARO_UNIT_RAW === 'mmhg') ? 'mmHg' : 'inHg');
+
+        var SCOPE_IS_SPECIFIC = window.DISCOVER_WEATHERCAM_SPECIFIC === true;
 
         var mapLayer = document.getElementById('map-layer');
         var camLayer = document.getElementById('cam-layer');
@@ -463,8 +498,21 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         }
 
         function isOperational(id) {
-            // Fail closed: a network blip or a hung health check reads as not
-            // operational, so the kiosk never stalls waiting on one airport.
+            // A pinned airport shows even when degraded or down: the user asked
+            // for it by name, so only a network failure fails closed. For the
+            // rotating deck, operational or degraded is showable and a fully
+            // down airport is skipped.
+            return isReachable(id).then(function (status) {
+                if (SCOPE_IS_SPECIFIC && fullDeck.length === 1 && fullDeck[0].id === id) {
+                    return status !== null;  // reachable = showable for a pin
+                }
+                return status === 'operational' || status === 'degraded';
+            });
+        }
+
+        function isReachable(id) {
+            // Fail closed: a network blip or a hung health check reads as down,
+            // so the kiosk never stalls waiting on one airport.
             var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
             var timer = controller ? setTimeout(function () { controller.abort(); }, HEALTH_TIMEOUT_MS) : null;
             function cleanup() {
@@ -475,8 +523,14 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 signal: controller ? controller.signal : undefined
             })
                 .then(function (res) { return res.json(); })
-                .then(function (data) { cleanup(); return !!data && data.status === 'operational'; })
-                .catch(function () { cleanup(); return false; });
+                .then(function (data) {
+                    cleanup();
+                    return (data && data.status) || null;
+                })
+                .catch(function () {
+                    cleanup();
+                    return null;
+                });
         }
 
         // The server ships a scope-filtered, webcam-enriched deck. Hold it as

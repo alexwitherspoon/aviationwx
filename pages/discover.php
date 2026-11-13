@@ -231,11 +231,14 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function isOperational(id) {
-            // Fail closed: a network blip reads as not operational rather than
-            // risking a stale or unknown dashboard on the booth screen.
+            // Fail closed on a network blip: a stale or unknown dashboard must
+            // not land on the booth. A degraded airport still tours; only a
+            // fully down airport is skipped.
             return fetch('/discover?health=' + encodeURIComponent(id), { cache: 'no-store' })
                 .then(function (res) { return res.json(); })
-                .then(function (data) { return data && data.status === 'operational'; })
+                .then(function (data) {
+                    return !!data && (data.status === 'operational' || data.status === 'degraded');
+                })
                 .catch(function () { return false; });
         }
 
