@@ -76,6 +76,10 @@ $baseDomain = getBaseDomain();
                         <span class="dropdown-item-icon">📡</span>
                         <span>API Documentation</span>
                     </a>
+                    <a href="https://discover.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">🖥️</span>
+                        <span>Discover</span>
+                    </a>
                     <div class="site-nav-dropdown-divider">Open Source</div>
                     <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" class="site-nav-dropdown-item">
                         <span class="dropdown-item-icon">🛬</span>
@@ -117,6 +121,10 @@ $baseDomain = getBaseDomain();
     <a href="https://api.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
         <span class="dropdown-item-icon">📡</span>
         <span>API Documentation</span>
+    </a>
+    <a href="https://discover.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">🖥️</span>
+        <span>Discover</span>
     </a>
     
     <div class="site-nav-mobile-divider">Open Source</div>
