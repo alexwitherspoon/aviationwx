@@ -594,22 +594,75 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             }
             windReadout.innerHTML = windTxt;
 
-            var tempF = (typeof w.temperature_f === 'number') ? Math.round(w.temperature_f) + '&deg;F' : '--';
-            var dewF = (typeof w.dewpoint_f === 'number') ? Math.round(w.dewpoint_f) + '&deg;F' : '--';
-            var vis = (typeof w.visibility === 'number') ? Math.round(w.visibility) + ' SM' : '--';
-            var ceil = (typeof w.ceiling === 'number') ? Math.round(w.ceiling) + ' ft' : '--';
-            var cloud = (typeof w.cloud_cover === 'string' && w.cloud_cover) ? w.cloud_cover : '--';
-            var cat = (typeof w.flight_category === 'string' && w.flight_category) ? w.flight_category : '--';
-            var catCls = 'status-' + String(cat).toLowerCase();
+            conditionsBody.innerHTML = renderConditions(w);
+        }
 
+        // Mirror the dashboard's Current Conditions grid on the right panel.
+        // A row is only emitted when the airport actually has that data, so
+        // an airport without a functional METAR omits condition, visibility,
+        // ceiling, and cloud cover instead of showing dashes.
+        function renderConditions(w) {
             var rows = '';
-            rows += metricRow('Temperature', tempF);
-            rows += metricRow('Dewpoint', dewF);
-            rows += metricRow('Visibility', vis);
-            rows += metricRow('Ceiling', ceil);
-            rows += metricRow('Clouds', cloud);
-            rows += metricRow('Category', cat, catCls);
-            conditionsBody.innerHTML = rows;
+            var hasMetar = (typeof w.obs_time_metar === 'number' && w.obs_time_metar > 0) ||
+                (typeof w.last_updated_metar === 'number' && w.last_updated_metar > 0);
+
+            if (hasMetar) {
+                var cat = (typeof w.flight_category === 'string' && w.flight_category) ? w.flight_category : null;
+                if (cat) {
+                    rows += metricRow('Condition', cat, 'status-' + cat.toLowerCase());
+                }
+                if (typeof w.visibility === 'number') {
+                    rows += metricRow('Visibility', Math.round(w.visibility) + ' SM');
+                }
+                if (typeof w.ceiling === 'number') {
+                    rows += metricRow('Ceiling', Math.round(w.ceiling) + ' ft');
+                }
+                if (typeof w.cloud_cover === 'string' && w.cloud_cover) {
+                    rows += metricRow('Clouds', w.cloud_cover);
+                }
+            }
+
+            if (typeof w.temperature_f === 'number') {
+                rows += metricRow('Temperature', Math.round(w.temperature_f) + '&deg;F');
+            }
+            if (typeof w.temp_high_today === 'number') {
+                rows += metricRow('Today\'s High', Math.round(w.temp_high_today) + '&deg;F');
+            }
+            if (typeof w.temp_low_today === 'number') {
+                rows += metricRow('Today\'s Low', Math.round(w.temp_low_today) + '&deg;F');
+            }
+            if (typeof w.density_altitude === 'number') {
+                rows += metricRow('Density Altitude', Math.round(w.density_altitude) + ' ft');
+            }
+            if (typeof w.pressure === 'number') {
+                rows += metricRow('Pressure', w.pressure.toFixed(2) + ' inHg');
+            }
+            if (typeof w.pressure_altitude === 'number') {
+                rows += metricRow('Pressure Altitude', Math.round(w.pressure_altitude) + ' ft');
+            }
+            if (typeof w.humidity === 'number') {
+                rows += metricRow('Humidity', Math.round(w.humidity) + '%');
+            }
+            if (typeof w.dewpoint_f === 'number') {
+                rows += metricRow('Dewpoint', Math.round(w.dewpoint_f) + '&deg;F');
+            }
+            if (typeof w.dewpoint_spread === 'number') {
+                rows += metricRow('Dewpoint Spread', Math.round(w.dewpoint_spread) + '&deg;F');
+            }
+            if (typeof w.precip_accum === 'number') {
+                rows += metricRow('Rainfall Today', Math.round(w.precip_accum * 100) / 100 + ' in');
+            }
+            if (typeof w.sunrise === 'string' && w.sunrise) {
+                rows += metricRow('Sunrise', w.sunrise);
+            }
+            if (typeof w.sunset === 'string' && w.sunset) {
+                rows += metricRow('Sunset', w.sunset);
+            }
+
+            if (rows === '') {
+                rows = '<span class="label">No weather data</span>';
+            }
+            return rows;
         }
 
         // ---- Webcam history player ----
