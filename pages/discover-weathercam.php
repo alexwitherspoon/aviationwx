@@ -225,6 +225,25 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
         }
         .brand img { height: 26px; display: block; }
+        .page-title {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            background: rgba(11, 15, 20, 0.88);
+            border: 1px solid #2a3441;
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #e6edf3;
+            pointer-events: none;
+            max-width: 70vw;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         .label { color: #9aa7b4; }
         .value { color: #e6edf3; }
         #cam-label {
@@ -296,6 +315,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         <div id="conditions-body">Loading...</div>
     </div>
     <div class="brand" id="brand"><img src="/public/images/logo.svg" alt="AviationWX.org"></div>
+    <div class="page-title" id="page-title"></div>
     <div class="message" id="message" style="display:none;"></div>
 
     <script src="/public/js/leaflet.js"></script>
@@ -315,6 +335,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var camImg = document.getElementById('cam-img');
         var camLabelName = document.getElementById('cam-label-name');
         var camLabelUpdated = document.getElementById('cam-label-updated');
+        var pageTitle = document.getElementById('page-title');
         var windOverlay = document.getElementById('wind-overlay');
         var conditionsOverlay = document.getElementById('conditions-overlay');
         var windCanvas = document.getElementById('wind-canvas');
@@ -639,6 +660,9 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             layerVisibility(camLayer, false);
             setWeatherOverlays(true);
             showMessage('');
+            var code = airport.primary || airport.id || '';
+            pageTitle.textContent = (airport.name || '') +
+                (code ? ' (' + code + ')' : '');
             loadWeather(airport);
             var startedAt = Date.now();
             var fly = (map && airport.lat != null && airport.lon != null) ? flyTo(airport) : delay(500);
@@ -712,6 +736,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     layerVisibility(camLayer, false);
                     layerVisibility(mapLayer, true);
                     setWeatherOverlays(true);
+                    pageTitle.textContent = '';
                     showMessage('');
                     return delay(IDLE_RETRY_MS).then(navigateNext);
                 }
