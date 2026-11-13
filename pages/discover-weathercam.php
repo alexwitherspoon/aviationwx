@@ -191,11 +191,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             top: 14px;
             left: 14px;
             z-index: 20;
-            background: rgba(11, 15, 20, 0.72);
+            background: #ffffff;
             border-radius: 8px;
             padding: 8px 12px;
             line-height: 0;
             pointer-events: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
         }
         .brand img { height: 26px; display: block; }
         .label { color: #9aa7b4; }
