@@ -89,6 +89,20 @@ if ($discoverMenuAirportsJson === false) {
             color: var(--muted);
             margin: 0 0 2rem;
         }
+        .main-layout {
+            display: grid;
+            grid-template-columns: minmax(360px, 420px) 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+        @media (max-width: 900px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .left-panel {
+            min-width: 0;
+        }
         .modes {
             display: grid;
             gap: 1rem;
@@ -103,9 +117,52 @@ if ($discoverMenuAirportsJson === false) {
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
+            cursor: pointer;
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+        .mode-card:hover { border-color: var(--accent); }
+        .mode-card--active {
+            border-color: var(--accent);
+            background: #1a2634;
         }
         .mode-card h2 { margin: 0 0 0.25rem; font-size: 1.1rem; }
         .mode-card p { margin: 0; color: var(--muted); }
+        .mode-card .check {
+            color: var(--accent);
+            font-size: 1.3rem;
+            line-height: 1;
+        }
+        .mode-card--active .check { content: '\2713'; }
+
+        .preview-panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .preview-header {
+            padding: 0.9rem 1.2rem;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text);
+        }
+        .preview-header span {
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+        .preview-frame {
+            width: 100%;
+            height: 76vh;
+            border: 0;
+            display: block;
+            background: #0b0f14;
+        }
 
         .controls {
             background: var(--panel);
@@ -204,67 +261,75 @@ if ($discoverMenuAirportsJson === false) {
         <h1>AviationWX Discover</h1>
         <p class="tagline">Pick a demo, choose what to show, and point a display at the URL.</p>
 
-        <div class="modes">
-            <div class="mode-card">
-                <div>
-                    <h2>Dashboard Tour</h2>
-                    <p>Fly the map to each airport, then scroll its live dashboard.</p>
+        <div class="main-layout">
+            <div class="left-panel">
+                <div class="controls">
+                    <h3>Mode</h3>
+                    <div class="modes">
+                        <div class="mode-card mode-card--active" id="mode-dashboard" role="button" tabindex="0">
+                            <div>
+                                <h2>Dashboard Tour</h2>
+                                <p>Fly the map to each airport, then scroll its live dashboard.</p>
+                            </div>
+                            <span class="check">&#10003;</span>
+                        </div>
+                        <div class="mode-card" id="mode-weathercam" role="button" tabindex="0">
+                            <div>
+                                <h2>Weathercam Loop</h2>
+                                <p>Fly to each airport for context, then play its webcams.</p>
+                            </div>
+                            <span class="check"></span>
+                        </div>
+                    </div>
                 </div>
-                <button type="button" id="pick-dashboard">Choose</button>
-            </div>
-            <div class="mode-card">
-                <div>
-                    <h2>Weathercam Loop</h2>
-                    <p>Fly to each airport for context, then play its webcams.</p>
+
+                <div class="controls">
+                    <h3>Configure</h3>
+                    <div class="field">
+                        <label for="scope">Scope</label>
+                        <select id="scope">
+                            <option value="all">All airports</option>
+                            <optgroup label="State / region">
+                                <!-- regions filled from the projection -->
+                            </optgroup>
+                            <optgroup label="Specific airport">
+                                <!-- airports filled from the projection -->
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="tourDuration">Minutes per airport</label>
+                        <select id="tourDuration" title="How long each airport stays up">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                            <option value="15">15</option>
+                            <option value="30">30</option>
+                            <option value="60">60</option>
+                        </select>
+                    </div>
                 </div>
-                <button type="button" id="pick-weathercam">Choose</button>
-            </div>
-        </div>
 
-        <div class="controls">
-            <h3>Configure</h3>
-            <div class="field">
-                <label for="mode">Mode</label>
-                <select id="mode">
-                    <option value="dashboard">Dashboard Tour</option>
-                    <option value="weathercam">Weathercam Loop</option>
-                </select>
+                <div class="controls">
+                    <h3>URL</h3>
+                    <div class="url-row">
+                        <div class="preview" id="preview" aria-live="polite"></div>
+                        <button type="button" id="copy">Copy</button>
+                        <button type="button" id="play">Play</button>
+                    </div>
+                    <p class="hint">Bookmark the URL, or paste it into a display screen. This page stays off the search index when configured.</p>
+                </div>
             </div>
-            <div class="field">
-                <label for="scope">Scope</label>
-                <select id="scope">
-                    <option value="all">All airports</option>
-                    <optgroup label="State / region">
-                        <!-- regions filled from the projection -->
-                    </optgroup>
-                    <optgroup label="Specific airport">
-                        <!-- airports filled from the projection -->
-                    </optgroup>
-                </select>
-            </div>
-            <div class="field">
-                <label for="tourDuration">Minutes per airport</label>
-                <select id="tourDuration" title="How long each airport stays up">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="5" selected>5</option>
-                    <option value="10">10</option>
-                    <option value="15">15</option>
-                    <option value="30">30</option>
-                    <option value="60">60</option>
-                </select>
-            </div>
-        </div>
 
-        <div class="controls">
-            <h3>URL</h3>
-            <div class="url-row">
-                <div class="preview" id="preview" aria-live="polite"></div>
-                <button type="button" id="copy">Copy</button>
-                <button type="button" id="play">Play</button>
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <h3>Live Preview</h3>
+                    <span id="preview-mode-label">Dashboard Tour</span>
+                </div>
+                <iframe class="preview-frame" id="preview-frame" title="Discover preview"></iframe>
             </div>
-            <p class="hint">Bookmark the URL, or paste it into a display screen. This page stays off the search index when configured.</p>
         </div>
 
         <div class="footer">
@@ -278,10 +343,17 @@ if ($discoverMenuAirportsJson === false) {
 
         var AIRPORTS = <?= $discoverMenuAirportsJson ?>;
 
-        var mode = document.getElementById('mode');
+        // Mode is chosen by the two cards, not a dropdown.
+        var MODES = {
+            dashboard: { id: 'mode-dashboard', label: 'Dashboard Tour' },
+            weathercam: { id: 'mode-weathercam', label: 'Weathercam Loop' }
+        };
+        var activeMode = 'dashboard';
         var scope = document.getElementById('scope');
         var tourDuration = document.getElementById('tourDuration');
         var preview = document.getElementById('preview');
+        var previewFrame = document.getElementById('preview-frame');
+        var previewModeLabel = document.getElementById('preview-mode-label');
         var copyBtn = document.getElementById('copy');
         var playBtn = document.getElementById('play');
 
@@ -328,19 +400,45 @@ if ($discoverMenuAirportsJson === false) {
 
         function buildUrl() {
             var params = new URLSearchParams();
-            params.set('mode', mode.value);
+            params.set('mode', activeMode);
             params.set('scope', scope.value);
             params.set('tourDuration', tourDuration.value);
             return '/discover?' + params.toString();
         }
 
-        function render() {
-            preview.textContent = buildUrl();
+        function selectModeCard(mode) {
+            Object.keys(MODES).forEach(function (m) {
+                document.getElementById(MODES[m].id).classList.toggle('mode-card--active', m === mode);
+            });
         }
 
-        mode.addEventListener('change', render);
+        function render() {
+            var url = buildUrl();
+            preview.textContent = url;
+            previewModeLabel.textContent = MODES[activeMode].label;
+            previewFrame.src = url;
+        }
+
+        function chooseMode(mode) {
+            if (!MODES[mode]) { return; }
+            activeMode = mode;
+            selectModeCard(mode);
+            render();
+        }
+
         scope.addEventListener('change', render);
         tourDuration.addEventListener('change', render);
+
+        Object.keys(MODES).forEach(function (m) {
+            var card = document.getElementById(MODES[m].id);
+            card.addEventListener('click', function () { chooseMode(m); });
+            card.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    chooseMode(m);
+                }
+            });
+        });
 
         copyBtn.addEventListener('click', function () {
             var url = buildUrl();
@@ -367,15 +465,6 @@ if ($discoverMenuAirportsJson === false) {
         playBtn.addEventListener('click', function () {
             window.location.href = buildUrl();
         });
-
-        function chooseMode(value) {
-            mode.value = value;
-            render();
-            playBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        document.getElementById('pick-dashboard').addEventListener('click', function () { chooseMode('dashboard'); });
-        document.getElementById('pick-weathercam').addEventListener('click', function () { chooseMode('weathercam'); });
 
         buildScopeOptions();
         render();
