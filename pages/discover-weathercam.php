@@ -175,7 +175,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             line-height: 1.5;
             pointer-events: none;
         }
-        .wind-overlay { left: 1.5rem; top: 50%; transform: translateY(-50%); }
+        .wind-overlay { left: 1rem; bottom: 1rem; }
         .wind-overlay canvas {
             display: block;
             width: 210px;
@@ -188,9 +188,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             font-weight: 600;
         }
         .conditions-overlay {
-            right: 1.5rem;
-            top: 50%;
-            transform: translateY(-50%);
+            right: 1rem;
+            bottom: 1rem;
             min-width: 15rem;
         }
         .conditions-overlay h3 {
