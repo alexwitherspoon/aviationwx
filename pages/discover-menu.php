@@ -250,7 +250,7 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             overflow-x: auto;
             white-space: nowrap;
         }
-        button {
+        .url-row .action-btn {
             border: 0;
             border-radius: 6px;
             padding: 0.55rem 1rem;
@@ -260,13 +260,13 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             color: #fff;
             white-space: nowrap;
         }
-        button:hover { background: #0052a3; }
-        button.secondary {
+        .url-row .action-btn:hover { background: #0052a3; }
+        .url-row .action-btn.secondary {
             background: #fff;
             border: 1px solid #d9d9d9;
             color: #333;
         }
-        button.secondary:hover { background: #f0f0f0; }
+        .url-row .action-btn.secondary:hover { background: #f0f0f0; }
         .hint { color: #888; font-size: 0.8rem; margin-top: 0.5rem; }
 
         .footer {
@@ -358,8 +358,8 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                     <h3>URL</h3>
                     <div class="url-row">
                         <div class="url-value" id="preview" aria-live="polite"></div>
-                        <button type="button" id="copy">Copy</button>
-                        <button type="button" class="secondary" id="play">Play</button>
+                        <button type="button" class="action-btn" id="copy">Copy</button>
+                        <button type="button" class="action-btn secondary" id="play">Play</button>
                     </div>
                     <p class="hint">Bookmark the URL, or paste it into a display screen. This page stays off the search index when configured.</p>
                 </div>
