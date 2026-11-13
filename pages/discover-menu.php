@@ -332,7 +332,7 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                             </optgroup>
                         </select>
                     </div>
-                    <div class="field">
+                    <div class="field" id="duration-field">
                         <label for="tourDuration">Minutes per airport</label>
                         <select id="tourDuration" title="How long each airport stays up">
                             <option value="1">1</option>
@@ -519,11 +519,16 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
             if (!MODES[mode]) { return; }
             activeMode = mode;
             selectModeCard(mode);
-            // Only the weathercam tour takes unit params, so the units panel
-            // appears for it and hides for the dashboard tour.
+            // Parameters are scoped to the tour that uses them: minutes per
+            // airport belongs to the dashboard tour, units to the weathercam
+            // tour, and neither shows on the tour it does not apply to.
             var unitsPanel = document.getElementById('units-panel');
+            var durationField = document.getElementById('duration-field');
             if (unitsPanel) {
                 unitsPanel.classList.toggle('hidden', mode !== 'weathercam');
+            }
+            if (durationField) {
+                durationField.classList.toggle('hidden', mode !== 'dashboard');
             }
             render();
         }
