@@ -170,6 +170,15 @@ if ($discoverMenuAirportsJson === false) {
             display: block;
             background: #0b0f14;
         }
+        .right-column {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .right-column .controls {
+            margin-bottom: 0;
+        }
 
         .controls {
             background: var(--panel);
@@ -318,6 +327,18 @@ if ($discoverMenuAirportsJson === false) {
                         </select>
                     </div>
                 </div>
+            </div>
+
+            <div class="right-column">
+                <div class="preview-panel">
+                    <div class="preview-header">
+                        <h3>Live Preview</h3>
+                        <span id="preview-mode-label">Dashboard Tour</span>
+                    </div>
+                    <div class="preview-body">
+                        <iframe class="preview-frame" id="preview-frame" title="Discover preview"></iframe>
+                    </div>
+                </div>
 
                 <div class="controls">
                     <h3>URL</h3>
@@ -327,16 +348,6 @@ if ($discoverMenuAirportsJson === false) {
                         <button type="button" id="play">Play</button>
                     </div>
                     <p class="hint">Bookmark the URL, or paste it into a display screen. This page stays off the search index when configured.</p>
-                </div>
-            </div>
-
-            <div class="preview-panel">
-                <div class="preview-header">
-                    <h3>Live Preview</h3>
-                    <span id="preview-mode-label">Dashboard Tour</span>
-                </div>
-                <div class="preview-body">
-                    <iframe class="preview-frame" id="preview-frame" title="Discover preview"></iframe>
                 </div>
             </div>
         </div>
