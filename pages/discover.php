@@ -144,21 +144,6 @@ header('Content-Type: text/html; charset=utf-8');
         .discover-caption--hidden {
             opacity: 0;
         }
-        .discover-brand {
-            position: fixed;
-            top: 14px;
-            left: 14px;
-            background: rgba(11, 15, 20, 0.72);
-            border-radius: 8px;
-            padding: 8px 12px;
-            pointer-events: none;
-            z-index: 20;
-            line-height: 0;
-        }
-        .discover-brand img {
-            height: 26px;
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -167,7 +152,6 @@ header('Content-Type: text/html; charset=utf-8');
         <iframe class="discover-layer discover-layer--hidden" id="discover-dashboard" title="Airport dashboard"></iframe>
     </div>
     <div class="discover-caption discover-caption--hidden" id="discover-caption"></div>
-    <div class="discover-brand" id="discover-brand"><img src="/public/images/logo.svg" alt="AviationWX.org"></div>
     <script>
     window.DISCOVER_DECK = <?= $discoverDeckJson ?>;
     (function () {
