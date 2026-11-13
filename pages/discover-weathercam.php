@@ -229,15 +229,25 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         .value { color: #e6edf3; }
         #cam-label {
             position: fixed;
-            left: 50%;
-            bottom: 4.5rem;
-            transform: translateX(-50%);
+            left: 0;
+            right: 0;
+            bottom: 0;
             z-index: 11;
-            background: rgba(11, 15, 20, 0.78);
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-size: 1.05rem;
+            background: #1a1a1a;
+            color: #fff;
+            text-align: center;
+            padding: 0.8rem 1rem;
             pointer-events: none;
+        }
+        #cam-label .cam-label-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        #cam-label .cam-label-sub {
+            font-size: 0.85rem;
+            color: #ccc;
+            margin-top: 0.2rem;
         }
         .message {
             position: fixed;
@@ -262,7 +272,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             <div id="cam-stage">
                 <img id="cam-img" alt="Airport webcam">
             </div>
-            <div id="cam-label" class="hidden-label"></div>
+            <div id="cam-label">
+                <div class="cam-label-title" id="cam-label-title"></div>
+                <div class="cam-label-sub" id="cam-label-sub"></div>
+            </div>
         </div>
     </div>
 
@@ -292,7 +305,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var mapLayer = document.getElementById('map-layer');
         var camLayer = document.getElementById('cam-layer');
         var camImg = document.getElementById('cam-img');
-        var camLabel = document.getElementById('cam-label');
+        var camLabelTitle = document.getElementById('cam-label-title');
+        var camLabelSub = document.getElementById('cam-label-sub');
+        var windOverlay = document.getElementById('wind-overlay');
+        var conditionsOverlay = document.getElementById('conditions-overlay');
         var windCanvas = document.getElementById('wind-canvas');
         var windReadout = document.getElementById('wind-readout');
         var conditionsBody = document.getElementById('conditions-body');
@@ -324,6 +340,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         }
         function layerVisibility(layer, visible) {
             layer.classList.toggle('layer--hidden', !visible);
+        }
+        // The weather overlays sit over the map to give context while an
+        // airport is located, then hide so the webcam is unobstructed.
+        function setWeatherOverlays(visible) {
+            windOverlay.style.display = visible ? 'block' : 'none';
+            conditionsOverlay.style.display = visible ? 'block' : 'none';
         }
 
         function isOperational(id) {
@@ -515,7 +537,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                         return;
                     }
                     camImg.src = frames[idx].url;
-                    camLabel.textContent = (airport.name || airport.id) + ' - cam ' + (camIndex + 1);
+                    camLabelTitle.textContent = airport.name || airport.id;
+                    camLabelSub.textContent = 'Camera ' + (camIndex + 1);
                     // Preload the next frame while this one shows.
                     if (idx + 1 < frames.length) {
                         preload(frames[idx + 1].url);
@@ -545,6 +568,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         function playAirport(airport) {
             layerVisibility(mapLayer, true);
             layerVisibility(camLayer, false);
+            setWeatherOverlays(true);
             showMessage('');
             loadWeather(airport);
             var startedAt = Date.now();
@@ -568,6 +592,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                         }
                         layerVisibility(mapLayer, false);
                         layerVisibility(camLayer, true);
+                        setWeatherOverlays(false);
                         return playCamera(airport, camIndex).then(function (played) {
                             camIndex++;
                             return loopCams();
@@ -617,6 +642,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     // Nothing operational; rest on the map and retry.
                     layerVisibility(camLayer, false);
                     layerVisibility(mapLayer, true);
+                    setWeatherOverlays(true);
                     showMessage('');
                     return delay(IDLE_RETRY_MS).then(navigateNext);
                 }
