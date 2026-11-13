@@ -77,7 +77,7 @@ if ($discoverMenuAirportsJson === false) {
             min-height: 100vh;
         }
         .wrap {
-            max-width: 860px;
+            max-width: 1640px;
             margin: 0 auto;
             padding: 2.5rem 1.5rem 4rem;
         }
@@ -91,7 +91,7 @@ if ($discoverMenuAirportsJson === false) {
         }
         .main-layout {
             display: grid;
-            grid-template-columns: minmax(360px, 420px) 1fr;
+            grid-template-columns: minmax(340px, 400px) 3fr;
             gap: 2rem;
             align-items: start;
         }
@@ -156,12 +156,25 @@ if ($discoverMenuAirportsJson === false) {
             color: var(--muted);
             font-size: 0.85rem;
         }
+        .preview-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+        }
         .preview-frame {
             width: 100%;
-            height: 76vh;
+            height: auto;
+            aspect-ratio: 16 / 9;
             border: 0;
             display: block;
             background: #0b0f14;
+        }
+        .preview-frame--portrait {
+            /* Dashboard tour is a portrait page; keep a tall, centered frame. */
+            aspect-ratio: 3 / 4;
+            width: auto;
+            max-width: 480px;
         }
 
         .controls {
@@ -328,7 +341,9 @@ if ($discoverMenuAirportsJson === false) {
                     <h3>Live Preview</h3>
                     <span id="preview-mode-label">Dashboard Tour</span>
                 </div>
-                <iframe class="preview-frame" id="preview-frame" title="Discover preview"></iframe>
+                <div class="preview-body">
+                    <iframe class="preview-frame" id="preview-frame" title="Discover preview"></iframe>
+                </div>
             </div>
         </div>
 
@@ -423,6 +438,8 @@ if ($discoverMenuAirportsJson === false) {
             if (!MODES[mode]) { return; }
             activeMode = mode;
             selectModeCard(mode);
+            // Dashboard tour previews portrait; weathercam previews landscape.
+            previewFrame.classList.toggle('preview-frame--portrait', mode === 'dashboard');
             render();
         }
 
@@ -467,6 +484,8 @@ if ($discoverMenuAirportsJson === false) {
         });
 
         buildScopeOptions();
+        // Start on Dashboard Tour (portrait).
+        previewFrame.classList.add('preview-frame--portrait');
         render();
     })();
     </script>
