@@ -414,7 +414,6 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
     <script src="/public/js/wind-visual.js"></script>
     <script>
     window.DISCOVER_WEATHERCAM_DECK = <?= $discoverWeathercamDeckJson ?>;
-    window.DISCOVER_WEATHERCAM_SCOPE = <?= json_encode($discoverWeathercamScope) ?>;
     window.DISCOVER_WEATHERCAM_SPECIFIC = <?= $discoverWeathercamSpecific ? 'true' : 'false' ?>;
     window.DISCOVER_WEATHERCAM_DURATION_MIN = <?= json_encode($discoverWeathercamDuration) ?>;
     window.DISCOVER_WEATHERCAM_UNITS = <?= $discoverWeathercamUnitsJson ?>;
@@ -592,8 +591,6 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19
             }).addTo(map);
-            // Cloud layer via the tile proxy.
-            var cloudsUrl = '/api/map-tiles.php?layer=clouds_new&t={t}&z={z}&x={x}&y={y}';
             // Radar layer over the base, from the RainViewer manifest.
             fetch('/api/rainviewer-weather-maps.php')
                 .then(function (res) { return res.json(); })
