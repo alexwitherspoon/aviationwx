@@ -68,13 +68,13 @@ $baseDomain = getBaseDomain();
                     Developers <span class="dropdown-arrow">▼</span>
                 </button>
                 <div class="site-nav-dropdown-menu">
-                    <a href="https://embed.aviationwx.org" class="site-nav-dropdown-item">
-                        <span class="dropdown-item-icon">🔗</span>
-                        <span>Embed Generator</span>
-                    </a>
                     <a href="https://api.aviationwx.org" class="site-nav-dropdown-item">
                         <span class="dropdown-item-icon">📡</span>
                         <span>API Documentation</span>
+                    </a>
+                    <a href="https://embed.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">🔗</span>
+                        <span>Embed Generator</span>
                     </a>
                     <a href="https://discover.aviationwx.org" class="site-nav-dropdown-item">
                         <span class="dropdown-item-icon">🖥️</span>
@@ -114,13 +114,13 @@ $baseDomain = getBaseDomain();
     
     <div class="site-nav-mobile-divider">Developers</div>
     
-    <a href="https://embed.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
-        <span class="dropdown-item-icon">🔗</span>
-        <span>Embed Generator</span>
-    </a>
     <a href="https://api.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
         <span class="dropdown-item-icon">📡</span>
         <span>API Documentation</span>
+    </a>
+    <a href="https://embed.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">🔗</span>
+        <span>Embed Generator</span>
     </a>
     <a href="https://discover.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
         <span class="dropdown-item-icon">🖥️</span>
