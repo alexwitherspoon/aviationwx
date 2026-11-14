@@ -64,6 +64,13 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Live Preview**: See exactly how your embed will look before copying the code
 - **Visit**: [embed.aviationwx.org](https://embed.aviationwx.org)
 
+### Discover Demo Kiosk
+- **Booth demo**: Runs a self-playing tour of the airport network, suitable for conference and display screens
+- **Dashboard Tour**: Rotates through the operational and degraded airports, flying the map and scrolling each live dashboard section by section
+- **Weathercam Tour**: Flies to each airport for context, then plays its webcams with the wind rose and current conditions
+- **Configurable (weathercam)**: Scope to all, one region, or a single airport; set dwell and units via URL
+- **Visit**: [discover.aviationwx.org](https://discover.aviationwx.org)
+
 ### Technical Features
 - **Performance**: Config caching (APCu), HTTP cache headers, rate limiting
 - **Security**: Input validation, rate limiting, sanitized error messages
