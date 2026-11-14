@@ -497,11 +497,13 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var days = Math.floor(seconds / 86400);
             return days + (days === 1 ? ' day' : ' days') + ' ago';
         }
-        // Show a module's "Last Updated: Xs ago", ticking each second.
+        // Show a module's "Last Updated: Xs ago", ticking each second. The age is
+        // rounded to the nearest whole second so sub-second drift never prints
+        // as a fractional count.
         function renderModuleUpdated(el, ts, timerRef) {
             if (!el) { return; }
             var render = function () {
-                var age = (typeof ts === 'number') ? (Date.now() / 1000) - ts : null;
+                var age = (typeof ts === 'number') ? Math.round((Date.now() / 1000) - ts) : null;
                 el.textContent = age != null ? formatRelativeTime(age) : '--';
                 if (timerRef && timerRef.timer) { clearTimeout(timerRef.timer); }
                 timerRef.timer = setTimeout(render, 1000);
