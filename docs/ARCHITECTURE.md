@@ -388,6 +388,39 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
   - Weather refresh (configurable, default 60 seconds)
 - **Fallback**: Graceful degradation to setInterval if Workers unavailable
 
+### Discover Kiosk (`pages/discover.php`)
+
+A self-running booth surface for demos, reachable at `/discover` (menu) and
+`discover.aviationwx.org` in production. The dashboard tour wraps the real
+airport pages, so the dashboards and map it shows are the same ones a pilot
+would open directly; the weathercam tour builds its own map and overlays from
+the internal APIs.
+
+- **Menu** (`pages/discover-menu.php`): Landing page that builds a configured
+  URL. Choices are carried as query params, so a display can be pointed at one
+  exact flow. Mode is chosen from two cards. Scope and dwell apply to both
+  tours; units are the weathercam tour's parameters.
+- **Dashboard tour** (`mode=dashboard`): Rotates through the current
+  operational-and-degraded network: it flies the network map to an airport,
+  then cross-fades to that airport's real dashboard. The shell scrolls the
+  dashboard section by section (webcam, wind, current conditions, airport
+  info, tail) rather than panning the whole page, and prefers dark mode via the
+  shared `aviationwx_theme` cookie. Scope pins or filters the network; the
+  dwell param sets how long a dashboard stays up.
+- **Weathercam tour** (`mode=weathercam`, `pages/discover-weathercam.php`):
+  Flies a Leaflet map (OSM + RainViewer radar) to each airport, dwells, then
+  plays that airport's webcam history fullscreen with the wind rose and current
+  conditions overlaid. Reuses the shared wind compass (`AviationWX.drawWindCompass`)
+  in full mode, so runway segments, magnetic offset, and wind-rose petals match
+  the dashboards. Scope, dwell, and unit params (`temp`, `dist`, `wind`,
+  `baro`) apply; unit names follow the embed generator.
+- **Deck selection** (`lib/discover.php`): The deck is listed airports only,
+  kept to operational or degraded status (a down airport, with no healthy
+  sources, is excluded). Health is scanned once and cached briefly; each
+  airport is re-checked just before it is revealed. The weathercam specific
+  pin (in `discover-weathercam.php`) shows a chosen airport even when degraded
+  or down, as long as it is listed and has a webcam.
+
 ## Data Flow
 
 ### Weather Data Flow

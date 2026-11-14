@@ -50,14 +50,40 @@ if (isset($_GET['health']) && $_GET['health'] !== '') {
 // calls this when its deck is exhausted, not on every transition.
 if (isset($_GET['pool']) && $_GET['pool'] === '1') {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['airports' => discoverGetCachedOperationalDeck(loadConfig())], JSON_INVALID_UTF8_SUBSTITUTE);
+    $poolScope = isset($_GET['scope']) ? strtolower(trim((string) $_GET['scope'])) : 'all';
+    echo json_encode(['airports' => discoverBuildScopedDeck(loadConfig(), $poolScope)], JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
-// HTML shell: compute and shuffle the initial deck once so the booth has an
-// airport to show the moment the page finishes loading.
+// Mode dispatch. The bare /discover path is the menu; a configured flow is
+// requested with ?mode=dashboard (tour) or ?mode=weathercam. Anything absent
+// or unhandled falls back to the menu so a stale link never lands on a dead
+// screen.
+$discoverMode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : '';
+if ($discoverMode === 'weathercam') {
+    require_once __DIR__ . '/discover-weathercam.php';
+    exit;
+}
+if ($discoverMode !== 'dashboard') {
+    require_once __DIR__ . '/discover-menu.php';
+    exit;
+}
+
+// HTML shell: compute the initial deck once so the booth has an airport to
+// show the moment the page finishes loading. Scope and dwell are honored here,
+// matching the weathercam tour. discoverBuildScopedDeck applies the scope and
+// enriches entries with region, so the pool refresh stays scoped too.
 $discoverConfig = loadConfig();
-$discoverDeck = discoverGetCachedOperationalDeck($discoverConfig);
+$discoverScope = isset($_GET['scope']) ? strtolower(trim((string) $_GET['scope'])) : 'all';
+$discoverDeck = discoverBuildScopedDeck($discoverConfig, $discoverScope);
+
+// Dwell (minutes per airport). Default 5, clamped to 1-60.
+$discoverDwellMinutes = 5;
+if (isset($_GET['tourDuration']) && preg_match('/^[1-9][0-9]*$/', (string) $_GET['tourDuration'])) {
+    $discoverDwellMinutes = min(60, max(1, (int) $_GET['tourDuration']));
+}
+$discoverDwellMs = $discoverDwellMinutes * 60 * 1000;
+
 shuffle($discoverDeck);
 // Substitute invalid bytes so a stray config value can never break the inline
 // script and leave the booth with a dead page.
@@ -73,6 +99,8 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <!-- The tour runs on configured URLs (?mode=dashboard), so keep it off the index. -->
+    <meta name="robots" content="noindex, nofollow">
     <title>Discover - AviationWX.org</title>
     <style>
         /* Full-bleed kiosk shell. The child pages are the display; the shell is
@@ -138,23 +166,38 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="discover-caption discover-caption--hidden" id="discover-caption"></div>
     <script>
     window.DISCOVER_DECK = <?= $discoverDeckJson ?>;
+    window.DISCOVER_SCOPE = <?= json_encode($discoverScope) ?>;
+    window.DISCOVER_DWELL_MS = <?= (int) $discoverDwellMs ?>;
     (function () {
         var deck = Array.isArray(window.DISCOVER_DECK) ? window.DISCOVER_DECK.slice() : [];
+        var discoverScope = window.DISCOVER_SCOPE || 'all';
         var mapFrame = document.getElementById('discover-map');
         var dashFrame = document.getElementById('discover-dashboard');
         var caption = document.getElementById('discover-caption');
 
-        var DWELL_MS = 5 * 60 * 1000;       // time a dashboard stays up
+        var DWELL_MS = window.DISCOVER_DWELL_MS || (5 * 60 * 1000); // time a dashboard stays up
         var FLY_TIMEOUT_MS = 8000;          // cap on waiting for the map flight
         var SETTLE_MS = 2500;               // hold after the flight before the fade
         var PREWARM_TIMEOUT_MS = 15000;     // cap on waiting for a dashboard to load
         var SKIP_DELAY_MS = 3000;           // settle pause after skipping a failed dashboard
         var FADE_MS = 1200;                 // matches the CSS opacity transition
-        var SCROLL_FIRST_DELAY_MS = 8000;   // let the top of the dashboard read first
-        var SCROLL_CYCLE_MS = 60000;        // one down-and-up pan per minute
-        var PAN_MS = 20000;                 // one leg of the pan (down or up)
-        var PAN_HOLD_MS = 8000;             // pause at the bottom of the page
+        var SECTION_FIRST_DELAY_MS = 8000;  // let the top of the dashboard read first
+        var SECTION_DWELL_MS = 20000;       // pause on each section before moving on
+        var PASS_GAP_MS = 250;              // breather between section passes
+        var PAN_MS = 20000;                 // smooth + legible hop between sections
         var IDLE_RETRY_MS = 30000;          // retry when nothing is eligible
+
+        // Dashboard sections to dwell on, in document order. Each is a CSS
+        // selector into the dashboard document; the final null is the page
+        // bottom. Sections can be absent on a given airport (webcam-less,
+        // weather-less), so the tour builds its target list at runtime.
+        var DASH_SECTIONS = [
+            '.webcam-section',
+            '.wind-visual-section',
+            '.weather-section',
+            '.airport-info',
+            null   // page bottom
+        ];
 
         function delay(ms) {
             return new Promise(function (resolve) { setTimeout(resolve, ms); });
@@ -188,7 +231,10 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function refreshDeck() {
-            return fetch('/discover?pool=1', { cache: 'no-store' })
+            // Re-fetch the same scoped deck so a scoped tour stays scoped after
+            // the initial deck runs dry. The ?pool endpoint applies the scope.
+            var poolUrl = '/discover?pool=1&scope=' + encodeURIComponent(discoverScope);
+            return fetch(poolUrl, { cache: 'no-store' })
                 .then(function (res) {
                     if (!res.ok) {
                         throw new Error('deck refresh failed');
@@ -203,11 +249,14 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function isOperational(id) {
-            // Fail closed: a network blip reads as not operational rather than
-            // risking a stale or unknown dashboard on the booth screen.
+            // Fail closed on a network blip: a stale or unknown dashboard must
+            // not land on the booth. A degraded airport still tours; only a
+            // fully down airport is skipped.
             return fetch('/discover?health=' + encodeURIComponent(id), { cache: 'no-store' })
                 .then(function (res) { return res.json(); })
-                .then(function (data) { return data && data.status === 'operational'; })
+                .then(function (data) {
+                    return !!data && (data.status === 'operational' || data.status === 'degraded');
+                })
                 .catch(function () { return false; });
         }
 
@@ -291,6 +340,7 @@ header('Content-Type: text/html; charset=utf-8');
                     dashFrame.removeEventListener('load', onLoad);
                     if (loaded) {
                         hideScrollbars();
+                        applyDarkMode();
                     }
                     resolve(loaded);
                 }
@@ -333,12 +383,35 @@ header('Content-Type: text/html; charset=utf-8');
             }
         }
 
+        // Prefer the dark dashboard theme to spare the booth's LCD. The cookie
+        // persists the choice across subdomain loads; the class set here takes
+        // effect on the current iframe instantly so the first dwell is already
+        // dark. Both are best-effort - a failed write never blocks the tour.
+        function applyDarkMode() {
+            try {
+                document.cookie = 'aviationwx_theme=dark; path=/; max-age=' + (30 * 24 * 60 * 60);
+            } catch (e) {
+                // Cookie write failure is not worth stalling the booth.
+            }
+            try {
+                var doc = dashFrame.contentDocument;
+                if (doc && doc.documentElement) {
+                    doc.documentElement.classList.add('dark-mode');
+                    if (doc.body) {
+                        doc.body.classList.add('dark-mode');
+                    }
+                }
+            } catch (e) {
+                // Same-origin, but never let a theme step break the tour.
+            }
+        }
+
         function maxScrollY(win) {
             var doc = win.document.documentElement;
             return Math.max(0, (doc.scrollHeight || 0) - (win.innerHeight || doc.clientHeight));
         }
 
-        function scrollTween(win, targetY, durationMs) {
+        function scrollTween(win, targetY, durationMs, abort) {
             return new Promise(function (resolve) {
                 var max = maxScrollY(win);
                 if (max <= 0) {
@@ -357,6 +430,10 @@ header('Content-Type: text/html; charset=utf-8');
                 }
 
                 function step(now) {
+                    if (abort && abort.stopped) {
+                        resolve();
+                        return;
+                    }
                     var t = Math.min((now - start) / durationMs, 1);
                     var y = startY + (clamped - startY) * easeInOutQuad(t);
                     win.scrollTo(0, y);
@@ -371,41 +448,142 @@ header('Content-Type: text/html; charset=utf-8');
             });
         }
 
-        // One down-and-up cycle over the dashboard. Dashboards short enough to
-        // fit the screen stay put; the requirement is only to pan tall pages.
-        function runScrollPan() {
-            var win;
-            try {
-                win = dashFrame.contentWindow;
-                if (!win || !win.document || !win.document.documentElement) {
-                    return;
-                }
-            } catch (e) {
-                // Never let an unreachable document stall the booth.
-                return;
-            }
+        // Resolve the sections that exist on the current dashboard into scroll
+        // targets (top pixel of each section, then the page bottom). Sections
+        // are conditional on an airport, so this is built at runtime and only
+        // tall pages are walked at all.
+        function dashboardSectionTargets(win) {
+            var doc = win.document;
             var max = maxScrollY(win);
             if (max <= 0) {
-                return;
+                return [];
             }
-            scrollTween(win, max, PAN_MS)
-                .then(function () { return delay(PAN_HOLD_MS); })
-                .then(function () { return scrollTween(win, 0, PAN_MS); });
+            var targets = [];
+            for (var i = 0; i < DASH_SECTIONS.length; i++) {
+                var selector = DASH_SECTIONS[i];
+                if (selector === null) {
+                    // The final null is the page bottom, capped at max scroll.
+                    var bottom = targets.length > 0 ? targets[targets.length - 1] : 0;
+                    if (max > bottom) {
+                        targets.push(max);
+                    }
+                    continue;
+                }
+                var el;
+                try {
+                    el = doc.querySelector(selector);
+                } catch (e) {
+                    el = null;
+                }
+                if (el && typeof el.offsetTop === 'number') {
+                    // Clamp to the max scroll so a section near the end does not
+                    // create an unreachable target.
+                    var y = Math.min(el.offsetTop, max);
+                    if (targets.length === 0 || targets[targets.length - 1] !== y) {
+                        targets.push(y);
+                    }
+                }
+            }
+            return targets;
+        }
+
+        // Dwell on each section in order, then back up, walking once over the
+        // sections that are present. Short dashboards that fit the screen stay
+        // put (no targets), matching the prior "only pan tall pages" rule.
+        // Resolves when one full down-and-up pass completes so the dwell loop
+        // can re-run it for the rest of the dwell window. An abort token
+        // ({ stopped }) stops the walk and any in-flight tween so a pass that
+        // outlives the dwell window cannot keep scrolling the next dashboard.
+        function runSectionCycle(abort) {
+            return new Promise(function (resolve) {
+                var win;
+                try {
+                    win = dashFrame.contentWindow;
+                    if (!win || !win.document || !win.document.documentElement) {
+                        resolve();
+                        return;
+                    }
+                } catch (e) {
+                    // Never let an unreachable document stall the booth.
+                    resolve();
+                    return;
+                }
+                var targets = dashboardSectionTargets(win);
+                if (targets.length === 0) {
+                    resolve();
+                    return;
+                }
+                var index = 0;
+                var movingDown = true;
+
+                function step() {
+                    if (abort && abort.stopped) {
+                        resolve();
+                        return;
+                    }
+                    var y = targets[index];
+                    scrollTween(win, y, PAN_MS, abort)
+                        .then(function () { return delay(SECTION_DWELL_MS); })
+                        .then(function () {
+                            if (abort && abort.stopped) {
+                                resolve();
+                                return;
+                            }
+                            if (movingDown) {
+                                if (index === targets.length - 1) {
+                                    // Hit the bottom; flip and head back up.
+                                    if (targets.length === 1) {
+                                        // Nowhere to walk back to; done after
+                                        // the single target.
+                                        resolve();
+                                        return;
+                                    }
+                                    movingDown = false;
+                                    index--;
+                                } else {
+                                    index++;
+                                }
+                            } else {
+                                if (index === 0) {
+                                    resolve();
+                                    return;
+                                }
+                                index--;
+                            }
+                            step();
+                        });
+                }
+                step();
+            });
         }
 
         function dwell() {
             return new Promise(function (resolve) {
-                var panTimer = null;
+                // One token per dwell: flipping it stops the current walk and
+                // its in-flight tween, so a pass that spans past DWELL_MS cannot
+                // scroll the dashboard that loads for the next airport.
+                var abort = { stopped: false };
                 var startTimer = setTimeout(function () {
-                    runScrollPan();
-                    panTimer = setInterval(runScrollPan, SCROLL_CYCLE_MS);
-                }, SCROLL_FIRST_DELAY_MS);
+                    var cycleLoop = function () {
+                        if (abort.stopped) {
+                            return;
+                        }
+                        // runSectionCycle can resolve synchronously (short or
+                        // section-less dashboard), so yield a real timer gap or
+                        // the loop would starve the event loop.
+                        runSectionCycle(abort).then(function () {
+                            if (abort.stopped) {
+                                return;
+                            }
+                            delay(PASS_GAP_MS).then(cycleLoop);
+                        });
+                    };
+                    cycleLoop();
+                }, SECTION_FIRST_DELAY_MS);
 
                 setTimeout(function () {
+                    abort.stopped = true;
                     clearTimeout(startTimer);
-                    if (panTimer) {
-                        clearInterval(panTimer);
-                    }
                     resolve();
                 }, DWELL_MS);
             });
