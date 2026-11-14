@@ -100,6 +100,32 @@ final class SubdomainRoutingTest extends TestCase
     }
 
     /**
+     * The dashboard tour honors the dwell param: DISCOVER_DWELL_MS is derived
+     * from ?tourDuration, scoped to the request's minutes.
+     */
+    public function testDiscoverTourHonorsDwellParam(): void
+    {
+        [$status, $body] = $this->request('/?mode=dashboard&tourDuration=2', 'discover.aviationwx.org');
+        $this->assertSame(200, $status);
+        $this->assertStringContainsString('DISCOVER_DWELL_MS = 120000', $body);
+    }
+
+    /**
+     * The ?pool endpoint honors scope, so a scoped dashboard tour stays scoped
+     * even after its initial deck is exhausted (the refresh path re-applies it).
+     */
+    public function testDiscoverPoolHonorsScope(): void
+    {
+        // A nonsense region id cannot match, so the pool must be empty rather
+        // than falling back to the whole network.
+        [$status, $body] = $this->request('/?pool=1&scope=XX-NOPE', 'discover.aviationwx.org');
+        $this->assertSame(200, $status);
+        $data = json_decode($body, true);
+        $this->assertIsArray($data);
+        $this->assertSame([], $data['airports'] ?? null);
+    }
+
+    /**
      * mode=weathercam selects the weathercam tour page, its deck bootstrap,
      * and the map element, not the menu or the dashboard tour.
      */

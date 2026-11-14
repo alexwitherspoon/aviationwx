@@ -11,7 +11,7 @@
  *
  * The page is self-contained: all the animation, the Leaflet map, the history
  * player, and the overlays live here, and the data comes from the existing
- * internal endpoints (pool/health for the deck, /api/weather.php for the
+ * internal endpoints (health for the deck re-check, /api/weather.php for the
  * overlays, /api/webcam-history.php for frames). Dark mode is preferred to
  * spare the LCD.
  */

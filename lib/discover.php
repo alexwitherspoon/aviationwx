@@ -146,3 +146,60 @@ function discoverGetCachedOperationalDeck(?array $config, int $ttlSeconds = 30):
 
     return $deck;
 }
+
+/**
+ * Build the discover deck with region metadata and apply a scope filter.
+ *
+ * The operational pool only carries id/primary/name, so a region scope needs
+ * the airport's region resolved from config. This enriches each entry with
+ * its ISO 3166-2 region and then filters by scope: all keeps everything, an
+ * airport id keeps that listed airport only, and anything else is treated as
+ * a region id. Scope is re-applied here (and by the ?pool= refresh) so a
+ * scoped tour stays scoped across deck refreshes.
+ *
+ * @param array|null $config Loaded config; empty when null
+ * @param string $scope 'all', an airport id, or an ISO 3166-2 region id
+ * @return array List of ['id','primary','name','region'] entries in deck order
+ */
+function discoverBuildScopedDeck(?array $config, string $scope): array
+{
+    if ($config === null) {
+        return [];
+    }
+
+    $listedById = [];
+    foreach (getListedAirports($config) as $aid => $ap) {
+        $listedById[$aid] = $ap;
+    }
+
+    $deck = [];
+    foreach (discoverGetCachedOperationalDeck($config) as $entry) {
+        $ap = $listedById[$entry['id']] ?? null;
+        if ($ap === null) {
+            continue;
+        }
+        $deck[] = [
+            'id' => $entry['id'],
+            'primary' => $entry['primary'],
+            'name' => $entry['name'],
+            'region' => getEffectiveIso3166RegionForAirport($entry['id'], $ap),
+        ];
+    }
+
+    $scope = strtolower(trim($scope));
+    if ($scope === '' || $scope === 'all') {
+        return $deck;
+    }
+
+    if (isset($listedById[$scope])) {
+        // Specific airport: keep it only if it is listed.
+        return array_values(array_filter($deck, function ($entry) use ($scope) {
+            return strtolower($entry['id']) === $scope;
+        }));
+    }
+
+    // Region id (ISO 3166-2, e.g. US-OR).
+    return array_values(array_filter($deck, function ($entry) use ($scope) {
+        return strtolower((string) $entry['region']) === $scope;
+    }));
+}

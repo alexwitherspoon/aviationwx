@@ -68,7 +68,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Booth demo**: Runs a self-playing tour of the airport network, suitable for conference and display screens
 - **Dashboard Tour**: Rotates through the operational and degraded airports, flying the map and scrolling each live dashboard section by section
 - **Weathercam Tour**: Flies to each airport for context, then plays its webcams with the wind rose and current conditions
-- **Configurable (weathercam)**: Scope to all, one region, or a single airport; set dwell and units via URL
+- **Configurable**: Scope to all, one region, or a single airport; set dwell via URL. Units apply to the weathercam tour
 - **Visit**: [discover.aviationwx.org](https://discover.aviationwx.org)
 
 ### Technical Features

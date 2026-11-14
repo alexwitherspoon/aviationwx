@@ -50,7 +50,8 @@ if (isset($_GET['health']) && $_GET['health'] !== '') {
 // calls this when its deck is exhausted, not on every transition.
 if (isset($_GET['pool']) && $_GET['pool'] === '1') {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['airports' => discoverGetCachedOperationalDeck(loadConfig())], JSON_INVALID_UTF8_SUBSTITUTE);
+    $poolScope = isset($_GET['scope']) ? strtolower(trim((string) $_GET['scope'])) : 'all';
+    echo json_encode(['airports' => discoverBuildScopedDeck(loadConfig(), $poolScope)], JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
@@ -68,10 +69,21 @@ if ($discoverMode !== 'dashboard') {
     exit;
 }
 
-// HTML shell: compute and shuffle the initial deck once so the booth has an
-// airport to show the moment the page finishes loading.
+// HTML shell: compute the initial deck once so the booth has an airport to
+// show the moment the page finishes loading. Scope and dwell are honored here,
+// matching the weathercam tour. discoverBuildScopedDeck applies the scope and
+// enriches entries with region, so the pool refresh stays scoped too.
 $discoverConfig = loadConfig();
-$discoverDeck = discoverGetCachedOperationalDeck($discoverConfig);
+$discoverScope = isset($_GET['scope']) ? strtolower(trim((string) $_GET['scope'])) : 'all';
+$discoverDeck = discoverBuildScopedDeck($discoverConfig, $discoverScope);
+
+// Dwell (minutes per airport). Default 5, clamped to 1-60.
+$discoverDwellMinutes = 5;
+if (isset($_GET['tourDuration']) && preg_match('/^[1-9][0-9]*$/', (string) $_GET['tourDuration'])) {
+    $discoverDwellMinutes = min(60, max(1, (int) $_GET['tourDuration']));
+}
+$discoverDwellMs = $discoverDwellMinutes * 60 * 1000;
+
 shuffle($discoverDeck);
 // Substitute invalid bytes so a stray config value can never break the inline
 // script and leave the booth with a dead page.
@@ -154,13 +166,16 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="discover-caption discover-caption--hidden" id="discover-caption"></div>
     <script>
     window.DISCOVER_DECK = <?= $discoverDeckJson ?>;
+    window.DISCOVER_SCOPE = <?= json_encode($discoverScope) ?>;
+    window.DISCOVER_DWELL_MS = <?= (int) $discoverDwellMs ?>;
     (function () {
         var deck = Array.isArray(window.DISCOVER_DECK) ? window.DISCOVER_DECK.slice() : [];
+        var discoverScope = window.DISCOVER_SCOPE || 'all';
         var mapFrame = document.getElementById('discover-map');
         var dashFrame = document.getElementById('discover-dashboard');
         var caption = document.getElementById('discover-caption');
 
-        var DWELL_MS = 5 * 60 * 1000;       // time a dashboard stays up
+        var DWELL_MS = window.DISCOVER_DWELL_MS || (5 * 60 * 1000); // time a dashboard stays up
         var FLY_TIMEOUT_MS = 8000;          // cap on waiting for the map flight
         var SETTLE_MS = 2500;               // hold after the flight before the fade
         var PREWARM_TIMEOUT_MS = 15000;     // cap on waiting for a dashboard to load
@@ -216,7 +231,10 @@ header('Content-Type: text/html; charset=utf-8');
         }
 
         function refreshDeck() {
-            return fetch('/discover?pool=1', { cache: 'no-store' })
+            // Re-fetch the same scoped deck so a scoped tour stays scoped after
+            // the initial deck runs dry. The ?pool endpoint applies the scope.
+            var poolUrl = '/discover?pool=1&scope=' + encodeURIComponent(discoverScope);
+            return fetch(poolUrl, { cache: 'no-store' })
                 .then(function (res) {
                     if (!res.ok) {
                         throw new Error('deck refresh failed');
