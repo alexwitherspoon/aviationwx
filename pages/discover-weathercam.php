@@ -637,13 +637,26 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         }
 
         // A row in the current-conditions panel, matching the widget's metric
-        // rows: muted label on the left, bold value on the right.
+        // rows: muted label on the left, bold value on the right. The value and
+        // class are escaped here so any string reaching the row (including
+        // weather text fields from upstream) cannot inject HTML. Numeric and
+        // unit-formatted values already pass literally; the degree symbol is a
+        // literal character, so escaping it is a no-op.
         function metricRow(label, value, cls) {
-            var valueCls = cls ? ' class="' + cls + '"' : '';
+            var valueCls = cls ? ' class="' + escapeHtml(cls) + '"' : '';
             return '<div class="metric-row">' +
-                '<span class="label">' + label + '</span>' +
-                '<span class="value"' + valueCls + '>' + value + '</span>' +
+                '<span class="label">' + escapeHtml(label) + '</span>' +
+                '<span class="value"' + valueCls + '>' + escapeHtml(value) + '</span>' +
                 '</div>';
+        }
+
+        // Escape text for safe interpolation into HTML, matching the
+        // dashboard's helper. Used where user/upstream text reaches a row;
+        // numeric and unit-formatted values are safe as-is.
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c;
+            });
         }
 
         // Unit-aware formatting for the metric rows. The weather API reports
@@ -651,7 +664,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         // display when the configured unit differs.
         function fmtTempF(f) {
             if (f == null) { return '--'; }
-            return TEMP_UNIT === 'C' ? Math.round((f - 32) * 5 / 9) + '&deg;C' : Math.round(f) + '&deg;F';
+            return TEMP_UNIT === 'C' ? Math.round((f - 32) * 5 / 9) + '\u00B0C' : Math.round(f) + '\u00B0F';
         }
         function fmtWindKt(kt) {
             if (kt == null) { return '--'; }
@@ -727,7 +740,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var dirTxt = '---';
             if (!calm) {
                 if (isVRB) { dirTxt = 'VRB'; }
-                else if (mag != null) { dirTxt = Math.round(mag) + '&deg;'; }
+                else if (mag != null) { dirTxt = Math.round(mag) + '\u00B0'; }
             }
             var gustTxt = (gust != null && gust > 0) ? fmtWindKt(gust) : '--';
             var gustFactor = (speed != null && gust != null) ? (typeof w.gust_factor === 'number' ? fmtWindKt(w.gust_factor) : '--') : '--';
@@ -755,7 +768,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             }
             var wd = w.wind_direction || {};
             if (typeof wd.magnetic_north === 'number') {
-                windTxt = wd.magnetic_north + '&deg; ' + windTxt;
+                windTxt = wd.magnetic_north + '\u00B0 ' + windTxt;
             } else if (wd.variable) {
                 windTxt = 'VRB ' + windTxt;
             }
