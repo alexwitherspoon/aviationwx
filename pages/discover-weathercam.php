@@ -463,7 +463,8 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var windUpdateTimer = makeModuleTimer();
         var conditionsUpdateTimer = makeModuleTimer();
 
-        var MAP_DWELL_MS = 15000;          // hold the map after flying to an airport
+        var MAP_DWELL_MS = 30000;          // hold the map after flying to an airport
+        var FLY_MS = 5000;                 // fly-to animation budget
         var FRAME_MS = 500;                // history player pacing (2 FPS), matches the dashboard player
         var SINGLE_FRAME_DWELL_MS = 30000; // hold a lone webcam image for a readable beat
         var HEALTH_TIMEOUT_MS = 5000;       // cap on the per-airport health re-check
@@ -617,8 +618,9 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     resolve();
                     return;
                 }
-                map.flyTo([airport.lat, airport.lon], 13, { duration: 3 });
-                setTimeout(resolve, MAP_DWELL_MS);
+                map.flyTo([airport.lat, airport.lon], 13, { duration: FLY_MS / 1000 });
+                // Hold on the map for the dwell window after the fly completes.
+                setTimeout(resolve, FLY_MS + MAP_DWELL_MS);
             });
         }
 
