@@ -547,6 +547,8 @@ rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
 - **Heading-based runways** (`heading_1`/`heading_2`): Runway numbers = magnetic north. No rotation.
 - **Cardinal runways** (compass-point idents, e.g. `N/S`, `NE/SW`): no coordinates or numeric designator, so the ident resolves to its fixed magnetic bearing and a through-center segment is synthesized. No rotation.
 - **Heading-based synthesis** (numeric runway numbers without coordinates): When OurAirports or FAA publish runway end identifiers (e.g. `15/33`) with true north headings but no end coordinates, segments are synthesized from the true headings. The runtime converts true → magnetic using the airport's declination.
+- **Curved runway synthesis**: When a runway has both end coordinates and both true headings that are not reciprocal (a real bend), a sampled Bezier curve is emitted as `curve_points` between the ends instead of a straight line. Fail closed: a missing heading, a straight (reciprocal) heading pair, or an absurd heading pair keeps the straight line. `curve_points` are carried through centering and true-to-magnetic rotation with the segment ends.
+- **Runway center guard**: The segment projection center falls back to the runway-endpoint centroid when the mapped airport center sits more than 25 km from the runway geometry. That distance signals an identifier collision across datasets (for example FAA LID `ID76` Elk Ridge vs an OurAirports `ID76` that points at a different airport ~74 km away). Projecting a runway against a far center would collapse the segment to sub-pixel size, so the guard keeps runways visible and correctly placed on the compass.
 
 ### Runway display (dashboard per-end HW/XW)
 
