@@ -690,4 +690,55 @@ class FetchRunwaysTest extends TestCase
         $this->assertCount(1, $segments);
         $this->assertArrayNotHasKey('curve_points', $segments[0]);
     }
+
+    public function testRunwaysToSegments_AbsurdHeadings_NoCurvePoints(): void
+    {
+        // Headings 090/140 (130° from reciprocal) are too far from a plausible
+        // bend; keep the straight line rather than emit a mangled curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '14',
+                'le_heading_degT' => 90,
+                'he_heading_degT' => 140,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
+
+    public function testResolveRunwayEntryCenter_ID76Collision_RendersFullSizeSegment(): void
+    {
+        // The headline bug: an OurAirports LID maps ID76 to Wilson Bar ~74 km
+        // away, so the Elk Ridge runway projects to a sub-pixel ~0.007 segment.
+        // After the center guard falls back to the runway centroid, the same
+        // runway must paint at full size so it is visible on the compass.
+        $runways = [[
+            'lat1' => 44.72358333,
+            'lon1' => -116.02633333,
+            'lat2' => 44.72358333,
+            'lon2' => -116.01763888,
+            'le_ident' => '09',
+            'he_ident' => '27',
+            'source' => 'faa',
+        ]];
+        $airportCenters = [
+            'ID76' => ['lat' => 45.396994, 'lon' => -115.485306],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'ID76');
+        $segments = runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']);
+
+        $this->assertCount(1, $segments);
+        $start = $segments[0]['start'];
+        $end = $segments[0]['end'];
+        $span = sqrt(pow($end[0] - $start[0], 2) + pow($end[1] - $start[1], 2));
+        $this->assertGreaterThan(0.5, $span);
+    }
 }
