@@ -234,7 +234,9 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             opacity: 0;
             transition: opacity 0.5s ease;
         }
-        .cam-img--show { opacity: 1; }
+        /* The show state needs a selector at least as specific as the base
+           rule; the ID here outranks a bare class, so scope it to the id too. */
+        #cam-img.cam-img--show { opacity: 1; }
         .overlay {
             position: fixed;
             z-index: 10;
@@ -471,6 +473,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         var DURATION_MS = Math.max(60000, (window.DISCOVER_WEATHERCAM_DURATION_MIN || 5) * 60 * 1000);
         var radarLayer = null;
         var map = null;
+        // Bumped on every airport change. Async calls (weather fetch) capture it
+        // so a late response from a previous airport does not render under the
+        // new one's title or overlays.
+        var transitionId = 0;
 
         function delay(ms) {
             return new Promise(function (res) { setTimeout(res, ms); });
@@ -584,29 +590,47 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         function initMap() {
             map = L.map('map', {
                 zoomControl: false,
-                attributionControl: false,
+                attributionControl: true,
                 center: [20, 0],
                 zoom: 2
             });
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19
+                maxZoom: 19,
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
-            // Radar layer over the base, from the RainViewer manifest.
-            fetch('/api/rainviewer-weather-maps.php')
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data && data.radar && Array.isArray(data.radar.past) && data.radar.past.length > 0) {
-                        var last = data.radar.past[data.radar.past.length - 1];
-                        var frameId = (last && last.path) ? last.path.split('/').pop() : null;
-                        if (!frameId) { return; }
-                        radarLayer = L.tileLayer(
-                            '/api/map-tiles.php?layer=rainviewer&radar=' + encodeURIComponent(frameId) + '&z={z}&x={x}&y={y}',
-                            { opacity: 0.55 }
-                        );
-                        radarLayer.addTo(map);
-                    }
-                })
-                .catch(function () { /* Radar optional; base map still shows. */ });
+            // Radar layer over the base, from the RainViewer manifest. The
+            // tile endpoint caps at zoom 7, so tell Leaflet its native max and
+            // let it scale tiles up at higher zooms instead of requesting an
+            // unsupported zoom.
+            var applyRadar = function (frameId) {
+                if (radarLayer) {
+                    map.removeLayer(radarLayer);
+                }
+                radarLayer = L.tileLayer(
+                    '/api/map-tiles.php?layer=rainviewer&radar=' + encodeURIComponent(frameId) + '&z={z}&x={x}&y={y}',
+                    { opacity: 0.55, maxNativeZoom: 7, maxZoom: 19, minZoom: 1, attribution: 'Radar © <a href="https://www.rainviewer.com">RainViewer</a>' }
+                );
+                radarLayer.addTo(map);
+            };
+            var refreshRadar = function () {
+                return fetch('/api/rainviewer-weather-maps.php')
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data && data.radar && Array.isArray(data.radar.past) && data.radar.past.length > 0) {
+                            var last = data.radar.past[data.radar.past.length - 1];
+                            var frameId = (last && last.path) ? last.path.split('/').pop() : null;
+                            // Frame ids are 12 hex chars; reject anything else so a
+                            // malformed manifest cannot feed a bogus tile request.
+                            if (!frameId || !/^[0-9a-f]{12}$/i.test(frameId)) { return; }
+                            applyRadar(frameId);
+                        }
+                    })
+                    .catch(function () { /* Radar optional; base map still shows. */ });
+            };
+            refreshRadar();
+            // Refresh the radar frame as a kiosk session wears on, so the radar
+            // stays current instead of showing the startup frame for hours.
+            setInterval(refreshRadar, 10 * 60 * 1000);
         }
 
         function flyTo(airport) {
@@ -623,14 +647,23 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 
         // ---- Weather overlay ----
         function loadWeather(airport) {
+            // Capture the current transition so a slow weather response from the
+            // previous airport cannot land under this one's title or overlays.
+            var myTransition = transitionId;
             return fetch('/api/weather.php?airport=' + encodeURIComponent(airport.primary || airport.id))
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
+                    if (myTransition !== transitionId) {
+                        return;  // stale response from an earlier airport
+                    }
                     var w = data && data.weather ? data.weather : null;
                     if (!w) { throw new Error('no weather'); }
                     renderWeather(w, airport);
                 })
                 .catch(function () {
+                    if (myTransition !== transitionId) {
+                        return;  // another airport already owns this transition
+                    }
                     windReadout.textContent = '--';
                     conditionsBody.textContent = 'Unavailable';
                 });
@@ -665,6 +698,17 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         function fmtTempF(f) {
             if (f == null) { return '--'; }
             return TEMP_UNIT === 'C' ? Math.round((f - 32) * 5 / 9) + '\u00B0C' : Math.round(f) + '\u00B0F';
+        }
+        // Temperature from a Celsius input, shown in the configured unit.
+        function fmtTempC(c) {
+            if (c == null) { return '--'; }
+            return TEMP_UNIT === 'C' ? Math.round(c) + '\u00B0C' : Math.round(c * 9 / 5 + 32) + '\u00B0F';
+        }
+        // A temperature difference given in Celsius (no offset): convert by 9/5
+        // for Fahrenheit, keep as-is for Celsius.
+        function fmtTempDeltaC(c) {
+            if (c == null) { return '--'; }
+            return TEMP_UNIT === 'C' ? Math.round(c) + '\u00B0C' : Math.round(c * 9 / 5) + '\u00B0F';
         }
         function fmtWindKt(kt) {
             if (kt == null) { return '--'; }
@@ -764,7 +808,7 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             var windTxt = '--';
             if (speed != null) {
                 windTxt = fmtWindKt(speed);
-                if (gust != null) { windTxt += ' G' + Math.round(gust) + (WIND_UNIT === 'mph' ? ' mph' : (WIND_UNIT === 'kmh' ? ' km/h' : ' kt')); }
+                if (gust != null) { windTxt += ' G' + fmtWindKt(gust); }
             }
             var wd = w.wind_direction || {};
             if (typeof wd.magnetic_north === 'number') {
@@ -784,9 +828,11 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 ? w._field_obs_time_map
                 : {};
             var windTs = (typeof obs.wind_speed === 'number') ? obs.wind_speed
-                : ((typeof w.last_updated === 'number') ? w.last_updated : null);
+                : ((typeof w.obs_time_primary === 'number') ? w.obs_time_primary
+                    : ((typeof w.last_updated === 'number') ? w.last_updated : null));
             var condTs = (typeof obs.visibility === 'number') ? obs.visibility
-                : ((typeof w.last_updated === 'number') ? w.last_updated : null);
+                : ((typeof w.obs_time_primary === 'number') ? w.obs_time_primary
+                    : ((typeof w.last_updated === 'number') ? w.last_updated : null));
             windUpdateTimer.clear();
             conditionsUpdateTimer.clear();
             renderModuleUpdated(windUpdated, windTs, windUpdateTimer);
@@ -818,14 +864,14 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                 }
             }
 
-            if (typeof w.temperature_f === 'number') {
-                rows += metricRow('Temperature', fmtTempF(w.temperature_f));
+            if (typeof w.temperature === 'number') {
+                rows += metricRow('Temperature', fmtTempC(w.temperature));
             }
             if (typeof w.temp_high_today === 'number') {
-                rows += metricRow('Today\'s High', fmtTempF(w.temp_high_today));
+                rows += metricRow('Today\'s High', fmtTempC(w.temp_high_today));
             }
             if (typeof w.temp_low_today === 'number') {
-                rows += metricRow('Today\'s Low', fmtTempF(w.temp_low_today));
+                rows += metricRow('Today\'s Low', fmtTempC(w.temp_low_today));
             }
             if (typeof w.density_altitude === 'number') {
                 rows += metricRow('Density Altitude', fmtDistFt(w.density_altitude));
@@ -839,11 +885,11 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
             if (typeof w.humidity === 'number') {
                 rows += metricRow('Humidity', Math.round(w.humidity) + '%');
             }
-            if (typeof w.dewpoint_f === 'number') {
-                rows += metricRow('Dewpoint', fmtTempF(w.dewpoint_f));
+            if (typeof w.dewpoint === 'number') {
+                rows += metricRow('Dewpoint', fmtTempC(w.dewpoint));
             }
             if (typeof w.dewpoint_spread === 'number') {
-                rows += metricRow('Dewpoint Spread', fmtTempF(w.dewpoint_spread));
+                rows += metricRow('Dewpoint Spread', fmtTempDeltaC(w.dewpoint_spread));
             }
             if (typeof w.precip_accum === 'number') {
                 var rainaltIn = Math.round(w.precip_accum * 100) / 100;
@@ -865,9 +911,19 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 
         // ---- Webcam history player ----
         function getFrames(airport, camIndex) {
-            return fetch('/api/webcam-history.php?id=' + encodeURIComponent(airport.id) + '&cam=' + camIndex, { cache: 'no-store' })
+            // Bound the fetch and JSON parse so a stalled history response
+            // cannot leave playCamera waiting forever and stall the tour. The
+            // timer stays armed until the body is parsed, mirroring isReachable.
+            var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            var timer = controller ? setTimeout(function () { controller.abort(); }, HEALTH_TIMEOUT_MS) : null;
+            function clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+            return fetch('/api/webcam-history.php?id=' + encodeURIComponent(airport.id) + '&cam=' + camIndex, {
+                cache: 'no-store',
+                signal: controller ? controller.signal : undefined
+            })
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
+                    clearTimer();
                     if (!data || !data.enabled || !Array.isArray(data.frames) || data.frames.length === 0) {
                         return [];
                     }
@@ -880,7 +936,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
                     }
                     return recent;
                 })
-                .catch(function () { return []; });
+                .catch(function () {
+                    clearTimer();
+                    return [];
+                });
         }
         function preload(url) {
             var img = new Image();
@@ -950,6 +1009,19 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
         // hold the rotation for most of a pass. Resolves after the airport (all
         // cams, or the budget) is done so the loop moves on.
         function playAirport(airport) {
+            // Move to a new transition: invalidate any in-flight weather from the
+            // previous airport and clear its weather modules.
+            transitionId++;
+            windUpdateTimer.clear();
+            conditionsUpdateTimer.clear();
+            windReadout.textContent = '--';
+            windDetails.innerHTML = '';
+            conditionsBody.textContent = 'Loading...';
+            if (window.AviationWX && typeof window.AviationWX.drawWindCompass === 'function') {
+                var wdCanvas = windCanvas;
+                var ctx = wdCanvas && wdCanvas.getContext ? wdCanvas.getContext('2d') : null;
+                if (ctx) { ctx.clearRect(0, 0, wdCanvas.width, wdCanvas.height); }
+            }
             layerVisibility(mapLayer, true);
             layerVisibility(camLayer, false);
             setWeatherOverlays(true);
@@ -1045,7 +1117,10 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 
         initMap();
         if (runningDeck.length === 0 && fullDeck.length === 0) {
-            showMessage('No eligible airports right now');
+            // No airports in the rendered deck: let the navigate loop idle and
+            // retry rather than stopping the kiosk permanently. The deck itself
+            // is fixed for this page load, so a recovery is picked up on reload.
+            navigateNext();
             return;
         }
         navigateNext();

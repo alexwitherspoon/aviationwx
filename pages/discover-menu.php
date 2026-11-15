@@ -545,13 +545,7 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
 
         copyBtn.addEventListener('click', function () {
             var url = buildUrl();
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(function () {
-                    copyBtn.textContent = 'Copied';
-                    setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1500);
-                });
-            } else {
-                // Fallback for older browsers / iframes without clipboard access.
+            function manualCopy() {
                 var ta = document.createElement('textarea');
                 ta.value = url;
                 ta.style.position = 'fixed';
@@ -562,6 +556,19 @@ $canonicalUrl = 'https://discover.' . $baseDomain;
                 document.body.removeChild(ta);
                 copyBtn.textContent = 'Copied';
                 setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1500);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () {
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1500);
+                }).catch(function () {
+                    // Clipboard permission can be denied even when the API exists;
+                    // fall back to a selectable copy so the user still gets there.
+                    manualCopy();
+                });
+            } else {
+                // Older browsers / iframes without clipboard access.
+                manualCopy();
             }
         });
 
