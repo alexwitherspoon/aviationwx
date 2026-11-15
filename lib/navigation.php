@@ -68,13 +68,17 @@ $baseDomain = getBaseDomain();
                     Developers <span class="dropdown-arrow">▼</span>
                 </button>
                 <div class="site-nav-dropdown-menu">
+                    <a href="https://api.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">📡</span>
+                        <span>API Documentation</span>
+                    </a>
                     <a href="https://embed.aviationwx.org" class="site-nav-dropdown-item">
                         <span class="dropdown-item-icon">🔗</span>
                         <span>Embed Generator</span>
                     </a>
-                    <a href="https://api.aviationwx.org" class="site-nav-dropdown-item">
-                        <span class="dropdown-item-icon">📡</span>
-                        <span>API Documentation</span>
+                    <a href="https://discover.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">🖥️</span>
+                        <span>Discover</span>
                     </a>
                     <div class="site-nav-dropdown-divider">Open Source</div>
                     <a href="https://github.com/alexwitherspoon/aviationwx" target="_blank" rel="noopener" class="site-nav-dropdown-item">
@@ -110,13 +114,17 @@ $baseDomain = getBaseDomain();
     
     <div class="site-nav-mobile-divider">Developers</div>
     
+    <a href="https://api.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">📡</span>
+        <span>API Documentation</span>
+    </a>
     <a href="https://embed.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
         <span class="dropdown-item-icon">🔗</span>
         <span>Embed Generator</span>
     </a>
-    <a href="https://api.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
-        <span class="dropdown-item-icon">📡</span>
-        <span>API Documentation</span>
+    <a href="https://discover.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">🖥️</span>
+        <span>Discover</span>
     </a>
     
     <div class="site-nav-mobile-divider">Open Source</div>

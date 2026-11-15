@@ -35,7 +35,7 @@ class DiscoverDeckTest extends TestCase
         ];
     }
 
-    public function testDiscoverSelectOperationalAirports_OperationalOnly(): void
+    public function testDiscoverSelectOperationalAirports_OperationalAndDegraded(): void
     {
         $status = [
             'kspb' => 'operational',
@@ -47,7 +47,7 @@ class DiscoverDeckTest extends TestCase
         $deck = discoverSelectOperationalAirports($this->airports, $status);
 
         $ids = array_column($deck, 'id');
-        $this->assertSame(['kspb', 'pdx'], $ids);
+        $this->assertSame(['kspb', 'pdx', '03s'], $ids);
     }
 
     public function testDiscoverSelectOperationalAirports_MissingStatus_FailsClosed(): void
