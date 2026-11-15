@@ -625,4 +625,69 @@ class FetchRunwaysTest extends TestCase
         $this->assertSame(0.0, $center['lat']);
         $this->assertSame(0.0, $center['lon']);
     }
+
+    public function testRunwaysToSegments_CurvedRunway_EmitsCurvePoints(): void
+    {
+        // Headings 145 and 285 are 140° apart (40° from 180), a plausible bend.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '14',
+                'he_ident' => '28',
+                'le_heading_degT' => 145,
+                'he_heading_degT' => 285,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayHasKey('curve_points', $segments[0]);
+        $this->assertGreaterThan(2, count($segments[0]['curve_points']));
+        $last = count($segments[0]['curve_points']) - 1;
+        $this->assertEqualsWithDelta($segments[0]['start'][0], $segments[0]['curve_points'][0][0], 1e-9);
+        $this->assertEqualsWithDelta($segments[0]['end'][1], $segments[0]['curve_points'][$last][1], 1e-9);
+    }
+
+    public function testRunwaysToSegments_ReciprocalHeadings_NoCurvePoints(): void
+    {
+        // Headings 090/270 are straight; do not add a spurious curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'le_heading_degT' => 90,
+                'he_heading_degT' => 270,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
+
+    public function testRunwaysToSegments_MissingHeadings_NoCurvePoints(): void
+    {
+        // Coordinates present but no headings: straight line, no curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'source' => 'faa',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
 }

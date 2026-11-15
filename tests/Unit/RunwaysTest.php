@@ -412,6 +412,65 @@ class RunwaysTest extends TestCase
         );
     }
 
+    public function testCenterRunwaySegments_CarriesCurvePointsThroughCentering(): void
+    {
+        $segment = [
+            'start' => [-0.9, 0.0],
+            'end' => [0.9, 0.0],
+            'curve_points' => [
+                [-0.9, 0.0],
+                [-0.4, 0.3],
+                [0.4, 0.3],
+                [0.9, 0.0],
+            ],
+        ];
+
+        $centered = centerRunwaySegments([$segment]);
+
+        $this->assertArrayHasKey('curve_points', $centered[0]);
+        $this->assertCount(4, $centered[0]['curve_points']);
+        // Centering keeps the curve endpoints glued to the segment ends.
+        $this->assertEqualsWithDelta($centered[0]['start'][0], $centered[0]['curve_points'][0][0], 1e-9);
+        $this->assertEqualsWithDelta($centered[0]['end'][0], $centered[0]['curve_points'][3][0], 1e-9);
+        $this->assertEqualsWithDelta($centered[0]['end'][1], $centered[0]['curve_points'][3][1], 1e-9);
+        // Idempotent: centering twice keeps curve_points identical.
+        $twice = centerRunwaySegments($centered);
+        $this->assertEqualsWithDelta(
+            $centered[0]['curve_points'][1][0],
+            $twice[0]['curve_points'][1][0],
+            1e-9
+        );
+    }
+
+    public function testRotateRunwaySegmentsToMagnetic_CarriesCurvePointsThroughRotation(): void
+    {
+        $segment = [
+            'start' => [-0.9, 0.0],
+            'end' => [0.9, 0.0],
+            'curve_points' => [
+                [-0.9, 0.0],
+                [-0.4, 0.3],
+                [0.4, 0.3],
+                [0.9, 0.0],
+            ],
+        ];
+
+        $rotated = rotateRunwaySegmentsToMagnetic([$segment], 15.0);
+
+        $this->assertArrayHasKey('curve_points', $rotated[0]);
+        $this->assertCount(4, $rotated[0]['curve_points']);
+        // Curve endpoints follow the rotated segment ends.
+        $this->assertEqualsWithDelta($rotated[0]['start'][0], $rotated[0]['curve_points'][0][0], 1e-6);
+        $this->assertEqualsWithDelta($rotated[0]['end'][0], $rotated[0]['curve_points'][3][0], 1e-6);
+        $this->assertEqualsWithDelta($rotated[0]['end'][1], $rotated[0]['curve_points'][3][1], 1e-6);
+        // Rotation preserves chord length.
+        $chord = sqrt(
+            pow($rotated[0]['end'][0] - $rotated[0]['start'][0], 2) +
+            pow($rotated[0]['end'][1] - $rotated[0]['start'][1], 2)
+        );
+        $this->assertEqualsWithDelta(1.8, $chord, 1e-6);
+    }
+
     public function testGetRunwaySegmentsForAirport_ManualLatLonOffset_ReturnsCenteredSegments(): void
     {
         $airport = [

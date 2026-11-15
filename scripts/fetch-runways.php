@@ -525,6 +525,73 @@ function headingBasedRunwayToSegment(array $rw, string $source): ?array
 }
 
 /**
+ * Sample a cubic Bezier between two coordinate runway ends whose headings are
+ * not reciprocal (a real bend). Headings are true (degT), matching the frame
+ * where x is east and y is north. Returns null unless the end headings show a
+ * meaningful but plausible bend, so straight runways and bad data stay as a
+ * plain line rather than getting a spurious curve.
+ *
+ * @param float $x1 Low-end x (normalized)
+ * @param float $y1 Low-end y (normalized)
+ * @param float $x2 High-end x (normalized)
+ * @param float $y2 High-end y (normalized)
+ * @param float $leHeading True heading at the low end
+ * @param float $heHeading True heading at the high end
+ * @param int $steps Sample count along the curve
+ * @return array<int, array{float, float}>|null Sampled points, or null
+ */
+function curvedRunwayPoints(
+    float $x1,
+    float $y1,
+    float $x2,
+    float $y2,
+    float $leHeading,
+    float $heHeading,
+    int $steps = 12
+): ?array {
+    if (!is_finite($leHeading) || !is_finite($heHeading)) {
+        return null;
+    }
+    $raw = fmod(abs($leHeading - $heHeading), 360.0);
+    $delta = min($raw, 360.0 - $raw);
+    if (abs($delta - 180.0) <= 20.0 || abs($delta - 180.0) > 60.0) {
+        return null;
+    }
+
+    $rad = M_PI / 180.0;
+    // Outward direction at the low end, inbound direction at the high end.
+    $dx = sin($leHeading * $rad);
+    $dy = cos($leHeading * $rad);
+    $ex = sin(($heHeading + 180.0) * $rad);
+    $ey = cos(($heHeading + 180.0) * $rad);
+
+    $segLen = sqrt(pow($x2 - $x1, 2) + pow($y2 - $y1, 2));
+    if ($segLen < 0.0001) {
+        return null;
+    }
+    $k = $segLen * 0.35;
+    $p1x = $x1 + $dx * $k;
+    $p1y = $y1 + $dy * $k;
+    $p2x = $x2 + $ex * $k;
+    $p2y = $y2 + $ey * $k;
+
+    $points = [];
+    for ($i = 0; $i <= $steps; $i++) {
+        $t = $i / $steps;
+        $mt = 1.0 - $t;
+        $a = $mt * $mt * $mt;
+        $b = 3.0 * $mt * $mt * $t;
+        $c = 3.0 * $mt * $t * $t;
+        $d = $t * $t * $t;
+        $points[] = [
+            $a * $x1 + $b * $p1x + $c * $p2x + $d * $x2,
+            $a * $y1 + $b * $p1y + $c * $p2y + $d * $y2,
+        ];
+    }
+    return $points;
+}
+
+/**
  * Build normalized compass segments from raw runway rows.
  *
  * Coordinate rows are projected and scaled to fit; coordinate-less rows are synthesized
@@ -613,7 +680,7 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             $identAt2 = $heIdent;
         }
 
-        $segments[] = [
+        $segment = [
             'start' => [$x1, $y1],
             'end' => [$x2, $y2],
             'le_ident' => $identAt1,
@@ -622,6 +689,26 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             'ident_at_end' => $identAt2,
             'source' => $rw['source'] ?? 'programmatic',
         ];
+
+        $leHeading = $rw['le_heading_degT'] ?? $rw['le_heading_deg'] ?? null;
+        $heHeading = $rw['he_heading_degT'] ?? $rw['he_heading_deg'] ?? null;
+        $curve = null;
+        if (is_numeric($leHeading) && is_numeric($heHeading)
+            && trim((string) $leHeading) !== ''
+            && trim((string) $heHeading) !== '') {
+            $curve = curvedRunwayPoints(
+                (float) $x1,
+                (float) $y1,
+                (float) $x2,
+                (float) $y2,
+                (float) $leHeading,
+                (float) $heHeading
+            );
+        }
+        if ($curve !== null) {
+            $segment['curve_points'] = $curve;
+        }
+        $segments[] = $segment;
     }
     return centerRunwaySegments($segments);
 }
