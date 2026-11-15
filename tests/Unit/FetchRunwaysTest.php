@@ -554,4 +554,75 @@ class FetchRunwaysTest extends TestCase
 
         $this->assertEmpty($segments);
     }
+
+    public function testResolveRunwayEntryCenter_FarMappedCenter_FallsBackToRunwayCentroid(): void
+    {
+        // FAA ID76 (Elk Ridge) collides with an OurAirports LID that points at
+        // a different airport (Wilson Bar, ~74 km away). The mapped center must
+        // not win here, or the runway projects to sub-pixel size.
+        $runways = [
+            [
+                'lat1' => 44.72358333,
+                'lon1' => -116.02633333,
+                'lat2' => 44.72358333,
+                'lon2' => -116.01763888,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'source' => 'faa',
+            ],
+        ];
+        $airportCenters = [
+            // OurAirports maps LID ID76 to Wilson Bar, ~74 km from Elk Ridge.
+            'ID76' => ['lat' => 45.396994, 'lon' => -115.485306],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'ID76');
+
+        $this->assertEqualsWithDelta(44.72358333, $center['lat'], 1e-6);
+        $this->assertEqualsWithDelta(-116.0219861, $center['lon'], 1e-4);
+    }
+
+    public function testResolveRunwayEntryCenter_NearMappedCenter_KeepsMappedCenter(): void
+    {
+        // A sane center within the guard stays authoritative (matches existing
+        // behavior for airports whose mapped center sits near the runway).
+        $runways = [
+            [
+                'lat1' => 45.540394,
+                'lon1' => -122.960000,
+                'lat2' => 45.540394,
+                'lon2' => -122.939650,
+                'le_ident' => '03',
+                'he_ident' => '21',
+                'source' => 'faa',
+            ],
+        ];
+        $airportCenters = ['KHIO' => ['lat' => 45.54038, 'lon' => -122.94983]];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'KHIO');
+
+        $this->assertEqualsWithDelta(45.54038, $center['lat'], 1e-6);
+        $this->assertEqualsWithDelta(-122.94983, $center['lon'], 1e-6);
+    }
+
+    public function testResolveRunwayEntryCenter_NoCoordinates_ReturnsOrigin(): void
+    {
+        // Cardinal-only strip with no coordinates: center is arbitrary.
+        $runways = [
+            [
+                'lat1' => null,
+                'lon1' => null,
+                'lat2' => null,
+                'lon2' => null,
+                'le_ident' => 'N',
+                'he_ident' => 'S',
+                'source' => 'ourairports',
+            ],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, [], 'STRIP');
+
+        $this->assertSame(0.0, $center['lat']);
+        $this->assertSame(0.0, $center['lon']);
+    }
 }

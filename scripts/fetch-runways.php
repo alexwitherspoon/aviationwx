@@ -20,6 +20,12 @@ require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
 require_once __DIR__ . '/../lib/ourairports/http.php';
 require_once __DIR__ . '/../lib/ourairports/refresh.php';
 require_once __DIR__ . '/../lib/ourairports/urls.php';
+require_once __DIR__ . '/../lib/map-card.php';
+
+// Guard (km): a mapped airport center farther than this from its runway
+// geometry is treated as an identifier collision, so the runway centroid is
+// used instead. The same LID can name two different airports across datasets.
+const RUNWAY_CENTER_COLLISION_GUARD_KM = 25.0;
 
 // Worldwide merge peak exceeds default PHP-FPM/CLI limits; match NASR APT worker headroom.
 // @ suppresses ini_set failure in restricted environments (e.g. disable_functions)
@@ -629,10 +635,47 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
  */
 function resolveRunwayEntryCenter(array $runways, array $airportCenters, string $primaryId, ?string $altId = null): array
 {
+    $centroid = runwayEndpointsCentroid($runways);
     $center = $airportCenters[$primaryId] ?? ($altId !== null ? ($airportCenters[$altId] ?? null) : null);
+
+    if ($center !== null && $centroid !== null) {
+        // A mapped center far from the actual runway geometry means the
+        // identifier collided across datasets: the same LID names two
+        // different airports (FAA ID76 Elk Ridge vs OurAirports ID76 Wilson
+        // Bar). Projecting a runway against a center kilometers away collapses
+        // the segment to sub-pixel size. Prefer the runway geometry instead.
+        $distanceKm = mapCardDistanceKm(
+            (float) $center['lat'],
+            (float) $center['lon'],
+            $centroid['lat'],
+            $centroid['lon']
+        );
+        if ($distanceKm > RUNWAY_CENTER_COLLISION_GUARD_KM) {
+            $center = $centroid;
+        }
+    }
+
     if ($center !== null) {
         return $center;
     }
+
+    if ($centroid !== null) {
+        return $centroid;
+    }
+
+    // No coordinate-bearing runways (cardinal-only strip); center is arbitrary
+    // because synthesized segments are drawn through center by bearing.
+    return ['lat' => 0.0, 'lon' => 0.0];
+}
+
+/**
+ * Mean of runway endpoint coordinates, or null when none are numeric.
+ *
+ * @param array<int, array<string, mixed>> $runways
+ * @return array{lat: float, lon: float}|null
+ */
+function runwayEndpointsCentroid(array $runways): ?array
+{
     $lats = array_values(array_filter(
         array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2')),
         'is_numeric'
@@ -643,9 +686,7 @@ function resolveRunwayEntryCenter(array $runways, array $airportCenters, string 
     ));
 
     if ($lats === [] || $lons === []) {
-        // No coordinate-bearing runways (cardinal-only strip); center is arbitrary
-        // because synthesized segments are drawn through center by bearing.
-        return ['lat' => 0.0, 'lon' => 0.0];
+        return null;
     }
 
     return [
