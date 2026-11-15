@@ -559,11 +559,11 @@ function curvedRunwayPoints(
     }
 
     $rad = M_PI / 180.0;
-    // Outward direction at the low end, inbound direction at the high end.
+    // Outward runway heading at each end.
     $dx = sin($leHeading * $rad);
     $dy = cos($leHeading * $rad);
-    $ex = sin(($heHeading + 180.0) * $rad);
-    $ey = cos(($heHeading + 180.0) * $rad);
+    $ex = sin($heHeading * $rad);
+    $ey = cos($heHeading * $rad);
 
     $segLen = sqrt(pow($x2 - $x1, 2) + pow($y2 - $y1, 2));
     if ($segLen < 0.0001) {

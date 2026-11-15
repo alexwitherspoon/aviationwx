@@ -651,6 +651,20 @@ class FetchRunwaysTest extends TestCase
         $this->assertEqualsWithDelta($segments[0]['end'][1], $segments[0]['curve_points'][$last][1], 1e-9);
     }
 
+    public function testCurvedRunwayPoints_ArrivalHeadingMatchesHighEnd(): void
+    {
+        // The high-end control point must sit on the runway heading so the
+        // curve arrives at the high end at the expected heading instead of
+        // curling back past it. Headings 070/290 arrive at 110 degrees.
+        $pts = curvedRunwayPoints(-0.9, 0.0, 0.9, 0.0, 70.0, 290.0);
+        $this->assertNotNull($pts);
+        $last = $pts[count($pts) - 1];
+        $prev = $pts[count($pts) - 2];
+        $heading = rad2deg(atan2($last[0] - $prev[0], $last[1] - $prev[1]));
+        $heading = fmod($heading + 360.0, 360.0);
+        $this->assertEqualsWithDelta(110.0, $heading, 5.0);
+    }
+
     public function testRunwaysToSegments_ReciprocalHeadings_NoCurvePoints(): void
     {
         // Headings 090/270 are straight; do not add a spurious curve.
