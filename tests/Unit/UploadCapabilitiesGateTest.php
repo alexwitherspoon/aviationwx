@@ -80,6 +80,40 @@ class UploadCapabilitiesGateTest extends TestCase
         }
     }
 
+    public function testGetPushWebcamUsernameIndex_IncludesPushConfigOnlyCamera(): void
+    {
+        // A camera with a push_config block but no type: push is a valid push
+        // camera. cleanup-cache reuses this index to protect push inboxes from
+        // cleanup, so it has to include a push_config-only camera.
+        $cam = $this->pushCamera();
+        unset($cam['type']);
+        $tmp = $this->writeTempConfig($this->airportConfig([$cam]));
+
+        try {
+            $index = getPushWebcamUsernameIndex();
+            $this->assertArrayHasKey(
+                'kspbcam0push01',
+                $index,
+                'cleanup must protect a push_config-only camera inbox'
+            );
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    public function testGetPushWebcamUsernameIndex_ExcludesPullCamera(): void
+    {
+        $tmp = $this->writeTempConfig($this->airportConfig([
+            ['name' => 'Pull Cam', 'url' => 'https://example.com/cam.jpg'],
+        ]));
+
+        try {
+            $this->assertSame([], getPushWebcamUsernameIndex());
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
     private function clearConfigCache(): void
     {
         if (function_exists('apcu_clear_cache')) {

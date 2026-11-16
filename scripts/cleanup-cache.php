@@ -1233,24 +1233,13 @@ function cleanupEmptyDirectoriesExcludingSftp(
     
     $removed = 0;
     
-    // Build list of configured push webcam usernames
+    // Build list of configured push webcam usernames. Reuse the shared index so
+    // a camera with push_config but no type: push is protected the same way the
+    // upload cluster provisions it.
     $configuredUsernames = [];
     $config = loadConfig(false);
-    if ($config !== null && isset($config['airports']) && is_array($config['airports'])) {
-        foreach ($config['airports'] as $airportId => $airport) {
-            if (!is_array($airport)) continue;
-            $webcams = $airport['webcams'] ?? [];
-            if (!is_array($webcams)) continue;
-            foreach ($webcams as $webcam) {
-                if (!is_array($webcam)) continue;
-                if (($webcam['type'] ?? '') === 'push') {
-                    $username = $webcam['push_config']['username'] ?? null;
-                    if ($username) {
-                        $configuredUsernames[] = strtolower($username);
-                    }
-                }
-            }
-        }
+    if ($config !== null) {
+        $configuredUsernames = array_keys(getPushWebcamUsernameIndex($config));
     }
 
     $probeRaw = getGlobalConfig('upload_health_probe');
@@ -1442,8 +1431,9 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
                 continue;
             }
             
-            // Only process push webcams
-            if (($webcam['type'] ?? '') !== 'push') {
+            // Only process push webcams. A camera is push when its type is push or it
+            // carries a push_config block, matching how sync-push-config provisions it.
+            if (!isPushCameraConfig($webcam)) {
                 continue;
             }
             
