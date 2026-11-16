@@ -122,6 +122,26 @@
     /**
      * Draw full-mode wind compass (dashboard-matching)
      */
+    // Map a runway segment to compass-space points for stroking. Curved
+    // segments carry sampled Bezier points; straight segments are just the
+    // two ends. y is flipped because canvas y grows downward while compass
+    // north is up.
+    function runwaySegmentCompassPoints(seg, cx, cy, rw) {
+        const curve = (seg && seg.curve_points && Array.isArray(seg.curve_points)
+            && seg.curve_points.length >= 2)
+            ? seg.curve_points
+            : null;
+        if (curve) {
+            return curve.map(function(p) {
+                return [cx + rw * ((p && p[0]) || 0), cy - rw * ((p && p[1]) || 0)];
+            });
+        }
+        return [
+            [cx + rw * ((seg.start && seg.start[0]) || 0), cy - rw * ((seg.start && seg.start[1]) || 0)],
+            [cx + rw * ((seg.end && seg.end[0]) || 0), cy - rw * ((seg.end && seg.end[1]) || 0)]
+        ];
+    }
+
     function drawWindCompassFullMode(canvas, options) {
         const layout = prepareWindCompassFullModeContext(canvas, options);
         const ctx = layout.ctx;
@@ -170,22 +190,19 @@
             && (isCalmWindSpeed(windSpeed) || isVRB);
 
         segments.forEach(function(seg) {
-            const sx = (seg.start && seg.start[0]) || 0;
-            const sy = (seg.start && seg.start[1]) || 0;
-            const ex = (seg.end && seg.end[0]) || 0;
-            const ey = (seg.end && seg.end[1]) || 0;
             const rw = r * runwayScale;
-            const startX = cx + rw * sx;
-            const startY = cy - rw * sy;
-            const endX = cx + rw * ex;
-            const endY = cy - rw * ey;
+            const pts = runwaySegmentCompassPoints(seg, cx, cy, rw);
 
             ctx.strokeStyle = colors.runway;
             ctx.lineWidth = 8 * scale;
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
+            if (pts.length > 0) {
+                ctx.moveTo(pts[0][0], pts[0][1]);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i][0], pts[i][1]);
+                }
+            }
             ctx.stroke();
         });
 
@@ -870,7 +887,8 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
             isCalmWindSpeed: isCalmWindSpeed,
-            CALM_WIND_THRESHOLD: CALM_WIND_THRESHOLD
+            CALM_WIND_THRESHOLD: CALM_WIND_THRESHOLD,
+            runwaySegmentCompassPoints: runwaySegmentCompassPoints
         };
     }
 

@@ -61,10 +61,23 @@ function rotateRunwaySegmentsToMagnetic(array $segments, float $declination): ar
         $e = $seg['end'] ?? [0, 0];
         $rs = rotatePointTrueToMagnetic((float) $s[0], (float) $s[1], $declination);
         $re = rotatePointTrueToMagnetic((float) $e[0], (float) $e[1], $declination);
-        $rotated[] = array_merge($seg, [
+        $out = array_merge($seg, [
             'start' => [$rs['x'], $rs['y']],
             'end' => [$re['x'], $re['y']],
         ]);
+        if (isset($seg['curve_points']) && is_array($seg['curve_points'])) {
+            $curve = [];
+            foreach ($seg['curve_points'] as $point) {
+                $rotatedPoint = rotatePointTrueToMagnetic(
+                    (float) $point[0],
+                    (float) $point[1],
+                    $declination
+                );
+                $curve[] = [$rotatedPoint['x'], $rotatedPoint['y']];
+            }
+            $out['curve_points'] = $curve;
+        }
+        $rotated[] = $out;
     }
     return $rotated;
 }
@@ -168,13 +181,25 @@ function centerRunwaySegments(array $segments): array {
     $sumX = 0.0;
     $sumY = 0.0;
     $count = 0;
-    foreach ($segments as $segment) {
+    $pointLists = [];
+    foreach ($segments as $index => $segment) {
+        $points = [];
         foreach (['start', 'end'] as $key) {
-            if (!isset($segment[$key][0], $segment[$key][1])) {
-                continue;
+            if (isset($segment[$key][0], $segment[$key][1])) {
+                $points[] = [$segment[$key][0], $segment[$key][1]];
             }
-            $sumX += (float) $segment[$key][0];
-            $sumY += (float) $segment[$key][1];
+        }
+        if (isset($segment['curve_points']) && is_array($segment['curve_points'])) {
+            foreach ($segment['curve_points'] as $curvePoint) {
+                if (isset($curvePoint[0], $curvePoint[1])) {
+                    $points[] = [$curvePoint[0], $curvePoint[1]];
+                }
+            }
+        }
+        $pointLists[$index] = $points;
+        foreach ($points as $point) {
+            $sumX += (float) $point[0];
+            $sumY += (float) $point[1];
             $count++;
         }
     }
@@ -186,13 +211,10 @@ function centerRunwaySegments(array $segments): array {
     $centerY = $sumY / $count;
 
     $maxDistance = 0.0;
-    foreach ($segments as $segment) {
-        foreach (['start', 'end'] as $key) {
-            if (!isset($segment[$key][0], $segment[$key][1])) {
-                continue;
-            }
-            $x = (float) $segment[$key][0] - $centerX;
-            $y = (float) $segment[$key][1] - $centerY;
+    foreach ($pointLists as $points) {
+        foreach ($points as $point) {
+            $x = (float) $point[0] - $centerX;
+            $y = (float) $point[1] - $centerY;
             $maxDistance = max($maxDistance, sqrt($x * $x + $y * $y));
         }
     }
@@ -201,7 +223,7 @@ function centerRunwaySegments(array $segments): array {
     $scale = $maxDistance > 0.9 ? 0.9 / $maxDistance : 1.0;
 
     $centered = [];
-    foreach ($segments as $segment) {
+    foreach ($segments as $index => $segment) {
         foreach (['start', 'end'] as $key) {
             if (!isset($segment[$key][0], $segment[$key][1])) {
                 continue;
@@ -211,7 +233,24 @@ function centerRunwaySegments(array $segments): array {
                 ((float) $segment[$key][1] - $centerY) * $scale,
             ];
         }
-        $centered[] = $segment;
+        if (isset($segment['curve_points']) && is_array($segment['curve_points'])) {
+            $curve = [];
+            foreach ($segment['curve_points'] as $curvePoint) {
+                if (!isset($curvePoint[0], $curvePoint[1])) {
+                    continue;
+                }
+                $curve[] = [
+                    ((float) $curvePoint[0] - $centerX) * $scale,
+                    ((float) $curvePoint[1] - $centerY) * $scale,
+                ];
+            }
+            if ($curve !== []) {
+                $segment['curve_points'] = $curve;
+            } else {
+                unset($segment['curve_points']);
+            }
+        }
+        $centered[$index] = $segment;
     }
 
     return $centered;
