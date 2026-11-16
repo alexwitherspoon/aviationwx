@@ -212,6 +212,20 @@ function readDateTimeOriginalFromExif(string $filePath): array {
 }
 
 /**
+ * Pull the genuine DateTimeOriginal tag from parsed EXIF.
+ *
+ * Returns null when the tag is absent. The completeness gate must not fall back
+ * to IFD0.DateTime: a file-level datetime is not a capture timestamp, so it
+ * only masks a missing DateTimeOriginal.
+ *
+ * @param array $exif Output of exif_read_data()
+ * @return string|null The DateTimeOriginal string, or null when absent
+ */
+function resolveDateTimeOriginalTag(array $exif): ?string {
+    return $exif['EXIF']['DateTimeOriginal'] ?? $exif['DateTimeOriginal'] ?? null;
+}
+
+/**
  * Try to read DateTimeOriginal using PHP's native exif_read_data.
  *
  * @param string $filePath Path to image file
@@ -226,12 +240,9 @@ function tryReadDateTimeOriginalWithPhpExif(string $filePath): array {
         return ['status' => 'absent', 'timestamp' => 0];
     }
     
-    // Check various locations where DateTimeOriginal might be stored
-    $dateTime = $exif['EXIF']['DateTimeOriginal'] 
-             ?? $exif['DateTimeOriginal'] 
-             ?? $exif['IFD0']['DateTime']
-             ?? null;
-    
+    // Require the genuine DateTimeOriginal tag. A frame with only IFD0.DateTime
+    // carries no capture timestamp, so it must not be counted as complete.
+    $dateTime = resolveDateTimeOriginalTag($exif);
     if ($dateTime === null) {
         return ['status' => 'absent', 'timestamp' => 0];
     }
