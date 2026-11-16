@@ -1576,13 +1576,33 @@ function getTimestampForExif(string $filePath): int {
 }
 
 /**
+ * Whether a caller-provided capture time should overwrite an embedded
+ * DateTimeOriginal.
+ *
+ * A live pull's fetch time is the authoritative capture time because the camera
+ * clock is not trusted. When one is provided it overwrites the embedded value
+ * so the stored and embedded times agree; without one the embedded value is
+ * preserved.
+ *
+ * @param int $fallbackTimestamp Caller-provided capture time, or 0 when unknown
+ * @return bool True when the caller's time should overwrite the embedded tag
+ */
+function exifCaptureTimeOverridesEmbedded(int $fallbackTimestamp): bool
+{
+    return $fallbackTimestamp > 0;
+}
+
+/**
  * Ensure image has valid EXIF timestamp (defensive entry point)
  *
  * Priority order:
- * 1. Existing EXIF DateTimeOriginal (if valid) - ensures GPS fields added
- * 2. Filename/folder timestamp pattern
- * 3. Provided fallback timestamp (explicit capture time)
- * 4. File mtime
+ * 1. Caller-provided capture time (a pull's fetch time) is authoritative: it
+ *    overwrites a frame's embedded DateTimeOriginal so the stored and embedded
+ *    times agree.
+ * 2. Existing EXIF DateTimeOriginal (if valid), when no caller time was passed -
+ *    preserved, with GPS fields added if missing.
+ * 3. Filename/folder timestamp pattern, then file mtime - for images without
+ *    EXIF (a provided capture time is still preferred over mtime there).
  *
  * @param string $filePath Path to image file
  * @param int|null $fallbackTimestamp Explicit capture timestamp, preferred over file mtime (null = derive from filename/mtime)
@@ -1601,6 +1621,12 @@ function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, st
     
     // Already has valid EXIF with DateTimeOriginal?
     if (hasExifTimestamp($filePath)) {
+        if (exifCaptureTimeOverridesEmbedded((int) $fallbackTimestamp)) {
+            // A caller-provided capture time (a pull's fetch time) is
+            // authoritative over an embedded camera-clock value, which is not
+            // trusted. Stamp it so the stored and embedded times agree.
+            return addExifTimestamp($filePath, (int) $fallbackTimestamp, $timezone, false, $context);
+        }
         // Ensure GPS UTC fields exist (for old images processed before GPS requirement)
         // Use existing EXIF timestamp, not mtime, to preserve the original capture time
         $timestamp = getExifTimestamp($filePath);
