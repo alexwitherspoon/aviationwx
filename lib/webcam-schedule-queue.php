@@ -18,6 +18,18 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/webcam-source-validation.php';
 
 /**
+ * Whether the scheduler should refresh webcams on the current tick.
+ *
+ * False in the isolated test environment: integration tests own the webcam
+ * cache and a concurrent pull re-points original.jpg to a fresh frame mid-test,
+ * flipping staleness assertions (the over-age no-store case) to "fresh".
+ */
+function schedulerShouldRefreshWebcams(): bool
+{
+    return !isTestMode();
+}
+
+/**
  * Camera entry in the schedule queue
  */
 class ScheduleEntry
