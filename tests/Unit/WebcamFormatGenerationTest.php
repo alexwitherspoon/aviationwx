@@ -414,526 +414,6 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
-     * Test buildFormatCommand() generates valid WebP command with -f webp flag
-     */
-    public function testBuildFormatCommand_Webp_ContainsCorrectParameters(): void
-    {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp.tmp', 'webp', time());
-        
-        $this->assertStringContainsString('ffmpeg', $cmd);
-        $this->assertStringContainsString('-i', $cmd);
-        $this->assertStringContainsString('/source/file.jpg', $cmd);
-        $this->assertStringContainsString('/dest/file.webp.tmp', $cmd);
-        $this->assertStringContainsString('-f webp', $cmd, 'WebP command must include -f webp flag for .tmp extension');
-        $this->assertStringContainsString('-q:v ' . getWebcamWebpQuality(), $cmd, 'WebP command must use configured quality');
-        $this->assertStringContainsString('nice -n 10', $cmd);
-    }
-
-
-    /**
-     * Test buildFormatCommand() generates valid JPG command
-     */
-    public function testBuildFormatCommand_Jpg_ContainsCorrectParameters(): void
-    {
-        $cmd = buildFormatCommand('/source/file.png', '/dest/file.jpg', 'jpg', time());
-        
-        $this->assertStringContainsString('ffmpeg', $cmd);
-        $this->assertStringContainsString('/source/file.png', $cmd);
-        $this->assertStringContainsString('/dest/file.jpg', $cmd);
-        $this->assertStringContainsString('-q:v ' . getWebcamJpegQuality(), $cmd, 'JPEG command must use configured quality');
-    }
-
-    /**
-     * Test buildFormatCommand() includes mtime sync when captureTime provided
-     * 
-     * Verifies the touch command uses correct date format: YYYYMMDDhhmm.ss
-     * (touch -t requires dot before seconds)
-     */
-    public function testBuildFormatCommand_WithCaptureTime_IncludesTouchCommand(): void
-    {
-        $captureTime = strtotime('2024-12-25 10:30:45');
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', $captureTime);
-        
-        $this->assertStringContainsString('touch -t', $cmd);
-        // Verify correct format: YYYYMMDDhhmm.ss (with dot before seconds)
-        $this->assertStringContainsString('202412251030.45', $cmd, 'touch command must use YYYYMMDDhhmm.ss format');
-    }
-
-    /**
-     * Test buildFormatCommand() skips mtime sync when captureTime is 0
-     */
-    public function testBuildFormatCommand_ZeroCaptureTime_SkipsTouchCommand(): void
-    {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', 0);
-        
-        $this->assertStringNotContainsString('touch -t', $cmd);
-    }
-
-    /**
-     * P3: EXIF copy failure must fail format generation - no || true
-     *
-     * When exiftool is used to copy EXIF, failure must propagate (fail closed).
-     * The command must NOT include "|| true" which would silence exiftool failures.
-     */
-    public function testBuildFormatCommand_WhenExiftoolUsed_DoesNotSilenceExifCopyFailure(): void
-    {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', time());
-
-        if (str_contains($cmd, 'exiftool')) {
-            $this->assertStringNotContainsString('|| true', $cmd,
-                'EXIF copy failure must fail format generation - remove || true for safety');
-        }
-    }
-
-    /**
-     * Test promoteFormats() returns empty array when no formats to promote
-     */
-    public function testPromoteFormats_NoFormats_ReturnsSourceFormatIfExists(): void
-    {
-        // Create a staging file for this test
-        $testAirport = 'test_promote_' . time();
-        $stagingFile = getStagingFilePath($testAirport, 0, 'jpg', 'original');
-        $cacheDir = dirname($stagingFile);
-        $timestamp = time();
-        
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
-        
-        // Create staging file
-        @file_put_contents($stagingFile, 'test jpg content');
-        
-        // Promote with empty format results
-        $result = promoteFormats($testAirport, 0, [], 'jpg', $timestamp);
-        
-        // Should have promoted the source format
-        $this->assertContains('jpg', $result);
-        
-        // Cleanup
-        $timestampFile = getFinalFilePath($testAirport, 0, 'jpg', $timestamp);
-        $symlink = getCacheSymlinkPath($testAirport, 0, 'jpg');
-        @unlink($timestampFile);
-        if (is_link($symlink)) {
-            @unlink($symlink);
-        }
-    }
-
-    /**
-     * Test promoteFormats() promotes successful formats only
-     */
-    public function testPromoteFormats_PromotesSuccessfulFormatsOnly(): void
-    {
-        $testAirport = 'test_promote_partial_' . time();
-        $timestamp = time();
-        
-        ensureCacheDir(CACHE_WEBCAMS_DIR);
-        
-        // Create staging files for jpg and webp
-        @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg', 'original'), 'test jpg');
-        @file_put_contents(getStagingFilePath($testAirport, 0, 'webp', 'original'), 'test webp');
-        
-        // Promote formats
-        $formatResults = ['webp' => true];
-        $result = promoteFormats($testAirport, 0, $formatResults, 'jpg', $timestamp);
-        
-        // Should include jpg and webp
-        $this->assertContains('jpg', $result);
-        $this->assertContains('webp', $result);
-        
-        // Verify timestamp files exist
-        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'jpg', $timestamp));
-        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'webp', $timestamp));
-        
-        // Verify symlinks exist
-        $this->assertTrue(is_link(getCacheSymlinkPath($testAirport, 0, 'jpg')));
-        $this->assertTrue(is_link(getCacheSymlinkPath($testAirport, 0, 'webp')));
-        
-        // Cleanup
-        @unlink(getFinalFilePath($testAirport, 0, 'jpg', $timestamp));
-        @unlink(getFinalFilePath($testAirport, 0, 'webp', $timestamp));
-        $symlinkJpg = getCacheSymlinkPath($testAirport, 0, 'jpg');
-        $symlinkWebp = getCacheSymlinkPath($testAirport, 0, 'webp');
-        if (is_link($symlinkJpg)) {
-            @unlink($symlinkJpg);
-        }
-        if (is_link($symlinkWebp)) {
-            @unlink($symlinkWebp);
-        }
-    }
-
-    /**
-     * Test generateFormatsSync() actually generates WebP format (if ffmpeg available)
-     * 
-     * This is an integration test that requires ffmpeg to be installed.
-     * It verifies that the format generation pipeline works end-to-end.
-     */
-    public function testGenerateFormatsSync_WebP_GeneratesValidFile(): void
-    {
-        // Skip if ffmpeg not available
-        $ffmpegPath = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
-        if (empty($ffmpegPath)) {
-            $this->markTestSkipped('ffmpeg not available');
-        }
-        
-        // Skip if WebP generation disabled
-        if (!isWebpGenerationEnabled()) {
-            $this->markTestSkipped('WebP generation disabled in config');
-        }
-        
-        $testAirport = 'test_gen_' . time();
-        ensureCacheDir(CACHE_WEBCAMS_DIR);
-        
-        // Create a real JPEG test image using GD (if available)
-        $sourceFile = $this->testImageDir . '/source.jpg';
-        if (function_exists('imagecreate')) {
-            $img = imagecreate(100, 100);
-            $bg = imagecolorallocate($img, 255, 255, 255);
-            $text = imagecolorallocate($img, 0, 0, 0);
-            imagestring($img, 5, 10, 10, 'TEST', $text);
-            imagejpeg($img, $sourceFile, 85);
-        } else {
-            // Fallback: create minimal valid JPEG
-            file_put_contents($sourceFile, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xFF\xD9");
-        }
-        
-        // Generate formats
-        $formatResults = generateFormatsSync($sourceFile, $testAirport, 0, 'jpg');
-        
-        // Verify WebP was generated
-        $this->assertArrayHasKey('webp', $formatResults, 'WebP should be in format results');
-        $this->assertTrue($formatResults['webp'], 'WebP generation should succeed');
-        
-        // Verify staging file exists and is valid WebP
-        $stagingFile = getStagingFilePath($testAirport, 0, 'webp', 'original');
-        $this->assertFileExists($stagingFile, 'WebP staging file should exist');
-        
-        // Verify it's a valid WebP file
-        $format = detectImageFormat($stagingFile);
-        $this->assertEquals('webp', $format, 'Generated file should be valid WebP');
-        
-        // Cleanup
-        @unlink($stagingFile);
-        @unlink($sourceFile);
-    }
-
-    /**
-     * Test full format generation pipeline with mock data (functional test)
-     * 
-     * This is a comprehensive functional test that verifies the entire image conversion
-     * pipeline works end-to-end using mock image data. Tests:
-     * - generateFormatsSync() generates all enabled formats
-     * - promoteFormats() promotes staging files to final cache
-     * - Date format fix (touch -t command) works correctly
-     * - Generated files are valid and accessible
-     * 
-     * Uses mock webcam image data to ensure testability without external dependencies.
-     */
-    public function testFormatGenerationPipeline_WithMockData_GeneratesAllFormats(): void
-    {
-        // Skip if ffmpeg not available
-        $ffmpegPath = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
-        if (empty($ffmpegPath)) {
-            $this->markTestSkipped('ffmpeg not available');
-        }
-        
-        $testAirport = 'test_pipeline_' . time();
-        $cacheDir = CACHE_WEBCAMS_DIR;
-        if (!is_dir($cacheDir)) {
-            ensureCacheDir($cacheDir);
-        }
-        
-        // Use mock webcam image generator for consistent test data
-        require_once __DIR__ . '/../../lib/mock-webcam.php';
-        $mockImageData = generateMockWebcamImage($testAirport, 0, 640, 480);
-        
-        // Save mock image to source file
-        $sourceFile = $this->testImageDir . '/source_mock.jpg';
-        file_put_contents($sourceFile, $mockImageData);
-        
-        // Verify source file is valid JPEG
-        $sourceFormat = detectImageFormat($sourceFile);
-        $this->assertEquals('jpg', $sourceFormat, 'Source mock image should be valid JPEG');
-        
-        // Get capture time for timestamp-based filenames
-        $captureTime = time();
-        
-        // Generate all enabled formats
-        $formatResults = generateFormatsSync($sourceFile, $testAirport, 0, 'jpg');
-        
-        // Verify formats were generated (check what's enabled)
-        $enabledFormats = getEnabledWebcamFormats();
-        $expectedFormats = array_filter(['jpg', 'webp'], function($fmt) use ($enabledFormats) {
-            return in_array($fmt, $enabledFormats);
-        });
-        
-        foreach ($expectedFormats as $format) {
-            if ($format === 'jpg') {
-                continue; // Source is already JPG
-            }
-            
-            $this->assertArrayHasKey($format, $formatResults, "Format {$format} should be in results");
-            
-            if (in_array($format, $enabledFormats)) {
-                $this->assertTrue($formatResults[$format], "Format {$format} generation should succeed");
-                
-                // Verify staging file exists and is valid
-                $stagingFile = getStagingFilePath($testAirport, 0, $format, 'original');
-                $this->assertFileExists($stagingFile, "Staging file for {$format} should exist");
-                
-                // Verify it's a valid file of the expected format
-                $detectedFormat = detectImageFormat($stagingFile);
-                $this->assertEquals($format, $detectedFormat, "Generated {$format} file should be valid");
-                
-                // Verify file has content
-                $this->assertGreaterThan(0, filesize($stagingFile), "Generated {$format} file should have content");
-            }
-        }
-        
-        // Test promotion pipeline
-        if (!empty($formatResults)) {
-            $promotedFormats = promoteFormats($testAirport, 0, $formatResults, 'jpg', $captureTime);
-            
-            // Verify promoted formats
-            foreach ($promotedFormats as $format) {
-                // Check timestamp-based file exists
-                $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
-                $this->assertFileExists($timestampFile, "Promoted {$format} file should exist");
-                
-                // Verify symlink exists
-                $symlinkPath = getCacheSymlinkPath($testAirport, 0, $format);
-                if ($format !== 'jpg' || count($promotedFormats) > 1) {
-                    // Symlink should exist for promoted formats
-                    $this->assertTrue(is_link($symlinkPath) || file_exists($symlinkPath), 
-                        "Symlink for {$format} should exist");
-                }
-                
-                // Verify file mtime matches capture time (tests date format fix)
-                $fileMtime = filemtime($timestampFile);
-                $this->assertGreaterThanOrEqual($captureTime - 2, $fileMtime, 
-                    "File mtime should be close to capture time (tests touch -t date format)");
-                $this->assertLessThanOrEqual($captureTime + 2, $fileMtime, 
-                    "File mtime should be close to capture time (tests touch -t date format)");
-            }
-        }
-        
-        // Cleanup
-        @unlink($sourceFile);
-        // Clean up staging files
-        foreach (['jpg', 'webp'] as $format) {
-            $stagingFile = getStagingFilePath($testAirport, 0, $format, 'original');
-            @unlink($stagingFile);
-            $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
-            @unlink($timestampFile);
-            $symlinkPath = getCacheSymlinkPath($testAirport, 0, $format);
-            if (is_link($symlinkPath)) {
-                @unlink($symlinkPath);
-            }
-        }
-    }
-
-    
-    /**
-     * Test parseResolutionString() - Valid format
-     */
-    public function testParseResolutionString_ValidFormat_ReturnsArray(): void
-    {
-        $result = parseResolutionString('1920x1080');
-        $this->assertIsArray($result);
-        $this->assertEquals(1920, $result['width']);
-        $this->assertEquals(1080, $result['height']);
-    }
-    
-    /**
-     * Test parseResolutionString() - Invalid format
-     */
-    public function testParseResolutionString_InvalidFormat_ReturnsNull(): void
-    {
-        $result = parseResolutionString('invalid');
-        $this->assertNull($result);
-    }
-    
-    /**
-     * Test parseResolutionString() - Case insensitive
-     */
-    public function testParseResolutionString_CaseInsensitive_ReturnsArray(): void
-    {
-        $result = parseResolutionString('1920X1080');
-        $this->assertIsArray($result);
-        $this->assertEquals(1920, $result['width']);
-        $this->assertEquals(1080, $result['height']);
-    }
-    
-    /**
-     * Test getVariantDimensions() - Height-based variants
-     */
-    public function testGetVariantDimensions_HeightVariants_ReturnsCorrectDimensions(): void
-    {
-        // Default aspect ratio is 16:9
-        $h720 = getVariantDimensions(720);
-        $this->assertIsArray($h720);
-        $this->assertEquals(1280, $h720['width']);
-        $this->assertEquals(720, $h720['height']);
-        
-        $h360 = getVariantDimensions(360);
-        $this->assertEquals(640, $h360['width']);
-        $this->assertEquals(360, $h360['height']);
-        
-        $h1080 = getVariantDimensions(1080);
-        $this->assertEquals(1920, $h1080['width']);
-        $this->assertEquals(1080, $h1080['height']);
-        
-        // Also test with string height
-        $h720Str = getVariantDimensions('720');
-        $this->assertEquals(1280, $h720Str['width']);
-        $this->assertEquals(720, $h720Str['height']);
-    }
-    
-    /**
-     * Test getVariantDimensions() - Original variant
-     */
-    public function testGetVariantDimensions_OriginalVariant_ReturnsProvidedDimensions(): void
-    {
-        $originalDims = ['width' => 1920, 'height' => 1080];
-        
-        $original = getVariantDimensions('original', $originalDims);
-        $this->assertEquals($originalDims, $original);
-    }
-    
-    /**
-     * Test getVariantDimensions() - Invalid variant
-     */
-    public function testGetVariantDimensions_InvalidVariant_ReturnsNull(): void
-    {
-        // Non-numeric, non-'original' string
-        $result = getVariantDimensions('invalid');
-        $this->assertNull($result);
-        
-        // Zero height
-        $result = getVariantDimensions(0);
-        $this->assertNull($result);
-        
-        // Negative height
-        $result = getVariantDimensions(-100);
-        $this->assertNull($result);
-    }
-    
-    /**
-     * Test shouldGenerateVariant() - Smaller variant
-     */
-    public function testShouldGenerateVariant_SmallerVariant_ReturnsTrue(): void
-    {
-        $variantSize = ['width' => 320, 'height' => 180];
-        $actualPrimary = ['width' => 1920, 'height' => 1080];
-        
-        $result = shouldGenerateVariant($variantSize, $actualPrimary);
-        $this->assertTrue($result);
-    }
-    
-    /**
-     * Test shouldGenerateVariant() - Larger variant
-     */
-    public function testShouldGenerateVariant_LargerVariant_ReturnsFalse(): void
-    {
-        $variantSize = ['width' => 1920, 'height' => 1080];
-        $actualPrimary = ['width' => 320, 'height' => 180];
-        
-        $result = shouldGenerateVariant($variantSize, $actualPrimary);
-        $this->assertFalse($result);
-    }
-    
-    /**
-     * Test shouldGenerateVariant() - Equal size
-     */
-    public function testShouldGenerateVariant_EqualSize_ReturnsTrue(): void
-    {
-        $variantSize = ['width' => 1920, 'height' => 1080];
-        $actualPrimary = ['width' => 1920, 'height' => 1080];
-        
-        $result = shouldGenerateVariant($variantSize, $actualPrimary);
-        $this->assertTrue($result);
-    }
-    
-    /**
-     * Test getImageResolutionConfig() - Returns valid structure
-     */
-    public function testGetImageResolutionConfig_ReturnsValidStructure(): void
-    {
-        $config = getImageResolutionConfig();
-        
-        $this->assertIsArray($config);
-        $this->assertArrayHasKey('primary', $config);
-        $this->assertArrayHasKey('max', $config);
-        $this->assertArrayHasKey('aspect_ratio', $config);
-        $this->assertArrayHasKey('variants', $config);
-        
-        // Check primary and max are arrays with width/height
-        if ($config['primary'] !== null) {
-            $this->assertArrayHasKey('width', $config['primary']);
-            $this->assertArrayHasKey('height', $config['primary']);
-        }
-        if ($config['max'] !== null) {
-            $this->assertArrayHasKey('width', $config['max']);
-            $this->assertArrayHasKey('height', $config['max']);
-        }
-        
-        // Check variants is an array
-        $this->assertIsArray($config['variants']);
-    }
-    
-    /**
-     * Test buildVariantCommand() - Contains resize parameters
-     */
-    public function testBuildVariantCommand_ContainsResizeParameters(): void
-    {
-        $sourceFile = $this->testImageDir . '/source.jpg';
-        $destFile = $this->testImageDir . '/dest.jpg';
-        $this->createTestJpeg('source.jpg');
-        
-        $variantDims = ['width' => 320, 'height' => 180];
-        $cmd = buildVariantCommand($sourceFile, $destFile, 'small', 'jpg', $variantDims, false, 0);
-        
-        $this->assertStringContainsString('scale=320:180', $cmd);
-        $this->assertStringContainsString(escapeshellarg($sourceFile), $cmd);
-        $this->assertStringContainsString(escapeshellarg($destFile), $cmd);
-    }
-    
-    /**
-     * Test buildVariantCommand() - Letterboxing adds pad filter
-     */
-    public function testBuildVariantCommand_WithLetterboxing_ContainsPadFilter(): void
-    {
-        $sourceFile = $this->testImageDir . '/source.jpg';
-        $destFile = $this->testImageDir . '/dest.jpg';
-        $this->createTestJpeg('source.jpg');
-        
-        $variantDims = ['width' => 1920, 'height' => 1080];
-        $cmd = buildVariantCommand($sourceFile, $destFile, 'original', 'jpg', $variantDims, true, 0);
-        
-        $this->assertStringContainsString('pad=', $cmd);
-        $this->assertStringContainsString('color=black', $cmd);
-    }
-
-    /**
-     * P3: EXIF copy failure must fail variant generation - no || true
-     *
-     * When exiftool is used to copy EXIF, failure must propagate (fail closed).
-     */
-    public function testBuildVariantCommand_WhenExiftoolUsed_DoesNotSilenceExifCopyFailure(): void
-    {
-        $sourceFile = $this->testImageDir . '/source.jpg';
-        $destFile = $this->testImageDir . '/dest.jpg';
-        $this->createTestJpeg('source.jpg');
-        $variantDims = ['width' => 320, 'height' => 180];
-
-        $cmd = buildVariantCommand($sourceFile, $destFile, 'small', 'jpg', $variantDims, false, time());
-
-        if (str_contains($cmd, 'exiftool')) {
-            $this->assertStringNotContainsString('|| true', $cmd,
-                'EXIF copy failure must fail variant generation - remove || true for safety');
-        }
-    }
-    
-    /**
      * Test getTimestampCacheFilePath() - With variant (uses date/hour subdir)
      */
     public function testGetTimestampCacheFilePath_WithVariant_IncludesVariant(): void
@@ -945,9 +425,9 @@ class WebcamFormatGenerationTest extends TestCase
     }
     
     /**
-     * Test getTimestampCacheFilePath() - Without variant (backward compatible)
+     * Test getTimestampCacheFilePath() with the 'original' variant
      */
-    public function testGetTimestampCacheFilePath_WithoutVariant_UsesPrimary(): void
+    public function testGetTimestampCacheFilePath_OriginalVariant_ReturnsTimestampedPath(): void
     {
         $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
         $this->assertStringContainsString('1703700000_original.jpg', $path);
@@ -968,6 +448,202 @@ class WebcamFormatGenerationTest extends TestCase
             ['123_original.jpg', '456_original.png', '789_original.webp'],
             $basenames
         );
+    }
+
+    /**
+     * A generated variant must carry EXIF and its mtime must match the capture
+     * time, not the time ffmpeg finished. Both are required for browser-side
+     * verification and for retention that trusts file mtime.
+     */
+    public function testGenerateVariantsFromOriginal_VariantCarriesExifAndCaptureMtime(): void
+    {
+        $ffmpeg = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpeg)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        require_once __DIR__ . '/../../lib/exif-utils.php';
+
+        $captureTime = strtotime('2026-05-06 07:08:09 UTC');
+        $testAirport = 'test_var_' . time();
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
+
+        // 640x480 source tall enough to produce a 360 variant, stamped at a
+        // known capture time.
+        $source = $this->testImageDir . '/source.jpg';
+        $img = imagecreatetruecolor(640, 480);
+        imagefill($img, 0, 0, imagecolorallocate($img, 200, 200, 200));
+        imagejpeg($img, $source, 90);
+        imagedestroy($img);
+
+        $this->assertTrue(
+            ensureImageHasExif($source, $captureTime, 'UTC', [
+                'airport_id' => $testAirport,
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'source must carry EXIF before variant generation'
+        );
+
+        $result = generateVariantsFromOriginal($source, $testAirport, 0, $captureTime);
+
+        $this->assertNotNull($result['original'], 'original must be preserved');
+        $this->assertTrue(hasExifTimestamp($result['original']), 'original must keep its EXIF');
+
+        $this->assertNotEmpty($result['variants'], 'a 360 jpg variant must be generated for a 640x480 source');
+        foreach ($result['variants'] as $height => $paths) {
+            foreach ($paths as $path) {
+                $this->assertTrue(hasExifTimestamp($path), "variant {$height} must carry EXIF");
+                $this->assertSame($captureTime, @filemtime($path), "variant {$height} mtime must equal capture time");
+            }
+        }
+
+        // Tidy the generated cache entries for this airport.
+        $cameraDir = getWebcamCameraDir($testAirport, 0);
+        foreach (glob($cameraDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($cameraDir);
+        $framesDir = getWebcamFramesDir($testAirport, 0, $captureTime);
+        foreach (glob($framesDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($framesDir);
+    }
+
+    /**
+     * One ffmpeg pass writes every output, decoding the source once: a single
+     * -i and one -map/-frames block per output.
+     */
+    public function testBuildVariantArgs_SinglePass_ManyOutputsOneDecode(): void
+    {
+        $source = '/cache/webcams/x/original.jpg';
+        $args = buildVariantArgs($source, [
+            '720_jpg' => ['dest' => '/cache/webcams/x/staging_720_jpg.tmp', 'format' => 'jpg', 'width' => 1280, 'height' => 720],
+            '360_webp' => ['dest' => '/cache/webcams/x/staging_360_webp.tmp', 'format' => 'webp', 'width' => 640, 'height' => 360],
+        ]);
+
+        $this->assertSame(1, count(array_keys($args, $source, true)), 'source must be read once');
+        $this->assertSame(2, count(array_keys($args, '-map', true)), 'one -map per output');
+        $this->assertSame(2, count(array_keys($args, '-frames:v', true)), 'one -frames:v per output');
+        $this->assertSame(1, count(array_keys($args, 'scale=1280:720:force_original_aspect_ratio=decrease', true)));
+        $this->assertSame(1, count(array_keys($args, 'scale=640:360:force_original_aspect_ratio=decrease', true)));
+        $this->assertContains('image2', $args, 'jpg output must force the image2 muxer');
+        $this->assertContains('webp', $args, 'webp output must force the webp muxer');
+        $this->assertContains((string) getWebcamJpegQuality(), $args);
+        $this->assertContains((string) getWebcamWebpQuality(), $args);
+    }
+
+    /**
+     * A real multi-output ffmpeg run writes every staging file, verifying the
+     * one-pass command shape actually produces both formats.
+     */
+    public function testBuildVariantArgs_MultiOutput_RunsAndWritesBothFormats(): void
+    {
+        $ffmpeg = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpeg)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        $source = $this->testImageDir . '/multi.jpg';
+        $jpg = $this->testImageDir . '/out_720.jpg.tmp';
+        $webp = $this->testImageDir . '/out_360.webp.tmp';
+        $img = imagecreatetruecolor(640, 480);
+        imagefill($img, 0, 0, imagecolorallocate($img, 90, 130, 70));
+        imagejpeg($img, $source, 90);
+        imagedestroy($img);
+
+        $args = buildVariantArgs($source, [
+            '720_jpg' => ['dest' => $jpg, 'format' => 'jpg', 'width' => 1280, 'height' => 720],
+            '360_webp' => ['dest' => $webp, 'format' => 'webp', 'width' => 640, 'height' => 360],
+        ]);
+        $result = @proc_open($args, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        if (!is_resource($result)) {
+            $this->fail('proc_open failed for the single-pass ffmpeg argv');
+        }
+        @fclose($pipes[0]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        while ($st = proc_get_status($result)) {
+            if (!$st['running']) {
+                break;
+            }
+            usleep(50000);
+        }
+        @fclose($pipes[1]);
+        @fclose($pipes[2]);
+        @proc_close($result);
+
+        $this->assertSame(0, $st['exitcode'], 'single-pass ffmpeg must succeed');
+        $this->assertSame('jpg', detectImageFormat($jpg), 'jpg output must be a real jpg');
+        $this->assertSame('webp', detectImageFormat($webp), 'webp output must be a real webp');
+    }
+
+    public function testVariantCpuTicks_LiveProcess_ReturnsTicks(): void
+    {
+        $ticks = variantCpuTicks(getmypid());
+        $this->assertTrue(is_int($ticks) || $ticks === null, 'ticks must be int on Linux, null elsewhere');
+    }
+
+    public function testVariantCpuTicks_UnknownPid_ReturnsNull(): void
+    {
+        $this->assertNull(variantCpuTicks(2147483647));
+    }
+
+    /**
+     * A png source keeps its native original; no png variant is emitted, and
+     * the jpg variant is real jpg, never jpeg bytes carrying a png name.
+     */
+    public function testGenerateVariantsFromOriginal_PngSource_EmitsNoPngVariant(): void
+    {
+        $ffmpeg = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpeg)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        require_once __DIR__ . '/../../lib/exif-utils.php';
+
+        $captureTime = strtotime('2026-11-19 12:00:00 UTC');
+        $testAirport = 'test_pngvar_' . time();
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
+
+        $source = $this->testImageDir . '/source.png';
+        $img = imagecreatetruecolor(640, 480);
+        imagefill($img, 0, 0, imagecolorallocate($img, 100, 60, 40));
+        imagepng($img, $source);
+        imagedestroy($img);
+
+        $this->assertTrue(
+            ensureImageHasExif($source, $captureTime, 'UTC', [
+                'airport_id' => $testAirport,
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'png source must carry EXIF before variant generation'
+        );
+
+        $result = generateVariantsFromOriginal($source, $testAirport, 0, $captureTime);
+
+        $this->assertNotNull($result['original']);
+        $this->assertSame('png', detectImageFormat($result['original']), 'original stays png');
+        foreach ($result['variants'] as $height => $formats) {
+            foreach ($formats as $format => $path) {
+                $this->assertNotSame('png', $format, 'png must not be emitted as a served variant');
+                $this->assertTrue(hasExifTimestamp($path));
+                $this->assertSame('jpg', detectImageFormat($path), 'variant must be real jpg');
+            }
+        }
+
+        $cameraDir = getWebcamCameraDir($testAirport, 0);
+        foreach (glob($cameraDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($cameraDir);
+        $framesDir = getWebcamFramesDir($testAirport, 0, $captureTime);
+        foreach (glob($framesDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($framesDir);
     }
 }
 

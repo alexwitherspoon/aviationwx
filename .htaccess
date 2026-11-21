@@ -162,7 +162,7 @@ Options -Indexes
 </FilesMatch>
 
 # PWA help screenshots (Add to Home Screen) -- same long cache as about-photo
-<FilesMatch "^public/images/pwa-add-to-home-screen-(android|ios)\.(jpg|jpeg|webp|avif)$">
+<FilesMatch "^public/images/pwa-add-to-home-screen-(android|ios)\.(jpg|jpeg|webp)$">
     <IfModule mod_expires.c>
         ExpiresActive On
         ExpiresDefault "access plus 1 month"

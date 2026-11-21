@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     unzip \
     ffmpeg \
     fonts-dejavu-core \
-    libimage-exiftool-perl \
     cron \
     proftpd-core \
     proftpd-mod-crypto \
@@ -33,14 +32,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     iptables \
     jq \
     python3 \
-    libcap2-bin \
     tini \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd zip pcntl \
     && pecl channel-update pecl.php.net \
     && pecl install apcu-5.1.27 \
     && docker-php-ext-enable apcu \
-    && setcap cap_sys_nice+ep /usr/bin/nice \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable Apache mod_rewrite

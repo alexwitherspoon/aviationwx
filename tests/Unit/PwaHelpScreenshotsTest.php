@@ -46,7 +46,6 @@ class PwaHelpScreenshotsTest extends TestCase
         touch($this->tempDir . '/' . $base . '.jpg');
         $set = getPwaHelpScreenshotSet($this->tempDir, $base);
         $this->assertIsArray($set);
-        $this->assertNull($set['avif']);
         $this->assertNull($set['webp']);
         $this->assertSame('/public/images/' . $base . '.jpg', $set['jpg']);
     }
@@ -70,25 +69,22 @@ class PwaHelpScreenshotsTest extends TestCase
         $this->assertSame('/public/images/' . $base . '.jpeg', $set['jpg']);
     }
 
-    public function testGetPwaHelpScreenshotSet_AllThreeFormats(): void
+    public function testGetPwaHelpScreenshotSet_WebpAndJpg(): void
     {
         $base = 'pwa-add-to-home-screen-android';
-        touch($this->tempDir . '/' . $base . '.avif');
         touch($this->tempDir . '/' . $base . '.webp');
         touch($this->tempDir . '/' . $base . '.jpg');
         $set = getPwaHelpScreenshotSet($this->tempDir, $base);
         $this->assertIsArray($set);
-        $this->assertSame('/public/images/' . $base . '.avif', $set['avif']);
         $this->assertSame('/public/images/' . $base . '.webp', $set['webp']);
         $this->assertSame('/public/images/' . $base . '.jpg', $set['jpg']);
     }
 
-    public function testGetPwaHelpScreenshotImgFallback_PrefersJpgThenWebpThenAvif(): void
+    public function testGetPwaHelpScreenshotImgFallback_PrefersJpgThenWebp(): void
     {
         $this->assertSame(
             '/public/images/x.jpg',
             getPwaHelpScreenshotImgFallback([
-                'avif' => '/public/images/x.avif',
                 'webp' => '/public/images/x.webp',
                 'jpg' => '/public/images/x.jpg',
             ])
@@ -96,16 +92,7 @@ class PwaHelpScreenshotsTest extends TestCase
         $this->assertSame(
             '/public/images/x.webp',
             getPwaHelpScreenshotImgFallback([
-                'avif' => '/public/images/x.avif',
                 'webp' => '/public/images/x.webp',
-                'jpg' => null,
-            ])
-        );
-        $this->assertSame(
-            '/public/images/x.avif',
-            getPwaHelpScreenshotImgFallback([
-                'avif' => '/public/images/x.avif',
-                'webp' => null,
                 'jpg' => null,
             ])
         );
@@ -115,7 +102,7 @@ class PwaHelpScreenshotsTest extends TestCase
     {
         $this->assertSame(
             '',
-            getPwaHelpScreenshotImgFallback(['avif' => null, 'webp' => null, 'jpg' => null])
+            getPwaHelpScreenshotImgFallback(['webp' => null, 'jpg' => null])
         );
     }
 }

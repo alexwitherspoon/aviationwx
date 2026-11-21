@@ -1142,13 +1142,14 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure($reason, 'push', $validationResult);
         }
 
-        // Check for transient EXIF read error before normalizing (exiftool missing or
-        // failing momentarily). Preserve the upload for retry; don't consume it.
+        // Check for a transient EXIF read error before normalizing (an
+        // unreadable file or momentary read failure). Preserve the upload for
+        // retry; don't consume it.
         // normalizeExifToUtc returns false for transient errors, which would consume
         // the upload, so we check for errors first.
         $exifRead = readExifTimestamp($uploadFile);
         if ($exifRead['status'] === 'error') {
-            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+            return AcquisitionResult::skip('exif_read_failed', 'push');
         }
 
         // Normalize EXIF timestamp
@@ -1162,11 +1163,11 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Get the normalized UTC capture time from GPS. A read error is transient
-        // (exiftool missing or failing) and must keep the upload for retry; a
-        // genuinely absent field is a bad image and is consumed.
+        // and must keep the upload for retry; a genuinely absent field is a bad
+        // image and is consumed.
         $gpsRead = readGpsUtcTimestampFromExif($uploadFile);
         if ($gpsRead['status'] === 'error') {
-            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+            return AcquisitionResult::skip('exif_read_failed', 'push');
         }
         if ($gpsRead['status'] === 'absent') {
             $this->consumeEvaluatedUpload($uploadFile, 'no_capture_time');
@@ -1363,17 +1364,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             $timezone = $this->getTimezone();
             $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
             if (!ensureImageHasExif($file, null, $timezone, $context)) {
-                // exiftool down/misconfigured: leave file for retry once tooling recovers
-                if (!isExiftoolAvailable()) {
-                    continue;
-                }
                 require_once __DIR__ . '/webcam-image-metrics.php';
                 trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
                 $this->consumeEvaluatedUpload($file, 'no_exif_timestamp');
                 continue;
             }
 
-            // Fail closed if exiftool rewrite damaged the trailer
+            // Fail closed if the EXIF rewrite damaged the trailer
             $incompleteAfterExif = $this->checkUploadCompleteness($file);
             if ($incompleteAfterExif !== null) {
                 $this->consumeEvaluatedUpload($file, $incompleteAfterExif['reason']);
@@ -1389,7 +1386,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     /**
      * Reject incomplete image bitstreams (missing JPEG EOI / PNG IEND / WebP trailer).
      *
-     * Cheap (~0.1ms). Call before EXIF mutation and again after exiftool.
+     * Cheap (~0.1ms). Call before EXIF mutation and again after the rewrite.
      * Quarantines a copy on incomplete_upload.
      *
      * @param string $file Absolute path to upload
@@ -1496,7 +1493,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         // Validate EXIF timestamp
         $exifCheck = validateExifTimestampWithStatus($file);
         if (!$exifCheck['valid']) {
-            // Transient read error (exiftool missing or failing after ensureImageHasExif succeeded)
+            // Transient read error (a failure after ensureImageHasExif succeeded)
             // Preserve the upload for retry; don't consume it
             if (($exifCheck['read_status'] ?? null) === 'error') {
                 return ['valid' => false, 'reason' => 'exif_read_error', 'details' => $exifCheck];
@@ -1927,10 +1924,6 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         $timezone = $this->getTimezone();
         $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
         if (!ensureImageHasExif($filePath, null, $timezone, $context)) {
-            // Host missing exiftool is infra, not a bad frame - keep inbox for later
-            if (!isExiftoolAvailable()) {
-                return AcquisitionResult::skip('exiftool_unavailable', 'push');
-            }
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
             $this->recordStabilityMetrics($stabilityTime, false);
@@ -1938,7 +1931,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('no_exif_timestamp', 'push');
         }
 
-        // Fail closed if exiftool rewrite damaged the trailer
+        // Fail closed if the EXIF rewrite damaged the trailer
         $incompleteAfterExif = $this->checkUploadCompleteness($filePath);
         if ($incompleteAfterExif !== null) {
             $reason = $incompleteAfterExif['reason'];
@@ -1956,11 +1949,12 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure($reason, 'push', $validationResult);
         }
 
-        // Check for transient EXIF read error before normalizing (exiftool missing or
-        // failing momentarily). Preserve the upload for retry; don't consume it.
+        // Check for a transient EXIF read error before normalizing (an
+        // unreadable file or momentary read failure). Preserve the upload for
+        // retry; don't consume it.
         $exifRead = readExifTimestamp($filePath);
         if ($exifRead['status'] === 'error') {
-            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+            return AcquisitionResult::skip('exif_read_failed', 'push');
         }
 
         // Normalize EXIF timestamp to UTC
@@ -1973,11 +1967,11 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Get the normalized UTC capture time from GPS. A read error is transient
-        // (exiftool missing or failing) and must keep the upload for retry; a
-        // genuinely absent field is a bad image and is consumed.
+        // and must keep the upload for retry; a genuinely absent field is a bad
+        // image and is consumed.
         $gpsRead = readGpsUtcTimestampFromExif($filePath);
         if ($gpsRead['status'] === 'error') {
-            return AcquisitionResult::skip('exiftool_read_failed', 'push');
+            return AcquisitionResult::skip('exif_read_failed', 'push');
         }
         if ($gpsRead['status'] === 'absent') {
             $this->consumeEvaluatedUpload($filePath, 'no_capture_time');

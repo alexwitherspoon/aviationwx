@@ -547,45 +547,12 @@ class ExifUtilsTest extends TestCase
         $this->assertNull($result, "Year {$futureYear} should be rejected");
     }
 
-    public function testClassifyGpsRead_NonZeroExit_ReturnsError()
-    {
-        $this->assertSame('error', classifyGpsRead(1, []));
-    }
 
-    public function testClassifyGpsRead_UnwrittenExitSentinel_ReturnsError()
-    {
-        // readGpsUtcTimestampFromExif initializes the exit code to -1 so a
-        // failed exec that never writes it still classifies as an error.
-        $this->assertSame('error', classifyGpsRead(-1, []));
-    }
 
-    public function testClassifyGpsRead_ZeroExitEmptyOutput_ReturnsAbsent()
-    {
-        $this->assertSame('absent', classifyGpsRead(0, []));
-    }
 
-    public function testClassifyGpsRead_ZeroExitGarbageOutput_ReturnsAbsent()
-    {
-        $this->assertSame('absent', classifyGpsRead(0, ['not a date']));
-    }
 
-    public function testClassifyGpsRead_ZeroExitValidOutput_ReturnsOk()
-    {
-        $this->assertSame('ok', classifyGpsRead(0, ['2024:12:26', '15:30:45']));
-    }
 
-    public function testParseGpsExiftoolOutput_ValidLines_ReturnsUtcTimestamp()
-    {
-        // gmmktime is calendar math independent of the server default timezone,
-        // matching the explicit UTC suffix the parser applies.
-        $expected = gmmktime(15, 30, 45, 12, 26, 2024);
-        $this->assertSame($expected, parseGpsExiftoolOutput(['2024:12:26', '15:30:45']));
-    }
 
-    public function testParseGpsExiftoolOutput_Garbage_ReturnsZero()
-    {
-        $this->assertSame(0, parseGpsExiftoolOutput(['garbage']));
-    }
 
     public function testReadGpsUtcTimestampFromExif_MissingFile_ReturnsError()
     {
@@ -657,38 +624,9 @@ class ExifUtilsTest extends TestCase
         $this->assertSame(0, $result['timestamp']);
     }
 
-    public function testResolveDateTimeOriginalTag_ExifSubarray_ReturnsValue(): void
-    {
-        $this->assertSame(
-            '2024:12:26 15:30:45',
-            resolveDateTimeOriginalTag(['EXIF' => ['DateTimeOriginal' => '2024:12:26 15:30:45']])
-        );
-    }
 
-    public function testResolveDateTimeOriginalTag_Root_ReturnsValue(): void
-    {
-        $this->assertSame(
-            '2024:12:26 15:30:45',
-            resolveDateTimeOriginalTag(['DateTimeOriginal' => '2024:12:26 15:30:45'])
-        );
-    }
 
-    public function testResolveDateTimeOriginalTag_Ifd0Only_ReturnsNull(): void
-    {
-        // The completeness gate must reject a frame that only carries the
-        // IFD0.DateTime fallback. A file datetime is not a capture timestamp.
-        $this->assertNull(
-            resolveDateTimeOriginalTag(['IFD0' => ['DateTime' => '2024:12:26 15:30:45']])
-        );
-        $this->assertNull(
-            resolveDateTimeOriginalTag(['EXIF' => ['DateTimeOriginal' => null], 'IFD0' => ['DateTime' => '2024:12:26 15:30:45']])
-        );
-    }
 
-    public function testResolveDateTimeOriginalTag_Absent_ReturnsNull(): void
-    {
-        $this->assertNull(resolveDateTimeOriginalTag([]));
-    }
 
     public function testExifCaptureTimeOverridesEmbedded_NoProvidedTime_ReturnsFalse(): void
     {
@@ -721,5 +659,37 @@ class ExifUtilsTest extends TestCase
         $this->assertSame(0, $result['timestamp']);
 
         chmod($tmpFile, 0644);
+    }
+
+    /**
+     * writeImageCredit writes the credit tags to a rendered PNG and preserves
+     * its mtime, matching the exiftool -P behavior it replaces.
+     */
+    public function testWriteImageCredit_Png_CarriesCreditAndPreservesMtime(): void
+    {
+        $dest = $this->testDir . '/card.png';
+        copy(__DIR__ . '/../Fixtures/webcam-exif/png_no_exif.png', $dest);
+        $mtime = time() - 3600;
+        @touch($dest, $mtime);
+
+        $credit = [
+            'copyright' => '© OpenStreetMap contributors · AviationWX.org',
+            'artist' => 'AviationWX.org',
+            'imageDescription' => 'Airport directory weather map rendered 2026-05-06 07:08 UTC.',
+            'userComment' => '© OpenStreetMap contributors · as of 2026-05-06 07:08 UTC',
+        ];
+
+        $this->assertTrue(writeImageCredit($dest, $credit));
+
+        $result = exifNativeRead($dest);
+        $this->assertSame('ok', $result['status']);
+        $this->assertSame($credit['copyright'], $result['Copyright'] ?? null);
+        $this->assertSame($credit['imageDescription'], $result['ImageDescription'] ?? null);
+        $this->assertSame($mtime, @filemtime($dest), 'credit write must restore mtime');
+    }
+
+    public function testWriteImageCredit_MissingFile_ReturnsFalse(): void
+    {
+        $this->assertFalse(writeImageCredit($this->testDir . '/absent.png', ['copyright' => 'x']));
     }
 }

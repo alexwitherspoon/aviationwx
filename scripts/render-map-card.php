@@ -386,16 +386,14 @@ function renderMapCard(): bool
     }
     imagedestroy($im);
 
-    $argv = [
-        'exiftool', '-overwrite_original', '-q', '-P',
-        '-Copyright=© OpenStreetMap contributors · Cloud data © OpenWeatherMap · Radar © RainViewer · AviationWX.org',
-        '-Artist=AviationWX.org',
-        '-ImageDescription=' . "Airport directory weather map rendered {$stamp}.",
-        '-UserComment=' . "© OpenStreetMap contributors · Cloud data © OpenWeatherMap · Radar © RainViewer · as of {$stamp}",
-        $tmpFile,
-    ];
-    if (!runExiftoolWithRetry($argv)['success']) {
-        aviationwx_log('warning', 'map card: exiftool credit write failed, keeping uncredited image', [], 'app');
+    $creditWritten = writeImageCredit($tmpFile, [
+        'copyright' => '© OpenStreetMap contributors · Cloud data © OpenWeatherMap · Radar © RainViewer · AviationWX.org',
+        'artist' => 'AviationWX.org',
+        'imageDescription' => "Airport directory weather map rendered {$stamp}.",
+        'userComment' => "© OpenStreetMap contributors · Cloud data © OpenWeatherMap · Radar © RainViewer · as of {$stamp}",
+    ]);
+    if (!$creditWritten) {
+        aviationwx_log('warning', 'map card: credit write failed, serving image without EXIF credit', [], 'app');
     }
 
     if (!@rename($tmpFile, CACHE_SOCIAL_MAP_CARD_FILE)) {
