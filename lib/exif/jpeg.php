@@ -16,6 +16,13 @@ if (!defined('EXIF_MAX_VALUE_DECODE_BYTES')) {
     define('EXIF_MAX_VALUE_DECODE_BYTES', 1048576);
 }
 
+// Bound on the total decoded across one IFD parse. Decoding expands bytes to
+// PHP array elements, so many entries sharing one in-file region could still
+// balloon memory even though each value is individually within the cap.
+if (!defined('EXIF_MAX_TOTAL_DECODE_BYTES')) {
+    define('EXIF_MAX_TOTAL_DECODE_BYTES', 1048576);
+}
+
 /**
  * Parse a JPEG path and return the EXIF tags this module understands.
  *
@@ -246,6 +253,7 @@ function exifNativeReadIfdEntries(string $tiff, int $offset, bool $isLittle): ?a
     }
     $pos = $offset + 2;
     $entries = [];
+    $totalDecode = 0;
     for ($i = 0; $i < $count; $i++) {
         if ($pos + 12 > $length) {
             return null;
@@ -285,6 +293,8 @@ function exifNativeReadIfdEntries(string $tiff, int $offset, bool $isLittle): ?a
                     $valueCount,
                     $isLittle
                 );
+            } elseif ($totalDecode + $bytesNeeded > EXIF_MAX_TOTAL_DECODE_BYTES) {
+                $value = null;
             } elseif ($bytesNeeded <= (int) $length - (int) exifNativeUint32($tiff, $pos + 8, $isLittle)) {
                 $dataOffset = exifNativeUint32($tiff, $pos + 8, $isLittle);
                 if ($dataOffset + $bytesNeeded <= $length) {
@@ -296,6 +306,7 @@ function exifNativeReadIfdEntries(string $tiff, int $offset, bool $isLittle): ?a
                         $valueCount,
                         $isLittle
                     );
+                    $totalDecode += $bytesNeeded;
                 } else {
                     $value = null;
                 }

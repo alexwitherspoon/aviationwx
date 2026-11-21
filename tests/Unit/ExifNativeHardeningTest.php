@@ -109,6 +109,25 @@ class ExifNativeHardeningTest extends TestCase
         $this->assertNull($groups['ifd0'][0x0E00], 'an over-budget value must decode to null, not expand');
     }
 
+    public function testParseTiffTags_AggregateDecodeIsBounded(): void
+    {
+        // 512 entries each claim a 256 KB type-7 value on a shared 16-byte
+        // region. Each value is inside the single-value cap, so only the
+        // aggregate budget can stop the expansion. Before it existed this
+        // file OOMs the worker at the production memory limit.
+        $count = 512;
+        $tiff = 'II' . "\x2A\x00" . "\x08\x00\x00\x00" . pack('v', $count);
+        $entryBase = 8 + 2 + $count * 12;
+        for ($i = 0; $i < $count; $i++) {
+            $tiff .= pack('v', 0x0E00) . pack('v', 7) . pack('V', 262144) . pack('V', $entryBase);
+        }
+        $tiff .= pack('V', 0) . str_repeat("\x00", 16);
+
+        $groups = exifNativeParseTiffTags($tiff);
+        $this->assertArrayHasKey(0x0E00, $groups['ifd0']);
+        $this->assertNull($groups['ifd0'][0x0E00], 'the aggregate budget must stop expansion, not OOM');
+    }
+
     public function testPng_TamperedExifCrc_ReturnsAbsent(): void
     {
         $png = file_get_contents($this->fixtureDir . '/png_exif.png');
