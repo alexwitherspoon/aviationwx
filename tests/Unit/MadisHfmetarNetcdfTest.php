@@ -205,7 +205,45 @@ class MadisHfmetarNetcdfTest extends TestCase
         $this->assertSame(3600, MadisHfmetarAdapter::getMaxAcceptableAge());
         $this->assertTrue(MadisHfmetarAdapter::providesField('wind_speed'));
         $this->assertTrue(MadisHfmetarAdapter::providesField('wind_direction'));
-        $this->assertFalse(MadisHfmetarAdapter::providesField('ceiling'));
+        $this->assertTrue(MadisHfmetarAdapter::providesField('ceiling'));
+        $this->assertTrue(MadisHfmetarAdapter::providesField('cloud_cover'));
+    }
+
+    /**
+     * Reader returns sky layers as per-record arrays of trimmed codes
+     */
+    public function testNetcdfClassic_SkyCvrColumn_ReturnsLayerRows(): void
+    {
+        $netcdf = $this->fixtureNetcdf();
+        $ids = $netcdf->readColumnString('stationId');
+        $sky = $netcdf->readColumn('skyCvr');
+        $kspbRecord = array_search('KSPB', array_map('trim', $ids), true);
+        $this->assertIsInt($kspbRecord);
+        $this->assertSame('OVC', $sky[$kspbRecord][0]);
+    }
+
+    /**
+     * Ceiling and cloud cover decode from the sky layer columns
+     */
+    public function testMadisHfmetarDecode_Kspb_CeilingAndCloud(): void
+    {
+        $observations = madisHfmetarDecodeBytes($this->fixtureBytes(), 'KSPB');
+        $first = $observations[0];
+        // OVC base 670.56 m -> 2200 ft
+        $this->assertSame(2200, $first['ceiling_ft']);
+        $this->assertSame('OVC', $first['cloud_cover']);
+    }
+
+    /**
+     * Clear-sky stations carry cloud_cover without a ceiling
+     */
+    public function testMadisHfmetarDecode_SkyClear_CloudCoverWithoutCeiling(): void
+    {
+        $observations = madisHfmetarDecodeBytes($this->fixtureBytes(), 'KMAE');
+        $this->assertNotNull($observations);
+        $first = $observations[0];
+        $this->assertSame('SCT', $first['cloud_cover']);
+        $this->assertNull($first['ceiling_ft']);
     }
 
     /**
@@ -244,6 +282,8 @@ class MadisHfmetarNetcdfTest extends TestCase
         $this->assertSame(0.0, $snapshot->wind->speed->value);
         $this->assertTrue($snapshot->wind->direction->hasValue());
         $this->assertNull($snapshot->wind->gust->value, 'gust is missing for calm KSPB');
+        $this->assertEqualsWithDelta(2300.0, $snapshot->ceiling->value, 0.01, 'co-located ASOS ceiling at latest mark');
+        $this->assertSame('OVC', $snapshot->cloudCover->value);
         // The latest mark is 23:55 UTC on 2026-11-20
         $this->assertSame(gmmktime(23, 55, 0, 11, 20, 2026), $snapshot->getFieldObservationTime('temperature'));
     }

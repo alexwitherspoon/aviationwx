@@ -178,7 +178,7 @@ class NetcdfClassic
         if (!$var['recordVariable']) {
             throw new NetcdfFormatException("variable {$name} is not a record variable");
         }
-        $typeSize = self::typeSize($var['ncType']);
+        $innerDims = array_slice($var['dims'], 1);
         $values = [];
         for ($record = 0; $record < $this->numRecs; $record++) {
             $offset = $var['begin'] + ($record * $this->recordSize);
@@ -186,9 +186,22 @@ class NetcdfClassic
                 $values[] = $this->readOne($this->bytes, $offset, $var['ncType']);
                 continue;
             }
-            if ($var['ncType'] === NC_CHAR) {
+            if ($var['ncType'] === NC_CHAR && count($innerDims) === 1) {
                 $length = $var['innerCount'];
                 $values[] = rtrim(substr($this->bytes, $offset, $length), "\x00");
+                continue;
+            }
+            if ($var['ncType'] === NC_CHAR) {
+                // Two inner dims: fixed-width rows (e.g. sky layers), one row per slice.
+                $rowLength = $this->dims[$innerDims[count($innerDims) - 1]];
+                $rows = [];
+                $rowStart = $offset;
+                $rowEnd = $offset + $var['innerCount'];
+                while ($rowStart < $rowEnd) {
+                    $rows[] = rtrim(substr($this->bytes, $rowStart, $rowLength), "\x00");
+                    $rowStart += $rowLength;
+                }
+                $values[] = $rows;
                 continue;
             }
             $values[] = $this->readMany($offset, $var['innerCount'], $var['ncType']);

@@ -38,6 +38,7 @@ require_once __DIR__ . '/adapter/swob-man-v1.php';
 require_once __DIR__ . '/adapter/dyaconlive-v1.php';
 require_once __DIR__ . '/adapter/davis-weatherlink-live-bridge.php';
 require_once __DIR__ . '/adapter/wifilogger.php';
+require_once __DIR__ . '/adapter/madis-hfmetar-v1.php';
 require_once __DIR__ . '/dyaconlive-state.php';
 require_once __DIR__ . '/dyaconlive-fetch.php';
 require_once __DIR__ . '/wind-normalizer.php';
@@ -373,6 +374,47 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
             continue;
         }
 
+        // MADIS HFMETAR: mock/bulk/HTTP via madisHfmetarResolveStationResponse (bulk before HTTP circuit)
+        if ($sourceType === 'madis_hfmetar') {
+            $stationId = $source['station_id'] ?? '';
+            if (!is_string($stationId) || trim($stationId) === '') {
+                continue;
+            }
+            $resolved = madisHfmetarResolveStationResponse(strtoupper(trim($stationId)), $airportId);
+            switch ($resolved['outcome']) {
+                case MADIS_HFMETAR_RESOLVE_OK:
+                    if (is_string($resolved['body'])) {
+                        $responses[$sourceKey] = $resolved['body'];
+                        recordWeatherSuccess($airportId, $sourceType, $source);
+                        weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+                    }
+                    break;
+                case MADIS_HFMETAR_RESOLVE_THROTTLED:
+                    weatherHealthTrackUpstreamThrottleSkip($airportId, $sourceType);
+                    break;
+                case MADIS_HFMETAR_RESOLVE_CIRCUIT_OPEN:
+                    weatherHealthTrackCircuitOpen($airportId, $sourceType);
+                    break;
+                case MADIS_HFMETAR_RESOLVE_HTTP_FAILED:
+                case MADIS_HFMETAR_RESOLVE_INVALID_STATION:
+                    $responses[$sourceKey] = null;
+                    $madisHttpCode = isset($resolved['http_code']) ? (int) $resolved['http_code'] : null;
+                    $madisHeaders = $resolved['response_headers'] ?? null;
+                    recordWeatherFailure(
+                        $airportId,
+                        $sourceType,
+                        'transient',
+                        $madisHttpCode,
+                        null,
+                        $source,
+                        is_array($madisHeaders) ? $madisHeaders : null
+                    );
+                    weatherHealthTrackFetch($airportId, $sourceType, false, $madisHttpCode);
+                    break;
+            }
+            continue;
+        }
+
         // Check circuit breaker (non-METAR sources)
         $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType, $source);
         if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
@@ -640,6 +682,7 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
             'timezone' => dyaconliveResolveTimezone($source, $airport),
             'elevation_ft' => $airport['elevation_ft'] ?? null,
         ])),
+        'madis_hfmetar' => MadisHfmetarAdapter::parseResponse($response, $source),
         default => null,
     };
 }

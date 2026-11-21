@@ -51,6 +51,8 @@ class MadisHfmetarAdapter {
         'wind_direction',
         'gust_speed',
         'visibility',
+        'ceiling',
+        'cloud_cover',
     ];
 
     /** Typical update frequency in seconds (5-minute ASOS marks) */
@@ -160,13 +162,35 @@ class MadisHfmetarAdapter {
             }
         }
 
-        $observations = madisHfmetarDecodeBytes($bytes, $stationId);
-        if ($observations === null || $observations === []) {
-            return WeatherSnapshot::empty(self::SOURCE_TYPE);
+        // A bulk slice is JSON; a direct download is gzipped netCDF.
+        if (str_starts_with(ltrim($bytes), '{')) {
+            $slice = json_decode($bytes, true);
+            $observations = is_array($slice) ? ($slice['observations'] ?? null) : null;
+            if (!is_array($observations) || $observations === []) {
+                return WeatherSnapshot::empty(self::SOURCE_TYPE);
+            }
+        } else {
+            $observations = madisHfmetarDecodeBytes($bytes, $stationId);
+            if ($observations === null || $observations === []) {
+                return WeatherSnapshot::empty(self::SOURCE_TYPE);
+            }
         }
 
         // Observations are sorted ascending; the latest mark is the snapshot.
         $obs = $observations[count($observations) - 1];
+
+        return self::snapshotFromObservation($obs, $stationId);
+    }
+
+    /**
+     * Build a snapshot from one decoded observation array.
+     *
+     * @param array<string, mixed> $obs Observation from the decoder or a bulk slice
+     * @param string $stationId Station ICAO (uppercase)
+     * @return WeatherSnapshot
+     */
+    private static function snapshotFromObservation(array $obs, string $stationId): WeatherSnapshot
+    {
         $obsTime = (int)$obs['obs_time'];
         $source = self::SOURCE_TYPE;
 
@@ -194,8 +218,8 @@ class MadisHfmetarAdapter {
                 ? WindGroup::from($windSpeed, $windDirection, $gustSpeed, $source, $obsTime)
                 : WindGroup::empty(),
             visibility: WeatherReading::statuteMiles($obs['visibility_sm'], $source, $obsTime),
-            ceiling: WeatherReading::feet(null, $source, $obsTime),
-            cloudCover: WeatherReading::text(null, $source, $obsTime),
+            ceiling: WeatherReading::feet($obs['ceiling_ft'], $source, $obsTime),
+            cloudCover: WeatherReading::text($obs['cloud_cover'], $source, $obsTime),
             rawMetar: null,
             isValid: true,
             metarStationId: null,
@@ -203,4 +227,100 @@ class MadisHfmetarAdapter {
             metarFieldCompleteness: null
         );
     }
+}
+
+// =============================================================================
+// STATION RESPONSE RESOLUTION (mock/bulk/HTTP, mirroring the METAR adapter)
+// =============================================================================
+
+/** MADIS resolve produced a body (mock, bulk slice, or HTTP). */
+const MADIS_HFMETAR_RESOLVE_OK = 'ok';
+/** HTTP budget exhausted for this cycle; not an upstream failure. */
+const MADIS_HFMETAR_RESOLVE_THROTTLED = 'throttled';
+/** Per-airport MADIS circuit open; HTTP skipped (bulk/mock already attempted). */
+const MADIS_HFMETAR_RESOLVE_CIRCUIT_OPEN = 'circuit_open';
+/** Per-station HTTP attempt failed after bulk miss. */
+const MADIS_HFMETAR_RESOLVE_HTTP_FAILED = 'http_failed';
+/** Missing or empty station_id. */
+const MADIS_HFMETAR_RESOLVE_INVALID_STATION = 'invalid_station';
+
+/**
+ * Resolve the MADIS response body for one station.
+ *
+ * Precedence: test mock, fresh bulk slice, then HTTP (gated by circuit
+ * breaker and throttle). Throttle and circuit-open outcomes are not
+ * upstream failures; callers must not record them as fetch failures.
+ *
+ * @param string $stationId ICAO station id (e.g. KSPB)
+ * @param string|null $airportId Airport slug for per-airport MADIS circuit (null skips HTTP gate)
+ * @return array{body: ?string, outcome: string, http_code?: int|null, response_headers?: array<string, string>}
+ */
+function madisHfmetarResolveStationResponse(string $stationId, ?string $airportId = null): array
+{
+    $stationId = strtoupper(trim($stationId));
+    if ($stationId === '') {
+        return ['body' => null, 'outcome' => MADIS_HFMETAR_RESOLVE_INVALID_STATION];
+    }
+
+    $stationSource = ['type' => 'madis_hfmetar', 'station_id' => $stationId];
+    $url = MadisHfmetarAdapter::buildUrl($stationSource);
+    if ($url === null) {
+        return ['body' => null, 'outcome' => MADIS_HFMETAR_RESOLVE_INVALID_STATION];
+    }
+
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        return ['body' => $mockResponse, 'outcome' => MADIS_HFMETAR_RESOLVE_OK];
+    }
+
+    require_once __DIR__ . '/../../madis-hfmetar/bulk.php';
+    $sliceJson = madisHfmetarTryReadStationSlice($stationId);
+    if ($sliceJson !== null) {
+        return ['body' => $sliceJson, 'outcome' => MADIS_HFMETAR_RESOLVE_OK];
+    }
+
+    if ($airportId !== null && $airportId !== '') {
+        require_once __DIR__ . '/../../circuit-breaker.php';
+        $breakerResult = checkWeatherCircuitBreaker($airportId, 'madis_hfmetar', $stationSource);
+        if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
+            return ['body' => null, 'outcome' => MADIS_HFMETAR_RESOLVE_CIRCUIT_OPEN];
+        }
+    }
+
+    require_once __DIR__ . '/../../upstream-rate-limit.php';
+    if (!upstreamRateLimitConsumeForSource($stationSource)['allowed']) {
+        return ['body' => null, 'outcome' => MADIS_HFMETAR_RESOLVE_THROTTLED];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => CURL_TIMEOUT,
+            'ignore_errors' => true,
+        ],
+    ]);
+    $response = @file_get_contents($url, false, $context);
+    $rawHeaders = $http_response_header ?? null;
+    $httpCode = null;
+    if (is_array($rawHeaders)) {
+        foreach ($rawHeaders as $headerLine) {
+            if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $headerLine, $matches)) {
+                $httpCode = (int) $matches[1];
+                break;
+            }
+        }
+    }
+
+    if ($response === false || ($httpCode !== null && $httpCode >= 400)) {
+        return [
+            'body' => null,
+            'outcome' => MADIS_HFMETAR_RESOLVE_HTTP_FAILED,
+            'http_code' => $httpCode,
+        ];
+    }
+
+    return [
+        'body' => $response,
+        'outcome' => MADIS_HFMETAR_RESOLVE_OK,
+        'http_code' => $httpCode,
+    ];
 }

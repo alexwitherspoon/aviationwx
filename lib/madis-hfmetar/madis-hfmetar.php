@@ -17,6 +17,7 @@
  */
 
 require_once __DIR__ . '/netcdf-classic.php';
+require_once __DIR__ . '/../units.php';
 
 use AviationWX\Madis\NetcdfClassic;
 use AviationWX\Madis\NetcdfFormatException;
@@ -128,6 +129,8 @@ function madisHfmetarObservationsFromNetcdf(NetcdfClassic $netcdf, string $stati
     $raw = madisHfmetarColumn($netcdf, 'rawMessage');
     $latitude = madisHfmetarColumn($netcdf, 'latitude');
     $longitude = madisHfmetarColumn($netcdf, 'longitude');
+    $skyCvr = madisHfmetarColumn($netcdf, 'skyCvr');
+    $skyBase = madisHfmetarColumn($netcdf, 'skyCovLayerBase');
 
     $observations = [];
     foreach ($rows as $record) {
@@ -148,8 +151,15 @@ function madisHfmetarObservationsFromNetcdf(NetcdfClassic $netcdf, string $stati
             'metar_type' => madisHfmetarValueOrNull($metarType, $netcdf, 'metarType', $record),
             'latitude' => madisHfmetarValueOrNull($latitude, $netcdf, 'latitude', $record),
             'longitude' => madisHfmetarValueOrNull($longitude, $netcdf, 'longitude', $record),
+            'ceiling_ft' => null,
+            'cloud_cover' => null,
             'raw' => is_array($raw) ? (string)($raw[$record] ?? '') : '',
         ];
+        $cloud = madisHfmetarCloudLayer($skyCvr, $skyBase, $netcdf, $record);
+        if ($cloud !== null) {
+            $observation['ceiling_ft'] = $cloud['ceiling_ft'];
+            $observation['cloud_cover'] = $cloud['cloud_cover'];
+        }
         $observations[] = $observation;
     }
 
@@ -237,4 +247,59 @@ function madisHfmetarValueOrNull(?array $column, NetcdfClassic $netcdf, string $
     }
 
     return $value;
+}
+
+/**
+ * Ceiling and cloud cover from the sky layer columns.
+ *
+ * Ceiling is the lowest BKN/OVC/OVX layer base (feet AGL), matching the
+ * METAR convention; cloud_cover is that layer's code, or the first reported
+ * layer when no ceiling layer exists. Layer bases are meters in the file.
+ *
+ * @param array<int, mixed>|null $skyCvr skyCvr column (per record: array of layer codes)
+ * @param array<int, mixed>|null $skyBase skyCovLayerBase column (per record: array of floats)
+ * @return array{ceiling_ft: int|null, cloud_cover: string|null}|null
+ */
+function madisHfmetarCloudLayer(?array $skyCvr, ?array $skyBase, NetcdfClassic $netcdf, int $record): ?array
+{
+    if ($skyCvr === null || $skyBase === null || !array_key_exists($record, $skyCvr)) {
+        return null;
+    }
+    $layers = $skyCvr[$record];
+    $bases = $skyBase[$record];
+    if (!is_array($layers) || !is_array($bases)) {
+        return null;
+    }
+
+    $ceilingFt = null;
+    $ceilingCover = null;
+    $firstCover = null;
+    foreach ($layers as $index => $cover) {
+        $cover = strtoupper(trim((string)$cover));
+        if ($cover === '') {
+            continue;
+        }
+        if ($firstCover === null) {
+            $firstCover = $cover;
+        }
+        $baseFt = null;
+        $base = $bases[$index] ?? null;
+        if ($base !== null && !$netcdf->isMissing('skyCovLayerBase', $base)) {
+            $baseFt = (int) round(metersToFeet((float) $base));
+        }
+        if (in_array($cover, ['BKN', 'OVC', 'OVX'], true) && $baseFt !== null
+            && ($ceilingFt === null || $baseFt < $ceilingFt)) {
+            $ceilingFt = $baseFt;
+            $ceilingCover = $cover;
+        }
+    }
+
+    if ($ceilingFt === null && $firstCover === null) {
+        return null;
+    }
+
+    return [
+        'ceiling_ft' => $ceilingFt,
+        'cloud_cover' => $ceilingFt !== null ? $ceilingCover : $firstCover,
+    ];
 }
