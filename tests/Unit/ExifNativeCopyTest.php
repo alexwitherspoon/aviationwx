@@ -121,6 +121,17 @@ class ExifNativeCopyTest extends TestCase
         $this->assertNotSame('ok', $result['status'] ?? null);
     }
 
+    public function testCopyTiff_OversizedPayloadToJpeg_ReturnsFalseAndLeavesDestUntouched(): void
+    {
+        $dest = $this->tmpDir . '/out.jpg';
+        copy($this->fixtureDir . '/no_exif.jpg', $dest);
+        $before = file_get_contents($dest);
+
+        // A TIFF over 65533 bytes would wrap the 16-bit JPEG APP1 length.
+        $this->assertFalse(exifNativeCopyTiff(str_repeat("\x00", 66000), $dest));
+        $this->assertSame($before, file_get_contents($dest), 'an oversized payload must not replace the jpeg');
+    }
+
     public function testCopy_SourceWithoutExif_ReturnsFalseAndLeavesDestUntouched(): void
     {
         $dest = $this->tmpDir . '/out.jpg';

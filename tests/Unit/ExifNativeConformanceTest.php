@@ -201,4 +201,28 @@ class ExifNativeConformanceTest extends TestCase
             $this->assertSame(24, $this->u32($tiff, $groups['exif'][0xA003]['valueField']), $name . ' height');
         }
     }
+
+    public function testStamp_Webp_ConformsToContainerOrder(): void
+    {
+        $path = $this->tmpDir . '/card.webp';
+        copy($this->fixtureDir . '/webp_no_exif.webp', $path);
+        $this->assertTrue(exifNativeStamp($path, strtotime('2026-11-19 12:00:00 UTC'), 'UTC'));
+
+        $bytes = (string) file_get_contents($path);
+        // Metadata requires the extended container: VP8X must lead.
+        $this->assertSame('VP8X', substr($bytes, 12, 4), 'metadata requires a VP8X container');
+        $this->assertNotSame(0, ord($bytes[20]) & 0x08, 'the EXIF-present flag must be set');
+
+        // The EXIF chunk follows the image chunk, like the reference layout.
+        $exifPos = strpos($bytes, 'EXIF');
+        $vp8Pos = strpos($bytes, 'VP8 ');
+        $vp8lPos = strpos($bytes, 'VP8L');
+        $imgPos = ($vp8lPos !== false && ($vp8Pos === false || $vp8lPos < $vp8Pos)) ? $vp8lPos : $vp8Pos;
+        $this->assertNotFalse($imgPos, 'an image chunk must exist');
+        $this->assertNotFalse($exifPos, 'the EXIF chunk must be present');
+        $this->assertGreaterThan($imgPos, $exifPos, 'EXIF must follow the image chunk');
+
+        $groups = $this->parseTiff($this->webpTiff($bytes));
+        $this->assertArrayHasKey(0x9003, $groups['exif'], 'the stamped capture time must parse back');
+    }
 }

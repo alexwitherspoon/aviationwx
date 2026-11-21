@@ -9,6 +9,13 @@
  * so callers can distinguish a missing field from a transient read failure.
  */
 
+// Bound on a single decoded IFD value. Ordinary webcam tags (dates, GPS
+// rationals, short strings) sit far below this; it exists so a hostile count
+// cannot expand bytes into a huge PHP array during a parse.
+if (!defined('EXIF_MAX_VALUE_DECODE_BYTES')) {
+    define('EXIF_MAX_VALUE_DECODE_BYTES', 1048576);
+}
+
 /**
  * Parse a JPEG path and return the EXIF tags this module understands.
  *
@@ -263,7 +270,12 @@ function exifNativeReadIfdEntries(string $tiff, int $offset, bool $isLittle): ?a
             $value = null;
         } else {
             $bytesNeeded = $unit * $valueCount;
-            if ($bytesNeeded <= 4) {
+            // Bound how much a single value may expand. Decoding expands bytes
+            // to PHP array elements, so an oversized claim on a hostile file
+            // would balloon memory even though it is inside the file bounds.
+            if ($bytesNeeded > EXIF_MAX_VALUE_DECODE_BYTES) {
+                $value = null;
+            } elseif ($bytesNeeded <= 4) {
                 // Inline value in the 4-byte field.
                 $value = exifNativeDecodeValue(
                     $tiff,

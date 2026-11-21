@@ -524,6 +524,7 @@ class WebcamFormatGenerationTest extends TestCase
         ]);
 
         $this->assertSame(1, count(array_keys($args, $source, true)), 'source must be read once');
+        $this->assertContains('-noautorotate', $args, 'source pixels must not be rotated by the decoder');
         $this->assertSame(2, count(array_keys($args, '-map', true)), 'one -map per output');
         $this->assertSame(2, count(array_keys($args, '-frames:v', true)), 'one -frames:v per output');
         $this->assertSame(1, count(array_keys($args, 'scale=1280:720:force_original_aspect_ratio=decrease', true)));
@@ -588,6 +589,84 @@ class WebcamFormatGenerationTest extends TestCase
     public function testVariantCpuTicks_UnknownPid_ReturnsNull(): void
     {
         $this->assertNull(variantCpuTicks(2147483647));
+    }
+
+    /**
+     * A leftover staging file under the old fixed name must never be promoted
+     * by a later run, whose staging names carry a per-run marker.
+     */
+    public function testGenerateVariantsFromOriginal_StaleStagingFileIsNotPromoted(): void
+    {
+        $ffmpeg = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpeg)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        require_once __DIR__ . '/../../lib/exif-utils.php';
+
+        $captureTime = strtotime('2026-11-19 12:00:00 UTC');
+        $testAirport = 'test_stale_' . time();
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
+
+        $source = $this->testImageDir . '/source.jpg';
+        $img = imagecreatetruecolor(640, 480);
+        imagefill($img, 0, 0, imagecolorallocate($img, 70, 90, 130));
+        imagejpeg($img, $source, 90);
+        imagedestroy($img);
+        $this->assertTrue(
+            ensureImageHasExif($source, $captureTime, 'UTC', [
+                'airport_id' => $testAirport,
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ])
+        );
+
+        // Seed a stale file at the old fixed staging name; it belongs to a
+        // stopped worker and must survive untouched, never get promoted.
+        $cameraDir = getWebcamCameraDir($testAirport, 0);
+        ensureCacheDir($cameraDir);
+        $stale = $cameraDir . '/staging_360_jpg.tmp';
+        file_put_contents($stale, 'stale bytes from a stopped worker');
+        $staleMtime = time() - 60;
+        @touch($stale, $staleMtime);
+
+        $result = generateVariantsFromOriginal($source, $testAirport, 0, $captureTime);
+
+        $this->assertNotEmpty($result['variants'], 'a fresh variant is produced');
+        foreach ($result['variants'] as $height => $formats) {
+            foreach ($formats as $path) {
+                $this->assertFileExists($path);
+                $this->assertNotSame($stale, $path, 'the stale staging file must not become a variant');
+            }
+        }
+        $this->assertSame('stale bytes from a stopped worker', file_get_contents($stale), 'stale file left untouched');
+        $this->assertSame($staleMtime, @filemtime($stale), 'stale file mtime unchanged');
+
+        foreach (glob($cameraDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($cameraDir);
+        $framesDir = getWebcamFramesDir($testAirport, 0, $captureTime);
+        foreach (glob($framesDir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($framesDir);
+    }
+
+    /**
+     * A truncated jpg (start-of-scan with no end-of-image) is rejected as
+     * incomplete, so the promotion gate cannot serve a torn frame.
+     */
+    public function testIsImageCompleteRejectsTruncatedJpeg(): void
+    {
+        require_once __DIR__ . '/../../lib/webcam-history.php';
+        $file = $this->testImageDir . '/truncated.jpg';
+        // SOI + APP0 + SOF + SOS, but no EOI.
+        $jpeg = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00"
+            . "\xFF\xC0\x00\x0B\x08\x00\x01\x00\x01\x01\x01\x11\x00"
+            . "\xFF\xDA\x00\x08\x01\x01\x00\x00\x3F\x00";
+        file_put_contents($file, $jpeg);
+        $this->assertFalse(isImageComplete($file, 'jpg'), 'a torn jpg must be incomplete');
     }
 
     /**

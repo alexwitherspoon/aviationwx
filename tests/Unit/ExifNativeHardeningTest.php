@@ -94,6 +94,21 @@ class ExifNativeHardeningTest extends TestCase
         $this->assertSame([], $groups['exif']);
     }
 
+    public function testParseTiffTags_OversizedValueClaim_IsSkippedNotExpanded(): void
+    {
+        // IFD0 with a type-7 entry claiming ~16M components. Decoding expands
+        // bytes into array elements, so the claim must be skipped without a
+        // huge allocation or a throw.
+        $tiff = 'II' . "\x2A\x00" . "\x08\x00\x00\x00"
+            . "\x01\x00"                     // one entry
+            . "\x00\x0E\x07\x00"             // tag 0x0E00, type 7 (UNDEFINED)
+            . "\xFF\xFF\xFF\x00"             // count 16,777,215
+            . "\x10\x00\x00\x00";            // data offset 16 (in-bounds)
+        $groups = exifNativeParseTiffTags($tiff);
+        $this->assertArrayHasKey(0x0E00, $groups['ifd0']);
+        $this->assertNull($groups['ifd0'][0x0E00], 'an over-budget value must decode to null, not expand');
+    }
+
     public function testPng_TamperedExifCrc_ReturnsAbsent(): void
     {
         $png = file_get_contents($this->fixtureDir . '/png_exif.png');

@@ -1035,6 +1035,9 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
 
     // Enumerate the variant outputs for a single ffmpeg pass. Width follows
     // each height, recalculated when the aspect-ratio width exceeds the cap.
+    // Staging names carry a per-run marker so a leftover from a stopped worker
+    // can never be mistaken for this run's output.
+    $runId = getmypid() . '_' . bin2hex(random_bytes(4));
     $outputs = [];
     foreach ($variantHeights as $targetHeight) {
         $targetWidth = (int)round($targetHeight * $aspectRatio);
@@ -1051,7 +1054,7 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
                 continue;
             }
             $outputs[$targetHeight . '_' . $format] = [
-                'dest' => $cacheDir . '/staging_' . $targetHeight . '_' . $format . '.tmp',
+                'dest' => $cacheDir . '/staging_' . $runId . '_' . $targetHeight . '_' . $format . '.tmp',
                 'format' => $format,
                 'width' => $targetWidth,
                 'height' => $targetHeight,
@@ -1168,6 +1171,26 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
         list($height, $format) = explode('_', $key, 2);
         $finalPath = getWebcamVariantPath($airportId, $camIndex, $timestamp, (int)$height, $format);
         
+        // A failed ffmpeg run can leave a truncated file that still carries
+        // headers. Nothing with a torn trailer is promoted.
+        require_once __DIR__ . '/webcam-history.php';
+        if (!isImageComplete($stagingFile, $format)) {
+            aviationwx_log('warning', 'generateVariantsFromOriginal: variant incomplete', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'variant' => $height . '_' . $format,
+                'file' => basename($stagingFile),
+                'note' => 'incomplete bitstream from the ffmpeg pass; not promoted'
+            ], 'app');
+            require_once __DIR__ . '/webcam-quarantine.php';
+            quarantineImage($stagingFile, $airportId, $camIndex, 'variant_incomplete', [
+                'variant' => $height . '_' . $format,
+                'file' => basename($stagingFile)
+            ]);
+            @unlink($stagingFile);
+            continue;
+        }
+        
         // Stamp and verify the staging file before it is renamed into place, so
         // a variant is only promoted once it is known to carry EXIF.
         $exifOk = $sourceTiff !== null
@@ -1246,7 +1269,10 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
  */
 function buildVariantArgs(string $sourceFile, array $outputs): array
 {
-    $args = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', $sourceFile];
+    // -noautorotate keeps pixels in stored orientation: the EXIF Orientation
+    // copied onto each variant is what applies, so a rotated source must not
+    // be rotated again by the decoder.
+    $args = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-noautorotate', '-i', $sourceFile];
     foreach ($outputs as $out) {
         $args = array_merge($args, [
             '-map', '0:v',

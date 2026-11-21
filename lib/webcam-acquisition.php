@@ -1155,6 +1155,12 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         // Normalize EXIF timestamp
         $timezone = $this->getTimezone();
         if (!normalizeExifToUtc($uploadFile, $this->airportId, $this->camIndex, $timezone)) {
+            // A transient I/O failure (mtime or momentary read error) must keep
+            // the upload for retry; only a definitive bad timestamp consumes it.
+            if (@filemtime($uploadFile) === false
+                || (readExifTimestamp($uploadFile)['status'] ?? '') === 'error') {
+                return AcquisitionResult::skip('exif_read_failed', 'push');
+            }
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
@@ -1959,6 +1965,14 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
         // Normalize EXIF timestamp to UTC
         if (!normalizeExifToUtc($filePath, $this->airportId, $this->camIndex, $timezone)) {
+            // normalize returns false both for a transient I/O problem (mtime
+            // unreadable, momentary read error) and for a definitive bad
+            // timestamp. Only the definitive case consumes the upload; a
+            // transient one keeps the file for a later pass.
+            if (@filemtime($filePath) === false
+                || (readExifTimestamp($filePath)['status'] ?? '') === 'error') {
+                return AcquisitionResult::skip('exif_read_failed', 'push');
+            }
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
             $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
