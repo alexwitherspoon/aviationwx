@@ -5046,7 +5046,7 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['weather_sources'])) {
                 $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'davis_weatherlink_live', 'wifilogger'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man', 'dyaconlive', 'davis_weatherlink_live', 'wifilogger', 'madis_hfmetar'];
                 foreach ($airport['weather_sources'] as $idx => $ws) {
                     $label = "weather_sources[{$idx}]";
                     if (!is_array($ws)) {
@@ -5151,6 +5151,17 @@ function validateAirportsJsonStructure(array $config): array {
                         }
                         if (!isset($airport['elevation_ft']) || !is_numeric($airport['elevation_ft'])) {
                             $warnings[] = "Airport '{$airportCode}' {$label} (dyaconlive): missing airport elevation_ft; pressure will be omitted";
+                        }
+                    } elseif ($wsType === 'madis_hfmetar') {
+                        // MADIS is only used when the ASOS is co-located with the field (operator policy).
+                        $airportIcao = isset($airport['icao']) ? strtoupper(trim((string) $airport['icao'])) : '';
+                        if ($airportIcao === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (madis_hfmetar) requires airport 'icao' (co-located ASOS only)";
+                        }
+                        if (!isset($ws['station_id']) || !is_string($ws['station_id']) || trim($ws['station_id']) === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (madis_hfmetar) missing 'station_id'";
+                        } elseif ($airportIcao !== '' && strtoupper(trim($ws['station_id'])) !== $airportIcao) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (madis_hfmetar) station_id '{$ws['station_id']}' must match airport icao '{$airportIcao}' (co-located ASOS only)";
                         }
                     }
                     // Cache-backed bridge types: fields + bridges[].id binding in validateBridgeConfig()
