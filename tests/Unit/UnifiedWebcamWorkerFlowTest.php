@@ -32,16 +32,12 @@ require_once __DIR__ . '/../../lib/webcam-pipeline.php';
 class UnifiedWebcamWorkerFlowTest extends TestCase
 {
     private string $testDir;
-    private bool $hasExiftool;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->testDir = sys_get_temp_dir() . '/unified_worker_test_' . uniqid();
         @mkdir($this->testDir, 0755, true);
-
-        exec('which exiftool 2>/dev/null', $output, $exitCode);
-        $this->hasExiftool = ($exitCode === 0);
     }
 
     protected function tearDown(): void
@@ -85,29 +81,20 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
      */
     public function testGetExifTimestamp_PrioritizesGpsUtcOverDateTimeOriginal()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_gps_priority.jpg');
 
         // Simulate a camera that wrote local time (PST = UTC-8)
         // DateTimeOriginal: 2026-01-16 15:30:00 (local PST)
         // GPS: 2026-01-16 23:30:00 (UTC)
-        $localTime = '2026:01:16 15:30:00';
-        $utcDate = '2026:01:16';
-        $utcTime = '23:30:00';
-
-        // Add both local DateTimeOriginal AND GPS UTC fields
-        $cmd = sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
-            escapeshellarg($localTime),
-            escapeshellarg($utcDate),
-            escapeshellarg($utcTime),
-            escapeshellarg($testFile)
+        // The native stamp produces exactly that split for a non-UTC timezone.
+        $this->assertTrue(
+            addExifTimestamp($testFile, strtotime('2026-01-16 23:30:00 UTC'), 'America/Los_Angeles', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
         );
-        exec($cmd, $output, $exitCode);
-        $this->assertEquals(0, $exitCode, 'exiftool must succeed: ' . implode("\n", $output));
 
         // ACT: Get timestamp using our function
         $timestamp = getExifTimestamp($testFile);
@@ -128,20 +115,9 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
      */
     public function testGetExifTimestamp_FallsBackToDateTimeOriginalIfNoGps()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
-        $testFile = $this->createTestJpeg('test_no_gps.jpg');
-
-        // Add only DateTimeOriginal (no GPS fields)
-        $dateTime = '2026:01:16 12:00:00';
-        $cmd = sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
-            escapeshellarg($dateTime),
-            escapeshellarg($testFile)
-        );
-        exec($cmd);
+        $testFile = $this->testDir . '/test_no_gps.jpg';
+        // Committed fixture carries DateTimeOriginal and no GPS fields.
+        copy(__DIR__ . '/../Fixtures/webcam-exif/datetime_only.jpg', $testFile);
 
         // ACT
         $timestamp = getExifTimestamp($testFile);
@@ -155,25 +131,18 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
      */
     public function testGetSourceCaptureTime_PrioritizesGpsUtc()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_source_capture.jpg');
 
-        // Same setup: local time in DateTimeOriginal, UTC in GPS
-        $localTime = '2026:01:16 08:00:00'; // 8 AM local
-        $utcDate = '2026:01:16';
-        $utcTime = '16:00:00'; // 4 PM UTC (UTC-8 offset)
-
-        $cmd = sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
-            escapeshellarg($localTime),
-            escapeshellarg($utcDate),
-            escapeshellarg($utcTime),
-            escapeshellarg($testFile)
+        // Same setup: local time in DateTimeOriginal, UTC in GPS.
+        // 16:00 UTC is 08:00 PST (UTC-8), which the native stamp writes.
+        $this->assertTrue(
+            addExifTimestamp($testFile, strtotime('2026-01-16 16:00:00 UTC'), 'America/Los_Angeles', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
         );
-        exec($cmd);
 
         // ACT
         $timestamp = getSourceCaptureTime($testFile);
@@ -256,27 +225,23 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
      */
     public function testNormalizeExifToUtc_DetectsTimezoneAndAddsGpsFields()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_normalize.jpg');
 
-        // Simulate: Camera wrote local time, file mtime is UTC
-        // Use relative timestamps to avoid test failures as time passes
-        // UTC time is "now" minus a small buffer to account for test execution time
+        // Simulate a camera clock eight hours behind UTC: stamp DateTimeOriginal
+        // and GPS both at the local value, then set mtime to the true UTC time.
+        // The diff beyond drift is what triggers offset detection.
         $utcTimestamp = time() - 60; // 1 minute ago (well within retention window)
-        
-        // Local time is 8 hours behind UTC (PST = UTC-8)
-        $localTimestamp = $utcTimestamp - (8 * 3600);
+        $localTimestamp = $utcTimestamp - (8 * 3600); // PST = UTC-8
         $localTime = gmdate('Y:m:d H:i:s', $localTimestamp);
-        
-        $cmd = sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
-            escapeshellarg($localTime),
-            escapeshellarg($testFile)
+
+        $this->assertTrue(
+            addExifTimestamp($testFile, $localTimestamp, 'UTC', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
         );
-        exec($cmd);
 
         // Set file mtime to UTC time
         touch($testFile, $utcTimestamp);
@@ -298,23 +263,21 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
      */
     public function testNormalizeExifToUtc_PreservesOriginalDateTimeOriginal()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_preserve_local.jpg');
 
         // Use relative timestamps to avoid test failures as time passes
         $utcTimestamp = time() - 60; // 1 minute ago
         $localTimestamp = $utcTimestamp - (8 * 3600); // PST = UTC-8
         $localTime = gmdate('Y:m:d H:i:s', $localTimestamp);
-        
-        $cmd = sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
-            escapeshellarg($localTime),
-            escapeshellarg($testFile)
+
+        $this->assertTrue(
+            addExifTimestamp($testFile, $localTimestamp, 'UTC', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
         );
-        exec($cmd);
 
         touch($testFile, $utcTimestamp);
 
@@ -322,8 +285,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         normalizeExifToUtc($testFile, 'test', 0, 'America/Los_Angeles');
 
         // ASSERT: DateTimeOriginal should still have local time
-        exec('exiftool -s -s -s -DateTimeOriginal ' . escapeshellarg($testFile), $output);
-        $dto = trim($output[0] ?? '');
+        $dto = exifNativeRead($testFile)['DateTimeOriginal'] ?? null;
         $this->assertEquals($localTime, $dto,
             'DateTimeOriginal should be preserved in local time for audit purposes');
     }

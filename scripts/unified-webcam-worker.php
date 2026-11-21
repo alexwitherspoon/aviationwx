@@ -42,14 +42,8 @@ require_once __DIR__ . '/../lib/variant-health.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/webcam-source-validation.php';
 
-// Verify exiftool is available (required for EXIF handling)
+// EXIF handling is native and in-process; no external tool is required here.
 require_once __DIR__ . '/../lib/exif-utils.php';
-try {
-    requireExiftool();
-} catch (RuntimeException $e) {
-    fwrite(STDERR, "FATAL: " . $e->getMessage() . "\n");
-    exit(1);
-}
 
 /**
  * Parse command line arguments

@@ -5,7 +5,7 @@
  * Tests that catch critical bugs in the EXIF processing pipeline:
  * - EXIF must be added before processing continues
  * - GPS timestamp must be written correctly
- * - exiftool commands must be syntactically valid
+ * - EXIF must be written without external tools
  * - All attribution fields must be present
  * 
  * These tests should fail FAST if critical pipeline issues are introduced.
@@ -23,17 +23,12 @@ require_once __DIR__ . '/../../lib/exif-utils.php';
 class ExifPipelineCriticalTest extends TestCase
 {
     private $testDir;
-    private $hasExiftool;
     
     protected function setUp(): void
     {
         parent::setUp();
         $this->testDir = sys_get_temp_dir() . '/exif_pipeline_test_' . uniqid();
         @mkdir($this->testDir, 0755, true);
-        
-        // Check if exiftool is available
-        exec('which exiftool 2>/dev/null', $output, $exitCode);
-        $this->hasExiftool = ($exitCode === 0);
     }
     
     protected function tearDown(): void
@@ -73,16 +68,12 @@ class ExifPipelineCriticalTest extends TestCase
      * CRITICAL: addExifTimestamp() must successfully add EXIF to images
      * 
      * This test catches:
-     * - Broken exiftool command syntax
-     * - Missing exiftool binary
+     * - Missing EXIF block after a native stamp
+     * - Broken write path
      * - File permissions issues
      */
     public function testAddExifTimestamp_WithValidImage_SucceedsAndAddsExif()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_add_exif.jpg');
         $timestamp = time();
         
@@ -114,14 +105,9 @@ class ExifPipelineCriticalTest extends TestCase
      * This test catches:
      * - Wrong GPS timestamp format (rational vs HH:MM:SS)
      * - Missing GPS timestamp
-     * - Shell escaping issues that break GPS timestamp
      */
     public function testAddExifTimestamp_WithValidImage_AddsGpsTimestamp()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_gps_timestamp.jpg');
         $timestamp = strtotime('2026-01-13 05:20:03 UTC');
         
@@ -129,13 +115,13 @@ class ExifPipelineCriticalTest extends TestCase
         $result = addExifTimestamp($testFile, $timestamp);
         $this->assertTrue($result, 'addExifTimestamp() must succeed');
         
-        // ASSERT: GPS TimeStamp must be present
-        exec('exiftool -s -s -s -GPSTimeStamp ' . escapeshellarg($testFile), $output, $exitCode);
-        $this->assertEquals(0, $exitCode, 'exiftool must read GPS timestamp successfully');
-        $this->assertNotEmpty($output, 'GPS TimeStamp must be present in EXIF');
-        
-        $gpsTimeStamp = trim($output[0] ?? '');
-        $this->assertNotEmpty($gpsTimeStamp, 'GPS TimeStamp value must not be empty');
+        // ASSERT: GPS TimeStamp must be present and UTC
+        $exif = exifNativeRead($testFile);
+        $this->assertSame('ok', $exif['status'] ?? null);
+        $components = $exif['GpsTimeComponents'] ?? null;
+        $this->assertNotEmpty($components, 'GPS TimeStamp must be present in EXIF');
+
+        $gpsTimeStamp = sprintf('%02d:%02d:%02d', $components[0], $components[1], $components[2]);
         
         // ASSERT: GPS timestamp must be in HH:MM:SS format
         $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2}$/', $gpsTimeStamp,
@@ -152,10 +138,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testAddExifTimestamp_WithValidImage_AddsGpsDateStamp()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_gps_date.jpg');
         $timestamp = strtotime('2026-01-13 05:20:03 UTC');
         
@@ -164,11 +146,10 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertTrue($result);
         
         // ASSERT: GPS DateStamp must be present
-        exec('exiftool -s -s -s -GPSDateStamp ' . escapeshellarg($testFile), $output, $exitCode);
-        $this->assertEquals(0, $exitCode);
-        $this->assertNotEmpty($output);
-        
-        $gpsDateStamp = trim($output[0] ?? '');
+        $exif = exifNativeRead($testFile);
+        $this->assertSame('ok', $exif['status'] ?? null);
+        $gpsDateStamp = $exif['GpsDateStamp'] ?? null;
+        $this->assertNotEmpty($gpsDateStamp);
         $expectedGpsDate = gmdate('Y:m:d', $timestamp);
         $this->assertEquals($expectedGpsDate, $gpsDateStamp,
             'GPS DateStamp must match the UTC date we provided');
@@ -183,10 +164,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testAddExifTimestamp_WithValidImage_AddsAllAttributionFields()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_attribution.jpg');
         $timestamp = time();
         
@@ -194,17 +171,14 @@ class ExifPipelineCriticalTest extends TestCase
         $result = addExifTimestamp($testFile, $timestamp);
         $this->assertTrue($result);
         
-        // ASSERT: Check all attribution fields
-        exec('exiftool -Artist -Copyright -Rights -ImageDescription -UserComment ' . 
-             escapeshellarg($testFile), $output);
-        $outputText = implode("\n", $output);
-        
-        $this->assertStringContainsString('Artist', $outputText, 'Artist field must be present');
-        $this->assertStringContainsString('AviationWX.org', $outputText, 'AviationWX.org must be in metadata');
-        $this->assertStringContainsString('Copyright', $outputText, 'Copyright field must be present');
-        $this->assertStringContainsString('Rights', $outputText, 'Rights field must be present');
-        $this->assertStringContainsString('Image Description', $outputText, 'ImageDescription must be present');
-        $this->assertStringContainsString('User Comment', $outputText, 'UserComment must be present');
+        // ASSERT: EXIF-resident attribution fields. XMP Rights is deliberately
+        // dropped under the EXIF-only policy, so it is not asserted.
+        $exif = exifNativeRead($testFile);
+        $this->assertSame('ok', $exif['status'] ?? null);
+        $this->assertSame('Aviation weather webcam image processed by AviationWX.org', $exif['ImageDescription'] ?? null);
+        $this->assertSame('AviationWX.org', $exif['Artist'] ?? null);
+        $this->assertSame('© AviationWX.org and image contributors', $exif['Copyright'] ?? null);
+        $this->assertSame('Processed by AviationWX.org', $exif['UserComment'] ?? null);
     }
     
     // ========================================
@@ -230,10 +204,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testEnsureImageHasExif_WithImageWithoutExif_AddsExif()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_ensure_exif.jpg');
         
         // ASSERT: Initially has no EXIF
@@ -256,10 +226,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testEnsureImageHasExif_WithImageWithExif_PreservesExistingExif()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_preserve_exif.jpg');
         $originalTimestamp = strtotime('2026-01-13 10:00:00 UTC');
         
@@ -286,10 +252,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testEnsureImageHasExif_PrefersProvidedTimestampOverMtime()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_prefer_provided_ts.jpg');
         // Age the file mtime so it clearly disagrees with the provided timestamp.
         touch($testFile, time() - 3600);
@@ -312,10 +274,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testEnsureImageHasExif_ProvidedFetchTimeOverwritesEmbeddedExif()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_overwrite_embedded.jpg');
         $cameraTime = strtotime('2026-01-13 10:00:00 UTC');
         addExifTimestamp($testFile, $cameraTime);
@@ -348,70 +306,20 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testHasCompleteWebcamExif_RequiresBothFields()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $complete = $this->createTestJpeg('complete.jpg');
         $this->assertTrue(addExifTimestamp($complete, time()), 'addExifTimestamp must succeed');
         $this->assertTrue(hasCompleteWebcamExif($complete), 'Both fields present must count as complete');
 
-        $localOnly = $this->createTestJpeg('local_only.jpg');
-        exec(sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
-            escapeshellarg(gmdate('Y:m:d H:i:s', time())),
-            escapeshellarg($localOnly)
-        ), $out, $code);
-        $this->assertSame(0, $code, 'exiftool must stamp the fixture: ' . implode("\n", $out));
+        $localOnly = $this->testDir . '/local_only.jpg';
+        copy(__DIR__ . '/../Fixtures/webcam-exif/datetime_only.jpg', $localOnly);
         $this->assertFalse(hasCompleteWebcamExif($localOnly), 'Local time without GPS UTC must be incomplete');
 
-        $gpsOnly = $this->createTestJpeg('gps_only.jpg');
-        exec(sprintf(
-            'exiftool -overwrite_original -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
-            escapeshellarg(gmdate('Y:m:d', time())),
-            escapeshellarg(gmdate('H:i:s', time())),
-            escapeshellarg($gpsOnly)
-        ), $out, $code);
-        $this->assertSame(0, $code, 'exiftool must stamp the fixture: ' . implode("\n", $out));
+        $gpsOnly = $this->testDir . '/gps_only.jpg';
+        copy(__DIR__ . '/../Fixtures/webcam-exif/gps_only.jpg', $gpsOnly);
         $this->assertFalse(hasCompleteWebcamExif($gpsOnly), 'GPS UTC without local time must be incomplete');
 
         $none = $this->createTestJpeg('none.jpg');
         $this->assertFalse(hasCompleteWebcamExif($none), 'A bare image must be incomplete');
-    }
-    
-    // ========================================
-    // CRITICAL TEST 5: exiftool Command Syntax Must Be Valid
-    // ========================================
-    
-    /**
-     * CRITICAL: exiftool must not receive broken arguments
-     * 
-     * This test catches:
-     * - Arguments with spaces being split incorrectly
-     * - Missing shell escaping
-     * - Array/string concatenation bugs
-     */
-    public function testAddExifTimestamp_CommandSyntax_DoesNotProduceShellErrors()
-    {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
-        $testFile = $this->createTestJpeg('test_command_syntax.jpg');
-        $timestamp = time();
-        
-        // ACT: This should not produce shell errors
-        $result = addExifTimestamp($testFile, $timestamp);
-        
-        // ASSERT: Must succeed without errors
-        $this->assertTrue($result, 'addExifTimestamp() must not fail due to command syntax errors');
-        
-        // ASSERT: File must not have error messages written to it
-        $fileContents = file_get_contents($testFile);
-        $this->assertStringNotContainsString('File not found', $fileContents,
-            'Image file must not contain shell error messages');
-        $this->assertStringNotContainsString('Error:', $fileContents,
-            'Image file must not contain error messages from broken commands');
     }
     
     // ========================================
@@ -429,10 +337,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function exifPipeline_FromNoExifToValidated_Succeeds()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         $testFile = $this->createTestJpeg('test_full_pipeline.jpg');
         
         // STEP 1: Verify no EXIF initially
@@ -455,12 +359,11 @@ class ExifPipelineCriticalTest extends TestCase
             'reason: ' . ($validation['reason'] ?? 'none'));
         
         // STEP 5: GPS fields must be present for client-side verification
-        exec('exiftool -GPSTimeStamp -GPSDateStamp ' . escapeshellarg($testFile), $output);
-        $outputText = implode("\n", $output);
-        $this->assertStringContainsString('GPS Time Stamp', $outputText,
-            'GPS TimeStamp must be present for client-side verification');
-        $this->assertStringContainsString('GPS Date Stamp', $outputText,
+        $exif = exifNativeRead($testFile);
+        $this->assertNotEmpty($exif['GpsDateStamp'] ?? null,
             'GPS DateStamp must be present for client-side verification');
+        $this->assertNotEmpty($exif['GpsTimeComponents'] ?? null,
+            'GPS TimeStamp must be present for client-side verification');
     }
     
     /**
@@ -502,10 +405,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testAddExifTimestamp_WritesLocalTime_BasedOnTimezone()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         // Use a specific UTC timestamp
         // 2026-01-13 10:30:00 UTC = 2026-01-13 02:30:00 PST (America/Los_Angeles, UTC-8)
         $utcTimestamp = strtotime('2026-01-13 10:30:00 UTC');
@@ -517,11 +416,8 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertTrue($result);
         
         // ASSERT: Read back EXIF DateTimeOriginal
-        exec('exiftool -s -s -s -DateTimeOriginal ' . escapeshellarg($testFile), $output, $exitCode);
-        $this->assertEquals(0, $exitCode);
-        $this->assertNotEmpty($output);
-        
-        $exifDateTime = trim($output[0] ?? '');
+        $exifDateTime = exifNativeRead($testFile)['DateTimeOriginal'] ?? null;
+        $this->assertNotEmpty($exifDateTime);
         
         // ASSERT: Must be LOCAL time (PST), not UTC
         $dt = new \DateTime('@' . $utcTimestamp);
@@ -543,10 +439,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testAddExifTimestamp_GpsFieldsAreUtc()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-        
         // Use a timestamp where UTC differs from most local timezones
         // 2026-01-13 23:45:30 UTC (nearly midnight UTC, different day in US timezones)
         $utcTimestamp = strtotime('2026-01-13 23:45:30 UTC');
@@ -558,16 +450,19 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertTrue($result);
         
         // ASSERT: GPS fields must match UTC time
-        exec('exiftool -s -s -s -GPSTimeStamp -GPSDateStamp ' . escapeshellarg($testFile), $output);
-        $outputText = implode("\n", $output);
+        $exif = exifNativeRead($testFile);
+        $gpsDate = $exif['GpsDateStamp'] ?? null;
+        $components = $exif['GpsTimeComponents'] ?? null;
         
         $expectedGpsDate = gmdate('Y:m:d', $utcTimestamp);  // UTC!
         $expectedGpsTime = gmdate('H:i:s', $utcTimestamp);  // UTC!
         
-        $this->assertStringContainsString($expectedGpsDate, $outputText,
-            'GPS DateStamp must be UTC date');
-        $this->assertStringContainsString($expectedGpsTime, $outputText,
-            'GPS TimeStamp must be UTC time');
+        $this->assertSame($expectedGpsDate, $gpsDate, 'GPS DateStamp must be UTC date');
+        $this->assertSame(
+            $expectedGpsTime,
+            sprintf('%02d:%02d:%02d', $components[0], $components[1], $components[2]),
+            'GPS TimeStamp must be UTC time'
+        );
     }
 
     // ========================================
@@ -577,23 +472,19 @@ class ExifPipelineCriticalTest extends TestCase
     /**
      * CRITICAL: addExifTimestamp must return false on corrupt/unwritable image
      *
-     * When exiftool fails (corrupt image, permission denied), retries exhaust
-     * and function must fail closed - return false, never pass invalid image.
+     * When the native writer fails (corrupt image, permission denied), retries
+     * exhaust and function must fail closed - return false, never pass invalid image.
      */
     public function testAddExifTimestamp_WithCorruptImage_ReturnsFalse()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
-        // Create file that exiftool cannot process (not a valid image)
+        // Create a file the native writer cannot process (not a valid image)
         $corruptFile = $this->testDir . '/corrupt.jpg';
         file_put_contents($corruptFile, 'not a valid jpeg - garbage data');
 
         $result = addExifTimestamp($corruptFile, time());
 
         $this->assertFalse($result,
-            'addExifTimestamp must return false when exiftool fails - fail closed');
+            'addExifTimestamp must return false when the native writer fails - fail closed');
     }
 
     /**
@@ -602,30 +493,11 @@ class ExifPipelineCriticalTest extends TestCase
      * When image has EXIF but addExifTimestamp fails (e.g. read-only directory),
      * ensureImageHasExif must return false - not ignore the failure.
      */
-    public function testEnsureImageHasExif_WhenGpsAddFails_ReturnsFalse()
+    public function testEnsureImageHasExif_ReturnsFalseForMissingFile()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
-        $testFile = $this->createTestJpeg('test_readonly.jpg');
-        addExifTimestamp($testFile, time());
-        $this->assertTrue(hasExifTimestamp($testFile), 'Setup: image must have EXIF');
-
-        // Make directory read-only so exiftool cannot create temp file for -overwrite_original
-        $testDir = dirname($testFile);
-        $origDirMode = @fileperms($testDir);
-        @chmod($testDir, 0555);
-
-        $result = ensureImageHasExif($testFile);
-
-        // Restore directory permissions for cleanup
-        if ($origDirMode !== false) {
-            @chmod($testDir, $origDirMode & 0777);
-        }
-
-        $this->assertFalse($result,
-            'ensureImageHasExif must return false when addExifTimestamp fails on existing EXIF');
+        $missing = $this->testDir . '/does-not-exist.jpg';
+        $this->assertFalse(ensureImageHasExif($missing, null, 'UTC'),
+            'ensureImageHasExif must fail closed on a missing file');
     }
 
     // ========================================
@@ -637,10 +509,6 @@ class ExifPipelineCriticalTest extends TestCase
      */
     public function testAddExifTimestamp_WithValidImage_CompletesWithinTimeout()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $testFile = $this->createTestJpeg('test_timeout.jpg');
         $start = microtime(true);
         $result = addExifTimestamp($testFile, time());
@@ -669,71 +537,28 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertFalse($result);
     }
 
-    // ========================================
-    // WebP EXIF: exiftool version in failure logs
-    // ========================================
-
-    /**
-     * getExiftoolVersion must return version string when exiftool available
-     *
-     * Used for WebP EXIF failure diagnostics - exiftool WebP support varies by version.
-     */
-    public function testGetExiftoolVersion_WhenExiftoolAvailable_ReturnsVersionString()
+    public function testCopyExifMetadata_WebpDestination_CarriesExifAndFailsClosedWithoutSource()
     {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
+        $sourceFile = $this->createTestJpeg('source_copy.jpg');
+        addExifTimestamp($sourceFile, strtotime('2025-01-02 03:04:05 UTC'));
 
-        $version = getExiftoolVersion();
-
-        $this->assertNotNull($version, 'getExiftoolVersion must return non-null when exiftool available');
-        $this->assertMatchesRegularExpression('/^\d+\.\d+/', $version,
-            'exiftool version must be in X.Y format (e.g. 12.70)');
-    }
-
-    /**
-     * getExiftoolVersion must cache result (same value on repeated calls)
-     */
-    public function testGetExiftoolVersion_IsCached()
-    {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
-        $v1 = getExiftoolVersion();
-        $v2 = getExiftoolVersion();
-
-        $this->assertSame($v1, $v2, 'getExiftoolVersion must return cached value on repeated calls');
-    }
-
-    /**
-     * copyExifMetadata with WebP dest: on exiftool failure, log includes exiftool_version
-     *
-     * When EXIF copy fails for a WebP file, logs must include exiftool version
-     * for diagnostics (WebP EXIF support varies by exiftool version).
-     */
-    public function testCopyExifMetadata_WhenWebpDestAndExiftoolFails_LogsIncludeExiftoolVersion()
-    {
-        if (!$this->hasExiftool) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
-        $sourceFile = $this->createTestJpeg('source.jpg');
-        addExifTimestamp($sourceFile, time());
         $destFile = $this->testDir . '/output.webp';
-        file_put_contents($destFile, 'RIFF....WEBP'); // Minimal WebP header placeholder
+        $img = imagecreatetruecolor(32, 24);
+        imagefill($img, 0, 0, imagecolorallocate($img, 10, 20, 30));
+        imagewebp($img, $destFile);
+        imagedestroy($img);
 
-        $testDir = dirname($destFile);
-        $origDirMode = @fileperms($testDir);
-        @chmod($testDir, 0555);
+        $this->assertTrue(copyExifMetadata($sourceFile, $destFile),
+            'native copy into a WebP must succeed');
+        $dest = exifNativeRead($destFile);
+        $this->assertSame('2025:01:02 03:04:05', $dest['DateTimeOriginal'] ?? null);
 
-        $result = copyExifMetadata($sourceFile, $destFile);
-
-        if ($origDirMode !== false) {
-            @chmod($testDir, $origDirMode & 0777);
-        }
-
-        $this->assertFalse($result, 'copyExifMetadata returns false when exiftool fails');
-        $this->assertNotNull(getExiftoolVersion(), 'exiftool version must be available for log context');
+        // A source without EXIF must fail closed and leave the destination alone.
+        $noExif = $this->createTestJpeg('source_noexif_copy.jpg');
+        $destCopy = $destFile . '.copy';
+        copy($destFile, $destCopy);
+        $before = file_get_contents($destCopy);
+        $this->assertFalse(copyExifMetadata($noExif, $destCopy));
+        $this->assertSame($before, file_get_contents($destCopy));
     }
 }

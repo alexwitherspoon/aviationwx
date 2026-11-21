@@ -1367,7 +1367,7 @@ The webcam processing pipeline uses three main components:
     - PNG: canonical IEND chunk (12-byte trailer with CRC) on source bytes before any PNG-to-JPEG conversion
     - WebP: RIFF declared size matches file size
   - Incomplete uploads are a definitive reject: quarantine copy, consume inbox file (a finished write missing a trailer does not grow one later)
-  - Completeness is re-checked after exiftool rewrite
+  - Completeness is re-verified after EXIF is written; a frame whose trailer is damaged is rejected
 - **Decode-time Truncation Pads** (Fail-Closed):
   - Source format comes from the caller or magic-byte detection; unresolved format is rejected
   - JPEG: contiguous GD mid-grey (~128) fill from the bottom (minimum one row)
@@ -1488,8 +1488,8 @@ The webcam processing pipeline uses three main components:
 - Prevents corruption from concurrent writes
 
 **EXIF Metadata Preservation**:
-- Original images have EXIF metadata (DateTimeOriginal, Description, Rights, etc.)
-- When generating variants and formats, EXIF is copied using `exiftool -TagsFromFile`
+- Original images have EXIF metadata (DateTimeOriginal, GPS UTC, attribution)
+- When generating variants and formats, EXIF is copied in-process by the native writer
 - Ensures all cached files (variants, WebP) have correct capture timestamps
 - Critical for accurate "Last Updated" display on frontend
 - Function: `copyExifMetadata($source, $dest)` in `lib/exif-utils.php`
@@ -1507,19 +1507,18 @@ The webcam processing pipeline uses three main components:
 - System generates JPEG and WebP formats from source images (if enabled in config)
 - Format generation is globally configurable via `webcam_generate_webp` flag
 - Default: WebP disabled (only JPEG generated) to control resource usage
-- All generation runs synchronously in parallel with `nice -n 10` priority (low priority to avoid interfering with normal operations)
+- All generation runs synchronously in parallel, ffmpeg invoked at normal priority
 - Mtime automatically synced to match source image's capture time (EXIF or filemtime)
 - EXIF metadata is copied from source to all generated formats using `copyExifMetadata()`
 - Formats generated in background, may not be immediately available
 - Generation jobs are logged (start and result) for monitoring and troubleshooting
 
 **JPEG to WebP**:
-- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -q:v 90 -compression_level 6 output.webp`
+- Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -q:v 90 -compression_level 6 output.webp`
 - Quality: 90 (0-100 scale, higher = better quality) - configurable via `config.webcam_webp_quality`
 - Compression: Level 6 (0-6 scale)
-- Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
-- Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
-- EXIF metadata copied from source JPEG using `exiftool -TagsFromFile`
+- Mtime sync: in-process, set to the capture time before the staging file is renamed into place
+- EXIF metadata copied in-process by the native writer
 - Only runs if `webcam_generate_webp` is enabled in config
 
 **Variant Generation**:

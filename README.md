@@ -207,7 +207,6 @@ AviationWX supports multiple weather data sources. See the [Configuration Guide]
 | Tool | Purpose | License |
 |------|---------|---------|
 | [PHP](https://www.php.net) 8.4 + Apache | Runtime (php:8.4-apache base image) | PHP License |
-| [ExifTool](https://exiftool.org) (libimage-exiftool-perl) | EXIF metadata for webcam images | Perl Artistic / GPL |
 | [FFmpeg](https://ffmpeg.org) | Image/video processing for webcam formats | GPL/LGPL |
 | [tini](https://github.com/krallin/tini) | Init process for container | MIT |
 | [Composer](https://getcomposer.org) | PHP dependency manager | MIT |
