@@ -1154,11 +1154,11 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
         // Normalize EXIF timestamp
         $timezone = $this->getTimezone();
-        if (!normalizeExifToUtc($uploadFile, $this->airportId, $this->camIndex, $timezone)) {
-            // A transient I/O failure (mtime or momentary read error) must keep
-            // the upload for retry; only a definitive bad timestamp consumes it.
-            if (@filemtime($uploadFile) === false
-                || (readExifTimestamp($uploadFile)['status'] ?? '') === 'error') {
+        $normalizeTransient = false;
+        if (!normalizeExifToUtc($uploadFile, $this->airportId, $this->camIndex, $timezone, $normalizeTransient)) {
+            // A retryable read or write failure must keep the upload for a
+            // later pass; a definitive bad timestamp consumes it.
+            if ($normalizeTransient) {
                 return AcquisitionResult::skip('exif_read_failed', 'push');
             }
             require_once __DIR__ . '/webcam-image-metrics.php';
@@ -1964,13 +1964,11 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         // Normalize EXIF timestamp to UTC
-        if (!normalizeExifToUtc($filePath, $this->airportId, $this->camIndex, $timezone)) {
-            // normalize returns false both for a transient I/O problem (mtime
-            // unreadable, momentary read error) and for a definitive bad
-            // timestamp. Only the definitive case consumes the upload; a
-            // transient one keeps the file for a later pass.
-            if (@filemtime($filePath) === false
-                || (readExifTimestamp($filePath)['status'] ?? '') === 'error') {
+        $normalizeTransient = false;
+        if (!normalizeExifToUtc($filePath, $this->airportId, $this->camIndex, $timezone, $normalizeTransient)) {
+            // A retryable read or write failure must keep the upload for a
+            // later pass; a definitive bad timestamp consumes it.
+            if ($normalizeTransient) {
                 return AcquisitionResult::skip('exif_read_failed', 'push');
             }
             require_once __DIR__ . '/webcam-image-metrics.php';

@@ -290,7 +290,7 @@ function ensureExifTimestamp(string $filePath, string $timezone = 'UTC'): bool {
  * @param string $timezone Airport timezone (for adding GPS fields with correct UTC conversion)
  * @return bool True if image timestamp is reliable and GPS fields added
  */
-function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, string $timezone = 'UTC'): bool {
+function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, string $timezone = 'UTC', bool &$transient = false): bool {
     $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
 
     // Get server file modification time (UTC, set on upload completion)
@@ -302,6 +302,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
             'cam' => $camIndex
         ]);
         logWebcamRejection($airportId, $camIndex, 'system_error', 'Cannot read file mtime', $filePath);
+        $transient = true;
         return false;
     }
     
@@ -311,6 +312,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
     // Case A: No EXIF or unparseable → REJECT
     // If read failed (transient), skip this image for retry; don't consume it
     if ($exifRead['status'] === 'error') {
+        $transient = true;
         return false; // Return false to allow retry, don't consume the upload
     }
     if ($exifRead['status'] === 'absent' || $exifRead['timestamp'] === 0) {
@@ -361,6 +363,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
         if (!addExifTimestamp($filePath, $exifTimestamp, $timezone, false, $context)) {
             logWebcamRejection($airportId, $camIndex, 'exif_rewrite_failed',
                 'failed to add GPS fields', $filePath);
+            $transient = true;
             return false;
         }
         return true;
@@ -406,6 +409,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
                 ]);
                 logWebcamRejection($airportId, $camIndex, 'exif_rewrite_failed', 
                     'failed to update timestamp', $filePath);
+                $transient = true;
                 return false;
             }
             
