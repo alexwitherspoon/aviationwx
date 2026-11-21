@@ -64,6 +64,7 @@ $lastCloudflareAnalyticsFetch = 0;
 $lastStatusPageCachesFetch = 0;
 $lastOperationsSnapshotBuild = 0;
 $lastMetarBulkRefresh = 0;
+$lastMadisHfmetarRefresh = 0;
 $lastNwsPointsRefresh = 0;
 $lastFaaTfrWfsRefresh = 0;
 $lastNmsFdcAirspaceRefresh = 0;
@@ -252,6 +253,19 @@ $workRegistry->registerEnqueueTick('metar_bulk', function (int $now) use (&$last
             reapZombies();
         }
         $lastMetarBulkRefresh = $now;
+    }
+});
+
+$workRegistry->registerEnqueueTick('madis_hfmetar_bulk', function (int $now) use (&$lastMadisHfmetarRefresh): void {
+    // MADIS HFMETAR hourly netCDF ingest runs in a background worker (see refresh-madis-hfmetar.php).
+    if (($now - $lastMadisHfmetarRefresh) >= MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS) {
+        $madisScript = __DIR__ . '/refresh-madis-hfmetar.php';
+        if (file_exists($madisScript)) {
+            $phpBin = PHP_BINARY !== '' && PHP_BINARY !== false ? PHP_BINARY : 'php';
+            exec(escapeshellarg($phpBin) . ' ' . escapeshellarg($madisScript) . ' > /dev/null 2>&1 &');
+            reapZombies();
+        }
+        $lastMadisHfmetarRefresh = $now;
     }
 });
 

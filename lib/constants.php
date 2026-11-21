@@ -900,6 +900,17 @@ if (!defined('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS')) {
     define('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS', 120);
 }
 
+// MADIS HFMETAR bulk: scheduler refresh cadence, slice max age before HTTP fallback, download timeout
+if (!defined('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS')) {
+    define('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS', 300);
+}
+if (!defined('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS')) {
+    define('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS', 900);
+}
+if (!defined('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS')) {
+    define('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS', 120);
+}
+
 // Upstream self-throttle (per-credential token bucket under cache/upstream-limits/)
 if (!defined('UPSTREAM_RATE_LIMIT_DEFAULT_RPM')) {
     define('UPSTREAM_RATE_LIMIT_DEFAULT_RPM', 60);
