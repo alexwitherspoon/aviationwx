@@ -630,12 +630,14 @@ function exifNativeSpliceWebp(string $bytes, string $exifPayload): ?string
         $exifPayload = substr($exifPayload, 6);
     }
 
-    $pos = 12;
+    // Remove the existing EXIF chunk first, then rebuild: ensure a VP8X chunk
+    // with the EXIF flag leads, and append the new EXIF chunk after the image.
+    // Rebuilding from the EXIF-stripped base keeps all offsets valid no matter
+    // where the original EXIF chunk sat.
     $length = strlen($bytes);
-    $revPos = -1;                    // EXIF chunk to replace
+    $revStart = -1;
     $revEnd = -1;
-    $vp8xFlags = -1;                 // offset of the VP8X feature-flag byte
-    $imagePos = -1;                  // first VP8 or VP8L chunk
+    $pos = 12;
     while ($pos + 8 <= $length) {
         $fourcc = substr($bytes, $pos, 4);
         $chunkLen = exifNativeLeUint32($bytes, $pos + 4);
@@ -645,10 +647,32 @@ function exifNativeSpliceWebp(string $bytes, string $exifPayload): ?string
             return null;
         }
         if ($fourcc === 'EXIF') {
-            $revPos = $pos;
+            $revStart = $pos;
             $revEnd = $dataEnd + ($chunkLen % 2);
-        } elseif ($fourcc === 'VP8X') {
-            $vp8xFlags = $dataStart; // payload byte 0 is the feature flag set
+            break; // only replace the first EXIF chunk
+        }
+        $pos = $dataStart + $chunkLen + ($chunkLen % 2);
+    }
+
+    $base = $revStart >= 0
+        ? substr($bytes, 0, $revStart) . substr($bytes, $revEnd)
+        : $bytes;
+
+    // Re-scan the base for VP8X and the first image chunk; offsets are fresh
+    // after the removal above.
+    $vp8xFlags = -1;
+    $imagePos = -1;
+    $blen = strlen($base);
+    $pos = 12;
+    while ($pos + 8 <= $blen) {
+        $fourcc = substr($base, $pos, 4);
+        $chunkLen = exifNativeLeUint32($base, $pos + 4);
+        $dataStart = $pos + 8;
+        if ($dataStart + $chunkLen > $blen) {
+            return null;
+        }
+        if ($fourcc === 'VP8X') {
+            $vp8xFlags = $dataStart;
         } elseif (($fourcc === 'VP8 ' || $fourcc === 'VP8L') && $imagePos < 0) {
             $imagePos = $pos;
         }
@@ -656,34 +680,26 @@ function exifNativeSpliceWebp(string $bytes, string $exifPayload): ?string
     }
 
     // The WebP container only allows EXIF in the extended format: a VP8X chunk
-    // must carry the EXIF flag and appear before the metadata. Flag it on the
-    // existing chunk, or add one ahead of the image chunk when there is none.
+    // must carry the EXIF flag and appear before the metadata.
     if ($vp8xFlags >= 0) {
-        $bytes[$vp8xFlags] = chr(ord($bytes[$vp8xFlags]) | 0x08);
+        $base[$vp8xFlags] = chr(ord($base[$vp8xFlags]) | 0x08);
     } elseif ($imagePos >= 0) {
-        $dims = exifNativeContainerDimensions($bytes);
+        $dims = exifNativeContainerDimensions($base);
         $w = max(0, ($dims['width'] ?? 1) - 1);
         $h = max(0, ($dims['height'] ?? 1) - 1);
         $vp8x = 'VP8X' . exifNativeLe32(10)
             . chr(0x08) . "\x00\x00\x00"
             . chr($w & 0xFF) . chr(($w >> 8) & 0xFF) . chr(($w >> 16) & 0xFF)
             . chr($h & 0xFF) . chr(($h >> 8) & 0xFF) . chr(($h >> 16) & 0xFF);
-        $bytes = substr($bytes, 0, $imagePos) . $vp8x . substr($bytes, $imagePos);
+        $base = substr($base, 0, $imagePos) . $vp8x . substr($base, $imagePos);
     }
 
-    if ($revPos >= 0) {
-        // Replace the existing EXIF chunk in place.
-        $out = substr($bytes, 0, $revPos)
-            . exifNativeWebpExifChunk($exifPayload)
-            . substr($bytes, $revEnd);
-    } elseif ($imagePos >= 0) {
-        // Append the EXIF chunk after the image data, like exiftool writes it.
-        $out = $bytes . exifNativeWebpExifChunk($exifPayload);
-    } else {
+    if ($imagePos < 0) {
         return null; // No image chunk; refuse to restructure blindly.
     }
 
-    return exifNativeWebpFixRiffSize($out);
+    // Append the EXIF chunk after the image data, matching the reference layout.
+    return exifNativeWebpFixRiffSize($base . exifNativeWebpExifChunk($exifPayload));
 }
 
 /**

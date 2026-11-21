@@ -225,4 +225,32 @@ class ExifNativeConformanceTest extends TestCase
         $groups = $this->parseTiff($this->webpTiff($bytes));
         $this->assertArrayHasKey(0x9003, $groups['exif'], 'the stamped capture time must parse back');
     }
+
+    public function testSpliceWebp_ExistingExifWithoutVp8x_Survives(): void
+    {
+        // Build a third-party-layout webp: image chunk then EXIF, no VP8X.
+        $src = (string) file_get_contents($this->fixtureDir . '/webp_exif.webp');
+        $vp8xLen = 8 + $this->u32($src, 16) + ($this->u32($src, 16) % 2);
+        $noVp8x = substr($src, 0, 12) . substr($src, 12 + $vp8xLen);
+        $riffSize = strlen($noVp8x) - 8;
+        $noVp8x = substr($noVp8x, 0, 4) . pack('V', $riffSize) . substr($noVp8x, 8);
+        $this->assertNotSame('VP8X', substr($noVp8x, 12, 4), 'fixture must have no VP8X');
+        $this->assertNotFalse(strpos($noVp8x, 'EXIF'), 'fixture must carry EXIF');
+
+        $path = $this->tmpDir . '/legacy.webp';
+        file_put_contents($path, $noVp8x);
+        $this->assertTrue(exifNativeStamp($path, strtotime('2026-11-19 12:00:00 UTC'), 'UTC'));
+
+        $result = exifNativeRead($path);
+        $this->assertSame('ok', $result['status'] ?? null, 'a valid legacy webp must survive a stamp');
+        $this->assertSame('2026:11:19 12:00:00', $result['DateTimeOriginal'] ?? null);
+
+        $bytes = (string) file_get_contents($path);
+        $this->assertSame('VP8X', substr($bytes, 12, 4), 'the stamp must add the extended container');
+        $this->assertNotSame(0, ord($bytes[20]) & 0x08, 'the EXIF-present flag must be set');
+        $exifPos = strpos($bytes, 'EXIF');
+        $vp8Pos = strpos($bytes, 'VP8 ');
+        $this->assertNotFalse($exifPos);
+        $this->assertGreaterThan($vp8Pos, $exifPos, 'EXIF must follow the image chunk');
+    }
 }
