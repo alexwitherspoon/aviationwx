@@ -126,6 +126,31 @@ class WeatherHistoryTest extends TestCase
         
         $this->assertEquals(1, $history['observation_count'], 'Should only have one observation');
     }
+
+    /**
+     * A fresher field observation time creates a new ring entry even when the
+     * primary source observation time is older (5-minute sources like MADIS
+     * HFMETAR must drive the ring past an hourly primary source).
+     */
+    public function testAppendWeatherHistory_FresherFieldObsTime_CreatesNewEntry(): void
+    {
+        $older = time() - 600;
+        $fresher = time();
+        $weather = [
+            'obs_time_primary' => $older,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => [
+                'wind_speed' => $fresher,
+                'temperature' => $older,
+            ],
+        ];
+
+        appendWeatherHistory($this->testAirportId, $weather);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count']);
+        $this->assertSame($fresher, $history['observations'][0]['obs_time']);
+    }
     
     /**
      * Different observation times should add new entries
