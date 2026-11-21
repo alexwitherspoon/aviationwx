@@ -102,4 +102,22 @@ class MadisConfigValidationTest extends TestCase
             getWeatherSourceDisplayName('madis_hfmetar', 'kspb')
         );
     }
+
+    /**
+     * Co-located Federal ASOS defaults to the faa operator like METAR
+     */
+    public function testMadisSource_DefaultOperator_IsFaa(): void
+    {
+        require_once __DIR__ . '/../../lib/operator.php';
+        $this->assertSame('faa', defaultOperatorForWeatherSourceType('madis_hfmetar'));
+    }
+
+    /**
+     * Rate-limit identity uses station_id so airports share no per-source bucket
+     */
+    public function testMadisSource_RateLimitIdentity_IncludesStationId(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+        $this->assertContains('station_id', upstreamRateLimitIdentityFieldNames('madis_hfmetar'));
+    }
 }

@@ -614,12 +614,14 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
 | `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
+| `madis_hfmetar` | NOAA MADIS HFMETAR (Federal ASOS, 5-minute marks; co-located only) | ~5 minutes (marks) |
 
 **Operator:** Optional `operator` on each `weather_sources[]` row is a lowercase slug. Public API `GET /v1/airports?operator=` matches airports.json (configured weathercams and weather sources), not the live fused observation. Optional `has_webcams=true` keeps airports that have weathercams configured; it is not sliced by operator. Optional `has_weather=true` keeps airports that have weather sources configured; it is not sliced by operator. When `operator` is set, `webcam_count` still counts matching weathercams only. `GET /v1/weathercam/bulk` is the partner catalog: listed airports with matching weathercams, nested webcam objects, and absolute image URLs. Matching on that path is weathercams only. The origin catalog is rebuilt when airports.json changes. Omit `operator` to use the type default:
 
 | `type` | Default `operator` |
 |--------|--------------------|
 | `metar` | `faa` |
+| `madis_hfmetar` | `faa` |
 | `nws` | `nws` |
 | `swob_auto`, `swob_man` | `navcanada` |
 | `awosnet` | `awosnet` |
@@ -872,6 +874,23 @@ Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses 
 ```
 
 The `station_id` is the AWOSnet station identifier used in the subdomain (e.g., `ks40` for http://ks40.awosnet.com). Use lowercase.
+
+### MADIS HFMETAR (co-located Federal ASOS)
+
+Fetches Federal ASOS observations at 5-minute marks (12 per hour per station) from the NOAA MADIS HFMETAR dataset. Public anonymous access; no API key.
+
+```json
+"weather_sources": [
+  {
+    "type": "madis_hfmetar",
+    "station_id": "KSPB"
+  }
+]
+```
+
+The `station_id` must equal the airport's `icao` (co-located ASOS only, operator policy). Airports without an `icao` cannot use this source. MADIS is never configured as a supplemental wind source for a nearby station; use it only when the ASOS is at the field.
+
+The scheduler downloads the current UTC hour's netCDF file every `MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS` (5 minutes) and slices it per configured station under `cache/madis-hfmetar/stations/`. Each 5-minute mark reaches the public feed roughly 10-25 minutes after observation, so expect the source to refresh faster than hourly METAR but not at true 5-minute latency.
 
 ### Nav Canada Weather (Canadian Airports)
 

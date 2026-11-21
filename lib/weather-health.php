@@ -463,7 +463,7 @@ function weatherHealthComputeSourceStatus(array $data): array
     $sources = [];
     $oneHourAgo = gmdate('Y-m-d-H', time() - 3600);
 
-    $sourceTypes = ['tempest', 'ambient', 'metar', 'synopticdata', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'awosnet'];
+    $sourceTypes = ['tempest', 'ambient', 'metar', 'synopticdata', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'awosnet', 'madis_hfmetar'];
 
     foreach ($sourceTypes as $sourceType) {
         $attempts = 0;
