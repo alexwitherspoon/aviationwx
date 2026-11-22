@@ -91,6 +91,7 @@ function madisHfmetarBulkEnsureDirectories(): void
  * @param string|null $ifModifiedSince Prior Last-Modified header value, or null for an unconditional fetch
  * @param int|null $httpCode HTTP status from the response, when available
  * @param string|null $lastModified Last-Modified header from a 200 response, when available
+ * @param array<string, string>|null $responseHeaders Lowercase upstream response headers, populated on any response
  * @return string One of MADIS_HFMETAR_DL_*
  */
 function madisHfmetarBulkDownloadCurrentHourGz(
