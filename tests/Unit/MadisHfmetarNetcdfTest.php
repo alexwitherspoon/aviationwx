@@ -136,6 +136,20 @@ class MadisHfmetarNetcdfTest extends TestCase
     }
 
     /**
+     * Every decoded row's raw message token matches the requested station,
+     * so the stationId column cannot silently route another station's data.
+     */
+    public function testMadisHfmetarDecode_Kspb_RawMessageMatchesStationId(): void
+    {
+        $observations = madisHfmetarDecodeBytes($this->fixtureBytes(), 'KSPB');
+        $this->assertNotNull($observations);
+        foreach ($observations as $obs) {
+            $token = explode(',', (string) $obs['raw'])[0];
+            $this->assertSame('KSPB', $token, 'raw message first token must match the requested station');
+        }
+    }
+
+    /**
      * Observations are sorted ascending by observation time
      */
     public function testMadisHfmetarDecode_Kspb_SortedAscending(): void
