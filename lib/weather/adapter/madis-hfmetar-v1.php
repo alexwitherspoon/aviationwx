@@ -338,11 +338,14 @@ function madisHfmetarResolveStationResponse(string $stationId, ?string $airportI
     }
 
     if ($response === false || ($httpCode !== null && $httpCode >= 400)) {
+        // A 404 on the current-hour URL is the file not being published yet,
+        // an expected state near the top of the hour, not an upstream failure.
         return [
             'body' => null,
             'outcome' => MADIS_HFMETAR_RESOLVE_HTTP_FAILED,
             'http_code' => $httpCode,
             'response_headers' => normalizeResponseHeaders($rawHeaders),
+            'not_published' => $httpCode === 404,
         ];
     }
 

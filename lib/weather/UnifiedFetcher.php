@@ -404,6 +404,17 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
                     $responses[$sourceKey] = null;
                     $madisHttpCode = isset($resolved['http_code']) ? (int) $resolved['http_code'] : null;
                     $madisHeaders = $resolved['response_headers'] ?? null;
+                    // A 404 on the current-hour URL is the file not being
+                    // published yet, expected near the top of the hour. It is
+                    // no-data, not a failure: skip the breaker and health
+                    // failure so the staleness model ages it instead.
+                    if (!empty($resolved['not_published'])) {
+                        aviationwx_log('info', 'madis_hfmetar: current-hour file not published yet', [
+                            'airport_id' => $airportId,
+                            'http_code' => $madisHttpCode,
+                        ], 'app');
+                        break;
+                    }
                     recordWeatherFailure(
                         $airportId,
                         $sourceType,

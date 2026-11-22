@@ -31,6 +31,11 @@ use AviationWX\Madis\NetcdfFormatException;
 const MADIS_HFMETAR_DL_CHANGED = 'changed';
 /** Bulk download status: the file is unchanged (304 Not Modified). */
 const MADIS_HFMETAR_DL_NOT_MODIFIED = 'not_modified';
+/**
+ * Bulk download status: the current hour's file does not exist yet (404).
+ * Expected near the top of the hour while MADIS is still publishing it.
+ */
+const MADIS_HFMETAR_DL_NOT_PUBLISHED = 'not_published';
 /** Bulk download status: the request failed. */
 const MADIS_HFMETAR_DL_FAILED = 'failed';
 
@@ -156,6 +161,13 @@ function madisHfmetarBulkDownloadCurrentHourGz(
         @unlink($destAbsolute);
 
         return MADIS_HFMETAR_DL_NOT_MODIFIED;
+    }
+    if ($code === 404) {
+        // The current hour's file is not published yet; MADIS typically serves
+        // it ~10-15 minutes into the hour. Expected, not a failure.
+        @unlink($destAbsolute);
+
+        return MADIS_HFMETAR_DL_NOT_PUBLISHED;
     }
     if ($code !== 200) {
         @unlink($destAbsolute);
@@ -582,6 +594,22 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         aviationwx_log('info', 'madis_hfmetar_bulk: file unchanged (304)', [
             'http_code' => $downloadHttpCode,
             'touched' => $touched,
+        ], 'app');
+
+        return $result;
+    }
+
+    if ($downloadStatus === MADIS_HFMETAR_DL_NOT_PUBLISHED) {
+        // The current hour's file is not up yet. Not a failure: the previous
+        // hour's slices keep serving and the staleness model ages them. Record
+        // it as a skip, like the other expected no-work outcomes.
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+        @unlink($gzTmp);
+        $result['ok'] = true;
+        $result['note'] = 'file_not_published';
+        aviationwx_log('info', 'madis_hfmetar_bulk: current-hour file not published yet', [
+            'http_code' => $downloadHttpCode,
         ], 'app');
 
         return $result;
