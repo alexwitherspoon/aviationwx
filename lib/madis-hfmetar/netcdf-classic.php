@@ -160,7 +160,7 @@ class NetcdfClassic
             throw new NetcdfFormatException("variable {$name} is a record variable, not a scalar");
         }
 
-        return $this->readOne($this->bytes, $var['begin'], $var['ncType']);
+        return self::decodeOne($this->bytes, $var['begin'], $var['ncType']);
     }
 
     /**
@@ -183,7 +183,7 @@ class NetcdfClassic
         for ($record = 0; $record < $this->numRecs; $record++) {
             $offset = $var['begin'] + ($record * $this->recordSize);
             if ($var['innerCount'] === 1) {
-                $values[] = $this->readOne($this->bytes, $offset, $var['ncType']);
+                $values[] = self::decodeOne($this->bytes, $offset, $var['ncType']);
                 continue;
             }
             if ($var['ncType'] === NC_CHAR && count($innerDims) === 1) {
@@ -192,7 +192,7 @@ class NetcdfClassic
                 continue;
             }
             if ($var['ncType'] === NC_CHAR) {
-                // Two inner dims: fixed-width rows (e.g. sky layers), one row per slice.
+                // Two or more inner dims: fixed-width rows (e.g. sky layers), one row per slice.
                 $rowLength = $this->dims[$innerDims[count($innerDims) - 1]];
                 $rows = [];
                 $rowStart = $offset;
@@ -399,6 +399,10 @@ class NetcdfClassic
             $this->recordSize += self::roundUp4($slabSize);
         }
 
+        if ($recordDimFound && $this->recordVariableNames === []) {
+            throw new NetcdfFormatException('file declares a record dimension but no record variables');
+        }
+
         // Record slabs must follow the header's begin offsets contiguously.
         $firstBegin = $this->variables[$this->recordVariableNames[0]]['begin'];
         $expected = $firstBegin;
@@ -475,19 +479,6 @@ class NetcdfClassic
         }
 
         return $values;
-    }
-
-    /**
-     * Read one value of the given type at an absolute byte offset.
-     *
-     * @param string $bytes File contents
-     * @param int $offset Absolute byte offset
-     * @param int $ncType netCDF type constant
-     * @return mixed
-     */
-    private function readOne(string $bytes, int $offset, int $ncType): mixed
-    {
-        return self::decodeOne($bytes, $offset, $ncType);
     }
 
     /**

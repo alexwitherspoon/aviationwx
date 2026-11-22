@@ -123,10 +123,8 @@ class MadisHfmetarAdapter {
         if (!preg_match('/^[A-Z0-9]{3,5}$/i', trim($stationId))) {
             return null;
         }
-        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
 
-        return 'https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/'
-            . $now->format('Ymd_H') . '00.gz';
+        return madisHfmetarCurrentHourFileUrl();
     }
 
     /**

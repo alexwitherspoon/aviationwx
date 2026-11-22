@@ -22,22 +22,6 @@ require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
 
-/** Base URL for the MADIS HFMETAR realtime netCDF files. */
-const MADIS_HFMETAR_CACHE_GZ_URL_PREFIX = 'https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/';
-
-/**
- * URL of the netCDF file for the given UTC hour.
- *
- * @param int|null $now Reference time for tests
- * @return string
- */
-function madisHfmetarBulkCurrentHourFileUrl(?int $now = null): string
-{
-    $now = $now ?? time();
-
-    return MADIS_HFMETAR_CACHE_GZ_URL_PREFIX . gmdate('Ymd_H', $now) . '00.gz';
-}
-
 /**
  * Configured madis_hfmetar station ids from enabled airports.
  *
@@ -105,7 +89,7 @@ function madisHfmetarBulkDownloadCurrentHourGz(string $destAbsolute, ?int &$http
         return false;
     }
     curl_setopt_array($ch, [
-        CURLOPT_URL => madisHfmetarBulkCurrentHourFileUrl(),
+        CURLOPT_URL => madisHfmetarCurrentHourFileUrl(),
         CURLOPT_FILE => $fp,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 5,
@@ -160,7 +144,7 @@ function madisHfmetarBulkWriteStationSliceAtomic(string $icaoUpper, string $json
  * @param string $gzAbsolute Path to the gzipped netCDF file
  * @param array<string, true> $icaoSet Station ids to retain
  * @param string $fileHour Hour the file covers (e.g. 20261120_23)
- * @return array{written: int, scanned: int}|array{error: string}
+ * @return array{written: int, scanned: int}
  */
 function madisHfmetarBulkIngestFileToStationSlices(string $gzAbsolute, array $icaoSet, string $fileHour): array
 {
@@ -369,7 +353,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         fclose($lockFp);
         @unlink($gzTmp);
         aviationwx_log('warning', 'madis_hfmetar_bulk: download failed', [
-            'url' => madisHfmetarBulkCurrentHourFileUrl($now),
+            'url' => madisHfmetarCurrentHourFileUrl($now),
             'http_code' => $downloadHttpCode,
         ], 'app');
 

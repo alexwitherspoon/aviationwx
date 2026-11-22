@@ -60,7 +60,7 @@ class MadisHfmetarBulkTest extends TestCase
      */
     public function testMadisHfmetarBulk_CurrentHourFileUrl_Format(): void
     {
-        $url = madisHfmetarBulkCurrentHourFileUrl(gmmktime(23, 0, 0, 11, 20, 2026));
+        $url = madisHfmetarCurrentHourFileUrl(gmmktime(23, 0, 0, 11, 20, 2026));
         $this->assertStringContainsString('LDAD/hfmetar/netCDF/20261120_2300.gz', $url);
     }
 

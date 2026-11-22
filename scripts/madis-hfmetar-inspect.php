@@ -18,7 +18,7 @@ use AviationWX\Madis\NetcdfClassic;
 
 function inspectUsage(): void
 {
-    fwrite(STDERR, "usage: php madis-hfmetar-inspect.php <file> <stationId>|--header\n");
+    fwrite(STDERR, "usage: php scripts/madis-hfmetar-inspect.php <file> <stationId>|--header\n");
     exit(1);
 }
 
@@ -77,7 +77,7 @@ foreach ($decoded as $obs) {
     printf(
         "%-8s %-8s %7.1f %6d %7.1f %7.1f %10.2f %s\n",
         gmdate('H:i', $obs['obs_time']),
-        $obs['metar_type'] === 1 ? 'ASOS' : 'other',
+        $obs['metar_type'] === MADIS_HFMETAR_TYPE_FEDERAL_ASOS ? 'ASOS' : 'other',
         $obs['temperature_c'] ?? NAN,
         $obs['wind_direction_deg'] ?? -1,
         $obs['wind_speed_kts'] ?? NAN,

@@ -25,6 +25,22 @@ use AviationWX\Madis\NetcdfFormatException;
 /** Federal ASOS metarType value in HFMETAR files. */
 const MADIS_HFMETAR_TYPE_FEDERAL_ASOS = 1;
 
+/** Base URL for the MADIS HFMETAR realtime netCDF files. */
+const MADIS_HFMETAR_CACHE_GZ_URL_PREFIX = 'https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/';
+
+/**
+ * URL of the netCDF file for the given UTC hour.
+ *
+ * @param int|null $now Reference time for tests
+ * @return string
+ */
+function madisHfmetarCurrentHourFileUrl(?int $now = null): string
+{
+    $now = $now ?? time();
+
+    return MADIS_HFMETAR_CACHE_GZ_URL_PREFIX . gmdate('Ymd_H', $now) . '00.gz';
+}
+
 /**
  * Decode HFMETAR file contents into observations for one station.
  *
@@ -228,7 +244,7 @@ function madisHfmetarMetersToSm(?array $column, NetcdfClassic $netcdf, string $n
         return null;
     }
 
-    return $value / 1609.344;
+    return metersToStatuteMiles((float) $value);
 }
 
 /**
