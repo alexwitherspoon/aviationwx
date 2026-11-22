@@ -149,6 +149,15 @@ function upstreamRateGlobalCredentialFingerprint(string $provider, array $source
             $sourceConfig,
             ['application_key']
         ),
+        // All MADIS airports share the same current-hour bulk file, so a 429
+        // from any one of them must back off all of them. The station id is
+        // intentionally not part of the fingerprint.
+        'madis_hfmetar' => upstreamRateFingerprintForScope(
+            'madis_hfmetar',
+            'bulk',
+            $sourceConfig,
+            []
+        ),
         default => upstreamRateFingerprint($provider, $sourceConfig),
     };
 }
@@ -179,6 +188,18 @@ function upstreamRateLimitScopesForSource(array $source): array
                 'fingerprint' => upstreamRateFingerprintForScope('ambient', 'application_key', $source, ['application_key']),
                 'rpm' => UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_RPM,
                 'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST,
+            ],
+        ],
+        'madis_hfmetar' => [
+            // All MADIS airports fall back to the same current-hour bulk file
+            // over HTTP, so they share one global bucket. The fingerprint is
+            // scope-only: the station id must not split the bucket, or a mass
+            // fallback would compound rather than throttle.
+            [
+                'scope' => 'bulk',
+                'fingerprint' => upstreamRateFingerprintForScope('madis_hfmetar', 'bulk', $source, []),
+                'rpm' => UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_RPM,
+                'burst' => UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_BURST,
             ],
         ],
         default => (static function () use ($provider, $source): array {

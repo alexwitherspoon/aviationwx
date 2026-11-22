@@ -65,6 +65,65 @@ class MadisHfmetarBulkTest extends TestCase
     }
 
     /**
+     * The Last-Modified header persists through the metadata so the next fetch
+     * can send it as If-Modified-Since.
+     */
+    public function testMadisHfmetarBulk_WriteReadMeta_RoundTripsLastModified(): void
+    {
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(
+            1795325000,
+            '20261120_23',
+            2,
+            2,
+            'Sun, 20 Nov 2026 23:59:00 GMT'
+        ));
+        $meta = madisHfmetarBulkReadMeta();
+        $this->assertIsArray($meta);
+        $this->assertSame('Sun, 20 Nov 2026 23:59:00 GMT', $meta['last_modified']);
+        $this->assertSame(1795325000, $meta['fetched_at']);
+    }
+
+    /**
+     * A slice write failure marks the refresh incomplete so the next run skips
+     * the conditional request and re-downloads, rather than a 304 touching and
+     * serving the stale slice that a failed rewrite left behind.
+     */
+    public function testMadisHfmetarBulk_WriteReadMeta_PersistsAndClearsIncomplete(): void
+    {
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(1795325000, '20261120_23', 1, 2, 'Sun, 20 Nov 2026 23:59:00 GMT', true));
+        $this->assertTrue(madisHfmetarBulkReadMeta()['incomplete'], 'a failed write must mark the refresh incomplete');
+
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(1795325100, '20261120_23', 2, 2, 'Sun, 20 Nov 2026 23:59:00 GMT', false));
+        $this->assertFalse(madisHfmetarBulkReadMeta()['incomplete'], 'a clean cycle must clear the incomplete marker');
+    }
+
+    /**
+     * On a 304 (unchanged file) the slices are touched so the resolver keeps
+     * serving them instead of falling back to per-airport HTTP.
+     */
+    public function testMadisHfmetarBulk_TouchStationSlices_UpdatesMtime(): void
+    {
+        madisHfmetarBulkIngestFileToStationSlices($this->fixturePath, ['KSPB' => true], '20261120_23');
+        $path = getMadisHfmetarStationSlicePath('KSPB');
+        $old = filemtime($path);
+        $this->assertTrue(@touch($path, $old - 60));
+        $touched = madisHfmetarBulkTouchStationSlices(['KSPB']);
+        $this->assertSame(1, $touched);
+        $this->assertGreaterThan($old - 60, filemtime($path));
+    }
+
+    /**
+     * Slices are covered when every station has a slice for the expected hour.
+     */
+    public function testMadisHfmetarBulk_SlicesCover_AllStationsCurrent(): void
+    {
+        madisHfmetarBulkIngestFileToStationSlices($this->fixturePath, ['KSPB' => true], '20261120_23');
+        $this->assertTrue(madisHfmetarBulkSlicesCover(['KSPB'], '20261120_23'));
+        $this->assertFalse(madisHfmetarBulkSlicesCover(['KSPB', 'KMMV'], '20261120_23'), 'missing station slice must not count as covered');
+        $this->assertFalse(madisHfmetarBulkSlicesCover(['KSPB'], '20261120_22'), 'an earlier hour must not count as covered');
+    }
+
+    /**
      * Ingesting the sample file writes one slice per configured station
      */
     public function testMadisHfmetarBulk_IngestSampleFile_WritesSlices(): void

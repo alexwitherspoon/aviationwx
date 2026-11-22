@@ -385,7 +385,11 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
                 case MADIS_HFMETAR_RESOLVE_OK:
                     if (is_string($resolved['body'])) {
                         $responses[$sourceKey] = $resolved['body'];
-                        recordWeatherSuccess($airportId, $sourceType, $source);
+                        // A slice-cache hit served no upstream request, so it
+                        // clears only the per-airport breaker, never the shared
+                        // upstream backoff that a 429/503 opened.
+                        $successSource = !empty($resolved['from_slice']) ? null : $source;
+                        recordWeatherSuccess($airportId, $sourceType, $successSource);
                         weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
                     }
                     break;
@@ -400,6 +404,17 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
                     $responses[$sourceKey] = null;
                     $madisHttpCode = isset($resolved['http_code']) ? (int) $resolved['http_code'] : null;
                     $madisHeaders = $resolved['response_headers'] ?? null;
+                    // A 404 on the current-hour URL is the file not being
+                    // published yet, expected near the top of the hour. It is
+                    // no-data, not a failure: skip the breaker and health
+                    // failure so the staleness model ages it instead.
+                    if (!empty($resolved['not_published'])) {
+                        aviationwx_log('info', 'madis_hfmetar: current-hour file not published yet', [
+                            'airport_id' => $airportId,
+                            'http_code' => $madisHttpCode,
+                        ], 'app');
+                        break;
+                    }
                     recordWeatherFailure(
                         $airportId,
                         $sourceType,

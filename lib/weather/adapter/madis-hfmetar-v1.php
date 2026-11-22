@@ -243,6 +243,33 @@ const MADIS_HFMETAR_RESOLVE_HTTP_FAILED = 'http_failed';
 const MADIS_HFMETAR_RESOLVE_INVALID_STATION = 'invalid_station';
 
 /**
+ * Normalize $http_response_header lines into a lowercase header map.
+ *
+ * The circuit breaker reads Retry-After and X-RateLimit-Reset from the
+ * lowercase map, so upstream tells us how long to back off on a 429.
+ *
+ * @param array<int, string>|null $lines Raw header lines
+ * @return array<string, string>
+ */
+function normalizeResponseHeaders(?array $lines): array
+{
+    $headers = [];
+    if (!is_array($lines)) {
+        return $headers;
+    }
+    foreach ($lines as $line) {
+        $trimmed = rtrim($line, "\r\n");
+        if ($trimmed === '' || strpos($trimmed, ':') === false) {
+            continue;
+        }
+        [$name, $value] = explode(':', $trimmed, 2);
+        $headers[strtolower(trim($name))] = trim($value);
+    }
+
+    return $headers;
+}
+
+/**
  * Resolve the MADIS response body for one station.
  *
  * Precedence: test mock, fresh bulk slice, then HTTP (gated by circuit
@@ -274,7 +301,9 @@ function madisHfmetarResolveStationResponse(string $stationId, ?string $airportI
     require_once __DIR__ . '/../../madis-hfmetar/bulk.php';
     $sliceJson = madisHfmetarTryReadStationSlice($stationId);
     if ($sliceJson !== null) {
-        return ['body' => $sliceJson, 'outcome' => MADIS_HFMETAR_RESOLVE_OK];
+        // A slice read served no upstream HTTP, so it must not be treated as a
+        // success that clears the shared upstream backoff.
+        return ['body' => $sliceJson, 'outcome' => MADIS_HFMETAR_RESOLVE_OK, 'from_slice' => true];
     }
 
     if ($airportId !== null && $airportId !== '') {
@@ -309,10 +338,14 @@ function madisHfmetarResolveStationResponse(string $stationId, ?string $airportI
     }
 
     if ($response === false || ($httpCode !== null && $httpCode >= 400)) {
+        // A 404 on the current-hour URL is the file not being published yet,
+        // an expected state near the top of the hour, not an upstream failure.
         return [
             'body' => null,
             'outcome' => MADIS_HFMETAR_RESOLVE_HTTP_FAILED,
             'http_code' => $httpCode,
+            'response_headers' => normalizeResponseHeaders($rawHeaders),
+            'not_published' => $httpCode === 404,
         ];
     }
 
