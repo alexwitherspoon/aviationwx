@@ -54,12 +54,14 @@ const MM_PER_INCH = 25.4;
  */
 const KMH_PER_KNOT = 1.852;
 const MPH_PER_KNOT = 1.15078;
+const KNOTS_PER_MPS = 1.943844;
 
 /**
  * Altitude conversion factor
  * 1 foot = 0.3048 meters (exact, International Yard and Pound Agreement 1959)
  */
 const METERS_PER_FOOT = 0.3048;
+const KELVIN_OFFSET_CELSIUS = 273.15;
 
 /**
  * Nautical mile conversion factor
@@ -102,6 +104,18 @@ function hpaToInhg(float $hpa): float
 function inhgToHpa(float $inhg): float
 {
     return $inhg * HPA_PER_INHG;
+}
+
+/**
+ * Convert pascals to inches of mercury
+ * Formula: inHg = Pa / 3386.39 (1 inHg = 33.8639 hPa = 3386.39 Pa)
+ * 
+ * @param float $pascals Pressure in pascals
+ * @return float Pressure in inches of mercury
+ */
+function pascalToInhg(float $pascals): float
+{
+    return hpaToInhg($pascals / 100);
 }
 
 
@@ -211,6 +225,18 @@ function fahrenheitToCelsius(float $fahrenheit): float
     return ($fahrenheit - 32) * 5 / 9;
 }
 
+/**
+ * Convert kelvin to celsius
+ * Formula: °C = K - 273.15 (273.15 K = 0°C)
+ * 
+ * @param float $kelvin Temperature in kelvin
+ * @return float Temperature in celsius
+ */
+function kelvinToCelsius(float $kelvin): float
+{
+    return $kelvin - KELVIN_OFFSET_CELSIUS;
+}
+
 
 // ============================================================================
 // WIND SPEED CONVERSIONS (knots ↔ mph ↔ km/h)
@@ -258,6 +284,18 @@ function knotsToMph(float $knots): float
 function mphToKnots(float $mph): float
 {
     return $mph / MPH_PER_KNOT;
+}
+
+/**
+ * Convert meters per second to knots
+ * Formula: kts = m/s × 1.943844 (1 m/s = 1.943844 kt)
+ * 
+ * @param float $mps Wind speed in meters per second
+ * @return float Wind speed in knots
+ */
+function mpsToKnots(float $mps): float
+{
+    return $mps * KNOTS_PER_MPS;
 }
 
 

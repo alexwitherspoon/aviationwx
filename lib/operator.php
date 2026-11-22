@@ -72,6 +72,8 @@ function defaultOperatorForWeatherSourceType(string $type): string
             return 'awosnet';
         case 'synopticdata':
             return 'synopticdata';
+        case 'madis_hfmetar':
+            return 'faa';
         default:
             return DEFAULT_OPERATOR;
     }

@@ -30,6 +30,7 @@
 
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -316,7 +317,7 @@ function parseSynopticDataResponse(?string $response): ?array {
         // Altimeter from SynopticData is in hundredths of inHg (e.g., 3038.93 = 30.3893 inHg)
         // Normal inHg range is 28-32, so values > 100 indicate hundredths format
         if ($pressureSource === 'sea_level_pressure' || $pressureSource === 'pressure') {
-            $pressure = (float)$pressure / 33.8639;
+            $pressure = hpaToInhg((float)$pressure);
         } else {
             // Altimeter: check if in hundredths of inHg (value > 100) or already in inHg
             $pressureFloat = (float)$pressure;
@@ -333,11 +334,10 @@ function parseSynopticDataResponse(?string $response): ?array {
     }
     
     // Wind speed - SynopticData provides wind_speed in m/s
-    // Convert to knots: kts = m/s × 1.943844
     $windSpeed = $getValue('wind_speed');
     if ($windSpeed !== null && is_numeric($windSpeed)) {
         // Convert m/s to knots
-        $windSpeedKts = (int)round((float)$windSpeed * 1.943844);
+        $windSpeedKts = (int)round(mpsToKnots((float)$windSpeed));
     } else {
         $windSpeedKts = null;
     }
@@ -354,7 +354,7 @@ function parseSynopticDataResponse(?string $response): ?array {
     $gustSpeed = $getValue('wind_gust');
     if ($gustSpeed !== null && is_numeric($gustSpeed)) {
         // Convert m/s to knots
-        $gustSpeedKts = (int)round((float)$gustSpeed * 1.943844);
+        $gustSpeedKts = (int)round(mpsToKnots((float)$gustSpeed));
     } else {
         $gustSpeedKts = null;
     }
@@ -375,8 +375,7 @@ function parseSynopticDataResponse(?string $response): ?array {
         $precip = $getValue('precip_accum_one_hour');
     }
     if ($precip !== null && is_numeric($precip)) {
-        // Convert mm to inches
-        $precip = (float)$precip * 0.0393701;
+        $precip = mmToInches((float)$precip);
     } else {
         $precip = 0;
     }
@@ -397,8 +396,7 @@ function parseSynopticDataResponse(?string $response): ?array {
         // Check if in meters (typical) and convert to statute miles
         // If value is > 10, likely in meters; if < 10, likely already in miles
         if ($visibility > 10) {
-            // Convert meters to statute miles: SM = m / 1609.344
-            $visibility = (float)$visibility / 1609.344;
+            $visibility = metersToStatuteMiles((float)$visibility);
         } else {
             $visibility = (float)$visibility;
         }

@@ -41,7 +41,7 @@ function upstreamRateLimitCredentialFieldNames(string $provider): array
 function upstreamRateLimitIdentityFieldNames(string $provider): array
 {
     return match ($provider) {
-        'metar', 'awosnet', 'swob_auto', 'swob_man', 'nws' => ['station_id'],
+        'metar', 'awosnet', 'swob_auto', 'swob_man', 'nws', 'madis_hfmetar' => ['station_id'],
         'dyaconlive' => ['station_id'],
         'aviationwx_api' => ['base_url', 'airport_id'],
         default => [],

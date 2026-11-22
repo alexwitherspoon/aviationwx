@@ -126,6 +126,83 @@ class WeatherHistoryTest extends TestCase
         
         $this->assertEquals(1, $history['observation_count'], 'Should only have one observation');
     }
+
+    /**
+     * A fresher field observation time creates a new ring entry even when the
+     * primary source observation time is older (5-minute sources like MADIS
+     * HFMETAR must drive the ring past an hourly primary source).
+     */
+    public function testAppendWeatherHistory_FresherFieldObsTime_CreatesNewEntry(): void
+    {
+        $older = time() - 600;
+        $fresher = time();
+        $weather = [
+            'obs_time_primary' => $older,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => [
+                'wind_speed' => $fresher,
+                'temperature' => $older,
+            ],
+        ];
+
+        appendWeatherHistory($this->testAirportId, $weather);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count']);
+        $this->assertSame($fresher, $history['observations'][0]['obs_time']);
+    }
+
+    /**
+     * A regression in the freshest field observation time is not appended, so
+     * the ring stays in non-decreasing observation order for the wind rose.
+     */
+    public function testAppendWeatherHistory_BackwardsObsTime_Skipped(): void
+    {
+        $t1 = time() - 120;
+        $t2 = time();
+
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $t1,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => ['tempest' => $t2],
+        ]);
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $t1,
+            'temperature' => 15.6,
+            '_field_obs_time_map' => ['metar' => $t1],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count'], 'backwards obs time must not append');
+        $this->assertSame($t2, $history['observations'][0]['obs_time']);
+    }
+
+    /**
+     * A future observation timestamp is a clock artifact and must not become
+     * the ring marker, or it would block every later valid observation.
+     */
+    public function testAppendWeatherHistory_FutureObsTime_Rejected(): void
+    {
+        $past = time() - 300;
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => time() + 3600,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => ['tempest' => time() + 3600],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(0, $history['observation_count'], 'future obs time must not append');
+
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $past,
+            'temperature' => 15.6,
+            '_field_obs_time_map' => ['tempest' => $past],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count'], 'valid obs must append after the future one is rejected');
+        $this->assertSame($past, $history['observations'][0]['obs_time']);
+    }
     
     /**
      * Different observation times should add new entries

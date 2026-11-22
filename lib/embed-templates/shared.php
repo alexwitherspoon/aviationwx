@@ -306,7 +306,7 @@ function formatEmbedPressure($pressureInHg, $unit) {
     if ($pressureInHg === null) return '--';
     
     if ($unit === 'hPa') {
-        $pressureHPa = $pressureInHg * 33.8639;
+        $pressureHPa = inhgToHpa($pressureInHg);
         return round($pressureHPa) . ' hPa';
     } elseif ($unit === 'mmHg') {
         $pressureMmHg = $pressureInHg * 25.4;

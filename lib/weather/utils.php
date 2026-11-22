@@ -423,6 +423,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Davis WeatherLink Live (WiFiLogger)',
                 'url' => null
             ];
+        case 'madis_hfmetar':
+            return [
+                'name' => 'MADIS HFMETAR',
+                'url' => 'https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/'
+            ];
         default:
             return null;
     }

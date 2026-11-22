@@ -187,6 +187,53 @@ function getMetarBulkMetaPath(): string
 }
 
 // =============================================================================
+// MADIS HFMETAR CACHE (hourly netCDF ingest, per-ICAO JSON under cache/madis-hfmetar/stations/)
+// =============================================================================
+
+if (!defined('CACHE_MADIS_HFMETAR_DIR')) {
+    define('CACHE_MADIS_HFMETAR_DIR', CACHE_BASE_DIR . '/madis-hfmetar');
+}
+
+function getMadisHfmetarCacheDir(): string
+{
+    if (isset($GLOBALS['madisHfmetarTestCacheRoot'])
+        && is_string($GLOBALS['madisHfmetarTestCacheRoot'])
+        && $GLOBALS['madisHfmetarTestCacheRoot'] !== ''
+    ) {
+        return rtrim($GLOBALS['madisHfmetarTestCacheRoot'], '/');
+    }
+
+    return CACHE_MADIS_HFMETAR_DIR;
+}
+
+function getMadisHfmetarStationsDir(): string
+{
+    return getMadisHfmetarCacheDir() . '/stations';
+}
+
+function getMadisHfmetarTempDir(): string
+{
+    return getMadisHfmetarCacheDir() . '/tmp';
+}
+
+function getMadisHfmetarRefreshLockPath(): string
+{
+    return getMadisHfmetarCacheDir() . '/refresh.lock';
+}
+
+function getMadisHfmetarStationSlicePath(string $icaoUpper): string {
+    return getMadisHfmetarStationsDir() . '/' . strtoupper($icaoUpper) . '.json';
+}
+
+/**
+ * MADIS HFMETAR refresh metadata (`fetched_at`, file_hour, counts) for ops age metrics.
+ */
+function getMadisHfmetarMetaPath(): string
+{
+    return getMadisHfmetarCacheDir() . '/meta.json';
+}
+
+// =============================================================================
 // NWS POINTS CACHE (api.weather.gov /points/{lat},{lon})
 // =============================================================================
 

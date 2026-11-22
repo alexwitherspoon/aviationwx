@@ -889,6 +889,13 @@ if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
     define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
 }
 
+// Weather history ring: reject observation times more than this many seconds
+// in the future (clock skew headroom), so a clock artifact cannot become the
+// ring marker and block later valid observations.
+if (!defined('WEATHER_HISTORY_FUTURE_SKEW_SECONDS')) {
+    define('WEATHER_HISTORY_FUTURE_SKEW_SECONDS', 60);
+}
+
 // METAR bulk: scheduler refresh cadence, slice max age before HTTP fallback, download timeout
 if (!defined('METAR_BULK_REFRESH_INTERVAL_SECONDS')) {
     define('METAR_BULK_REFRESH_INTERVAL_SECONDS', 120);
@@ -898,6 +905,19 @@ if (!defined('METAR_BULK_STATION_FILE_MAX_AGE_SECONDS')) {
 }
 if (!defined('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS')) {
     define('METAR_BULK_DOWNLOAD_TIMEOUT_SECONDS', 120);
+}
+
+// MADIS HFMETAR bulk: scheduler refresh cadence, slice max age before HTTP fallback, download timeout
+if (!defined('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS')) {
+    define('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS', 300);
+}
+if (!defined('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS')) {
+    // 30 minutes keeps the previous hour's slices serving through the
+    // hourly file rollover, when the new hour's file is not yet published.
+    define('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS', 1800);
+}
+if (!defined('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS')) {
+    define('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS', 120);
 }
 
 // Upstream self-throttle (per-credential token bucket under cache/upstream-limits/)

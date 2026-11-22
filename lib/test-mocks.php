@@ -66,6 +66,17 @@ function getMockHttpResponse(string $url): ?string {
 
         return getMockMETARResponse();
     }
+
+    if (strpos($url, 'madis-data.ncep.noaa.gov') !== false) {
+        // MADIS HFMETAR: return the committed one-hour sample file bytes
+        if (madisHfmetarTestSkipMock()) {
+            return null;
+        }
+        $fixture = __DIR__ . '/../tests/Fixtures/madis/hfmetar-sample.gz';
+        $bytes = @file_get_contents($fixture);
+
+        return $bytes !== false ? $bytes : null;
+    }
     
     if (strpos($url, 'api.aerisapi.com') !== false) {
         // AerisWeather API (PWSWeather.com)
@@ -123,5 +134,22 @@ function metarBulkTestSetSkipMetarHttpMock(bool $skip): void
 function metarBulkTestSkipMetarHttpMock(): bool
 {
     return !empty($GLOBALS['_metar_bulk_test_skip_metar_http_mock']);
+}
+
+/**
+ * When true, `getMockHttpResponse()` does not return the MADIS fixture so bulk/HTTP paths can be tested.
+ * PHPUnit only; always reset in test tearDown.
+ */
+function madisHfmetarTestSetSkipMock(bool $skip): void
+{
+    $GLOBALS['_madis_hfmetar_test_skip_mock'] = $skip;
+}
+
+/**
+ * @internal Used by `getMockHttpResponse()` only
+ */
+function madisHfmetarTestSkipMock(): bool
+{
+    return !empty($GLOBALS['_madis_hfmetar_test_skip_mock']);
 }
 

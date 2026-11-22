@@ -33,18 +33,38 @@ function appendWeatherHistory(string $airportId, array $weather, ?array $fieldSo
         return false;
     }
     
-    // Get observation time - use primary source observation time
-    $obsTime = $weather['obs_time_primary'] ?? $weather['last_updated'] ?? null;
+    // Observation time: the freshest contributing field wins, so 5-minute
+    // sources (MADIS HFMETAR) drive the ring even when an hourly source is
+    // listed first as the primary. Falls back to primary observation time.
+    $obsTime = null;
+    $fieldObsMap = $weather['_field_obs_time_map'] ?? null;
+    if (is_array($fieldObsMap) && $fieldObsMap !== []) {
+        $numeric = array_filter($fieldObsMap, 'is_numeric');
+        if ($numeric !== []) {
+            $obsTime = (int) max($numeric);
+        }
+    }
     if ($obsTime === null) {
+        $obsTime = $weather['obs_time_primary'] ?? $weather['last_updated'] ?? null;
+    }
+    if ($obsTime === null) {
+        return false;
+    }
+
+    // A timestamp beyond a small future skew is a clock artifact, not an
+    // observation. Reject it so it cannot become the ring marker and freeze
+    // later valid entries behind it.
+    if ($obsTime > time() + WEATHER_HISTORY_FUTURE_SKEW_SECONDS) {
         return false;
     }
     
     $history = loadWeatherHistory($airportId);
     
-    // Check if this observation is new (different from last)
+    // Check if this observation advances the ring: duplicates and backwards
+    // regressions are skipped so entries stay in non-decreasing order.
     if (!empty($history['observations'])) {
         $lastObs = end($history['observations']);
-        if (isset($lastObs['obs_time']) && $lastObs['obs_time'] === $obsTime) {
+        if (isset($lastObs['obs_time']) && $obsTime <= (int) $lastObs['obs_time']) {
             // Same observation time, skip
             return false;
         }

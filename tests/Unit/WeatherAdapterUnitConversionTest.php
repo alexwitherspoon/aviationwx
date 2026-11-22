@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
 require_once __DIR__ . '/../../lib/weather/adapter/metar-v1.php';
 require_once __DIR__ . '/../../lib/weather/adapter/tempest-v1.php';
+require_once __DIR__ . '/../../lib/madis-hfmetar/madis-hfmetar.php';
 require_once __DIR__ . '/../../lib/weather/UnifiedFetcher.php';
 require_once __DIR__ . '/../../lib/constants.php';
 
@@ -350,6 +351,78 @@ class WeatherAdapterUnitConversionTest extends TestCase
         ];
         $out = addCalculatedFields($data, $airport);
         $this->assertNull($out['dewpoint']);
+    }
+
+    // ============================================================================
+    // MADIS HFMETAR conversions (co-located Federal ASOS at 5-minute marks)
+    // Ground truth: KSPB 2026-11-20 23:00 UTC sample file, cross-verified with
+    // an independent netCDF reader.
+    // ============================================================================
+
+    /**
+     * Temperature: kelvin to celsius. Raw 280.15 K - 273.15 = 7.0 C
+     */
+    public function testMadis_TemperatureKelvin_ConvertedToCelsius(): void
+    {
+        $observations = madisHfmetarDecodeFile(
+            __DIR__ . '/../Fixtures/madis/hfmetar-sample.gz',
+            'KSPB'
+        );
+        $this->assertNotNull($observations);
+        $this->assertEqualsWithDelta(7.0, $observations[0]['temperature_c'], 0.01);
+    }
+
+    /**
+     * Altimeter: pascal to inHg. Raw 101964.16 Pa / 3386.39 = 30.11 inHg
+     */
+    public function testMadis_AltimeterPascal_ConvertedToInhg(): void
+    {
+        $observations = madisHfmetarDecodeFile(
+            __DIR__ . '/../Fixtures/madis/hfmetar-sample.gz',
+            'KSPB'
+        );
+        $this->assertNotNull($observations);
+        $this->assertEqualsWithDelta(30.11, $observations[0]['altimeter_inhg'], 0.01);
+    }
+
+    /**
+     * Visibility: meters to statute miles. Raw 16093.44 m / 1609.344 = 10 SM
+     */
+    public function testMadis_VisibilityMeters_ConvertedToSm(): void
+    {
+        $observations = madisHfmetarDecodeFile(
+            __DIR__ . '/../Fixtures/madis/hfmetar-sample.gz',
+            'KSPB'
+        );
+        $this->assertNotNull($observations);
+        $this->assertEqualsWithDelta(10.0, $observations[0]['visibility_sm'], 0.01);
+    }
+
+    /**
+     * Ceiling: meters to feet. Raw 670.56 m x 3.28084 = 2200 ft AGL
+     */
+    public function testMadis_CeilingMeters_ConvertedToFeet(): void
+    {
+        $observations = madisHfmetarDecodeFile(
+            __DIR__ . '/../Fixtures/madis/hfmetar-sample.gz',
+            'KSPB'
+        );
+        $this->assertNotNull($observations);
+        $this->assertSame(2200, $observations[0]['ceiling_ft']);
+    }
+
+    /**
+     * Wind: m/s to knots. KMMV picks up mid-hour wind from the sample.
+     */
+    public function testMadis_WindMps_ConvertedToKnots(): void
+    {
+        $observations = madisHfmetarDecodeFile(
+            __DIR__ . '/../Fixtures/madis/hfmetar-sample.gz',
+            'KMMV'
+        );
+        $this->assertNotNull($observations);
+        $speeds = array_column($observations, 'wind_speed_kts');
+        $this->assertGreaterThan(2.9, max($speeds), 'mid-hour wind must convert to ~3 kts');
     }
 }
 

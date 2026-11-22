@@ -15,6 +15,7 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -310,7 +311,7 @@ class WeatherLinkV2Adapter {
             } else {
                 $precipMm = self::getFirstNumeric($dataFields, ['rainfall_daily_mm', 'rain_day_mm']);
                 if ($precipMm !== null) {
-                    $result['precip_accum'] = $precipMm * 0.0393701;
+                    $result['precip_accum'] = mmToInches((float) $precipMm);
                 }
             }
         }

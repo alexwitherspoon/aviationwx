@@ -35,6 +35,9 @@ Thumbs.db
 vendor/
 composer.lock
 
+# Live MADIS HFMETAR downloads for local inspection (fixture is committed separately)
+/madis-samples/
+
 # PHPUnit
 .phpunit.cache/
 .phpunit.result.cache

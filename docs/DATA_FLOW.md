@@ -201,6 +201,25 @@ All weather sources are configured in a unified `weather_sources` array. Each so
   - Precipitation (inches)
   - Observation timestamp (ISO 8601, parsed to Unix seconds)
 
+#### MADIS HFMETAR Source
+- **Endpoint**: `https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/` (public anonymous access; no API key)
+- **Data**: Federal ASOS observations at 5-minute marks (12 per hour per station) from the NOAA MADIS HFMETAR dataset.
+- **Co-located only (operator policy)**: A `madis_hfmetar` source may only be configured when the ASOS is at the airfield. Config validation requires `station_id` to equal the airport `icao`, and airports without an `icao` cannot use it. MADIS is never a supplemental wind source for a nearby station.
+- **Bulk cache**: The scheduler starts `scripts/refresh-madis-hfmetar.php` in the background on `MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS` (5 minutes). It downloads the current UTC hour's netCDF file, parses it once, and writes one JSON slice per configured station under `cache/madis-hfmetar/stations/{ICAO}.json`. The unified fetcher prefers a fresh slice (within `MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS`) over HTTP, mirroring the METAR bulk pattern. Missing or stale slices fall back to downloading the current-hour file per station.
+- **Delivery latency**: MADIS publishes each 5-minute mark roughly 10-25 minutes after the observation time, in batches. The slice reflects the latest mark MADIS has published for the hour, so the effective wind refresh is faster than hourly METAR but not 5 minutes end to end.
+- **Data Provided**:
+  - Temperature (Celsius)
+  - Dewpoint (Celsius)
+  - Humidity (derived from temperature and dewpoint)
+  - Pressure/Altimeter (inHg)
+  - Wind direction (true north) and speed (knots)
+  - Gust speed (knots)
+  - Visibility (statute miles)
+  - Ceiling (feet AGL, from the lowest BKN/OVC/OVX layer)
+  - Cloud cover (FEW/SCT/BKN/OVC/CLR)
+  - Observation timestamp (Unix seconds)
+- **Not provided**: precipitation accumulation (HFMETAR does not report it reliably).
+
 ### Supplemental remote weather policy
 
 **Guiding principle:** Pilot safety is the prime directive for weather sourcing. It takes precedence over filling coverage gaps. When safety and completeness conflict, fail closed: show less data, show an outage banner, or do not configure a remote source rather than display weather that could mislead pilots about conditions at the field.
