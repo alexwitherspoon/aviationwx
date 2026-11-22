@@ -75,7 +75,7 @@ PHP_INI_OVERRIDES=/usr/local/etc/php/conf.d/env-overrides.ini
 
 # Normalize PHP ini size values (digits with optional K/M/G/T suffix, e.g.
 # 100M or 2G) to bytes so upload and POST caps compare across units. Returns 0
-# for values that do not parse; the deploy config validates the format.
+# for values that do not parse; an unparseable value just skips the check.
 php_size_to_bytes() {
     local v="$1"
     if ! [[ "$v" =~ ^[0-9]+[kKmMgGtT]?$ ]]; then
