@@ -889,6 +889,13 @@ if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
     define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
 }
 
+// Weather history ring: reject observation times more than this many seconds
+// in the future (clock skew headroom), so a clock artifact cannot become the
+// ring marker and block later valid observations.
+if (!defined('WEATHER_HISTORY_FUTURE_SKEW_SECONDS')) {
+    define('WEATHER_HISTORY_FUTURE_SKEW_SECONDS', 60);
+}
+
 // METAR bulk: scheduler refresh cadence, slice max age before HTTP fallback, download timeout
 if (!defined('METAR_BULK_REFRESH_INTERVAL_SECONDS')) {
     define('METAR_BULK_REFRESH_INTERVAL_SECONDS', 120);

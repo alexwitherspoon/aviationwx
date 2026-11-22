@@ -50,6 +50,13 @@ function appendWeatherHistory(string $airportId, array $weather, ?array $fieldSo
     if ($obsTime === null) {
         return false;
     }
+
+    // A timestamp beyond a small future skew is a clock artifact, not an
+    // observation. Reject it so it cannot become the ring marker and freeze
+    // later valid entries behind it.
+    if ($obsTime > time() + WEATHER_HISTORY_FUTURE_SKEW_SECONDS) {
+        return false;
+    }
     
     $history = loadWeatherHistory($airportId);
     

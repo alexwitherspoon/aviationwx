@@ -176,6 +176,33 @@ class WeatherHistoryTest extends TestCase
         $this->assertEquals(1, $history['observation_count'], 'backwards obs time must not append');
         $this->assertSame($t2, $history['observations'][0]['obs_time']);
     }
+
+    /**
+     * A future observation timestamp is a clock artifact and must not become
+     * the ring marker, or it would block every later valid observation.
+     */
+    public function testAppendWeatherHistory_FutureObsTime_Rejected(): void
+    {
+        $past = time() - 300;
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => time() + 3600,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => ['tempest' => time() + 3600],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(0, $history['observation_count'], 'future obs time must not append');
+
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $past,
+            'temperature' => 15.6,
+            '_field_obs_time_map' => ['tempest' => $past],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count'], 'valid obs must append after the future one is rejected');
+        $this->assertSame($past, $history['observations'][0]['obs_time']);
+    }
     
     /**
      * Different observation times should add new entries
