@@ -325,7 +325,7 @@ function madisHfmetarBulkIngestFileToStationSlices(string $gzAbsolute, array $ic
         aviationwx_log('warning', 'madis_hfmetar_bulk: slice write failed', ['failed' => $failed], 'app');
     }
 
-    return ['written' => $written, 'scanned' => $scanned];
+    return ['written' => $written, 'scanned' => $scanned, 'failed' => $failed];
 }
 
 /**
@@ -365,6 +365,8 @@ function madisHfmetarBulkPruneOrphanStationSlices(array $icaoSet): int
  *
  * @param string|null $lastModified Last-Modified header from the most recent
  *   200 response, used as the conditional If-Modified-Since on the next fetch.
+ * @param bool $incomplete True when a slice write failed this cycle; persists
+ *   so the next run skips the conditional request and re-downloads
  * @return bool
  */
 function madisHfmetarBulkWriteRefreshMeta(
@@ -372,7 +374,8 @@ function madisHfmetarBulkWriteRefreshMeta(
     string $fileHour,
     int $written,
     int $scanned,
-    ?string $lastModified = null
+    ?string $lastModified = null,
+    bool $incomplete = false
 ): bool {
     madisHfmetarBulkEnsureDirectories();
     $path = getMadisHfmetarMetaPath();
@@ -382,6 +385,9 @@ function madisHfmetarBulkWriteRefreshMeta(
         'written' => $written,
         'scanned' => $scanned,
         'last_modified' => $lastModified,
+        // True when a slice write failed this cycle; forces an unconditional
+        // fetch next run so the stale slice is rewritten rather than served.
+        'incomplete' => $incomplete,
     ], JSON_UNESCAPED_SLASHES);
     if ($payload === false) {
         return false;
@@ -510,6 +516,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $useConditional = is_array($meta)
         && ($meta['last_modified'] ?? null) !== null
         && ($meta['file_hour'] ?? null) === $currentFileHour
+        && empty($meta['incomplete'])
         && madisHfmetarBulkSlicesCover(array_keys($icaoSet), $currentFileHour);
     $ifModifiedSince = $useConditional ? ($meta['last_modified'] ?? null) : null;
 
@@ -521,6 +528,9 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         weatherHealthTrackCircuitOpen('madis_bulk', 'madis_hfmetar');
+        // Backoff is an intentional skip, not a failure: the CLI and health
+        // treat it like the other skip outcomes so a 429 does not alarm.
+        $result['ok'] = true;
         $result['note'] = 'circuit_open';
         aviationwx_log('info', 'madis_hfmetar_bulk: skipped, shared circuit open', [
             'backoff_remaining' => $breaker['backoff_remaining'] ?? null,
@@ -554,7 +564,8 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
             gmdate('Ymd_H', $now),
             $priorWritten,
             $priorScanned,
-            is_array($meta) ? ($meta['last_modified'] ?? null) : null
+            is_array($meta) ? ($meta['last_modified'] ?? null) : null,
+            is_array($meta) && !empty($meta['incomplete'])
         );
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
@@ -621,7 +632,8 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         $fileHour,
         $result['written'],
         $result['scanned'],
-        $lastModified
+        $lastModified,
+        (int) ($ingest['failed'] ?? 0) > 0
     );
     $result['meta_written'] = $metaWritten;
 

@@ -84,6 +84,20 @@ class MadisHfmetarBulkTest extends TestCase
     }
 
     /**
+     * A slice write failure marks the refresh incomplete so the next run skips
+     * the conditional request and re-downloads, rather than a 304 touching and
+     * serving the stale slice that a failed rewrite left behind.
+     */
+    public function testMadisHfmetarBulk_WriteReadMeta_PersistsAndClearsIncomplete(): void
+    {
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(1795325000, '20261120_23', 1, 2, 'Sun, 20 Nov 2026 23:59:00 GMT', true));
+        $this->assertTrue(madisHfmetarBulkReadMeta()['incomplete'], 'a failed write must mark the refresh incomplete');
+
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(1795325100, '20261120_23', 2, 2, 'Sun, 20 Nov 2026 23:59:00 GMT', false));
+        $this->assertFalse(madisHfmetarBulkReadMeta()['incomplete'], 'a clean cycle must clear the incomplete marker');
+    }
+
+    /**
      * On a 304 (unchanged file) the slices are touched so the resolver keeps
      * serving them instead of falling back to per-airport HTTP.
      */
