@@ -114,6 +114,26 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
         $this->assertFalse($allowed['skip']);
     }
 
+    /**
+     * A slice-cache hit records success without a source config, so it must
+     * not clear the shared upstream backoff (no HTTP success occurred). A 429
+     * opened it; serving an old slice must not re-arm the bulk worker early.
+     */
+    public function testRecordWeatherSuccess_WithoutSourceConfig_DoesNotClearSharedMadisBackoff(): void
+    {
+        $source = ['type' => 'madis_hfmetar'];
+
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure(self::AIRPORT_A, 'madis_hfmetar', 'transient', 429, null, $source);
+        }
+        $this->assertTrue(checkWeatherCircuitBreaker(self::AIRPORT_B, 'madis_hfmetar', $source)['skip']);
+
+        // Per-airport success only; no global clear.
+        recordWeatherSuccess(self::AIRPORT_A, 'madis_hfmetar');
+        $stillBlocked = checkWeatherCircuitBreaker(self::AIRPORT_B, 'madis_hfmetar', $source);
+        $this->assertTrue($stillBlocked['skip'], 'shared backoff must survive a slice-cache hit');
+    }
+
     public function testRecordWeatherFailure_NonCoordinatingHttpCode_DoesNotOpenGlobalOnly(): void
     {
         $source = ['type' => 'tempest', 'api_key' => '404-only-key', 'station_id' => '1'];

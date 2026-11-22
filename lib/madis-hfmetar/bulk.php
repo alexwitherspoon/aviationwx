@@ -209,6 +209,40 @@ function madisHfmetarBulkTouchStationSlices(array $icaos): int
 }
 
 /**
+ * Whether every configured station has a slice for the given hour.
+ *
+ * The conditional request (304) must not run when a station's slice is missing
+ * or from an earlier hour: a 304 only touches existing slices and would fail to
+ * backfill a newly added airport or a slice that never got written.
+ *
+ * @param array<int, string> $icaos Station ids
+ * @param string $fileHour Expected hour a current slice must cover (e.g. 20261122_15)
+ * @return bool
+ */
+function madisHfmetarBulkSlicesCover(array $icaos, string $fileHour): bool
+{
+    if ($icaos === []) {
+        return true;
+    }
+    foreach ($icaos as $icao) {
+        $path = getMadisHfmetarStationSlicePath($icao);
+        if (!is_file($path)) {
+            return false;
+        }
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return false;
+        }
+        $slice = @json_decode($raw, true);
+        if (!is_array($slice) || ($slice['file_hour'] ?? null) !== $fileHour) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Atomically write one station slice file.
  *
  * @param string $icaoUpper Station ICAO
@@ -467,7 +501,17 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $lastModified = null;
     $responseHeaders = null;
     $meta = madisHfmetarBulkReadMeta();
-    $ifModifiedSince = is_array($meta) ? ($meta['last_modified'] ?? null) : null;
+    $currentFileHour = gmdate('Ymd_H', $now);
+    // Send If-Modified-Since only when the stored Last-Modified belongs to this
+    // hour's URL and every configured station already has a current slice. A
+    // stale hour (URL change) or a missing slice (newly added airport) forces
+    // an unconditional fetch so the new resource, or the missing station, is
+    // actually ingested instead of a 304 touching nothing.
+    $useConditional = is_array($meta)
+        && ($meta['last_modified'] ?? null) !== null
+        && ($meta['file_hour'] ?? null) === $currentFileHour
+        && madisHfmetarBulkSlicesCover(array_keys($icaoSet), $currentFileHour);
+    $ifModifiedSince = $useConditional ? ($meta['last_modified'] ?? null) : null;
 
     // Honor an open shared breaker: a recent 429/503 has already backed us
     // off, so skip the download instead of compounding the request rate.

@@ -99,6 +99,17 @@ class MadisHfmetarBulkTest extends TestCase
     }
 
     /**
+     * Slices are covered when every station has a slice for the expected hour.
+     */
+    public function testMadisHfmetarBulk_SlicesCover_AllStationsCurrent(): void
+    {
+        madisHfmetarBulkIngestFileToStationSlices($this->fixturePath, ['KSPB' => true], '20261120_23');
+        $this->assertTrue(madisHfmetarBulkSlicesCover(['KSPB'], '20261120_23'));
+        $this->assertFalse(madisHfmetarBulkSlicesCover(['KSPB', 'KMMV'], '20261120_23'), 'missing station slice must not count as covered');
+        $this->assertFalse(madisHfmetarBulkSlicesCover(['KSPB'], '20261120_22'), 'an earlier hour must not count as covered');
+    }
+
+    /**
      * Ingesting the sample file writes one slice per configured station
      */
     public function testMadisHfmetarBulk_IngestSampleFile_WritesSlices(): void

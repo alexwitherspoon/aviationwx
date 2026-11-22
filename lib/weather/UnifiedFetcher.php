@@ -385,7 +385,11 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
                 case MADIS_HFMETAR_RESOLVE_OK:
                     if (is_string($resolved['body'])) {
                         $responses[$sourceKey] = $resolved['body'];
-                        recordWeatherSuccess($airportId, $sourceType, $source);
+                        // A slice-cache hit served no upstream request, so it
+                        // clears only the per-airport breaker, never the shared
+                        // upstream backoff that a 429/503 opened.
+                        $successSource = !empty($resolved['from_slice']) ? null : $source;
+                        recordWeatherSuccess($airportId, $sourceType, $successSource);
                         weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
                     }
                     break;

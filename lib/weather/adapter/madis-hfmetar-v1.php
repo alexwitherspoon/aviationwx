@@ -301,7 +301,9 @@ function madisHfmetarResolveStationResponse(string $stationId, ?string $airportI
     require_once __DIR__ . '/../../madis-hfmetar/bulk.php';
     $sliceJson = madisHfmetarTryReadStationSlice($stationId);
     if ($sliceJson !== null) {
-        return ['body' => $sliceJson, 'outcome' => MADIS_HFMETAR_RESOLVE_OK];
+        // A slice read served no upstream HTTP, so it must not be treated as a
+        // success that clears the shared upstream backoff.
+        return ['body' => $sliceJson, 'outcome' => MADIS_HFMETAR_RESOLVE_OK, 'from_slice' => true];
     }
 
     if ($airportId !== null && $airportId !== '') {
