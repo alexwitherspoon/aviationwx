@@ -56,8 +56,9 @@ vendor/bin/phpunit tests/Unit/MadisHfmetarNetcdfTest.php tests/Unit/MadisHfmetar
   minutes of delivery latency, not true 5-minute freshness.
 - Coverage is Federal ASOS only: 1,025 stations CONUS + Alaska + territories.
   AWOS stations are not in HFMETAR.
-- Of the 69 airports in the production config, 11 have a co-located Federal
-  ASOS that appears in the HFMETAR feed.
+- Of the airports on the public airport list, 8 have a direct ICAO match in
+  the HFMETAR feed (KBOI, KEUL, KHIO, KLLJ, KMYL, KPUW, KSPB, KTWF), and
+  more sit close to a Federal ASOS.
 - The realtime LDAD path retains ~5 days of hourly files, which is enough
   to warm the wind-rose history on a forward rolling basis.
 
