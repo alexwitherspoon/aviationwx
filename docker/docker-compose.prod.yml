@@ -40,7 +40,9 @@ services:
       - NET_RAW
       - SYS_NICE
     env_file:
-      - /home/aviationwx/.env.production
+      # The deploy workflow ships the validated .env to this path; it is the
+      # single source of truth for container env (PHP_* overrides included).
+      - /home/aviationwx/.env
     environment:
       # Core configuration (can override env_file values if needed)
       - APACHE_DOCUMENT_ROOT=/var/www/html
