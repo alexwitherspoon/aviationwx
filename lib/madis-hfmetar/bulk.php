@@ -26,6 +26,13 @@ require_once __DIR__ . '/../weather-health.php';
 use AviationWX\Madis\NetcdfClassic;
 use AviationWX\Madis\NetcdfFormatException;
 
+/** Bulk download status: a changed file (200) was downloaded. */
+const MADIS_HFMETAR_DL_CHANGED = 'changed';
+/** Bulk download status: the file is unchanged (304 Not Modified). */
+const MADIS_HFMETAR_DL_NOT_MODIFIED = 'not_modified';
+/** Bulk download status: the request failed. */
+const MADIS_HFMETAR_DL_FAILED = 'failed';
+
 /**
  * Configured madis_hfmetar station ids from enabled airports.
  *
@@ -75,23 +82,39 @@ function madisHfmetarBulkEnsureDirectories(): void
 /**
  * Download the current UTC hour's netCDF file to a destination path.
  *
+ * Sends a conditional request (If-Modified-Since) when a prior Last-Modified
+ * is known. A 304 Not Modified means the file is unchanged, so the caller
+ * keeps the existing slices instead of re-downloading a file it already has.
+ *
  * @param string $destAbsolute Destination file path
+ * @param string|null $ifModifiedSince Prior Last-Modified header value, or null for an unconditional fetch
  * @param int|null $httpCode HTTP status from the response, when available
- * @return bool
+ * @param string|null $lastModified Last-Modified header from a 200 response, when available
+ * @return string One of MADIS_HFMETAR_DL_*
  */
-function madisHfmetarBulkDownloadCurrentHourGz(string $destAbsolute, ?int &$httpCode = null): bool
-{
+function madisHfmetarBulkDownloadCurrentHourGz(
+    string $destAbsolute,
+    ?string $ifModifiedSince = null,
+    ?int &$httpCode = null,
+    ?string &$lastModified = null
+): string {
     $httpCode = null;
+    $lastModified = null;
     $ch = curl_init();
     if ($ch === false) {
-        return false;
+        return MADIS_HFMETAR_DL_FAILED;
     }
     $fp = @fopen($destAbsolute, 'wb');
     if ($fp === false) {
         curl_close($ch);
 
-        return false;
+        return MADIS_HFMETAR_DL_FAILED;
     }
+    $requestHeaders = [];
+    if (is_string($ifModifiedSince) && $ifModifiedSince !== '') {
+        $requestHeaders[] = 'If-Modified-Since: ' . $ifModifiedSince;
+    }
+    $responseHeaders = [];
     curl_setopt_array($ch, [
         CURLOPT_URL => madisHfmetarCurrentHourFileUrl(),
         CURLOPT_FILE => $fp,
@@ -102,19 +125,83 @@ function madisHfmetarBulkDownloadCurrentHourGz(string $destAbsolute, ?int &$http
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
         CURLOPT_USERAGENT => 'AviationWX MADIS HFMETAR bulk refresh/1.0',
+        CURLOPT_HEADERFUNCTION => static function ($curl, $header) use (&$responseHeaders): int {
+            $length = strlen($header);
+            if (preg_match('/^Last-Modified:\s*(.+)\r?$/i', $header, $matches)) {
+                $responseHeaders['last_modified'] = trim($matches[1]);
+            }
+
+            return $length;
+        },
     ]);
+    if ($requestHeaders !== []) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $requestHeaders);
+    }
     $ok = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $httpCode = $code > 0 ? $code : null;
     curl_close($ch);
     fclose($fp);
-    if ($ok === false || $code !== 200) {
+
+    if ($ok === false) {
         @unlink($destAbsolute);
 
-        return false;
+        return MADIS_HFMETAR_DL_FAILED;
+    }
+    if ($code === 304) {
+        @unlink($destAbsolute);
+
+        return MADIS_HFMETAR_DL_NOT_MODIFIED;
+    }
+    if ($code !== 200) {
+        @unlink($destAbsolute);
+
+        return MADIS_HFMETAR_DL_FAILED;
+    }
+    $lastModified = $responseHeaders['last_modified'] ?? null;
+
+    return MADIS_HFMETAR_DL_CHANGED;
+}
+
+/**
+ * Read the bulk refresh metadata.
+ *
+ * @return array<string, mixed>|null
+ */
+function madisHfmetarBulkReadMeta(): ?array
+{
+    $path = getMadisHfmetarMetaPath();
+    if (!is_readable($path)) {
+        return null;
+    }
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+    $meta = @json_decode($raw, true);
+
+    return is_array($meta) ? $meta : null;
+}
+
+/**
+ * Refresh the mtime of every station slice so a 304 (unchanged file) keeps the
+ * slices serving through the resolver instead of falling back to per-airport
+ * HTTP. Content is untouched; only the freshness timestamp advances.
+ *
+ * @param array<int, string> $icaos Station ids to touch
+ * @return int Number of slices touched
+ */
+function madisHfmetarBulkTouchStationSlices(array $icaos): int
+{
+    $touched = 0;
+    foreach ($icaos as $icao) {
+        $path = getMadisHfmetarStationSlicePath($icao);
+        if (is_file($path) && @touch($path)) {
+            $touched++;
+        }
     }
 
-    return true;
+    return $touched;
 }
 
 /**
@@ -238,10 +325,17 @@ function madisHfmetarBulkPruneOrphanStationSlices(array $icaoSet): int
 /**
  * Write the refresh metadata file.
  *
+ * @param string|null $lastModified Last-Modified header from the most recent
+ *   200 response, used as the conditional If-Modified-Since on the next fetch.
  * @return bool
  */
-function madisHfmetarBulkWriteRefreshMeta(int $fetchedAt, string $fileHour, int $written, int $scanned): bool
-{
+function madisHfmetarBulkWriteRefreshMeta(
+    int $fetchedAt,
+    string $fileHour,
+    int $written,
+    int $scanned,
+    ?string $lastModified = null
+): bool {
     madisHfmetarBulkEnsureDirectories();
     $path = getMadisHfmetarMetaPath();
     $payload = json_encode([
@@ -249,6 +343,7 @@ function madisHfmetarBulkWriteRefreshMeta(int $fetchedAt, string $fileHour, int 
         'file_hour' => $fileHour,
         'written' => $written,
         'scanned' => $scanned,
+        'last_modified' => $lastModified,
     ], JSON_UNESCAPED_SLASHES);
     if ($payload === false) {
         return false;
@@ -365,12 +460,51 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $tmpDir = getMadisHfmetarTempDir();
     $gzTmp = $tmpDir . '/hfmetar.' . uniqid('', true) . '.gz';
     $downloadHttpCode = null;
-    $httpOk = madisHfmetarBulkDownloadCurrentHourGz($gzTmp, $downloadHttpCode);
-    $result['http_ok'] = $httpOk;
+    $lastModified = null;
+    $meta = madisHfmetarBulkReadMeta();
+    $ifModifiedSince = is_array($meta) ? ($meta['last_modified'] ?? null) : null;
+    $downloadStatus = madisHfmetarBulkDownloadCurrentHourGz(
+        $gzTmp,
+        is_string($ifModifiedSince) ? $ifModifiedSince : null,
+        $downloadHttpCode,
+        $lastModified
+    );
+    $result['http_ok'] = $downloadStatus !== MADIS_HFMETAR_DL_FAILED;
     if ($downloadHttpCode !== null) {
         $result['http_code'] = $downloadHttpCode;
     }
-    if (!$httpOk) {
+
+    if ($downloadStatus === MADIS_HFMETAR_DL_NOT_MODIFIED) {
+        // The file is unchanged since our last fetch. Touch the slices so the
+        // resolver keeps serving them instead of falling back to per-airport
+        // HTTP, and record the check as current without a redundant rewrite.
+        @unlink($gzTmp);
+        $touched = madisHfmetarBulkTouchStationSlices(array_keys($icaoSet));
+        $priorWritten = is_array($meta) ? (int) ($meta['written'] ?? 0) : 0;
+        $priorScanned = is_array($meta) ? (int) ($meta['scanned'] ?? 0) : 0;
+        $metaWritten = madisHfmetarBulkWriteRefreshMeta(
+            $now,
+            gmdate('Ymd_H', $now),
+            $priorWritten,
+            $priorScanned,
+            is_array($meta) ? ($meta['last_modified'] ?? null) : null
+        );
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+        $result['touched'] = $touched;
+        $result['meta_written'] = $metaWritten;
+        $result['ok'] = true;
+        $result['note'] = 'not_modified';
+        weatherHealthTrackMadisHfmetarBulkDownloadSuccess();
+        aviationwx_log('info', 'madis_hfmetar_bulk: file unchanged (304)', [
+            'http_code' => $downloadHttpCode,
+            'touched' => $touched,
+        ], 'app');
+
+        return $result;
+    }
+
+    if ($downloadStatus === MADIS_HFMETAR_DL_FAILED) {
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         @unlink($gzTmp);
@@ -400,7 +534,13 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $result['written'] = (int) $ingest['written'];
     $result['scanned'] = (int) $ingest['scanned'];
     $result['pruned'] = madisHfmetarBulkPruneOrphanStationSlices($icaoSet);
-    $metaWritten = madisHfmetarBulkWriteRefreshMeta($now, $fileHour, $result['written'], $result['scanned']);
+    $metaWritten = madisHfmetarBulkWriteRefreshMeta(
+        $now,
+        $fileHour,
+        $result['written'],
+        $result['scanned'],
+        $lastModified
+    );
     $result['meta_written'] = $metaWritten;
 
     flock($lockFp, LOCK_UN);

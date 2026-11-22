@@ -65,6 +65,40 @@ class MadisHfmetarBulkTest extends TestCase
     }
 
     /**
+     * The Last-Modified header persists through the metadata so the next fetch
+     * can send it as If-Modified-Since.
+     */
+    public function testMadisHfmetarBulk_WriteReadMeta_RoundTripsLastModified(): void
+    {
+        $this->assertTrue(madisHfmetarBulkWriteRefreshMeta(
+            1795325000,
+            '20261120_23',
+            2,
+            2,
+            'Sun, 20 Nov 2026 23:59:00 GMT'
+        ));
+        $meta = madisHfmetarBulkReadMeta();
+        $this->assertIsArray($meta);
+        $this->assertSame('Sun, 20 Nov 2026 23:59:00 GMT', $meta['last_modified']);
+        $this->assertSame(1795325000, $meta['fetched_at']);
+    }
+
+    /**
+     * On a 304 (unchanged file) the slices are touched so the resolver keeps
+     * serving them instead of falling back to per-airport HTTP.
+     */
+    public function testMadisHfmetarBulk_TouchStationSlices_UpdatesMtime(): void
+    {
+        madisHfmetarBulkIngestFileToStationSlices($this->fixturePath, ['KSPB' => true], '20261120_23');
+        $path = getMadisHfmetarStationSlicePath('KSPB');
+        $old = filemtime($path);
+        $this->assertTrue(@touch($path, $old - 60));
+        $touched = madisHfmetarBulkTouchStationSlices(['KSPB']);
+        $this->assertSame(1, $touched);
+        $this->assertGreaterThan($old - 60, filemtime($path));
+    }
+
+    /**
      * Ingesting the sample file writes one slice per configured station
      */
     public function testMadisHfmetarBulk_IngestSampleFile_WritesSlices(): void
