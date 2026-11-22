@@ -724,6 +724,8 @@ Formulas, stress ratios, and tier thresholds are in [SAFETY_CRITICAL_CALCULATION
 
 OurAirports is community-maintained; length and surface can disagree with national AIS. NASR remains authoritative for US airports when both exist.
 
+**Wind-compass geometry cache**: The runways cache stores normalized segments for the compass. A runway with both end coordinates and both true headings that are not reciprocal stores a curved `curve_points` set; otherwise it stays a straight line. When the mapped airport center sits more than 25 km from the runway geometry, the cache resolves center to the runway-endpoint centroid so a LID that names two airports (FAA `ID76` vs an OurAirports `ID76`) does not collapse the runway to sub-pixel size. Fail-closed rules and rotation are in [Runway segment handling](SAFETY_CRITICAL_CALCULATIONS.md#runway-segments).
+
 **NASR ingest**: `scripts/fetch-nasr-apt.php` writes `cache/nasr/nasr_apt.json`. The scheduler retries on a short interval while the APT/FRQ cache files are missing, and uses a weekly gate when the files are present but aged or a new cycle needs discovery. Failed or closed NASR pavement condition and water surfaces are excluded from runway selection.
 
 **Configured runtime slice**: Weather formatting loads `cache/nasr/nasr_apt_configured.json`, a subset containing only NASR records referenced by `airports.json`. The slice rebuilds automatically when the config file or full NASR cache changes (tracked via config SHA and source mtime in `nasr_meta.json`).

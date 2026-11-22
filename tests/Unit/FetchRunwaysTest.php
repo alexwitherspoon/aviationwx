@@ -554,4 +554,205 @@ class FetchRunwaysTest extends TestCase
 
         $this->assertEmpty($segments);
     }
+
+    public function testResolveRunwayEntryCenter_FarMappedCenter_FallsBackToRunwayCentroid(): void
+    {
+        // FAA ID76 (Elk Ridge) collides with an OurAirports LID that points at
+        // a different airport (Wilson Bar, ~74 km away). The mapped center must
+        // not win here, or the runway projects to sub-pixel size.
+        $runways = [
+            [
+                'lat1' => 44.72358333,
+                'lon1' => -116.02633333,
+                'lat2' => 44.72358333,
+                'lon2' => -116.01763888,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'source' => 'faa',
+            ],
+        ];
+        $airportCenters = [
+            // OurAirports maps LID ID76 to Wilson Bar, ~74 km from Elk Ridge.
+            'ID76' => ['lat' => 45.396994, 'lon' => -115.485306],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'ID76');
+
+        $this->assertEqualsWithDelta(44.72358333, $center['lat'], 1e-6);
+        $this->assertEqualsWithDelta(-116.0219861, $center['lon'], 1e-4);
+    }
+
+    public function testResolveRunwayEntryCenter_NearMappedCenter_KeepsMappedCenter(): void
+    {
+        // A sane center within the guard stays authoritative (matches existing
+        // behavior for airports whose mapped center sits near the runway).
+        $runways = [
+            [
+                'lat1' => 45.540394,
+                'lon1' => -122.960000,
+                'lat2' => 45.540394,
+                'lon2' => -122.939650,
+                'le_ident' => '03',
+                'he_ident' => '21',
+                'source' => 'faa',
+            ],
+        ];
+        $airportCenters = ['KHIO' => ['lat' => 45.54038, 'lon' => -122.94983]];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'KHIO');
+
+        $this->assertEqualsWithDelta(45.54038, $center['lat'], 1e-6);
+        $this->assertEqualsWithDelta(-122.94983, $center['lon'], 1e-6);
+    }
+
+    public function testResolveRunwayEntryCenter_NoCoordinates_ReturnsOrigin(): void
+    {
+        // Cardinal-only strip with no coordinates: center is arbitrary.
+        $runways = [
+            [
+                'lat1' => null,
+                'lon1' => null,
+                'lat2' => null,
+                'lon2' => null,
+                'le_ident' => 'N',
+                'he_ident' => 'S',
+                'source' => 'ourairports',
+            ],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, [], 'STRIP');
+
+        $this->assertSame(0.0, $center['lat']);
+        $this->assertSame(0.0, $center['lon']);
+    }
+
+    public function testRunwaysToSegments_CurvedRunway_EmitsCurvePoints(): void
+    {
+        // Headings 145 and 285 are 140° apart (40° from 180), a plausible bend.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '14',
+                'he_ident' => '28',
+                'le_heading_degT' => 145,
+                'he_heading_degT' => 285,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayHasKey('curve_points', $segments[0]);
+        $this->assertGreaterThan(2, count($segments[0]['curve_points']));
+        $last = count($segments[0]['curve_points']) - 1;
+        $this->assertEqualsWithDelta($segments[0]['start'][0], $segments[0]['curve_points'][0][0], 1e-9);
+        $this->assertEqualsWithDelta($segments[0]['end'][1], $segments[0]['curve_points'][$last][1], 1e-9);
+    }
+
+    public function testCurvedRunwayPoints_ArrivalHeadingMatchesHighEnd(): void
+    {
+        // The high-end control point must sit on the runway heading so the
+        // curve arrives at the high end at the expected heading instead of
+        // curling back past it. Headings 070/290 arrive at 110 degrees.
+        $pts = curvedRunwayPoints(-0.9, 0.0, 0.9, 0.0, 70.0, 290.0);
+        $this->assertNotNull($pts);
+        $last = $pts[count($pts) - 1];
+        $prev = $pts[count($pts) - 2];
+        $heading = rad2deg(atan2($last[0] - $prev[0], $last[1] - $prev[1]));
+        $heading = fmod($heading + 360.0, 360.0);
+        $this->assertEqualsWithDelta(110.0, $heading, 5.0);
+    }
+
+    public function testRunwaysToSegments_ReciprocalHeadings_NoCurvePoints(): void
+    {
+        // Headings 090/270 are straight; do not add a spurious curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'le_heading_degT' => 90,
+                'he_heading_degT' => 270,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
+
+    public function testRunwaysToSegments_MissingHeadings_NoCurvePoints(): void
+    {
+        // Coordinates present but no headings: straight line, no curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '27',
+                'source' => 'faa',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
+
+    public function testRunwaysToSegments_AbsurdHeadings_NoCurvePoints(): void
+    {
+        // Headings 090/140 (130° from reciprocal) are too far from a plausible
+        // bend; keep the straight line rather than emit a mangled curve.
+        $segments = runwaysToSegments([
+            [
+                'lat1' => 45.0,
+                'lon1' => -120.01,
+                'lat2' => 45.0,
+                'lon2' => -120.00,
+                'le_ident' => '09',
+                'he_ident' => '14',
+                'le_heading_degT' => 90,
+                'he_heading_degT' => 140,
+                'source' => 'ourairports',
+            ],
+        ], 45.0, -120.005);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('curve_points', $segments[0]);
+    }
+
+    public function testResolveRunwayEntryCenter_ID76Collision_RendersFullSizeSegment(): void
+    {
+        // The headline bug: an OurAirports LID maps ID76 to Wilson Bar ~74 km
+        // away, so the Elk Ridge runway projects to a sub-pixel ~0.007 segment.
+        // After the center guard falls back to the runway centroid, the same
+        // runway must paint at full size so it is visible on the compass.
+        $runways = [[
+            'lat1' => 44.72358333,
+            'lon1' => -116.02633333,
+            'lat2' => 44.72358333,
+            'lon2' => -116.01763888,
+            'le_ident' => '09',
+            'he_ident' => '27',
+            'source' => 'faa',
+        ]];
+        $airportCenters = [
+            'ID76' => ['lat' => 45.396994, 'lon' => -115.485306],
+        ];
+
+        $center = resolveRunwayEntryCenter($runways, $airportCenters, 'ID76');
+        $segments = runwaysToSegments($runways, (float) $center['lat'], (float) $center['lon']);
+
+        $this->assertCount(1, $segments);
+        $start = $segments[0]['start'];
+        $end = $segments[0]['end'];
+        $span = sqrt(pow($end[0] - $start[0], 2) + pow($end[1] - $start[1], 2));
+        $this->assertGreaterThan(0.5, $span);
+    }
 }

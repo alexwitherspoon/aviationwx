@@ -105,7 +105,7 @@ If `CONFIG_PATH` points at a missing path, it is skipped and the remaining candi
 | `timezone` | global default | Timezone (e.g., `America/Los_Angeles`) |
 | **Status** |||
 | `maintenance` | `false` | Show maintenance banner |
-| `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning; logged at info, exit 2 (skip) so process pool does not log "worker failed". |
+| `unlisted` | `false` | Hide from discovery (map, search, sitemap). When true, worker failures (webcam/weather/NOTAM) are treated as expected during commissioning; logged at info, exit 2 (skip) so process pool does not log "worker failed". Unlisted airports are also excluded from the discover kiosk, even when a scope names one directly. |
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
 | `station_power` | - | Optional facility power telemetry for `limited_availability` sites. Object shape: `provider` (string, e.g. `vrm`) and `config` (provider-specific). **Requires** `limited_availability: true`. Staleness for this block is **not** tied to METAR/weather fail-closed rules. The dashboard uses neutral **Station Power** labels only (no vendor branding in the UI). **Manual refresh:** same command as the scheduler: `php scripts/fetch-station-power.php --worker <airport_id>`; with local Docker: `make station-power-fetch AIRPORT=<airport_id>` (containers must be running). |

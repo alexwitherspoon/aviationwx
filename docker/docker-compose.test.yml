@@ -61,7 +61,7 @@ services:
       - WEATHER_REFRESH_URL=http://localhost
       - GIT_SHA=${GIT_SHA:-test}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-sf", "--max-time", "5", "http://localhost/"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -191,6 +191,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a0e️⃣  Runway Display Render Tests (JS)..."
 	@node tests/js/runway-display-render.test.js || { echo "❌ Runway display render JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a0e1️⃣  Runway Compass Curve Tests (JS)..."
+	@node tests/js/wind-runway-curve.test.js || { echo "❌ Runway compass curve JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a0b️⃣  Outage Display Sync Tests (JS)..."
 	@node tests/js/outage-display-sync.test.js || { echo "❌ Outage display sync JS tests failed"; exit 1; }
 	@echo ""
@@ -367,8 +370,7 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	@docker compose -f docker/docker-compose.test.yml up -d
 	@echo "Waiting for test container to be healthy..."
 	@bash -c 'timeout=60; while [ $$timeout -gt 0 ]; do \
-		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf http://localhost/ >/dev/null 2>&1; then \
-			echo "✓ Test environment ready at http://localhost:9080"; \
+		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf --max-time 5 http://localhost/ >/dev/null 2>&1; then \
 			break; \
 		fi; \
 		sleep 1; \
@@ -378,7 +380,16 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 		echo "❌ Test container failed to become healthy"; \
 		docker compose -f docker/docker-compose.test.yml logs; \
 		exit 1; \
-	fi'
+	fi'; \
+	# Both curl probes above use --max-time 5, proving mod_php actually
+	# serves HTTP responses before PHPUnit hits the server. This prevents
+	# the race condition where Apache accepts connections but PHP modules
+	# are not yet initialized when test runs begin.
+	@bash -c 'ready=false; for i in 1 2 3 4 5; do \
+		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf --max-time 5 http://localhost/ >/dev/null 2>&1; then \
+			ready=true; break; fi; sleep 1; done; \
+		if [ "$$ready" = "false" ]; then echo "Web server not responding after stabilization window"; exit 1; fi; \
+		echo "✓ Test environment ready at http://localhost:9080"'
 	# Host-run make targets (test-ci, test-local, test-e2e) still write webcam
 	# frames from the host into this bind-mounted cache, so keep the webcams tree
 	# writable by both users (#298). CI's native-HTTP step no longer depends on

@@ -657,6 +657,51 @@ class ExifUtilsTest extends TestCase
         $this->assertSame(0, $result['timestamp']);
     }
 
+    public function testResolveDateTimeOriginalTag_ExifSubarray_ReturnsValue(): void
+    {
+        $this->assertSame(
+            '2024:12:26 15:30:45',
+            resolveDateTimeOriginalTag(['EXIF' => ['DateTimeOriginal' => '2024:12:26 15:30:45']])
+        );
+    }
+
+    public function testResolveDateTimeOriginalTag_Root_ReturnsValue(): void
+    {
+        $this->assertSame(
+            '2024:12:26 15:30:45',
+            resolveDateTimeOriginalTag(['DateTimeOriginal' => '2024:12:26 15:30:45'])
+        );
+    }
+
+    public function testResolveDateTimeOriginalTag_Ifd0Only_ReturnsNull(): void
+    {
+        // The completeness gate must reject a frame that only carries the
+        // IFD0.DateTime fallback. A file datetime is not a capture timestamp.
+        $this->assertNull(
+            resolveDateTimeOriginalTag(['IFD0' => ['DateTime' => '2024:12:26 15:30:45']])
+        );
+        $this->assertNull(
+            resolveDateTimeOriginalTag(['EXIF' => ['DateTimeOriginal' => null], 'IFD0' => ['DateTime' => '2024:12:26 15:30:45']])
+        );
+    }
+
+    public function testResolveDateTimeOriginalTag_Absent_ReturnsNull(): void
+    {
+        $this->assertNull(resolveDateTimeOriginalTag([]));
+    }
+
+    public function testExifCaptureTimeOverridesEmbedded_NoProvidedTime_ReturnsFalse(): void
+    {
+        $this->assertFalse(exifCaptureTimeOverridesEmbedded(0));
+        $this->assertFalse(exifCaptureTimeOverridesEmbedded(-1));
+    }
+
+    public function testExifCaptureTimeOverridesEmbedded_ProvidedCaptureTime_ReturnsTrue(): void
+    {
+        $this->assertTrue(exifCaptureTimeOverridesEmbedded(1700000000));
+        $this->assertTrue(exifCaptureTimeOverridesEmbedded(1));
+    }
+
     public function testReadDateTimeOriginalFromExif_UnreadableFile_ReturnsError()
     {
         // Skip when running as root: chmod 000 is bypassed for root, so

@@ -342,6 +342,12 @@ $workRegistry->registerEnqueueTick('weather', function (int $now) use (&$weather
 });
 
 $workRegistry->registerEnqueueTick('webcam', function (int $now) use (&$webcamPool, &$webcamScheduleQueue): void {
+    // Integration tests manage the webcam cache deterministically; the
+    // scheduler must not refresh webcams while they run (see
+    // schedulerShouldRefreshWebcams()).
+    if (!schedulerShouldRefreshWebcams()) {
+        return;
+    }
     // Min-heap schedule: both push and pull cams with per-camera refresh_seconds.
     if ($webcamPool !== null && $webcamScheduleQueue !== null) {
         foreach ($webcamScheduleQueue->getReadyCameras() as $entry) {

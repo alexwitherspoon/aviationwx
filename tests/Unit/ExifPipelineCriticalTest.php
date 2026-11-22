@@ -306,6 +306,42 @@ class ExifPipelineCriticalTest extends TestCase
     }
 
     /**
+     * A live pull's fetch time must overwrite an embedded camera-clock
+     * DateTimeOriginal so the stored and embedded times agree. The camera clock
+     * is not trusted, so its embedded value must not be preserved.
+     */
+    public function testEnsureImageHasExif_ProvidedFetchTimeOverwritesEmbeddedExif()
+    {
+        if (!$this->hasExiftool) {
+            $this->fail('Install libimage-exiftool-perl');
+        }
+
+        $testFile = $this->createTestJpeg('test_overwrite_embedded.jpg');
+        $cameraTime = strtotime('2026-01-13 10:00:00 UTC');
+        addExifTimestamp($testFile, $cameraTime);
+        $this->assertSame(
+            $cameraTime,
+            getDateTimeOriginalTimestamp($testFile),
+            'precondition: the frame carries an embedded DateTimeOriginal'
+        );
+
+        $fetchTime = time();
+        $result = ensureImageHasExif($testFile, $fetchTime);
+
+        $this->assertTrue($result, 'ensureImageHasExif() must return true');
+        $this->assertSame(
+            $fetchTime,
+            getDateTimeOriginalTimestamp($testFile),
+            'a provided fetch time must overwrite the embedded DateTimeOriginal so stored and embedded agree'
+        );
+        $this->assertSame(
+            $fetchTime,
+            getExifTimestamp($testFile),
+            'GPS UTC must be rewritten to the fetch time too'
+        );
+    }
+
+    /**
      * A complete capture-time payload carries both the UTC GPS time and the
      * local DateTimeOriginal. Federated sources are trusted only when both are
      * present; a partial payload means the source is not actually healthy.

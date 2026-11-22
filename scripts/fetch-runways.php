@@ -20,6 +20,12 @@ require_once __DIR__ . '/../lib/ourairports/ingest-airports.php';
 require_once __DIR__ . '/../lib/ourairports/http.php';
 require_once __DIR__ . '/../lib/ourairports/refresh.php';
 require_once __DIR__ . '/../lib/ourairports/urls.php';
+require_once __DIR__ . '/../lib/map-card.php';
+
+// Guard (km): a mapped airport center farther than this from its runway
+// geometry is treated as an identifier collision, so the runway centroid is
+// used instead. The same LID can name two different airports across datasets.
+const RUNWAY_CENTER_COLLISION_GUARD_KM = 25.0;
 
 // Worldwide merge peak exceeds default PHP-FPM/CLI limits; match NASR APT worker headroom.
 // @ suppresses ini_set failure in restricted environments (e.g. disable_functions)
@@ -519,6 +525,73 @@ function headingBasedRunwayToSegment(array $rw, string $source): ?array
 }
 
 /**
+ * Sample a cubic Bezier between two coordinate runway ends whose headings are
+ * not reciprocal (a real bend). Headings are true (degT), matching the frame
+ * where x is east and y is north. Returns null unless the end headings show a
+ * meaningful but plausible bend, so straight runways and bad data stay as a
+ * plain line rather than getting a spurious curve.
+ *
+ * @param float $x1 Low-end x (normalized)
+ * @param float $y1 Low-end y (normalized)
+ * @param float $x2 High-end x (normalized)
+ * @param float $y2 High-end y (normalized)
+ * @param float $leHeading True heading at the low end
+ * @param float $heHeading True heading at the high end
+ * @param int $steps Sample count along the curve
+ * @return array<int, array{float, float}>|null Sampled points, or null
+ */
+function curvedRunwayPoints(
+    float $x1,
+    float $y1,
+    float $x2,
+    float $y2,
+    float $leHeading,
+    float $heHeading,
+    int $steps = 12
+): ?array {
+    if (!is_finite($leHeading) || !is_finite($heHeading)) {
+        return null;
+    }
+    $raw = fmod(abs($leHeading - $heHeading), 360.0);
+    $delta = min($raw, 360.0 - $raw);
+    if (abs($delta - 180.0) <= 20.0 || abs($delta - 180.0) > 60.0) {
+        return null;
+    }
+
+    $rad = M_PI / 180.0;
+    // Outward runway heading at each end.
+    $dx = sin($leHeading * $rad);
+    $dy = cos($leHeading * $rad);
+    $ex = sin($heHeading * $rad);
+    $ey = cos($heHeading * $rad);
+
+    $segLen = sqrt(pow($x2 - $x1, 2) + pow($y2 - $y1, 2));
+    if ($segLen < 0.0001) {
+        return null;
+    }
+    $k = $segLen * 0.35;
+    $p1x = $x1 + $dx * $k;
+    $p1y = $y1 + $dy * $k;
+    $p2x = $x2 + $ex * $k;
+    $p2y = $y2 + $ey * $k;
+
+    $points = [];
+    for ($i = 0; $i <= $steps; $i++) {
+        $t = $i / $steps;
+        $mt = 1.0 - $t;
+        $a = $mt * $mt * $mt;
+        $b = 3.0 * $mt * $mt * $t;
+        $c = 3.0 * $mt * $t * $t;
+        $d = $t * $t * $t;
+        $points[] = [
+            $a * $x1 + $b * $p1x + $c * $p2x + $d * $x2,
+            $a * $y1 + $b * $p1y + $c * $p2y + $d * $y2,
+        ];
+    }
+    return $points;
+}
+
+/**
  * Build normalized compass segments from raw runway rows.
  *
  * Coordinate rows are projected and scaled to fit; coordinate-less rows are synthesized
@@ -607,7 +680,7 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             $identAt2 = $heIdent;
         }
 
-        $segments[] = [
+        $segment = [
             'start' => [$x1, $y1],
             'end' => [$x2, $y2],
             'le_ident' => $identAt1,
@@ -616,6 +689,26 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             'ident_at_end' => $identAt2,
             'source' => $rw['source'] ?? 'programmatic',
         ];
+
+        $leHeading = $rw['le_heading_degT'] ?? $rw['le_heading_deg'] ?? null;
+        $heHeading = $rw['he_heading_degT'] ?? $rw['he_heading_deg'] ?? null;
+        $curve = null;
+        if (is_numeric($leHeading) && is_numeric($heHeading)
+            && trim((string) $leHeading) !== ''
+            && trim((string) $heHeading) !== '') {
+            $curve = curvedRunwayPoints(
+                (float) $x1,
+                (float) $y1,
+                (float) $x2,
+                (float) $y2,
+                (float) $leHeading,
+                (float) $heHeading
+            );
+        }
+        if ($curve !== null) {
+            $segment['curve_points'] = $curve;
+        }
+        $segments[] = $segment;
     }
     return centerRunwaySegments($segments);
 }
@@ -629,10 +722,47 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
  */
 function resolveRunwayEntryCenter(array $runways, array $airportCenters, string $primaryId, ?string $altId = null): array
 {
+    $centroid = runwayEndpointsCentroid($runways);
     $center = $airportCenters[$primaryId] ?? ($altId !== null ? ($airportCenters[$altId] ?? null) : null);
+
+    if ($center !== null && $centroid !== null) {
+        // A mapped center far from the actual runway geometry means the
+        // identifier collided across datasets: the same LID names two
+        // different airports (FAA ID76 Elk Ridge vs OurAirports ID76 Wilson
+        // Bar). Projecting a runway against a center kilometers away collapses
+        // the segment to sub-pixel size. Prefer the runway geometry instead.
+        $distanceKm = mapCardDistanceKm(
+            (float) $center['lat'],
+            (float) $center['lon'],
+            $centroid['lat'],
+            $centroid['lon']
+        );
+        if ($distanceKm > RUNWAY_CENTER_COLLISION_GUARD_KM) {
+            $center = $centroid;
+        }
+    }
+
     if ($center !== null) {
         return $center;
     }
+
+    if ($centroid !== null) {
+        return $centroid;
+    }
+
+    // No coordinate-bearing runways (cardinal-only strip); center is arbitrary
+    // because synthesized segments are drawn through center by bearing.
+    return ['lat' => 0.0, 'lon' => 0.0];
+}
+
+/**
+ * Mean of runway endpoint coordinates, or null when none are numeric.
+ *
+ * @param array<int, array<string, mixed>> $runways
+ * @return array{lat: float, lon: float}|null
+ */
+function runwayEndpointsCentroid(array $runways): ?array
+{
     $lats = array_values(array_filter(
         array_merge(array_column($runways, 'lat1'), array_column($runways, 'lat2')),
         'is_numeric'
@@ -643,9 +773,7 @@ function resolveRunwayEntryCenter(array $runways, array $airportCenters, string 
     ));
 
     if ($lats === [] || $lons === []) {
-        // No coordinate-bearing runways (cardinal-only strip); center is arbitrary
-        // because synthesized segments are drawn through center by bearing.
-        return ['lat' => 0.0, 'lon' => 0.0];
+        return null;
     }
 
     return [

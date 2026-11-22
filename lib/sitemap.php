@@ -178,7 +178,7 @@ function getSitemapUrls(): array
     
     $urls['tools'][] = [
         'loc' => 'https://discover.aviationwx.org/',
-        'title' => 'Airport Tour',
+        'title' => 'Discover',
         'lastmod' => $today,
         'changefreq' => 'daily',
         'priority' => '0.3'
