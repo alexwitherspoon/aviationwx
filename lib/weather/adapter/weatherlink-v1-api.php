@@ -19,6 +19,7 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -284,7 +285,7 @@ class WeatherLinkV1Adapter {
         if (isset($data['pressure_in']) && is_numeric($data['pressure_in'])) {
             $result['pressure'] = (float)$data['pressure_in'];
         } elseif (isset($data['pressure_mb']) && is_numeric($data['pressure_mb'])) {
-            $result['pressure'] = (float)$data['pressure_mb'] / 33.8639;
+            $result['pressure'] = hpaToInhg((float) $data['pressure_mb']);
         }
         
         // Wind speed - prefer knots, fallback to mph conversion

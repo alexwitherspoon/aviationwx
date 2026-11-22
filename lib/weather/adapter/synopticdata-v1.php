@@ -334,7 +334,6 @@ function parseSynopticDataResponse(?string $response): ?array {
     }
     
     // Wind speed - SynopticData provides wind_speed in m/s
-    // Convert to knots: kts = m/s × 1.943844
     $windSpeed = $getValue('wind_speed');
     if ($windSpeed !== null && is_numeric($windSpeed)) {
         // Convert m/s to knots
@@ -376,7 +375,6 @@ function parseSynopticDataResponse(?string $response): ?array {
         $precip = $getValue('precip_accum_one_hour');
     }
     if ($precip !== null && is_numeric($precip)) {
-        // Convert mm to inches
         $precip = mmToInches((float)$precip);
     } else {
         $precip = 0;
@@ -398,7 +396,6 @@ function parseSynopticDataResponse(?string $response): ?array {
         // Check if in meters (typical) and convert to statute miles
         // If value is > 10, likely in meters; if < 10, likely already in miles
         if ($visibility > 10) {
-            // Convert meters to statute miles: SM = m / 1609.344
             $visibility = metersToStatuteMiles((float)$visibility);
         } else {
             $visibility = (float)$visibility;

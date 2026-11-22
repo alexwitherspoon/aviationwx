@@ -338,7 +338,6 @@ class NwsApiAdapter {
         $humidity = self::extractValue($props, 'relativeHumidity');
         
         // Pressure: Pa → inHg
-        // Conversion: inHg = Pa / 3386.39
         $pressure = null;
         $pressurePa = self::extractValue($props, 'barometricPressure');
         if ($pressurePa !== null) {
@@ -346,7 +345,6 @@ class NwsApiAdapter {
         }
         
         // Wind Speed: km/h → knots
-        // Conversion: knots = km/h / 1.852
         $windSpeed = null;
         $windSpeedKmh = self::extractValue($props, 'windSpeed');
         if ($windSpeedKmh !== null) {
@@ -368,7 +366,6 @@ class NwsApiAdapter {
         }
         
         // Visibility: meters → statute miles
-        // Conversion: SM = m / 1609.344
         $visibility = null;
         $visibilityM = self::extractValue($props, 'visibility');
         if ($visibilityM !== null) {

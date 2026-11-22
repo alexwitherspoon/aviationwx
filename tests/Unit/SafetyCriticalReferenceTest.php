@@ -398,6 +398,18 @@ class SafetyCriticalReferenceTest extends TestCase
         $this->assertEqualsWithDelta(20.0, $result, 0.0001,
             "293.15 K should equal 20 C. Got: $result");
     }
+
+    /**
+     * Round-trip temperature conversion (K → C → K)
+     */
+    public function testTemperatureConversion_RoundTrip_KelvinCelsius()
+    {
+        $original = 288.15;
+        $celsius = kelvinToCelsius($original);
+        $result = $celsius + 273.15;
+        $this->assertEqualsWithDelta($original, $result, 0.0001,
+            "Round-trip temperature conversion (K→C→K) must preserve value");
+    }
     
     // ============================================================================
     // WIND CALCULATION TESTS (Gust Factor)
