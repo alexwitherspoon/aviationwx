@@ -88,15 +88,26 @@ You don't need to configure update cadence or push settings. We pull data from y
 - ☐ Validate "looks reasonable" readings for 24-72 hours
 
 ### What you need to do
-- **Set up your Davis station** with WeatherLink connectivity
-- **Provide AviationWX with API access** (see "Connecting Your Station to AviationWX" below)
-- **That's it** - AviationWX handles polling automatically
+
+- **Set up your Davis station** with a WeatherLink Live hub
+- **Pick one connectivity path** (below)
+- **That's it** - AviationWX handles the rest
 
 Davis installs tend to reward careful mounting and cable hygiene. If your airport or community is already familiar with Davis, lean into that expertise.
 
-### WiFiLogger direct upload (alternative path)
+### Pick your connectivity path
 
-WeatherLink or a local hub with the AviationWX Bridge are the preferred weather data paths for Davis Vantage stations. If neither works for your setup, a WiFiLogger with internet access can push conditions directly to aviationwx.org from its **Custom Export Setup** screen. For device-level steps, check the [WiFiLogger documentation](https://wifilogger.com/docs) for your specific hardware model.
+Two paths work well, and they are mutually exclusive per station. Pick one.
+
+**Path 1: WeatherLink cloud API (direct).** Your hub has a WeatherLink account. AviationWX polls the WeatherLink API with the keys you provide. No extra device. See "Davis WeatherLink - What We Need" below.
+
+**Path 2: AviationWX Bridge (local, no WeatherLink account).** A Bridge on your LAN polls the hub's local API. No WeatherLink account, no cloud round trip. Point the Bridge at the hub's LAN address, run a test poll in the web console, and pick the transmitter. The AviationWX admin wires the station into the airport config on their end. See **Guide 10 - AviationWX Bridge** for the device side.
+
+If you have both a WeatherLink account and a Bridge, use one path for the station, not both. The platform can ingest both, but one path per station is cleaner to operate.
+
+### WiFiLogger direct upload (fallback path)
+
+If neither WeatherLink nor a local Bridge works for your setup, a WiFiLogger with internet access can push conditions directly to aviationwx.org from its **Custom Export Setup** screen. For device-level steps, check the [WiFiLogger documentation](https://wifilogger.com/docs) for your specific hardware model.
 
 The airport admin gives you one ready-to-paste URL; the rest is entering it and checking that data shows up.
 
@@ -277,6 +288,7 @@ AviationWX supports the weather station platforms below, plus METAR-only configu
 | **Tempest** | New installs, community deployments | ~1 minute | Free API |
 | **Ambient Weather** | Budget stations, existing installs | ~1 minute | Free API |
 | **Davis WeatherLink** | Professional/long-term installs | 15 min (Basic/free), 5 min (Pro), ~1 min (Pro+) | Free API (Basic); paid for 5 min / 1 min |
+| **Davis via Bridge** | Davis on a WeatherLink Live hub, no cloud account | Near-real-time (Bridge polls the hub locally) | Bridge device (Guide 10) |
 | **DyaconLive** | Existing Dyacon stations at small airports | ~10 minutes | DyaconLive+ required for API |
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
 | **SynopticData** | Backup source, aggregated networks | 5-10 minutes | Free tier available |
@@ -382,7 +394,9 @@ Alternatively, the MAC address is printed on a label on your weather station's b
 
 ## Davis WeatherLink - What We Need
 
-Professional-grade option for long-term, high-reliability installs. Davis offers two API versions (v1 and v2) depending on your hardware. **When WeatherLink or a local hub isn't available,** use the [WiFiLogger direct upload](#wifilogger-direct-upload--alternative-path) path as an alternative.
+This is **Path 1** from the Davis setup section above: direct polling through the WeatherLink cloud API. If you don't have a WeatherLink account and want to use the local hub instead, that's **Path 2** with the AviationWX Bridge (see **Guide 10**). If neither works, the [WiFiLogger direct upload](#wifilogger-direct-upload--fallback-path) path is the fallback.
+
+Davis offers two API versions (v1 and v2) depending on your hardware.
 
 ### Which API Version Do I Need?
 
@@ -840,6 +854,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | **Tempest** | `station_id`, `api_key` |
 | **Ambient** | `api_key`, `application_key`,  `mac_address` |
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
+| **Davis via Bridge** | Hub LAN address, transmitter ID (admin wires the rest; Guide 10) |
 | **WiFiLogger Direct Upload** | upload URL (from AviationWX), MAC address |
 | **DyaconLive** | `station_id`, `username`, `password` (DyaconLive+ required) |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
