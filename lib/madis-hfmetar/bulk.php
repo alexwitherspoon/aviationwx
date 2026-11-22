@@ -300,7 +300,11 @@ function madisHfmetarBulkIngestFileToStationSlices(string $gzAbsolute, array $ic
     $scanned = 0;
     $failed = 0;
     foreach (array_keys($icaoSet) as $icao) {
-        $observations = madisHfmetarDecodeFile($gzAbsolute, $icao);
+        // Decode from the bytes already read and validated above. A null here
+        // can only mean the station has no rows in this file, never a transient
+        // re-read failure, which would wrongly count as a station-not-reporting
+        // and skip retrying its stale slice.
+        $observations = madisHfmetarDecodeBytes($fileBytes, $icao);
         $scanned++;
         if ($observations === null) {
             continue;

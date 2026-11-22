@@ -182,6 +182,7 @@ final class GlobalWeatherCircuitBreakerTest extends TestCase
             self::AIRPORT_B . '_weather_',
             'global_weather_tempest_',
             'global_weather_ambient_',
+            'global_weather_madis_hfmetar_',
         ];
         $changed = false;
         foreach (array_keys($data) as $key) {
