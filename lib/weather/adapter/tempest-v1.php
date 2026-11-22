@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../upstream-rate-limit.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -480,17 +481,17 @@ function parseTempestResponse($response): ?array {
     // This will be set later if wind_gust is numeric
     
     // Convert pressure from mb to inHg
-    $pressureInHg = isset($obs['sea_level_pressure']) ? $obs['sea_level_pressure'] / 33.8639 : null;
+    $pressureInHg = isset($obs['sea_level_pressure']) ? hpaToInhg((float) $obs['sea_level_pressure']) : null;
     
     // Convert wind speed from m/s to knots
     // Add type checks to handle unexpected input types gracefully
     $windSpeedKts = null;
     if (isset($obs['wind_avg']) && is_numeric($obs['wind_avg'])) {
-        $windSpeedKts = (int)round((float)$obs['wind_avg'] * 1.943844);
+        $windSpeedKts = (int)round(mpsToKnots((float)$obs['wind_avg']));
     }
     $gustSpeedKts = null;
     if (isset($obs['wind_gust']) && is_numeric($obs['wind_gust'])) {
-        $gustSpeedKts = (int)round((float)$obs['wind_gust'] * 1.943844);
+        $gustSpeedKts = (int)round(mpsToKnots((float)$obs['wind_gust']));
     }
     // Also update peak_gust calculation
     if ($gustSpeedKts !== null) {
@@ -504,7 +505,7 @@ function parseTempestResponse($response): ?array {
         'wind_speed' => $windSpeedKts,
         'wind_direction' => isset($obs['wind_direction']) && is_numeric($obs['wind_direction']) ? (int)round((float)$obs['wind_direction']) : null,
         'gust_speed' => $gustSpeedKts,
-        'precip_accum' => isset($obs['precip_accum_local_day_final']) ? $obs['precip_accum_local_day_final'] * 0.0393701 : 0, // mm to inches
+        'precip_accum' => isset($obs['precip_accum_local_day_final']) ? mmToInches((float) $obs['precip_accum_local_day_final']) : 0, // mm to inches
         'dewpoint' => isset($obs['dew_point']) ? $obs['dew_point'] : null,
         'visibility' => null, // Not available from Tempest
         'ceiling' => null, // Not available from Tempest

@@ -199,7 +199,7 @@ function madisHfmetarKelvinToCelsius(?array $column, NetcdfClassic $netcdf, stri
         return null;
     }
 
-    return $value - 273.15;
+    return kelvinToCelsius((float) $value);
 }
 
 /**
@@ -214,7 +214,7 @@ function madisHfmetarPascalToInhg(?array $column, NetcdfClassic $netcdf, string 
         return null;
     }
 
-    return $value / 3386.39;
+    return pascalToInhg((float) $value);
 }
 
 /**
@@ -229,7 +229,7 @@ function madisHfmetarMpsToKnots(?array $column, NetcdfClassic $netcdf, string $n
         return null;
     }
 
-    return $value * 1.943844;
+    return mpsToKnots((float) $value);
 }
 
 /**

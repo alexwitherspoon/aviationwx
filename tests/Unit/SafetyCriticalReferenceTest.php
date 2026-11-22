@@ -378,6 +378,26 @@ class SafetyCriticalReferenceTest extends TestCase
         $result = round(($input - 32) * 5/9, 1);
         $this->assertEquals($expected, $result);
     }
+
+    /**
+     * 273.15 K = 0°C (absolute zero reference for ASOS kelvin feeds)
+     */
+    public function testTemperatureConversion_KelvinToCelsius_Freezing()
+    {
+        $result = kelvinToCelsius(273.15);
+        $this->assertEqualsWithDelta(0.0, $result, 0.0001,
+            "273.15 K should equal 0 C. Got: $result");
+    }
+
+    /**
+     * 293.15 K = 20°C (room temperature reference)
+     */
+    public function testTemperatureConversion_KelvinToCelsius_RoomTemperature()
+    {
+        $result = kelvinToCelsius(293.15);
+        $this->assertEqualsWithDelta(20.0, $result, 0.0001,
+            "293.15 K should equal 20 C. Got: $result");
+    }
     
     // ============================================================================
     // WIND CALCULATION TESTS (Gust Factor)
@@ -516,6 +536,31 @@ class SafetyCriticalReferenceTest extends TestCase
         $converted = inhgToHpa(hpaToInhg($original));
         $this->assertEqualsWithDelta($original, $converted, 0.01,
             "Round-trip pressure conversion must preserve value within 0.01 hPa");
+    }
+
+    /**
+     * 101325 Pa (standard sea level) = 29.9213 inHg
+     * Source: ICAO International Standard Atmosphere (ISA), 1 inHg = 3386.39 Pa
+     */
+    public function testPressureConversion_PascalToInhg_StandardAtmosphere()
+    {
+        $result = pascalToInhg(101325.0);
+        $this->assertEqualsWithDelta(29.9213, $result, 0.001,
+            "101325 Pa should equal 29.9213 inHg. Got: $result");
+    }
+
+    /**
+     * ASOS altimeter in Pa converts to the same inHg as hPa input
+     */
+    public function testPressureConversion_PascalToInhg_MatchesHpaToInhg()
+    {
+        $hpa = 1013.25;
+        $this->assertEqualsWithDelta(
+            hpaToInhg($hpa),
+            pascalToInhg($hpa * 100),
+            0.0001,
+            "Pa and hPa paths must agree"
+        );
     }
     
     // ----------------------------------------------------------------------------
@@ -905,6 +950,31 @@ class SafetyCriticalReferenceTest extends TestCase
         $result = mphToKnots($mph);
         $this->assertEqualsWithDelta($expectedKnots, $result, 0.0001,
             "1.15078 mph should equal 1 knot. Got: $result");
+    }
+
+    /**
+     * 1 m/s = 1.943844 knots (data flow standard for ASOS/MESONET feeds)
+     */
+    public function testWindConversion_MpsToKnots()
+    {
+        $mps = 1.0;
+        $expectedKnots = 1.943844;
+        
+        $result = mpsToKnots($mps);
+        $this->assertEqualsWithDelta($expectedKnots, $result, 0.000001,
+            "1 m/s should equal 1.943844 knots. Got: $result");
+    }
+
+    /**
+     * Round-trip wind conversion (knots → m/s → knots)
+     */
+    public function testWindConversion_RoundTrip_Mps()
+    {
+        $originalKnots = 12.0;
+        $mps = $originalKnots / 1.943844;
+        $result = mpsToKnots($mps);
+        $this->assertEqualsWithDelta($originalKnots, $result, 0.0001,
+            "Round-trip wind conversion (kt→m/s→kt) must preserve value");
     }
     
     /**

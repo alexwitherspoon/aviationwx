@@ -35,6 +35,7 @@ require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../nws-points-cache.php';
+require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
@@ -341,7 +342,7 @@ class NwsApiAdapter {
         $pressure = null;
         $pressurePa = self::extractValue($props, 'barometricPressure');
         if ($pressurePa !== null) {
-            $pressure = $pressurePa / 3386.39;
+            $pressure = pascalToInhg((float) $pressurePa);
         }
         
         // Wind Speed: km/h → knots
@@ -349,7 +350,7 @@ class NwsApiAdapter {
         $windSpeed = null;
         $windSpeedKmh = self::extractValue($props, 'windSpeed');
         if ($windSpeedKmh !== null) {
-            $windSpeed = (int)round($windSpeedKmh / 1.852);
+            $windSpeed = (int)round(kmhToKnots((float) $windSpeedKmh));
         }
         
         // Wind Direction: degrees (no conversion needed)
@@ -363,7 +364,7 @@ class NwsApiAdapter {
         $gustSpeed = null;
         $gustSpeedKmh = self::extractValue($props, 'windGust');
         if ($gustSpeedKmh !== null) {
-            $gustSpeed = (int)round($gustSpeedKmh / 1.852);
+            $gustSpeed = (int)round(kmhToKnots((float) $gustSpeedKmh));
         }
         
         // Visibility: meters → statute miles
@@ -371,7 +372,7 @@ class NwsApiAdapter {
         $visibility = null;
         $visibilityM = self::extractValue($props, 'visibility');
         if ($visibilityM !== null) {
-            $visibility = $visibilityM / 1609.344;
+            $visibility = metersToStatuteMiles((float) $visibilityM);
             // Cap at reasonable maximum
             if ($visibility > 50) {
                 $visibility = 50.0;
