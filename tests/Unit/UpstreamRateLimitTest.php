@@ -341,6 +341,19 @@ final class UpstreamRateLimitTest extends TestCase
     }
 
     /**
+     * A 429 from any MADIS airport backs off all of them: the global
+     * circuit-breaker credential fingerprint is shared, not per-station.
+     */
+    public function testGlobalCredentialFingerprint_MadisHfmetar_SharedAcrossStations(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $kspb = upstreamRateGlobalCredentialFingerprint('madis_hfmetar', ['type' => 'madis_hfmetar', 'station_id' => 'kspb']);
+        $kboi = upstreamRateGlobalCredentialFingerprint('madis_hfmetar', ['type' => 'madis_hfmetar', 'station_id' => 'KBOI']);
+        $this->assertSame($kspb, $kboi, '429 backoff must coordinate across all MADIS stations');
+    }
+
+    /**
      * A cold-start or mass-outage stampede is bounded by the shared bucket:
      * once it is spent across any stations, the next fallback is throttled.
      */

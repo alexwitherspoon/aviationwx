@@ -149,6 +149,15 @@ function upstreamRateGlobalCredentialFingerprint(string $provider, array $source
             $sourceConfig,
             ['application_key']
         ),
+        // All MADIS airports share the same current-hour bulk file, so a 429
+        // from any one of them must back off all of them. The station id is
+        // intentionally not part of the fingerprint.
+        'madis_hfmetar' => upstreamRateFingerprintForScope(
+            'madis_hfmetar',
+            'bulk',
+            $sourceConfig,
+            []
+        ),
         default => upstreamRateFingerprint($provider, $sourceConfig),
     };
 }

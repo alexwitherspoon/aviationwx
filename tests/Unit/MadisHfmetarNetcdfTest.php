@@ -230,6 +230,26 @@ class MadisHfmetarNetcdfTest extends TestCase
     }
 
     /**
+     * Response headers normalize to a lowercase map so the circuit breaker can
+     * read Retry-After on a 429.
+     */
+    public function testNormalizeResponseHeaders_LowercasesAndKeepsRetryAfter(): void
+    {
+        $lines = [
+            "HTTP/1.1 429 Too Many Requests\r",
+            "Retry-After: 60\r",
+            "X-RateLimit-Reset: 1730000000\r",
+            "Content-Type: text/html\r",
+            "\r",
+        ];
+        $headers = normalizeResponseHeaders($lines);
+        $this->assertSame('60', $headers['retry-after']);
+        $this->assertSame('1730000000', $headers['x-ratelimit-reset']);
+        $this->assertSame('text/html', $headers['content-type']);
+        $this->assertArrayNotHasKey('http/1.1 429 too many requests', $headers, 'status line is not a header pair');
+    }
+
+    /**
      * Adapter exposes the source type and 5-minute update frequency
      */
     public function testMadisAdapter_SourceContract(): void

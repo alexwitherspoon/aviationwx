@@ -22,6 +22,7 @@ require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../weather-health.php';
+require_once __DIR__ . '/../circuit-breaker.php';
 
 use AviationWX\Madis\NetcdfClassic;
 use AviationWX\Madis\NetcdfFormatException;
@@ -96,10 +97,12 @@ function madisHfmetarBulkDownloadCurrentHourGz(
     string $destAbsolute,
     ?string $ifModifiedSince = null,
     ?int &$httpCode = null,
-    ?string &$lastModified = null
+    ?string &$lastModified = null,
+    ?array &$responseHeaders = null
 ): string {
     $httpCode = null;
     $lastModified = null;
+    $responseHeaders = [];
     $ch = curl_init();
     if ($ch === false) {
         return MADIS_HFMETAR_DL_FAILED;
@@ -114,7 +117,6 @@ function madisHfmetarBulkDownloadCurrentHourGz(
     if (is_string($ifModifiedSince) && $ifModifiedSince !== '') {
         $requestHeaders[] = 'If-Modified-Since: ' . $ifModifiedSince;
     }
-    $responseHeaders = [];
     curl_setopt_array($ch, [
         CURLOPT_URL => madisHfmetarCurrentHourFileUrl(),
         CURLOPT_FILE => $fp,
@@ -127,8 +129,9 @@ function madisHfmetarBulkDownloadCurrentHourGz(
         CURLOPT_USERAGENT => 'AviationWX MADIS HFMETAR bulk refresh/1.0',
         CURLOPT_HEADERFUNCTION => static function ($curl, $header) use (&$responseHeaders): int {
             $length = strlen($header);
-            if (preg_match('/^Last-Modified:\s*(.+)\r?$/i', $header, $matches)) {
-                $responseHeaders['last_modified'] = trim($matches[1]);
+            if (preg_match('/^([^:]+):\s*(.+)\r?$/i', $header, $matches)) {
+                $name = strtolower(trim($matches[1]));
+                $responseHeaders[$name] = trim($matches[2]);
             }
 
             return $length;
@@ -158,7 +161,7 @@ function madisHfmetarBulkDownloadCurrentHourGz(
 
         return MADIS_HFMETAR_DL_FAILED;
     }
-    $lastModified = $responseHeaders['last_modified'] ?? null;
+    $lastModified = $responseHeaders['last-modified'] ?? null;
 
     return MADIS_HFMETAR_DL_CHANGED;
 }
@@ -461,13 +464,32 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $gzTmp = $tmpDir . '/hfmetar.' . uniqid('', true) . '.gz';
     $downloadHttpCode = null;
     $lastModified = null;
+    $responseHeaders = null;
     $meta = madisHfmetarBulkReadMeta();
     $ifModifiedSince = is_array($meta) ? ($meta['last_modified'] ?? null) : null;
+
+    // Honor an open shared breaker: a recent 429/503 has already backed us
+    // off, so skip the download instead of compounding the request rate.
+    $madisSourceConfig = ['type' => 'madis_hfmetar'];
+    $breaker = checkWeatherCircuitBreaker('madis_bulk', 'madis_hfmetar', $madisSourceConfig);
+    if (is_array($breaker) && ($breaker['skip'] ?? false)) {
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+        weatherHealthTrackCircuitOpen('madis_bulk', 'madis_hfmetar');
+        $result['note'] = 'circuit_open';
+        aviationwx_log('info', 'madis_hfmetar_bulk: skipped, shared circuit open', [
+            'backoff_remaining' => $breaker['backoff_remaining'] ?? null,
+        ], 'app');
+
+        return $result;
+    }
+
     $downloadStatus = madisHfmetarBulkDownloadCurrentHourGz(
         $gzTmp,
         is_string($ifModifiedSince) ? $ifModifiedSince : null,
         $downloadHttpCode,
-        $lastModified
+        $lastModified,
+        $responseHeaders
     );
     $result['http_ok'] = $downloadStatus !== MADIS_HFMETAR_DL_FAILED;
     if ($downloadHttpCode !== null) {
@@ -495,6 +517,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         $result['meta_written'] = $metaWritten;
         $result['ok'] = true;
         $result['note'] = 'not_modified';
+        recordWeatherSuccess('madis_bulk', 'madis_hfmetar', $madisSourceConfig);
         weatherHealthTrackMadisHfmetarBulkDownloadSuccess();
         aviationwx_log('info', 'madis_hfmetar_bulk: file unchanged (304)', [
             'http_code' => $downloadHttpCode,
@@ -508,6 +531,19 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         @unlink($gzTmp);
+        // A 429/503 is a backpressure signal: open the shared breaker so every
+        // MADIS airport and the worker itself back off, honoring Retry-After.
+        if ($downloadHttpCode === 429 || $downloadHttpCode === HTTP_STATUS_SERVICE_UNAVAILABLE) {
+            recordWeatherFailure(
+                'madis_bulk',
+                'madis_hfmetar',
+                'transient',
+                $downloadHttpCode,
+                null,
+                $madisSourceConfig,
+                $responseHeaders
+            );
+        }
         weatherHealthTrackMadisHfmetarBulkDownloadFailure($downloadHttpCode);
         aviationwx_log('warning', 'madis_hfmetar_bulk: download failed', [
             'url' => madisHfmetarCurrentHourFileUrl($now),
@@ -517,6 +553,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         return $result;
     }
     weatherHealthTrackMadisHfmetarBulkDownloadSuccess();
+    recordWeatherSuccess('madis_bulk', 'madis_hfmetar', $madisSourceConfig);
 
     $fileHour = gmdate('Ymd_H', $now);
     $ingest = madisHfmetarBulkIngestFileToStationSlices($gzTmp, $icaoSet, $fileHour);
