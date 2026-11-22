@@ -336,7 +336,7 @@ See `config/env.example` for full list. Key Docker/infrastructure variables:
 
 - `DOMAIN`: Your domain name (aviationwx.org)
 - `APP_PORT`: Local port to use (default: 8080)
-- `PHP_MEMORY_LIMIT`: PHP memory (default: 2048M)
+- `PHP_MEMORY_LIMIT`: PHP memory (default: 256M)
 - `COMPOSE_PROJECT_NAME`: Docker Compose project name
 - `SSL_ENABLED`: Enable SSL for local dev (default: false)
 

@@ -66,10 +66,11 @@ if [ ! -f "${CONFIG_FILE}" ]; then
     fi
 fi
 
-# Apply optional runtime PHP ini overrides. These variables are validated by
-# the deploy config but are not wired to PHP anywhere else, so without this
-# block they would never take effect. Baked defaults live in custom.ini;
-# later conf.d files win in the PHP scan, so this file overrides them.
+# Apply optional runtime PHP ini overrides. Compose files pass these through
+# from the project .env (see docker-compose.yml); without this block the
+# values would sit unused in the container env. Baked defaults live in
+# custom.ini; later conf.d files win in the PHP scan, so this file overrides
+# them.
 PHP_INI_OVERRIDES=/usr/local/etc/php/conf.d/env-overrides.ini
 
 # Normalize PHP ini size values (digits with optional K/M/G/T suffix, e.g.
