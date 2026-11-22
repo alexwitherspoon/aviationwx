@@ -120,4 +120,27 @@ class MadisConfigValidationTest extends TestCase
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
         $this->assertContains('station_id', upstreamRateLimitIdentityFieldNames('madis_hfmetar'));
     }
+
+    /**
+     * Runtime loading rejects an off-field MADIS source so the co-location
+     * guarantee does not depend on running the offline validator
+     */
+    public function testMadisSource_RuntimeValidation_OffFieldStation_Rejected(): void
+    {
+        $config = $this->airportConfig([['type' => 'madis_hfmetar', 'station_id' => 'KUAO']]);
+        $result = validateRuntimeConfigSchema($config);
+        $joined = implode(' ', $result['errors']);
+        $this->assertStringContainsString('madis_hfmetar', $joined);
+        $this->assertStringContainsString('co-located', $joined);
+    }
+
+    /**
+     * Runtime loading accepts a co-located MADIS source
+     */
+    public function testMadisSource_RuntimeValidation_CoLocated_Valid(): void
+    {
+        $config = $this->airportConfig([['type' => 'madis_hfmetar', 'station_id' => 'KSPB']]);
+        $result = validateRuntimeConfigSchema($config);
+        $this->assertStringNotContainsString('madis_hfmetar', implode(' ', $result['errors']));
+    }
 }

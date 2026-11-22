@@ -905,7 +905,9 @@ if (!defined('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS')) {
     define('MADIS_HFMETAR_REFRESH_INTERVAL_SECONDS', 300);
 }
 if (!defined('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS')) {
-    define('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS', 900);
+    // 30 minutes keeps the previous hour's slices serving through the
+    // hourly file rollover, when the new hour's file is not yet published.
+    define('MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS', 1800);
 }
 if (!defined('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS')) {
     define('MADIS_HFMETAR_DOWNLOAD_TIMEOUT_SECONDS', 120);

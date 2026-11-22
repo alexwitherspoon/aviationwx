@@ -82,6 +82,22 @@ class MadisHfmetarBulkTest extends TestCase
     }
 
     /**
+     * A corrupt downloaded file is reported as an error, not a success with zero
+     * written, so the refresh run does not advance the successful-refresh metadata
+     */
+    public function testMadisHfmetarBulk_IngestCorruptFile_ReturnsError(): void
+    {
+        $gzPath = sys_get_temp_dir() . '/madis_corrupt_' . uniqid('', true) . '.gz';
+        file_put_contents($gzPath, gzencode('not a netcdf file at all', 9));
+
+        $result = madisHfmetarBulkIngestFileToStationSlices($gzPath, ['KSPB' => true], '20261120_23');
+        @unlink($gzPath);
+
+        $this->assertArrayHasKey('error', $result);
+        $this->assertStringContainsString('netCDF', $result['error']);
+    }
+
+    /**
      * A fresh station slice is returned as JSON
      */
     public function testMadisHfmetarBulk_TryReadStationSlice_Fresh_ReturnsJson(): void
@@ -100,8 +116,8 @@ class MadisHfmetarBulkTest extends TestCase
     {
         madisHfmetarBulkIngestFileToStationSlices($this->fixturePath, ['KSPB' => true], '20261120_23');
         $path = getMadisHfmetarStationSlicePath('KSPB');
-        // Older than MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS
-        $this->assertTrue(@touch($path, time() - 1000));
+        // Older than MADIS_HFMETAR_STATION_FILE_MAX_AGE_SECONDS (1800)
+        $this->assertTrue(@touch($path, time() - 2000));
         $this->assertNull(madisHfmetarTryReadStationSlice('KSPB'));
     }
 

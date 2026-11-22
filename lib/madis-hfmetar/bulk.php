@@ -23,6 +23,9 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../weather-health.php';
 
+use AviationWX\Madis\NetcdfClassic;
+use AviationWX\Madis\NetcdfFormatException;
+
 /**
  * Configured madis_hfmetar station ids from enabled airports.
  *
@@ -150,6 +153,24 @@ function madisHfmetarBulkWriteStationSliceAtomic(string $icaoUpper, string $json
 function madisHfmetarBulkIngestFileToStationSlices(string $gzAbsolute, array $icaoSet, string $fileHour): array
 {
     madisHfmetarBulkEnsureDirectories();
+
+    // A valid download that yields no observations is a station not yet
+    // reporting, not a failure. Distinguish that from an unparseable file so
+    // the refresh run does not report success for a corrupt download.
+    $fileBytes = @file_get_contents($gzAbsolute);
+    if ($fileBytes === false) {
+        return ['error' => 'file read failed'];
+    }
+    $raw = (substr($fileBytes, 0, 2) === "\x1f\x8b") ? gzdecode($fileBytes) : $fileBytes;
+    if ($raw === false) {
+        return ['error' => 'file is not a valid gzip stream'];
+    }
+    try {
+        new NetcdfClassic($raw);
+    } catch (NetcdfFormatException $e) {
+        return ['error' => 'file is not a parseable netCDF'];
+    }
+
     $written = 0;
     $scanned = 0;
     $failed = 0;
@@ -366,6 +387,15 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
     $fileHour = gmdate('Ymd_H', $now);
     $ingest = madisHfmetarBulkIngestFileToStationSlices($gzTmp, $icaoSet, $fileHour);
     @unlink($gzTmp);
+
+    if (isset($ingest['error'])) {
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+        $result['note'] = $ingest['error'];
+        aviationwx_log('warning', 'madis_hfmetar_bulk: ingest failed', ['error' => $ingest['error']], 'app');
+
+        return $result;
+    }
 
     $result['written'] = (int) $ingest['written'];
     $result['scanned'] = (int) $ingest['scanned'];

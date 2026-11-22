@@ -2398,6 +2398,25 @@ function validateRuntimeConfigSchema(array $config): array {
                 $errors[] = "Airport key '{$aid}' is invalid (must be 3-50 lowercase alphanumeric characters, hyphens allowed)";
             }
 
+            // MADIS co-location is a safety guarantee, so runtime loading must
+            // reject an off-field station_id just like the offline validator.
+            // This runs before the webcams guard, which skips airports without
+            // cameras.
+            if (isset($ap['weather_sources']) && is_array($ap['weather_sources'])) {
+                foreach ($ap['weather_sources'] as $wsIdx => $ws) {
+                    if (!is_array($ws) || ($ws['type'] ?? '') !== 'madis_hfmetar') {
+                        continue;
+                    }
+                    $apIcao = isset($ap['icao']) ? strtoupper(trim((string) $ap['icao'])) : '';
+                    if ($apIcao === '') {
+                        $errors[] = "Airport '{$aid}' weather_sources[{$wsIdx}] (madis_hfmetar) requires airport 'icao' (co-located ASOS only)";
+                    } elseif (!isset($ws['station_id']) || !is_string($ws['station_id'])
+                        || strtoupper(trim($ws['station_id'])) !== $apIcao) {
+                        $errors[] = "Airport '{$aid}' weather_sources[{$wsIdx}] (madis_hfmetar) station_id must match airport icao (co-located ASOS only)";
+                    }
+                }
+            }
+
             if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
                 continue;
             }

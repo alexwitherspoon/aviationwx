@@ -64,11 +64,10 @@ function madisHfmetarDecodeBytes(string $bytes, string $stationId): ?array
 
     try {
         $netcdf = new NetcdfClassic($bytes);
+        return madisHfmetarObservationsFromNetcdf($netcdf, $stationId);
     } catch (NetcdfFormatException $e) {
         return null;
     }
-
-    return madisHfmetarObservationsFromNetcdf($netcdf, $stationId);
 }
 
 /**

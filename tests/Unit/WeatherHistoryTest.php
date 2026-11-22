@@ -151,6 +151,31 @@ class WeatherHistoryTest extends TestCase
         $this->assertEquals(1, $history['observation_count']);
         $this->assertSame($fresher, $history['observations'][0]['obs_time']);
     }
+
+    /**
+     * A regression in the freshest field observation time is not appended, so
+     * the ring stays in non-decreasing observation order for the wind rose.
+     */
+    public function testAppendWeatherHistory_BackwardsObsTime_Skipped(): void
+    {
+        $t1 = time() - 120;
+        $t2 = time();
+
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $t1,
+            'temperature' => 15.5,
+            '_field_obs_time_map' => ['tempest' => $t2],
+        ]);
+        appendWeatherHistory($this->testAirportId, [
+            'obs_time_primary' => $t1,
+            'temperature' => 15.6,
+            '_field_obs_time_map' => ['metar' => $t1],
+        ]);
+
+        $history = getWeatherHistory($this->testAirportId);
+        $this->assertEquals(1, $history['observation_count'], 'backwards obs time must not append');
+        $this->assertSame($t2, $history['observations'][0]['obs_time']);
+    }
     
     /**
      * Different observation times should add new entries

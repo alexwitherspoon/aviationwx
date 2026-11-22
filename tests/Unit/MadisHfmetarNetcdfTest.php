@@ -73,6 +73,26 @@ class MadisHfmetarNetcdfTest extends TestCase
     }
 
     /**
+     * Reader rejects a header truncated mid-word with a format exception,
+     * not a bare TypeError from unpack on an empty slice
+     */
+    public function testNetcdfClassic_TruncatedWords_ThrowsNetcdfFormatException(): void
+    {
+        // "CDF\x01" + a zero record count: 8 bytes passes the guard but the
+        // next word read hits EOF.
+        $this->expectException(NetcdfFormatException::class);
+        new NetcdfClassic("CDF\x01" . str_repeat("\x00", 4));
+    }
+
+    /**
+     * Truncation inside the decode path returns null instead of throwing
+     */
+    public function testMadisHfmetarDecode_TruncatedHeader_ReturnsNull(): void
+    {
+        $this->assertNull(madisHfmetarDecodeBytes("CDF\x01" . str_repeat("\x00", 4), 'KSPB'));
+    }
+
+    /**
      * Record count matches the fixture's 12,239 records
      */
     public function testNetcdfClassic_RecordCount_MatchesFixture(): void

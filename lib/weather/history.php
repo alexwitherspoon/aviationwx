@@ -53,10 +53,11 @@ function appendWeatherHistory(string $airportId, array $weather, ?array $fieldSo
     
     $history = loadWeatherHistory($airportId);
     
-    // Check if this observation is new (different from last)
+    // Check if this observation advances the ring: duplicates and backwards
+    // regressions are skipped so entries stay in non-decreasing order.
     if (!empty($history['observations'])) {
         $lastObs = end($history['observations']);
-        if (isset($lastObs['obs_time']) && $lastObs['obs_time'] === $obsTime) {
+        if (isset($lastObs['obs_time']) && $obsTime <= (int) $lastObs['obs_time']) {
             // Same observation time, skip
             return false;
         }

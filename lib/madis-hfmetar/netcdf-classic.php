@@ -430,6 +430,9 @@ class NetcdfClassic
     private static function readString(string $bytes, int &$offset): string
     {
         $length = self::readUint32($bytes, $offset);
+        if ($length > strlen($bytes) - $offset) {
+            throw new NetcdfFormatException('file truncated reading name string');
+        }
         $raw = substr($bytes, $offset, $length);
         $offset += self::roundUp4($length);
 
@@ -537,6 +540,9 @@ class NetcdfClassic
      */
     private static function readUint32(string $bytes, int &$offset): int
     {
+        if (strlen($bytes) - $offset < 4) {
+            throw new NetcdfFormatException('file truncated reading 4-byte word');
+        }
         $value = unpack('N', substr($bytes, $offset, 4))[1];
         $offset += 4;
 
