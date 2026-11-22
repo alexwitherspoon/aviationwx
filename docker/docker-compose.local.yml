@@ -41,6 +41,13 @@ services:
       - CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}
       - WEATHER_REFRESH_URL=http://localhost
       - GIT_SHA=${GIT_SHA:-}
+      # PHP runtime overrides (optional). Baked defaults in the image are low
+      # (memory_limit 256M) so small single-airport hosts stay within reach;
+      # raise them here if your cameras push large frames.
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-}
+      - PHP_MAX_EXECUTION_TIME=${PHP_MAX_EXECUTION_TIME:-}
+      - PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE:-}
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

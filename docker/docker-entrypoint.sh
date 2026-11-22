@@ -66,6 +66,51 @@ if [ ! -f "${CONFIG_FILE}" ]; then
     fi
 fi
 
+# Apply optional runtime PHP ini overrides. Compose files pass these through
+# from the project .env (see docker-compose.yml); without this block the
+# values would sit unused in the container env. Baked defaults live in
+# custom.ini; later conf.d files win in the PHP scan, so this file overrides
+# them.
+PHP_INI_OVERRIDES=/usr/local/etc/php/conf.d/env-overrides.ini
+
+# Normalize PHP ini size values (digits with optional K/M/G/T suffix, e.g.
+# 100M or 2G) to bytes so upload and POST caps compare across units. Returns 0
+# for values that do not parse; an unparseable value just skips the check.
+php_size_to_bytes() {
+    local v="$1"
+    if ! [[ "$v" =~ ^[0-9]+[kKmMgGtT]?$ ]]; then
+        echo 0
+        return 0
+    fi
+    local num="${v%[kKmMgGtT]}"
+    case "${v#"$num"}" in
+        k|K) echo $((num * 1024)) ;;
+        m|M) echo $((num * 1024 * 1024)) ;;
+        g|G) echo $((num * 1024 * 1024 * 1024)) ;;
+        t|T) echo $((num * 1024 * 1024 * 1024 * 1024)) ;;
+        *) echo "$num" ;;
+    esac
+}
+
+if [ -n "${PHP_MEMORY_LIMIT:-}" ] || [ -n "${PHP_MAX_EXECUTION_TIME:-}" ] \
+    || [ -n "${PHP_UPLOAD_MAX_FILESIZE:-}" ] || [ -n "${PHP_POST_MAX_SIZE:-}" ]; then
+    # upload_max_filesize caps a single file; post_max_size caps the whole
+    # multipart body. A POST cap below the upload cap makes big pushes fail with
+    # an empty $_FILES, so require POST >= upload using the baked 100M defaults
+    # for values left unset.
+    UPLOAD_MAX="${PHP_UPLOAD_MAX_FILESIZE:-100M}"
+    POST_MAX="${PHP_POST_MAX_SIZE:-100M}"
+    if [ "$(php_size_to_bytes "$UPLOAD_MAX")" -gt "$(php_size_to_bytes "$POST_MAX")" ]; then
+        echo "❌ PHP_POST_MAX_SIZE (${POST_MAX}) must be >= PHP_UPLOAD_MAX_FILESIZE (${UPLOAD_MAX}); uploads above the POST cap fail with empty _FILES" >&2
+        exit 1
+    fi
+    : > "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_MEMORY_LIMIT:-}" ] && echo "memory_limit = ${PHP_MEMORY_LIMIT}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_MAX_EXECUTION_TIME:-}" ] && echo "max_execution_time = ${PHP_MAX_EXECUTION_TIME}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_UPLOAD_MAX_FILESIZE:-}" ] && echo "upload_max_filesize = ${PHP_UPLOAD_MAX_FILESIZE}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_POST_MAX_SIZE:-}" ] && echo "post_max_size = ${PHP_POST_MAX_SIZE}" >> "${PHP_INI_OVERRIDES}"
+fi
+
 # Secure airports.json permissions (prevents SFTP users from reading sensitive config)
 # airports.json contains API keys, passwords, and other secrets
 # Permissions: 640 (root read/write, www-data read, others none)
