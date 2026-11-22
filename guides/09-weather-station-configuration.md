@@ -94,6 +94,42 @@ You don't need to configure update cadence or push settings. We pull data from y
 
 Davis installs tend to reward careful mounting and cable hygiene. If your airport or community is already familiar with Davis, lean into that expertise.
 
+### WiFiLogger direct upload (alternative path)
+
+WeatherLink or a local hub with the AviationWX Bridge are the preferred weather data paths for Davis Vantage stations. If neither works for your setup, a WiFiLogger with internet access can push conditions directly to aviationwx.org from its **Custom Export Setup** screen. For device-level steps, check the [WiFiLogger documentation](https://wifilogger.com/docs) for your specific hardware model.
+
+The airport admin gives you one ready-to-paste URL; the rest is entering it and checking that data shows up.
+
+#### Before you start
+
+Three things:
+- A WiFiLogger with internet access and its web UI reachable from a browser on the same network.
+- The upload URL from your AviationWX contact. It looks like `https://api.aviationwx.org/v1/upload/weather/wifilogger/awxu_...`. Do not retype it by hand; copy and paste it.
+- The station's MAC address. If the admin asks for it, it is on the WiFiLogger's **System** or **Network** page, in the form `aa:bb:cc:dd:ee:ff`.
+
+The exact steps depend on your WiFiLogger firmware version and device model. Check the [WiFiLogger documentation](https://wifilogger.com/docs) for setup instructions specific to your hardware.
+
+There is no username or password on the HTTP tab; the long token in the URL connects your station to the right airport. For the upload interval, 5 seconds works well for a local weather page.
+
+#### Confirm it works
+
+- After a refresh cycle, open your airport's AviationWX page and check that temperature, wind, and pressure update.
+- The station also sends a one-time "registration" message with its model and firmware. You do not need to act on it; AviationWX uses it to confirm the station identity.
+
+#### What the station sends
+
+A WiFiLogger pushes weather data from whatever hardware it is attached to: temperature, humidity, dew point, barometer or altimeter, wind speed and direction, gusts, and rain. AviationWX prefers the altimeter for pressure, treats wind as true north, and discards any reading outside a sane range.
+
+For Davis Vantage stations, the vane must be installed and aimed to true north; AviationWX does not apply a magnetic correction.
+
+#### If it does not update
+
+- **No data at all:** confirm the URL is pasted exactly, that Interval is set, and that the WiFiLogger has an internet connection. The WiFiLogger's own status page usually shows the last export attempt and any HTTP error.
+- **Rejected (4xx):** the station MAC or the Davis station id does not match what the admin configured. Send the admin the MAC from the WiFiLogger's System page and the `wid` value if you know it.
+- **Stale after a while:** the interval may be too long, or the station lost power or internet. Check the WiFiLogger status page.
+
+Questions go to `contact@aviationwx.org`.
+
 ---
 
 ## DyaconLive setup (existing Dyacon stations)
@@ -346,7 +382,7 @@ Alternatively, the MAC address is printed on a label on your weather station's b
 
 ## Davis WeatherLink - What We Need
 
-Professional-grade option for long-term, high-reliability installs. Davis offers two API versions depending on your hardware.
+Professional-grade option for long-term, high-reliability installs. Davis offers two API versions (v1 and v2) depending on your hardware. **When WeatherLink or a local hub isn't available,** use the [WiFiLogger direct upload](#wifilogger-direct-upload--alternative-path) path as an alternative.
 
 ### Which API Version Do I Need?
 
@@ -720,8 +756,8 @@ For Canadian airports, AviationWX can use Nav Canada weather data via the SWOB-M
 
 ### Which Type to Use?
 
-- **swob_auto** – Automated stations (e.g., CYAV Winnipeg/St. Andrews, CBBC Bella Bella)
-- **swob_man** – Manned stations (e.g., CYVR Vancouver, CYYZ Toronto, CYOW Ottawa)
+- **swob_auto** - Automated stations (e.g., CYAV Winnipeg/St. Andrews, CBBC Bella Bella)
+- **swob_man** - Manned stations (e.g., CYVR Vancouver, CYYZ Toronto, CYOW Ottawa)
 
 Most airports use one or the other. Check the [SWOB station list](https://dd.meteo.gc.ca/today/observations/doc/swob-xml_station_list.csv) or try the AUTO endpoint first; if it returns 404, try MAN.
 
@@ -804,6 +840,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | **Tempest** | `station_id`, `api_key` |
 | **Ambient** | `api_key`, `application_key`,  `mac_address` |
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
+| **WiFiLogger Direct Upload** | upload URL (from AviationWX), MAC address |
 | **DyaconLive** | `station_id`, `username`, `password` (DyaconLive+ required) |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
 | **SynopticData** | `station_id` + permission (we have a central API key) |
