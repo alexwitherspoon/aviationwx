@@ -181,6 +181,18 @@ function upstreamRateLimitScopesForSource(array $source): array
                 'burst' => UPSTREAM_RATE_LIMIT_AMBIENT_APPLICATION_KEY_BURST,
             ],
         ],
+        'madis_hfmetar' => [
+            // All MADIS airports fall back to the same current-hour bulk file
+            // over HTTP, so they share one global bucket. The fingerprint is
+            // scope-only: the station id must not split the bucket, or a mass
+            // fallback would compound rather than throttle.
+            [
+                'scope' => 'bulk',
+                'fingerprint' => upstreamRateFingerprintForScope('madis_hfmetar', 'bulk', $source, []),
+                'rpm' => UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_RPM,
+                'burst' => UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_BURST,
+            ],
+        ],
         default => (static function () use ($provider, $source): array {
             $policy = upstreamRateLimitPolicyForProvider($provider);
             if ($policy['rpm'] <= 0 || $policy['burst'] <= 0) {

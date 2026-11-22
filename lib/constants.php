@@ -977,6 +977,15 @@ if (!defined('UPSTREAM_RATE_LIMIT_NWS_RPM')) {
 if (!defined('UPSTREAM_RATE_LIMIT_NWS_BURST')) {
     define('UPSTREAM_RATE_LIMIT_NWS_BURST', 2);
 }
+if (!defined('UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_RPM')) {
+    // Per-airport HTTP fallback shares one bucket because every source
+    // downloads the same current-hour bulk file. Bounds a cold-start or
+    // mass-outage stampede; throttled airports degrade to METAR.
+    define('UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_RPM', 12);
+}
+if (!defined('UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_BURST')) {
+    define('UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_BURST', 2);
+}
 
 // NWS /points/{lat},{lon} metadata cache (stable grid mapping; reduces repeat calls)
 if (!defined('NWS_POINTS_CACHE_TTL_SECONDS')) {

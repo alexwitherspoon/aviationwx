@@ -323,6 +323,45 @@ final class UpstreamRateLimitTest extends TestCase
         unset($GLOBALS['upstreamRateLimitTestNow']);
     }
 
+    /**
+     * All MADIS airports hit the same current-hour bulk file on HTTP fallback,
+     * so every station maps to one shared bucket, not a per-station one.
+     */
+    public function testScopesForSource_MadisHfmetar_SameBucketAcrossStations(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        $kspb = upstreamRateLimitScopesForSource(['type' => 'madis_hfmetar', 'station_id' => 'kspb']);
+        $kboi = upstreamRateLimitScopesForSource(['type' => 'madis_hfmetar', 'station_id' => 'KBOI']);
+        $this->assertCount(1, $kspb);
+        $this->assertCount(1, $kboi);
+        $this->assertSame('bulk', $kspb[0]['scope']);
+        $this->assertSame($kspb[0]['fingerprint'], $kboi[0]['fingerprint'], 'stations must share one bucket');
+        $this->assertSame(UPSTREAM_RATE_LIMIT_MADIS_HFMETAR_BURST, $kspb[0]['burst']);
+    }
+
+    /**
+     * A cold-start or mass-outage stampede is bounded by the shared bucket:
+     * once it is spent across any stations, the next fallback is throttled.
+     */
+    public function testConsumeForSource_MadisHfmetar_SharedBucketThrottlesAcrossStations(): void
+    {
+        require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
+
+        upstreamRateLimitTestForceEnforcement();
+        $t0 = 1_700_000_000.0;
+        $GLOBALS['upstreamRateLimitTestNow'] = $t0;
+
+        // burst = 2, so two stations may go; a third is throttled.
+        $this->assertTrue(upstreamRateLimitConsumeForSource(['type' => 'madis_hfmetar', 'station_id' => 'kspb'])['allowed']);
+        $this->assertTrue(upstreamRateLimitConsumeForSource(['type' => 'madis_hfmetar', 'station_id' => 'kboi'])['allowed']);
+        $third = upstreamRateLimitConsumeForSource(['type' => 'madis_hfmetar', 'station_id' => 'khio']);
+        $this->assertFalse($third['allowed'], 'shared MADIS bucket must throttle the third fallback');
+
+        upstreamRateLimitTestClearForceEnforcement();
+        unset($GLOBALS['upstreamRateLimitTestNow']);
+    }
+
     public function testConsumeForSource_Ambient_PartialDenyRefundsEarlierScopeTokens(): void
     {
         require_once __DIR__ . '/../../lib/upstream-rate-limit.php';
