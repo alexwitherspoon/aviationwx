@@ -216,6 +216,41 @@ function weatherHealthTrackMetarBulkDownloadSuccess(): void
     weatherHealthAtomicUpdate($currentHour, $counters, $now);
 }
 
+/**
+ * Track a MADIS HFMETAR bulk download failure so a bulk-only outage is
+ * visible on the status page even when per-airport HTTP fallback still works.
+ */
+function weatherHealthTrackMadisHfmetarBulkDownloadFailure(?int $httpCode): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $counters = [
+        'madis_hfmetar_bulk_download_failures' => 1,
+        'attempts_madis_hfmetar_bulk' => 1,
+        'failures_madis_hfmetar_bulk' => 1,
+    ];
+    weatherHealthIncrementHttpFailureCounters($counters, $httpCode, 'madis_hfmetar_bulk');
+
+    weatherHealthAtomicUpdate($currentHour, $counters, $now);
+}
+
+/**
+ * Track a successful MADIS HFMETAR bulk download.
+ */
+function weatherHealthTrackMadisHfmetarBulkDownloadSuccess(): void
+{
+    $now = time();
+    $currentHour = gmdate('Y-m-d-H', $now);
+
+    $counters = [
+        'attempts_madis_hfmetar_bulk' => 1,
+        'successes_madis_hfmetar_bulk' => 1,
+    ];
+
+    weatherHealthAtomicUpdate($currentHour, $counters, $now);
+}
+
 // =============================================================================
 // FILE I/O FUNCTIONS
 // =============================================================================
@@ -392,6 +427,7 @@ function weatherHealthComputeStatus(array $data): array
         'upstream_rate_limit_fail_open' => 0,
         'upstream_429' => 0,
         'metar_bulk_download_failures' => 0,
+        'madis_hfmetar_bulk_download_failures' => 0,
     ];
 
     foreach ($data['hourly_buckets'] ?? [] as $hourKey => $bucket) {
@@ -406,7 +442,9 @@ function weatherHealthComputeStatus(array $data): array
         ? $totals['total_successes'] / $totals['total_attempts']
         : 1.0;
 
-    $noFetchActivity = $totals['total_attempts'] === 0 && $totals['metar_bulk_download_failures'] === 0;
+    $noFetchActivity = $totals['total_attempts'] === 0
+        && $totals['metar_bulk_download_failures'] === 0
+        && $totals['madis_hfmetar_bulk_download_failures'] === 0;
 
     if ($totals['total_attempts'] > 0 && $successRate < 0.5) {
         $health['status'] = 'down';
@@ -426,6 +464,9 @@ function weatherHealthComputeStatus(array $data): array
     } elseif ($totals['metar_bulk_download_failures'] > 0) {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d METAR bulk download failure(s) in last hour', $totals['metar_bulk_download_failures']);
+    } elseif ($totals['madis_hfmetar_bulk_download_failures'] > 0) {
+        $health['status'] = 'degraded';
+        $health['message'] = sprintf('%d MADIS HFMETAR bulk download failure(s) in last hour', $totals['madis_hfmetar_bulk_download_failures']);
     } elseif ($totals['upstream_429'] > 0) {
         $health['status'] = 'degraded';
         $health['message'] = sprintf('%d upstream HTTP 429 response(s) in last hour', $totals['upstream_429']);
@@ -447,6 +488,7 @@ function weatherHealthComputeStatus(array $data): array
         'upstream_rate_limit_fail_open_last_hour' => $totals['upstream_rate_limit_fail_open'],
         'upstream_429_last_hour' => $totals['upstream_429'],
         'metar_bulk_download_failures_last_hour' => $totals['metar_bulk_download_failures'],
+        'madis_hfmetar_bulk_download_failures_last_hour' => $totals['madis_hfmetar_bulk_download_failures'],
     ];
 
     return $health;
@@ -604,6 +646,9 @@ function weatherHealthProviderDisplayName(string $provider): string
 {
     if ($provider === 'metar_bulk') {
         return 'METAR bulk (AWC national gzip)';
+    }
+    if ($provider === 'madis_hfmetar_bulk') {
+        return 'MADIS HFMETAR bulk (NOAA hourly netCDF)';
     }
 
     require_once __DIR__ . '/weather/utils.php';

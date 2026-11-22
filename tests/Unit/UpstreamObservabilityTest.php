@@ -179,6 +179,39 @@ final class UpstreamObservabilityTest extends TestCase
         $this->assertStringContainsString('METAR bulk download', (string) ($status['message'] ?? ''));
     }
 
+    public function testWeatherHealthTrackMadisHfmetarBulkDownloadFailure_429RollsIntoGlobalHealth(): void
+    {
+        weatherHealthTrackMadisHfmetarBulkDownloadFailure(429);
+        weatherHealthFlush();
+
+        $status = weatherHealthGetStatus();
+        $metrics = $status['metrics'] ?? [];
+        $this->assertSame(1, $metrics['upstream_429_last_hour'] ?? null);
+        $this->assertSame(1, $metrics['madis_hfmetar_bulk_download_failures_last_hour'] ?? null);
+        $this->assertSame('degraded', $status['status'] ?? null);
+        $this->assertStringContainsString('MADIS HFMETAR bulk download', (string) ($status['message'] ?? ''));
+    }
+
+    public function testWeatherHealthTrackMadisHfmetarBulkDownloadSuccess_IncrementsAttempts(): void
+    {
+        weatherHealthTrackMadisHfmetarBulkDownloadSuccess();
+        weatherHealthFlush();
+
+        $cache = weatherHealthLoadCache();
+        $hourKey = gmdate('Y-m-d-H', time());
+        $bucket = $cache['hourly_buckets'][$hourKey] ?? [];
+        $this->assertSame(1, $bucket['attempts_madis_hfmetar_bulk'] ?? null);
+        $this->assertSame(1, $bucket['successes_madis_hfmetar_bulk'] ?? null);
+    }
+
+    public function testWeatherHealthProviderDisplayName_MadisHfmetarBulk(): void
+    {
+        $this->assertSame(
+            'MADIS HFMETAR bulk (NOAA hourly netCDF)',
+            weatherHealthProviderDisplayName('madis_hfmetar_bulk')
+        );
+    }
+
     public function testWeatherHealthTrackUpstreamThrottleSkip_WithFetchesStaysOperational(): void
     {
         weatherHealthTrackFetch('kspb', 'tempest', true, 200);

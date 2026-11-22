@@ -21,6 +21,7 @@ require_once __DIR__ . '/../cache-paths.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../weather-health.php';
 
 /**
  * Configured madis_hfmetar station ids from enabled airports.
@@ -352,6 +353,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
         flock($lockFp, LOCK_UN);
         fclose($lockFp);
         @unlink($gzTmp);
+        weatherHealthTrackMadisHfmetarBulkDownloadFailure($downloadHttpCode);
         aviationwx_log('warning', 'madis_hfmetar_bulk: download failed', [
             'url' => madisHfmetarCurrentHourFileUrl($now),
             'http_code' => $downloadHttpCode,
@@ -359,6 +361,7 @@ function madisHfmetarBulkRefreshRun(?int $now = null): array
 
         return $result;
     }
+    weatherHealthTrackMadisHfmetarBulkDownloadSuccess();
 
     $fileHour = gmdate('Ymd_H', $now);
     $ingest = madisHfmetarBulkIngestFileToStationSlices($gzTmp, $icaoSet, $fileHour);
