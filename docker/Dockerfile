@@ -178,7 +178,7 @@ RUN touch /var/log/proftpd.log /var/log/auth.log \
 RUN mkdir -p /etc/proftpd && touch /etc/proftpd/ftpd.passwd && chmod 600 /etc/proftpd/ftpd.passwd
 
 # PHP configuration
-RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
+RUN echo "memory_limit = 2048M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "upload_max_filesize = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini \

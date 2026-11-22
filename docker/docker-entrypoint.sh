@@ -66,6 +66,20 @@ if [ ! -f "${CONFIG_FILE}" ]; then
     fi
 fi
 
+# Apply optional runtime PHP ini overrides. These variables are validated by
+# the deploy config but are not wired to PHP anywhere else, so without this
+# block they would never take effect. Baked defaults live in custom.ini;
+# later conf.d files win in the PHP scan, so this file overrides them.
+PHP_INI_OVERRIDES=/usr/local/etc/php/conf.d/env-overrides.ini
+if [ -n "${PHP_MEMORY_LIMIT:-}" ] || [ -n "${PHP_MAX_EXECUTION_TIME:-}" ] \
+    || [ -n "${PHP_UPLOAD_MAX_FILESIZE:-}" ] || [ -n "${PHP_POST_MAX_SIZE:-}" ]; then
+    : > "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_MEMORY_LIMIT:-}" ] && echo "memory_limit = ${PHP_MEMORY_LIMIT}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_MAX_EXECUTION_TIME:-}" ] && echo "max_execution_time = ${PHP_MAX_EXECUTION_TIME}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_UPLOAD_MAX_FILESIZE:-}" ] && echo "upload_max_filesize = ${PHP_UPLOAD_MAX_FILESIZE}" >> "${PHP_INI_OVERRIDES}"
+    [ -n "${PHP_POST_MAX_SIZE:-}" ] && echo "post_max_size = ${PHP_POST_MAX_SIZE}" >> "${PHP_INI_OVERRIDES}"
+fi
+
 # Secure airports.json permissions (prevents SFTP users from reading sensitive config)
 # airports.json contains API keys, passwords, and other secrets
 # Permissions: 640 (root read/write, www-data read, others none)
