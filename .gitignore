@@ -31,9 +31,6 @@ Thumbs.db
 # Logs
 *.log
 
-# Placeholder image (if using a real one)
-placeholder.jpg
-
 # Composer dependencies
 vendor/
 composer.lock

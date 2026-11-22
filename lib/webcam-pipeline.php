@@ -399,12 +399,14 @@ class ProcessingPipeline
      */
     private function generateVariants(string $imagePath, int $timestamp): array
     {
-        // Use the existing variant generation (handles all the complexity)
+        // Pass the already-decoded GD dimensions so variant sizing does not
+        // re-measure the same image.
         return generateVariantsFromOriginal(
             $imagePath,
             $this->airportId,
             $this->camIndex,
-            $timestamp
+            $timestamp,
+            ['width' => $this->imageWidth, 'height' => $this->imageHeight]
         );
     }
 

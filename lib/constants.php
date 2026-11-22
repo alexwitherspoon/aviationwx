@@ -1222,17 +1222,6 @@ if (!defined('WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS')) {
     define('WEBCAM_CAPTURE_TIME_MAX_VARIANCE_SECONDS', 5); // Max seconds between the acquisition capture time and EXIF before rejecting
 }
 
-// exiftool execution (safety-critical: retry transient failures, timeout prevents hang)
-if (!defined('EXIFTOOL_TIMEOUT_SECONDS')) {
-    define('EXIFTOOL_TIMEOUT_SECONDS', 10);
-}
-if (!defined('EXIFTOOL_MAX_RETRIES')) {
-    define('EXIFTOOL_MAX_RETRIES', 3);
-}
-if (!defined('EXIFTOOL_RETRY_DELAY_MS')) {
-    define('EXIFTOOL_RETRY_DELAY_MS', 100);
-}
-
 // Filename timestamp validation: mtime window (hours) for parseFilenameTimestamp
 // Tighter window reduces false positives from product IDs; ±12h covers timezone/upload delay
 if (!defined('FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS')) {
@@ -1393,6 +1382,13 @@ if (!defined('WEBCAM_WEBP_QUALITY')) {
 // Default 6 is fine for background processing
 if (!defined('WEBCAM_WEBP_COMPRESSION_LEVEL')) {
     define('WEBCAM_WEBP_COMPRESSION_LEVEL', 6);
+}
+
+// Seconds a variant ffmpeg process may sit alive with frozen CPU before it is
+// treated as stalled and killed. Generous enough for a short I/O pause, short
+// enough to not wait out the whole deadline on a hung decoder.
+if (!defined('VARIANT_FFMPEG_STALL_GRACE_SECONDS')) {
+    define('VARIANT_FFMPEG_STALL_GRACE_SECONDS', 8);
 }
 
 // JPEG quality (1-31 scale for ffmpeg, lower = better quality)

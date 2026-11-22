@@ -374,7 +374,7 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 - **Version Cookie** (`aviationwx_v`): Cross-subdomain cookie set on every response containing hash.timestamp
   - Server detects stuck clients by missing/stale cookie
   - Cleanup injected when `stuck_client_cleanup: true` in config
-- **No service worker**: pages are intentionally served live (no-cache HTML, versioned static assets); a previous service worker never controlled the page (it was scoped to `/public/js/`) and was removed. The dashboard unregisters legacy registrations
+- **No service worker**: pages are served live (no-cache HTML, versioned static assets); no service worker controls the page, and the dashboard unregisters any registration scoped to `/public/js/` so a stale worker cannot take over
 - See [Operations Guide](OPERATIONS.md#client-version-management) for cleanup procedures
 
 **Timer Worker System**:

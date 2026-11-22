@@ -138,13 +138,11 @@ function saveRejectedWebcam(string $imagePath, string $airportId, int $camIndex,
  * @return int Unix timestamp
  */
 function getImageTimestamp(string $imagePath): int {
-    // Try EXIF first if exiftool is available
-    if (function_exists('isExiftoolAvailable') && isExiftoolAvailable()) {
-        if (function_exists('getExifTimestamp')) {
-            $exifTimestamp = getExifTimestamp($imagePath);
-            if ($exifTimestamp !== null && $exifTimestamp > 0) {
-                return $exifTimestamp;
-            }
+    // Try EXIF first using the native reader.
+    if (function_exists('getExifTimestamp')) {
+        $exifTimestamp = getExifTimestamp($imagePath);
+        if ($exifTimestamp !== null && $exifTimestamp > 0) {
+            return $exifTimestamp;
         }
     }
     
@@ -213,8 +211,8 @@ function buildRejectionLog(string $originalPath, string $savedPath, string $airp
     }
     $log[] = "";
     
-    // EXIF Data (if available)
-    if (function_exists('isExiftoolAvailable') && isExiftoolAvailable() && function_exists('getExifTimestamp')) {
+    // EXIF Data (if available), read natively
+    if (function_exists('getExifTimestamp')) {
         $exifTimestamp = getExifTimestamp($originalPath);
         $log[] = "EXIF DATA:";
         if ($exifTimestamp !== null && $exifTimestamp > 0) {

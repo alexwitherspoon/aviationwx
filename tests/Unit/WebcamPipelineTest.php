@@ -286,10 +286,6 @@ class WebcamPipelineTest extends TestCase
      */
     public function testValidateExif_EnforcesCaptureTimeAgreement(): void
     {
-        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
-        if ($whichCode !== 0) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
         if (!function_exists('imagecreatetruecolor')) {
             $this->markTestSkipped('GD library not available');
         }
@@ -304,14 +300,14 @@ class WebcamPipelineTest extends TestCase
         imagedestroy($img);
 
         $stamp = time() - 60;
-        exec(sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
-            escapeshellarg(gmdate('Y:m:d H:i:s', $stamp)),
-            escapeshellarg(gmdate('Y:m:d', $stamp)),
-            escapeshellarg(gmdate('H:i:s', $stamp)),
-            escapeshellarg($path)
-        ), $exifOut, $exifCode);
-        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
+        $this->assertTrue(
+            addExifTimestamp($path, $stamp, 'UTC', false, [
+                'airport_id' => 'kspb',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
+        );
 
         $reflection = new ReflectionMethod(ProcessingPipeline::class, 'validateExif');
         $reflection->setAccessible(true);

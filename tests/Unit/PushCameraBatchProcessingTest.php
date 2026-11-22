@@ -323,11 +323,6 @@ class PushCameraBatchProcessingTest extends TestCase
      */
     public function testAcquireFile_ConsumesInboxFileAfterErrorFrameReject()
     {
-        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
-        if ($whichCode !== 0) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $strategy = $this->createStrategyWithUploadDir($this->testDir);
 
         $path = $this->testDir . '/solid_grey_reject.jpg';
@@ -339,19 +334,14 @@ class PushCameraBatchProcessingTest extends TestCase
         $mtime = time() - 10;
         touch($path, $mtime);
 
-        $dt = gmdate('Y:m:d H:i:s', $mtime);
-        $gpsDate = gmdate('Y:m:d', $mtime);
-        $gpsTime = gmdate('H:i:s', $mtime);
-        exec(sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s -GPSDateStamp=%s -GPSTimeStamp=%s %s 2>&1',
-            escapeshellarg($dt),
-            escapeshellarg($gpsDate),
-            escapeshellarg($gpsTime),
-            escapeshellarg($path)
-        ), $exifOut, $exifCode);
-        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
-        // exiftool updates mtime; restore age so the file is eligible for evaluation
-        touch($path, $mtime);
+        $this->assertTrue(
+            addExifTimestamp($path, $mtime, 'UTC', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
+        );
 
         $result = $strategy->acquireFile($path);
 
@@ -367,7 +357,7 @@ class PushCameraBatchProcessingTest extends TestCase
 
     /**
      * Truncated JPEG (missing EOI) is a definitive reject and must be consumed.
-     * Completeness runs before EXIF so truncated files are not stamped by exiftool.
+     * Completeness runs before EXIF so truncated files are not stamped by the writer.
      */
     public function testAcquireFile_ConsumesInboxFileAfterIncompleteUploadReject(): void
     {
@@ -435,11 +425,6 @@ class PushCameraBatchProcessingTest extends TestCase
      */
     public function testAcquireFile_BlackFrame_UsesNormalizedCaptureTime(): void
     {
-        exec('which exiftool 2>/dev/null', $whichOut, $whichCode);
-        if ($whichCode !== 0) {
-            $this->fail('Install libimage-exiftool-perl');
-        }
-
         $airport = ['lat' => 0.0, 'lon' => 0.0, 'timezone' => 'UTC'];
         $strategy = $this->createStrategyWithUploadDir($this->testDir, $airport);
 
@@ -470,15 +455,20 @@ class PushCameraBatchProcessingTest extends TestCase
             $this->markTestSkipped('no whole-hour timezone offset flips the phase at this time of day');
         }
 
-        // Stamp only DateTimeOriginal (no GPS), as a non-UTC camera does.
-        $localDateTime = gmdate('Y:m:d H:i:s', $mtime + $offsetHours * 3600);
-        exec(sprintf(
-            'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
-            escapeshellarg($localDateTime),
-            escapeshellarg($path)
-        ), $exifOut, $exifCode);
-        $this->assertSame(0, $exifCode, 'exiftool must stamp test fixture: ' . implode("\n", $exifOut));
-        touch($path, $mtime); // exiftool rewrites mtime; restore the upload time
+        // Stamp the camera-local time, as a non-UTC camera writes. The native
+        // stamp also echoes GPS at that same value; the diff against mtime
+        // drives offset detection exactly as the no-GPS case would.
+        $localTimestamp = $mtime + $offsetHours * 3600;
+        $this->assertTrue(
+            addExifTimestamp($path, $localTimestamp, 'UTC', false, [
+                'airport_id' => 'test',
+                'cam_index' => 0,
+                'source_type' => 'test'
+            ]),
+            'native stamp must prepare the test fixture'
+        );
+        // Set mtime to the true UTC capture time so the diff triggers normalization
+        touch($path, $mtime);
 
         $result = $strategy->acquireFile($path);
 

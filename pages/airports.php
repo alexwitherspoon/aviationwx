@@ -126,7 +126,7 @@ $airportsJson = json_encode($airportsForMap);
 // NOTAM TFR map layer refresh (matches per-airport NOTAM cache TTL)
 $notamMapLayerRefreshMs = max(60_000, (int)getNotamCacheTtlSeconds() * 1000);
 
-// Optional screenshots for Add to Home Screen help: public/images/pwa-add-to-home-screen-{android,ios}.{avif,webp,jpg}
+// Optional screenshots for Add to Home Screen help: public/images/pwa-add-to-home-screen-{android,ios}.{webp,jpg}
 $pwaHelpImageDir = __DIR__ . '/../public/images';
 $pwaHelpScreenshotAndroid = getPwaHelpScreenshotSet($pwaHelpImageDir, 'pwa-add-to-home-screen-android');
 $pwaHelpScreenshotIos = getPwaHelpScreenshotSet($pwaHelpImageDir, 'pwa-add-to-home-screen-ios');
@@ -1470,9 +1470,6 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <?php if ($pwaHelpScreenshotAndroid !== null): ?>
                         <figure class="airports-pwa-figure">
                             <picture>
-                                <?php if ($pwaHelpScreenshotAndroid['avif'] !== null): ?>
-                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotAndroid['avif'], ENT_QUOTES, 'UTF-8') ?>" type="image/avif">
-                                <?php endif; ?>
                                 <?php if ($pwaHelpScreenshotAndroid['webp'] !== null): ?>
                                 <source srcset="<?= htmlspecialchars($pwaHelpScreenshotAndroid['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
                                 <?php endif; ?>
@@ -1493,9 +1490,6 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <?php if ($pwaHelpScreenshotIos !== null): ?>
                         <figure class="airports-pwa-figure">
                             <picture>
-                                <?php if ($pwaHelpScreenshotIos['avif'] !== null): ?>
-                                <source srcset="<?= htmlspecialchars($pwaHelpScreenshotIos['avif'], ENT_QUOTES, 'UTF-8') ?>" type="image/avif">
-                                <?php endif; ?>
                                 <?php if ($pwaHelpScreenshotIos['webp'] !== null): ?>
                                 <source srcset="<?= htmlspecialchars($pwaHelpScreenshotIos['webp'], ENT_QUOTES, 'UTF-8') ?>" type="image/webp">
                                 <?php endif; ?>

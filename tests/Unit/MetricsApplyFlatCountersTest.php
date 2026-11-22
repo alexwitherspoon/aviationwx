@@ -92,10 +92,10 @@ class MetricsApplyFlatCountersTest extends TestCase
     public function testSumWebcamFormatTotals_UnknownFormatKey_IsInitialized(): void
     {
         $totals = metricsSumWebcamFormatTotals([
-            'kspb_0' => ['by_format' => ['avif' => 5]],
+            'kspb_0' => ['by_format' => ['bmp' => 5]],
         ]);
 
-        $this->assertSame(5, $totals['avif']);
+        $this->assertSame(5, $totals['bmp']);
         $this->assertSame(0, $totals['jpg']);
         $this->assertSame(0, $totals['png']);
         $this->assertSame(0, $totals['webp']);
