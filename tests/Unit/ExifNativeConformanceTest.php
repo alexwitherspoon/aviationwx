@@ -226,6 +226,25 @@ class ExifNativeConformanceTest extends TestCase
         $this->assertArrayHasKey(0x9003, $groups['exif'], 'the stamped capture time must parse back');
     }
 
+    public function testSpliceWebp_UnreadableDims_IsRejected(): void
+    {
+        // A VP8 chunk whose frame tag has no keyframe start code, so the
+        // dimensions cannot be read. The pipeline must reject this, not emit
+        // a VP8X with an empty canvas.
+        $webp = 'RIFF' . pack('V', 28) . 'WEBP' . 'VP8 ' . pack('V', 16) . str_repeat("\x00", 16);
+        $this->assertNull(exifNativeContainerDimensions($webp), 'precondition: dims are unreadable');
+        $this->assertNull(
+            exifNativeSpliceWebp($webp, "Exif\x00\x00II\x2A\x00\x08\x00\x00\x00"),
+            'a webp whose dims cannot be read must be rejected'
+        );
+
+        $path = $this->tmpDir . '/bad.webp';
+        file_put_contents($path, $webp);
+        $before = file_get_contents($path);
+        $this->assertFalse(exifNativeStamp($path, strtotime('2026-11-19 12:00:00 UTC'), 'UTC'));
+        $this->assertSame($before, file_get_contents($path), 'a rejected webp must be left untouched');
+    }
+
     public function testSpliceWebp_ExistingExifWithoutVp8x_Survives(): void
     {
         // Build a third-party-layout webp: image chunk then EXIF, no VP8X.

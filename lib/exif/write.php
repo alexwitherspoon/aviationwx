@@ -685,8 +685,14 @@ function exifNativeSpliceWebp(string $bytes, string $exifPayload): ?string
         $base[$vp8xFlags] = chr(ord($base[$vp8xFlags]) | 0x08);
     } elseif ($imagePos >= 0) {
         $dims = exifNativeContainerDimensions($base);
-        $w = max(0, ($dims['width'] ?? 1) - 1);
-        $h = max(0, ($dims['height'] ?? 1) - 1);
+        // Fail closed: a WebP we cannot size must not carry EXIF inside a VP8X
+        // with an empty canvas. Refuse the write rather than emit a broken
+        // container; the caller treats the image as rejected.
+        if ($dims === null) {
+            return null;
+        }
+        $w = max(0, $dims['width'] - 1);
+        $h = max(0, $dims['height'] - 1);
         $vp8x = 'VP8X' . exifNativeLe32(10)
             . chr(0x08) . "\x00\x00\x00"
             . chr($w & 0xFF) . chr(($w >> 8) & 0xFF) . chr(($w >> 16) & 0xFF)
