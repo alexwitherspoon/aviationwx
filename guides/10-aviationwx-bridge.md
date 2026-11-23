@@ -1,428 +1,266 @@
-# 10 - AviationWX Bridge (Optional Image Upload Tool)
+# 10 - AviationWX Bridge
 
-## What is the AviationWX Bridge?
+## Goal
 
-The AviationWX Bridge is an optional tool that runs on a small local device like a Raspberry Pi and handles capturing snapshots from local cameras, validating image quality and timestamps, and uploading them reliably to AviationWX via SFTP (or FTPS when required). Use the Bridge when your cameras don't support scheduled FTP uploads natively, such as UniFi Protect or NVR systems.
+Get cameras and weather stations onto AviationWX when they can't publish directly. The Bridge is a small local device that captures still images from your cameras, collects readings from your weather station, and uploads both to aviationwx.org reliably.
 
-Think of it as a dedicated "camera assistant" that sits on your local network and makes sure images get to AviationWX-even when your cameras don't natively support scheduled FTP uploads.
+This guide covers what the Bridge is, what it connects to, and how to install it. It is intentionally short. Deep configuration and operations live in the [Bridge repository](https://github.com/alexwitherspoon/aviationwx-bridge), and the links below point to the right page.
 
-```
-+-----------------------------------------------------------------------------+
-|                         WHEN TO USE THE BRIDGE                              |
-+-----------------------------------------------------------------------------+
-|                                                                             |
-|  USE THE BRIDGE WHEN:                  SKIP THE BRIDGE WHEN:                |
-|  ----------------------                -----------------------              |
-|  • Camera doesn't support              • Camera has built-in FTP/FTPS       |
-|    scheduled FTP uploads                 uploads that work reliably         |
-|                                                                             |
-|  • Camera only offers RTSP             • You're already getting good        |
-|    or HTTP snapshots                     quality images directly            |
-|                                                                             |
-|  • You want higher reliability         • You prefer fewer devices           |
-|    and local quality control             to maintain                        |
-|                                                                             |
-|  • You have multiple cameras           • Simple single-camera setup         |
-|    that need unified handling            is working well                    |
-|                                                                             |
-+-----------------------------------------------------------------------------+
-```
+## Where the Bridge fits
 
-**This is optional.** Many airports work great with cameras that upload directly to AviationWX (see Guide 08). The Bridge is here for when that's not possible or when you want extra reliability.
+AviationWX prefers a direct connection whenever the hardware supports one:
 
----
+- **Reolink cameras** can publish images straight to aviationwx.org via FTP/FTPS. When your camera supports it, use that (see Guide 08).
+- **Tempest stations** run on a clean cloud API with good properties like automatic sensor calibration. Use that when you have one (see Guide 09).
 
-## Why use a Bridge instead of direct camera uploads?
+But a lot of sensors have no cloud path and no direct upload. A Davis station behind a WeatherLink Live hub, an Ecowitt gateway, a UniFi Protect NVR, an RTSP-only security camera. None of those can talk to aviationwx.org on their own. They need a device in the middle that reads the sensor and pushes the data.
 
-### Problem: Not all cameras support scheduled uploads
+The Bridge is that device. It sits on your local network and:
 
-Many camera systems-especially **UniFi Protect**, **NVR-based systems**, and some **enterprise cameras**-don't offer built-in FTP/FTPS upload scheduling. They're designed around continuous video recording, not periodic still images.
+- captures still images from cameras (HTTP snapshot, RTSP, or ONVIF)
+- collects weather readings from supported stations (see the table below)
+- stamps each image with its observation time and verifies local time against NTP
+- queues uploads while the internet is down and resumes when it returns
+- uploads over an encrypted connection
 
-### Problem: RTSP frame grabs can have quality issues
+One Bridge can carry cameras and weather stations at the same time, so a single airport can run both feeds off one small box.
 
-When AviationWX extracts still images from an RTSP video stream, the result depends on:
-- network conditions at the moment of capture
-- video compression artifacts
-- the camera's encoding settings
+| Use the Bridge when | Direct upload is better when |
+|---------------------|------------------------------|
+| The camera has no FTP/FTPS upload | The camera publishes FTP/FTPS and it works reliably |
+| The camera only offers RTSP or an HTTP snapshot | You are already getting good images directly |
+| The weather station has no cloud API | The station has a clean cloud API (Tempest) or pushes on its own |
+| You want local queuing and one box for everything | You prefer fewer devices and your current path is stable |
 
-This can lead to **pixelation**, **blur**, or **inconsistent quality**-especially on congested networks or over cellular connections.
+## What it connects to
 
-### Solution: The Bridge handles it locally
+### Cameras
 
-The AviationWX Bridge runs on your local network, close to the cameras. It:
-- captures high-quality snapshots directly from cameras
-- validates timestamps and image integrity before upload
-- queues images locally if the internet is temporarily down
-- uploads via SFTP (preferred) or FTPS when connectivity is available
+| Type | How it works | Good for |
+|------|--------------|----------|
+| **HTTP snapshot** | Bridge fetches a JPEG from a URL | Cameras with a `/snapshot.jpg`-style endpoint |
+| **RTSP** | Bridge extracts still frames from the video stream (via ffmpeg) | NVRs, UniFi Protect, enterprise cameras |
+| **ONVIF** | Industry-standard camera protocol | Many commercial IP cameras |
 
-**The result:** more consistent image quality and reliable uploads, even with cameras that weren't designed for this workflow.
+### Weather stations
 
----
+| Type | How it works | Good for |
+|------|--------------|----------|
+| **Davis WeatherLink Live** | Bridge polls the Davis local API on your LAN | Vantage Pro2 or Vantage Vue with a WeatherLink Live hub |
+| **Ecowitt gateway** | Bridge polls the gateway's live data endpoint | Ecowitt GW1000, GW1100, and similar gateways |
+| **HTTP endpoint** | The station pushes Weather Underground-style updates to the Bridge | Stations or loggers that can POST to a URL |
 
-## How it works (architecture)
+Field-level configuration for every type (intervals, transmitter IDs, listen addresses, dialects) is in the [configuration reference](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/CONFIG_SCHEMA.md) in the Bridge repo.
 
-```
-+-----------------------------------------------------------------------------+
-|                          YOUR LOCAL NETWORK                                 |
-+-----------------------------------------------------------------------------+
-|                                                                             |
-|  +-----------+     +-----------+     +-----------+                          |
-|  |  Camera   |     |  Camera   |     |  Camera   |                          |
-|  |  (HTTP)   |     |  (RTSP)   |     |  (ONVIF)  |                          |
-|  +-----+-----+     +-----+-----+     +-----+-----+                          |
-|        |                 |                 |                                |
-|        +--------+--------+---------+-------+                                |
-|                 |                  |                                        |
-|                 v                  v                                        |
-|  +------------------------------------------------------------------+       |
-|  |                      AVIATIONWX BRIDGE                           |       |
-|  |              (Raspberry Pi or similar device)                    |       |
-|  +------------------------------------------------------------------+       |
-|  |                                                                  |       |
-|  |  +--------------+     +--------------+     +------------------+  |       |
-|  |  |    Camera    |     |    Camera    |     |   Web Console    |  |       |
-|  |  |    Workers   |     |    Workers   |     |   (port 1229)    |  |       |
-|  |  |              |     |              |     |                  |  |       |
-|  |  | Capture from |     | Capture from |     | Configure cameras|  |       |
-|  |  | each source  |     | each source  |     | View status      |  |       |
-|  |  +--------------+     +--------------+     +------------------+  |       |
-|  |         |                   |                                    |       |
-|  |         v                   v                                    |       |
-|  |  +----------------------------------------------------------+    |       |
-|  |  |           FILE QUEUE (RAM-based, avoids SD wear)         |    |       |
-|  |  |                                                          |    |       |
-|  |  |   camera-1/                 camera-2/                    |    |       |
-|  |  |   ├── 20231225T143022Z.jpg  ├── 20231225T143052Z.jpg     |    |       |
-|  |  |   └── 20231225T143122Z.jpg  └── ...                      |    |       |
-|  |  +----------------------------------------------------------+    |       |
-|  |                           |                                      |       |
-|  |                           v                                      |       |
-|  |  +----------------------------------------------------------+    |       |
-|  |  |              UPLOAD WORKER (round-robin)                 |    |       |
-|  |  |                                                          |    |       |
-|  |  |   • Validates image quality                              |    |       |
-|  |  |   • Verifies timestamps (EXIF + NTP)                     |    |       |
-|  |  |   • Uploads via SFTP/FTPS to upload.aviationwx.org        |    |       |
-|  |  |   • Retries with backoff if network hiccups              |    |       |
-|  |  +----------------------------------------------------------+    |       |
-|  |                                                                  |       |
-|  +------------------------------------------------------------------+       |
-|                                    |                                        |
-+-----------------------------------------------------------------------------+
-                                     |
-                                     | SFTP / FTPS (encrypted)
-                                     v
-+-----------------------------------------------------------------------------+
-|                         upload.aviationwx.org                               |
-|                                                                             |
-|                    Images appear on airport dashboard                       |
-|                    with accurate observation timestamps                     |
-+-----------------------------------------------------------------------------+
-```
+## Hardware
 
-**Key points:**
-- The Bridge captures images locally at high quality
-- Images are queued in RAM (not SD card) to avoid wear on flash storage
-- Uploads happen via SFTP (preferred) or FTPS with automatic retry
-- A web console lets you configure cameras and monitor status from any browser
+The Bridge ships as a standard Linux container (ARM64, x86-64, 32-bit ARMv7). It runs on any host that runs Docker: a single-board computer, a mini-PC, a server, or a VM.
 
----
+| Tier | Specs | Notes |
+|------|-------|-------|
+| Minimum | 1GB RAM, Raspberry Pi 4-class quad-core CPU, 8GB storage | One camera, conservative intervals |
+| Recommended | 3GB+ RAM, 16GB+ storage, wired ethernet | Multiple cameras and higher resolutions |
 
-## Hardware requirements
+RAM is the binding constraint, not CPU. The Raspberry Pi 4 and 5 are the best-documented boards. Comparable hardware works too: Radxa ROCK, Orange Pi 5, Libre Computer, or an Intel N100-class mini-PC. These are examples, not endorsements.
 
-The Bridge is designed to run on minimal hardware. We recommend Raspberry Pi for most installations.
+**Below the floor:** Raspberry Pi 3 and Pi Zero 2 W are not recommended, even where the Bridge still starts.
 
-### Recommended: Raspberry Pi 5 (2GB+ RAM)
+For long-term reliability, prefer an NVMe SSD or a high-endurance SD card. The Bridge buffers images in RAM rather than on the storage medium, which is a big part of why small boards work.
 
-The **Raspberry Pi 5 with 2GB or more RAM** is the recommended choice for most Bridge deployments:
+## Installation
 
-- Handles multiple cameras with headroom for reliability
-- Faster image processing and upload handling
-- Better thermal performance than earlier models
-- Wide accessory ecosystem (cases, HATs, power supplies)
+### Path A: Supervised install (recommended)
 
-### Minimum: Raspberry Pi Zero 2 W
-
-The **Raspberry Pi Zero 2 W** is the minimum viable hardware:
-
-- Supports up to 4 cameras at 30-second intervals, 4K resolution
-- Very low power consumption (good for solar/battery setups)
-- Compact form factor for tight installations
-- Limited headroom - works but may struggle under heavy load
-
-### Alternative: Any Docker-capable device
-
-IT-managed environments can run the Bridge on any Docker-capable hardware (NAS, server, VM, etc.).
-
-### Hardware comparison
-
-| Hardware | Best for | Notes |
-|----------|----------|-------|
-| **Raspberry Pi 5 (2GB+)** | Most installations (recommended) | Best balance of performance, reliability, and cost |
-| **Raspberry Pi 5 (4GB/8GB)** | Heavy workloads, many cameras | Extra RAM rarely needed for Bridge alone |
-| **Raspberry Pi Zero 2 W** | Budget or solar/remote sites | Works but limited headroom |
-| **Raspberry Pi 4 (2GB+)** | If you already have one | Still works well, but Pi 5 preferred for new purchases |
-| **Docker host / VM** | IT-managed environments | Use existing infrastructure |
-
-### Optional accessories (recommended for reliability)
-
-**NVMe HAT + SSD (recommended for long-term reliability)**
-
-SD cards can wear out over time, especially in always-on deployments. An NVMe HAT with a small SSD (32GB+ is plenty) significantly improves long-term reliability:
-
-- Faster boot and more consistent performance
-- Much longer lifespan than SD cards
-- Worth the ~$40-60 investment for production deployments
-
-**PoE HAT (useful in some environments)**
-
-A PoE (Power over Ethernet) HAT lets you power the Pi through the Ethernet cable:
-
-- Simplifies cabling - one cable for power and network
-- Cleaner installations, especially in equipment closets
-- Requires a PoE switch or injector on the other end
-- Good fit when the Bridge is co-located with PoE cameras
-
-### Storage
-
-The Bridge uses RAM for image queuing, so storage wear is minimal. However:
-
-- **With NVMe SSD:** 32GB+ SSD is plenty; best long-term reliability
-- **With SD card:** 16GB+ high-endurance card recommended; 8GB minimum
-
-### Network
-
-The device needs:
-- Network access to your cameras (usually on the same LAN or VLAN)
-- Internet access to upload to AviationWX (SFTP or FTPS outbound)
-
----
-
-## Two installation paths
-
-### Path A: Raspberry Pi ("set and forget")
-
-Best for dedicated devices at airports with minimal IT support. One command installs everything:
+Best for a dedicated device at an airport with no IT staff. One command:
 
 ```text
-curl -fsSL https://get.aviationwx.org/bridge | sudo bash
+curl -fsSL https://raw.githubusercontent.com/alexwitherspoon/aviationwx-bridge/main/scripts/install.sh | sudo bash
 ```
 
-This installs:
-- Docker (if not already present)
-- The AviationWX Bridge container
-- Automatic security updates with rollback
+That installs Docker (if needed), the Bridge container, and a small update supervisor on the host. The supervisor:
 
-After installation, open `http://<device-ip>:1229` to configure cameras.
+- checks for updates on boot and once a day
+- applies a new release when GitHub has one
+- rolls back if the Bridge fails its health check after an update
+- restarts the Bridge after a crash or a capture stall
+
+You can also update manually (`sudo aviationwx update`) and check where things stand (`sudo aviationwx status`).
+
+After installation:
+
+- Web console: `http://<device-ip>:1229`
+- Default password: `aviationwx`. Change it in Settings right away.
 
 ### Path B: Docker (IT-managed)
 
-Best for environments with existing Docker infrastructure:
+Best for environments that already run Docker. Your team keeps update and rollback control through their own tooling:
 
 ```text
 docker pull ghcr.io/alexwitherspoon/aviationwx-org-bridge:latest
 ```
 
-Your IT team manages updates via their existing tooling (Portainer, Watchtower, Kubernetes, etc.).
+The [deployment guide](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/DEPLOYMENT.md) has the full `docker run` and Docker Compose examples, including the tmpfs buffer sizing.
 
----
+## Network exposure
 
-## Configuration overview
+The Bridge is a local LAN utility. The web console is for you, on your network. Do not port-forward port 1229 to the internet or bind it publicly. Reach it from your LAN or over a VPN, like any other admin interface on a small device.
 
-The Bridge includes a **web console** for configuration:
+## Web console
 
-```
-+-----------------------------------------------------------------------------+
-|  AVIATIONWX BRIDGE - Web Console (http://device-ip:1229)                    |
-+-----------------------------------------------------------------------------+
-|                                                                             |
-|  CAMERAS                                                                    |
-|  +-------------------------------------------------------------------+      |
-|  |  Camera 1: North Runway                          [Enabled] [Edit] |      |
-|  |  Type: HTTP snapshot                                              |      |
-|  |  URL: http://192.168.1.100/snapshot.jpg                           |      |
-|  |  Interval: 60 seconds                                             |      |
-|  |  Last capture: 45 seconds ago                    Status: OK       |      |
-|  +-------------------------------------------------------------------+      |
-|  |  Camera 2: South Approach                        [Enabled] [Edit] |      |
-|  |  Type: RTSP                                                       |      |
-|  |  URL: rtsp://192.168.1.101/stream1                                |      |
-|  |  Interval: 60 seconds                                             |      |
-|  |  Last capture: 12 seconds ago                    Status: OK       |      |
-|  +-------------------------------------------------------------------+      |
-|                                                                             |
-|  UPLOAD STATUS                                                              |
-|  +-------------------------------------------------------------------+      |
-|  |  Destination: upload.aviationwx.org                               |      |
-|  |  Last successful upload: 2 minutes ago                            |      |
-|  |  Queue depth: 0 images                           Status: OK       |      |
-|  +-------------------------------------------------------------------+      |
-|                                                                             |
-+-----------------------------------------------------------------------------+
-```
+The console at `http://<device-ip>:1229` is where you add cameras and stations, set intervals, and watch what's happening. Screenshots live in the [repo](https://github.com/alexwitherspoon/aviationwx-bridge/tree/main/docs/images):
 
-**What you configure:**
-- Camera sources (HTTP snapshot URL, RTSP stream, or ONVIF)
-- Capture interval (1 second to 30 minutes)
-- Local timezone (for EXIF interpretation)
-- Upload credentials (provided by AviationWX)
+- [Dashboard](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/images/dashboard.jpg)
+- [Cameras](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/images/cameras.jpg)
+- [Add camera](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/images/add-camera.jpg)
+- [Settings](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/images/settings.jpg)
+- [Logs](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/images/logs.jpg)
 
----
-
-## Supported camera types
-
-| Type | How it works | Good for |
-|------|--------------|----------|
-| **HTTP snapshot** | Bridge fetches a JPEG from a URL | Cameras with `/snapshot.jpg` endpoints |
-| **RTSP** | Bridge extracts frames from video stream | NVRs, UniFi Protect, enterprise cameras |
-| **ONVIF** | Industry-standard protocol | Many commercial IP cameras |
-
-The Bridge uses `ffmpeg` for RTSP extraction, which gives more control over quality than grabbing frames remotely.
-
----
+Changes to cameras, timezone, and time-sync settings apply immediately, no restart needed.
 
 ## Getting upload credentials
 
-The AviationWX Bridge uses the same credential process as direct camera uploads:
+Same process as direct camera uploads:
 
 1. **Submit your airport** following Guide 12
-2. **Request "Bridge" credentials** in your email (mention you're using the AviationWX Bridge)
+2. **Request Bridge credentials** in your email (mention you're using the AviationWX Bridge). Ask for one distinct SFTP username per camera. The Bridge rejects two cameras that share the same SFTP identity (same host, port, and username).
 3. **Receive upload details** (server, port, username, password)
-4. **Enter credentials** in the Bridge web console
+4. **Enter credentials** for each camera when you add or edit it in the web console. Upload settings are per-camera; there is no global credential slot.
 
-**Protocol preference:** We recommend **SFTP** by default. Use SFTP in all cases unless FTPS is specifically required for your setup. AviationWX provides credentials for `upload.aviationwx.org` (SFTP port 2222, FTP/FTPS control port 2121 by default). On a **self-hosted** deployment, listener ports are defined in `config.network_ports`.
+Image uploads go to `upload.aviationwx.org` over SFTP, port 2222. The Bridge is SFTP only. Weather readings go to the aviationwx.org API. On a self-hosted deployment, the ports are defined in your core's `config.network_ports`.
 
----
-
-## Reliability features
-
-The Bridge is designed for unattended operation at remote locations:
+## Reliability
 
 | Feature | What it does |
 |---------|--------------|
-| **Local queuing** | If internet drops, images queue locally until connectivity returns |
-| **Automatic retry** | Failed uploads retry with exponential backoff |
-| **Health monitoring** | Built-in health endpoint for external monitoring |
-| **NTP validation** | Verifies system time is accurate before upload |
-| **Automatic updates** | Security updates apply automatically (Path A) with rollback if something breaks |
-| **RAM-based queue** | Avoids SD card wear on Raspberry Pi devices |
-
----
+| **Local queuing** | Images buffer in RAM while the internet is down; uploads resume automatically |
+| **Weather catch-up** | Recent station readings hold in a short in-memory window and replay when the uplink recovers |
+| **Automatic retry** | Failed uploads retry with backoff |
+| **Time verification** | EXIF validation on images, NTP checks on the device clock |
+| **Host-key verification** | SFTP connections verify the server's SSH key against the aviationwx.org roster |
+| **Automatic updates** | Supervisor applies releases on boot and daily, rolls back on failure (Path A) |
+| **Self-recovery** | Restarts after crashes and capture stalls; no nightly reboot needed |
 
 ## Common scenarios
 
 ### Scenario 1: UniFi Protect cameras
 
-UniFi Protect doesn't offer scheduled FTP uploads. The Bridge connects to the RTSP stream, extracts still images, and uploads them. **The Bridge must be on the same network as the NVR.**
+UniFi Protect doesn't offer scheduled FTP uploads. The Bridge reads the local RTSP stream instead. **The Bridge must be on the same network as the NVR.**
 
 **Get and convert the RTSP URL:**
 
 1. **Get the URL from UniFi Protect:** Home → Protect → UniFi Devices → (select camera) → Settings → Advanced → toggle the resolution you want → copy the URL (e.g., `rtsps://192.168.1.1:7441/QxJCVMefFHfBnqrp?enableSrtp`)
 
-2. **Convert it** - UniFi's URL needs a few adjustments. Apply these three changes:
+2. **Convert it.** UniFi's URL needs three adjustments:
    - Change `rtsps://` to `rtsp://` (remove the second `s`)
    - Change port `7441` to `7447`
    - Remove `?enableSrtp` from the end
 
-3. **Use in the Bridge:** Enter the converted URL in the Bridge web console. Leave the username and password fields empty - UniFi Local RTSP does not use authentication.
+3. **Use it in the Bridge:** enter the converted URL as an RTSP camera. Leave the username and password empty. UniFi local RTSP has no authentication.
 
-**Example:**
 ```
 # What UniFi gives you:
 rtsps://192.168.1.1:7441/QxJCVMefFHfBnqrp?enableSrtp
 
-# What to enter in the Bridge:
+# What you enter in the Bridge:
 rtsp://192.168.1.1:7447/QxJCVMefFHfBnqrp
 ```
 
-### Scenario 2: NVR-only installations
+### Scenario 2: Davis station without a cloud path
 
-Some airports have an NVR that records continuously but can't push stills. The Bridge can:
-- pull RTSP from the NVR's camera feeds
-- handle multiple cameras through a single Bridge device
+A Davis Vantage Pro2 or Vue behind a WeatherLink Live hub can publish straight through the Bridge. Point the Bridge at the hub's LAN address, run a test poll in the console, and pick the transmitter. No WeatherLink account needed.
 
-### Scenario 3: Mixed camera types
+The Bridge also needs its API key installed, and the station has to be enabled in the airport config. The aviationwx.org team sets both up. The `api` block and key live in the bridge config; see the [configuration reference](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/CONFIG_SCHEMA.md) for how the block works.
 
-You might have:
-- one camera with HTTP snapshot (easy)
-- one camera with only RTSP (needs extraction)
-- one older ONVIF camera
+### Scenario 3: NVR-only installations
 
-The Bridge handles all of them with a unified configuration.
+An NVR that records continuously but can't push stills:
 
-### Scenario 4: Remote/solar installations
+- the Bridge pulls RTSP from its camera feeds
+- one Bridge handles all the cameras on the NVR
 
-At remote sites where reliability matters most:
-- the Bridge queues images during internet outages
-- uploads resume automatically when connectivity returns
-- no lost observations due to brief network hiccups
+### Scenario 4: Cameras and station in one box
 
----
+Many small airports end up with:
+
+- a Reolink-style camera that can FTP directly, **or** an RTSP camera that needs the Bridge
+- a Davis or Ecowitt station with no cloud
+
+The Bridge handles both roles on one device, so power, networking, and monitoring stay in one place.
+
+### Scenario 5: Remote and solar installations
+
+At remote sites, the queuing matters most:
+
+- images hold in RAM while the internet is down
+- uploads resume when connectivity returns
+- buffering reduces loss, but it is not a guarantee. The queue thins under sustained pressure, and a device restart drops whatever was in RAM
 
 ## Troubleshooting
 
 ### "Camera captures are failing"
-- **Test RTSP separately:** To confirm the feed is reachable, try it from a computer on the same network as the camera or NVR. Open **VLC** (Media → Open Network Stream) and paste your RTSP URL. If VLC can play the stream, the Bridge should be able to reach it too. If VLC fails, the issue is likely with the network or camera configuration - troubleshoot that first.
+
+- **Test the stream separately first:** open **VLC** on a computer on the same network (Media → Open Network Stream) and paste your RTSP URL. If VLC can't play it, the problem is the network or the camera, not the Bridge.
 - Verify the camera URL is reachable from the Bridge device
-- For RTSP, confirm the stream path (and that username/password are empty for UniFi Local RTSP)
-- Check the Bridge logs via the web console
+- For UniFi local RTSP, confirm the username and password fields are empty
+- Check the Bridge logs in the web console
 
 ### "Uploads aren't happening"
-- **Test SFTP/FTPS separately:** Use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can connect and upload a test file, the Bridge should be able to as well. If FileZilla fails, the issue is likely with credentials or network connectivity - check those first.
-- Verify internet connectivity from the Bridge device
-- Check upload credentials in the web console
-- Look for queue buildup (images waiting to upload)
+
+- **Test the upload separately first:** use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can't upload a test file, the problem is credentials or network, not the Bridge.
+- Verify the Bridge has internet access
+- Check the credentials on the camera's own upload settings
+- Watch the upload status for a growing queue
+
+### "Weather readings aren't showing up"
+
+- Run the test poll for the station in the console. For Davis, confirm you picked the right transmitter.
+- Confirm the station and the Bridge share a network, and that the station's own app or display shows live data
+- Check the station's status panel in the console for last-receive times
 
 ### "Images look pixelated"
-- For RTSP sources, try increasing capture quality settings
-- Ensure the camera's video stream is configured for high quality
-- Check network bandwidth between camera and Bridge
 
-### "Bridge device isn't responding"
-- Verify power to the device
-- Check that the device is on the network
-- For Raspberry Pi: try power cycling (unplug, wait 10 seconds, plug in)
+- For RTSP, raise the camera's stream quality or switch to the main stream
+- Check bandwidth between the camera and the Bridge
+- Prefer a higher-quality snapshot source when one exists
 
-For detailed troubleshooting, see the [Bridge documentation](https://github.com/alexwitherspoon/aviationwx-bridge).
+### "The device isn't responding"
 
----
+- Check power and network
+- Health endpoints: `http://<device-ip>:1229/readyz` (capture readiness) and `/healthz` (process status)
+- For a Raspberry Pi, power cycle it (unplug, wait 10 seconds, plug in)
+
+For logs and the full operations runbook, see the [deployment guide](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/DEPLOYMENT.md) and the [maintenance guide](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/MAINTENANCE_GUIDE.md) in the repo.
 
 ## Decision checklist
 
-Before setting up a Bridge, confirm:
+Before you wire it up, confirm:
 
-- ☐ **Why you need it:** Camera(s) don't support direct FTP uploads, or you want higher reliability
-- ☐ **Hardware choice:** Raspberry Pi 5 2GB+ (recommended), Pi Zero 2 W (minimum), or Docker host
-- ☐ **Storage choice:** NVMe HAT + SSD (recommended) or high-endurance SD card (minimum)
-- ☐ **Power/network:** Standard power supply, or PoE HAT if simplifying cabling
-- ☐ **Camera compatibility:** You know the camera URLs/protocols (HTTP, RTSP, ONVIF)
-- ☐ **Network access:** Bridge device can reach cameras on local network
-- ☐ **Internet access:** Bridge device can reach `upload.aviationwx.org`
-- ☐ **Credentials requested:** You've contacted AviationWX for upload credentials
-
----
+- ☐ **What it will carry:** camera list and/or station list
+- ☐ **Hardware:** 1GB+ RAM and Pi 4-class CPU minimum; 3GB+ RAM preferred
+- ☐ **Storage:** NVMe or high-endurance SD card
+- ☐ **Network:** the Bridge can reach every camera and station on the LAN, plus the internet for uploads
+- ☐ **Console access:** you can reach `:1229` from your own network (and only from there)
+- ☐ **Credentials requested:** you've asked AviationWX for Bridge upload credentials
 
 ## Resources
 
 | Resource | Link |
 |----------|------|
-| **Bridge GitHub repository** | https://github.com/alexwitherspoon/aviationwx-bridge |
-| **Installation documentation** | See README in GitHub repository |
-| **Configuration reference** | See `/docs` folder in GitHub repository |
-| **Request credentials** | contact@aviationwx.org |
-
----
+| Bridge repository | https://github.com/alexwitherspoon/aviationwx-bridge |
+| Configuration reference | [CONFIG_SCHEMA.md](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/CONFIG_SCHEMA.md) |
+| Deployment guide | [DEPLOYMENT.md](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/DEPLOYMENT.md) |
+| Queue and storage | [QUEUE_STORAGE.md](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/QUEUE_STORAGE.md) |
+| Maintenance guide | [MAINTENANCE_GUIDE.md](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/MAINTENANCE_GUIDE.md) |
+| Changelog | [CHANGELOG.md](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/CHANGELOG.md) |
+| Request credentials | contact@aviationwx.org |
 
 ## Next
 
 - If you haven't submitted your airport yet, see **Guide 12 - Submit a New Airport**
 - For camera framing and siting, see **Guide 02 - Location & Siting**
-- For direct camera FTP setup (when cameras support it), see **Guide 08 - Camera Configuration**
-
----
+- For direct camera FTP setup, see **Guide 08 - Camera Configuration**
+- For weather station options, see **Guide 09 - Weather Station Configuration**
 
 ## Technical documentation
 
 - [docs/CONFIGURATION.md](https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md) - configuration schema for airports, cameras, and weather sources
-
-
