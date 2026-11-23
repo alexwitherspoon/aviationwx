@@ -41,6 +41,8 @@
             runway: '#0066cc',
             runwayLabel: '#0066cc',
             runwayLabelStrokeWidth: 3,
+            waterRunway: '#0077b6',
+            waterRunwayLabel: '#0077b6',
             labelOutline: '#ffffff',
             compass: '#666',
             windArrow: '#dc3545',
@@ -56,6 +58,8 @@
             runway: '#4a9eff',
             runwayLabel: '#6bb3ff',
             runwayLabelStrokeWidth: 2,
+            waterRunway: '#5ec8ff',
+            waterRunwayLabel: '#7fd4ff',
             runwayLabelOutline: '#1a1a1a',
             labelOutline: '#333',
             compass: '#999',
@@ -72,6 +76,8 @@
             runway: '#cc4444',
             runwayLabel: '#ff5555',
             runwayLabelStrokeWidth: 3,
+            waterRunway: '#ff6666',
+            waterRunwayLabel: '#ff8888',
             labelOutline: '#330000',
             compass: '#993333',
             windArrow: '#ff4444',
@@ -142,6 +148,58 @@
         ];
     }
 
+    /**
+     * Draw the dashed outline of a water runway strip.
+     *
+     * Water runways are drawn as a dashed outline rather than a solid centerline,
+     * matching the FAA airport-diagram convention. The outline sits at the same
+     * visual width as a paved strip (half the land runway line width on either
+     * side), so the waterway reads as a normal runway that is dashed, not a wide
+     * band. No fill: the outline only.
+     *
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {Array<Array<number>>} pts Compass-space points (start..end)
+     * @param {number} scale Compass scale factor
+     */
+    function drawWaterRunwayOutline(ctx, pts, scale) {
+        if (!Array.isArray(pts) || pts.length < 2) {
+            return;
+        }
+        const sx = pts[0][0];
+        const sy = pts[0][1];
+        const ex = pts[pts.length - 1][0];
+        const ey = pts[pts.length - 1][1];
+        const dx = ex - sx;
+        const dy = ey - sy;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) {
+            return;
+        }
+
+        // Half-width matches the paved strip line width (8 * scale), so the
+        // waterway outline spans the same space a land runway occupies.
+        const halfWidth = 4 * scale;
+
+        // Unit perpendicular of the strip direction.
+        const px = -dy / len;
+        const py = dx / len;
+
+        const corners = [
+            [sx + px * halfWidth, sy + py * halfWidth],
+            [ex + px * halfWidth, ey + py * halfWidth],
+            [ex - px * halfWidth, ey - py * halfWidth],
+            [sx - px * halfWidth, sy - py * halfWidth]
+        ];
+
+        ctx.beginPath();
+        ctx.moveTo(corners[0][0], corners[0][1]);
+        ctx.lineTo(corners[1][0], corners[1][1]);
+        ctx.lineTo(corners[2][0], corners[2][1]);
+        ctx.lineTo(corners[3][0], corners[3][1]);
+        ctx.closePath();
+        ctx.stroke();
+    }
+
     function drawWindCompassFullMode(canvas, options) {
         const layout = prepareWindCompassFullModeContext(canvas, options);
         const ctx = layout.ctx;
@@ -193,17 +251,29 @@
             const rw = r * runwayScale;
             const pts = runwaySegmentCompassPoints(seg, cx, cy, rw);
 
-            ctx.strokeStyle = colors.runway;
-            ctx.lineWidth = 8 * scale;
+            const isWater = seg.water === true;
+            // Water runways draw as a dashed outline of the strip, matching the
+            // FAA airport-diagram convention (solid for hard surface, dashed
+            // outline for water). The outline spans the same width as a paved
+            // strip so the waterway reads as a normal runway, not a wide band.
+            ctx.setLineDash(isWater ? [6 * scale, 5 * scale] : []);
             ctx.lineCap = 'round';
-            ctx.beginPath();
-            if (pts.length > 0) {
-                ctx.moveTo(pts[0][0], pts[0][1]);
-                for (let i = 1; i < pts.length; i++) {
-                    ctx.lineTo(pts[i][0], pts[i][1]);
+            ctx.strokeStyle = isWater ? colors.waterRunway : colors.runway;
+            if (isWater) {
+                ctx.lineWidth = 3 * scale;
+                drawWaterRunwayOutline(ctx, pts, scale);
+            } else {
+                ctx.lineWidth = 8 * scale;
+                ctx.beginPath();
+                if (pts.length > 0) {
+                    ctx.moveTo(pts[0][0], pts[0][1]);
+                    for (let i = 1; i < pts.length; i++) {
+                        ctx.lineTo(pts[i][0], pts[i][1]);
+                    }
                 }
+                ctx.stroke();
             }
-            ctx.stroke();
+            ctx.setLineDash([]);
         });
 
         // On-segment label layout (overlap + hub when CALM/VRB); public/js/runway-label-layout.js
@@ -293,6 +363,7 @@
         ctx.textBaseline = 'middle';
         labelPositions.forEach(function(lp) {
             if (!lp.ident) return;
+            const isWaterLabel = lp.water === true;
             ctx.save();
             ctx.translate(lp.x, lp.y);
             if (magneticDeclination !== 0) ctx.rotate(-magneticDeclination * deg2rad);
@@ -302,7 +373,9 @@
                 ctx.lineWidth = strokeW * scale;
                 ctx.strokeText(lp.ident, 0, 0);
             }
-            ctx.fillStyle = colors.runwayLabel;
+            ctx.fillStyle = isWaterLabel
+                ? (colors.waterRunwayLabel !== undefined ? colors.waterRunwayLabel : colors.waterRunway)
+                : colors.runwayLabel;
             ctx.fillText(lp.ident, 0, 0);
             ctx.restore();
         });
@@ -888,7 +961,9 @@
         module.exports = {
             isCalmWindSpeed: isCalmWindSpeed,
             CALM_WIND_THRESHOLD: CALM_WIND_THRESHOLD,
-            runwaySegmentCompassPoints: runwaySegmentCompassPoints
+            runwaySegmentCompassPoints: runwaySegmentCompassPoints,
+            getWindCompassColors: getWindCompassColors,
+            drawWaterRunwayOutline: drawWaterRunwayOutline
         };
     }
 

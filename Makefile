@@ -206,6 +206,9 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@echo "5a1b2️⃣  Wind Compass Resize Tests (JS)..."
 	@node tests/js/wind-compass-resize.test.js || { echo "❌ Wind compass resize JS tests failed"; exit 1; }
 	@echo ""
+	@echo "5a1b3️⃣  Water Runway Compass Tests (JS)..."
+	@node tests/js/wind-water-runway.test.js || { echo "❌ Water runway compass JS tests failed"; exit 1; }
+	@echo ""
 	@echo "5a1c️⃣  Status local calendar Tests (JS)..."
 	@node tests/js/status-local-calendar.test.js || { echo "❌ Status local calendar JS tests failed"; exit 1; }
 	@echo ""
