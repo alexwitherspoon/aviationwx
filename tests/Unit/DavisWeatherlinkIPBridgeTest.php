@@ -159,9 +159,10 @@ class DavisWeatherlinkIPBridgeTest extends TestCase
     public function testSnapshot_FromStoredRecord(): void
     {
         $packet = self::buildLoopPacket([]);
+        $now = time() - 30;
         $record = [
-            'observed_at' => '2020-05-08T13:36:54Z',
-            'observed_unix' => 1588948614,
+            'observed_at' => gmdate('c', $now),
+            'observed_unix' => $now,
             'provider' => 'davis_weatherlink_ip',
             'provider_meta' => [
                 'api' => 'vantage_serial_v1',
@@ -183,6 +184,7 @@ class DavisWeatherlinkIPBridgeTest extends TestCase
         $snap = davisWeatherlinkIPResolveSnapshot('kspb', $source, [
             'bridges' => [],
             'elevation_ft' => 100,
+            'timezone' => 'America/Chicago',
             'weather_sources' => [$source],
         ]);
         $this->assertNotNull($snap);
@@ -192,6 +194,62 @@ class DavisWeatherlinkIPBridgeTest extends TestCase
         $this->assertEqualsWithDelta(12 * 0.868976, $snap->wind->speed->getValue(), 0.001);
         $this->assertEqualsWithDelta(0.03, $snap->precipAccum->getValue(), 0.0001);
         $this->assertSame('wx-spb-wlip', $snap->getStationIdForAttribution());
+    }
+
+    public function testSnapshot_LocalConsoleNormalizedToUtc(): void
+    {
+        // A console running the site's local time displays the wall clock; the
+        // naive GETTIME value is off UTC by the site offset. The framing must
+        // identify it as local and normalize the epoch back to the true instant.
+        $now = time() - 30;
+        $tz = new DateTimeZone('America/Chicago');
+        $offset = $tz->getOffset(new DateTime('@' . $now)); // negative west, DST-aware
+        $naive = $now + $offset; // what a local console displays at instant $now
+
+        $packet = self::buildLoopPacket([]);
+        $record = [
+            'observed_at' => gmdate('c', $naive),
+            'observed_unix' => $naive,
+            'provider' => 'davis_weatherlink_ip',
+            'provider_meta' => [
+                'api' => 'vantage_serial_v1',
+                'raw' => ['loop_base64' => base64_encode($packet)],
+            ],
+        ];
+        $record['source_id'] = 'station-wlip';
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-spb', $record, time()));
+
+        $source = [
+            'type' => 'davis_weatherlink_ip',
+            'bridge_id' => 'bridge-spb',
+            'bridge_source_id' => 'station-wlip',
+        ];
+        $snap = davisWeatherlinkIPResolveSnapshot('kspb', $source, [
+            'bridges' => [],
+            'timezone' => 'America/Chicago',
+            'weather_sources' => [$source],
+        ]);
+        $this->assertNotNull($snap);
+        $this->assertTrue($snap->isValid);
+        // The naive local value normalizes back to the true instant.
+        $this->assertEqualsWithDelta($now, $snap->temperature->observationTime ?? 0, 5);
+    }
+
+    public function testSnapshot_UnidentifiableClockRejected(): void
+    {
+        // 47 minutes off matches neither UTC nor the site frame: fail closed.
+        $now = time() - 47 * 60;
+        $packet = self::buildLoopPacket([]);
+        $record = [
+            'observed_at' => gmdate('c', $now),
+            'provider' => 'davis_weatherlink_ip',
+            'provider_meta' => [
+                'raw' => ['loop_base64' => base64_encode($packet)],
+            ],
+        ];
+        $this->assertNull(DavisWeatherlinkIPBridgeAdapter::snapshotFromLatestRecord($record, [], [
+            'timezone' => 'America/Chicago',
+        ]));
     }
 
     public function testSnapshot_RejectsWrongProvider(): void

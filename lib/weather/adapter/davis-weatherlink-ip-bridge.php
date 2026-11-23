@@ -18,13 +18,17 @@
  * there is no per-packet unit tag. A metric-configured console would return
  * garbage and the absurdity bounds below reject it.
  *
- * observed_at is the console clock, assumed UTC pending real-hardware
- * validation (GETTIME returns the console wall clock; see the bridge adapter).
+ * observed_at comes from the console clock via GETTIME: a naive wall-clock
+ * value with no timezone. The clock is framed by stationClockFrameNaive():
+ * aligned to UTC it is accepted as UTC, aligned to the site timezone it is
+ * identified as local and normalized to UTC; a value matching no frame is
+ * unidentifiable and fails closed until the console is corrected.
  */
 
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
+require_once __DIR__ . '/../station-clock.php';
 require_once __DIR__ . '/../../bridge/weather-store.php';
 require_once __DIR__ . '/../../bridge/config.php';
 require_once __DIR__ . '/../../logger.php';
@@ -75,7 +79,7 @@ function davisWeatherlinkIPResolveSnapshot(
         return null;
     }
 
-    return DavisWeatherlinkIPBridgeAdapter::snapshotFromLatestRecord($latest, $source);
+    return DavisWeatherlinkIPBridgeAdapter::snapshotFromLatestRecord($latest, $source, $airport);
 }
 
 /**
@@ -83,6 +87,8 @@ function davisWeatherlinkIPResolveSnapshot(
  */
 class DavisWeatherlinkIPBridgeAdapter
 {
+    /** One-time local-framing notice per process (avoids per-poll log spam). */
+    private static bool $localFramingNoted = false;
     public const SOURCE_TYPE = 'davis_weatherlink_ip';
 
     public const FIELDS_PROVIDED = [
@@ -128,9 +134,10 @@ class DavisWeatherlinkIPBridgeAdapter
      *
      * @param array $record Stored observation (provider_meta.raw required)
      * @param array $config weather_sources row
+     * @param array|null $airport Airport config (site timezone for clock framing)
      * @return WeatherSnapshot|null
      */
-    public static function snapshotFromLatestRecord(array $record, array $config = []): ?WeatherSnapshot
+    public static function snapshotFromLatestRecord(array $record, array $config = [], ?array $airport = null): ?WeatherSnapshot
     {
         if (($record['provider'] ?? null) !== self::SOURCE_TYPE) {
             return self::reject('provider_mismatch', [
@@ -152,7 +159,7 @@ class DavisWeatherlinkIPBridgeAdapter
             return self::reject('missing_provider_meta_raw');
         }
 
-        $obsTime = self::observedTimeFromRecord($record);
+        $obsTime = self::observedTimeFromRecord($record, $airport);
         if ($obsTime === null) {
             return null;
         }
@@ -382,12 +389,13 @@ class DavisWeatherlinkIPBridgeAdapter
     }
 
     /**
-     * Derive the observation epoch from the stored record (console clock).
+     * Frame the console clock from the stored record and normalize to UTC.
      *
      * @param array $record Stored record
-     * @return int|null
+     * @param array|null $airport Airport config (site timezone)
+     * @return int|null Normalized UTC epoch, or null with a logged reason
      */
-    private static function observedTimeFromRecord(array $record): ?int
+    private static function observedTimeFromRecord(array $record, ?array $airport = null): ?int
     {
         $observedAt = $record['observed_at'] ?? null;
         if (!is_string($observedAt) || $observedAt === '') {
@@ -399,12 +407,31 @@ class DavisWeatherlinkIPBridgeAdapter
             self::logReject('invalid_observed_at', ['observed_at' => $observedAt]);
             return null;
         }
-        // Console clock ahead of wall time would bypass staleness checks.
-        if ($ts > time() + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS) {
-            self::logReject('future_observed_at', ['epoch' => $ts]);
+
+        $siteTz = null;
+        if (is_array($airport) && isset($airport['timezone']) && is_string($airport['timezone']) && $airport['timezone'] !== '') {
+            $siteTz = $airport['timezone'];
+        }
+
+        $framed = stationClockFrameNaive($ts, time(), ['site_timezone' => $siteTz]);
+        if (!$framed['ok']) {
+            self::logReject('station_clock_unidentifiable', [
+                'reason' => $framed['reason'],
+            ]);
             return null;
         }
-        return $ts;
+        if ($framed['framing'] === 'local') {
+            // One-time note so a local console is visible without spamming the
+            // per-poll log; the normalized epoch still flows every observation.
+            if (!self::$localFramingNoted) {
+                self::$localFramingNoted = true;
+                aviationwx_log('info', 'davis_weatherlink_ip clock framed as local', [
+                    'tz' => $siteTz,
+                    'epoch_utc' => $framed['epoch_utc'],
+                ], 'app');
+            }
+        }
+        return $framed['epoch_utc'];
     }
 
     /**
