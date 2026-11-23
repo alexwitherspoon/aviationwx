@@ -124,9 +124,9 @@ Same process as direct camera uploads:
 1. **Submit your airport** following Guide 12
 2. **Request Bridge credentials** in your email (mention you're using the AviationWX Bridge)
 3. **Receive upload details** (server, port, username, password)
-4. **Enter credentials** in the web console under Settings
+4. **Enter credentials** for each camera when you add or edit it in the web console. Upload settings are per-camera; there is no global credential slot.
 
-Image uploads go to `upload.aviationwx.org` (SFTP port 2222, or FTPS port 2121 if your setup needs it). Weather readings go to the aviationwx.org API. On a self-hosted deployment, the ports are defined in your core's `config.network_ports`.
+Image uploads go to `upload.aviationwx.org` over SFTP, port 2222. The Bridge is SFTP only. Weather readings go to the aviationwx.org API. On a self-hosted deployment, the ports are defined in your core's `config.network_ports`.
 
 ## Reliability
 
@@ -167,7 +167,9 @@ rtsp://192.168.1.1:7447/QxJCVMefFHfBnqrp
 
 ### Scenario 2: Davis station without a cloud path
 
-A Davis Vantage Pro2 or Vue behind a WeatherLink Live hub can publish straight through the Bridge. Point the Bridge at the hub's LAN address, run a test poll in the console, pick the transmitter, and it starts pushing conditions to aviationwx.org. No WeatherLink account needed.
+A Davis Vantage Pro2 or Vue behind a WeatherLink Live hub can publish straight through the Bridge. Point the Bridge at the hub's LAN address, run a test poll in the console, and pick the transmitter. No WeatherLink account needed.
+
+The Bridge also needs its API key installed, and the station has to be enabled in the airport config. The aviationwx.org team sets both up. The [deployment guide](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/DEPLOYMENT.md) covers the full sequence.
 
 ### Scenario 3: NVR-only installations
 
@@ -191,7 +193,7 @@ At remote sites, the queuing matters most:
 
 - images hold in RAM while the internet is down
 - uploads resume when connectivity returns
-- brief outages don't lose observations
+- buffering reduces loss, but it is not a guarantee. The queue thins under sustained pressure, and a device restart drops whatever was in RAM
 
 ## Troubleshooting
 
