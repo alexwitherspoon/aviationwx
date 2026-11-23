@@ -5,9 +5,24 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../../lib/nasr/parse.php';
 require_once __DIR__ . '/../../lib/nasr/runway-remarks.php';
 require_once __DIR__ . '/../../lib/runway-display.php';
+require_once __DIR__ . '/../Helpers/LoadsNasrAptFixtureCacheTrait.php';
 
 class RunwayDisplayTest extends TestCase
 {
+    use LoadsNasrAptFixtureCacheTrait;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->loadNasrAptFixtureCache();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->tearDownNasrAptFixtureCache();
+        parent::tearDown();
+    }
+
     public function testRunwayDisplayIsHelipad_H1_ReturnsTrue(): void
     {
         $this->assertTrue(runwayDisplayIsHelipad('H1'));
@@ -388,5 +403,45 @@ class RunwayDisplayTest extends TestCase
         ]);
 
         $this->assertSame('RWY 31L: Right traffic', $note);
+    }
+
+    public function testNasrDisplay_IncludesWaterRunway_At42b(): void
+    {
+        $display = getRunwayDisplayForAirport(['faa' => '42B', 'lat' => 41.4456, 'lon' => -72.4556], '42b');
+        $this->assertNotNull($display);
+        $this->assertSame('nasr', $display['runway_source']);
+
+        $rwyIds = array_column($display['runways'], 'rwy_id');
+        $this->assertContains('14/32', $rwyIds);
+        $this->assertContains('16W/34W', $rwyIds);
+
+        foreach ($display['runways'] as $row) {
+            if ($row['rwy_id'] === '16W/34W') {
+                $this->assertTrue($row['is_water']);
+                $this->assertSame('Water', $row['surface']);
+                $this->assertSame('WATER', $row['surface_code']);
+            } else {
+                $this->assertFalse($row['is_water']);
+            }
+        }
+    }
+
+    public function testNasrDisplay_WaterRunwayFactsCarryIsWater(): void
+    {
+        $display = getRunwayDisplayForAirport(['faa' => '42B', 'lat' => 41.4456, 'lon' => -72.4556], '42b');
+        $this->assertNotNull($display);
+
+        $waterRow = null;
+        foreach ($display['runways'] as $row) {
+            if ($row['rwy_id'] === '16W/34W') {
+                $waterRow = $row;
+                break;
+            }
+        }
+        $this->assertNotNull($waterRow);
+
+        $facts = runwayDisplayFormatRunwayFactsRow($waterRow);
+        $this->assertTrue($facts['is_water']);
+        $this->assertSame('WATER', $facts['surface_code']);
     }
 }

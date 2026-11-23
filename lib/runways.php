@@ -775,11 +775,6 @@ function ourAirportsRunwayIsDisplayable(array $runway): bool
         return false;
     }
 
-    $surface = (string) ($runway['surface'] ?? '');
-    if ($surface !== '' && ourAirportsIsWaterSurface($surface)) {
-        return false;
-    }
-
     return true;
 }
 
