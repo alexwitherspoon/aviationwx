@@ -5,14 +5,18 @@
  */
 
 /**
- * Canonicalize a runway end ident to two-digit number plus optional L/C/R suffix.
+ * Canonicalize a runway end ident to two-digit number plus optional L/C/R/W suffix.
  *
- * @return string|null Canonical ident (e.g. 09, 09L) or null when invalid
+ * The W suffix marks a water runway end (16W/34W seaplane strip), per FAA
+ * convention. A bare W stays a cardinal direction (West) and is handled by
+ * parseCardinalRunwayEndHeading, not here.
+ *
+ * @return string|null Canonical ident (e.g. 09, 09L, 16W) or null when invalid
  */
 function canonicalizeRunwayEndIdent(string $endId): ?string
 {
     $trimmed = trim($endId);
-    if ($trimmed === '' || !preg_match('/^(\d{1,2})([LCR])?$/i', $trimmed, $matches)) {
+    if ($trimmed === '' || !preg_match('/^(\d{1,2})([LCRW])?$/i', $trimmed, $matches)) {
         return null;
     }
 
@@ -106,7 +110,8 @@ function parseRunwayEndIdentMagneticHeading(string $endId): ?float
 /**
  * Whether two runway end idents are opposite ends of the same strip.
  *
- * For runway numbers: differs by 18 (1-36) with matching L/C/R suffixes (e.g. 09/27, 09L/27L).
+ * For runway numbers: differs by 18 (1-36) with matching L/C/R/W suffixes
+ * (e.g. 09/27, 09L/27L, 16W/34W).
  * For runway numbers with opposite suffixes: L/R, C/R, R/L are valid opposites (e.g. 09L/27R).
  */
 function runwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): bool
@@ -117,8 +122,8 @@ function runwayEndIdentsAreReciprocal(string $endIdA, string $endIdB): bool
         return false;
     }
 
-    if (!preg_match('/^(\d{2})([LCR])?$/', $canonicalA, $matchesA)
-        || !preg_match('/^(\d{2})([LCR])?$/', $canonicalB, $matchesB)) {
+    if (!preg_match('/^(\d{2})([LCRW])?$/', $canonicalA, $matchesA)
+        || !preg_match('/^(\d{2})([LCRW])?$/', $canonicalB, $matchesB)) {
         return false;
     }
 

@@ -143,6 +143,38 @@ function runTests() {
         assert(Math.abs(ys[0] - expectedYBottom) < 0.5 || Math.abs(ys[1] - expectedYBottom) < 0.5, 'near bottom');
     });
 
+    test('water segment labels carry water flag', () => {
+        const cx = 150;
+        const cy = 150;
+        const r = 130;
+        const segments = [
+            {
+                start: [0.62, 0.34],
+                end: [-0.62, -0.34],
+                le_ident: '16W',
+                he_ident: '34W',
+                ident_at_start: '34W',
+                ident_at_end: '16W',
+                water: true
+            }
+        ];
+        const out = computeRunwayLabelPositions({
+            cx: cx,
+            cy: cy,
+            r: r,
+            segments: segments,
+            willShowCenterText: false,
+            runwayScale: 0.86,
+            labelPosition: 0.93
+        });
+        assert(out.length === 2, 'two labels');
+        out.forEach(function (lp) {
+            assert(lp.water === true, 'label carries water flag');
+        });
+        const idents = out.map(function (lp) { return lp.ident; }).sort();
+        assert(idents[0] === '16W' && idents[1] === '34W', 'W idents preserved');
+    });
+
     console.log('\n' + '='.repeat(50));
     console.log(`Results: ${passed} passed, ${failed} failed`);
     if (failed > 0) {

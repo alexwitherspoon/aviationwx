@@ -1111,6 +1111,10 @@
             "type": "boolean",
             "description": "True for FAA helipad designators (H1, H2, etc.); per-end wind components are omitted in UI"
           },
+          "is_water": {
+            "type": "boolean",
+            "description": "True for water runways (seaplane strips, e.g. 16W/34W); drawn as a dashed outline on the wind compass"
+          },
           "ends": {
             "type": "array",
             "items": {
@@ -1228,6 +1232,10 @@
           "is_helipad": {
             "type": "boolean",
             "description": "True for FAA helipad designators (H1, H2, etc.); per-end wind components are omitted in UI"
+          },
+          "is_water": {
+            "type": "boolean",
+            "description": "True for water runways (seaplane strips, e.g. 16W/34W); drawn as a dashed outline on the wind compass"
           },
           "ends": {
             "type": "array",
