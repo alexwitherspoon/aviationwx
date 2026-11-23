@@ -755,4 +755,153 @@ class FetchRunwaysTest extends TestCase
         $span = sqrt(pow($end[0] - $start[0], 2) + pow($end[1] - $start[1], 2));
         $this->assertGreaterThan(0.5, $span);
     }
+
+    public function testRunwaysToSegments_WaterRunwayWithoutCoordinates_SynthesizesIdentHeadingSegment(): void
+    {
+        // 42B Goodspeed water runway: no coordinates, no heading fields, just 16W/34W.
+        $rw = [
+            'lat1' => null,
+            'lon1' => null,
+            'lat2' => null,
+            'lon2' => null,
+            'le_ident' => '16W',
+            'he_ident' => '34W',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('16W', $seg['le_ident']);
+        $this->assertSame('34W', $seg['he_ident']);
+        $this->assertTrue($seg['magnetic']);
+        $this->assertTrue($seg['water']);
+        $this->assertSame('34W', $seg['ident_at_start']);
+        $this->assertSame('16W', $seg['ident_at_end']);
+    }
+
+    public function testRunwaysToSegments_WaterSegmentPointsSouthEastOrientation(): void
+    {
+        // 16W is magnetic 160 (south-southeast). The start point should sit at
+        // that bearing with the end exactly opposite.
+        $rw = [
+            'le_ident' => '16W',
+            'he_ident' => '34W',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $start = $seg['start'];
+        $bearing = atan2($start[0], $start[1]) * 180 / M_PI;
+        $bearing = $bearing < 0 ? $bearing + 360 : $bearing;
+        $this->assertEqualsWithDelta(160.0, $bearing, 1.0);
+        $this->assertEqualsWithDelta($start[0], -$seg['end'][0], 0.001);
+        $this->assertEqualsWithDelta($start[1], -$seg['end'][1], 0.001);
+    }
+
+    public function testParseOurAirportsRunwaysFromPath_WaterWithoutCoordinates_KeepsRow(): void
+    {
+        // A coordinate-less water runway (16W/34W, no headings) must survive CSV
+        // parsing so the ident-based fallback can synthesize it. Before the fix
+        // this row was dropped as neither cardinal nor heading-based.
+        $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
+        file_put_contents(
+            $path,
+            "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
+            . "1,KBAD,3000,75,ASPH,1,0,09,27,,,,,90,270,0,0\n"
+            . "2,KWTR,4500,1000,WATER,0,0,16W,34W,,,,,,0,0\n",
+            LOCK_EX
+        );
+
+        $parsed = parseOurAirportsRunwaysFromPath($path);
+        $this->assertArrayHasKey('KWTR', $parsed);
+        $this->assertNull($parsed['KWTR'][0]['lat1']);
+        $this->assertSame('16W', $parsed['KWTR'][0]['le_ident']);
+        $this->assertSame('34W', $parsed['KWTR'][0]['he_ident']);
+        $this->assertSame('WATER', $parsed['KWTR'][0]['surface']);
+    }
+
+    public function testParseOurAirportsRunwaysFromPath_LandWithoutCoordinatesStillDropped(): void
+    {
+        // Land rows without coordinates or headings stay dropped: only water
+        // pairs get the ident-based keep, preserving the existing contract.
+        $path = CACHE_OURAIRPORTS_RUNWAYS_CSV;
+        file_put_contents(
+            $path,
+            "id,airport_ident,length_ft,width_ft,surface,lighted,closed,le_ident,he_ident,le_latitude_deg,le_longitude_deg,he_latitude_deg,he_longitude_deg,le_heading_degT,he_heading_degT,le_displaced_threshold_ft,he_displaced_threshold_ft\n"
+            . "1,KLDN,3000,75,ASPH,1,0,15,33,,,,,,0,0\n",
+            LOCK_EX
+        );
+
+        $parsed = parseOurAirportsRunwaysFromPath($path);
+        $this->assertArrayNotHasKey('KLDN', $parsed);
+    }
+
+    public function testRunwaysToSegments_CoordinateWaterRunway_StampsWater(): void
+    {
+        // A water runway WITH coordinates uses the coordinate path and must still
+        // carry the water flag so it renders dashed, not as a paved strip.
+        $rw = [
+            'lat1' => 41.44,
+            'lon1' => -72.46,
+            'lat2' => 41.45,
+            'lon2' => -72.45,
+            'le_ident' => '16W',
+            'he_ident' => '34W',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $this->assertTrue($segments[0]['water']);
+    }
+
+    public function testRunwaysToSegments_CardinalWaterRunway_StampsWater(): void
+    {
+        // A water runway using cardinal idents (N/S) goes through the cardinal
+        // path and must carry the water flag too.
+        $rw = [
+            'le_ident' => 'N',
+            'he_ident' => 'S',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $this->assertTrue($segments[0]['water']);
+    }
+
+    public function testRunwaysToSegments_LandRunway_DoesNotStampWater(): void
+    {
+        // Land runways must never get the water flag, regardless of path.
+        $coordinateLand = [
+            'lat1' => 41.44,
+            'lon1' => -72.46,
+            'lat2' => 41.45,
+            'lon2' => -72.45,
+            'le_ident' => '09',
+            'he_ident' => '27',
+            'surface' => 'ASPH',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$coordinateLand], 41.4456, -72.4556);
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('water', $segments[0]);
+
+        $cardinalLand = [
+            'le_ident' => 'N',
+            'he_ident' => 'S',
+            'surface' => 'TURF',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$cardinalLand], 41.4456, -72.4556);
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('water', $segments[0]);
+    }
 }
