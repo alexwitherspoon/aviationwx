@@ -134,6 +134,7 @@
                 tLo: tMin,
                 tHi: Math.min(tNearStartMax, tStart + 0.35),
                 ident: identAtStart,
+                water: seg.water === true,
                 cx: cx,
                 cy: cy
             });
@@ -147,6 +148,7 @@
                 tLo: Math.max(tNearEndMin, tEnd - 0.35),
                 tHi: tMax,
                 ident: identAtEnd,
+                water: seg.water === true,
                 cx: cx,
                 cy: cy
             });
@@ -204,7 +206,7 @@
         }
 
         return labels.map(function (lb) {
-            return { x: lb.x, y: lb.y, ident: lb.ident };
+            return { x: lb.x, y: lb.y, ident: lb.ident, water: lb.water === true };
         });
     }
 

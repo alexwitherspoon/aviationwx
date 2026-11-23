@@ -85,7 +85,10 @@ function nasrSelectActiveLandRunwaysForPerformance(array $airportRecord): array
 }
 
 /**
- * Runways eligible for dashboard display (includes NASR closed rows; excludes water).
+ * Runways eligible for dashboard display (includes NASR closed rows and water runways).
+ *
+ * Water runways are displayable (a seaplane strip shows on the compass and facts) but
+ * are excluded from DA performance selection in nasrRunwayIsSelectable().
  *
  * @param array $airportRecord Parsed NASR airport record
  * @return list<array> Runways sorted by length descending
@@ -95,10 +98,6 @@ function nasrSelectRunwaysForDisplay(array $airportRecord): array
     $displayable = [];
     foreach ($airportRecord['runways'] ?? [] as $runway) {
         if (!is_array($runway)) {
-            continue;
-        }
-        $surface = strtoupper((string) ($runway['surface'] ?? ''));
-        if ($surface !== '' && str_contains($surface, 'WATER')) {
             continue;
         }
         $length = (int) ($runway['length_ft'] ?? 0);
