@@ -37,6 +37,7 @@ require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
 require_once __DIR__ . '/adapter/dyaconlive-v1.php';
 require_once __DIR__ . '/adapter/davis-weatherlink-live-bridge.php';
+require_once __DIR__ . '/adapter/mqtt-bridge.php';
 require_once __DIR__ . '/adapter/wifilogger.php';
 require_once __DIR__ . '/adapter/madis-hfmetar-v1.php';
 require_once __DIR__ . '/dyaconlive-state.php';
@@ -260,6 +261,18 @@ function fetchAllSources(array $sources, string $airportId, array $airport = [])
         // Local-cache push sources: no upstream HTTP
         if ($sourceType === 'davis_weatherlink_live') {
             $snap = davisWeatherlinkLiveResolveSnapshot($airportId, $source, $airport);
+            if ($snap !== null && $snap->isValid) {
+                $skippedSnapshots[$sourceKey] = $snap;
+                recordWeatherSuccess($airportId, $sourceType, $source);
+                weatherHealthTrackFetch($airportId, $sourceType, true, HTTP_STATUS_OK);
+            } else {
+                weatherHealthTrackFetch($airportId, $sourceType, false, null);
+            }
+            continue;
+        }
+
+        if ($sourceType === 'mqtt') {
+            $snap = mqttResolveSnapshot($airportId, $source, $airport);
             if ($snap !== null && $snap->isValid) {
                 $skippedSnapshots[$sourceKey] = $snap;
                 recordWeatherSuccess($airportId, $sourceType, $source);
