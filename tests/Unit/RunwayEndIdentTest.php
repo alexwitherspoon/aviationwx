@@ -102,4 +102,32 @@ class RunwayEndIdentTest extends TestCase
         $this->assertFalse(runwayEndIdentsAreReciprocal('09L', '09L'));
         $this->assertFalse(runwayEndIdentsAreReciprocal('09R', '09R'));
     }
+
+    public function testCanonicalizeRunwayEndIdent_WaterSuffix(): void
+    {
+        $this->assertSame('16W', canonicalizeRunwayEndIdent('16W'));
+        $this->assertSame('34W', canonicalizeRunwayEndIdent('34w'));
+        $this->assertSame('07W', canonicalizeRunwayEndIdent('7W'));
+    }
+
+    public function testCanonicalizeRunwayEndIdent_BareWRemainsNull(): void
+    {
+        // A bare W is a cardinal direction (West), not a water-suffixed number.
+        $this->assertNull(canonicalizeRunwayEndIdent('W'));
+        $this->assertNull(canonicalizeRunwayEndIdent('w'));
+    }
+
+    public function testParseRunwayEndIdentMagneticHeading_WaterSuffix(): void
+    {
+        $this->assertSame(160.0, parseRunwayEndIdentMagneticHeading('16W'));
+        $this->assertSame(340.0, parseRunwayEndIdentMagneticHeading('34W'));
+        $this->assertSame(270.0, parseRunwayEndIdentMagneticHeading('W'));
+    }
+
+    public function testRunwayEndIdentsAreReciprocal_WaterSuffix(): void
+    {
+        $this->assertTrue(runwayEndIdentsAreReciprocal('16W', '34W'));
+        $this->assertTrue(runwayEndIdentsAreReciprocal('34W', '16W'));
+        $this->assertFalse(runwayEndIdentsAreReciprocal('16W', '27W'));
+    }
 }
