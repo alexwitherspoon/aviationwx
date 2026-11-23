@@ -613,6 +613,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `mqtt` | MQTT broker publish via bridge subscriber (canonical schema; `awxb_` key + enable row) | Up to 1 Hz (bridge thin) |
 | `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
 | `madis_hfmetar` | NOAA MADIS HFMETAR (Federal ASOS, 5-minute marks; co-located only) | ~5 minutes (marks) |
 
@@ -655,6 +656,25 @@ A bridge key alone never publishes weather.
 4. Discover stations: `php scripts/bridge-inventory.php --airport kspb` (or Bridge Host lines on the status page).
 5. Enable publish: `php scripts/bridge-enable-weather.php --airport kspb --bridge bridge-spb-1 --source station-… [--station-id wx-…]` and paste the printed object into `weather_sources[]`.
 6. Prefer one Davis path (cloud **or** local) for ops clarity; dual ingest is allowed - the aggregator chooses freshest fields as usual.
+
+**MQTT canonical schema:** an `mqtt` source expects the publisher to emit this exact JSON shape (all fields optional; unknown keys are ignored). Units are aviation-native so no conversion happens core-side. `observed_at` is the bridge's message arrival time, per the MQTT push exception.
+
+```json
+{
+  "temperature_c": 21.5,
+  "humidity": 55,
+  "pressure_inhg": 30.01,
+  "wind_kt": 12,
+  "gust_kt": 18,
+  "wind_dir_deg": 270,
+  "precip_in": 0.03
+}
+```
+
+- `temperature_c` air temperature in C; `humidity` relative humidity in %; `pressure_inhg` sea-level barometer in inHg.
+- `wind_kt` / `gust_kt` in knots; `wind_dir_deg` true-north degrees (360 reads as 0).
+- `precip_in` daily precipitation accumulation in inches.
+- Values outside sane instrument ranges are dropped per field (a metric-misconfigured payload cannot become plausible weather). Bounds: temperature -80 to 65 C; humidity 0 to 100; pressure 10 to 32 inHg; wind and gust 0 to 217 kt; precipitation 0 to 20 in; direction 0 to 360 (360 reads as 0).
 
 ```json
 "bridges": [
