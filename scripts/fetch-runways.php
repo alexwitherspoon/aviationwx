@@ -525,6 +525,58 @@ function headingBasedRunwayToSegment(array $rw, string $source): ?array
 }
 
 /**
+ * Synthesize a through-center compass segment from a numeric runway end pair
+ * when neither coordinates nor heading fields are published.
+ *
+ * Water runways (16W/34W) usually have no end coordinates and no heading
+ * fields in OurAirports or NASR. The ident pair still gives the orientation:
+ * 16W is magnetic 160, 34W is 340. This mirrors the runtime
+ * synthesizeRunwaySegmentsFromDisplay() path so a water strip renders on the
+ * compass even though it cannot be placed from geometry.
+ *
+ * @param array $rw Runway row with le_ident, he_ident, surface
+ * @param string $source Source label ('faa', 'ourairports')
+ * @return array<string, mixed>|null Segment, or null when the idents do not
+ *         form a reciprocal numeric pair
+ */
+function identHeadingRunwayToSegment(array $rw, string $source): ?array
+{
+    $leIdent = trim((string) ($rw['le_ident'] ?? ''));
+    $heIdent = trim((string) ($rw['he_ident'] ?? ''));
+
+    if ($leIdent === '' || $heIdent === '' || !runwayEndIdentsAreReciprocal($leIdent, $heIdent)) {
+        return null;
+    }
+
+    $leHeading = parseRunwayEndIdentMagneticHeading($leIdent);
+    if ($leHeading === null) {
+        return null;
+    }
+
+    $surface = strtoupper(trim((string) ($rw['surface'] ?? '')));
+    $isWater = ourAirportsIsWaterSurface($surface);
+
+    $angle = ($leHeading * M_PI) / 180;
+    $length = 0.9;
+
+    $segment = [
+        'start' => [sin($angle) * $length, cos($angle) * $length],
+        'end' => [-sin($angle) * $length, -cos($angle) * $length],
+        'le_ident' => $leIdent,
+        'he_ident' => $heIdent,
+        'ident_at_start' => $heIdent,
+        'ident_at_end' => $leIdent,
+        'source' => $source === '' ? 'programmatic' : $source,
+        'magnetic' => true,
+    ];
+    if ($isWater) {
+        $segment['water'] = true;
+    }
+
+    return $segment;
+}
+
+/**
  * Sample a cubic Bezier between two coordinate runway ends whose headings are
  * not reciprocal (a real bend). Headings are true (degT), matching the frame
  * where x is east and y is north. Returns null unless the end headings show a
@@ -653,6 +705,20 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
             if ($headingBased !== null) {
                 $segments[] = $headingBased;
                 continue;
+            }
+            // Ident-based fallback for water runways (16W/34W) that publish no
+            // coordinates and no heading fields. The ident heading is magnetic,
+            // matching the runtime synthesizeRunwaySegmentsFromDisplay(). Land
+            // runways without geometry stay skipped, as before.
+            if (ourAirportsIsWaterSurface(strtoupper(trim((string) ($rw['surface'] ?? ''))))) {
+                $identBased = identHeadingRunwayToSegment(
+                    $rw,
+                    (string) ($rw['source'] ?? 'programmatic')
+                );
+                if ($identBased !== null) {
+                    $segments[] = $identBased;
+                    continue;
+                }
             }
             continue;
         }

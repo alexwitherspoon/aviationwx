@@ -315,6 +315,9 @@ function synthesizeRunwaySegmentsFromDisplay(array $displayRunways, string $sour
             'source' => $source,
             'synthesized' => true,
         ];
+        if (!empty($runway['is_water'])) {
+            $segment['water'] = true;
+        }
         if ($magnetic) {
             $segment['magnetic'] = true;
         }

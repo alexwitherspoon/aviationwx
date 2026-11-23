@@ -604,6 +604,39 @@ class RunwaysTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $segments[0]['start'][1], 1e-9);
     }
 
+    public function testSynthesizeRunwaySegmentsFromDisplay_WaterRunway_StampsWater(): void
+    {
+        $runways = [[
+            'is_water' => true,
+            'ends' => [
+                ['end_id' => '16W'],
+                ['end_id' => '34W'],
+            ],
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways);
+
+        $this->assertCount(1, $segments);
+        $this->assertTrue($segments[0]['water']);
+        $this->assertTrue($segments[0]['magnetic']);
+        $this->assertEqualsWithDelta(160.0, atan2($segments[0]['start'][0], $segments[0]['start'][1]) * 180 / M_PI, 1.0);
+    }
+
+    public function testSynthesizeRunwaySegmentsFromDisplay_LandRunway_NoWaterStamp(): void
+    {
+        $runways = [[
+            'ends' => [
+                ['end_id' => '09'],
+                ['end_id' => '27'],
+            ],
+        ]];
+
+        $segments = synthesizeRunwaySegmentsFromDisplay($runways);
+
+        $this->assertCount(1, $segments);
+        $this->assertArrayNotHasKey('water', $segments[0]);
+    }
+
     public function testSynthesizeRunwaySegmentsFromDisplay_TrueAlignment_LeavesMagneticUnset(): void
     {
         $runways = [[

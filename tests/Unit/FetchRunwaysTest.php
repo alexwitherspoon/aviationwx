@@ -755,4 +755,51 @@ class FetchRunwaysTest extends TestCase
         $span = sqrt(pow($end[0] - $start[0], 2) + pow($end[1] - $start[1], 2));
         $this->assertGreaterThan(0.5, $span);
     }
+
+    public function testRunwaysToSegments_WaterRunwayWithoutCoordinates_SynthesizesIdentHeadingSegment(): void
+    {
+        // 42B Goodspeed water runway: no coordinates, no heading fields, just 16W/34W.
+        $rw = [
+            'lat1' => null,
+            'lon1' => null,
+            'lat2' => null,
+            'lon2' => null,
+            'le_ident' => '16W',
+            'he_ident' => '34W',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $this->assertSame('16W', $seg['le_ident']);
+        $this->assertSame('34W', $seg['he_ident']);
+        $this->assertTrue($seg['magnetic']);
+        $this->assertTrue($seg['water']);
+        $this->assertSame('34W', $seg['ident_at_start']);
+        $this->assertSame('16W', $seg['ident_at_end']);
+    }
+
+    public function testRunwaysToSegments_WaterSegmentPointsSouthEastOrientation(): void
+    {
+        // 16W is magnetic 160 (south-southeast). The start point should sit at
+        // that bearing with the end exactly opposite.
+        $rw = [
+            'le_ident' => '16W',
+            'he_ident' => '34W',
+            'surface' => 'WATER',
+            'source' => 'ourairports',
+        ];
+        $segments = runwaysToSegments([$rw], 41.4456, -72.4556);
+
+        $this->assertCount(1, $segments);
+        $seg = $segments[0];
+        $start = $seg['start'];
+        $bearing = atan2($start[0], $start[1]) * 180 / M_PI;
+        $bearing = $bearing < 0 ? $bearing + 360 : $bearing;
+        $this->assertEqualsWithDelta(160.0, $bearing, 1.0);
+        $this->assertEqualsWithDelta($start[0], -$seg['end'][0], 0.001);
+        $this->assertEqualsWithDelta($start[1], -$seg['end'][1], 0.001);
+    }
 }
