@@ -613,6 +613,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `davis_weatherlink_ip` | Legacy Davis WeatherLinkIP via bridge LOOP1 pull cache (`awxb_` key + enable row) | One poll per 60s (bridge floor) |
 | `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
 | `madis_hfmetar` | NOAA MADIS HFMETAR (Federal ASOS, 5-minute marks; co-located only) | ~5 minutes (marks) |
 
