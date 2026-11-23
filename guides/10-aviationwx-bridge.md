@@ -122,7 +122,7 @@ Changes to cameras, timezone, and time-sync settings apply immediately, no resta
 Same process as direct camera uploads:
 
 1. **Submit your airport** following Guide 12
-2. **Request Bridge credentials** in your email (mention you're using the AviationWX Bridge)
+2. **Request Bridge credentials** in your email (mention you're using the AviationWX Bridge). Ask for one distinct SFTP username per camera. The Bridge rejects two cameras that share the same SFTP identity (same host, port, and username).
 3. **Receive upload details** (server, port, username, password)
 4. **Enter credentials** for each camera when you add or edit it in the web console. Upload settings are per-camera; there is no global credential slot.
 
@@ -169,7 +169,7 @@ rtsp://192.168.1.1:7447/QxJCVMefFHfBnqrp
 
 A Davis Vantage Pro2 or Vue behind a WeatherLink Live hub can publish straight through the Bridge. Point the Bridge at the hub's LAN address, run a test poll in the console, and pick the transmitter. No WeatherLink account needed.
 
-The Bridge also needs its API key installed, and the station has to be enabled in the airport config. The aviationwx.org team sets both up. The [deployment guide](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/DEPLOYMENT.md) covers the full sequence.
+The Bridge also needs its API key installed, and the station has to be enabled in the airport config. The aviationwx.org team sets both up. The `api` block and key live in the bridge config; see the [configuration reference](https://github.com/alexwitherspoon/aviationwx-bridge/blob/main/docs/CONFIG_SCHEMA.md) for how the block works.
 
 ### Scenario 3: NVR-only installations
 
