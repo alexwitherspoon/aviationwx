@@ -27,6 +27,7 @@ require_once __DIR__ . '/../../bridge/config.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../units.php';
 require_once __DIR__ . '/../calculator.php';
+require_once __DIR__ . '/../station-clock.php';
 
 use AviationWX\Weather\Data\WeatherReading;
 use AviationWX\Weather\Data\WeatherSnapshot;
@@ -150,6 +151,15 @@ class TempestUDPBridgeAdapter
 
         $parsed = self::parseRawData($raw, $meta, $config, $airport);
         if ($parsed === null) {
+            return null;
+        }
+
+        // The Tempest UDP spec defines the datagram epoch as UTC, so the
+        // deterministic recency guard applies rather than framing: a stale or
+        // future device clock fails closed instead of publishing aged cache.
+        $clockOk = stationClockPlausibleUtc($parsed['obs_time'], time());
+        if (!$clockOk['ok']) {
+            self::logReject($clockOk['reason'], ['epoch' => $parsed['obs_time']]);
             return null;
         }
 

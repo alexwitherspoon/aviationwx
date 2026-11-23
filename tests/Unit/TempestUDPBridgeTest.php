@@ -175,15 +175,16 @@ class TempestUDPBridgeTest extends TestCase
 
     public function testSnapshot_FromStoredRecord(): void
     {
+        $now = time() - 30;
         $record = [
-            'observed_at' => '2020-05-08T13:36:54Z',
-            'observed_unix' => 1588948614,
+            'observed_at' => gmdate('c', $now),
+            'observed_unix' => $now,
             'provider' => 'tempest_udp',
             'provider_meta' => [
                 'api' => 'weatherflow_tempest_udp_v1',
                 'raw' => [
                     'type' => 'obs_st',
-                    'obs' => [[1588948614, 1.0, 5.0, 9.0, 220, 6, 1017.57, 18.5, 61.0, 250, 0.1, 7, 0.4, 0, 0, 0, 2.4, 1]],
+                    'obs' => [[$now, 1.0, 5.0, 9.0, 220, 6, 1017.57, 18.5, 61.0, 250, 0.1, 7, 0.4, 0, 0, 0, 2.4, 1]],
                 ],
             ],
         ];
@@ -235,5 +236,34 @@ class TempestUDPBridgeTest extends TestCase
         $this->assertNull(
             TempestUDPBridgeAdapter::snapshotFromLatestRecord($record, [], [])
         );
+    }
+
+    public function testSnapshot_RejectsStaleDeviceClock(): void
+    {
+        $now = time() - 30 * 60; // 30 minutes stale
+        $record = [
+            'observed_at' => gmdate('c', $now),
+            'observed_unix' => $now,
+            'provider' => 'tempest_udp',
+            'provider_meta' => [
+                'api' => 'weatherflow_tempest_udp_v1',
+                'raw' => [
+                    'type' => 'obs_st',
+                    'obs' => [[$now, 1.0, 5.0, 9.0, 220, 6, 1017.57, 18.5, 61.0, 250, 0.1, 7, 0.4, 0, 0, 0, 2.4, 1]],
+                ],
+            ],
+        ];
+        $this->storeRecord('kspb', 'bridge-spb', 'station-tempest', $record);
+
+        $source = [
+            'type' => 'tempest_udp',
+            'bridge_id' => 'bridge-spb',
+            'bridge_source_id' => 'station-tempest',
+        ];
+        $this->assertNull(tempestUDPResolveSnapshot('kspb', $source, [
+            'bridges' => [],
+            'elevation_ft' => 100,
+            'weather_sources' => [$source],
+        ]));
     }
 }
