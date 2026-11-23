@@ -192,6 +192,11 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
     public function testResolveSnapshot_FromStoredGoldenAndEnableGate(): void
     {
         $post = $this->loadGoldenPost();
+        // The golden wire sample carries a 2018 station ts and observed_at;
+        // use live, consistent values so the ingest skew check and the shared
+        // recency gate both accept it.
+        $post['observed_at'] = gmdate('c', time() - 30);
+        $post['provider_meta']['raw']['ts'] = time() - 30;
         $n = bridgeNormalizeWeatherItem($post);
         $this->assertTrue($n['ok']);
         $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']));
@@ -221,6 +226,8 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
     {
         // Mis-aimed / magnetic vane must not be corrected in software.
         $post = $this->loadGoldenPost();
+        $post['observed_at'] = gmdate('c', time() - 30);
+        $post['provider_meta']['raw']['ts'] = time() - 30;
         $post['provider_meta']['wind_reference'] = 'magnetic';
         $n = bridgeNormalizeWeatherItem($post);
         bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
@@ -312,5 +319,25 @@ class DavisWeatherlinkLiveBridgeTest extends TestCase
                 'rain_size' => 0,
             ])
         );
+    }
+
+    public function testSnapshot_RejectsStaleStationClock(): void
+    {
+        $post = $this->loadGoldenPost();
+        $post['observed_at'] = gmdate('c', time() - 30 * 60);
+        $post['provider_meta']['raw']['ts'] = time() - 30 * 60; // 30 minutes stale
+        $n = bridgeNormalizeWeatherItem($post);
+        $this->assertTrue($n['ok']);
+        $this->assertTrue(bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']));
+
+        $source = [
+            'type' => 'davis_weatherlink_live',
+            'bridge_id' => 'bridge-spb-1',
+            'bridge_source_id' => 'station-davis-wll',
+            'station_id' => 'wx-spb-davis',
+            'txid' => 1,
+        ];
+        $airport = ['weather_sources' => [$source], 'lat' => 45.77, 'lon' => -122.86];
+        $this->assertNull(davisWeatherlinkLiveResolveSnapshot('kspb', $source, $airport));
     }
 }

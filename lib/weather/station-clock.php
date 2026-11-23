@@ -1,13 +1,19 @@
 <?php
 /**
- * Station clock framing and UTC normalization.
+ * Shared station clock toolkit for weather adapters.
  *
- * Weather adapters receive observed_at from station clocks a few ways:
+ * Any adapter with a station clock may use this; adapters whose protocol
+ * defines the time source deterministically (a unix epoch per spec) prefer
+ * the deterministic stationClockPlausibleUtc() recency guard over framing,
+ * because the spec already fixes the frame.
+ *
+ * The three clock shapes:
  *
  * - naive wall clock (a console clock with no timezone; e.g. the Vantage
- *   GETTIME response), which may be UTC or the site's local time;
- * - unix epoch (UTC by convention; e.g. WeatherFlow device epochs, WeatherLink
- *   Live raw.ts), which only needs a recency sanity check;
+ *   GETTIME response), which may be UTC or the site's local time; frame it
+ *   with stationClockFrameNaive();
+ * - unix epoch (UTC by spec; e.g. WeatherFlow device epochs, WeatherLink
+ *   Live raw.ts); confirm recency with stationClockPlausibleUtc();
  * - bridge arrival time (the MQTT push exception), which is bridge UTC and
  *   needs no clock check at all.
  *

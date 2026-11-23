@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../data/WeatherReading.php';
 require_once __DIR__ . '/../data/WindGroup.php';
 require_once __DIR__ . '/../data/WeatherSnapshot.php';
+require_once __DIR__ . '/../station-clock.php';
 require_once __DIR__ . '/../../bridge/weather-store.php';
 require_once __DIR__ . '/../../bridge/config.php';
 require_once __DIR__ . '/../../logger.php';
@@ -142,6 +143,15 @@ class DavisWeatherlinkLiveBridgeAdapter
         $parsed = self::parseRawData($raw, $meta, $config);
         if ($parsed === null) {
             // parseRawData already logged the concrete reject reason
+            return null;
+        }
+
+        // The WLL Local API defines raw.ts as a unix epoch, so the spec is
+        // deterministic: UTC. The shared recency gate fails closed on a stale
+        // or future device clock rather than publishing aged cache.
+        $clockOk = stationClockPlausibleUtc($parsed['obs_time'], time());
+        if (!$clockOk['ok']) {
+            self::logReject($clockOk['reason'], ['raw_ts' => $parsed['obs_time']]);
             return null;
         }
 
