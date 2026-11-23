@@ -208,7 +208,7 @@ At remote sites, the queuing matters most:
 
 - **Test the upload separately first:** use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can't upload a test file, the problem is credentials or network, not the Bridge.
 - Verify the Bridge has internet access
-- Check the credentials under Settings
+- Check the credentials on the camera's own upload settings
 - Watch the upload status for a growing queue
 
 ### "Weather readings aren't showing up"
