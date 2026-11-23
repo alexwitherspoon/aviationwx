@@ -613,6 +613,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `tempest_udp` | WeatherFlow Tempest via bridge UDP push cache (`awxb_` key + enable row) | Up to 1 report per minute (obs_st) |
 | `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
 | `madis_hfmetar` | NOAA MADIS HFMETAR (Federal ASOS, 5-minute marks; co-located only) | ~5 minutes (marks) |
 
@@ -655,6 +656,13 @@ A bridge key alone never publishes weather.
 4. Discover stations: `php scripts/bridge-inventory.php --airport kspb` (or Bridge Host lines on the status page).
 5. Enable publish: `php scripts/bridge-enable-weather.php --airport kspb --bridge bridge-spb-1 --source station-… [--station-id wx-…]` and paste the printed object into `weather_sources[]`.
 6. Prefer one Davis path (cloud **or** local) for ops clarity; dual ingest is allowed - the aggregator chooses freshest fields as usual.
+
+Cache-backed bridge types live in `lib/bridge/weather-store.php` and `lib/weather/adapter/`:
+
+| Type | Source | Snapshot fields | Notes |
+|------|--------|-----------------|-------|
+| `davis_weatherlink_live` | WLL Local API datagram | temperature, dewpoint, humidity, pressure (sea-level), wind, gust, precip | Txid-selected ISS; bar_absolute never used as pressure |
+| `tempest_udp` | Tempest hub UDP broadcast (`obs_st`/`obs_air`/`obs_sky`/`rapid_wind`) | temperature, humidity, pressure (altimeter when the airport has `elevation_ft`), wind, gust | UDP ships no dewpoint and no daily rain; both stay unset rather than invented. Pressure is station pressure reduced with `elevation_ft` (US standard barometric reduction) |
 
 ```json
 "bridges": [
