@@ -254,8 +254,8 @@
             const isWater = seg.water === true;
             // Water runways draw as a dashed outline of the strip, matching the
             // FAA airport-diagram convention (solid for hard surface, dashed
-            // outline for water). The outline uses the real width when known,
-            // so a 1000 ft waterway reads wider than a 50 ft strip.
+            // outline for water). The outline spans the same width as a paved
+            // strip so the waterway reads as a normal runway, not a wide band.
             ctx.setLineDash(isWater ? [6 * scale, 5 * scale] : []);
             ctx.lineCap = 'round';
             ctx.strokeStyle = isWater ? colors.waterRunway : colors.runway;
