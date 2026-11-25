@@ -78,67 +78,44 @@ class TempestUDPBridgeTest extends TestCase
         $this->assertSame(1588948614, $parsed['obs_time']);
     }
 
-    public function testParse_ObsAirProvidesTempHumPressure(): void
+    // Partial sensor datagrams are not publishable observations: the store
+    // keeps one latest record per source, so publishing one would drop
+    // temperature, humidity, and pressure from the snapshot until the next
+    // full report. The bridge does not forward them; this rejects the case
+    // where one lands in the store anyway.
+    public function testParse_PartialDatagramsRejected(): void
     {
-        $raw = [
-            'type' => 'obs_air',
-            'obs' => [[1493164835, 835.0, 10.0, 45, 0, 0, 3.46, 1]],
+        $partials = [
+            'obs_air' => [
+                'type' => 'obs_air',
+                'obs' => [[1493164835, 835.0, 10.0, 45, 0, 0, 3.46, 1]],
+            ],
+            'obs_sky' => [
+                'type' => 'obs_sky',
+                'obs' => [[1493321340, 9000, 10, 0.0, 2.6, 4.6, 7.4, 187, 3.12, 1, 130, null, 0, 3]],
+            ],
+            'rapid_wind' => ['type' => 'rapid_wind', 'ob' => [1493322445, 2.3, 128]],
         ];
-        $parsed = TempestUDPBridgeAdapter::parseRawData($raw, [], [], [
-            'elevation_ft' => 5000,
-        ]);
-        $this->assertNotNull($parsed);
-        $this->assertEqualsWithDelta(10.0, $parsed['temperature'], 0.01);
-        $this->assertEqualsWithDelta(45.0, $parsed['humidity'], 0.01);
-        $this->assertNotNull($parsed['pressure']);
-        $this->assertNull($parsed['wind_speed']);
-    }
-
-    public function testParse_RapidWindProvidesWindOnly(): void
-    {
-        $raw = ['type' => 'rapid_wind', 'ob' => [1493322445, 2.3, 128]];
-        $parsed = TempestUDPBridgeAdapter::parseRawData($raw, [], [], [
-            'elevation_ft' => 100,
-        ]);
-        $this->assertNotNull($parsed);
-        $this->assertEqualsWithDelta(2.3 * 1.943844, $parsed['wind_speed'], 0.0001);
-        $this->assertEqualsWithDelta(128.0, $parsed['wind_direction'], 0.001);
-        // No temp/hum/pressure in a rapid_wind datagram
-        $this->assertNull($parsed['temperature']);
-        $this->assertNull($parsed['humidity']);
-        $this->assertNull($parsed['pressure']);
-        $this->assertSame(1493322445, $parsed['obs_time']);
-    }
-
-    public function testParse_ObsSkyProvidesWindOnly(): void
-    {
-        // v171 fixture; wind avg at index 5, gust 6, dir 7. No temp/hum/pressure.
-        $raw = [
-            'type' => 'obs_sky',
-            'obs' => [[1493321340, 9000, 10, 0.0, 2.6, 4.6, 7.4, 187, 3.12, 1, 130, null, 0, 3]],
-        ];
-        $parsed = TempestUDPBridgeAdapter::parseRawData($raw, [], [], [
-            'elevation_ft' => 100,
-        ]);
-        $this->assertNotNull($parsed);
-        $this->assertEqualsWithDelta(4.6 * 1.943844, $parsed['wind_speed'], 0.0001);
-        $this->assertEqualsWithDelta(7.4 * 1.943844, $parsed['gust_speed'], 0.0001);
-        $this->assertEqualsWithDelta(187.0, $parsed['wind_direction'], 0.001);
-        $this->assertNull($parsed['temperature']);
-        $this->assertNull($parsed['humidity']);
-        $this->assertNull($parsed['pressure']);
-        $this->assertSame(1493321340, $parsed['obs_time']);
+        foreach ($partials as $name => $raw) {
+            $this->assertNull(TempestUDPBridgeAdapter::parseRawData($raw, [], [], []), $name);
+        }
     }
 
     public function testParse_InvalidEpochRejected(): void
     {
-        $raw = ['type' => 'rapid_wind', 'ob' => [0, 2.3, 128]];
+        $raw = [
+            'type' => 'obs_st',
+            'obs' => [[0, 0.18, 0.22, 0.27, 144, 6, 1017.57, 22.37, 50.26]],
+        ];
         $this->assertNull(TempestUDPBridgeAdapter::parseRawData($raw, [], [], []));
     }
 
     public function testParse_FutureEpochRejected(): void
     {
-        $raw = ['type' => 'rapid_wind', 'ob' => [time() + 99999, 2.3, 128]];
+        $raw = [
+            'type' => 'obs_st',
+            'obs' => [[time() + 99999, 0.18, 0.22, 0.27, 144, 6, 1017.57, 22.37, 50.26]],
+        ];
         $this->assertNull(TempestUDPBridgeAdapter::parseRawData($raw, [], [], []));
     }
 
@@ -167,10 +144,42 @@ class TempestUDPBridgeTest extends TestCase
 
     public function testParse_AbsurdWindRejected(): void
     {
-        $raw = ['type' => 'rapid_wind', 'ob' => [1493322445, 500.0, 128]];
+        $raw = [
+            'type' => 'obs_st',
+            'obs' => [[1493322445, 0.18, 500.0, 0.27, 128, 6, 1017.57, 22.37, 50.26]],
+        ];
         $parsed = TempestUDPBridgeAdapter::parseRawData($raw, [], [], []);
         $this->assertNotNull($parsed);
         $this->assertNull($parsed['wind_speed']);
+    }
+
+    public function testSnapshot_StoredPartialRecordNotPublished(): void
+    {
+        // The reviewer's shape: a wind-only datagram sits in latest.json
+        // (older bridge, or a direct push). It must not publish a
+        // wind-only snapshot; the site waits for the next full report.
+        $now = time() - 30;
+        $record = [
+            'observed_at' => gmdate('c', $now),
+            'observed_unix' => $now,
+            'provider' => 'tempest_udp',
+            'provider_meta' => [
+                'api' => 'weatherflow_tempest_udp_v1',
+                'raw' => ['type' => 'rapid_wind', 'ob' => [$now, 2.3, 128]],
+            ],
+        ];
+        $this->storeRecord('kspb', 'bridge-spb', 'station-tempest', $record);
+
+        $source = [
+            'type' => 'tempest_udp',
+            'bridge_id' => 'bridge-spb',
+            'bridge_source_id' => 'station-tempest',
+        ];
+        $this->assertNull(tempestUDPResolveSnapshot('kspb', $source, [
+            'bridges' => [],
+            'elevation_ft' => 100,
+            'weather_sources' => [$source],
+        ]));
     }
 
     public function testSnapshot_FromStoredRecord(): void

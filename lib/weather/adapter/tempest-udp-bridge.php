@@ -3,13 +3,19 @@
  * WeatherFlow Tempest UDP bridge adapter (bridge LAN push).
  *
  * Parses provider_meta.raw from a Tempest UDP broadcast datagram, as stored
- * under cache/bridges/.../weather/{source_id}/latest.json. The bridge forwards
- * the hub datagram verbatim (one of obs_st, obs_air, obs_sky, rapid_wind).
+ * under cache/bridges/.../weather/{source_id}/latest.json. The bridge
+ * forwards only the full obs_st report, verbatim; partial sensor datagrams
+ * (obs_air, obs_sky, rapid_wind, evt_*) are not forwarded.
  *
  * Field layouts per v171 of the WeatherFlow UDP reference
- * (https://weatherflow.github.io/Tempest/api/udp/): obs_st carries the full
- * Tempest set, obs_air carries temperature/humidity/pressure, obs_sky and
- * rapid_wind carry wind only. All values are metric-native (m/s, C, MB, mm).
+ * (https://weatherflow.github.io/Tempest/api/udp/): obs_st is the
+ * station's full report (pressure, temperature, humidity, wind) and the
+ * only type parsed here. obs_air carries temperature/humidity/pressure and
+ * obs_sky and rapid_wind carry wind only; they are rejected below even if
+ * one lands in the store, because the store keeps one latest record per
+ * source and a partial record would publish a snapshot missing the other
+ * fields until the next full report. All values are metric-native
+ * (m/s, C, MB, mm).
  *
  * Fail-closed notes:
  * - Station pressure (MB) is raw sensor pressure, not sea-level. It is only
@@ -232,6 +238,15 @@ class TempestUDPBridgeAdapter
             self::logReject('missing_datagram_type');
             return null;
         }
+        if ($type !== 'obs_st') {
+            // obs_air, obs_sky, rapid_wind, and evt_* are partial sensor
+            // feeds. The store keeps one latest record per source, so a
+            // partial record here would publish a snapshot missing the
+            // fields it does not carry until the next full report. Only
+            // the full station report is a publishable observation.
+            self::logReject('partial_datagram_type', ['type' => $type]);
+            return null;
+        }
 
         $fields = self::datagramFields($type, $raw);
         if ($fields === null) {
@@ -294,9 +309,10 @@ class TempestUDPBridgeAdapter
     }
 
     /**
-     * Extract raw fields from one datagram by type.
+     * Extract fields from the full obs_st report. Partial sensor types are
+     * rejected before this point (see parseRawData).
      *
-     * @param string $type Datagram type
+     * @param string $type Datagram type (obs_st)
      * @param array $raw provider_meta.raw
      * @return array{
      *   obs_time: int,
@@ -320,61 +336,17 @@ class TempestUDPBridgeAdapter
             'gust_speed' => null,
         ];
 
-        $arr = null;
-        switch ($type) {
-            case 'obs_st':
-                // [epoch, lull, avg, gust, dir, sample_int, pressure, temp, hum, ...]
-                $arr = self::firstArray($raw, 'obs');
-                if ($arr !== null) {
-                    $out['obs_time'] = self::epochAt($arr, 0);
-                    $out['pressure_mb'] = self::floatAt($arr, 6);
-                    $out['temperature'] = self::floatAt($arr, 7);
-                    $out['humidity'] = self::floatAt($arr, 8);
-                    $out['wind_speed'] = self::floatAt($arr, 2);
-                    $out['gust_speed'] = self::floatAt($arr, 3);
-                    $out['wind_direction'] = self::floatAt($arr, 4);
-                }
-                break;
-
-            case 'obs_air':
-                // [epoch, pressure, temp, hum, ...]
-                $arr = self::firstArray($raw, 'obs');
-                if ($arr !== null) {
-                    $out['obs_time'] = self::epochAt($arr, 0);
-                    $out['pressure_mb'] = self::floatAt($arr, 1);
-                    $out['temperature'] = self::floatAt($arr, 2);
-                    $out['humidity'] = self::floatAt($arr, 3);
-                }
-                break;
-
-            case 'obs_sky':
-                // [epoch, illum, uv, rain_prev_min, lull, avg, gust, dir, ...]
-                $arr = self::firstArray($raw, 'obs');
-                if ($arr !== null) {
-                    $out['obs_time'] = self::epochAt($arr, 0);
-                    $out['wind_speed'] = self::floatAt($arr, 5);
-                    $out['gust_speed'] = self::floatAt($arr, 6);
-                    $out['wind_direction'] = self::floatAt($arr, 7);
-                }
-                break;
-
-            case 'rapid_wind':
-                // ob = [epoch, wind m/s, wind dir]
-                $ob = $raw['ob'] ?? null;
-                if (is_array($ob) && count($ob) >= 3) {
-                    $arr = $ob;
-                    $out['obs_time'] = self::epochAt($arr, 0);
-                    $out['wind_speed'] = self::floatAt($arr, 1);
-                    $out['wind_direction'] = self::floatAt($arr, 2);
-                }
-                break;
-
-            default:
-                // status heartbeats and value-free events carry no observation
-                self::logReject('unsupported_datagram_type', ['type' => $type]);
-                return null;
+        // [epoch, lull, avg, gust, dir, sample_int, pressure, temp, hum, ...]
+        $arr = self::firstArray($raw, 'obs');
+        if ($arr !== null) {
+            $out['obs_time'] = self::epochAt($arr, 0);
+            $out['pressure_mb'] = self::floatAt($arr, 6);
+            $out['temperature'] = self::floatAt($arr, 7);
+            $out['humidity'] = self::floatAt($arr, 8);
+            $out['wind_speed'] = self::floatAt($arr, 2);
+            $out['gust_speed'] = self::floatAt($arr, 3);
+            $out['wind_direction'] = self::floatAt($arr, 4);
         }
-
         if ($out['obs_time'] <= 0) {
             self::logReject('invalid_epoch', ['type' => $type]);
             return null;
@@ -384,7 +356,7 @@ class TempestUDPBridgeAdapter
 
     /**
      * @param array $raw Datagram
-     * @param string $key obs or evt key
+     * @param string $key Observation key (obs)
      * @return array|null First observation array
      */
     private static function firstArray(array $raw, string $key): ?array
