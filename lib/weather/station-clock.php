@@ -20,10 +20,12 @@
  * For naive clocks we identify the framing by alignment: if the naive value
  * sits within tolerance of now-in-UTC it is UTC; if it sits within tolerance
  * of now-in-the-site-timezone it is local. Identified local times are
- * normalized to UTC via the timezone at that instant (DST-aware, so the
- * offset is not a fixed integer). Times that match no frame are unidentifiable
- * and are rejected rather than guessed at. Epochs get a recency guard: a
- * device clock older than the tolerance is stale and rejected.
+ * normalized to UTC by trying each offset the zone has used in the year and
+ * keeping the candidate that is plausible against the processing instant
+ * (DST-aware, transition days and repeated fall-back hours included). Times
+ * that match no frame are unidentifiable and are rejected rather than
+ * guessed at. Epochs get a recency guard: a device clock older than the
+ * tolerance is stale and rejected.
  *
  * The bridge replays failed POSTs for up to ten minutes, so the recency
  * tolerance must exceed the replay window; it also absorbs poll cadence.
@@ -67,14 +69,35 @@ function stationClockFrameNaive(int $naive, int $now, array $opts = []): array
             aviationwx_log('warning', 'station clock', ['reason' => 'invalid_site_timezone', 'tz' => $siteTz], 'app');
             return __stationClockRejectNaive($naive, $now, $ageUtc);
         }
-        // Offset at the naive value (the tz database folds the DST hour).
-        $offsetSec = $tz->getOffset(new DateTime('@' . $naive));
-        $epochUtc = $naive - $offsetSec;
-        if ($epochUtc <= $futureLimit) {
+        // The naive value is a wall clock; the offset in effect at that wall
+        // time is standard or daylight and only the tz database knows which.
+        // Looking the offset up at the naive value read as UTC picks the wrong
+        // side of a transition: on a spring-forward morning the console runs
+        // the new offset while the naive value still sits at the old one. So
+        // sample the zone's distinct offsets across the year, derive one
+        // candidate instant per offset (utc = wall - offset), and accept the
+        // candidate that is plausible against the processing instant. On a
+        // fall-back day the wall time occurs twice; the plausible candidate
+        // is the one within tolerance, which selects the right occurrence.
+        $distinctOffsets = [];
+        foreach ([0, 30, 91, 182, 273, 364] as $daysAhead) {
+            $distinctOffsets[$tz->getOffset(new DateTime('@' . ($naive + $daysAhead * 86400)))] = true;
+        }
+        $accepted = null;
+        foreach (array_keys($distinctOffsets) as $offsetSec) {
+            $epochUtc = $naive - $offsetSec;
+            if ($epochUtc > $futureLimit) {
+                continue;
+            }
             $ageLocal = $now - $epochUtc;
             if ($ageLocal >= -$tolerance && $ageLocal <= $tolerance) {
-                return ['ok' => true, 'epoch_utc' => $epochUtc, 'framing' => 'local', 'reason' => null];
+                if ($accepted === null || $ageLocal < $now - $accepted) {
+                    $accepted = $epochUtc;
+                }
             }
+        }
+        if ($accepted !== null) {
+            return ['ok' => true, 'epoch_utc' => $accepted, 'framing' => 'local', 'reason' => null];
         }
     }
 
