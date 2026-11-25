@@ -58,6 +58,21 @@ class ReferenceDataHealthTest extends TestCase
         $this->assertContains('ourairports_runways', $slugs);
     }
 
+    public function testRunwayDisplayConsumerIncludesFusionInventory(): void
+    {
+        $component = reference_data_health_build(null, null);
+        $consumer = null;
+        foreach ($component['consumers'] as $row) {
+            if (($row['slug'] ?? '') === 'runway_display') {
+                $consumer = $row;
+                break;
+            }
+        }
+
+        $this->assertIsArray($consumer);
+        $this->assertSame(['runway_fusion'], array_column($consumer['sources'], 'slug'));
+    }
+
     public function testRunwayPerformanceConsumer_IncludesAllPrecedenceSources(): void
     {
         $component = reference_data_health_build(null, null);

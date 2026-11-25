@@ -412,6 +412,21 @@ function reference_data_country_resolution_source_health(?array $config, ?string
 /**
  * @return array<string, mixed>
  */
+function reference_data_runway_fusion_source_health(): array
+{
+    reference_data_require_status_checks();
+
+    return reference_data_source_from_component_health(
+        'runway_fusion',
+        'Fused runway inventory',
+        'computed',
+        checkRunwayFusionHealth()
+    );
+}
+
+/**
+ * @return array<string, mixed>
+ */
 function reference_data_wmm_source_health(): array
 {
     reference_data_require_status_checks();

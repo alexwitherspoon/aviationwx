@@ -70,6 +70,165 @@ function runwayFusionInputStamps(?string $configPath = null): array
 }
 
 /**
+ * Collect every runway end ident observed at an airport across all sources:
+ * NASR row ends, OurAirports row ends, merge-cache geometry segments, and
+ * manual compass runway names.
+ *
+ * Used to decide which L/C/R suffixes are real (parallel strips) and which
+ * are source-to-source lettering drift on a single strip.
+ *
+ * @param list<array<string, mixed>> $nasrRows
+ * @param list<array<string, mixed>> $oaRows
+ * @param list<array<string, mixed>> $geometrySegments Segments with le_ident/he_ident
+ * @param list<string> $manualNames Manual compass runway names (e.g. 09/27)
+ * @return list<string> Canonical end idents (e.g. 18, 18L, 16W)
+ */
+function runwayFusionAirportEndIdents(array $nasrRows, array $oaRows, array $geometrySegments, array $manualNames): array
+{
+    $idends = [];
+
+    $collectEnd = static function (string $ident) use (&$idends): void {
+        $trimmed = trim($ident);
+        if ($trimmed === '') {
+            return;
+        }
+        $canonical = canonicalizeRunwayEndIdent($trimmed);
+        $idends[] = $canonical ?? strtoupper(str_replace(' ', '', $trimmed));
+    };
+
+    // A pair designator (18/36) contributes its two ends.
+    $collectPair = static function (string $designator) use ($collectEnd): void {
+        if (str_contains($designator, '/')) {
+            foreach (explode('/', $designator, 2) as $end) {
+                $collectEnd($end);
+            }
+            return;
+        }
+        $collectEnd($designator);
+    };
+
+    foreach ($nasrRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $collectPair((string) ($row['rwy_id'] ?? ''));
+        foreach (is_array($row['ends'] ?? null) ? $row['ends'] : [] as $end) {
+            if (is_array($end)) {
+                $collectEnd((string) ($end['end_id'] ?? ''));
+            }
+        }
+    }
+    foreach ($oaRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $collectPair((string) ($row['rwy_id'] ?? ''));
+        foreach (is_array($row['ends'] ?? null) ? $row['ends'] : [] as $end) {
+            if (is_array($end)) {
+                $collectEnd((string) ($end['end_id'] ?? ''));
+            }
+        }
+    }
+    foreach ($geometrySegments as $seg) {
+        if (!is_array($seg)) {
+            continue;
+        }
+        $collectEnd((string) ($seg['le_ident'] ?? ''));
+        $collectEnd((string) ($seg['he_ident'] ?? ''));
+    }
+    foreach ($manualNames as $name) {
+        $collectPair((string) $name);
+    }
+
+    return $idends;
+}
+
+/**
+ * Which canonical L/C/R end idents have their suffix stripped when matching
+ * pair keys for this airport.
+ *
+ * L/C/R carry information only while the airport has parallel strips at the
+ * numeric heading. When a heading has a single lettered end across all
+ * sources, the suffix is lettering drift (one source says 18L, another 18),
+ * so it is stripped and the pair keys match. W marks a water end, is never
+ * stripped, and never counts toward parallel ambiguity.
+ *
+ * @param list<string> $endIdents Canonical end idents from runwayFusionAirportEndIdents()
+ * @return array<string, string> Canonical end ident mapped to the ident to match with
+ */
+function runwayFusionParallelStripMap(array $endIdents): array
+{
+    $letteredByNumber = [];
+    foreach ($endIdents as $end) {
+        if (preg_match('/^(\d{2})([LCR])$/', $end, $m) === 1) {
+            $letteredByNumber[$m[1]][] = $end;
+        }
+    }
+
+    $strip = [];
+    foreach ($letteredByNumber as $number => $ends) {
+        $unique = array_values(array_unique($ends));
+        if (count($unique) === 1) {
+            $strip[$unique[0]] = $number;
+        }
+    }
+
+    return $strip;
+}
+
+/**
+ * Context-aware pair key for one airport: order-insensitive, with L/C/R
+ * suffixes stripped where runwayFusionParallelStripMap() deems them
+ * lettering drift. W suffixes and parallel-strip letters are preserved, so
+ * 09L/27R and 09R/27L stay distinct.
+ *
+ * @param array<string, string> $stripMap From runwayFusionParallelStripMap()
+ */
+function runwayFusionContextualPairKey(array $stripMap, string $designator): string
+{
+    $normalized = strtoupper(str_replace(' ', '', trim($designator)));
+    if ($normalized === '' || !str_contains($normalized, '/')) {
+        return $normalized;
+    }
+
+    [$endA, $endB] = explode('/', $normalized, 2);
+    $canonicalA = canonicalizeRunwayEndIdent($endA) ?? $endA;
+    $canonicalB = canonicalizeRunwayEndIdent($endB) ?? $endB;
+    $ends = [
+        $stripMap[$canonicalA] ?? $canonicalA,
+        $stripMap[$canonicalB] ?? $canonicalB,
+    ];
+    sort($ends, SORT_STRING);
+
+    return implode('/', $ends);
+}
+
+/**
+ * Pick the config runway_facts row for one fused row.
+ *
+ * Fused row keys are contextual (L/C/R stripped where the airport has no
+ * parallel strips), while runwayDisplayConfigFactsByRunwayId() indexes
+ * operator entries by strict normalized keys. When the two diverge, the
+ * winning source row's rwy_id carries the published form, so look it up too.
+ *
+ * @param array<string, array<string, mixed>> $factsByRunwayId Strict-key facts map
+ * @param string $rowKey Fused row contextual pair key
+ * @param array<string, mixed> $winner Winning source row (config > NASR > OA)
+ * @return array<string, mixed> The facts row, or [] when no override applies
+ */
+function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, array $winner): array
+{
+    if (isset($factsByRunwayId[$rowKey]) && is_array($factsByRunwayId[$rowKey])) {
+        return $factsByRunwayId[$rowKey];
+    }
+    $strictKey = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($winner['rwy_id'] ?? ''));
+    if ($strictKey !== '' && isset($factsByRunwayId[$strictKey]) && is_array($factsByRunwayId[$strictKey])) {
+        return $factsByRunwayId[$strictKey];
+    }
+    return [];
+}
+
+/**
  * Whether the fused artifact needs a rebuild.
  *
  * True when the artifact is missing or structurally invalid, its schema
@@ -110,6 +269,17 @@ function runwayFusionShouldRebuild(?array $artifact, array $stamps): bool
         if ($current > $recorded) {
             return true;
         }
+    }
+
+    // The merge retention gate deletes the runways cache on failed fetches.
+    // When it is gone after the build, the read-path gate withholds the
+    // artifact (its geometry coverage no longer holds), so a skipped worker
+    // would leave it unservable until the 24h max age. Rebuild instead: the
+    // new stamps match reality, the artifact is servable again, and the next
+    // successful merge fetch restores the full slice.
+    $runwaysRecorded = isset($inputs['runways_cache_mtime']) && is_int($inputs['runways_cache_mtime']) ? $inputs['runways_cache_mtime'] : 0;
+    if ($runwaysRecorded > 0 && ($stamps['runways_cache_mtime'] ?? null) === null) {
+        return true;
     }
 
     $configSha = $stamps['config_sha'] ?? null;
@@ -172,14 +342,39 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
     $manualRow = buildConfigRunwayForDensityAltitude($airport);
     $factsByRunwayId = runwayDisplayConfigFactsByRunwayId($airport);
 
-    // Union by normalized pair key. First row wins when a source repeats a
+    // Context-aware pair keys: an L/C/R suffix is kept only while the airport
+    // has parallel strips at the numeric heading across all of its sources
+    // (runwayFusionParallelStripMap), so lettering drift between sources on a
+    // single strip does not split the pair. W suffixes always stay.
+    $geometry = $runwaysData !== null
+        ? getRunwaySegmentsFromParsedCache($runwaysData, $airportId, $airport)
+        : [];
+    $manualNames = [];
+    if (!empty($airport['runways']) && is_array($airport['runways'])) {
+        foreach ($airport['runways'] as $manual) {
+            if (is_array($manual) && !empty($manual['name'])) {
+                $manualNames[] = (string) $manual['name'];
+            }
+        }
+    }
+    $stripMap = runwayFusionParallelStripMap(runwayFusionAirportEndIdents(
+        $nasrRows,
+        is_array($oaRows) ? $oaRows : [],
+        is_array($geometry) ? $geometry : [],
+        $manualNames
+    ));
+    $pairKey = static function (string $designator) use ($stripMap): string {
+        return runwayFusionContextualPairKey($stripMap, $designator);
+    };
+
+    // Union by contextual pair key. First row wins when a source repeats a
     // pair; later rows for the same pair are ignored (sources don't repeat).
     $pairs = [];
     foreach ($nasrRows as $row) {
         if (!is_array($row)) {
             continue;
         }
-        $key = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($row['rwy_id'] ?? ''));
+        $key = $pairKey((string) ($row['rwy_id'] ?? ''));
         if ($key !== '' && !isset($pairs[$key]['nasr'])) {
             $pairs[$key]['nasr'] = $row;
         }
@@ -188,7 +383,7 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
         if (!is_array($row)) {
             continue;
         }
-        $key = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($row['rwy_id'] ?? ''));
+        $key = $pairKey((string) ($row['rwy_id'] ?? ''));
         if ($key !== '' && !isset($pairs[$key]['oa'])) {
             $pairs[$key]['oa'] = $row;
         }
@@ -199,7 +394,7 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
     // is the DA escape hatch: it becomes a row only when no other source
     // provides one, matching today's closed-world fallback.
     if ($manualRow !== null) {
-        $manualKey = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($manualRow['rwy_id'] ?? ''));
+        $manualKey = $pairKey((string) ($manualRow['rwy_id'] ?? ''));
         $nameless = strtolower((string) ($manualRow['rwy_id'] ?? '')) === 'config';
         if ($manualKey !== '' && (!$nameless || $pairs === [])) {
             $pairs[$manualKey]['config'] = $manualRow;
@@ -220,7 +415,7 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
         $hasNasr = isset($sources['nasr']);
         $winner = $sources['config'] ?? $sources['nasr'] ?? $sources['oa'];
         $source = $hasConfig ? 'config' : ($hasNasr ? 'nasr' : 'ourairports');
-        $factsRow = $factsByRunwayId[$key] ?? [];
+        $factsRow = runwayFusionConfigFactsForRow($factsByRunwayId, $key, $winner);
         $oaRow = $sources['oa'] ?? [];
 
         // Per-field provenance mirrors the display formatter's resolution
@@ -283,13 +478,13 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
     }
 
     $segments = runwayFusionDerivedSegments(
-        $airportId,
         $airport,
         $rows,
         $factsByRunwayId,
         $calmWind,
         $declination,
-        $runwaysData
+        is_array($geometry) ? $geometry : [],
+        $stripMap
     );
 
     return [
@@ -303,42 +498,43 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
  * Derived through-center segments for union pairs without geometry.
  *
  * A pair is covered (no derived segment) when the merge cache has geometry
- * for it or a manual compass runway provides it. Remaining pairs are
- * formatted through the display formatter (so headings, water flags, and
- * closed handling match the list exactly) and synthesized.
+ * for it or a manual compass runway provides it, compared with the
+ * airport's contextual pair key: L/C/R suffixes count only while the
+ * airport has parallel strips at the numeric heading, so a geometry line
+ * published as 18L/36 covers an OurAirports row 18/36 on a single-strip
+ * field. Remaining pairs are formatted through the display formatter (so
+ * headings, water flags, and closed handling match the list exactly) and
+ * synthesized.
  *
- * @param string $airportId Config key
  * @param array<string, mixed> $airport Airport configuration
  * @param list<array<string, mixed>> $fusedRows Rows from runwayFusionBuildAirportEntry()
  * @param array<string, array<string, mixed>> $factsByRunwayId Config runway_facts indexed by pair key
  * @param array<string, mixed> $calmWind NASR calm wind (may be empty)
  * @param float|null $declination Magnetic declination in degrees
- * @param array<string, mixed>|null $runwaysData Parsed runways merge cache
+ * @param list<array<string, mixed>> $geometrySegments Merge-cache segments
+ * @param array<string, string> $stripMap From runwayFusionParallelStripMap()
  * @return list<array<string, mixed>>
  */
 function runwayFusionDerivedSegments(
-    string $airportId,
     array $airport,
     array $fusedRows,
     array $factsByRunwayId,
     array $calmWind,
     ?float $declination,
-    ?array $runwaysData
+    array $geometrySegments,
+    array $stripMap
 ): array {
     $covered = [];
-    if ($runwaysData !== null) {
-        $geometry = getRunwaySegmentsFromParsedCache($runwaysData, $airportId, $airport);
-        foreach (is_array($geometry) ? $geometry : [] as $seg) {
-            if (!is_array($seg)) {
-                continue;
-            }
-            $le = trim((string) ($seg['le_ident'] ?? ''));
-            $he = trim((string) ($seg['he_ident'] ?? ''));
-            if ($le === '' || $he === '') {
-                continue;
-            }
-            $covered[densityAltitudePerformanceNormalizeRunwayPairKey($le . '/' . $he)] = true;
+    foreach ($geometrySegments as $seg) {
+        if (!is_array($seg)) {
+            continue;
         }
+        $le = trim((string) ($seg['le_ident'] ?? ''));
+        $he = trim((string) ($seg['he_ident'] ?? ''));
+        if ($le === '' || $he === '') {
+            continue;
+        }
+        $covered[runwayFusionContextualPairKey($stripMap, $le . '/' . $he)] = true;
     }
 
     // Manual compass runways carry their own geometry (the read path keeps the
@@ -348,7 +544,7 @@ function runwayFusionDerivedSegments(
             if (!is_array($manual) || empty($manual['name'])) {
                 continue;
             }
-            $key = densityAltitudePerformanceNormalizeRunwayPairKey((string) $manual['name']);
+            $key = runwayFusionContextualPairKey($stripMap, (string) $manual['name']);
             if ($key !== '') {
                 $covered[$key] = true;
             }
@@ -371,7 +567,7 @@ function runwayFusionDerivedSegments(
         }
         $formatted[] = runwayDisplayFormatRunwayRow(
             $winner,
-            $factsByRunwayId[$row['key']] ?? [],
+            runwayFusionConfigFactsForRow($factsByRunwayId, (string) ($row['key'] ?? ''), $winner),
             $calmWind,
             $row['oa'] ?? [],
             $notamClosures,

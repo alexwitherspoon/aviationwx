@@ -670,9 +670,11 @@ class RunwayFusionReadPathTest extends TestCase
     }
 
     /**
-     * Write the artifact to the real cache path. Stamps default to values
-     * newer than any on-disk input (so the gate passes without creating
-     * input files); config_mtime matches the real fixture config.
+     * Write the artifact to the real cache path. Stamps are truthful about
+     * whatever on-disk inputs the cache dir happens to hold (CI checkouts
+     * have none; local dirs may carry gitignored leftovers), so the gate
+     * passes on the stamps alone. config_mtime matches the real fixture
+     * config.
      *
      * @param array<string, mixed> $airports
      * @param array<string, mixed>|null $stampOverrides
@@ -680,13 +682,14 @@ class RunwayFusionReadPathTest extends TestCase
     private function writeArtifact(array $airports, ?array $stampOverrides = null, ?int $builtAt = null): void
     {
         $configPath = getConfigFilePath();
+        clearstatcache();
         $stamps = [
-            'nasr_apt_mtime' => PHP_INT_MAX,
-            'runways_cache_mtime' => PHP_INT_MAX,
+            'nasr_apt_mtime' => is_readable(CACHE_NASR_APT_DATA_FILE) ? (int) filemtime(CACHE_NASR_APT_DATA_FILE) : 0,
+            'runways_cache_mtime' => is_readable(CACHE_RUNWAYS_DATA_FILE) ? (int) filemtime(CACHE_RUNWAYS_DATA_FILE) : 0,
             'config_sha' => 'test-sha',
-            'config_mtime' => is_string($configPath) && is_file($configPath)
+            'config_mtime' => is_string($configPath) && $configPath !== '' && is_file($configPath)
                 ? (int) filemtime($configPath)
-                : PHP_INT_MAX,
+                : 0,
         ];
         foreach ((array) $stampOverrides as $key => $value) {
             $stamps[$key] = $value;

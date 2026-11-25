@@ -585,7 +585,7 @@ function runwayDisplayBuildFromFusedEntry(array $fusedEntry, array $configFacts,
         }
         $formatted[] = runwayDisplayFormatRunwayRow(
             $winner,
-            $configFacts[$key] ?? [],
+            runwayFusionConfigFactsForRow($configFacts, $key, $winner),
             $calmWind,
             $row['oa'] ?? [],
             $notamClosures,

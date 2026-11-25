@@ -91,6 +91,209 @@ class RunwayFusionTest extends TestCase
         $this->assertEqualsWithDelta(-cos($angle) * 0.9, $seg['end'][1], 1e-9);
     }
 
+    public function testBuildAirportEntry_SingleStripLetterDrift_GeometryCoversUnletteredRow(): void
+    {
+        // L/C/R suffixes carry meaning only while the airport has parallel
+        // strips at the numeric heading. Heading 18 here has a single strip
+        // across all sources, so the geometry's 18L is lettering drift
+        // against OurAirports' 18: the pair keys merge into one, the row is
+        // covered by the geometry, and no derived segment is produced.
+        $runways = [
+            'airports' => [
+                '77L' => [
+                    'segments' => [
+                        [
+                            'start' => [-0.9, 0.0],
+                            'end' => [0.9, 0.0],
+                            'le_ident' => '36',
+                            'he_ident' => '18L',
+                            'ident_at_start' => '18L',
+                            'ident_at_end' => '36',
+                            'source' => 'faa',
+                        ],
+                    ],
+                    'display_runways' => [
+                        [
+                            'rwy_id' => '18/36',
+                            'length_ft' => 3000,
+                            'width_ft' => 45,
+                            'surface' => 'ASPH',
+                            'lighted' => false,
+                            'closed' => false,
+                            'ends' => [['end_id' => '18'], ['end_id' => '36']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => '77L',
+            'name' => 'Letter Mismatch Field',
+            'faa' => '77L',
+            'ourairports_ident' => '77L',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('77L', $airport, null, $runways);
+
+        $this->assertIsArray($entry);
+        $this->assertCount(1, $entry['rows']);
+        $this->assertSame('ourairports', $entry['rows'][0]['source']);
+        $this->assertSame('18/36', $entry['rows'][0]['key']);
+        $this->assertCount(0, $entry['segments']);
+    }
+
+    public function testBuildAirportEntry_TrueParallelStrips_StayDistinctAndCovered(): void
+    {
+        // Heading 09 has two lettered ends (09L and 09R) across the
+        // airport's sources, so both are real parallel strips. The suffixes
+        // are kept, the rows stay distinct, and the geometry covers both:
+        // no derived segment.
+        $runways = [
+            'airports' => [
+                'PPA' => [
+                    'segments' => [
+                        [
+                            'start' => [-0.9, -0.1],
+                            'end' => [0.9, -0.1],
+                            'le_ident' => '09L',
+                            'he_ident' => '27R',
+                            'ident_at_start' => '09L',
+                            'ident_at_end' => '27R',
+                            'source' => 'faa',
+                        ],
+                        [
+                            'start' => [-0.9, 0.1],
+                            'end' => [0.9, 0.1],
+                            'le_ident' => '09R',
+                            'he_ident' => '27L',
+                            'ident_at_start' => '09R',
+                            'ident_at_end' => '27L',
+                            'source' => 'faa',
+                        ],
+                    ],
+                    'display_runways' => [
+                        [
+                            'rwy_id' => '09L/27R',
+                            'length_ft' => 5000,
+                            'width_ft' => 150,
+                            'surface' => 'ASPH',
+                            'lighted' => true,
+                            'closed' => false,
+                            'ends' => [['end_id' => '09L'], ['end_id' => '27R']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                        [
+                            'rwy_id' => '09R/27L',
+                            'length_ft' => 4500,
+                            'width_ft' => 150,
+                            'surface' => 'ASPH',
+                            'lighted' => true,
+                            'closed' => false,
+                            'ends' => [['end_id' => '09R'], ['end_id' => '27L']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'PPA',
+            'name' => 'Parallel Field',
+            'faa' => 'PPA',
+            'ourairports_ident' => 'PPA',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('PPA', $airport, null, $runways);
+
+        $this->assertIsArray($entry);
+        $keys = array_column($entry['rows'], 'key');
+        sort($keys);
+        $this->assertSame(['09L/27R', '09R/27L'], $keys);
+        $this->assertCount(0, $entry['segments']);
+    }
+
+    public function testBuildAirportEntry_MissingParallel_DerivesUncoveredStrip(): void
+    {
+        // The geometry carries only one of two parallel strips. OurAirports
+        // lists both, so the 09L in the geometry is a real letter (not
+        // drift): 09R/27L stays a distinct pair and gets a derived
+        // through-center segment for the compass.
+        $runways = [
+            'airports' => [
+                'PPA' => [
+                    'segments' => [
+                        [
+                            'start' => [-0.9, -0.1],
+                            'end' => [0.9, -0.1],
+                            'le_ident' => '09L',
+                            'he_ident' => '27R',
+                            'ident_at_start' => '09L',
+                            'ident_at_end' => '27R',
+                            'source' => 'faa',
+                        ],
+                    ],
+                    'display_runways' => [
+                        [
+                            'rwy_id' => '09L/27R',
+                            'length_ft' => 5000,
+                            'width_ft' => 150,
+                            'surface' => 'ASPH',
+                            'lighted' => true,
+                            'closed' => false,
+                            'ends' => [['end_id' => '09L'], ['end_id' => '27R']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                        [
+                            'rwy_id' => '09R/27L',
+                            'length_ft' => 4500,
+                            'width_ft' => 150,
+                            'surface' => 'ASPH',
+                            'lighted' => true,
+                            'closed' => false,
+                            'ends' => [['end_id' => '09R'], ['end_id' => '27L']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'PPA',
+            'name' => 'Parallel Field',
+            'faa' => 'PPA',
+            'ourairports_ident' => 'PPA',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('PPA', $airport, null, $runways);
+
+        $this->assertIsArray($entry);
+        $this->assertCount(2, $entry['rows']);
+        $this->assertCount(1, $entry['segments']);
+        $this->assertSame('09R', $entry['segments'][0]['le_ident']);
+        $this->assertSame('27L', $entry['segments'][0]['he_ident']);
+    }
+
     public function testBuildAirportEntry_OaOnlyPairIncludedForAirportWithNasrRecord(): void
     {
         $nasr = [
@@ -415,6 +618,17 @@ class RunwayFusionTest extends TestCase
         // churning a rebuild that would just drop the official slice.
         $stamps['nasr_apt_mtime'] = null;
         $this->assertFalse(runwayFusionShouldRebuild($artifact, $stamps));
+    }
+
+    public function testShouldRebuild_RunwaysCacheBuiltInThenGone_ReturnsTrue(): void
+    {
+        $stamps = $this->inputStamps();
+        $artifact = $this->freshArtifact($stamps);
+        // The merge retention gate deletes the runways cache on failed
+        // fetches. The read-path gate withholds the artifact in this state,
+        // so the worker must rebuild rather than keep skipping it.
+        $stamps['runways_cache_mtime'] = null;
+        $this->assertTrue(runwayFusionShouldRebuild($artifact, $stamps));
     }
 
     public function testArtifactRoundTrip_WriteAndLoad(): void
