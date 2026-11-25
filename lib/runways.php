@@ -106,12 +106,24 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         return rotateSegmentsIfTrueNorth(centerRunwaySegments($segments), $airport);
     }
 
+    // Fused derived segments (water strips, off-grid pairs) join the geometry
+    // segments when the artifact is fresh. A stale or missing artifact leaves
+    // this path exactly as before, and the manual override above it is
+    // untouched either way.
+    require_once __DIR__ . '/runway-fusion.php';
+    $fusedEntry = runwayFusionEntryForAirport($airportId);
+    $fusedSegments = (is_array($fusedEntry) && is_array($fusedEntry['segments'] ?? null) && $fusedEntry['segments'] !== [])
+        ? $fusedEntry['segments']
+        : null;
+
     // Programmatic: check APCu, then file cache (invalidate APCu when file is newer)
     $apcuKey = RUNWAYS_APCU_PREFIX . $airportId;
     $cachePath = CACHE_RUNWAYS_DATA_FILE;
     $fileMtime = file_exists($cachePath) ? filemtime($cachePath) : 0;
 
-    if (function_exists('apcu_fetch')) {
+    // The APCu entry is geometry-only; serve it only when no fused derived
+    // segment needs merging in (its freshness is tracked separately).
+    if ($fusedSegments === null && function_exists('apcu_fetch')) {
         $storedMtime = @apcu_fetch(RUNWAYS_APCU_MTIME_KEY, $mtimeSuccess);
         if ($mtimeSuccess && $fileMtime > 0 && (int) $storedMtime === (int) $fileMtime) {
             $cached = @apcu_fetch($apcuKey, $success);
@@ -125,15 +137,24 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
     $segments = loadRunwaySegmentsFromFileCache($airportId, $airport);
     if ($segments === null) {
         $fromCache = false;
-        $segments = loadRunwaySegmentsFromDisplay($airport, $airportId);
+        if ($fusedSegments !== null) {
+            // Fresh fused inventory replaces the closed-world display fallback:
+            // it already derives segments for every pair without geometry.
+            $segments = $fusedSegments;
+        } else {
+            $segments = loadRunwaySegmentsFromDisplay($airport, $airportId);
+        }
+    } elseif ($fusedSegments !== null) {
+        $segments = runwayFusionMergeDerivedSegments($segments, $fusedSegments);
     }
     if ($segments === []) {
         return null;
     }
 
-    // Warm APCu when available. The display fallback is not cached here because
-    // its source (NASR or config) is separate from the runways cache file.
-    if ($fromCache && function_exists('apcu_store')) {
+    // Warm APCu when available. The display fallback and the fused merge are
+    // not cached here because their sources (NASR, fusion artifact) have
+    // freshness the runways-file mtime key does not track.
+    if ($fromCache && $fusedSegments === null && function_exists('apcu_store')) {
         @apcu_store($apcuKey, $segments, RUNWAYS_APCU_TTL);
         if ($fileMtime > 0) {
             @apcu_store(RUNWAYS_APCU_MTIME_KEY, $fileMtime, RUNWAYS_APCU_TTL);

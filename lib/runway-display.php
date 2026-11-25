@@ -507,6 +507,107 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
 }
 
 /**
+ * Assemble the runway display payload from a fresh fused artifact entry.
+ *
+ * Membership is the artifact's union (config, NASR, OurAirports); per-field
+ * resolution, NOTAM overlay, and provenance run through the same formatter
+ * as the live path, so rows render identically. The payload keeps the
+ * source fields (runway_source, source_reference, effective_date) for API
+ * consumers; the UI presents the inventory as AviationWX.org facts and does
+ * not display them.
+ *
+ * @param array{rows: list<array<string, mixed>>, segments: list<array<string, mixed>>, calm_wind: array<string, mixed>|null} $fusedEntry
+ * @param array<string, array<string, mixed>> $configFacts Config runway_facts indexed by pair key
+ * @param array{aerodrome_closed: bool, closed_pair_designators: list<string>, closed_end_idents: list<string>} $notamClosures
+ * @return array{
+ *   runway_source: ?string,
+ *   source_reference: ?string,
+ *   effective_date: ?string,
+ *   runways: list<array<string, mixed>>
+ * }|null
+ */
+function runwayDisplayBuildFromFusedEntry(array $fusedEntry, array $configFacts, array $notamClosures, ?float $declinationDeg): ?array
+{
+    $rows = is_array($fusedEntry['rows'] ?? null) ? $fusedEntry['rows'] : [];
+    if ($rows === []) {
+        return null;
+    }
+
+    $calmWind = is_array($fusedEntry['calm_wind'] ?? null) ? $fusedEntry['calm_wind'] : [];
+
+    // Airport-level source line: the highest-precedence source that
+    // contributed a row. Operator rows are a correction layer, so an
+    // officially sourced inventory still reads as the official source.
+    $hasNasr = false;
+    $hasOa = false;
+    $hasConfig = false;
+    $effectiveDate = null;
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (isset($row['nasr'])) {
+            $hasNasr = true;
+        }
+        if (isset($row['oa'])) {
+            $hasOa = true;
+        }
+        if (isset($row['config'])) {
+            $hasConfig = true;
+        }
+        if ($effectiveDate === null && is_string($row['effective_date'] ?? null) && $row['effective_date'] !== '') {
+            $effectiveDate = $row['effective_date'];
+        }
+    }
+
+    if ($hasNasr) {
+        $runwaySource = 'nasr';
+        $sourceReference = 'FAA NASR';
+    } elseif ($hasOa) {
+        $runwaySource = 'ourairports';
+        $sourceReference = 'OurAirports';
+    } elseif ($hasConfig) {
+        $runwaySource = 'config';
+        $sourceReference = 'Operator configuration';
+    } else {
+        return null;
+    }
+
+    $formatted = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $key = (string) ($row['key'] ?? '');
+        $winner = $row['config'] ?? $row['nasr'] ?? $row['oa'];
+        if (!is_array($winner)) {
+            continue;
+        }
+        $formatted[] = runwayDisplayFormatRunwayRow(
+            $winner,
+            $configFacts[$key] ?? [],
+            $calmWind,
+            $row['oa'] ?? [],
+            $notamClosures,
+            (string) ($row['source'] ?? 'unknown'),
+            $declinationDeg
+        );
+    }
+    $formatted = array_filter($formatted, 'is_array');
+
+    if ($formatted === []) {
+        return null;
+    }
+
+    return [
+        'runway_source' => $runwaySource,
+        'source_reference' => $sourceReference,
+        'effective_date' => $effectiveDate,
+        'runways' => array_values($formatted),
+    ];
+}
+
+/**
  * Build runway display payload for an airport.
  *
  * @param array<string, mixed> $airport
@@ -536,6 +637,26 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null, a
             $notamClosures = $options['notam_closures'];
         } else {
             $notamClosures = getActiveRunwayNotamClosuresForAirport($resolvedAirportId, $airport);
+        }
+    }
+
+    // Fused inventory first: the union of config/NASR/OurAirports for this
+    // airport, served only while the artifact is fresh. A stale or missing
+    // artifact falls through to the live resolver below, so degradation is
+    // exactly status quo. NOTAM closures stay a live overlay either way.
+    if ($resolvedAirportId !== '') {
+        require_once __DIR__ . '/runway-fusion.php';
+        $fusedEntry = runwayFusionEntryForAirport($resolvedAirportId);
+        if ($fusedEntry !== null) {
+            $fusedDisplay = runwayDisplayBuildFromFusedEntry(
+                $fusedEntry,
+                $configFacts,
+                $notamClosures,
+                $declination
+            );
+            if ($fusedDisplay !== null) {
+                return $fusedDisplay;
+            }
         }
     }
 

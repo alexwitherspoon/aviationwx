@@ -50,17 +50,22 @@ function runwayFusionInputStamps(?string $configPath = null): array
     $runwaysMtime = is_readable(CACHE_RUNWAYS_DATA_FILE) ? (int) filemtime(CACHE_RUNWAYS_DATA_FILE) : null;
 
     $configSha = null;
+    $configMtime = null;
     if ($configPath !== null && $configPath !== '' && is_readable($configPath)) {
         $raw = @file_get_contents($configPath);
         if ($raw !== false) {
             $configSha = hash('sha256', $raw);
         }
+        $configMtime = (int) filemtime($configPath);
     }
 
     return [
         'nasr_apt_mtime' => $nasrMtime,
         'runways_cache_mtime' => $runwaysMtime,
         'config_sha' => $configSha,
+        // mtime rides along for the request-path freshness gate, which stats
+        // instead of hashing (config changes also trip the sha at rebuild time).
+        'config_mtime' => $configMtime,
     ];
 }
 
@@ -436,4 +441,160 @@ function runwayFusionWriteArtifact(array $payload): bool
     }
 
     return true;
+}
+
+/**
+ * Load the published artifact, memoized per request (the read path stats and
+ * decodes it on every airport page and weather call).
+ *
+ * @return array<string, mixed>|null Valid artifact or null when absent/invalid
+ */
+function runwayFusionLoadArtifactMemoized(): ?array
+{
+    if (($GLOBALS['_runway_fusion_artifact_resolved'] ?? false) !== true) {
+        $GLOBALS['_runway_fusion_artifact_resolved'] = true;
+        $GLOBALS['_runway_fusion_artifact_memo'] = runwayFusionLoadArtifact();
+    }
+
+    return $GLOBALS['_runway_fusion_artifact_memo'] ?? null;
+}
+
+/**
+ * Clear the per-request artifact memo (testing).
+ */
+function resetRunwayFusionArtifactMemo(): void
+{
+    $GLOBALS['_runway_fusion_artifact_resolved'] = false;
+    $GLOBALS['_runway_fusion_artifact_memo'] = null;
+}
+
+/**
+ * Request-path freshness gate for serving the artifact.
+ *
+ * True when the artifact is valid, within RUNWAY_FUSION_MAX_AGE, and no input
+ * present on disk is newer than the stamps recorded at build time. Stat-only
+ * by design (no config hash on the request path). Null means "cannot verify
+ * fresh" (artifact missing/invalid, or the config path is unresolvable) and
+ * callers fall back to the live resolver.
+ */
+function runwayFusionArtifactIsFresh(): ?bool
+{
+    $artifact = runwayFusionLoadArtifactMemoized();
+    if ($artifact === null) {
+        return null;
+    }
+
+    $builtAt = $artifact['built_at'] ?? null;
+    if (!is_int($builtAt) || (time() - $builtAt) > RUNWAY_FUSION_MAX_AGE) {
+        return false;
+    }
+
+    $inputs = $artifact['inputs'] ?? [];
+    clearstatcache();
+
+    // NASR: a missing cache keeps the artifact servable. Its rows were valid
+    // at build time and runway definitions rarely change; a returned cycle
+    // has a newer mtime and trips the freshness check below.
+    $nasrRecorded = isset($inputs['nasr_apt_mtime']) && is_int($inputs['nasr_apt_mtime']) ? $inputs['nasr_apt_mtime'] : 0;
+    if (is_readable(CACHE_NASR_APT_DATA_FILE) && (int) filemtime(CACHE_NASR_APT_DATA_FILE) > $nasrRecorded) {
+        return false;
+    }
+
+    // Runways merge cache: if it existed at build time and is now gone (the
+    // merge retention gate deletes it on failed fetches), the geometry the
+    // artifact's segment coverage assumes is gone too. Do not serve it; the
+    // live display fallback derives segments for every pair instead.
+    $runwaysRecorded = isset($inputs['runways_cache_mtime']) && is_int($inputs['runways_cache_mtime']) ? $inputs['runways_cache_mtime'] : 0;
+    if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
+        if ($runwaysRecorded > 0) {
+            return false;
+        }
+    } elseif ((int) filemtime(CACHE_RUNWAYS_DATA_FILE) > $runwaysRecorded) {
+        return false;
+    }
+
+    $configPath = getConfigFilePath();
+    if (!is_string($configPath) || $configPath === '' || !is_file($configPath)) {
+        return null;
+    }
+    $recordedConfig = isset($inputs['config_mtime']) && is_int($inputs['config_mtime']) ? $inputs['config_mtime'] : 0;
+    if ((int) filemtime($configPath) > $recordedConfig) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Fused entry for an airport when the artifact is fresh, else null.
+ *
+ * @param string $airportId Airport identifier (config key or ICAO/Faa, any case)
+ * @return array{rows: list<array<string, mixed>>, segments: list<array<string, mixed>>, calm_wind: array<string, mixed>|null}|null
+ */
+function runwayFusionEntryForAirport(string $airportId): ?array
+{
+    if (runwayFusionArtifactIsFresh() !== true) {
+        return null;
+    }
+
+    $artifact = runwayFusionLoadArtifactMemoized();
+    $entry = $artifact['airports'][strtolower($airportId)] ?? null;
+
+    return is_array($entry) ? $entry : null;
+}
+
+/**
+ * Join fused derived segments onto geometry segments, deduped by normalized
+ * pair key. Geometry segments keep their coordinates; a derived segment for a
+ * pair the geometry already covers is dropped.
+ *
+ * @param list<array<string, mixed>> $geometrySegments Merge-cache segments
+ * @param list<array<string, mixed>> $fusedSegments Derived segments from the artifact
+ * @return list<array<string, mixed>>
+ */
+function runwayFusionMergeDerivedSegments(array $geometrySegments, array $fusedSegments): array
+{
+    $merged = [];
+    $covered = [];
+
+    foreach ($geometrySegments as $seg) {
+        if (!is_array($seg)) {
+            continue;
+        }
+        $merged[] = $seg;
+        $key = runwayFusionSegmentPairKey($seg);
+        if ($key !== '') {
+            $covered[$key] = true;
+        }
+    }
+
+    foreach ($fusedSegments as $seg) {
+        if (!is_array($seg)) {
+            continue;
+        }
+        $key = runwayFusionSegmentPairKey($seg);
+        if ($key !== '' && isset($covered[$key])) {
+            continue;
+        }
+        if ($key !== '') {
+            $covered[$key] = true;
+        }
+        $merged[] = $seg;
+    }
+
+    return $merged;
+}
+
+/**
+ * @param array<string, mixed> $seg Segment with le_ident/he_ident
+ */
+function runwayFusionSegmentPairKey(array $seg): string
+{
+    $le = trim((string) ($seg['le_ident'] ?? ''));
+    $he = trim((string) ($seg['he_ident'] ?? ''));
+    if ($le === '' || $he === '') {
+        return '';
+    }
+
+    return densityAltitudePerformanceNormalizeRunwayPairKey($le . '/' . $he);
 }
