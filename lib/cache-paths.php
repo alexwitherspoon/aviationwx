@@ -1352,6 +1352,11 @@ if (!defined('CACHE_RUNWAYS_FETCH_LOCK')) {
     define('CACHE_RUNWAYS_FETCH_LOCK', CACHE_RUNWAYS_DIR . '/.fetch.lock');
 }
 
+// Fused per-airport runway inventory (computed job; see scripts/build-runway-fusion.php)
+if (!defined('CACHE_RUNWAY_FUSION_FILE')) {
+    define('CACHE_RUNWAY_FUSION_FILE', CACHE_RUNWAYS_DIR . '/runway_fusion.json');
+}
+
 /**
  * Get path to runway fetch lock file
  *

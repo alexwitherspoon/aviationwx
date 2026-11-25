@@ -10,6 +10,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../nasr/workers.php';
 require_once __DIR__ . '/../ourairports/refresh.php';
 require_once __DIR__ . '/../airport-country-resolution-merge.php';
+require_once __DIR__ . '/../runway-fusion.php';
 require_once __DIR__ . '/jobs.php';
 
 /**
@@ -165,6 +166,28 @@ function referenceDataShouldEnqueue(string $jobName, int $now, array $pools, arr
 
             return countryResolutionAggregateShouldRefresh($cfgPath, $configSha);
 
+        case 'runway_fusion':
+            if (referenceDataPoolIsActive($pools, 'runway_fusion')) {
+                return false;
+            }
+            $startupEval = !empty($state['runway_fusion_startup_eval']);
+            $lastCheck = (int) ($state['last_runway_fusion_check'] ?? 0);
+            $due = !$startupEval
+                || (($now - $lastCheck) >= RUNWAY_FUSION_CHECK_INTERVAL);
+            if (!$due) {
+                return false;
+            }
+            $cfgPath = $state['config_path'] ?? null;
+            if (!is_string($cfgPath) || $cfgPath === '' || !is_readable($cfgPath)) {
+                return false;
+            }
+            // Same decision the worker makes: missing/invalid/old artifact or
+            // any input newer than the recorded stamps.
+            return runwayFusionShouldRebuild(
+                runwayFusionLoadArtifact(),
+                runwayFusionInputStamps($cfgPath)
+            );
+
         default:
             return false;
     }
@@ -209,6 +232,21 @@ function referenceDataEnqueueDueJobs(int $now, array $pools, array &$state): arr
                     }
                 }
             }
+            if ($jobName === 'runway_fusion') {
+                // Same rule as the enqueue gate: a due evaluation counts as
+                // checked even when the decision is "not now".
+                $cfgPath = $state['config_path'] ?? null;
+                if (is_string($cfgPath) && $cfgPath !== '' && is_readable($cfgPath)) {
+                    $startupEval = !empty($state['runway_fusion_startup_eval']);
+                    $lastCheck = (int) ($state['last_runway_fusion_check'] ?? 0);
+                    $due = !$startupEval
+                        || (($now - $lastCheck) >= RUNWAY_FUSION_CHECK_INTERVAL);
+                    if ($due) {
+                        $state['last_runway_fusion_check'] = $now;
+                        $state['runway_fusion_startup_eval'] = true;
+                    }
+                }
+            }
             continue;
         }
 
@@ -242,6 +280,10 @@ function referenceDataEnqueueDueJobs(int $now, array $pools, array &$state): arr
             case 'country_resolution':
                 $state['last_country_check'] = $now;
                 $state['country_startup_eval'] = true;
+                break;
+            case 'runway_fusion':
+                $state['last_runway_fusion_check'] = $now;
+                $state['runway_fusion_startup_eval'] = true;
                 break;
         }
     }

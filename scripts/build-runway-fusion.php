@@ -1,0 +1,124 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Build cache/runways/runway_fusion.json: the fused runway inventory for
+ * configured airports (union of manual config, NASR, and OurAirports rows,
+ * plus derived through-center segments for pairs without merge-cache geometry).
+ *
+ * Run by the scheduler (first eligible loop iteration after startup, then at
+ * most hourly evaluation). Rebuilds when the artifact is missing, invalid,
+ * older than RUNWAY_FUSION_MAX_AGE, or any input (NASR cache, runways merge
+ * cache, airports.json) is newer than the recorded input stamps.
+ *
+ * Fails open per input: a missing NASR cache builds without official rows and
+ * logs a warning. Fails closed on publish: zero airport rows means no write.
+ *
+ * Usage:
+ *   php scripts/build-runway-fusion.php
+ *
+ * Exit codes: 0 success (including not-due skip), 1 failure
+ */
+
+if (php_sapi_name() !== 'cli') {
+    fwrite(STDERR, "This script must be run from CLI.\n");
+    exit(1);
+}
+
+chdir(__DIR__ . '/..');
+
+define('AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE', true);
+
+// Test seam: disposable cache root (tests/bootstrap.php convention).
+$testCacheDir = getenv('TEST_CACHE_DIR');
+if (is_string($testCacheDir) && $testCacheDir !== '') {
+    define('CACHE_BASE_DIR', rtrim($testCacheDir, '/'));
+}
+
+require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
+require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/runway-fusion.php';
+
+initWorkerTimeout(RUNWAY_FUSION_WORKER_TIMEOUT, 'runway_fusion');
+
+$config = loadConfig();
+if ($config === null || !isset($config['airports']) || !is_array($config['airports'])) {
+    fwrite(STDERR, "build-runway-fusion: loadConfig() failed or no airports\n");
+    exit(1);
+}
+
+$configPath = $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] ?? null;
+if (!is_string($configPath) || $configPath === '' || !is_readable($configPath)) {
+    fwrite(STDERR, "build-runway-fusion: resolved config path unavailable\n");
+    exit(1);
+}
+
+$stamps = runwayFusionInputStamps($configPath);
+$artifact = runwayFusionLoadArtifact();
+if (!runwayFusionShouldRebuild($artifact, $stamps)) {
+    aviationwx_log('info', 'runway_fusion: artifact current, skipping rebuild', [
+        'path' => CACHE_RUNWAY_FUSION_FILE,
+    ], 'app');
+    exit(0);
+}
+
+$nasrPayload = loadNasrAptCache();
+if ($nasrPayload === null) {
+    aviationwx_log('warning', 'runway_fusion: NASR APT cache missing; building without official rows', [], 'app');
+} elseif (!isset($nasrPayload['effective_date'])) {
+    // Configured slices carry no cycle date; stamp it from NASR meta so the
+    // fused rows keep their official effective date.
+    $nasrMeta = loadNasrAptMeta();
+    $nasrPayload['effective_date'] = is_array($nasrMeta) && is_string($nasrMeta['effective_date'] ?? null)
+        ? $nasrMeta['effective_date']
+        : null;
+}
+
+$runwaysData = loadRunwaysCacheDataFromDisk();
+if ($runwaysData === null) {
+    aviationwx_log('info', 'runway_fusion: runways merge cache missing; building without OurAirports rows or geometry', [], 'app');
+}
+
+$airportsOut = [];
+foreach ($config['airports'] as $aid => $ap) {
+    if (!is_string($aid) || $aid === '' || !is_array($ap)) {
+        continue;
+    }
+    if (!isAirportEnabled($ap)) {
+        continue;
+    }
+    $entry = runwayFusionBuildAirportEntry($aid, $ap, $nasrPayload, $runwaysData);
+    if ($entry !== null) {
+        $airportsOut[strtolower($aid)] = $entry;
+    }
+}
+
+if ($airportsOut === []) {
+    aviationwx_log('error', 'runway_fusion: no configured airport produced rows; keeping existing artifact', [
+        'config_airport_count' => count($config['airports']),
+    ], 'app');
+    exit(1);
+}
+
+$payload = [
+    'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
+    'built_at' => time(),
+    'inputs' => $stamps,
+    'nasr_effective_date' => is_array($nasrPayload) ? ($nasrPayload['effective_date'] ?? null) : null,
+    'airports' => $airportsOut,
+];
+
+if (!runwayFusionWriteArtifact($payload)) {
+    fwrite(STDERR, "build-runway-fusion: failed to write artifact\n");
+    exit(1);
+}
+
+aviationwx_log('info', 'runway_fusion: wrote artifact', [
+    'path' => CACHE_RUNWAY_FUSION_FILE,
+    'airport_count' => count($airportsOut),
+    'nasr_effective_date' => $payload['nasr_effective_date'],
+], 'app');
+
+exit(0);
