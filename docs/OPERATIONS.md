@@ -133,7 +133,7 @@ The runway list and the wind diagram read a computed artifact, `cache/runways/ru
 
    A config change is picked up on the next rebuild (the gate stats the config file), and the live read path applies the same config precedence immediately.
 
-**Known edge case:** if the sources disagree on lettering for genuinely parallel pairs (one source letters a strip, another publishes it bare), the fusion can merge the two strips into one pair, because the combined end-ident set cannot tell lettering drift from a second strip. Real parallel fields are lettered in every FAA source, so the trigger is a data error and the fix is upstream: letter the second strip in the source. The diff report shows the merge as a removed pair. A local named `runways` entry can set the merged pair's display values but cannot re-split the pair cleanly (the bare source row stays its own pair, so the compass would draw three lines for two strips), so do not paper over this case locally.
+**Known edge case:** if the sources disagree on lettering for genuinely parallel pairs (one source letters a strip, another publishes it bare), the fusion can merge the two strips into one pair, because the combined end-ident set cannot tell lettering drift from a second strip. Real parallel fields are lettered in every FAA source, so the trigger is a data error and the fix is upstream: letter the second strip in the source. The diff report may show the merged pair as a field-level change (the OurAirports fill-in now crosses the lettering gap), and the row's `field_sources` records which source supplies each field. A local named `runways` entry can set the merged pair's display values but cannot re-split the pair cleanly (the bare source row stays its own pair, so the compass would draw three lines for two strips), so do not paper over this case locally.
 
 **Bare designator at a parallel bearing:** a source listing a bare `16/34` while another source letters true parallels (`16L/34L`, `16R/34R`) carries a data error, not a third strip: the FAA letters every parallel. The fusion drops that bare pair while a higher-precedence source holds the lettered parallels. A manual config row is never dropped, and a bare row from the same or a higher source than the lettered parallels stays visible as the data error it is.
 
@@ -654,7 +654,7 @@ CONFIG_PATH=/path/to/aviationwx-secrets/airports.json make config-check
 docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/report-runway-fusion-diff.php
 ```
 
-Per affected airport it lists added/changed/removed list pairs (with the fused source), field-level live-versus-fused values, and derived diagram segments. A removed pair is an anomaly (the fused inventory is a union and should never lose a live row); treat one as a bug, not data.
+Per affected airport it lists added/changed/removed list pairs (with the fused source), field-level live-versus-fused values, and derived diagram segments. A removed pair is an anomaly: the fused inventory is a union and should never lose a live row, the exceptions being pairs the precedence rules resolve differently than the live list (a bare designator at a true-parallel bearing dropped by lettered parallels, or a pair now won by a named config row). Treat any other removed pair as a bug, not data.
 
 ---
 
