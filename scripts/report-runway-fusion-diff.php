@@ -31,10 +31,12 @@ if (is_string($testCacheDir) && $testCacheDir !== '') {
     define('CACHE_BASE_DIR', rtrim($testCacheDir, '/'));
 }
 
-require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/nasr/cache.php';
 require_once __DIR__ . '/../lib/runway-fusion.php';
+require_once __DIR__ . '/../lib/runways.php';
 
 $asJson = in_array('--json', $argv, true);
 

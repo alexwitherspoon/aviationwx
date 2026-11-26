@@ -28,13 +28,15 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/config-runway.php';
+require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/nasr/identifiers.php';
 require_once __DIR__ . '/nasr/runway-selection.php';
 require_once __DIR__ . '/runway-display.php';
+require_once __DIR__ . '/runway-end-ident.php';
 require_once __DIR__ . '/runways.php';
+require_once __DIR__ . '/weather/da-performance-notam-closures.php';
 
 /**
  * Input freshness stamps the artifact is validated against.
@@ -152,6 +154,14 @@ function runwayFusionAirportEndIdents(array $nasrRows, array $oaRows, array $geo
  * sources, the suffix is lettering drift (one source says 18L, another 18),
  * so it is stripped and the pair keys match. W marks a water end, is never
  * stripped, and never counts toward parallel ambiguity.
+ *
+ * Known limitation: the ident set cannot tell lettering drift from a second
+ * genuinely parallel strip when the sources together show exactly one
+ * lettered end and one unlettered end at a heading. Those merge into one
+ * pair (the merged row wins the display; the other strip is not drawn
+ * separately). Real parallel fields are lettered by the FAA in every source,
+ * so the trigger is a data error; a correction upstream is the fix. Pinned
+ * in RunwayFusionTest::testBuildAirportEntry_MixedLetteringParallels_MergeIsLossy.
  *
  * @param list<string> $endIdents Canonical end idents from runwayFusionAirportEndIdents()
  * @return array<string, string> Canonical end ident mapped to the ident to match with
@@ -743,6 +753,13 @@ function runwayFusionEntryForAirport(string $airportId): ?array
  * Join fused derived segments onto geometry segments, deduped by normalized
  * pair key. Geometry segments keep their coordinates; a derived segment for a
  * pair the geometry already covers is dropped.
+ *
+ * The dedupe here uses strict pair keys (the airport's contextual strip map
+ * is not available at request time). That is a safety net, not the coverage
+ * decision: runwayFusionDerivedSegments() already applies the contextual
+ * keys at build time, so a derived segment for a geometry-covered pair never
+ * reaches this merge. A strict-key match implies a contextual-key match for
+ * the same ident pair, so the net can drop nothing real.
  *
  * @param list<array<string, mixed>> $geometrySegments Merge-cache segments
  * @param list<array<string, mixed>> $fusedSegments Derived segments from the artifact

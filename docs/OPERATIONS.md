@@ -110,7 +110,7 @@ The runway list and the wind diagram read a computed artifact, `cache/runways/ru
 
 **Who serves it:** both read paths check a stat-only freshness gate on every request. Fresh artifact: serve the fused inventory. Stale, missing, or invalid artifact: fall through to the live resolver, which is exactly the pre-fusion behavior. So a failed or late build degrades to status quo, never to missing data.
 
-**Rebuild triggers:** artifact older than 24h, any input on disk newer than the stamps recorded at build time (NASR cache mtime, merge cache mtime, config mtime), schema mismatch, or a merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches). A missing input never forces a rebuild.
+**Rebuild triggers:** artifact older than 24h, an input on disk newer than the stamps recorded at build time (NASR cache mtime, merge cache mtime), a config content change (SHA-256), a schema mismatch, or a merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches). A missing input never forces a rebuild.
 
 **Failure modes:** the worker fails open per input (NASR or merge cache missing: build without those rows, log a warning) and fails closed on publish (no configured airport produced rows: keep the existing artifact, log an error). Watch `app.log` for `runway_fusion:` lines.
 
@@ -132,6 +132,8 @@ The runway list and the wind diagram read a computed artifact, `cache/runways/ru
    - `runway_length_ft`: a nameless override that only takes effect when no other source provides a row for the airport (the density-altitude escape hatch).
 
    A config change is picked up on the next rebuild (the gate stats the config file), and the live read path applies the same config precedence immediately.
+
+**Known edge case:** if the sources disagree on lettering for genuinely parallel pairs (one source letters a strip, another publishes it bare), the fusion can merge the two strips into one pair, because the combined end-ident set cannot tell lettering drift from a second strip. Real parallel fields are lettered in every FAA source, so the trigger is a data error and the fix is upstream: letter the second strip in the source. The diff report shows the merge as a removed pair. A local named `runways` entry can set the merged pair's display values but cannot re-split the pair cleanly (the bare source row stays its own pair, so the compass would draw three lines for two strips), so do not paper over this case locally.
 
 ### Health Endpoints
 

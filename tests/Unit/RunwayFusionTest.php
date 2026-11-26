@@ -294,6 +294,65 @@ class RunwayFusionTest extends TestCase
         $this->assertSame('27L', $entry['segments'][0]['he_ident']);
     }
 
+    public function testBuildAirportEntry_MixedLetteringParallels_MergeIsLossy(): void
+    {
+        // Pinned known limitation: the sources together show one lettered end
+        // (16L, from geometry) and one unlettered end (16, from OurAirports)
+        // at heading 16, and the ident set cannot tell whether that is
+        // lettering drift on one strip or two genuinely parallel strips.
+        // The merge direction treats it as drift: one pair, one display row,
+        // covered by the geometry. The unlettered second strip (if it is one)
+        // is not drawn separately; lettering it upstream is the fix.
+        $runways = [
+            'airports' => [
+                'MIX' => [
+                    'segments' => [
+                        [
+                            'start' => [-0.9, -0.1],
+                            'end' => [0.9, -0.1],
+                            'le_ident' => '16L',
+                            'he_ident' => '34L',
+                            'ident_at_start' => '16L',
+                            'ident_at_end' => '34L',
+                            'source' => 'faa',
+                        ],
+                    ],
+                    'display_runways' => [
+                        [
+                            'rwy_id' => '16/34',
+                            'length_ft' => 4000,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'lighted' => true,
+                            'closed' => false,
+                            'ends' => [['end_id' => '16'], ['end_id' => '34']],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'MIX',
+            'name' => 'Mixed Lettering Field',
+            'faa' => 'MIX',
+            'ourairports_ident' => 'MIX',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('MIX', $airport, null, $runways);
+
+        $this->assertIsArray($entry);
+        $this->assertCount(1, $entry['rows']);
+        $this->assertSame('16/34', $entry['rows'][0]['key']);
+        $this->assertCount(0, $entry['segments']);
+    }
+
     public function testBuildAirportEntry_OaOnlyPairIncludedForAirportWithNasrRecord(): void
     {
         $nasr = [

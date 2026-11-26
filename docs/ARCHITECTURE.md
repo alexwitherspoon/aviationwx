@@ -758,6 +758,7 @@ These map to product and safety domains. UI groups are views over this list; gro
 |----------|--------|-----------------|
 | `runway_geometry` | Wind compass, map runway labels | FAA NGDA, OurAirports `runways.csv` |
 | `runway_performance` | Density-altitude runway model | NASR APT, OurAirports runway fields, `airports.json` overrides; **uses** NOTAM cache for active closures |
+| `runway_display` | Runway list and wind diagram | Runway fusion inventory (computed from config, NASR APT, OurAirports runways); **uses** NOTAM cache for active closures |
 | `airport_identity` | Validation, joins, slugs | OurAirports `airports.csv`, config |
 | `airport_comms` | Dashboard and API frequencies | NASR FRQ, OurAirports `airport-frequencies.csv`, config |
 | `airport_location` | Country and region context | Country-resolution aggregate (computed) |
@@ -782,7 +783,7 @@ Each cache artifact or ingest path is one **leaf** with metadata in a consistent
 **Kind** sets ops expectations:
 
 - **bulk** - external dump; conditional HTTP probes (ETag / `Last-Modified`) apply when supported
-- **computed** - rebuilt from config and geometry (country resolution)
+- **computed** - rebuilt from config and catalogs (country resolution, runway fusion inventory)
 - **bundled** - ships with deploy (WMM)
 - **config** - operator truth in `airports.json` (overrides, manual runways, frequencies)
 
@@ -792,6 +793,7 @@ Record consumption once; reference elsewhere in copy:
 
 - Runway geometry **uses** `airports.csv` for centers and FAA→ICAO mapping
 - Runway performance **uses** NOTAM cache for active runway and aerodrome closures
+- Runway display **uses** the runway fusion inventory (config, NASR configured slice, runways merge cache) and the NOTAM cache for active closures
 - NASR configured slices **use** full NASR cache plus config SHA
 - Density-altitude performance **uses** runway performance and weather (weather stays in the live plane)
 

@@ -324,6 +324,41 @@ class RunwayFusionReadPathTest extends TestCase
         $this->assertLessThanOrEqual(0.9001, sqrt($start[0] ** 2 + $start[1] ** 2));
     }
 
+    public function testCompass_LetteringDrift_SingleStripDrawsNoDuplicateLine(): void
+    {
+        // CYAV fixture: the geometry publishes 36/18L, OurAirports publishes
+        // 18/36 (one strip, lettering drift). The builder's contextual keys
+        // merge the pair and the geometry covers it, so no derived segment
+        // is built; the compass merge (strict keys) therefore has nothing to
+        // duplicate. End to end: exactly the three geometry lines, and no
+        // unlettered 18 line.
+        $airport = [
+            'id' => 'cyav',
+            'name' => 'Winnipeg/St. Andrews Airport',
+            'icao' => 'CYAV',
+            'lat' => 50.0564,
+            'lon' => -97.0325,
+            'elevation_ft' => 759,
+            'enabled' => true,
+            'magnetic_declination' => -15.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('cyav', $airport, null, loadRunwaysCacheDataFromDisk());
+        $this->assertIsArray($entry);
+        $this->assertCount(3, $entry['rows']);
+        $this->assertSame([], $entry['segments']);
+
+        $this->writeArtifact(['cyav' => $entry]);
+
+        $segments = getRunwaySegmentsForAirport('cyav', $airport);
+        $this->assertIsArray($segments);
+        $this->assertCount(3, $segments);
+        $leIdents = [];
+        foreach ($segments as $seg) {
+            $leIdents[] = $seg['le_ident'];
+        }
+        $this->assertNotContains('18', $leIdents);
+    }
+
     public function testCompass_FreshArtifact_NoFileCacheEntry_DerivedSegmentsCarryTheCompass(): void
     {
         // 42b has no geometry in the fixture merge cache; a fresh artifact's
