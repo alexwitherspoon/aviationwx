@@ -416,6 +416,43 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
     }
     ksort($pairs);
 
+    // A bare pair (pure numeric ends) at a bearing where the union holds
+    // lettered parallels is a mislabel of one of them, not a third strip:
+    // the FAA letters every parallel, so a bare designator at that bearing
+    // is a source data error. Drop it while a higher-precedence source
+    // holds the lettered parallels. A manual config row is never dropped,
+    // and a bare row from the same or higher source than the lettered ones
+    // stays visible for correction. Water pairs are never bare, so they
+    // keep their own pair.
+    $sourceRank = static function (array $sources): int {
+        if (isset($sources['config'])) {
+            return 3;
+        }
+        return isset($sources['nasr']) ? 2 : 1;
+    };
+    $letteredRankByNumber = [];
+    foreach ($pairs as $key => $sources) {
+        if (preg_match('/[LCR]/', $key) !== 1) {
+            continue;
+        }
+        $rank = $sourceRank($sources);
+        foreach (explode('/', $key, 2) as $end) {
+            $number = substr($end, 0, 2);
+            $letteredRankByNumber[$number] = max($letteredRankByNumber[$number] ?? 0, $rank);
+        }
+    }
+    foreach (array_keys($pairs) as $key) {
+        if (preg_match('/^(\d{2})\/(\d{2})$/', $key, $m) !== 1) {
+            continue;
+        }
+        $rank = $sourceRank($pairs[$key]);
+        $outranked = (isset($letteredRankByNumber[$m[1]]) && $letteredRankByNumber[$m[1]] > $rank)
+            || (isset($letteredRankByNumber[$m[2]]) && $letteredRankByNumber[$m[2]] > $rank);
+        if ($outranked) {
+            unset($pairs[$key]);
+        }
+    }
+
     $calmWind = is_array($nasrRecord['calm_wind'] ?? null) ? $nasrRecord['calm_wind'] : [];
     $declination = runwayDisplayMagneticDeclinationDeg($airport);
 

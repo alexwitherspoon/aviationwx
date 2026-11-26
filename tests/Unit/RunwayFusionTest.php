@@ -353,6 +353,214 @@ class RunwayFusionTest extends TestCase
         $this->assertCount(0, $entry['segments']);
     }
 
+    public function testBuildAirportEntry_BareRowAtParallelBearing_LowerSourceRowDropped(): void
+    {
+        // One source (NASR) lists two parallels at heading 16 and another
+        // source (OurAirports) lists one bare 16/34. The bare designator is a
+        // mislabel of one of the parallels, not a third strip: the FAA letters
+        // every parallel. The fusion applies the defined precedence: the bare
+        // pair is dropped while the higher-precedence source holds the
+        // lettered parallels.
+        $end = static function (string $id): array {
+            return ['end_id' => $id, 'true_alignment' => null];
+        };
+        $nasr = [
+            'schema_version' => 1,
+            'effective_date' => '2026-10-01',
+            'airports' => [
+                'BSCN' => [
+                    'arpt_id' => 'BSCN',
+                    'runways' => [
+                        [
+                            'rwy_id' => '16L/34L',
+                            'length_ft' => 4000,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'LOW',
+                            'ends' => [$end('16L'), $end('34L')],
+                        ],
+                        [
+                            'rwy_id' => '16R/34R',
+                            'length_ft' => 3800,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'MED',
+                            'ends' => [$end('16R'), $end('34R')],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $runways = [
+            'airports' => [
+                'BSCN' => [
+                    'display_runways' => [
+                        [
+                            'rwy_id' => '16/34',
+                            'length_ft' => 3900,
+                            'width_ft' => 50,
+                            'surface' => 'ASPH',
+                            'lighted' => false,
+                            'closed' => false,
+                            'ends' => [$end('16'), $end('34')],
+                            'le_displaced_threshold_ft' => 0,
+                            'he_displaced_threshold_ft' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'bscn',
+            'name' => 'Bare Row Parallel Field',
+            'faa' => 'BSCN',
+            'ourairports_ident' => 'BSCN',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('bscn', $airport, $nasr, $runways);
+
+        $this->assertIsArray($entry);
+        $keys = array_column($entry['rows'], 'key');
+        sort($keys);
+        $this->assertSame(['16L/34L', '16R/34R'], $keys);
+        // No geometry: each parallel gets a derived segment, and the dropped
+        // bare pair adds no third line to the diagram.
+        $this->assertCount(2, $entry['segments']);
+    }
+
+    public function testBuildAirportEntry_BareRowAtParallelBearing_ConfigRowKept(): void
+    {
+        // A manual config row is never dropped: the operator wrote a bare
+        // 16/34 next to NASR's lettered parallels, so the pair stays in the
+        // union and the operator sees it.
+        $end = static function (string $id): array {
+            return ['end_id' => $id, 'true_alignment' => null];
+        };
+        $nasr = [
+            'schema_version' => 1,
+            'effective_date' => '2026-10-01',
+            'airports' => [
+                'BSCN' => [
+                    'arpt_id' => 'BSCN',
+                    'runways' => [
+                        [
+                            'rwy_id' => '16L/34L',
+                            'length_ft' => 4000,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'LOW',
+                            'ends' => [$end('16L'), $end('34L')],
+                        ],
+                        [
+                            'rwy_id' => '16R/34R',
+                            'length_ft' => 3800,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'MED',
+                            'ends' => [$end('16R'), $end('34R')],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'bscn',
+            'name' => 'Bare Row Parallel Field',
+            'faa' => 'BSCN',
+            'ourairports_ident' => 'BSCN',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+            'runway_length_ft' => 3900,
+            'runways' => [['name' => '16/34', 'heading_1' => 160, 'heading_2' => 340]],
+        ];
+        $entry = runwayFusionBuildAirportEntry('bscn', $airport, $nasr, null);
+
+        $this->assertIsArray($entry);
+        $byKey = $this->rowsByKey($entry['rows']);
+        $this->assertCount(3, $byKey);
+        $this->assertArrayHasKey('16/34', $byKey);
+        $this->assertSame('config', $byKey['16/34']['source']);
+    }
+
+    public function testBuildAirportEntry_BareRowAtParallelBearing_SameSourceBareRowKept(): void
+    {
+        // NASR publishes a bare pair alongside its own lettered parallels:
+        // the winning source outranks none of the lettered ones, so the pair
+        // stays in the union, visible as the data error it is.
+        $end = static function (string $id): array {
+            return ['end_id' => $id, 'true_alignment' => null];
+        };
+        $nasr = [
+            'schema_version' => 1,
+            'effective_date' => '2026-10-01',
+            'airports' => [
+                'BSCN' => [
+                    'arpt_id' => 'BSCN',
+                    'runways' => [
+                        [
+                            'rwy_id' => '16L/34L',
+                            'length_ft' => 4000,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'LOW',
+                            'ends' => [$end('16L'), $end('34L')],
+                        ],
+                        [
+                            'rwy_id' => '16R/34R',
+                            'length_ft' => 3800,
+                            'width_ft' => 60,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'MED',
+                            'ends' => [$end('16R'), $end('34R')],
+                        ],
+                        [
+                            'rwy_id' => '16/34',
+                            'length_ft' => 3900,
+                            'width_ft' => 50,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => null,
+                            'ends' => [$end('16'), $end('34')],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $airport = [
+            'id' => 'bscn',
+            'name' => 'Bare Row Parallel Field',
+            'faa' => 'BSCN',
+            'ourairports_ident' => 'BSCN',
+            'lat' => 39.0,
+            'lon' => -95.0,
+            'elevation_ft' => 1000,
+            'enabled' => true,
+            'magnetic_declination' => -5.0,
+        ];
+        $entry = runwayFusionBuildAirportEntry('bscn', $airport, $nasr, null);
+
+        $this->assertIsArray($entry);
+        $keys = array_column($entry['rows'], 'key');
+        sort($keys);
+        $this->assertSame(['16/34', '16L/34L', '16R/34R'], $keys);
+    }
+
     public function testBuildAirportEntry_OaOnlyPairIncludedForAirportWithNasrRecord(): void
     {
         $nasr = [
