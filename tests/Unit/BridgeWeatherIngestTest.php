@@ -282,7 +282,7 @@ class BridgeWeatherIngestTest extends TestCase
 
     public function testEnableGate_DavisResolveWhenEnabled(): void
     {
-        $n = bridgeNormalizeWeatherItem($this->rawObservation());
+        $n = bridgeNormalizeWeatherItem($this->rawObservation('station-scappoose-davis', time() - 30));
         bridgeStoreWeatherObservation('kspb', 'bridge-spb-1', $n['record']);
 
         $source = [

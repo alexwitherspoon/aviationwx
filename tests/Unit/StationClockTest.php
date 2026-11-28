@@ -1,0 +1,170 @@
+<?php
+/**
+ * Unit tests for station clock framing and UTC normalization.
+ */
+
+use PHPUnit\Framework\TestCase;
+
+require_once __DIR__ . '/../../lib/weather/station-clock.php';
+require_once __DIR__ . '/../../lib/bridge/weather-store.php';
+
+class StationClockTest extends TestCase
+{
+    public function testFrameNaive_UtcAligned(): void
+    {
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        $r = stationClockFrameNaive($now - 10, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('utc', $r['framing']);
+        $this->assertSame($now - 10, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_LocalWinterChicagoNormalizesToUtc(): void
+    {
+        // Chicago winter is UTC-6. A local console displays 12:00 when the
+        // true instant is 18:00 UTC; the naive value is 6h behind.
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = $now - 6 * 3600;
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_LocalSummerChicagoUsesDstOffset(): void
+    {
+        // Chicago summer is UTC-5 (DST). Same test in July.
+        $now = (new DateTime('2025-07-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = $now - 5 * 3600;
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_HalfHourZoneNormalizes(): void
+    {
+        // Asia/Kolkata is UTC+5:30. A local console displays 23:30 when the
+        // true instant is 18:00 UTC (naive value 5h30m ahead).
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = $now + 5 * 3600 + 30 * 60;
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'Asia/Kolkata']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_SpringForwardDayNormalizes(): void
+    {
+        // 2025-03-09 is the US spring-forward day. At 08:30 UTC Chicago runs
+        // CDT (UTC-5); a correctly set console displays 03:30. The naive
+        // value (03:30 read as UTC) still sits on the pre-transition side,
+        // so an offset lookup at the naive instant would use CST and land an
+        // hour in the future. The candidate approach must pick CDT.
+        $now = (new DateTime('2025-03-09 08:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = (new DateTime('2025-03-09 03:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_FallBackFirstOccurrence(): void
+    {
+        // 2025-11-02 is the US fall-back day; 01:30 occurs twice in Chicago.
+        // First occurrence is 01:30 CDT = 06:30 UTC.
+        $now = (new DateTime('2025-11-02 06:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = (new DateTime('2025-11-02 01:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_FallBackSecondOccurrence(): void
+    {
+        // Same wall time, second occurrence: 01:30 CST = 07:30 UTC. The
+        // candidate one hour earlier is outside the recency tolerance, so
+        // the later occurrence wins.
+        $now = (new DateTime('2025-11-02 07:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = (new DateTime('2025-11-02 01:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_GapWallTimeStampsCurrentInstant(): void
+    {
+        // 02:30 does not exist on 2025-03-09 in Chicago (the spring-forward
+        // gap); only a console running up to an hour fast could display it.
+        // The candidate that is plausible is the true instant, so the
+        // reading stamps correctly and stays fresh: no stale or mis-timed
+        // weather can result.
+        $now = (new DateTime('2025-03-09 07:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $naive = (new DateTime('2025-03-09 02:30:00', new DateTimeZone('UTC')))->getTimestamp();
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertTrue($r['ok']);
+        $this->assertSame('local', $r['framing']);
+        $this->assertSame($now, $r['epoch_utc']);
+    }
+
+    public function testFrameNaive_UnidentifiableRejected(): void
+    {
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        // 47 minutes off matches neither UTC nor the site frame.
+        $naive = $now - 47 * 60;
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['framing']);
+        $this->assertNotNull($r['reason']);
+    }
+
+    public function testFrameNaive_HourOffReportsOffsetForOperator(): void
+    {
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        // Seven hours ahead of UTC on a Chicago site: no frame fits.
+        $naive = $now - 7 * 3600;
+        $r = stationClockFrameNaive($naive, $now, ['site_timezone' => 'America/Chicago']);
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('7 h off UTC', $r['reason']);
+    }
+
+    public function testFrameNaive_NoSiteTimezoneOnlyUtcFrame(): void
+    {
+        $now = (new DateTime('2025-01-15 18:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        // Local-encoded time with no site timezone cannot be framed.
+        $naive = $now - 6 * 3600;
+        $r = stationClockFrameNaive($naive, $now, []);
+        $this->assertFalse($r['ok']);
+    }
+
+    public function testPlausibleUtc_RecentAccepted(): void
+    {
+        $now = time();
+        $this->assertSame(true, stationClockPlausibleUtc($now - 30, $now)['ok']);
+    }
+
+    public function testPlausibleUtc_StaleRejected(): void
+    {
+        $now = time();
+        $r = stationClockPlausibleUtc($now - 30 * 60, $now);
+        $this->assertFalse($r['ok']);
+        $this->assertSame('station_clock_stale', $r['reason']);
+    }
+
+    public function testPlausibleUtc_FutureRejected(): void
+    {
+        $now = time();
+        $r = stationClockPlausibleUtc($now + BRIDGE_WEATHER_FUTURE_SKEW_SECONDS + 5, $now);
+        $this->assertFalse($r['ok']);
+        $this->assertSame('station_clock_future', $r['reason']);
+    }
+
+    public function testPlausibleUtc_InvalidEpochRejected(): void
+    {
+        $r = stationClockPlausibleUtc(0, time());
+        $this->assertFalse($r['ok']);
+        $this->assertSame('invalid_epoch', $r['reason']);
+    }
+}

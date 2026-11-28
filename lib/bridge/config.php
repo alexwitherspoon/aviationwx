@@ -24,7 +24,7 @@ function bridgeConfigAllowedFields(): array
  */
 function bridgeCacheBackedWeatherSourceTypes(): array
 {
-    return ['davis_weatherlink_live'];
+    return ['davis_weatherlink_live', 'davis_weatherlink_ip'];
 }
 
 /**

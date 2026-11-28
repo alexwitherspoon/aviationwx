@@ -613,6 +613,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `metar` | NOAA Aviation Weather METAR | ~60 minutes |
 | `dyaconlive` | Dyacon MS-100 advisory aviation station (DyaconLive+ API) | ~10 minutes |
 | `davis_weatherlink_live` | Davis WeatherLink Live via bridge push cache (`awxb_` key + enable row) | Adapter rate (typically ≤10s; ≤1 Hz ceiling) |
+| `davis_weatherlink_ip` | Legacy Davis WeatherLinkIP via bridge LOOP1 pull cache (`awxb_` key + enable row) | One poll per 60s (bridge floor); console clock framed to UTC |
 | `wifilogger` | Davis station via WiFiLogger direct upload (`awxu_` token + wid/MAC) | Configurable push interval (see below) |
 | `madis_hfmetar` | NOAA MADIS HFMETAR (Federal ASOS, 5-minute marks; co-located only) | ~5 minutes (marks) |
 
@@ -655,6 +656,8 @@ A bridge key alone never publishes weather.
 4. Discover stations: `php scripts/bridge-inventory.php --airport kspb` (or Bridge Host lines on the status page).
 5. Enable publish: `php scripts/bridge-enable-weather.php --airport kspb --bridge bridge-spb-1 --source station-… [--station-id wx-…]` and paste the printed object into `weather_sources[]`.
 6. Prefer one Davis path (cloud **or** local) for ops clarity; dual ingest is allowed - the aggregator chooses freshest fields as usual.
+
+**Station clock policy:** observed_at must be a UTC instant. A source that emits a naive wall clock (a console clock with no timezone) is framed by alignment against UTC and the airport's timezone: aligned to UTC it is used as-is; aligned to the site timezone it is identified as local and normalized to UTC via the timezone at that instant (DST-aware, so no fixed offset); a value matching neither frame is unidentifiable and the observation fails closed until the console clock is corrected. Sources that emit no time rely on the bridge arrival stamp as the proxy. The recency tolerance exceeds the bridge replay window (10 minutes) so catch-up reposts are never dropped.
 
 ```json
 "bridges": [
