@@ -192,8 +192,24 @@ if ($lockFp) {
     updateLockFile($lockFp, $pid, $startTime, 0, 'healthy', null, null, 0, null);
 }
 
+// Declared before the shutdown function so it can be captured by reference
+$workRegistry = null;
+
 // Register shutdown function for cleanup
-register_shutdown_function(function() use ($lockFp, $lockFile, &$loopCount, $startTime) {
+register_shutdown_function(function() use ($lockFp, $lockFile, &$loopCount, $startTime, &$workRegistry) {
+    // Terminate pool workers before exit so the process does not leave
+    // in-flight children orphaned to the container teardown.
+    if ($workRegistry instanceof SchedulerWorkRegistry) {
+        $inFlight = $workRegistry->sumActiveWorkers();
+        $workRegistry->cleanupFinishedAll();
+        $workRegistry->terminateAll();
+        if ($inFlight > 0) {
+            aviationwx_log('info', 'scheduler: terminated in-flight pool workers on shutdown', [
+                'in_flight_workers' => $inFlight
+            ], 'app');
+        }
+    }
+
     if ($lockFp) {
         $fpStat = @fstat($lockFp);
         @flock($lockFp, LOCK_UN);

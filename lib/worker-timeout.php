@@ -73,6 +73,23 @@ function initWorkerTimeout(?int $timeout = null, ?string $heartbeatId = null): v
             exit(124); // Same exit code as 'timeout' command
         });
         
+        // SIGTERM/SIGINT arrive at container stop, deploy drain, or a manual
+        // kill. Exit 143 (128 + SIGTERM) so the process pool classifies the
+        // death as a cancel, not a worker failure.
+        $cancelBySignal = function($signo) {
+            $startTime = $GLOBALS['_aviationwx_worker_start_time'] ?? time();
+            aviationwx_log('info', 'worker: canceled by signal', [
+                'pid' => getmypid(),
+                'signal' => $signo,
+                'runtime' => time() - $startTime
+            ], 'app');
+            exit(143);
+        };
+        pcntl_signal(SIGTERM, $cancelBySignal);
+        if (defined('SIGINT')) {
+            pcntl_signal(SIGINT, $cancelBySignal);
+        }
+        
         // Schedule SIGALRM
         pcntl_alarm($timeout);
     }
