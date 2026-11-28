@@ -2303,16 +2303,16 @@ This path is separate from the weather, webcam, and NOTAM pipelines. It supplies
 
 **Failure policy:** fail-open per input (NASR or merge cache missing: build without those rows, log a warning) and fail-closed on publish (no configured airport produced rows: keep the existing artifact, log an error).
 
-### Serve (stat-only freshness gate)
+### Serve (stat-only gate, digest-checked when the request has a digest)
 
-- `runwayFusionArtifactIsFresh()` stats the artifact and its recorded input stamps. Servable when the artifact is valid, within `RUNWAY_FUSION_MAX_AGE` (24h), the NASR cache is not newer than the recorded stamp, the runways merge cache is not newer, and config is not newer. It also compares the recorded config SHA against the digest `loadConfig()` parsed this request (the config is read and hashed on the request path anyway), so a same-mtime config redeploy that no mtime check can see still withholds the artifact. A merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches) makes the artifact unservable; a missing NASR cache does not.
+- `runwayFusionArtifactIsFresh()` stats the artifact and its recorded input stamps. Servable when the artifact is valid, within `RUNWAY_FUSION_MAX_AGE` (24h), the NASR cache is not newer than the recorded stamp, the runways merge cache is not newer, and config is not newer. When the request loads config (which loads airports.json and hashes it on the runway paths), it also compares the recorded config SHA against that parsed digest, so a same-mtime config redeploy that no mtime check can see still withholds the artifact; without a request digest the gate falls back to the mtime checks alone. A merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches) makes the artifact unservable; a missing NASR cache does not.
 - The runway list and wind diagram serve the fused entry while the gate passes and fall through to the live resolver (config per field, NASR, OurAirports) when it does not, so a stale, missing, or invalid artifact degrades to pre-fusion behavior.
 - Config `runway_facts`, named `runways`, and `runway_length_ft` overrides apply at request time with the same precedence as the live resolver.
 
 ### Scheduler (`scripts/scheduler.php`)
 
 - Evaluates whether to run the worker at **most once per hour** (`RUNWAY_FUSION_CHECK_INTERVAL`), with an **immediate** evaluation on the first eligible loop iteration after startup (same pattern as country resolution).
-- Runs the worker when the artifact is missing, invalid, schema-mismatched, **older than** `RUNWAY_FUSION_MAX_AGE` (24h), any input on disk is **newer** than the recorded stamps, the config SHA or config mtime moved, or a merge cache that existed at build time is now gone. A missing input never forces a rebuild.
+- Runs the worker when the artifact is missing, invalid, schema-mismatched, **older than** `RUNWAY_FUSION_MAX_AGE` (24h), any input on disk is **newer** than the recorded stamps, the config SHA or config mtime moved, or a merge cache that existed at build time is now gone. A missing NASR cache alone never forces a rebuild; a build-time merge cache that disappears does.
 
 ### Health (`lib/status-checks.php`)
 

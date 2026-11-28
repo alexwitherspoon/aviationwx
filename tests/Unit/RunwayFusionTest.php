@@ -755,6 +755,85 @@ class RunwayFusionTest extends TestCase
         $this->assertSame([['end_id' => '16W', 'displaced_thr_len' => 200]], $effective['ends']);
     }
 
+    public function testEffectiveSourceRow_OperatorHeadingsMapOntoLowerEnds(): void
+    {
+        // The read path consumes ends, not top-level heading keys, so the
+        // operator headings must land on the lower row's ends to survive.
+        $configRow = [
+            'rwy_id' => '14/32',
+            'length_ft' => 4400,
+            'heading_1' => 145,
+            'heading_2' => 325,
+            'ends' => [],
+        ];
+        $lowerRow = [
+            'rwy_id' => '14/32',
+            'ends' => [
+                ['end_id' => '14', 'true_alignment' => null],
+                ['end_id' => '32', 'true_alignment' => null],
+            ],
+        ];
+
+        $effective = runwayFusionEffectiveSourceRow($configRow, $lowerRow, null);
+        $this->assertSame(145, $effective['ends'][0]['heading_mag']);
+        $this->assertSame(325, $effective['ends'][1]['heading_mag']);
+    }
+
+    public function testEffectiveSourceRow_OperatorHeadingsMatchEndByIdentNotPosition(): void
+    {
+        // Ends reversed against the designator order: heading_1 still lands
+        // on the 14 end, by numeric ident, not by array position.
+        $configRow = ['rwy_id' => '14/32', 'heading_1' => 145, 'heading_2' => 325, 'ends' => []];
+        $lowerRow = [
+            'rwy_id' => '14/32',
+            'ends' => [
+                ['end_id' => '32', 'true_alignment' => null],
+                ['end_id' => '14', 'true_alignment' => null],
+            ],
+        ];
+
+        $effective = runwayFusionEffectiveSourceRow($configRow, $lowerRow, null);
+        $this->assertSame(325, $effective['ends'][0]['heading_mag']);
+        $this->assertSame(145, $effective['ends'][1]['heading_mag']);
+    }
+
+    public function testConfigFactsForRow_BareWinnerFallsBackToNasrStrictKey(): void
+    {
+        // A bare config row wins a pair while NASR carries lettered parallels
+        // and the operator keyed runway_facts to the lettered designator. The
+        // live resolver reads facts through the NASR key, so the fused lookup
+        // must honor it too or the closed override is dropped.
+        $facts = [
+            '18L/36R' => ['rwy_id' => '18L/36R', 'closed' => true],
+        ];
+        $winner = ['rwy_id' => '18/36', 'length_ft' => 5000, 'surface' => 'ASPH', 'ends' => []];
+        $nasr = ['rwy_id' => '18L/36R', 'length_ft' => 4900, 'width_ft' => 75, 'surface' => 'ASPH', 'ends' => []];
+
+        $this->assertSame(
+            ['rwy_id' => '18L/36R', 'closed' => true],
+            runwayFusionConfigFactsForRow($facts, '18/36', $winner, [$nasr])
+        );
+    }
+
+    public function testConfigFactsForRow_WinnerKeyWinsBeforeSourceKeys(): void
+    {
+        $facts = [
+            '18/36' => ['rwy_id' => '18/36', 'closed' => true],
+            '18L/36R' => ['rwy_id' => '18L/36R', 'closed' => false],
+        ];
+        $winner = ['rwy_id' => '18/36', 'ends' => []];
+        $nasr = ['rwy_id' => '18L/36R', 'ends' => []];
+
+        // The winner's (contextual) key hits first; the source-key fallback
+        // must not override the operator's bare-key choice.
+        $this->assertTrue(runwayFusionConfigFactsForRow($facts, '18/36', $winner, [$nasr])['closed']);
+    }
+
+    public function testConfigFactsForRow_NoMatchReturnsEmpty(): void
+    {
+        $this->assertSame([], runwayFusionConfigFactsForRow([], '09/27', ['rwy_id' => '09/27']));
+    }
+
     public function testBuildAirportEntry_NamelessManualRowIncludedOnlyWithoutOtherSources(): void
     {
         $bare = [

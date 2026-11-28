@@ -111,6 +111,13 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
     // this path exactly as before, and the manual override above it is
     // untouched either way.
     require_once __DIR__ . '/runway-fusion.php';
+    // The embed and widget pages can render the compass without having loaded
+    // config. Ensure the parsed-digest global exists so the freshness gate
+    // can digest-check; otherwise a same-mtime config change would go unseen.
+    if (($GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null) === null) {
+        require_once __DIR__ . '/config.php';
+        loadConfig();
+    }
     $fusedEntry = runwayFusionEntryForAirport($airportId, $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null);
     $fusedSegments = (is_array($fusedEntry) && is_array($fusedEntry['segments'] ?? null) && $fusedEntry['segments'] !== [])
         ? $fusedEntry['segments']
@@ -159,6 +166,24 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         if ($fileMtime > 0) {
             @apcu_store(RUNWAYS_APCU_MTIME_KEY, $fileMtime, RUNWAYS_APCU_TTL);
         }
+    }
+
+    // Merged path: file-cache geometry may be true-north while the fused
+    // derived segments are already magnetic. Bring the true-north geometry
+    // into the magnetic frame BEFORE centering, so the endpoint centroid is
+    // computed in a single frame. Centering a mixed-frame array would shift
+    // the compass center by the declination and the distance between the
+    // geometry and the derived segments. rotateRunwaySegmentsToMagnetic
+    // skips magnetic-flagged segments and does not flag the ones it rotates,
+    // so this leaves the derived segments alone, and skipping the final
+    // rotation here prevents a second rotation of the merged array.
+    if ($fusedSegments !== null) {
+        if (runwaysSegmentsAreInTrueNorth($airport)) {
+            require_once __DIR__ . '/config.php';
+            $declination = getMagneticDeclination($airport);
+            $segments = rotateRunwaySegmentsToMagnetic($segments, $declination);
+        }
+        return centerRunwaySegments($segments);
     }
 
     return rotateSegmentsIfTrueNorth(centerRunwaySegments($segments), $airport);

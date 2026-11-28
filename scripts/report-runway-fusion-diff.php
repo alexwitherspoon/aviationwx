@@ -175,6 +175,13 @@ foreach ($config['airports'] as $airportId => $airport) {
     $declination = runwayDisplayMagneticDeclinationDeg($airport);
     $explicitSurface = getConfigRunwaySurfaceOverride($airport);
     $live = reportDiffLiveSelection($airport, $airportId, $nasrPayload);
+    // Both serving paths resolve calm wind from the NASR record; the report
+    // uses the same value on the live and fused sides so the compared ends
+    // flags match what the served output shows.
+    $calmWindNasr = runwayFusionNasrRecordForAirport($airport, $nasrPayload);
+    $calmWind = ($calmWindNasr !== null && is_array($calmWindNasr['calm_wind'] ?? null))
+        ? $calmWindNasr['calm_wind']
+        : [];
     $liveOaByKey = [];
     $liveOaRows = loadOurAirportsDisplayRunwaysFromFileCache($airportId, $airport);
     foreach (is_array($liveOaRows) ? $liveOaRows : [] as $oaRow) {
@@ -200,7 +207,7 @@ foreach ($config['airports'] as $airportId => $airport) {
         $liveFormattedByKey[$key] = runwayDisplayFormatRunwayRow(
             $row,
             $configFacts[$key] ?? [],
-            [],
+            $calmWind,
             $liveOaByKey[$key] ?? [],
             $emptyClosures,
             (string) ($live['source'] ?? 'unknown'),
@@ -231,8 +238,13 @@ foreach ($config['airports'] as $airportId => $airport) {
             : $winner;
         $fusedFormatted = runwayDisplayFormatRunwayRow(
             is_array($fusedSourceRow) ? $fusedSourceRow : [],
-            runwayFusionConfigFactsForRow($configFacts, $fusedRowKeys[$key], $winner),
-            [],
+            runwayFusionConfigFactsForRow(
+                $configFacts,
+                $fusedRowKeys[$key],
+                $winner,
+                array_values(array_filter([$row['nasr'] ?? null, $row['oa'] ?? null], 'is_array'))
+            ),
+            $calmWind,
             is_array($row['oa'] ?? null) ? $row['oa'] : [],
             $emptyClosures,
             $fusedSources[$key] ?? 'unknown',

@@ -329,9 +329,10 @@ function runwayFusionContextualPairKey(array $stripMap, string $designator): str
  * @param array<string, array<string, mixed>> $factsByRunwayId Strict-key facts map
  * @param string $rowKey Fused row contextual pair key
  * @param array<string, mixed> $winner Winning source row (config > NASR > OA)
+ * @param list<array<string, mixed>> $sourceRows Other source rows in the same pair, checked by strict key after the winner
  * @return array<string, mixed> The facts row, or [] when no override applies
  */
-function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, array $winner): array
+function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, array $winner, array $sourceRows = []): array
 {
     if (isset($factsByRunwayId[$rowKey]) && is_array($factsByRunwayId[$rowKey])) {
         return $factsByRunwayId[$rowKey];
@@ -340,6 +341,20 @@ function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, a
     if ($strictKey !== '' && isset($factsByRunwayId[$strictKey]) && is_array($factsByRunwayId[$strictKey])) {
         return $factsByRunwayId[$strictKey];
     }
+    // The winner's designator may be bare while the pair's NASR or OurAirports
+    // row carries lettered parallels, and the live resolver reads runway_facts
+    // through that row's key. Honor it here too so a closed override or other
+    // operator value is not dropped when a fresh artifact serves the pair.
+    foreach ($sourceRows as $sourceRow) {
+        if (!is_array($sourceRow)) {
+            continue;
+        }
+        $sourceKey = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($sourceRow['rwy_id'] ?? ''));
+        if ($sourceKey !== '' && isset($factsByRunwayId[$sourceKey]) && is_array($factsByRunwayId[$sourceKey])) {
+            return $factsByRunwayId[$sourceKey];
+        }
+    }
+
     return [];
 }
 
@@ -380,6 +395,43 @@ function runwayFusionEffectiveSourceRow(array $configRow, array $lowerRow, ?stri
     foreach (['heading_1', 'heading_2'] as $headingKey) {
         if (isset($configRow[$headingKey])) {
             $effective[$headingKey] = $configRow[$headingKey];
+        }
+    }
+
+    // The read path consumes the runways' ends, not the top-level heading
+    // keys (those only feed the synthesized-ends fallback for a row with no
+    // ends). When the operator set a heading but did not supply ends, the
+    // ends came from the lower source row, so carry the operator heading
+    // onto the matching designator end, or it would be silently dropped.
+    $heading1 = isset($configRow['heading_1']) && is_numeric($configRow['heading_1']) ? (float) $configRow['heading_1'] : null;
+    $heading2 = isset($configRow['heading_2']) && is_numeric($configRow['heading_2']) ? (float) $configRow['heading_2'] : null;
+    $operatorEnds = (isset($configRow['ends']) && is_array($configRow['ends'])) ? $configRow['ends'] : [];
+    if (($heading1 !== null || $heading2 !== null) && $operatorEnds === [] && is_array($effective['ends'])) {
+        $tokens = explode('/', trim((string) ($configRow['rwy_id'] ?? $effective['rwy_id'] ?? '')));
+        $targets = [];
+        foreach ($tokens as $index => $token) {
+            $m = [];
+            if (preg_match('/^(\d{1,2})[LRWC]?$/i', trim($token), $m)) {
+                $targets[$index] = (int) $m[1];
+            }
+        }
+        if (isset($targets[0], $targets[1])) {
+            $headings = [$heading1, $heading2];
+            foreach ($effective['ends'] as $i => $end) {
+                if (!is_array($end)) {
+                    continue;
+                }
+                $endId = (string) ($end['end_id'] ?? '');
+                $em = [];
+                if (preg_match('/^(\d{1,2})[LRWC]?$/i', trim($endId), $em)) {
+                    $endNum = (int) $em[1];
+                    foreach ([0, 1] as $k) {
+                        if ($targets[$k] === $endNum && $headings[$k] !== null) {
+                            $effective['ends'][$i]['heading_mag'] = (int) round($headings[$k]);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -623,7 +675,12 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
         $hasNasr = isset($sources['nasr']);
         $winner = $sources['config'] ?? $sources['nasr'] ?? $sources['oa'];
         $source = $hasConfig ? 'config' : ($hasNasr ? 'nasr' : 'ourairports');
-        $factsRow = runwayFusionConfigFactsForRow($factsByRunwayId, $key, $winner);
+        $factsRow = runwayFusionConfigFactsForRow(
+            $factsByRunwayId,
+            $key,
+            $winner,
+            array_values(array_filter([$sources['nasr'] ?? null, $sources['oa'] ?? null], 'is_array'))
+        );
         $oaRow = $sources['oa'] ?? [];
 
         // The operator's named row contributes only the fields they set
@@ -794,7 +851,12 @@ function runwayFusionDerivedSegments(
             : $winner;
         $formatted[] = runwayDisplayFormatRunwayRow(
             $sourceRow,
-            runwayFusionConfigFactsForRow($factsByRunwayId, (string) ($row['key'] ?? ''), $winner),
+            runwayFusionConfigFactsForRow(
+                $factsByRunwayId,
+                (string) ($row['key'] ?? ''),
+                $winner,
+                array_values(array_filter([$row['nasr'] ?? null, $row['oa'] ?? null], 'is_array'))
+            ),
             $calmWind,
             $row['oa'] ?? [],
             $notamClosures,
@@ -945,12 +1007,12 @@ function runwayFusionArtifactIsFresh(?string $parsedSha = null): ?bool
         return false;
     }
 
-    // Digest check when the request has one. loadConfig() reads and hashes
-    // the config on every call, so the current sha costs nothing here. A
-    // same-mtime config flip (different bytes, restored timestamp) sails
-    // past the mtime check above; rejecting on the sha falls back to the
-    // live resolver, which serves the current config. Null (config not
-    // loaded this request) keeps this path stat-only.
+    // Digest check only when the request supplies a digest and the artifact
+    // records one; otherwise the mtime checks above are the whole gate.
+    // loadConfig() reads and hashes the config on every call, so the current
+    // sha costs nothing here. A same-mtime config flip (different bytes,
+    // restored timestamp) sails past the mtime check; rejecting on the sha
+    // falls back to the live resolver, which serves the current config.
     if (is_string($parsedSha) && $parsedSha !== '') {
         $recordedSha = isset($inputs['config_sha']) && is_string($inputs['config_sha']) ? $inputs['config_sha'] : null;
         if ($recordedSha !== null && $recordedSha !== $parsedSha) {
@@ -965,7 +1027,7 @@ function runwayFusionArtifactIsFresh(?string $parsedSha = null): ?bool
  * Fused entry for an airport when the artifact is fresh, else null.
  *
  * @param string $airportId Airport identifier (config key or ICAO/Faa, any case)
- * @param string|null $parsedSha Digest of the config bytes loadConfig() parsed this request, null to keep the gate stat-only
+ * @param string|null $parsedSha Digest of the config bytes loadConfig() parsed this request; when empty the gate stays stat-only
  * @return array{rows: list<array<string, mixed>>, segments: list<array<string, mixed>>, calm_wind: array<string, mixed>|null}|null
  */
 function runwayFusionEntryForAirport(string $airportId, ?string $parsedSha = null): ?array

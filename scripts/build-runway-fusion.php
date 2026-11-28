@@ -12,8 +12,12 @@
  *
  * Fails open per input: a missing NASR cache builds without official rows and
  * logs a warning. Fails closed on publish: zero airport rows means no write.
- * Inputs that change during the run leave the existing artifact in place for
- * the next loop.
+ * An input that changes before the publish gate (checked right before the
+ * write) leaves the existing artifact in place for the next loop. The write
+ * is atomic (temp file plus rename) but does not coordinate with concurrent
+ * config or cache updates, so a change between the gate and the rename can
+ * be stamped on the next successful rebuild; the read gate defends serving
+ * with a digest comparison when one is available.
  *
  * Usage:
  *   php scripts/build-runway-fusion.php
