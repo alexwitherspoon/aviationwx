@@ -237,6 +237,8 @@ $referenceDataState = [
     'last_nasr_frq' => 0,
     'last_country_check' => 0,
     'country_startup_eval' => false,
+    'last_runway_fusion_check' => 0,
+    'runway_fusion_startup_eval' => false,
     'config_path' => null,
     'config_sha' => null,
 ];

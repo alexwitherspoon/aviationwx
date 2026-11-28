@@ -90,7 +90,7 @@ Shows:
 - Per-airport status (Weather API, Webcams)
 - Usage metrics (Views, API requests, Map tiles served)
 
-**Reference data:** System Status groups slow-changing catalogs under **Reference data**, with expandable **consumer features** (runway geometry, runway performance, airport identity, comms, and related sources). Each source row shows local cache age, upstream probe result when applicable, and hard max age. Vocabulary and rollup rules: [ARCHITECTURE.md - Data Classification and Observability](ARCHITECTURE.md#data-classification-and-observability).
+**Reference data:** System Status groups slow-changing catalogs under **Reference data**, with expandable **consumer features** (runway geometry, runway display, runway performance, airport identity, comms, and related sources). Each source row shows local cache age, upstream probe result when applicable, and hard max age. Vocabulary and rollup rules: [ARCHITECTURE.md - Data Classification and Observability](ARCHITECTURE.md#data-classification-and-observability).
 
 **Interpreting signals**
 
@@ -103,6 +103,39 @@ Shows:
 **Schedulers and missing sensors**
 
 When an airport has no `weather_sources` or a webcam slot has no acquisition settings, schedulers **skip those workers** on purpose. Cron noise goes down, but you should still watch **staleness on the dashboard** and **status page per-airport rows**. Silence from `fetch-weather.php` / unified webcam workers does not prove observations are fresh; it means nothing was queued for that slot.
+
+### Runway fusion inventory
+
+The runway list and the wind diagram read a computed artifact, `cache/runways/runway_fusion.json`, built by the scheduler's `runway_fusion` job (`scripts/build-runway-fusion.php`). For every configured, enabled airport it stores the union of runway rows from manual config, NASR (official US source), and OurAirports (community source), in that precedence. Pairs without geometry in the worldwide merge cache get a derived through-center segment so the diagram can draw them.
+
+**Who serves it:** both read paths check a stat-only freshness gate on every request. Fresh artifact: serve the fused inventory. Stale, missing, or invalid artifact: fall through to the live resolver, which is exactly the pre-fusion behavior. So a failed or late build degrades to status quo, never to missing data.
+
+**Rebuild triggers:** artifact older than 24h, an input on disk newer than the stamps recorded at build time (NASR cache mtime, merge cache mtime), a config content change (SHA-256) or a config mtime bump (the gate stats the file, so an identical-bytes redeploy still withholds the artifact), a schema mismatch, or a merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches). A missing NASR cache alone never forces a rebuild; a build-time merge cache that disappears does.
+
+**Failure modes:** the worker fails open per input (NASR or merge cache missing: build without those rows, log a warning) and fails closed on publish (no configured airport produced rows: keep the existing artifact, log an error). If an input changes while the worker is loading it, the run aborts and keeps the existing artifact; the next loop retries with one consistent input generation. Watch `app.log` for `runway_fusion:` lines.
+
+**Status page:** the **Runway display** consumer under **Reference data** reports the inventory's health (`runway_fusion` source): age, rebuild-pending reasons, airport count, and the NASR cycle the official rows come from.
+
+**Data discrepancies.** The UI presents the inventory as AviationWX.org facts; it does not show per-field source attribution. Provenance lives in the artifact itself (`source` per pair, `field_sources` per field, `nasr_effective_date` for the cycle). When an operator spots a wrong value:
+
+1. Find the pair in the artifact and read where each field came from:
+
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec -T web \
+     php -r '$d=json_decode(file_get_contents("/var/www/html/cache/runways/runway_fusion.json"),true); var_export($d["airports"]["42b"]??null);'
+   ```
+
+2. If the official source (NASR) is wrong, there is nothing to fix locally; the next cycle picks it up. If OurAirports is wrong, the config override below wins until upstream corrects it (an OurAirports data correction is the durable fix).
+3. Correct or gap-fill in `airports.json`, which takes ultimate precedence:
+   - `runway_facts`: per-pair field overrides. Each row is keyed by `rwy_id` (for example `16W/34W`) and may set `length_ft`, `width_ft`, `surface`, `lights`, `closed`, or `traffic`.
+   - `runways`: named manual runways (`name`, `heading_1`/`heading_2`, or lat/lon endpoints). A named row wins membership for the pair, but it only contributes what you set: the designator, `runway_length_ft`, an explicit `runway_surface`, and any per-end or heading data. Width, lights, surface (when `runway_surface` is unset), closure, and ends you did not set fall through to NASR and then OurAirports, so a length override does not blank out the official water surface or width.
+   - `runway_length_ft`: a nameless override that only takes effect when no other source provides a row for the airport (the density-altitude escape hatch).
+
+   A config change is picked up on the next rebuild (the gate stats the config file), and the live read path applies the same config precedence immediately.
+
+**Known edge case:** if the sources disagree on lettering for genuinely parallel pairs (one source letters a strip, another publishes it bare), the fusion can merge the two strips into one pair, because the combined end-ident set cannot tell lettering drift from a second strip. Real parallel fields are lettered in every FAA source, so the trigger is a data error and the fix is upstream: letter the second strip in the source. The diff report may show the merged pair as a field-level change (the OurAirports fill-in now crosses the lettering gap), and the row's `field_sources` records which source supplies each field. A local named `runways` entry can set the merged pair's display values but cannot re-split the pair cleanly (the bare source row stays its own pair, so the compass would draw three lines for two strips), so do not paper over this case locally.
+
+**Bare designator at a parallel bearing:** a source listing a bare `16/34` while another source letters true parallels (`16L/34L`, `16R/34R`) carries a data error, not a third strip: the FAA letters every parallel. The fusion drops that bare pair while a higher-precedence source holds the lettered parallels. A manual config row is never dropped, and a bare row from the same or a higher source than the lettered parallels stays visible as the data error it is.
 
 ### Health Endpoints
 
@@ -612,6 +645,16 @@ CONFIG_PATH=/path/to/aviationwx-secrets/airports.json make config-check
 **Tolerances:** elevation ±2 ft (rounded integers); per-airport magnetic declination ±1.0°. Global `config.magnetic_declination` and WMM are not compared — only explicit per-airport overrides.
 
 **Interpretation:** Per-airport values intentionally override NASR at runtime; warnings flag possible stale config, not deploy blockers. NASR `MAG_VARN_YEAR` may be years old; magnetic warnings are a sanity check, not a substitute for WMM. Refresh NASR with `php scripts/fetch-nasr-apt.php` after parser or cycle updates.
+
+### Runway fusion diff report
+
+`php scripts/report-runway-fusion-diff.php` (add `--json` for machine-readable output) compares the pre-fusion live runway selection against the fused inventory for every configured, enabled airport. It reads the same inputs as the fusion worker (NASR cache, runways merge cache, airports.json) and writes nothing. Use it to enumerate which airports will show a different runway list or wind diagram after a deploy that introduces the fused read paths, and to review the impact of a config or data change:
+
+```bash
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/report-runway-fusion-diff.php
+```
+
+Per affected airport it lists added/changed/removed list pairs (with the fused source), field-level live-versus-fused values, and derived diagram segments. A removed pair is an anomaly: the fused inventory is a union and should never lose a live row, the exceptions being pairs the precedence rules resolve differently than the live list (a bare designator at a true-parallel bearing dropped by lettered parallels, or a pair now won by a named config row). Treat any other removed pair as a bug, not data.
 
 ---
 

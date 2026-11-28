@@ -35,6 +35,7 @@ final class ReferenceDataOrchestratorTest extends TestCase
                 'nasr_apt',
                 'nasr_frq',
                 'country_resolution',
+                'runway_fusion',
             ],
             array_keys($jobs)
         );

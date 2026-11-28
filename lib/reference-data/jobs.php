@@ -47,6 +47,10 @@ function referenceDataJobs(): array
             'script' => 'refresh-airport-country-resolution.php',
             'timeout' => (int) COUNTRY_RESOLUTION_WORKER_TIMEOUT,
         ],
+        'runway_fusion' => [
+            'script' => 'build-runway-fusion.php',
+            'timeout' => (int) RUNWAY_FUSION_WORKER_TIMEOUT,
+        ],
     ];
 }
 

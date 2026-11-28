@@ -19,8 +19,9 @@ For how external catalogs and live feeds are **classified** (planes, consumer fe
 9. [NOTAM Data Processing](#notam-data-processing)
 10. [Data Display on Dashboard](#data-display-on-dashboard)
 11. [Airport country resolution (geometry aggregate)](#airport-country-resolution-geometry-aggregate)
-12. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
-13. [Density Altitude Performance](#density-altitude-performance) (under [Weather Data Calculations](#weather-data-calculations))
+12. [Runway fusion inventory (computed runway reference)](#runway-fusion-inventory-computed-runway-reference)
+13. [Airport "Last updated": observation time vs fetch time](#airport-last-updated-observation-vs-fetch-time)
+14. [Density Altitude Performance](#density-altitude-performance) (under [Weather Data Calculations](#weather-data-calculations))
 
 ---
 
@@ -779,7 +780,7 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 ### Runway display (dashboard and weather API)
 
-**When it runs**: On each weather API response (Internal API, Public API, embed iframe/widget SSR, and Embed API) at format/render time. `attachRunwayDisplay()` (via `formatWeatherResponse()`, `formatInternalApiWeatherResponse()`, or `enrichEmbedWeatherForDisplay()` on cache fallback) resolves runway facts from config, NASR, and OurAirports without re-fetching weather.
+**When it runs**: On each weather API response (Internal API, Public API, embed iframe/widget SSR, and Embed API) at format/render time. `attachRunwayDisplay()` (via `formatWeatherResponse()`, `formatInternalApiWeatherResponse()`, or `enrichEmbedWeatherForDisplay()` on cache fallback) resolves runway facts from the fused per-airport runway inventory while its freshness gate passes, falling back to the live config/NASR/OurAirports resolver otherwise, without re-fetching weather.
 
 **Suppression** (no `runway_display` field in the response):
 
@@ -787,7 +788,7 @@ OurAirports is community-maintained; length and surface can disagree with nation
 
 **Pipeline**:
 
-1. Resolve runway inventory (config override per field, NASR, OurAirports).
+1. Resolve runway inventory: the fused per-airport inventory ([runway fusion](#runway-fusion-inventory-computed-runway-reference)) while its freshness gate passes, otherwise the live resolver (config override per field, NASR, OurAirports).
 2. Merge dimensions, surface, lights, traffic notes, calm-wind designation, and magnetic headings per end.
 3. Apply active NOTAM full-closure semantics on weather responses (same rules as density altitude performance).
 4. Attach `runway_display` to the formatted weather payload. Per-end headwind and crosswind are computed client-side from `wind_speed` and magnetic wind direction; missing wind shows unavailable in UI. Helipad rows (`is_helipad: true`) omit per-end wind components. Arrow semantics (aircraft-relative along- and cross-fuselage) are defined in [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#runway-display-dashboard-per-end-hwxw).
@@ -2294,6 +2295,37 @@ This path is separate from weather, webcam, and NOTAM pipelines. It supplies **g
 
 - **Push FTP/SFTP inbox debris:** Same keep-list as above. Non-image debris is deleted when older than `config.cleanup_push_upload_debris_max_age_seconds` (default **3 hours**). **`scripts/cleanup-push-upload-debris.php`** runs **hourly** via cron; **`cleanup-cache.php`** still runs the same step daily as a backup.
 - Layer-2 age cleanup for the aggregate uses a **90-day** threshold so a healthy file is not deleted while the 30-day policy still considers it usable between scheduler passes.
+
+---
+
+## Runway fusion inventory (computed runway reference)
+
+This path is separate from the weather, webcam, and NOTAM pipelines. It supplies a **per-airport fused runway row inventory** for the `runway_display` consumer (runway list and wind diagram): for every configured, enabled airport, the union of manual config, NASR APT, and OurAirports rows, in that precedence, plus derived through-center segments for pairs without geometry in the runways merge cache.
+
+### Build (`scripts/build-runway-fusion.php`)
+
+1. The script defines `AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE` and calls `loadConfig()`, which records the digest of the config bytes it parses; the worker then reads the NASR APT cache and the runways merge cache from disk (one cache read per run, per input). After loading it re-reads the input stamps, and again immediately before publishing, and aborts without publishing when it detects that an input changed or the config file no longer holds the parsed bytes. The mtime stamps cannot see a content change that keeps the same timestamp, so the guarantee is about detected drift: detected changes keep the existing artifact for the next loop, and a change that lands between the final gate and the write is recorded on the next successful rebuild.
+2. Per configured, enabled airport, fuses the sources into one inventory (`lib/runway-fusion.php`). Per-pair precedence is manual config > NASR > OurAirports; each row keeps the winning source's native shape plus the other sources' rows, per-field provenance (`source`, `field_sources`), and the NASR effective date. A pair won by a named config row uses an effective source row: the config row supplies only what the operator set (designator, length, explicit `runway_surface`, per-end and heading data) and the remaining fields come from the next source row, mirroring the live resolver.
+3. Pair keys are order-insensitive and context-aware: an L/C/R suffix is kept only while the airport has parallel strips at the numeric heading across all of its sources (a heading with a single lettered end is source-to-source lettering drift and the keys merge). `W` marks a water end: never stripped, never counted toward parallel ambiguity.
+4. Pairs without geometry in the runways merge cache, and not covered by a manual compass runway, get a derived through-center segment: ident bearing, water flag, magnetic frame (`source: "fusion"`).
+5. Writes **`cache/runways/runway_fusion.json`** atomically (temp file + `rename()`), including `schema_version`, `built_at`, input stamps (NASR APT mtime, runways merge cache mtime, config SHA and mtime), and `nasr_effective_date`.
+
+**Failure policy:** fail-open per input (NASR or merge cache missing: build without those rows, log a warning) and fail-closed on publish (no configured airport produced rows: keep the existing artifact, log an error).
+
+### Serve (stat-only gate, digest-checked when the request has a digest)
+
+- `runwayFusionArtifactIsFresh()` stats the artifact and its recorded input stamps. Servable when the artifact is valid, within `RUNWAY_FUSION_MAX_AGE` (24h), the NASR cache is not newer than the recorded stamp, the runways merge cache is not newer, and config is not newer. When the request supplies a nonempty parsed config digest and the artifact records a string SHA, it also compares the two, so a same-mtime config redeploy that no mtime check can see still withholds the artifact; without a request digest or a string artifact digest the gate falls back to the mtime checks alone. A merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches) makes the artifact unservable; a missing NASR cache does not.
+- The runway list and wind diagram serve the fused entry while the gate passes and fall through to the live resolver (config per field, NASR, OurAirports) when it does not, so a stale, missing, or invalid artifact degrades to pre-fusion behavior.
+- Config `runway_facts`, named `runways`, and `runway_length_ft` overrides apply at request time with the same precedence as the live resolver.
+
+### Scheduler (`scripts/scheduler.php`)
+
+- Evaluates whether to run the worker at **most once per hour** (`RUNWAY_FUSION_CHECK_INTERVAL`), with an **immediate** evaluation on the first eligible loop iteration after startup (same pattern as country resolution).
+- Runs the worker when the artifact is missing, invalid, schema-mismatched, **older than** `RUNWAY_FUSION_MAX_AGE` (24h), any input on disk is **newer** than the recorded stamps, the config SHA or config mtime moved, or a merge cache that existed at build time is now gone. A missing NASR cache alone never forces a rebuild; a build-time merge cache that disappears does.
+
+### Health (`lib/status-checks.php`)
+
+- `checkRunwayFusionHealth()` mirrors the read-path gate state-for-state and reports under the **Runway display** consumer (source leaf `runway_fusion`, kind `computed`): operational shows the airport count and the NASR cycle the official rows come from; degraded names the specific cause (age, newer input, merge cache gone since build, unresolvable config path, schema fault). APCu-cached on artifact and input mtimes.
 
 ---
 

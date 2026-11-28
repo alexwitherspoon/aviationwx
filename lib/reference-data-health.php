@@ -84,6 +84,7 @@ function reference_data_health_cache_paths(): array
         CACHE_OURAIRPORTS_RUNWAYS_CSV,
         CACHE_OURAIRPORTS_FREQUENCIES_CSV,
         CACHE_RUNWAYS_DATA_FILE,
+        CACHE_RUNWAY_FUSION_FILE,
         CACHE_NASR_APT_META_FILE,
         CACHE_NASR_APT_DATA_FILE,
         CACHE_NASR_FRQ_DATA_FILE,
@@ -195,6 +196,9 @@ function reference_data_health_build(?array $config, ?string $configSha256 = nul
             reference_data_faa_ngda_runways_source_health(),
             reference_data_ourairports_bulk_source_health('runways', 'ourairports_runways', 'OurAirports runways'),
         ], 'Uses OurAirports airports.csv for centers and FAA to ICAO mapping (see airport_identity).'),
+        reference_data_build_consumer('runway_display', 'Runway display', [
+            reference_data_runway_fusion_source_health(),
+        ], 'Fused per-airport runway inventory (config, NASR, OurAirports); the runway list and wind diagram serve it while fresh.'),
         reference_data_build_consumer('runway_performance', 'Runway performance', [
             $configSourceHealth,
             reference_data_nasr_apt_source_health(),

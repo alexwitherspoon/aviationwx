@@ -2513,6 +2513,11 @@ function loadConfig(bool $useCache = true): ?array {
     // Compute SHA-256 hash of file content for reliable change detection
     // This detects ANY content change, not just structural changes
     $fileSha = hash('sha256', $jsonContent);
+    // Expose the digest of the bytes this call parsed. Workers that build
+    // from this config compare their input stamp against it, so a change
+    // during the build (including one that reverts before the stamp read)
+    // cannot pair rows with a different generation's stamp.
+    $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] = $fileSha;
     $cacheKey = 'aviationwx_config';
     $cacheShaKey = 'aviationwx_config_sha';
     $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] = $configFile;

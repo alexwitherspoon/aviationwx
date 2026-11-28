@@ -24,6 +24,7 @@ require_once __DIR__ . '/webcam-image-metrics.php';
 require_once __DIR__ . '/weather/utils.php';
 require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/runways.php';
+require_once __DIR__ . '/runway-fusion.php';
 require_once __DIR__ . '/variant-health.php';
 require_once __DIR__ . '/weather-health.php';
 require_once __DIR__ . '/notam-health.php';
@@ -738,6 +739,267 @@ function checkAirportCountryResolutionHealth(?array $config, ?string $configSha2
         null,
         STATUS_HEALTH_CACHE_TTL
     );
+}
+
+/**
+ * Read-only health for the scheduler-built fused runway inventory
+ * (cache/runways/runway_fusion.json).
+ *
+ * Non-testing: result is cached in APCu (getCachedData, TTL STATUS_HEALTH_CACHE_TTL);
+ * cache key includes the artifact and its input mtimes, since any of them
+ * changing flips the freshness verdict. isTestMode() skips APCu for
+ * deterministic PHPUnit runs.
+ *
+ * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
+ */
+function checkRunwayFusionHealth(): array {
+    if (isTestMode()) {
+        return computeRunwayFusionHealth();
+    }
+
+    $artifactMtime = 0;
+    if (file_exists(CACHE_RUNWAY_FUSION_FILE) && is_file(CACHE_RUNWAY_FUSION_FILE)) {
+        $mt = @filemtime(CACHE_RUNWAY_FUSION_FILE);
+        $artifactMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $nasrMtime = 0;
+    if (file_exists(CACHE_NASR_APT_DATA_FILE) && is_file(CACHE_NASR_APT_DATA_FILE)) {
+        $mt = @filemtime(CACHE_NASR_APT_DATA_FILE);
+        $nasrMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $runwaysMtime = 0;
+    if (file_exists(CACHE_RUNWAYS_DATA_FILE) && is_file(CACHE_RUNWAYS_DATA_FILE)) {
+        $mt = @filemtime(CACHE_RUNWAYS_DATA_FILE);
+        $runwaysMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $cfgPath = getConfigFilePath();
+    $cfgMtime = 0;
+    if (is_string($cfgPath) && $cfgPath !== '' && file_exists($cfgPath) && is_file($cfgPath)) {
+        $mt = @filemtime($cfgPath);
+        $cfgMtime = ($mt !== false) ? (int) $mt : 0;
+    }
+    $cacheBasis = $artifactMtime . "\x1e" . $nasrMtime . "\x1e" . $runwaysMtime . "\x1e" . $cfgMtime;
+    $cacheKey = 'status_rf_health_' . substr(hash('sha256', $cacheBasis), 0, 16);
+
+    return getCachedData(
+        static function (): array {
+            return computeRunwayFusionHealth();
+        },
+        $cacheKey,
+        null,
+        STATUS_HEALTH_CACHE_TTL
+    );
+}
+
+/**
+ * Compute fused runway inventory health without caching.
+ *
+ * Mirrors the read-path freshness gate: the inventory is servable while it
+ * is within RUNWAY_FUSION_MAX_AGE and no input on disk is newer than the
+ * stamps recorded at build time. A missing NASR cache does not degrade the
+ * inventory (its rows were valid at build time); a merge cache that existed
+ * at build time and is now gone does (the geometry it assumed is gone).
+ *
+ * @return array{name: string, status: string, message: string, lastChanged: int, details?: array<string, mixed>}
+ */
+function computeRunwayFusionHealth(): array {
+    $name = 'Runway Fusion Inventory';
+    $path = CACHE_RUNWAY_FUSION_FILE;
+    $basename = basename($path);
+
+    if (!file_exists($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Fused runway inventory not present yet (scheduler writes ' . $basename . ')',
+            'lastChanged' => 0,
+            'details' => ['file' => $basename],
+        ];
+    }
+    if (!is_file($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory path exists but is not a regular file (' . $basename . ')',
+            'lastChanged' => 0,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    // @ below: TOCTOU if the artifact is removed or swapped after is_file / is_readable.
+    $mtime = @filemtime($path);
+    if ($mtime === false) {
+        $mtime = 0;
+    }
+    if (!is_readable($path)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory exists but is not readable',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory file is empty or unreadable',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    try {
+        $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (\JsonException) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory is not valid JSON',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+    if (!is_array($data)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory JSON is not an object',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+    if (($data['schema_version'] ?? null) !== RUNWAY_FUSION_SCHEMA_VERSION) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory schema version mismatch (worker should rewrite)',
+            'lastChanged' => $mtime,
+            'details' => [
+                'file' => $basename,
+                'version' => $data['schema_version'] ?? null,
+                'expected' => RUNWAY_FUSION_SCHEMA_VERSION,
+            ],
+        ];
+    }
+    if (!isset($data['airports']) || !is_array($data['airports'])) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory missing airports map',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+    if (!isset($data['built_at']) || !is_int($data['built_at'])) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory missing built_at stamp (worker should rewrite)',
+            'lastChanged' => $mtime,
+            'details' => ['file' => $basename],
+        ];
+    }
+
+    $builtAt = $data['built_at'];
+    $age = time() - $builtAt;
+    $airportsMap = $data['airports'];
+    $inputs = is_array($data['inputs'] ?? null) ? $data['inputs'] : [];
+    $effectiveDate = is_string($data['nasr_effective_date'] ?? null) ? $data['nasr_effective_date'] : null;
+    $details = [
+        'file' => $basename,
+        'built_at' => $builtAt,
+        'age_seconds' => $age,
+        // reference_data_source_from_component_health() reads the leaf age
+        // under this key; keep age_seconds for existing consumers.
+        'local_age_seconds' => $age,
+        'airport_count' => count($airportsMap),
+        'effective_date' => $effectiveDate,
+    ];
+
+    if ($age > RUNWAY_FUSION_MAX_AGE) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Inventory ' . (int) floor($age / 3600) . 'h old (max ' . (int) floor(RUNWAY_FUSION_MAX_AGE / 3600) . 'h); rebuild pending',
+            'lastChanged' => $mtime,
+            'details' => $details,
+        ];
+    }
+
+    clearstatcache();
+
+    $nasrRecorded = isset($inputs['nasr_apt_mtime']) && is_int($inputs['nasr_apt_mtime']) ? $inputs['nasr_apt_mtime'] : 0;
+    if (is_readable(CACHE_NASR_APT_DATA_FILE) && (int) filemtime(CACHE_NASR_APT_DATA_FILE) > $nasrRecorded) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'NASR cache newer than inventory; rebuild pending',
+            'lastChanged' => $mtime,
+            'details' => $details,
+        ];
+    }
+
+    $runwaysRecorded = isset($inputs['runways_cache_mtime']) && is_int($inputs['runways_cache_mtime']) ? $inputs['runways_cache_mtime'] : 0;
+    if (!is_readable(CACHE_RUNWAYS_DATA_FILE)) {
+        if ($runwaysRecorded > 0) {
+            return [
+                'name' => $name,
+                'status' => 'degraded',
+                'message' => 'Runways merge cache removed since build; rebuild pending',
+                'lastChanged' => $mtime,
+                'details' => $details,
+            ];
+        }
+    } elseif ((int) filemtime(CACHE_RUNWAYS_DATA_FILE) > $runwaysRecorded) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Runways merge cache newer than inventory; rebuild pending',
+            'lastChanged' => $mtime,
+            'details' => $details,
+        ];
+    }
+
+    // The read-path gate returns "cannot verify" (and falls back to the live
+    // resolver) when the config path is unresolvable, so the status page
+    // must not claim the inventory is servable either.
+    $configPath = getConfigFilePath();
+    if (!is_string($configPath) || $configPath === '' || !is_file($configPath)) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Airport config path unresolvable; read paths serve the live resolver',
+            'lastChanged' => $mtime,
+            'details' => $details,
+        ];
+    }
+    $configRecorded = isset($inputs['config_mtime']) && is_int($inputs['config_mtime']) ? $inputs['config_mtime'] : 0;
+    if ((int) filemtime($configPath) > $configRecorded) {
+        return [
+            'name' => $name,
+            'status' => 'degraded',
+            'message' => 'Airport config newer than inventory; rebuild pending',
+            'lastChanged' => $mtime,
+            'details' => $details,
+        ];
+    }
+
+    $message = count($airportsMap) . ' airports fused';
+    if ($effectiveDate !== null) {
+        $message .= ' (NASR cycle ' . $effectiveDate . ')';
+    }
+
+    return [
+        'name' => $name,
+        'status' => 'operational',
+        'message' => $message,
+        'lastChanged' => $mtime,
+        'details' => $details,
+    ];
 }
 
 /**

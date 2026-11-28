@@ -638,6 +638,23 @@ if (!defined('COUNTRY_RESOLUTION_REFRESH_INTERVAL')) {
     define('COUNTRY_RESOLUTION_REFRESH_INTERVAL', COUNTRY_RESOLUTION_AGGREGATE_MAX_AGE_SECONDS);
 }
 
+// Runway fusion (computed per-airport inventory under CACHE_RUNWAYS_DIR; see scripts/build-runway-fusion.php)
+if (!defined('RUNWAY_FUSION_SCHEMA_VERSION')) {
+    define('RUNWAY_FUSION_SCHEMA_VERSION', 1);
+}
+// How long a valid artifact may sit before the scheduler rebuilds it (policy:
+// runway definitions rarely change; a day of lag is acceptable).
+if (!defined('RUNWAY_FUSION_MAX_AGE')) {
+    define('RUNWAY_FUSION_MAX_AGE', 86400); // 24 hours
+}
+// Scheduler evaluates rebuild at most this often (avoids stat/decode every main-loop tick).
+if (!defined('RUNWAY_FUSION_CHECK_INTERVAL')) {
+    define('RUNWAY_FUSION_CHECK_INTERVAL', 3600); // 1 hour
+}
+if (!defined('RUNWAY_FUSION_WORKER_TIMEOUT')) {
+    define('RUNWAY_FUSION_WORKER_TIMEOUT', 120);
+}
+
 // Circuit breaker / backoff
 // Circuit breaker failure threshold - require this many consecutive failures before opening
 if (!defined('CIRCUIT_BREAKER_FAILURE_THRESHOLD')) {
