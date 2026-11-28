@@ -449,7 +449,8 @@ class WeatherHistoryTest extends TestCase
         $airportId = 'test_extremes_' . uniqid();
         $timezone = 'America/Los_Angeles';
         $tz = new DateTimeZone($timezone);
-        $now = new DateTime('now', $tz);
+        // Anchor to local noon so the one- and two-hour-earlier observations stay on the same local day
+        $now = new DateTime('today 12:00', $tz);
         $dateKey = $now->format('Y-m-d');
 
         // Create history file with observations for today
