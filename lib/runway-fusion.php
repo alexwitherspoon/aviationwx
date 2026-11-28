@@ -107,6 +107,53 @@ function runwayFusionPublishGatePasses(array $stamps, array $finalStamps, ?strin
 }
 
 /**
+ * The worker's publish step: re-check input stability and write the artifact.
+ *
+ * The airport build loop ran against in-memory payloads, so this re-reads
+ * the input stamps before writing. An input that moved since the post-load
+ * read, or a config that no longer holds the bytes loadConfig() parsed,
+ * keeps the existing artifact and reports 1, so the worker exits 0 without
+ * logging a write. The re-read and the write are called from one place so a
+ * test can flip the config between the post-load read this function is
+ * handed and its own final read, and assert the artifact is preserved.
+ *
+ * @param array<string, array<string, mixed>> $airportsOut Built entries keyed by airport id
+ * @param array<string, int|string|null> $stamps Post-load input stamps
+ * @param string $configPath Resolved airports.json path
+ * @param string|null $parsedSha Digest of the config bytes loadConfig() parsed
+ * @param string|null $nasrEffectiveDate Cycle date from the NASR payload
+ * @return int 0 published, 1 kept (an input drifted or the config changed), 2 write failure
+ */
+function runwayFusionWorkerPublishIfStable(
+    array $airportsOut,
+    array $stamps,
+    string $configPath,
+    ?string $parsedSha,
+    ?string $nasrEffectiveDate
+): int
+{
+    $finalStamps = runwayFusionInputStamps($configPath);
+    if (!runwayFusionPublishGatePasses($stamps, $finalStamps, $parsedSha)) {
+        aviationwx_log('warning', 'runway_fusion: input changed while building; keeping existing artifact', [
+            'changed' => runwayFusionInputDriftKey($stamps, $finalStamps),
+            'parsed_sha' => $parsedSha,
+            'stamp_sha' => $finalStamps['config_sha'] ?? null,
+        ], 'app');
+        return 1;
+    }
+
+    $payload = [
+        'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
+        'built_at' => time(),
+        'inputs' => $stamps,
+        'nasr_effective_date' => $nasrEffectiveDate,
+        'airports' => $airportsOut,
+    ];
+
+    return runwayFusionWriteArtifact($payload) ? 0 : 2;
+}
+
+/**
  * First input stamp that changed between two reads, or null when stable.
  *
  * The worker's rows come from a single pass over the config and cache

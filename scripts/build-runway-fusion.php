@@ -129,39 +129,30 @@ if ($airportsOut === []) {
     exit(1);
 }
 
-// Final gate, immediately before publication. The airport loop above ran
-// against in-memory payloads, so an input that moved after the post-load
-// check would leave an artifact whose rows and stamps disagree. The sha
-// comparison also catches a same-mtime config flip (different bytes,
-// restored timestamp), which no mtime check can see.
-$finalStamps = runwayFusionInputStamps($configPath);
-$parsedSha = $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null;
-if (!runwayFusionPublishGatePasses($stamps, $finalStamps, is_string($parsedSha) ? $parsedSha : null)) {
-    aviationwx_log('warning', 'runway_fusion: input changed while building; keeping existing artifact', [
-        'changed' => runwayFusionInputDriftKey($stamps, $finalStamps),
-        'parsed_sha' => is_string($parsedSha) ? $parsedSha : null,
-        'stamp_sha' => $finalStamps['config_sha'] ?? null,
-    ], 'app');
-    exit(0);
-}
-
-$payload = [
-    'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
-    'built_at' => time(),
-    'inputs' => $stamps,
-    'nasr_effective_date' => is_array($nasrPayload) ? ($nasrPayload['effective_date'] ?? null) : null,
-    'airports' => $airportsOut,
-];
-
-if (!runwayFusionWriteArtifact($payload)) {
+// Final gate plus publish. The airport loop above ran against in-memory
+// payloads; runwayFusionWorkerPublishIfStable re-reads the input stamps
+// right before writing and keeps the existing artifact if any moved, or if
+// the config no longer holds the bytes loadConfig() parsed.
+$publishStatus = runwayFusionWorkerPublishIfStable(
+    $airportsOut,
+    $stamps,
+    $configPath,
+    is_string($parsedSha) ? $parsedSha : null,
+    is_array($nasrPayload) ? ($nasrPayload['effective_date'] ?? null) : null
+);
+if ($publishStatus === 2) {
     fwrite(STDERR, "build-runway-fusion: failed to write artifact\n");
     exit(1);
+}
+if ($publishStatus === 1) {
+    // Kept; the seam logged the reason.
+    exit(0);
 }
 
 aviationwx_log('info', 'runway_fusion: wrote artifact', [
     'path' => CACHE_RUNWAY_FUSION_FILE,
     'airport_count' => count($airportsOut),
-    'nasr_effective_date' => $payload['nasr_effective_date'],
+    'nasr_effective_date' => is_array($nasrPayload) ? ($nasrPayload['effective_date'] ?? null) : null,
 ], 'app');
 
 exit(0);

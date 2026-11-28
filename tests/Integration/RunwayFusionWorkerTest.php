@@ -3,6 +3,8 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/nasr/cache.php';
+require_once __DIR__ . '/../../lib/runway-fusion.php';
+require_once __DIR__ . '/../../lib/logger.php';
 
 /**
  * build-runway-fusion.php worker: end-to-end build, not-due skip, and
@@ -126,6 +128,70 @@ class RunwayFusionWorkerTest extends TestCase
             $byKey[$row['key']] = $row;
         }
         $this->assertSame(2300, $byKey['14/32']['config']['length_ft']);
+    }
+
+    public function testWorkerPublish_SameMtimeFlipBetweenPostLoadAndFinalGate_KeepsExistingArtifact(): void
+    {
+        // The publish seam is the exact function the worker calls after the
+        // build loop. Drive it with the post-load baseline, then flip the
+        // config to a new generation at the same mtime (as if the deploy
+        // landed while the loop ran) and re-check what happens on disk.
+        $cacheDir = $this->seedWorkerInputs();
+        $configPath = $this->tmpDir . '/airports.json';
+
+        $configA = json_decode((string) file_get_contents($configPath), true);
+        $this->assertIsArray($configA, 'worker config must decode');
+        $stampsA = runwayFusionInputStamps($configPath);
+        $parsedShaA = $stampsA['config_sha'] ?? null;
+        $this->assertIsString($parsedShaA, 'config sha must be available');
+
+        $artifactPath = CACHE_RUNWAY_FUSION_FILE;
+        $dir = dirname($artifactPath);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            $this->markTestSkipped("cannot create {$dir}");
+        }
+        // A pre-existing artifact from generation A sits on disk.
+        $this->assertTrue(runwayFusionWriteArtifact([
+            'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
+            'built_at' => time() - 60,
+            'inputs' => $stampsA,
+            'nasr_effective_date' => '2026-10-01',
+            'airports' => [],
+        ]));
+        $artifactBefore = (string) file_get_contents($artifactPath);
+
+        try {
+            // The config flips to B and its mtime is restored: the final gate
+            // sees the same mtimes but different bytes.
+            $configB = $configA;
+            $configB['airports']['42b']['runway_length_ft'] = 2300;
+            file_put_contents($configPath, json_encode($configB, JSON_PRETTY_PRINT));
+            $this->assertTrue(touch($configPath, (int) $stampsA['config_mtime']));
+            $this->assertSame((int) $stampsA['config_mtime'], (int) filemtime($configPath));
+
+            $exit = runwayFusionWorkerPublishIfStable([], $stampsA, $configPath, $parsedShaA, '2026-10-01');
+            $this->assertSame(1, $exit, 'a drifted build keeps the artifact and reports kept');
+            $this->assertSame(
+                $artifactBefore,
+                (string) file_get_contents($artifactPath),
+                'existing artifact must be preserved unchanged'
+            );
+
+            // Restore generation A: a stable publish replaces the artifact.
+            file_put_contents($configPath, json_encode($configA, JSON_PRETTY_PRINT));
+            $stampsStable = runwayFusionInputStamps($configPath);
+            $this->assertSame(
+                0,
+                runwayFusionWorkerPublishIfStable([], $stampsStable, $configPath, $stampsStable['config_sha'], '2026-10-01')
+            );
+            $this->assertNotSame(
+                $artifactBefore,
+                (string) file_get_contents($artifactPath),
+                'a stable publish must land a new artifact'
+            );
+        } finally {
+            @unlink($artifactPath);
+        }
     }
 
     public function testWorker_FailsClosedWhenNoAirportProducesRows(): void
