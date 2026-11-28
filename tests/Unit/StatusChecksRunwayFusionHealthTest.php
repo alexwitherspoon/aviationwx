@@ -128,14 +128,17 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
     public function testHealth_NasrFileNewerThanStamp_ReturnsDegraded(): void
     {
         // Preserve a developer's existing NASR cache; the fixture moves the
-        // mtime, so only a file the test created may be deleted.
-        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
-        $nasrDir = CACHE_NASR_DIR;
-        if (!is_dir($nasrDir)) {
-            @mkdir($nasrDir, 0755, true);
-        }
-        touch(CACHE_NASR_APT_DATA_FILE);
+        // mtime, so only a file the test created may be deleted. The hide
+        // sits inside the try so the finally restores the original file
+        // even when the hide itself fails.
+        $hiddenNasr = null;
         try {
+            $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
+            $nasrDir = CACHE_NASR_DIR;
+            if (!is_dir($nasrDir)) {
+                @mkdir($nasrDir, 0755, true);
+            }
+            touch(CACHE_NASR_APT_DATA_FILE);
             $inputs = $this->truthStamps();
             $inputs['nasr_apt_mtime'] = 1000;
             $this->writeArtifact([
@@ -200,9 +203,12 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
     {
         // The merge retention gate deletes runways_data.json on failed
         // fetches; an inventory that assumed its geometry must show it.
+        // The NASR cache goes inside the try so a failed hide still runs
+        // the finally and restores the runways cache.
         $hidden = $this->hideFileIfPresent(CACHE_RUNWAYS_DATA_FILE);
-        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
+        $hiddenNasr = null;
         try {
+            $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
             $this->writeArtifact([
                 'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
                 'built_at' => time() - 60,
@@ -222,9 +228,12 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
     {
         // Built without a NASR cache (stamp 0) and it is still gone: the
         // inventory holds every row the sources had, so it stays servable.
+        // Same try placement as the sibling test: a failed hide must not
+        // leave the runways cache hidden.
         $hiddenRunways = $this->hideFileIfPresent(CACHE_RUNWAYS_DATA_FILE);
-        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
+        $hiddenNasr = null;
         try {
+            $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
             $this->writeArtifact([
                 'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
                 'built_at' => time() - 60,
