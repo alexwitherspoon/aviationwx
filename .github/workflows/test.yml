@@ -101,6 +101,7 @@ jobs:
               tests/Integration/PublicApiWebcamTest.php \
               tests/Integration/PublicApiWifiLoggerUploadTest.php \
               tests/Integration/SubdomainRoutingTest.php \
+              tests/Integration/NotamApiServeStateTest.php \
               --testdox --no-coverage
 
       - name: Stop isolated API test stack
