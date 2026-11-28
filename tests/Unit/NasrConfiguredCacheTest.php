@@ -167,6 +167,84 @@ class NasrConfiguredCacheTest extends TestCase
         $this->assertLessThanOrEqual(2, count($loaded['airports']));
     }
 
+    public function testRebuildRecordsMtimeOfCycleItRead(): void
+    {
+        $this->writeFullNasrCache([
+            'ID76' => ['arpt_id' => 'ID76', 'runways' => []],
+        ]);
+        $sourceMtime = time() - 3600;
+        touch(CACHE_NASR_APT_DATA_FILE, $sourceMtime);
+
+        $config = [
+            'airports' => [
+                'id76' => ['id' => 'id76', 'faa' => 'ID76'],
+            ],
+        ];
+
+        $payload = nasrRebuildConfiguredAptSlice($config);
+
+        $this->assertNotNull($payload);
+        $meta = loadNasrAptMeta();
+        $this->assertNotNull($meta);
+        $this->assertSame($sourceMtime, $meta['configured_source_mtime']);
+    }
+
+    public function testGuardRejectsReadWhenSourceRepublishedMidRead(): void
+    {
+        $this->writeFullNasrCache([
+            'ID76' => ['arpt_id' => 'ID76', 'runways' => [], 'elev_ft' => 100],
+        ]);
+
+        $guarded = nasrReadFullAptCacheWithSourceMtime(static function (): ?array {
+            // Read the current cycle, then land a new one: write tmp, rename
+            // over the path, the fetch job's own publish shape.
+            $current = nasrReadFullAptCacheFromDisk();
+            $published = [
+                'schema_version' => NASR_APT_SCHEMA_VERSION,
+                'airports' => ['ID76' => ['arpt_id' => 'ID76', 'runways' => [], 'elev_ft' => 999]],
+            ];
+            $tmp = CACHE_NASR_APT_DATA_FILE . '.tmp.' . getmypid();
+            file_put_contents($tmp, json_encode($published, JSON_UNESCAPED_SLASHES), LOCK_EX);
+            touch($tmp, time() + 1);
+            rename($tmp, CACHE_NASR_APT_DATA_FILE);
+            return $current;
+        });
+
+        $this->assertNull($guarded);
+    }
+
+    public function testSliceRebuildsWhenSourceMtimeAdvances(): void
+    {
+        // loadNasrAptCache rebuilds via loadConfig(), so the full cache must
+        // cover the fixture config's platform airports to show through.
+        $config = loadConfig();
+        $ids = nasrCollectArptIdsForPlatformAirports($config);
+        $this->assertNotEmpty($ids);
+
+        $airports = [];
+        foreach ($ids as $id) {
+            $airports[$id] = ['arpt_id' => $id, 'runways' => [], 'elev_ft' => 100];
+        }
+
+        $this->writeFullNasrCache($airports);
+        touch(CACHE_NASR_APT_DATA_FILE, time() - 3600);
+
+        nasrRebuildConfiguredAptSlice($config);
+        resetNasrAptCacheMemo();
+
+        // New cycle published with the same rows, a different elevation, and a newer mtime.
+        foreach ($airports as $id => $row) {
+            $airports[$id] = ['arpt_id' => $id, 'runways' => [], 'elev_ft' => 200];
+        }
+        $this->writeFullNasrCache($airports);
+        touch(CACHE_NASR_APT_DATA_FILE, time() - 60);
+
+        $loaded = loadNasrAptCache();
+        $this->assertNotNull($loaded);
+        $first = reset($ids);
+        $this->assertSame(200, $loaded['airports'][$first]['elev_ft']);
+    }
+
     /**
      * @param array<string, array<string, mixed>> $airports
      */

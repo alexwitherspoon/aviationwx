@@ -219,6 +219,41 @@ function nasrReadConfiguredAptCacheFromDisk(): ?array
 }
 
 /**
+ * Read the full NASR APT cache while proving the source did not move during the read.
+ *
+ * A cycle publish renames a fresh file over the same path. If one lands between
+ * the two stat reads, the decoded rows and the on-disk source disagree, and
+ * stamping the slice with the newer mtime would pass the freshness check while
+ * carrying the previous cycle. Reject the pair so the caller retries next
+ * request instead of recording a mismatched stamp.
+ *
+ * @param callable(): ?array $read Decodes the full cache from disk
+ * @return array{0: array, 1: int}|null Decoded payload plus the source mtime it was read from, or null when the source is missing, invalid, or republished during the read
+ */
+function nasrReadFullAptCacheWithSourceMtime(callable $read): ?array
+{
+    clearstatcache(false, CACHE_NASR_APT_DATA_FILE);
+    $sourceMtime = @filemtime(CACHE_NASR_APT_DATA_FILE);
+    if ($sourceMtime === false) {
+        return null;
+    }
+
+    $full = $read();
+    if ($full === null) {
+        return null;
+    }
+
+    // Stat the path again so a publish that renamed over it during the read is
+    // seen even if an earlier stat result is still in the cache.
+    clearstatcache(false, CACHE_NASR_APT_DATA_FILE);
+    if (@filemtime(CACHE_NASR_APT_DATA_FILE) !== $sourceMtime) {
+        return null;
+    }
+
+    return [$full, (int) $sourceMtime];
+}
+
+/**
  * Rebuild configured NASR slice from full cache and airports.json.
  *
  * @param array|null $configOverride Optional config for tests (defaults to {@see loadConfig()})
@@ -233,10 +268,11 @@ function nasrRebuildConfiguredAptSlice(?array $configOverride = null): ?array
         return null;
     }
 
-    $full = nasrReadFullAptCacheFromDisk();
-    if ($full === null) {
+    $source = nasrReadFullAptCacheWithSourceMtime(static fn (): ?array => nasrReadFullAptCacheFromDisk());
+    if ($source === null) {
         return null;
     }
+    [$full, $sourceMtime] = $source;
 
     $config = $configOverride ?? loadConfig();
     if ($config === null) {
@@ -251,7 +287,7 @@ function nasrRebuildConfiguredAptSlice(?array $configOverride = null): ?array
         'airports' => $airports,
     ];
 
-    if (!nasrWriteConfiguredAptCache($payload, $configSha)) {
+    if (!nasrWriteConfiguredAptCache($payload, $configSha, $sourceMtime)) {
         return null;
     }
 
@@ -262,8 +298,9 @@ function nasrRebuildConfiguredAptSlice(?array $configOverride = null): ?array
  * Persist configured NASR slice and update meta invalidation fields.
  *
  * @param array<string, mixed> $payload Configured cache body
+ * @param int $sourceMtime Full-cache mtime the payload was built from
  */
-function nasrWriteConfiguredAptCache(array $payload, string $configSha): bool
+function nasrWriteConfiguredAptCache(array $payload, string $configSha, int $sourceMtime): bool
 {
     ensureCacheDir(CACHE_NASR_DIR);
 
@@ -283,14 +320,9 @@ function nasrWriteConfiguredAptCache(array $payload, string $configSha): bool
         return false;
     }
 
-    $sourceMtime = @filemtime(CACHE_NASR_APT_DATA_FILE);
-    if ($sourceMtime === false) {
-        return false;
-    }
-
     return updateNasrAptMetaFields([
         'configured_config_sha' => $configSha,
-        'configured_source_mtime' => (int) $sourceMtime,
+        'configured_source_mtime' => $sourceMtime,
         'configured_arpt_count' => count($payload['airports'] ?? []),
         'configured_built_at' => gmdate('c'),
     ]);
