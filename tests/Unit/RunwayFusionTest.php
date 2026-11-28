@@ -988,6 +988,27 @@ class RunwayFusionTest extends TestCase
         $this->assertTrue(runwayFusionShouldRebuild($artifact, $stamps));
     }
 
+    public function testConfigStampMatchesParsed_StampMatchesParsedDigest_ReturnsTrue(): void
+    {
+        $this->assertTrue(runwayFusionConfigStampMatchesParsed('sha-a', ['config_sha' => 'sha-a']));
+    }
+
+    public function testConfigStampMatchesParsed_StampNamesDifferentGeneration_ReturnsFalse(): void
+    {
+        // The A to B to A race: loadConfig() parsed generation B's bytes and
+        // recorded them; the file reverted before the stamp read, so the
+        // stamp names generation A. Publishing here would pair B's rows with
+        // A's stamp, and the freshness gate would serve it as current.
+        $this->assertFalse(runwayFusionConfigStampMatchesParsed('sha-b', ['config_sha' => 'sha-a']));
+    }
+
+    public function testConfigStampMatchesParsed_MissingDigestOrStamp_ReturnsFalse(): void
+    {
+        $this->assertFalse(runwayFusionConfigStampMatchesParsed(null, ['config_sha' => 'sha-a']));
+        $this->assertFalse(runwayFusionConfigStampMatchesParsed('', ['config_sha' => 'sha-a']));
+        $this->assertFalse(runwayFusionConfigStampMatchesParsed('sha-a', ['config_sha' => null]));
+    }
+
     public function testInputDriftKey_StableStamps_ReturnsNull(): void
     {
         $stamps = $this->inputStamps();

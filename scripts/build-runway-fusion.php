@@ -45,28 +45,27 @@ require_once __DIR__ . '/../lib/runway-fusion.php';
 
 initWorkerTimeout(RUNWAY_FUSION_WORKER_TIMEOUT, 'runway_fusion');
 
-$configPath = resolveAirportsConfigFilePath();
-if ($configPath === null || !is_readable($configPath)) {
-    fwrite(STDERR, "build-runway-fusion: resolved config path unavailable\n");
-    exit(1);
-}
-
-// Stamps before the config read: the rows below come from this snapshot's
-// input generation, and the post-load check aborts if any input moves
-// while they are read.
-$stamps = runwayFusionInputStamps($configPath);
-
 $config = loadConfig();
 if ($config === null || !isset($config['airports']) || !is_array($config['airports'])) {
     fwrite(STDERR, "build-runway-fusion: loadConfig() failed or no airports\n");
     exit(1);
 }
 
-$loadedConfigPath = $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] ?? null;
-if (!is_string($loadedConfigPath) || $loadedConfigPath !== $configPath) {
-    aviationwx_log('warning', 'runway_fusion: config path changed during build; keeping existing artifact', [
-        'resolved' => $configPath,
-        'loaded' => is_string($loadedConfigPath) ? $loadedConfigPath : null,
+$configPath = $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] ?? null;
+if (!is_string($configPath) || $configPath === '' || !is_readable($configPath)) {
+    fwrite(STDERR, "build-runway-fusion: resolved config path unavailable\n");
+    exit(1);
+}
+
+// loadConfig() recorded the digest of the bytes it parsed. If the file no
+// longer holds those bytes, the rows below would carry a stamp from a
+// different config generation. Keep the existing artifact and retry.
+$stamps = runwayFusionInputStamps($configPath);
+$parsedSha = $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null;
+if (!runwayFusionConfigStampMatchesParsed(is_string($parsedSha) ? $parsedSha : null, $stamps)) {
+    aviationwx_log('warning', 'runway_fusion: config changed during load; keeping existing artifact', [
+        'parsed_sha' => is_string($parsedSha) ? $parsedSha : null,
+        'stamp_sha' => $stamps['config_sha'] ?? null,
     ], 'app');
     exit(0);
 }

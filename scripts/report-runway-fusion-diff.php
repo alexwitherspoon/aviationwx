@@ -270,10 +270,11 @@ foreach ($config['airports'] as $airportId => $airport) {
     // The pre-fusion compass already drew the geometry segments, or display
     // synthesized segments when the cache holds none, so only pairs absent
     // from that result are additions. Manual compass runways bypass the
-    // fused path entirely, so nothing is added for them.
+    // fused path entirely, so the fused segment list adds nothing for them.
     $diagram = [];
+    $hasManualCompass = !empty($airport['runways']) && is_array($airport['runways']);
     $preSegmentPairs = [];
-    if (empty($airport['runways']) || !is_array($airport['runways'])) {
+    if (!$hasManualCompass) {
         $preSegments = getRunwaySegmentsFromParsedCache(
             is_array($runwaysData) ? $runwaysData : [],
             $airportId,
@@ -292,19 +293,19 @@ foreach ($config['airports'] as $airportId => $airport) {
             }
             $preSegmentPairs[reportDiffSegmentPairKey($seg)] = true;
         }
-    }
-    foreach ((array) $fused['segments'] as $seg) {
-        if (!is_array($seg)) {
-            continue;
+        foreach ((array) $fused['segments'] as $seg) {
+            if (!is_array($seg)) {
+                continue;
+            }
+            $pairKey = reportDiffSegmentPairKey($seg);
+            if ($pairKey === '' || isset($preSegmentPairs[$pairKey])) {
+                continue;
+            }
+            $diagram[] = [
+                'pair' => trim((string) ($seg['le_ident'] ?? '')) . '/' . trim((string) ($seg['he_ident'] ?? '')),
+                'water' => !empty($seg['water']),
+            ];
         }
-        $pairKey = reportDiffSegmentPairKey($seg);
-        if ($pairKey === '' || isset($preSegmentPairs[$pairKey])) {
-            continue;
-        }
-        $diagram[] = [
-            'pair' => trim((string) ($seg['le_ident'] ?? '')) . '/' . trim((string) ($seg['he_ident'] ?? '')),
-            'water' => !empty($seg['water']),
-        ];
     }
 
     if ($added === [] && $removed === [] && $changed === [] && $diagram === []) {

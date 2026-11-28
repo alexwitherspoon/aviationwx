@@ -72,6 +72,23 @@ function runwayFusionInputStamps(?string $configPath = null): array
 }
 
 /**
+ * Whether an input stamp matches the config bytes loadConfig() parsed.
+ *
+ * The worker compares its config stamp against the digest loadConfig()
+ * recorded, so a config that changes after the parse cannot publish rows
+ * from one generation under another generation's stamp. This also covers
+ * a change that reverts before the stamp is read: the recorded digest
+ * still names the bytes the rows came from.
+ *
+ * @param string|null $parsedSha Digest recorded by loadConfig(), null when unavailable
+ * @param array<string, int|string|null> $stamps Input stamps read after the parse
+ */
+function runwayFusionConfigStampMatchesParsed(?string $parsedSha, array $stamps): bool
+{
+    return is_string($parsedSha) && $parsedSha !== '' && ($stamps['config_sha'] ?? null) === $parsedSha;
+}
+
+/**
  * First input stamp that changed between two reads, or null when stable.
  *
  * The worker's rows come from a single pass over the config and cache
