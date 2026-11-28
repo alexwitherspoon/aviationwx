@@ -232,7 +232,17 @@ class NasrConfiguredCacheTest extends TestCase
         nasrRebuildConfiguredAptSlice($config);
         resetNasrAptCacheMemo();
 
-        // New cycle published with the same rows, a different elevation, and a newer mtime.
+        // Before the republish, the slice carries the first cycle's rows. The
+        // config sha and source mtime both match, so this must not rebuild.
+        $loaded = loadNasrAptCache();
+        $this->assertNotNull($loaded);
+        $first = reset($ids);
+        $this->assertSame(100, $loaded['airports'][$first]['elev_ft']);
+        resetNasrAptCacheMemo();
+
+        // New cycle published with the same rows, a different elevation, and a
+        // newer mtime. Only the source mtime moved, so this must rebuild from
+        // the mtime check, not the config-sha check.
         foreach ($airports as $id => $row) {
             $airports[$id] = ['arpt_id' => $id, 'runways' => [], 'elev_ft' => 200];
         }
@@ -241,7 +251,6 @@ class NasrConfiguredCacheTest extends TestCase
 
         $loaded = loadNasrAptCache();
         $this->assertNotNull($loaded);
-        $first = reset($ids);
         $this->assertSame(200, $loaded['airports'][$first]['elev_ft']);
     }
 
@@ -264,12 +273,14 @@ class NasrConfiguredCacheTest extends TestCase
         );
         touch(CACHE_NASR_APT_DATA_FILE, time());
 
+        // Merge over the existing meta like the real publish path does, so
+        // configured_* invalidation fields survive a republish.
+        $meta = loadNasrAptMeta() ?? [];
+        $meta['schema_version'] = NASR_APT_SCHEMA_VERSION;
+        $meta['effective_date'] = gmdate('Y-m-d');
         file_put_contents(
             CACHE_NASR_APT_META_FILE,
-            json_encode([
-                'schema_version' => NASR_APT_SCHEMA_VERSION,
-                'effective_date' => gmdate('Y-m-d'),
-            ], JSON_UNESCAPED_SLASHES)
+            json_encode($meta, JSON_UNESCAPED_SLASHES)
         );
     }
 }
