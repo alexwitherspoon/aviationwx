@@ -84,6 +84,50 @@ class RunwayFusionWorkerTest extends TestCase
         );
     }
 
+    public function testWorker_RebuildsOnSameMtimeConfigChange(): void
+    {
+        // A redeploy that rewrites airports.json and restores the mtime is
+        // invisible to the every-mtime comparison, so the rebuild must fall
+        // back to the config sha. This is the worker-side pair of the gate's
+        // same-mtime semantic: build with A, flip to B at A's mtime, and the
+        // next run must rebuild and land B's row.
+        $cacheDir = $this->seedWorkerInputs();
+        $configPath = $this->tmpDir . '/airports.json';
+
+        [$exitCodeA, $stdoutA, $stderrA] = $this->runWorker($cacheDir);
+        $this->assertSame(0, $exitCodeA, "worker failed on A:\n{$stdoutA}\n{$stderrA}");
+
+        $artifactPath = $cacheDir . '/runways/runway_fusion.json';
+        $artifactA = json_decode((string) file_get_contents($artifactPath), true);
+        $this->assertIsArray($artifactA);
+        $mtimeA = $artifactA['inputs']['config_mtime'];
+        $this->assertIsInt($mtimeA);
+
+        $config = json_decode((string) file_get_contents($configPath), true);
+        $this->assertIsArray($config);
+        $config['airports']['42b']['runway_length_ft'] = 2300;
+        $config['airports']['42b']['runways'] = [
+            ['name' => '14/32', 'heading_1' => 140, 'heading_2' => 320],
+        ];
+        file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT));
+        $this->assertTrue(touch($configPath, $mtimeA));
+        $this->assertSame($mtimeA, (int) filemtime($configPath));
+
+        [$exitCodeB, $stdoutB, $stderrB] = $this->runWorker($cacheDir);
+        $this->assertSame(0, $exitCodeB, "worker failed on B:\n{$stdoutB}\n{$stderrB}");
+
+        $artifactB = json_decode((string) file_get_contents($artifactPath), true);
+        $this->assertIsArray($artifactB);
+        $this->assertNotSame($artifactA['inputs']['config_sha'], $artifactB['inputs']['config_sha']);
+        $this->assertSame($mtimeA, $artifactB['inputs']['config_mtime'], 'same mtime must still rebuild via sha');
+
+        $byKey = [];
+        foreach ($artifactB['airports']['42b']['rows'] as $row) {
+            $byKey[$row['key']] = $row;
+        }
+        $this->assertSame(2300, $byKey['14/32']['config']['length_ft']);
+    }
+
     public function testWorker_FailsClosedWhenNoAirportProducesRows(): void
     {
         $cacheDir = $this->tmpDir . '/cache';

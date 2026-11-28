@@ -1108,6 +1108,31 @@ class RunwayFusionTest extends TestCase
         }
     }
 
+    public function testConfigStampMatchesParsed_SameMtimeContentFlip_ReturnsFalse(): void
+    {
+        // A config changed during the build loop with the same integer mtime
+        // (a redeploy that restores the timestamp) is invisible to any mtime
+        // comparison. The pre-write gate pairs the current stamp against the
+        // digest loadConfig() parsed, so the sha catches it regardless.
+        $configPath = tempnam(sys_get_temp_dir(), 'runway-fusion-cfg');
+        $this->assertIsString($configPath);
+        file_put_contents($configPath, '{"airports": {}}');
+        $stampsA = runwayFusionInputStamps($configPath);
+        $mtimeA = (int) filemtime($configPath);
+
+        try {
+            file_put_contents($configPath, '{"airports": {"x": {}}}');
+            $this->assertTrue(touch($configPath, $mtimeA));
+
+            $stampsB = runwayFusionInputStamps($configPath);
+            $this->assertSame($mtimeA, (int) filemtime($configPath));
+            $this->assertNotSame($stampsA['config_sha'], $stampsB['config_sha']);
+            $this->assertFalse(runwayFusionConfigStampMatchesParsed($stampsA['config_sha'], $stampsB));
+        } finally {
+            @unlink($configPath);
+        }
+    }
+
     // --- Fixtures -----------------------------------------------------------
 
     private function goodspeedAirport(): array

@@ -129,6 +129,24 @@ if ($airportsOut === []) {
     exit(1);
 }
 
+// Final gate, immediately before publication. The airport loop above ran
+// against in-memory payloads, so an input that moved after the post-load
+// check would leave an artifact whose rows and stamps disagree. The sha
+// comparison also catches a same-mtime config flip (different bytes,
+// restored timestamp), which no mtime check can see.
+$finalStamps = runwayFusionInputStamps($configPath);
+$parsedSha = $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null;
+$driftKey = runwayFusionInputDriftKey($stamps, $finalStamps);
+if ($driftKey !== null
+    || !runwayFusionConfigStampMatchesParsed(is_string($parsedSha) ? $parsedSha : null, $finalStamps)) {
+    aviationwx_log('warning', 'runway_fusion: input changed while building; keeping existing artifact', [
+        'changed' => $driftKey,
+        'parsed_sha' => is_string($parsedSha) ? $parsedSha : null,
+        'stamp_sha' => $finalStamps['config_sha'] ?? null,
+    ], 'app');
+    exit(0);
+}
+
 $payload = [
     'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
     'built_at' => time(),
