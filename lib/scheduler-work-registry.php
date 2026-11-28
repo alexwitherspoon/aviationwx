@@ -129,7 +129,7 @@ final class SchedulerWorkRegistry
             if (!method_exists($pool, 'cleanupFinished')) {
                 continue;
             }
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0, 'canceled' => 0];
             $pool->cleanupFinished($dummyStats);
         }
         $this->pruneRetiringPools();

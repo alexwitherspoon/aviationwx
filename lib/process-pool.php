@@ -64,7 +64,7 @@ class ProcessPool {
      * @return bool True if job is running, false otherwise
      */
     private function isJobRunning($jobKey) {
-        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0, 'canceled' => 0];
         $this->cleanupFinished($dummyStats);
         return isset($this->activeJobs[$jobKey]);
     }
@@ -113,11 +113,12 @@ class ProcessPool {
      *   'completed' => int,   // Number of successfully completed jobs
      *   'timed_out' => int,   // Number of jobs that exceeded timeout
      *   'failed' => int,      // Number of jobs that failed (exit code 1)
-     *   'skipped' => int      // Number of jobs that were skipped (exit code 2 - circuit breaker, etc.)
+     *   'skipped' => int,     // Number of jobs that were skipped (exit code 2 - circuit breaker, etc.)
+     *   'canceled' => int     // Number of jobs killed from outside by signal (container stop, drain, manual kill)
      * }
      */
     public function waitForAll() {
-        $stats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+        $stats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0, 'canceled' => 0];
         
         while (!empty($this->workers)) {
             $this->cleanupFinished($stats);
@@ -136,7 +137,7 @@ class ProcessPool {
      * @return int Number of active workers (0 to maxWorkers)
      */
     public function getActiveCount() {
-        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0, 'canceled' => 0];
         $this->cleanupFinished($dummyStats);
         return count($this->workers);
     }
@@ -257,6 +258,7 @@ class ProcessPool {
      *   - 'timed_out' => int (incremented for timed-out jobs)
      *   - 'failed' => int (incremented for failed jobs, exit code 1)
      *   - 'skipped' => int (incremented for skipped jobs, exit code 2)
+     *   - 'canceled' => int (incremented for jobs killed from outside by signal)
      * @return void
      */
     public function cleanupFinished(array &$stats) {
@@ -334,6 +336,34 @@ class ProcessPool {
                 } elseif ($exitCode === 2) {
                     // Exit code 2 = skip (circuit breaker, fresh cache, etc.) - not a failure
                     $stats['skipped']++;
+                } elseif ($exitCode === 124) {
+                    // Exit code 124 = a timeout: the worker's SIGALRM self-timeout
+                    // or the timeout wrapper's own expiry. The pool's timeout
+                    // branch reaps most of these first; this catches the rest.
+                    $stats['timed_out']++;
+                    aviationwx_log('warning', 'process pool: worker timed out', [
+                        'invocation_id' => $this->invocationId,
+                        'script' => $this->scriptName,
+                        'args' => $worker['args'],
+                        'pid' => $worker['pid'],
+                        'exit_code' => $exitCode,
+                        'elapsed' => $elapsed
+                    ], 'app');
+                } elseif ($exitCode < 0 || ($exitCode >= 128 && $exitCode <= 165)) {
+                    // Killed from outside, not a worker fault. Negative means the
+                    // child died by signal (container teardown); 128..165 is the
+                    // 128+signum encoding that survives the timeout/nice wrappers
+                    // (143 = SIGTERM cancel, 137 = SIGKILL). No worker exits in
+                    // that band; PHP fatals (255) and self-timeouts (124) do not.
+                    $stats['canceled']++;
+                    aviationwx_log('info', 'process pool: worker canceled by signal', [
+                        'invocation_id' => $this->invocationId,
+                        'script' => $this->scriptName,
+                        'args' => $worker['args'],
+                        'pid' => $worker['pid'],
+                        'exit_code' => $exitCode,
+                        'elapsed' => $elapsed
+                    ], 'app');
                 } else {
                     $stats['failed']++;
                     // Include worker output in log for debugging
@@ -388,7 +418,7 @@ class ProcessPool {
         $waited = 0;
         
         while (count($this->workers) >= $this->maxWorkers && $waited < $maxWait) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0, 'canceled' => 0];
             $this->cleanupFinished($dummyStats);
             
             if (count($this->workers) < $this->maxWorkers) {
