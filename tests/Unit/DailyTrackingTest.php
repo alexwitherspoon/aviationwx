@@ -310,8 +310,10 @@ class DailyTrackingTest extends TestCase
         $airportId = 'test_same_low_earlier_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
-        // First, set a low temperature at a later time
-        $ts1 = time();
+        // Anchor to local noon so the one-hour-earlier observation stays on the same local day
+        $tz = new DateTimeZone('America/Los_Angeles');
+        $noon = new DateTime('today 12:00', $tz);
+        $ts1 = $noon->getTimestamp();
         updateTempExtremes($airportId, 10.0, $airport, $ts1);
         clearstatcache();
         $result1 = getTempExtremes($airportId, 10.0, $airport);
@@ -847,7 +849,8 @@ class DailyTrackingTest extends TestCase
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
 
         $tz = new DateTimeZone('America/Los_Angeles');
-        $now = new DateTime('now', $tz);
+        // Anchor to local noon so the one- and two-hour-earlier observations stay on the same local day
+        $now = new DateTime('today 12:00', $tz);
         $dateKey = $now->format('Y-m-d');
         $obs1 = $now->getTimestamp() - 7200;
         $obs2 = $now->getTimestamp() - 3600;
