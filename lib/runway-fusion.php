@@ -957,10 +957,14 @@ function resetRunwayFusionArtifactMemo(): void
  * Request-path freshness gate for serving the artifact.
  *
  * True when the artifact is valid, within RUNWAY_FUSION_MAX_AGE, and no input
- * present on disk is newer than the stamps recorded at build time. Stat-only
- * by design (no config hash on the request path). Null means "cannot verify
- * fresh" (artifact missing/invalid, or the config path is unresolvable) and
- * callers fall back to the live resolver.
+ * present on disk is newer than the stamps recorded at build time (mtime
+ * comparisons). When the request supplies a nonempty config digest and the
+ * artifact records a string one, the recorded SHA is compared against it too:
+ * loadConfig() reads and hashes the config on the request path anyway, so a
+ * same-mtime content change the mtime checks would miss still withholds the
+ * artifact. Without a digest the gate stays mtime-only. Null means "cannot
+ * verify fresh" (artifact missing/invalid, or the config path is
+ * unresolvable) and callers fall back to the live resolver.
  */
 function runwayFusionArtifactIsFresh(?string $parsedSha = null): ?bool
 {
