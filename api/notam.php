@@ -54,35 +54,51 @@ if ($config === null || !isset($config['airports'][$airportId])) {
 
 $airport = $config['airports'][$airportId];
 
-// Check cache
-$cacheFile = notamCacheFilePath($airportId);
-$cacheExists = file_exists($cacheFile);
-$cacheAge = $cacheExists ? (time() - filemtime($cacheFile)) : PHP_INT_MAX;
-$cacheTtl = getNotamCacheTtlSeconds();
+$serveState = notamResolveServeState(
+    $airportId,
+    time(),
+    getNotamCacheTtlSeconds(),
+    getNotamStaleWarningSeconds(),
+    getNotamStaleErrorSeconds(),
+    getNotamStaleFailclosedSeconds()
+);
 
-// 3-tier staleness model for NOTAMs
-$notamWarningThreshold = getNotamStaleWarningSeconds();
-$notamErrorThreshold = getNotamStaleErrorSeconds();
-$notamFailclosedThreshold = getNotamStaleFailclosedSeconds();
-
-// Determine staleness tier
-$isWarning = $cacheAge > $notamWarningThreshold;
-$isError = $cacheAge > $notamErrorThreshold;
-$isFailclosed = $cacheAge > $notamFailclosedThreshold;
-
-// Load cached data if available
-$cachedData = null;
-if ($cacheExists) {
-    $cacheContent = @file_get_contents($cacheFile);
-    if ($cacheContent !== false) {
-        $cachedData = json_decode($cacheContent, true);
-    }
+// No data has ever been fetched for this airport (commissioning, or a
+// persistently failing fetch). Serve "no NOTAMs available" quietly: the
+// fetch worker logs every failed attempt and retries on the failure
+// backoff, so the API must not re-warn per request or report a sentinel
+// age that reads as an overflow.
+if ($serveState['no_data']) {
+    notamApiSendCacheHeaders();
+    echo json_encode([
+        'status' => 'success',
+        'airport' => $airportId,
+        'notams' => [],
+        'cache_age' => null,
+        'refreshing' => false,
+        'no_data' => true
+    ]);
+    ob_end_flush();
+    exit;
 }
 
-// If cache is stale, trigger background refresh (non-blocking)
-$refreshing = false;
-if ($isWarning && $cacheAge > $cacheTtl) {
-    $refreshing = true;
+$cacheAge = $serveState['cache_age'];
+$isWarning = $serveState['is_warning'];
+$isError = $serveState['is_error'];
+$isFailclosed = $serveState['is_failclosed'];
+
+// Load cached data
+$cacheFile = notamCacheFilePath($airportId);
+$cachedData = null;
+$cacheContent = @file_get_contents($cacheFile);
+if ($cacheContent !== false) {
+    $cachedData = json_decode($cacheContent, true);
+}
+
+// Stale cache past TTL: a scheduler refresh is due (actual NMS refresh is
+// performed by scripts/fetch-notam.php, not inline on the HTTP request)
+$refreshing = $serveState['refreshing'];
+if ($refreshing) {
     aviationwx_log('info', 'notam api: cache stale, refresh needed', [
         'airport' => $airportId,
         'cache_age' => $cacheAge,
@@ -96,7 +112,7 @@ if ($isFailclosed) {
     aviationwx_log('warning', 'notam api: failclosed - cache too old', [
         'airport' => $airportId,
         'cache_age' => $cacheAge,
-        'threshold' => $notamFailclosedThreshold
+        'threshold' => getNotamStaleFailclosedSeconds()
     ], 'app');
     
     notamApiSendCacheHeaders();

@@ -151,7 +151,8 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	trap cleanup EXIT; \
 	$(MAKE) test-up; \
 	TEST_CACHE_DIR="/tmp/aviationwx-cache-test" APP_ENV=testing TEST_API_URL="http://127.0.0.1:9080" \
-		vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php tests/Integration/PublicApiWifiLoggerUploadTest.php --testdox --no-coverage; \
+		vendor/bin/phpunit tests/Integration/PublicApiWebcamTest.php tests/Integration/PublicApiWifiLoggerUploadTest.php \
+		tests/Integration/NotamApiServeStateTest.php --testdox --no-coverage; \
 	echo "✓ Native HTTP integration tests passed"
 	@echo ""
 	@echo "4️⃣  Running Critical Safety Tests..."
@@ -396,9 +397,11 @@ test-up: ## Start isolated test container (port 9080, test fixtures)
 	# Host-run make targets (test-ci, test-local, test-e2e) still write webcam
 	# frames from the host into this bind-mounted cache, so keep the webcams tree
 	# writable by both users (#298). CI's native-HTTP step no longer depends on
-	# this and runs in-container instead. Keep the SFTP chroot (/var/sftp) untouched.
+	# this and runs in-container instead. The NOTAM serve-state test seeds a
+	# stale cache file as www-data, so its directory needs the same treatment.
+	# Keep the SFTP chroot (/var/sftp) untouched.
 	@docker compose -f docker/docker-compose.test.yml exec -T web \
-		sh -c 'mkdir -p /var/www/html/cache/webcams && chmod -R a+rwX /var/www/html/cache/webcams'
+		sh -c 'mkdir -p /var/www/html/cache/webcams /var/www/html/cache/notam && chmod -R a+rwX /var/www/html/cache/webcams /var/www/html/cache/notam'
 
 test-down: ## Stop isolated test container
 	@echo "Stopping isolated test environment..."

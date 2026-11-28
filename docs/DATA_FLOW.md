@@ -1889,9 +1889,18 @@ Filtered NOTAMs are cached per airport:
 
 This ensures pilots never see expired NOTAMs, even if the cache has not refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
 
+### No Data (No Cache File)
+
+When no cache file exists for an airport, no NOTAM data has ever been fetched for it: the airport is still commissioning, or its fetch has been failing (the fetch worker logs every failed attempt and retries on the failure backoff). The API serves this state quietly:
+
+- Response carries `notams: []`, `cache_age: null`, `no_data: true`, and no `failclosed` flag
+- No per-request log: absence of data is a state to serve, not an error to alarm on; the worker's per-attempt logs remain the operational signal for a persistently failing fetch
+
+The 3-tier staleness model and failclosed below apply only when a cache file exists (previously fetched data that has aged past a threshold).
+
 ### Failclosed Behavior
 
-**Safety-critical**: If the NOTAM cache is too old, the system fails closed (returns empty rather than stale data).
+**Safety-critical**: If an existing NOTAM cache is too old, the system fails closed (returns empty rather than stale data). The no-cache case is a different state, served per **No Data (No Cache File)** above.
 
 **3-Tier Staleness Model** (defaults in `lib/constants.php`; override with `notam_stale_*_seconds` in config):
 - **Warning** (default 900s / 15 min): Logs stale cache; scheduler refresh on next cycle
@@ -1908,7 +1917,7 @@ When failclosed:
 ### API Response
 
 The `/api/notam.php` endpoint serves cached NOTAM data:
-- Loads cached data (or returns empty if no cache or failclosed)
+- Loads cached data; serves the no-data contract when no cache file exists; fails closed when the cache is stale
 - Re-validates NOTAM status at serve time (filters expired)
 - Converts UTC times to airport local timezone for display
 - Adds official FAA NOTAM links for each NOTAM

@@ -157,6 +157,65 @@ function notamShouldEnqueueRefresh(string $airportId, int $refreshInterval, ?int
 }
 
 /**
+ * Resolve the dashboard serve state for an airport's NOTAM cache file.
+ *
+ * Distinguishes "no data has ever been fetched" (cache file absent) from
+ * "data went stale" (cache file present and old). An absent cache yields
+ * cache_age null; a present cache always yields a real age, never a
+ * sentinel, so callers cannot report an overflow-looking value.
+ *
+ * @param string $airportId Airport config key
+ * @param int $now Reference Unix timestamp for tests
+ * @param int $cacheTtl Cache TTL in seconds
+ * @param int $warningThreshold Warning tier threshold in seconds
+ * @param int $errorThreshold Error tier threshold in seconds
+ * @param int $failclosedThreshold Failclosed tier threshold in seconds
+ * @return array{
+ *   no_data: bool,
+ *   cache_age: int|null,
+ *   is_warning: bool,
+ *   is_error: bool,
+ *   is_failclosed: bool,
+ *   refreshing: bool
+ * }
+ */
+function notamResolveServeState(
+    string $airportId,
+    int $now,
+    int $cacheTtl,
+    int $warningThreshold,
+    int $errorThreshold,
+    int $failclosedThreshold
+): array {
+    $cacheFile = notamCacheFilePath($airportId);
+
+    if (!is_file($cacheFile)) {
+        return [
+            'no_data' => true,
+            'cache_age' => null,
+            'is_warning' => false,
+            'is_error' => false,
+            'is_failclosed' => false,
+            'refreshing' => false,
+        ];
+    }
+
+    $cacheAge = $now - (int) filemtime($cacheFile);
+    $isWarning = $cacheAge > $warningThreshold;
+    $isError = $cacheAge > $errorThreshold;
+    $isFailclosed = $cacheAge > $failclosedThreshold;
+
+    return [
+        'no_data' => false,
+        'cache_age' => $cacheAge,
+        'is_warning' => $isWarning,
+        'is_error' => $isError,
+        'is_failclosed' => $isFailclosed,
+        'refreshing' => $isWarning && $cacheAge > $cacheTtl,
+    ];
+}
+
+/**
  * Atomically write NOTAM cache JSON (temp file + rename).
  *
  * @param string $cacheFile Absolute destination path

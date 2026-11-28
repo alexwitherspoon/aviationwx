@@ -7,12 +7,30 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/notam/cache.php';
 require_once __DIR__ . '/../../lib/notam/filter.php';
 require_once __DIR__ . '/../../lib/notam/schedule.php';
 require_once __DIR__ . '/../../lib/constants.php';
 
 class NotamApiTest extends TestCase {
-    
+
+    private string $cacheDir;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->cacheDir = sys_get_temp_dir() . '/aviationwx-notam-api-' . bin2hex(random_bytes(4));
+        mkdir($this->cacheDir, 0755, true);
+        $GLOBALS['notamCacheTestDirectory'] = $this->cacheDir;
+    }
+
+    protected function tearDown(): void
+    {
+        unset($GLOBALS['notamCacheTestDirectory']);
+        $this->removeTree($this->cacheDir);
+        parent::tearDown();
+    }
+
     // ==========================================================================
     // revalidateNotamStatus Tests
     // ==========================================================================
@@ -279,5 +297,109 @@ class NotamApiTest extends TestCase {
             DEFAULT_NOTAM_STALE_ERROR_SECONDS,
             'Error threshold should be less than failclosed threshold'
         );
+    }
+
+    // ==========================================================================
+    // Serve-State Resolution Tests (no data vs stale cache)
+    // ==========================================================================
+
+    /**
+     * No cache file means no data has ever been fetched: the serve state
+     * must be no_data with a null age, never a sentinel.
+     */
+    public function testNotamResolveServeState_NoCacheFile_ReturnsNoDataWithNullAge() {
+        $state = notamResolveServeState('gic', time(), 600, 900, 1800, 3600);
+
+        $this->assertTrue($state['no_data']);
+        $this->assertNull($state['cache_age']);
+        $this->assertFalse($state['is_warning']);
+        $this->assertFalse($state['is_error']);
+        $this->assertFalse($state['is_failclosed']);
+        $this->assertFalse($state['refreshing']);
+    }
+
+    /**
+     * A fresh cache file serves its real age with no staleness tier.
+     */
+    public function testNotamResolveServeState_FreshCache_ReturnsRealAgeNoTiers() {
+        $now = time();
+        $this->seedCacheFile('kspb', $now - 60);
+
+        $state = notamResolveServeState('kspb', $now, 600, 900, 1800, 3600);
+
+        $this->assertFalse($state['no_data']);
+        $this->assertSame(60, $state['cache_age']);
+        $this->assertFalse($state['is_warning']);
+        $this->assertFalse($state['is_error']);
+        $this->assertFalse($state['is_failclosed']);
+        $this->assertFalse($state['refreshing']);
+    }
+
+    /**
+     * Past the warning threshold and past TTL, the cache is stale and a
+     * scheduler refresh is due.
+     */
+    public function testNotamResolveServeState_WarningTier_ReturnsWarningAndRefreshing() {
+        $now = time();
+        $this->seedCacheFile('kspb', $now - 1200);
+
+        $state = notamResolveServeState('kspb', $now, 600, 900, 1800, 3600);
+
+        $this->assertFalse($state['no_data']);
+        $this->assertSame(1200, $state['cache_age']);
+        $this->assertTrue($state['is_warning']);
+        $this->assertFalse($state['is_error']);
+        $this->assertFalse($state['is_failclosed']);
+        $this->assertTrue($state['refreshing']);
+    }
+
+    /**
+     * Past the failclosed threshold, the age is still the real file age:
+     * an overflow sentinel here would read as a bug to every consumer.
+     */
+    public function testNotamResolveServeState_FailclosedAge_ReturnsRealAgeNotSentinel() {
+        $now = time();
+        $this->seedCacheFile('kspb', $now - 7200);
+
+        $state = notamResolveServeState('kspb', $now, 600, 900, 1800, 3600);
+
+        $this->assertFalse($state['no_data']);
+        $this->assertSame(7200, $state['cache_age']);
+        $this->assertNotSame(PHP_INT_MAX, $state['cache_age']);
+        $this->assertTrue($state['is_warning']);
+        $this->assertTrue($state['is_error']);
+        $this->assertTrue($state['is_failclosed']);
+        $this->assertTrue($state['refreshing']);
+    }
+
+    /**
+     * Write an empty NOTAM cache envelope with a backdated mtime.
+     */
+    private function seedCacheFile(string $airportId, int $mtime): void
+    {
+        $file = $this->cacheDir . '/' . strtolower($airportId) . '.json';
+        file_put_contents($file, json_encode([
+            'fetched_at' => $mtime,
+            'airport' => $airportId,
+            'notams' => [],
+            'status' => 'success',
+        ], JSON_THROW_ON_ERROR));
+        touch($file, $mtime);
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            is_dir($path) ? $this->removeTree($path) : @unlink($path);
+        }
+        @rmdir($dir);
     }
 }
