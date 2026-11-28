@@ -14,10 +14,12 @@
  * logs a warning. Fails closed on publish: zero airport rows means no write.
  * A change the publish gate detects (cache mtime or config digest, checked
  * right before the write) leaves the existing artifact in place for the next
- * loop. A same-mtime content change is invisible to the mtime stamps; it
- * surfaces on the next rebuild, which the config sha comparison triggers.
- * The write is atomic (temp file plus rename) but does not coordinate with
- * concurrent config or cache updates.
+ * loop. The mtime stamps cannot see a same-mtime content change: a config
+ * one surfaces on the next rebuild via the config sha comparison, while the
+ * NASR and merge caches carry no digest, so a same-mtime change there is
+ * picked up the next time any rebuild runs. The write is atomic (temp file
+ * plus rename) but does not coordinate with concurrent config or cache
+ * updates.
  *
  * Usage:
  *   php scripts/build-runway-fusion.php
