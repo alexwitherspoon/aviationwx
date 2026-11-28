@@ -89,6 +89,24 @@ function runwayFusionConfigStampMatchesParsed(?string $parsedSha, array $stamps)
 }
 
 /**
+ * Whether the worker may publish: no input drifted between the post-load
+ * stamp read and the final gate, and the config still holds the bytes
+ * loadConfig() parsed.
+ *
+ * @param array<string, int|string|null> $stamps Post-load input stamps
+ * @param array<string, int|string|null> $finalStamps Stamps re-read immediately before publishing
+ * @param string|null $parsedSha Digest of the config bytes loadConfig() parsed, null when unavailable
+ */
+function runwayFusionPublishGatePasses(array $stamps, array $finalStamps, ?string $parsedSha): bool
+{
+    if (runwayFusionInputDriftKey($stamps, $finalStamps) !== null) {
+        return false;
+    }
+
+    return runwayFusionConfigStampMatchesParsed($parsedSha, $finalStamps);
+}
+
+/**
  * First input stamp that changed between two reads, or null when stable.
  *
  * The worker's rows come from a single pass over the config and cache
@@ -835,7 +853,7 @@ function resetRunwayFusionArtifactMemo(): void
  * fresh" (artifact missing/invalid, or the config path is unresolvable) and
  * callers fall back to the live resolver.
  */
-function runwayFusionArtifactIsFresh(): ?bool
+function runwayFusionArtifactIsFresh(?string $parsedSha = null): ?bool
 {
     $artifact = runwayFusionLoadArtifactMemoized();
     if ($artifact === null) {
@@ -880,6 +898,19 @@ function runwayFusionArtifactIsFresh(): ?bool
         return false;
     }
 
+    // Digest check when the request has one. loadConfig() reads and hashes
+    // the config on every call, so the current sha costs nothing here. A
+    // same-mtime config flip (different bytes, restored timestamp) sails
+    // past the mtime check above; rejecting on the sha falls back to the
+    // live resolver, which serves the current config. Null (config not
+    // loaded this request) keeps this path stat-only.
+    if (is_string($parsedSha) && $parsedSha !== '') {
+        $recordedSha = isset($inputs['config_sha']) && is_string($inputs['config_sha']) ? $inputs['config_sha'] : null;
+        if ($recordedSha !== null && $recordedSha !== $parsedSha) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -887,11 +918,12 @@ function runwayFusionArtifactIsFresh(): ?bool
  * Fused entry for an airport when the artifact is fresh, else null.
  *
  * @param string $airportId Airport identifier (config key or ICAO/Faa, any case)
+ * @param string|null $parsedSha Digest of the config bytes loadConfig() parsed this request, null to keep the gate stat-only
  * @return array{rows: list<array<string, mixed>>, segments: list<array<string, mixed>>, calm_wind: array<string, mixed>|null}|null
  */
-function runwayFusionEntryForAirport(string $airportId): ?array
+function runwayFusionEntryForAirport(string $airportId, ?string $parsedSha = null): ?array
 {
-    if (runwayFusionArtifactIsFresh() !== true) {
+    if (runwayFusionArtifactIsFresh($parsedSha) !== true) {
         return null;
     }
 

@@ -2305,7 +2305,7 @@ This path is separate from the weather, webcam, and NOTAM pipelines. It supplies
 
 ### Serve (stat-only freshness gate)
 
-- `runwayFusionArtifactIsFresh()` stats the artifact and its recorded input stamps. Servable when the artifact is valid, within `RUNWAY_FUSION_MAX_AGE` (24h), the NASR cache is not newer than the recorded stamp, the runways merge cache is not newer, and config is not newer. A merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches) makes the artifact unservable; a missing NASR cache does not.
+- `runwayFusionArtifactIsFresh()` stats the artifact and its recorded input stamps. Servable when the artifact is valid, within `RUNWAY_FUSION_MAX_AGE` (24h), the NASR cache is not newer than the recorded stamp, the runways merge cache is not newer, and config is not newer. It also compares the recorded config SHA against the digest `loadConfig()` parsed this request (the config is read and hashed on the request path anyway), so a same-mtime config redeploy that no mtime check can see still withholds the artifact. A merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches) makes the artifact unservable; a missing NASR cache does not.
 - The runway list and wind diagram serve the fused entry while the gate passes and fall through to the live resolver (config per field, NASR, OurAirports) when it does not, so a stale, missing, or invalid artifact degrades to pre-fusion behavior.
 - Config `runway_facts`, named `runways`, and `runway_length_ft` overrides apply at request time with the same precedence as the live resolver.
 

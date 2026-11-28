@@ -111,7 +111,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
     // this path exactly as before, and the manual override above it is
     // untouched either way.
     require_once __DIR__ . '/runway-fusion.php';
-    $fusedEntry = runwayFusionEntryForAirport($airportId);
+    $fusedEntry = runwayFusionEntryForAirport($airportId, $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null);
     $fusedSegments = (is_array($fusedEntry) && is_array($fusedEntry['segments'] ?? null) && $fusedEntry['segments'] !== [])
         ? $fusedEntry['segments']
         : null;

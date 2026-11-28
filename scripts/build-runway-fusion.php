@@ -136,11 +136,9 @@ if ($airportsOut === []) {
 // restored timestamp), which no mtime check can see.
 $finalStamps = runwayFusionInputStamps($configPath);
 $parsedSha = $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null;
-$driftKey = runwayFusionInputDriftKey($stamps, $finalStamps);
-if ($driftKey !== null
-    || !runwayFusionConfigStampMatchesParsed(is_string($parsedSha) ? $parsedSha : null, $finalStamps)) {
+if (!runwayFusionPublishGatePasses($stamps, $finalStamps, is_string($parsedSha) ? $parsedSha : null)) {
     aviationwx_log('warning', 'runway_fusion: input changed while building; keeping existing artifact', [
-        'changed' => $driftKey,
+        'changed' => runwayFusionInputDriftKey($stamps, $finalStamps),
         'parsed_sha' => is_string($parsedSha) ? $parsedSha : null,
         'stamp_sha' => $finalStamps['config_sha'] ?? null,
     ], 'app');

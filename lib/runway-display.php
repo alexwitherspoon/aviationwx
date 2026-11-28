@@ -662,7 +662,7 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null, a
     // exactly status quo. NOTAM closures stay a live overlay either way.
     if ($resolvedAirportId !== '') {
         require_once __DIR__ . '/runway-fusion.php';
-        $fusedEntry = runwayFusionEntryForAirport($resolvedAirportId);
+        $fusedEntry = runwayFusionEntryForAirport($resolvedAirportId, $GLOBALS['AVIATIONWX_CONFIG_PARSED_SHA'] ?? null);
         if ($fusedEntry !== null) {
             $fusedDisplay = runwayDisplayBuildFromFusedEntry(
                 $fusedEntry,

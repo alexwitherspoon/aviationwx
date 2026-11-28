@@ -1009,6 +1009,33 @@ class RunwayFusionTest extends TestCase
         $this->assertFalse(runwayFusionConfigStampMatchesParsed('sha-a', ['config_sha' => null]));
     }
 
+    public function testPublishGate_StableStamps_AcceptsPublish(): void
+    {
+        $stamps = $this->inputStamps();
+        $this->assertTrue(runwayFusionPublishGatePasses($stamps, $stamps, 'test-sha'));
+    }
+
+    public function testPublishGate_SameMtimeFlipBetweenChecks_RejectsPublish(): void
+    {
+        // The post-load stamp read saw generation A. Before the final gate
+        // the file flips to B with its mtime restored: the re-read shows the
+        // same mtimes but a different sha, so the gate must reject and the
+        // worker keeps the existing artifact.
+        $before = $this->inputStamps();
+        $before['config_sha'] = 'sha-a';
+        $after = $before;
+        $after['config_sha'] = 'sha-b';
+        $this->assertFalse(runwayFusionPublishGatePasses($before, $after, 'sha-a'));
+    }
+
+    public function testPublishGate_DriftedNasrMtime_RejectsPublish(): void
+    {
+        $before = $this->inputStamps();
+        $after = $before;
+        $after['nasr_apt_mtime'] = 2000;
+        $this->assertFalse(runwayFusionPublishGatePasses($before, $after, 'test-sha'));
+    }
+
     public function testInputDriftKey_StableStamps_ReturnsNull(): void
     {
         $stamps = $this->inputStamps();

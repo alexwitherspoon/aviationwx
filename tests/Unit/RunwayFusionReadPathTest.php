@@ -357,6 +357,41 @@ class RunwayFusionReadPathTest extends TestCase
         $this->assertSame(50, $row['width_ft']);
     }
 
+    public function testArtifactIsFresh_ConfigShaMismatch_ReturnsFalse(): void
+    {
+        $realSha = getConfigFileSha256();
+        $this->assertIsString($realSha, 'CONFIG_PATH fixture must resolve and hash');
+        $this->writeArtifact([]);
+        // The request's parsed config digest differs from the artifact's
+        // recorded sha: a same-mtime config flip that no mtime check can
+        // see. The gate falls back to the live resolver instead of serving
+        // rows built from the previous config.
+        $this->assertFalse(runwayFusionArtifactIsFresh('other-sha'));
+        $this->assertTrue(runwayFusionArtifactIsFresh($realSha));
+        // No digest available this request: the gate stays stat-only.
+        $this->assertTrue(runwayFusionArtifactIsFresh(null));
+    }
+
+    public function testList_ConfigShaFromRequest_DrivesTheGate(): void
+    {
+        // Matching digest: the request loads config (the NASR slice sha
+        // path), so the parsed digest equals the artifact's recorded sha and
+        // the fused inventory serves.
+        $this->writeArtifact(['42b' => $this->goodspeedFusedEntry()]);
+        $display = getRunwayDisplayForAirport($this->goodspeedAirport(), '42b');
+        $this->assertIsArray($display);
+        $this->assertSame('nasr', $display['runway_source']);
+        $this->assertSame('2026-10-01', $display['effective_date']);
+
+        // Artifact built from an older config generation: the request's
+        // parsed digest differs, so the gate falls back to the live
+        // resolver (no effective date on the fixture's NASR record).
+        $this->writeArtifact(['42b' => $this->goodspeedFusedEntry()], ['config_sha' => 'old-sha']);
+        $display = getRunwayDisplayForAirport($this->goodspeedAirport(), '42b');
+        $this->assertIsArray($display);
+        $this->assertNull($display['effective_date']);
+    }
+
     public function testArtifactIsFresh_ValidCurrent_ReturnsTrue(): void
     {
         $this->writeArtifact([]);
@@ -905,7 +940,7 @@ class RunwayFusionReadPathTest extends TestCase
         $stamps = [
             'nasr_apt_mtime' => is_readable(CACHE_NASR_APT_DATA_FILE) ? (int) filemtime(CACHE_NASR_APT_DATA_FILE) : 0,
             'runways_cache_mtime' => is_readable(CACHE_RUNWAYS_DATA_FILE) ? (int) filemtime(CACHE_RUNWAYS_DATA_FILE) : 0,
-            'config_sha' => 'test-sha',
+            'config_sha' => getConfigFileSha256() ?? 'test-sha',
             'config_mtime' => is_string($configPath) && $configPath !== '' && is_file($configPath)
                 ? (int) filemtime($configPath)
                 : 0,
