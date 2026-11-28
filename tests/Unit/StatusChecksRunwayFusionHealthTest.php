@@ -129,8 +129,9 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
     {
         // Preserve a developer's existing NASR cache; the fixture moves the
         // mtime, so only a file the test created may be deleted. The hide
-        // sits inside the try so the finally restores the original file
-        // even when the hide itself fails.
+        // sits inside the try; the unlink is guarded on it having completed,
+        // so a failed hide leaves the developer's original file untouched
+        // (it was never moved aside, and we must not delete it).
         $hiddenNasr = null;
         try {
             $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
@@ -151,7 +152,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $this->assertSame('degraded', $h['status']);
             $this->assertStringContainsString('NASR cache newer', $h['message']);
         } finally {
-            if (is_file(CACHE_NASR_APT_DATA_FILE)) {
+            if ($hiddenNasr !== null && is_file(CACHE_NASR_APT_DATA_FILE)) {
                 @unlink(CACHE_NASR_APT_DATA_FILE);
             }
             $this->restoreHiddenFile($hiddenNasr);
@@ -219,8 +220,12 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $this->assertSame('degraded', $h['status']);
             $this->assertStringContainsString('removed since build', $h['message']);
         } finally {
-            $this->restoreHiddenFile($hidden);
-            $this->restoreHiddenFile($hiddenNasr);
+            // Nest the restores so a failure on either still attempts both.
+            try {
+                $this->restoreHiddenFile($hidden);
+            } finally {
+                $this->restoreHiddenFile($hiddenNasr);
+            }
         }
     }
 
@@ -243,8 +248,12 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $h = checkRunwayFusionHealth();
             $this->assertSame('operational', $h['status']);
         } finally {
-            $this->restoreHiddenFile($hiddenRunways);
-            $this->restoreHiddenFile($hiddenNasr);
+            // Nest the restores so a failure on either still attempts both.
+            try {
+                $this->restoreHiddenFile($hiddenRunways);
+            } finally {
+                $this->restoreHiddenFile($hiddenNasr);
+            }
         }
     }
 
