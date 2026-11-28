@@ -913,6 +913,9 @@ function computeRunwayFusionHealth(): array {
         'file' => $basename,
         'built_at' => $builtAt,
         'age_seconds' => $age,
+        // reference_data_source_from_component_health() reads the leaf age
+        // under this key; keep age_seconds for existing consumers.
+        'local_age_seconds' => $age,
         'airport_count' => count($airportsMap),
         'effective_date' => $effectiveDate,
     ];

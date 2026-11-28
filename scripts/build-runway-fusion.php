@@ -12,6 +12,8 @@
  *
  * Fails open per input: a missing NASR cache builds without official rows and
  * logs a warning. Fails closed on publish: zero airport rows means no write.
+ * Inputs that change during the run leave the existing artifact in place for
+ * the next loop.
  *
  * Usage:
  *   php scripts/build-runway-fusion.php
@@ -43,19 +45,32 @@ require_once __DIR__ . '/../lib/runway-fusion.php';
 
 initWorkerTimeout(RUNWAY_FUSION_WORKER_TIMEOUT, 'runway_fusion');
 
+$configPath = resolveAirportsConfigFilePath();
+if ($configPath === null || !is_readable($configPath)) {
+    fwrite(STDERR, "build-runway-fusion: resolved config path unavailable\n");
+    exit(1);
+}
+
+// Stamps before the config read: the rows below come from this snapshot's
+// input generation, and the post-load check aborts if any input moves
+// while they are read.
+$stamps = runwayFusionInputStamps($configPath);
+
 $config = loadConfig();
 if ($config === null || !isset($config['airports']) || !is_array($config['airports'])) {
     fwrite(STDERR, "build-runway-fusion: loadConfig() failed or no airports\n");
     exit(1);
 }
 
-$configPath = $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] ?? null;
-if (!is_string($configPath) || $configPath === '' || !is_readable($configPath)) {
-    fwrite(STDERR, "build-runway-fusion: resolved config path unavailable\n");
-    exit(1);
+$loadedConfigPath = $GLOBALS['AVIATIONWX_CONFIG_FILE_PATH'] ?? null;
+if (!is_string($loadedConfigPath) || $loadedConfigPath !== $configPath) {
+    aviationwx_log('warning', 'runway_fusion: config path changed during build; keeping existing artifact', [
+        'resolved' => $configPath,
+        'loaded' => is_string($loadedConfigPath) ? $loadedConfigPath : null,
+    ], 'app');
+    exit(0);
 }
 
-$stamps = runwayFusionInputStamps($configPath);
 $artifact = runwayFusionLoadArtifact();
 if (!runwayFusionShouldRebuild($artifact, $stamps)) {
     aviationwx_log('info', 'runway_fusion: artifact current, skipping rebuild', [
@@ -79,6 +94,19 @@ if ($nasrPayload === null) {
 $runwaysData = loadRunwaysCacheDataFromDisk();
 if ($runwaysData === null) {
     aviationwx_log('info', 'runway_fusion: runways merge cache missing; building without OurAirports rows or geometry', [], 'app');
+}
+
+// The rows above came from one pass over the config and cache files; the
+// stamps came from the file read in runwayFusionInputStamps(). A change
+// between those reads would pair rows from one generation with the stamp
+// of another, and the freshness gate would serve it as current. Keep the
+// existing artifact and let the next loop retry.
+$driftKey = runwayFusionInputDriftKey($stamps, runwayFusionInputStamps($configPath));
+if ($driftKey !== null) {
+    aviationwx_log('warning', 'runway_fusion: input changed during build; keeping existing artifact', [
+        'changed' => $driftKey,
+    ], 'app');
+    exit(0);
 }
 
 $airportsOut = [];

@@ -19,12 +19,18 @@ class RunwayFusionReadPathTest extends TestCase
 
     protected bool $createdNasrDir = false;
 
+    protected ?string $hiddenNasrFile = null;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->loadNasrAptFixtureCache();
         resetRunwayFusionArtifactMemo();
         $this->removeArtifact();
+        // Preserve a developer's existing NASR cache: some tests touch the
+        // file to move its mtime, and teardown deletes only what the test
+        // created.
+        $this->hiddenNasrFile = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
     }
 
     protected function tearDown(): void
@@ -32,6 +38,8 @@ class RunwayFusionReadPathTest extends TestCase
         $this->removeArtifact();
         resetRunwayFusionArtifactMemo();
         $this->removeNasrFileIfCreated();
+        $this->restoreHiddenFile($this->hiddenNasrFile);
+        $this->hiddenNasrFile = null;
         $this->tearDownNasrAptFixtureCache();
         parent::tearDown();
     }
@@ -171,6 +179,182 @@ class RunwayFusionReadPathTest extends TestCase
         }
         $this->assertTrue($byId['14/32']['closed']);
         $this->assertFalse($byId['16W/34W']['closed']);
+    }
+
+    public function testList_ConfigRowWinsWaterPair_KeepsNasrWidthSurfaceAndWater(): void
+    {
+        // Operator length override on a water strip: the config row wins the
+        // pair, but its default ASPH surface and missing width must not mask
+        // the NASR water row.
+        $airport = $this->goodspeedAirport();
+        $airport['runway_length_ft'] = 4400;
+        $airport['runways'] = [
+            ['name' => '16W/34W', 'heading_1' => 160, 'heading_2' => 340],
+        ];
+
+        $this->writeArtifact([
+            '42b' => [
+                'rows' => [
+                    [
+                        'key' => '16W/34W',
+                        'source' => 'config',
+                        'effective_date' => '2026-10-01',
+                        'is_water' => false,
+                        'closed' => false,
+                        'field_sources' => [
+                            'length_ft' => 'config',
+                            'width_ft' => 'nasr',
+                            'surface' => 'nasr',
+                        ],
+                        'nasr' => [
+                            'rwy_id' => '16W/34W',
+                            'length_ft' => 4500,
+                            'width_ft' => 1000,
+                            'surface' => 'WATER',
+                            'condition' => 'GOOD',
+                            'lights_code' => null,
+                            'ends' => [
+                                ['end_id' => '16W', 'true_alignment' => null],
+                                ['end_id' => '34W', 'true_alignment' => null],
+                            ],
+                        ],
+                        'oa' => null,
+                        'config' => [
+                            'rwy_id' => '16W/34W',
+                            'length_ft' => 4400,
+                            'surface' => 'ASPH',
+                            'ends' => [],
+                        ],
+                    ],
+                ],
+                'segments' => [],
+                'calm_wind' => null,
+            ],
+        ]);
+
+        $display = getRunwayDisplayForAirport($airport, '42b');
+
+        $this->assertIsArray($display);
+        $this->assertCount(1, $display['runways']);
+        $row = $display['runways'][0];
+        $this->assertSame('16W/34W', $row['rwy_id']);
+        $this->assertSame(4400, $row['length_ft']);
+        $this->assertSame(1000, $row['width_ft']);
+        $this->assertSame('Water', $row['surface']);
+        $this->assertTrue($row['is_water']);
+        $this->assertFalse($row['closed']);
+        // The artifact's per-field provenance rides through the formatter.
+        $this->assertSame('config', $row['field_sources']['length_ft']);
+        $this->assertSame('nasr', $row['field_sources']['width_ft']);
+        $this->assertSame('nasr', $row['field_sources']['surface']);
+    }
+
+    public function testList_ConfigRowWinsClosedNasrPair_StaysClosed(): void
+    {
+        // NASR closure survives an operator length override: the config row
+        // carries no condition, so the effective row keeps NASR's.
+        $airport = $this->goodspeedAirport();
+        $airport['runway_length_ft'] = 2200;
+        $airport['runways'] = [
+            ['name' => '14/32', 'heading_1' => 140, 'heading_2' => 320],
+        ];
+
+        $this->writeArtifact([
+            '42b' => [
+                'rows' => [
+                    [
+                        'key' => '14/32',
+                        'source' => 'config',
+                        'effective_date' => '2026-10-01',
+                        'is_water' => false,
+                        'closed' => false,
+                        'field_sources' => ['length_ft' => 'config'],
+                        'nasr' => [
+                            'rwy_id' => '14/32',
+                            'length_ft' => 2120,
+                            'width_ft' => 50,
+                            'surface' => 'ASPH',
+                            'condition' => 'CLOSED',
+                            'lights_code' => 'LOW',
+                            'ends' => [
+                                ['end_id' => '14', 'true_alignment' => null],
+                                ['end_id' => '32', 'true_alignment' => null],
+                            ],
+                        ],
+                        'oa' => null,
+                        'config' => [
+                            'rwy_id' => '14/32',
+                            'length_ft' => 2200,
+                            'surface' => 'ASPH',
+                            'ends' => [],
+                        ],
+                    ],
+                ],
+                'segments' => [],
+                'calm_wind' => null,
+            ],
+        ]);
+
+        $display = getRunwayDisplayForAirport($airport, '42b');
+
+        $this->assertIsArray($display);
+        $row = $display['runways'][0];
+        $this->assertSame(2200, $row['length_ft']);
+        $this->assertSame(50, $row['width_ft']);
+        $this->assertTrue($row['closed']);
+    }
+
+    public function testList_ConfigRowWinsPair_ExplicitSurfaceOverrideBeatsNasr(): void
+    {
+        $airport = $this->goodspeedAirport();
+        $airport['runway_length_ft'] = 2200;
+        $airport['runway_surface'] = 'GRASS';
+        $airport['runways'] = [
+            ['name' => '14/32', 'heading_1' => 140, 'heading_2' => 320],
+        ];
+
+        $this->writeArtifact([
+            '42b' => [
+                'rows' => [
+                    [
+                        'key' => '14/32',
+                        'source' => 'config',
+                        'effective_date' => '2026-10-01',
+                        'is_water' => false,
+                        'closed' => false,
+                        'field_sources' => ['length_ft' => 'config', 'surface' => 'config'],
+                        'nasr' => [
+                            'rwy_id' => '14/32',
+                            'length_ft' => 2120,
+                            'width_ft' => 50,
+                            'surface' => 'ASPH',
+                            'condition' => 'GOOD',
+                            'lights_code' => 'LOW',
+                            'ends' => [
+                                ['end_id' => '14', 'true_alignment' => null],
+                                ['end_id' => '32', 'true_alignment' => null],
+                            ],
+                        ],
+                        'oa' => null,
+                        'config' => [
+                            'rwy_id' => '14/32',
+                            'length_ft' => 2200,
+                            'surface' => 'GRASS',
+                            'ends' => [],
+                        ],
+                    ],
+                ],
+                'segments' => [],
+                'calm_wind' => null,
+            ],
+        ]);
+
+        $display = getRunwayDisplayForAirport($airport, '42b');
+
+        $this->assertIsArray($display);
+        $row = $display['runways'][0];
+        $this->assertSame('Turf', $row['surface']);
+        $this->assertSame(50, $row['width_ft']);
     }
 
     public function testArtifactIsFresh_ValidCurrent_ReturnsTrue(): void

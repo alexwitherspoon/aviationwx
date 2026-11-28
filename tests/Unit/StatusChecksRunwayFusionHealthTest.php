@@ -106,6 +106,10 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
         $this->assertStringContainsString('2026-10-01', $h['message']);
         $this->assertSame('2026-10-01', $h['details']['effective_date']);
         $this->assertSame(1, $h['details']['airport_count']);
+        // The reference-data health consumer reads local_age_seconds; keep
+        // age_seconds for existing consumers.
+        $this->assertSame($h['details']['age_seconds'], $h['details']['local_age_seconds']);
+        $this->assertGreaterThanOrEqual(60, $h['details']['local_age_seconds']);
     }
 
     public function testHealth_ExpiredArtifact_ReturnsDegraded(): void
@@ -123,6 +127,9 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
 
     public function testHealth_NasrFileNewerThanStamp_ReturnsDegraded(): void
     {
+        // Preserve a developer's existing NASR cache; the fixture moves the
+        // mtime, so only a file the test created may be deleted.
+        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
         $nasrDir = CACHE_NASR_DIR;
         if (!is_dir($nasrDir)) {
             @mkdir($nasrDir, 0755, true);
@@ -144,6 +151,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             if (is_file(CACHE_NASR_APT_DATA_FILE)) {
                 @unlink(CACHE_NASR_APT_DATA_FILE);
             }
+            $this->restoreHiddenFile($hiddenNasr);
         }
     }
 
@@ -193,6 +201,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
         // The merge retention gate deletes runways_data.json on failed
         // fetches; an inventory that assumed its geometry must show it.
         $hidden = $this->hideFileIfPresent(CACHE_RUNWAYS_DATA_FILE);
+        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
         try {
             $this->writeArtifact([
                 'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
@@ -205,6 +214,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $this->assertStringContainsString('removed since build', $h['message']);
         } finally {
             $this->restoreHiddenFile($hidden);
+            $this->restoreHiddenFile($hiddenNasr);
         }
     }
 
@@ -213,6 +223,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
         // Built without a NASR cache (stamp 0) and it is still gone: the
         // inventory holds every row the sources had, so it stays servable.
         $hiddenRunways = $this->hideFileIfPresent(CACHE_RUNWAYS_DATA_FILE);
+        $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
         try {
             $this->writeArtifact([
                 'schema_version' => RUNWAY_FUSION_SCHEMA_VERSION,
@@ -224,6 +235,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $this->assertSame('operational', $h['status']);
         } finally {
             $this->restoreHiddenFile($hiddenRunways);
+            $this->restoreHiddenFile($hiddenNasr);
         }
     }
 

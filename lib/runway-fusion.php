@@ -42,7 +42,7 @@ require_once __DIR__ . '/weather/da-performance-notam-closures.php';
  * Input freshness stamps the artifact is validated against.
  *
  * @param string|null $configPath Resolved airports.json path, or null to omit the config stamp
- * @return array{nasr_apt_mtime: int|null, runways_cache_mtime: int|null, config_sha: string|null}
+ * @return array{nasr_apt_mtime: int|null, runways_cache_mtime: int|null, config_sha: string|null, config_mtime: int|null}
  */
 function runwayFusionInputStamps(?string $configPath = null): array
 {
@@ -69,6 +69,29 @@ function runwayFusionInputStamps(?string $configPath = null): array
         // instead of hashing (config changes also trip the sha at rebuild time).
         'config_mtime' => $configMtime,
     ];
+}
+
+/**
+ * First input stamp that changed between two reads, or null when stable.
+ *
+ * The worker's rows come from a single pass over the config and cache
+ * files; publishing stamps taken from a different pass would pair rows
+ * from one input generation with the stamp of another, and the freshness
+ * gate would serve the mismatch as current.
+ *
+ * @param array<string, int|string|null> $before Stamps read before the input pass
+ * @param array<string, int|string|null> $after Stamps read after it
+ * @return string|null Key of the first drifted stamp
+ */
+function runwayFusionInputDriftKey(array $before, array $after): ?string
+{
+    foreach (['config_sha', 'config_mtime', 'nasr_apt_mtime', 'runways_cache_mtime'] as $key) {
+        if (($before[$key] ?? null) !== ($after[$key] ?? null)) {
+            return $key;
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -239,6 +262,49 @@ function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, a
 }
 
 /**
+ * Display source row for a pair won by the operator's named config row.
+ *
+ * The config row (buildConfigRunwayForDensityAltitude) carries a default
+ * surface and no width, ends, lights, or closure flag. Used raw, it masks
+ * NASR and OurAirports values the live resolver would display. The
+ * effective row keeps the lower source row as the base and layers on only
+ * the fields the operator actually set: the designator name,
+ * runway_length_ft, an explicit runway_surface, and per-end or heading
+ * data when provided. A config row with no lower source row (the
+ * closed-world fallback) is returned unchanged.
+ *
+ * @param array<string, mixed> $configRow Winning config row
+ * @param array<string, mixed> $lowerRow Next-lower source row (NASR or OurAirports), empty when absent
+ * @param string|null $explicitSurface Operator's runway_surface, null when unset
+ * @return array<string, mixed>
+ */
+function runwayFusionEffectiveSourceRow(array $configRow, array $lowerRow, ?string $explicitSurface): array
+{
+    if ($lowerRow === []) {
+        return $configRow;
+    }
+
+    $effective = $lowerRow;
+    $effective['rwy_id'] = (string) ($configRow['rwy_id'] ?? $lowerRow['rwy_id']);
+    if (isset($configRow['length_ft']) && is_numeric($configRow['length_ft'])) {
+        $effective['length_ft'] = $configRow['length_ft'];
+    }
+    if ($explicitSurface !== null) {
+        $effective['surface'] = $explicitSurface;
+    }
+    if (!empty($configRow['ends']) && is_array($configRow['ends'])) {
+        $effective['ends'] = $configRow['ends'];
+    }
+    foreach (['heading_1', 'heading_2'] as $headingKey) {
+        if (isset($configRow[$headingKey])) {
+            $effective[$headingKey] = $configRow[$headingKey];
+        }
+    }
+
+    return $effective;
+}
+
+/**
  * Whether the fused artifact needs a rebuild.
  *
  * True when the artifact is missing or structurally invalid, its schema
@@ -248,7 +314,7 @@ function runwayFusionConfigFactsForRow(array $factsByRunwayId, string $rowKey, a
  * better than a churned one that would drop the slice.
  *
  * @param array<string, mixed>|null $artifact Loaded artifact or null when absent
- * @param array{nasr_apt_mtime?: int|null, runways_cache_mtime?: int|null, config_sha?: string|null} $stamps Current input stamps
+ * @param array{nasr_apt_mtime?: int|null, runways_cache_mtime?: int|null, config_sha?: string|null, config_mtime?: int|null} $stamps Current input stamps
  */
 function runwayFusionShouldRebuild(?array $artifact, array $stamps): bool
 {
@@ -295,6 +361,18 @@ function runwayFusionShouldRebuild(?array $artifact, array $stamps): bool
     $configSha = $stamps['config_sha'] ?? null;
     if (is_string($configSha) && $configSha !== '' && ($inputs['config_sha'] ?? null) !== $configSha) {
         return true;
+    }
+
+    // The read-path gate stats config mtime (no hashing on the request
+    // path). A deploy that rewrites identical bytes moves the mtime and
+    // withholds the artifact, so the rebuild trigger must see it too. An
+    // unchanged mtime still skips.
+    $configMtime = $stamps['config_mtime'] ?? null;
+    if (is_int($configMtime)) {
+        $configRecorded = isset($inputs['config_mtime']) && is_int($inputs['config_mtime']) ? $inputs['config_mtime'] : 0;
+        if ($configMtime > $configRecorded) {
+            return true;
+        }
     }
 
     return false;
@@ -455,6 +533,7 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
 
     $calmWind = is_array($nasrRecord['calm_wind'] ?? null) ? $nasrRecord['calm_wind'] : [];
     $declination = runwayDisplayMagneticDeclinationDeg($airport);
+    $explicitSurface = getConfigRunwaySurfaceOverride($airport);
 
     $rows = [];
     foreach ($pairs as $key => $sources) {
@@ -465,30 +544,45 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
         $factsRow = runwayFusionConfigFactsForRow($factsByRunwayId, $key, $winner);
         $oaRow = $sources['oa'] ?? [];
 
+        // The operator's named row contributes only the fields they set
+        // (length, explicit surface, per-end and heading data). Width,
+        // lights, closure, and ends not set fall through to the lower
+        // source row, mirroring the live resolver's chain.
+        $effective = $hasConfig
+            ? runwayFusionEffectiveSourceRow($winner, $sources['nasr'] ?? $sources['oa'] ?? [], $explicitSurface)
+            : $winner;
+
         // Per-field provenance mirrors the display formatter's resolution
         // chain: config facts > winning source row > OurAirports row.
+        // Provenance labels the row a value came from, not the pair winner:
+        // an effective config row's width, lights, and unset surface come
+        // from the lower source row.
+        $lowerSource = isset($sources['nasr']) ? 'nasr' : (isset($sources['oa']) ? 'ourairports' : null);
+        $effectiveSource = ($hasConfig && $lowerSource !== null) ? $lowerSource : $source;
+        $lengthPrimarySource = $hasConfig ? 'config' : $source;
+
         [, $lengthSource] = runwayDisplayResolveField(
             $factsRow,
-            $winner['length_ft'] ?? null,
+            $effective['length_ft'] ?? null,
             $factsRow['length_ft'] ?? null,
-            $source
+            $lengthPrimarySource
         );
         [, $widthSource] = runwayDisplayResolveFieldWithFallback(
             $factsRow,
-            $winner['width_ft'] ?? null,
+            $effective['width_ft'] ?? null,
             $oaRow['width_ft'] ?? null,
             $factsRow['width_ft'] ?? null,
-            $source
+            $effectiveSource
         );
         [$surfaceCode, $surfaceSource] = runwayDisplayResolveFieldWithFallback(
             $factsRow,
-            $winner['surface'] ?? null,
+            $effective['surface'] ?? null,
             $oaRow['surface'] ?? null,
-            $factsRow['surface'] ?? null,
-            $source
+            $factsRow['surface'] ?? ($hasConfig ? $explicitSurface : null),
+            $effectiveSource
         );
         $surfaceCode = is_string($surfaceCode) ? strtoupper(trim($surfaceCode)) : null;
-        $nasrLights = nasrRunwayLightsLabel($winner['lights_code'] ?? null);
+        $nasrLights = nasrRunwayLightsLabel($effective['lights_code'] ?? null);
         $oaLights = runwayDisplayOurAirportsLightsLabel(
             isset($oaRow['lighted']) ? (bool) $oaRow['lighted'] : null
         );
@@ -497,11 +591,11 @@ function runwayFusionBuildAirportEntry(string $airportId, array $airport, ?array
             $nasrLights,
             $oaLights,
             $factsRow['lights'] ?? null,
-            $source
+            $effectiveSource
         );
 
         // Source-level closure (NOTAM overlay stays live in the read path).
-        $closed = nasrRunwayIsClosedInSource($winner) || !empty($oaRow['closed']);
+        $closed = nasrRunwayIsClosedInSource($effective) || !empty($oaRow['closed']);
         if (isset($factsRow['closed'])) {
             $closed = (bool) $factsRow['closed'];
         }
@@ -603,6 +697,7 @@ function runwayFusionDerivedSegments(
         'closed_pair_designators' => [],
         'closed_end_idents' => [],
     ];
+    $explicitSurface = getConfigRunwaySurfaceOverride($airport);
     $formatted = [];
     foreach ($fusedRows as $row) {
         if (!is_array($row) || isset($covered[$row['key']])) {
@@ -612,8 +707,11 @@ function runwayFusionDerivedSegments(
         if (!is_array($winner)) {
             continue;
         }
+        $sourceRow = is_array($row['config'] ?? null)
+            ? runwayFusionEffectiveSourceRow($winner, $row['nasr'] ?? $row['oa'] ?? [], $explicitSurface)
+            : $winner;
         $formatted[] = runwayDisplayFormatRunwayRow(
-            $winner,
+            $sourceRow,
             runwayFusionConfigFactsForRow($factsByRunwayId, (string) ($row['key'] ?? ''), $winner),
             $calmWind,
             $row['oa'] ?? [],

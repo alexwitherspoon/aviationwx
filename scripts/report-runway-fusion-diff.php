@@ -47,7 +47,9 @@ if ($config === null || !isset($config['airports']) || !is_array($config['airpor
 }
 
 // Same input gathering as the fusion worker, effective-date stamp included.
-$nasrPayload = loadNasrAptCache();
+// Read the configured slice straight from disk: the live loader rebuilds a
+// stale slice and updates NASR meta, and this report writes nothing.
+$nasrPayload = nasrReadConfiguredAptCacheFromDisk();
 if ($nasrPayload !== null && !isset($nasrPayload['effective_date'])) {
     $nasrMeta = loadNasrAptMeta();
     $nasrPayload['effective_date'] = is_array($nasrMeta) && is_string($nasrMeta['effective_date'] ?? null)
@@ -60,11 +62,15 @@ $runwaysData = loadRunwaysCacheDataFromDisk();
 /**
  * The pre-fusion selection: first source with rows wins the whole list.
  *
+ * Reads the NASR record from the caller's side-effect-free slice snapshot;
+ * getNasrAirportForConfig() would rebuild a stale slice and write meta.
+ *
+ * @param array<string, mixed>|null $nasrPayload Configured NASR slice snapshot
  * @return array{rows: list<array<string, mixed>>, source: string|null}
  */
-function reportDiffLiveSelection(array $airport, string $airportId): array
+function reportDiffLiveSelection(array $airport, string $airportId, ?array $nasrPayload): array
 {
-    $nasrRecord = getNasrAirportForConfig($airport);
+    $nasrRecord = runwayFusionNasrRecordForAirport($airport, $nasrPayload);
     $rows = $nasrRecord !== null ? nasrSelectRunwaysForDisplay($nasrRecord) : [];
     $source = $rows !== [] ? 'nasr' : null;
 
@@ -85,6 +91,25 @@ function reportDiffLiveSelection(array $airport, string $airportId): array
     }
 
     return ['rows' => $rows, 'source' => $source];
+}
+
+/**
+ * Order-independent pair key for a compass segment, so 09/27 and 27/09
+ * compare as the same line across the live and fused results.
+ *
+ * @param array<string, mixed> $segment
+ */
+function reportDiffSegmentPairKey(array $segment): string
+{
+    $le = strtoupper(trim((string) ($segment['le_ident'] ?? '')));
+    $he = strtoupper(trim((string) ($segment['he_ident'] ?? '')));
+    if ($le === '' || $he === '') {
+        return '';
+    }
+    $pair = [$le, $he];
+    sort($pair);
+
+    return implode('|', $pair);
 }
 
 $emptyClosures = [
@@ -142,21 +167,46 @@ foreach ($config['airports'] as $airportId => $airport) {
         }
     }
 
-    // Live (pre-fusion) rows, keyed the same way.
-    $live = reportDiffLiveSelection($airport, $airportId);
+    // Live (pre-fusion) rows, keyed the same way, with the pre-fusion
+    // strict-key lookups for config facts and OurAirports rows. The fused
+    // artifact's rows never feed the live side: a lettering-drift merge
+    // must show as a field change, not disappear.
+    $configFacts = runwayDisplayConfigFactsByRunwayId($airport);
+    $declination = runwayDisplayMagneticDeclinationDeg($airport);
+    $explicitSurface = getConfigRunwaySurfaceOverride($airport);
+    $live = reportDiffLiveSelection($airport, $airportId, $nasrPayload);
+    $liveOaByKey = [];
+    $liveOaRows = loadOurAirportsDisplayRunwaysFromFileCache($airportId, $airport);
+    foreach (is_array($liveOaRows) ? $liveOaRows : [] as $oaRow) {
+        if (!is_array($oaRow)) {
+            continue;
+        }
+        $oaKey = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($oaRow['rwy_id'] ?? ''));
+        if ($oaKey !== '') {
+            $liveOaByKey[$oaKey] = $oaRow;
+        }
+    }
     $liveByKey = [];
+    $liveFormattedByKey = [];
     foreach ($live['rows'] as $row) {
         if (!is_array($row)) {
             continue;
         }
         $key = densityAltitudePerformanceNormalizeRunwayPairKey((string) ($row['rwy_id'] ?? ''));
-        if ($key !== '') {
-            $liveByKey[$key] = $row;
+        if ($key === '') {
+            continue;
         }
+        $liveByKey[$key] = $row;
+        $liveFormattedByKey[$key] = runwayDisplayFormatRunwayRow(
+            $row,
+            $configFacts[$key] ?? [],
+            [],
+            $liveOaByKey[$key] ?? [],
+            $emptyClosures,
+            (string) ($live['source'] ?? 'unknown'),
+            $declination
+        );
     }
-
-    $configFacts = runwayDisplayConfigFactsByRunwayId($airport);
-    $declination = runwayDisplayMagneticDeclinationDeg($airport);
 
     $added = [];
     $removed = [];
@@ -171,35 +221,29 @@ foreach ($config['airports'] as $airportId => $airport) {
             continue;
         }
         // Both lists carry the pair: compare what the formatter renders.
-        // The fused row gets the same config-facts resolution the read path
-        // uses; the live row keeps the pre-fusion strict-key lookup.
+        // The fused row resolves through the artifact's rows (the read
+        // path, config winner included); the live row uses the pre-fusion
+        // strict-key lookups prepared above.
         $winner = is_array($row['config'] ?? null) ? $row['config']
             : (is_array($row['nasr'] ?? null) ? $row['nasr'] : $row['oa']);
-        $liveRow = $liveByKey[$key];
-        $oaRow = is_array($row['oa'] ?? null) ? $row['oa'] : (is_array($liveRow) && $live['source'] === 'ourairports' ? $liveRow : []);
+        $fusedSourceRow = is_array($row['config'] ?? null)
+            ? runwayFusionEffectiveSourceRow($winner, $row['nasr'] ?? $row['oa'] ?? [], $explicitSurface)
+            : $winner;
         $fusedFormatted = runwayDisplayFormatRunwayRow(
-            is_array($winner) ? $winner : [],
+            is_array($fusedSourceRow) ? $fusedSourceRow : [],
             runwayFusionConfigFactsForRow($configFacts, $fusedRowKeys[$key], $winner),
             [],
-            $oaRow,
+            is_array($row['oa'] ?? null) ? $row['oa'] : [],
             $emptyClosures,
             $fusedSources[$key] ?? 'unknown',
             $declination
         );
-        $liveFormatted = runwayDisplayFormatRunwayRow(
-            $liveRow,
-            $configFacts[$key] ?? [],
-            [],
-            $oaRow,
-            $emptyClosures,
-            (string) ($live['source'] ?? 'unknown'),
-            $declination
-        );
+        $liveFormatted = $liveFormattedByKey[$key];
         if ($fusedFormatted === null || $liveFormatted === null) {
             continue;
         }
         $fieldDiff = [];
-        foreach (['length_ft', 'width_ft', 'surface', 'lights', 'is_water'] as $field) {
+        foreach (['length_ft', 'width_ft', 'surface', 'lights', 'is_water', 'closed', 'traffic', 'ends'] as $field) {
             if (($fusedFormatted[$field] ?? null) !== ($liveFormatted[$field] ?? null)) {
                 $fieldDiff[$field] = [
                     'live' => $liveFormatted[$field] ?? null,
@@ -223,9 +267,38 @@ foreach ($config['airports'] as $airportId => $airport) {
     }
 
     // Compass: derived segments add diagram lines the geometry cache lacks.
+    // The pre-fusion compass already drew the geometry segments, or display
+    // synthesized segments when the cache holds none, so only pairs absent
+    // from that result are additions. Manual compass runways bypass the
+    // fused path entirely, so nothing is added for them.
     $diagram = [];
+    $preSegmentPairs = [];
+    if (empty($airport['runways']) || !is_array($airport['runways'])) {
+        $preSegments = getRunwaySegmentsFromParsedCache(
+            is_array($runwaysData) ? $runwaysData : [],
+            $airportId,
+            $airport
+        );
+        if ($preSegments === null) {
+            $preDisplayRows = array_values(array_filter($liveFormattedByKey, 'is_array'));
+            $preSegments = synthesizeRunwaySegmentsFromDisplay(
+                $preDisplayRows,
+                (string) ($live['source'] ?? 'display')
+            );
+        }
+        foreach ($preSegments as $seg) {
+            if (!is_array($seg)) {
+                continue;
+            }
+            $preSegmentPairs[reportDiffSegmentPairKey($seg)] = true;
+        }
+    }
     foreach ((array) $fused['segments'] as $seg) {
         if (!is_array($seg)) {
+            continue;
+        }
+        $pairKey = reportDiffSegmentPairKey($seg);
+        if ($pairKey === '' || isset($preSegmentPairs[$pairKey])) {
             continue;
         }
         $diagram[] = [

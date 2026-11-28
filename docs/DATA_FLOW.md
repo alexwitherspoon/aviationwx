@@ -2295,8 +2295,8 @@ This path is separate from the weather, webcam, and NOTAM pipelines. It supplies
 
 ### Build (`scripts/build-runway-fusion.php`)
 
-1. The script defines `AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE` and calls `loadConfig()`; the worker reads the NASR APT cache and the runways merge cache from disk (one cache read per run, per input).
-2. Per configured, enabled airport, fuses the sources into one inventory (`lib/runway-fusion.php`). Per-pair precedence is manual config > NASR > OurAirports; each row keeps the winning source's native shape plus the other sources' rows, per-field provenance (`source`, `field_sources`), and the NASR effective date.
+1. The script defines `AVIATIONWX_SKIP_COUNTRY_RESOLUTION_MERGE` and resolves the config path; it takes the input stamps first, then calls `loadConfig()` and reads the NASR APT cache and the runways merge cache from disk (one cache read per run, per input). After loading, it re-reads the input stamps and aborts without publishing if any changed, so the rows and the recorded stamps always come from one input generation.
+2. Per configured, enabled airport, fuses the sources into one inventory (`lib/runway-fusion.php`). Per-pair precedence is manual config > NASR > OurAirports; each row keeps the winning source's native shape plus the other sources' rows, per-field provenance (`source`, `field_sources`), and the NASR effective date. A pair won by a named config row uses an effective source row: the config row supplies only what the operator set (designator, length, explicit `runway_surface`, per-end and heading data) and the remaining fields come from the next source row, mirroring the live resolver.
 3. Pair keys are order-insensitive and context-aware: an L/C/R suffix is kept only while the airport has parallel strips at the numeric heading across all of its sources (a heading with a single lettered end is source-to-source lettering drift and the keys merge). `W` marks a water end: never stripped, never counted toward parallel ambiguity.
 4. Pairs without geometry in the runways merge cache, and not covered by a manual compass runway, get a derived through-center segment: ident bearing, water flag, magnetic frame (`source: "fusion"`).
 5. Writes **`cache/runways/runway_fusion.json`** atomically (temp file + `rename()`), including `schema_version`, `built_at`, input stamps (NASR APT mtime, runways merge cache mtime, config SHA and mtime), and `nasr_effective_date`.
@@ -2312,7 +2312,7 @@ This path is separate from the weather, webcam, and NOTAM pipelines. It supplies
 ### Scheduler (`scripts/scheduler.php`)
 
 - Evaluates whether to run the worker at **most once per hour** (`RUNWAY_FUSION_CHECK_INTERVAL`), with an **immediate** evaluation on the first eligible loop iteration after startup (same pattern as country resolution).
-- Runs the worker when the artifact is missing, invalid, schema-mismatched, **older than** `RUNWAY_FUSION_MAX_AGE` (24h), any input on disk is **newer** than the recorded stamps, the config SHA changed, or a merge cache that existed at build time is now gone. A missing input never forces a rebuild.
+- Runs the worker when the artifact is missing, invalid, schema-mismatched, **older than** `RUNWAY_FUSION_MAX_AGE` (24h), any input on disk is **newer** than the recorded stamps, the config SHA or config mtime moved, or a merge cache that existed at build time is now gone. A missing input never forces a rebuild.
 
 ### Health (`lib/status-checks.php`)
 

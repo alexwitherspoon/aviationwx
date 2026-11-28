@@ -110,9 +110,9 @@ The runway list and the wind diagram read a computed artifact, `cache/runways/ru
 
 **Who serves it:** both read paths check a stat-only freshness gate on every request. Fresh artifact: serve the fused inventory. Stale, missing, or invalid artifact: fall through to the live resolver, which is exactly the pre-fusion behavior. So a failed or late build degrades to status quo, never to missing data.
 
-**Rebuild triggers:** artifact older than 24h, an input on disk newer than the stamps recorded at build time (NASR cache mtime, merge cache mtime), a config content change (SHA-256), a schema mismatch, or a merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches). A missing input never forces a rebuild.
+**Rebuild triggers:** artifact older than 24h, an input on disk newer than the stamps recorded at build time (NASR cache mtime, merge cache mtime), a config content change (SHA-256) or a config mtime bump (the gate stats the file, so an identical-bytes redeploy still withholds the artifact), a schema mismatch, or a merge cache that existed at build time and is now gone (the merge retention gate deletes it on failed fetches). A missing input never forces a rebuild.
 
-**Failure modes:** the worker fails open per input (NASR or merge cache missing: build without those rows, log a warning) and fails closed on publish (no configured airport produced rows: keep the existing artifact, log an error). Watch `app.log` for `runway_fusion:` lines.
+**Failure modes:** the worker fails open per input (NASR or merge cache missing: build without those rows, log a warning) and fails closed on publish (no configured airport produced rows: keep the existing artifact, log an error). If an input changes while the worker is loading it, the run aborts and keeps the existing artifact; the next loop retries with one consistent input generation. Watch `app.log` for `runway_fusion:` lines.
 
 **Status page:** the **Runway display** consumer under **Reference data** reports the inventory's health (`runway_fusion` source): age, rebuild-pending reasons, airport count, and the NASR cycle the official rows come from.
 
@@ -128,7 +128,7 @@ The runway list and the wind diagram read a computed artifact, `cache/runways/ru
 2. If the official source (NASR) is wrong, there is nothing to fix locally; the next cycle picks it up. If OurAirports is wrong, the config override below wins until upstream corrects it (an OurAirports data correction is the durable fix).
 3. Correct or gap-fill in `airports.json`, which takes ultimate precedence:
    - `runway_facts`: per-pair field overrides. Each row is keyed by `rwy_id` (for example `16W/34W`) and may set `length_ft`, `width_ft`, `surface`, `lights`, `closed`, or `traffic`.
-   - `runways`: named manual runways (`name`, `heading_1`/`heading_2`, or lat/lon endpoints). These become full rows and win membership for the pair.
+   - `runways`: named manual runways (`name`, `heading_1`/`heading_2`, or lat/lon endpoints). A named row wins membership for the pair, but it only contributes what you set: the designator, `runway_length_ft`, an explicit `runway_surface`, and any per-end or heading data. Width, lights, surface (when `runway_surface` is unset), closure, and ends you did not set fall through to NASR and then OurAirports, so a length override does not blank out the official water surface or width.
    - `runway_length_ft`: a nameless override that only takes effect when no other source provides a row for the airport (the density-altitude escape hatch).
 
    A config change is picked up on the next rebuild (the gate stats the config file), and the live read path applies the same config precedence immediately.

@@ -366,6 +366,7 @@ function runwayDisplayRunwayClosedFromNotam(string $rwyId, array $ends, array $n
  * @param array<string, mixed> $airportCalmWind
  * @param array<string, mixed> $oaRow
  * @param array{aerodrome_closed: bool, closed_pair_designators: list<string>, closed_end_idents: list<string>} $notamClosures
+ * @param array<string, string> $fieldSourcesOverride Per-field provenance from the fused artifact; overrides the computed labels
  */
 function runwayDisplayFormatRunwayRow(
     array $sourceRow,
@@ -374,7 +375,8 @@ function runwayDisplayFormatRunwayRow(
     array $oaRow,
     array $notamClosures,
     string $sourceName,
-    ?float $declinationDeg
+    ?float $declinationDeg,
+    array $fieldSourcesOverride = []
 ): ?array {
     $rwyId = (string) ($sourceRow['rwy_id'] ?? '');
     if ($rwyId === '') {
@@ -461,6 +463,12 @@ function runwayDisplayFormatRunwayRow(
         'surface' => $surfaceSource,
         'lights' => $lightsSource,
     ]);
+    foreach (['length_ft', 'width_ft', 'surface', 'lights'] as $field) {
+        $override = $fieldSourcesOverride[$field] ?? null;
+        if (is_string($override) && $override !== '') {
+            $fieldSources[$field] = $override;
+        }
+    }
 
     return [
         'rwy_id' => $rwyId,
@@ -519,6 +527,7 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
  * @param array{rows: list<array<string, mixed>>, segments: list<array<string, mixed>>, calm_wind: array<string, mixed>|null} $fusedEntry
  * @param array<string, array<string, mixed>> $configFacts Config runway_facts indexed by pair key
  * @param array{aerodrome_closed: bool, closed_pair_designators: list<string>, closed_end_idents: list<string>} $notamClosures
+ * @param string|null $explicitSurface Operator's runway_surface, null when unset
  * @return array{
  *   runway_source: ?string,
  *   source_reference: ?string,
@@ -526,7 +535,7 @@ function runwayDisplayMagneticDeclinationDeg(?array $airport): ?float
  *   runways: list<array<string, mixed>>
  * }|null
  */
-function runwayDisplayBuildFromFusedEntry(array $fusedEntry, array $configFacts, array $notamClosures, ?float $declinationDeg): ?array
+function runwayDisplayBuildFromFusedEntry(array $fusedEntry, array $configFacts, array $notamClosures, ?float $declinationDeg, ?string $explicitSurface = null): ?array
 {
     $rows = is_array($fusedEntry['rows'] ?? null) ? $fusedEntry['rows'] : [];
     if ($rows === []) {
@@ -583,14 +592,21 @@ function runwayDisplayBuildFromFusedEntry(array $fusedEntry, array $configFacts,
         if (!is_array($winner)) {
             continue;
         }
+        // A config winner contributes only the fields the operator set;
+        // the rest falls through to the lower source row, matching the
+        // live resolver's chain.
+        $sourceRow = is_array($row['config'] ?? null)
+            ? runwayFusionEffectiveSourceRow($winner, $row['nasr'] ?? $row['oa'] ?? [], $explicitSurface)
+            : $winner;
         $formatted[] = runwayDisplayFormatRunwayRow(
-            $winner,
+            $sourceRow,
             runwayFusionConfigFactsForRow($configFacts, $key, $winner),
             $calmWind,
             $row['oa'] ?? [],
             $notamClosures,
             (string) ($row['source'] ?? 'unknown'),
-            $declinationDeg
+            $declinationDeg,
+            is_array($row['field_sources'] ?? null) ? $row['field_sources'] : []
         );
     }
     $formatted = array_filter($formatted, 'is_array');
@@ -652,7 +668,8 @@ function getRunwayDisplayForAirport(array $airport, ?string $airportId = null, a
                 $fusedEntry,
                 $configFacts,
                 $notamClosures,
-                $declination
+                $declination,
+                getConfigRunwaySurfaceOverride($airport)
             );
             if ($fusedDisplay !== null) {
                 return $fusedDisplay;

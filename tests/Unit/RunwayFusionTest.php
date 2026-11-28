@@ -666,11 +666,11 @@ class RunwayFusionTest extends TestCase
         $land = $byKey['14/32'];
         $this->assertSame('config', $land['source']);
         $this->assertSame(2100, $land['config']['length_ft']);
-        // Per-field chain mirrors the display formatter: winner row first,
-        // then the OurAirports row. The manual row carries its own surface
-        // (ASPH default); width and lights fall through to the OA row.
+        // The config row contributes only the operator's length; width,
+        // surface, and lights fall through to the NASR row, matching the
+        // live resolver. The raw config row stays in the artifact.
         $this->assertSame(
-            ['length_ft' => 'config', 'width_ft' => 'ourairports', 'surface' => 'config', 'lights' => 'ourairports'],
+            ['length_ft' => 'config', 'width_ft' => 'nasr', 'surface' => 'nasr', 'lights' => 'nasr'],
             $land['field_sources']
         );
 
@@ -681,6 +681,78 @@ class RunwayFusionTest extends TestCase
         // gets a derived segment.
         $this->assertCount(1, $entry['segments']);
         $this->assertSame('16W', $entry['segments'][0]['le_ident']);
+    }
+
+    public function testBuildAirportEntry_ConfigRowWinsNasrPair_KeepsNasrWidthSurfaceAndWater(): void
+    {
+        // Operator length override on the water strip. The named config row
+        // wins the pair, but only its length is operator data: width,
+        // surface, and closure come from the NASR row, not the config row's
+        // default ASPH surface and missing width.
+        $airport = $this->goodspeedAirport();
+        $airport['runway_length_ft'] = 4400;
+        $airport['runways'] = [
+            ['name' => '16W/34W', 'heading_1' => 160, 'heading_2' => 340],
+        ];
+
+        $nasr = $this->goodspeedNasrPayload();
+        $nasr['airports']['42B']['runways'][1]['condition'] = 'CLOSED';
+
+        $entry = runwayFusionBuildAirportEntry('42B', $airport, $nasr, $this->goodspeedRunwaysData());
+
+        $this->assertIsArray($entry);
+        $water = $this->rowsByKey($entry['rows'])['16W/34W'];
+        $this->assertSame('config', $water['source']);
+        $this->assertSame(4400, $water['config']['length_ft']);
+        $this->assertSame('config', $water['field_sources']['length_ft']);
+        $this->assertSame('nasr', $water['field_sources']['width_ft']);
+        $this->assertSame('nasr', $water['field_sources']['surface']);
+        $this->assertTrue($water['is_water']);
+        $this->assertTrue($water['closed']);
+    }
+
+    public function testEffectiveSourceRow_NoLowerRow_ReturnsConfigRowUnchanged(): void
+    {
+        $configRow = ['rwy_id' => '16W/34W', 'length_ft' => 4400, 'surface' => 'ASPH', 'ends' => []];
+
+        $this->assertSame($configRow, runwayFusionEffectiveSourceRow($configRow, [], null));
+    }
+
+    public function testEffectiveSourceRow_LayersOnlyExplicitOperatorFields(): void
+    {
+        $configRow = ['rwy_id' => '16W/34W', 'length_ft' => 4400, 'surface' => 'ASPH', 'ends' => []];
+        $lowerRow = [
+            'rwy_id' => '16W/34W',
+            'length_ft' => 4500,
+            'width_ft' => 1000,
+            'surface' => 'WATER',
+            'lights_code' => null,
+            'condition' => 'GOOD',
+            'ends' => [['end_id' => '16W'], ['end_id' => '34W']],
+        ];
+
+        // No runway_surface and no runway_ends: the lower row keeps surface,
+        // width, condition, and ends; only the length layers on.
+        $effective = runwayFusionEffectiveSourceRow($configRow, $lowerRow, null);
+        $this->assertSame(4400, $effective['length_ft']);
+        $this->assertSame(1000, $effective['width_ft']);
+        $this->assertSame('WATER', $effective['surface']);
+        $this->assertSame('GOOD', $effective['condition']);
+        $this->assertSame($lowerRow['ends'], $effective['ends']);
+
+        // An explicit surface and operator per-end data win over the lower row.
+        $effective = runwayFusionEffectiveSourceRow(
+            [
+                'rwy_id' => '16W/34W',
+                'length_ft' => 4400,
+                'surface' => 'ASPH',
+                'ends' => [['end_id' => '16W', 'displaced_thr_len' => 200]],
+            ],
+            $lowerRow,
+            'GRASS'
+        );
+        $this->assertSame('GRASS', $effective['surface']);
+        $this->assertSame([['end_id' => '16W', 'displaced_thr_len' => 200]], $effective['ends']);
     }
 
     public function testBuildAirportEntry_NamelessManualRowIncludedOnlyWithoutOtherSources(): void
@@ -861,6 +933,24 @@ class RunwayFusionTest extends TestCase
         $this->assertTrue(runwayFusionShouldRebuild($artifact, $stamps));
     }
 
+    public function testShouldRebuild_ConfigMtimeNewerThanRecordedStamp_ReturnsTrue(): void
+    {
+        $stamps = $this->inputStamps();
+        $stamps['config_mtime'] = 1000;
+        $artifact = $this->freshArtifact($stamps);
+        // Same bytes redeployed: the sha matches, the mtime moved, and the
+        // read-path gate withholds the artifact until this rebuild runs.
+        $stamps['config_mtime'] = 2000;
+        $this->assertTrue(runwayFusionShouldRebuild($artifact, $stamps));
+    }
+
+    public function testShouldRebuild_ConfigMtimeUnchanged_ReturnsFalse(): void
+    {
+        $stamps = $this->inputStamps();
+        $stamps['config_mtime'] = 1000;
+        $this->assertFalse(runwayFusionShouldRebuild($this->freshArtifact($stamps), $stamps));
+    }
+
     public function testShouldRebuild_AgeExceedsMax_ReturnsTrue(): void
     {
         $stamps = $this->inputStamps();
@@ -896,6 +986,42 @@ class RunwayFusionTest extends TestCase
         // so the worker must rebuild rather than keep skipping it.
         $stamps['runways_cache_mtime'] = null;
         $this->assertTrue(runwayFusionShouldRebuild($artifact, $stamps));
+    }
+
+    public function testInputDriftKey_StableStamps_ReturnsNull(): void
+    {
+        $stamps = $this->inputStamps();
+        $stamps['config_mtime'] = 1000;
+        $this->assertNull(runwayFusionInputDriftKey($stamps, $stamps));
+    }
+
+    public function testInputDriftKey_ChangedConfig_ReturnsConfigKey(): void
+    {
+        $before = $this->inputStamps();
+        $before['config_mtime'] = 1000;
+
+        $after = $before;
+        $after['config_sha'] = 'other-sha';
+        $this->assertSame('config_sha', runwayFusionInputDriftKey($before, $after));
+
+        $after = $before;
+        $after['config_mtime'] = 2000;
+        $this->assertSame('config_mtime', runwayFusionInputDriftKey($before, $after));
+    }
+
+    public function testInputDriftKey_CacheAppearedOrVanished_IsDrift(): void
+    {
+        $before = $this->inputStamps();
+        $before['config_mtime'] = 1000;
+
+        $after = $before;
+        $after['nasr_apt_mtime'] = null;
+        $this->assertSame('nasr_apt_mtime', runwayFusionInputDriftKey($before, $after));
+
+        $before['runways_cache_mtime'] = null;
+        $after = $before;
+        $after['runways_cache_mtime'] = 1000;
+        $this->assertSame('runways_cache_mtime', runwayFusionInputDriftKey($before, $after));
     }
 
     public function testArtifactRoundTrip_WriteAndLoad(): void
@@ -953,7 +1079,9 @@ class RunwayFusionTest extends TestCase
             $stamps = runwayFusionInputStamps($configPath);
             $this->assertArrayHasKey('nasr_apt_mtime', $stamps);
             $this->assertArrayHasKey('runways_cache_mtime', $stamps);
+            $this->assertArrayHasKey('config_mtime', $stamps);
             $this->assertSame(hash('sha256', '{"airports": {}}'), $stamps['config_sha']);
+            $this->assertSame((int) filemtime($configPath), $stamps['config_mtime']);
         } finally {
             @unlink($configPath);
         }
