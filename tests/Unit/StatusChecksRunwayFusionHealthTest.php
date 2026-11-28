@@ -133,8 +133,13 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
         // so a failed hide leaves the developer's original file untouched
         // (it was never moved aside, and we must not delete it).
         $hiddenNasr = null;
+        $fixtureIsOurs = false;
         try {
             $hiddenNasr = $this->hideFileIfPresent(CACHE_NASR_APT_DATA_FILE);
+            // Hide completed (or nothing to hide): any file at the cache
+            // path from here on is the test's fixture, whether the original
+            // was moved aside or was absent to begin with.
+            $fixtureIsOurs = true;
             $nasrDir = CACHE_NASR_DIR;
             if (!is_dir($nasrDir)) {
                 @mkdir($nasrDir, 0755, true);
@@ -152,7 +157,7 @@ final class StatusChecksRunwayFusionHealthTest extends TestCase
             $this->assertSame('degraded', $h['status']);
             $this->assertStringContainsString('NASR cache newer', $h['message']);
         } finally {
-            if ($hiddenNasr !== null && is_file(CACHE_NASR_APT_DATA_FILE)) {
+            if ($fixtureIsOurs && is_file(CACHE_NASR_APT_DATA_FILE)) {
                 @unlink(CACHE_NASR_APT_DATA_FILE);
             }
             $this->restoreHiddenFile($hiddenNasr);
